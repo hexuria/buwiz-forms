@@ -1,0 +1,103 @@
+{
+  "id": "2551Qv2018",
+  "title": "Quarterly Percentage Tax Return",
+  "description": "BIR Form No. 2551Q (January 2018 ENCS) - Quarterly Percentage Tax Return",
+  "pages": [
+    {
+      "title": "Part I - Background Information",
+      "sections": [
+        {
+          "title": "Filing Period",
+          "fields": [
+            {
+              "name": "frm2551Qv2018:txtYear",
+              "label": "For the Year",
+              "field_type": {
+                "type": "Text",
+                "max_length": 4,
+                "pattern": "^\\d{4}$"
+              },
+              "required": true,
+              "help_text": "Enter the 4-digit taxable year"
+            },
+            {
+              "name": "frm2551Qv2018:optQuarter",
+              "label": "Quarter",
+              "field_type": {
+                "type": "Radio",
+                "options": [
+                  { "label": "1st", "value": "1" },
+                  { "label": "2nd", "value": "2" },
+                  { "label": "3rd", "value": "3" },
+                  { "label": "4th", "value": "4" }
+                ]
+              },
+              "required": true
+            },
+            {
+              "name": "frm2551Qv2018:optAmended",
+              "label": "Amended Return?",
+              "field_type": {
+                "type": "Radio",
+                "options": [
+                  { "label": "Yes", "value": "Y" },
+                  { "label": "No", "value": "N" }
+                ]
+              },
+              "required": true,
+              "default_value": "N"
+            }
+          ]
+        },
+        {
+          "title": "Taxpayer Details",
+          "fields": [
+            {
+              "name": "frm2551Qv2018:txtTIN1",
+              "label": "Taxpayer Identification Number (TIN)",
+              "field_type": { "type": "Tin" },
+              "required": true
+            },
+            {
+              "name": "frm2551Qv2018:txtRDOCode",
+              "label": "RDO Code",
+              "field_type": { "type": "RdoSelect" },
+              "required": true
+            },
+            {
+              "name": "frm2551Qv2018:txtTaxpayerName",
+              "label": "Taxpayer's Name",
+              "field_type": { "type": "Text" },
+              "required": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Part II - Computation of Tax",
+      "sections": [
+        {
+          "title": "Tax Computation",
+          "fields": [
+            {
+              "name": "frm2551Qv2018:txtTax14",
+              "label": "14. Total Tax Due",
+              "field_type": { "type": "Currency" },
+              "required": true
+            },
+            {
+              "name": "frm2551Qv2018:txtTax22",
+              "label": "22. Total Amount Payable",
+              "field_type": {
+                "type": "Computed",
+                "formula": "txtTax14 - txtTax20 + txtTax21D"
+              },
+              "required": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
