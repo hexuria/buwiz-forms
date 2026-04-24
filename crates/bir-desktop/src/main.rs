@@ -1,6 +1,7 @@
 //! BIR Desktop Application — GPUI-powered tax filing interface.
 
 use gpui::*;
+use std::ops::Deref;
 use gpui_component::*;
 
 mod app;
@@ -13,9 +14,6 @@ fn main() {
             
             cx.spawn(async move |cx| {
                 let options = WindowOptions {
-                    window_bounds: Some(WindowBounds::Windowed(
-                        Bounds::centered(None, size(px(1200.), px(800.)), cx.deref())
-                    )),
                     titlebar: Some(TitlebarOptions {
                         title: Some("BIR eForms".into()),
                         ..Default::default()
@@ -24,8 +22,8 @@ fn main() {
                 };
                 
                 cx.open_window(options, |window, cx| {
-                    let view = cx.new_view(|cx| app::AppState::new(cx));
-                    cx.new_view(|cx| {
+                    let view = cx.new(|cx| app::AppState::new(cx));
+                    cx.new(|cx| {
                         Root::new(view, window, cx)
                             .bg(cx.theme().background)
                     })

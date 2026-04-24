@@ -1,4 +1,5 @@
 use gpui::*;
+use gpui_component::StyledExt;
 
 pub struct DashboardView;
 

@@ -1,4 +1,5 @@
 use gpui::*;
+use gpui_component::StyledExt;
 use gpui_component::*;
 use crate::views::*;
 
@@ -14,14 +15,14 @@ pub enum ActiveView {
 
 pub struct AppState {
     active_view: ActiveView,
-    dashboard: View<DashboardView>,
+    dashboard: Entity<DashboardView>,
 }
 
 impl AppState {
     pub fn new(cx: &mut Context<Self>) -> Self {
         Self {
             active_view: ActiveView::Dashboard,
-            dashboard: cx.new_view(|_| DashboardView::new()),
+            dashboard: cx.new(|_| DashboardView::new()),
         }
     }
 
@@ -32,7 +33,7 @@ impl AppState {
     fn render_active_view(&self, _cx: &mut Context<Self>) -> impl IntoElement {
         match self.active_view {
             ActiveView::Dashboard => self.dashboard.clone().into_any_element(),
-            _ => div().child("Not implemented"),
+            _ => div().child("Not implemented").into_any_element(),
         }
     }
 }
