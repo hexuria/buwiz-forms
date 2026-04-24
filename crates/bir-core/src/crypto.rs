@@ -168,4 +168,43 @@ mod tests {
         assert!(xml_string.starts_with("<?xml version='1.0'?>"));
         assert!(xml_string.contains("frm2551Qv2018"));
     }
+
+    #[test]
+    fn test_encrypt_decrypt_roundtrip() {
+        let original = b"<xml>test data with special chars</xml>";
+        let passphrase = "T0081gP45sy0rd-To+R3m3m63r!@4/<>";
+        let encrypted = compress_and_encrypt(original, passphrase).expect("encrypt failed");
+        assert_ne!(&encrypted[..], &original[..]);
+        let decrypted = decrypt_and_decompress(&encrypted, passphrase).expect("decrypt failed");
+        assert_eq!(decrypted, original);
+    }
+
+    #[test]
+    fn test_roundtrip_exact_block_boundary() {
+        // 32 bytes = exactly 2 blocks, no tail
+        let original = b"0123456789abcdef0123456789abcdef";
+        let passphrase = "testpass";
+        let encrypted = compress_and_encrypt(original, passphrase).expect("encrypt failed");
+        let decrypted = decrypt_and_decompress(&encrypted, passphrase).expect("decrypt failed");
+        assert_eq!(decrypted, original);
+    }
+
+    #[test]
+    fn test_roundtrip_non_block_boundary() {
+        // 33 bytes = 2 blocks + 1 tail byte
+        let original = b"0123456789abcdef0123456789abcdefX";
+        let passphrase = "testpass";
+        let encrypted = compress_and_encrypt(original, passphrase).expect("encrypt failed");
+        let decrypted = decrypt_and_decompress(&encrypted, passphrase).expect("decrypt failed");
+        assert_eq!(decrypted, original);
+    }
+
+    #[test]
+    fn test_roundtrip_empty_input() {
+        let original = b"";
+        let passphrase = "testpass";
+        let encrypted = compress_and_encrypt(original, passphrase).expect("encrypt failed");
+        let decrypted = decrypt_and_decompress(&encrypted, passphrase).expect("decrypt failed");
+        assert_eq!(decrypted, original);
+    }
 }
