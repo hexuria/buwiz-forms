@@ -4,7 +4,6 @@
 //! validation rules, and layout information. 
 
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FormSchema {

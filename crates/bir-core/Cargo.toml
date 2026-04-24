@@ -22,6 +22,8 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 keyring = { workspace = true }
+rand = "0.10.1"
+hex = "0.4.3"
 
 [dev-dependencies]
 insta = "1"
