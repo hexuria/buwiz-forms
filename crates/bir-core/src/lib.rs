@@ -19,7 +19,6 @@ pub mod crypto;
 pub mod db;
 pub mod form;
 pub mod naming;
-pub mod pdf;
 pub mod profile;
 pub mod reference;
 pub mod schema;
