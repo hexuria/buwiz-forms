@@ -19,12 +19,48 @@ pub struct Atc {
     pub rate: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Region {
+    pub code: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Province {
+    pub code: String,
+    pub region_code: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct City {
+    pub code: String,
+    pub province_code: String,
+    pub region_code: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaxTypeCode {
+    pub code: String,
+    pub description: String,
+    pub form: String,
+}
+
 /// Static embedded JSON data
 const RDO_JSON: &str = include_str!("../data/rdo.json");
 const ATC_JSON: &str = include_str!("../data/atcCodes.json");
+const REGION_JSON: &str = include_str!("../data/geo/regions.json");
+const PROVINCE_JSON: &str = include_str!("../data/geo/provinces.json");
+const CITY_JSON: &str = include_str!("../data/geo/cities.json");
+const TAX_TYPE_JSON: &str = include_str!("../data/tax_type_codes.json");
 
 static RDOS_BY_CODE: OnceLock<HashMap<String, Rdo>> = OnceLock::new();
 static ATCS_BY_CODE: OnceLock<HashMap<String, Atc>> = OnceLock::new();
+static REGIONS_BY_CODE: OnceLock<HashMap<String, Region>> = OnceLock::new();
+static PROVINCES_BY_CODE: OnceLock<HashMap<String, Province>> = OnceLock::new();
+static CITIES_BY_CODE: OnceLock<HashMap<String, City>> = OnceLock::new();
+static TAX_TYPES_BY_CODE: OnceLock<HashMap<String, TaxTypeCode>> = OnceLock::new();
 
 /// Initialize and parse the JSON lists
 fn init_rdos() -> HashMap<String, Rdo> {
@@ -35,6 +71,26 @@ fn init_rdos() -> HashMap<String, Rdo> {
 fn init_atcs() -> HashMap<String, Atc> {
     let list: Vec<Atc> = serde_json::from_str(ATC_JSON).expect("Invalid atcCodes.json");
     list.into_iter().map(|a| (a.code.clone(), a)).collect()
+}
+
+fn init_regions() -> HashMap<String, Region> {
+    let list: Vec<Region> = serde_json::from_str(REGION_JSON).expect("Invalid regions.json");
+    list.into_iter().map(|r| (r.code.clone(), r)).collect()
+}
+
+fn init_provinces() -> HashMap<String, Province> {
+    let list: Vec<Province> = serde_json::from_str(PROVINCE_JSON).expect("Invalid provinces.json");
+    list.into_iter().map(|p| (p.code.clone(), p)).collect()
+}
+
+fn init_cities() -> HashMap<String, City> {
+    let list: Vec<City> = serde_json::from_str(CITY_JSON).expect("Invalid cities.json");
+    list.into_iter().map(|c| (c.code.clone(), c)).collect()
+}
+
+fn init_tax_types() -> HashMap<String, TaxTypeCode> {
+    let list: Vec<TaxTypeCode> = serde_json::from_str(TAX_TYPE_JSON).expect("Invalid tax_type_codes.json");
+    list.into_iter().map(|t| (t.code.clone(), t)).collect()
 }
 
 /// Get an RDO by its code
@@ -55,6 +111,34 @@ pub fn get_all_rdos() -> Vec<Rdo> {
 pub fn get_atc(code: &str) -> Option<Atc> {
     let map = ATCS_BY_CODE.get_or_init(init_atcs);
     map.get(code).cloned()
+}
+
+pub fn get_all_regions() -> Vec<Region> {
+    let map = REGIONS_BY_CODE.get_or_init(init_regions);
+    let mut list: Vec<Region> = map.values().cloned().collect();
+    list.sort_by(|a, b| a.code.cmp(&b.code));
+    list
+}
+
+pub fn get_provinces_for_region(region_code: &str) -> Vec<Province> {
+    let map = PROVINCES_BY_CODE.get_or_init(init_provinces);
+    let mut list: Vec<Province> = map.values().filter(|p| p.region_code == region_code).cloned().collect();
+    list.sort_by(|a, b| a.code.cmp(&b.code));
+    list
+}
+
+pub fn get_cities_for_province(province_code: &str) -> Vec<City> {
+    let map = CITIES_BY_CODE.get_or_init(init_cities);
+    let mut list: Vec<City> = map.values().filter(|c| c.province_code == province_code).cloned().collect();
+    list.sort_by(|a, b| a.code.cmp(&b.code));
+    list
+}
+
+pub fn get_all_tax_types() -> Vec<TaxTypeCode> {
+    let map = TAX_TYPES_BY_CODE.get_or_init(init_tax_types);
+    let mut list: Vec<TaxTypeCode> = map.values().cloned().collect();
+    list.sort_by(|a, b| a.code.cmp(&b.code));
+    list
 }
 
 #[cfg(test)]
