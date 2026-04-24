@@ -1,0 +1,49 @@
+# Rust build artifacts
+/target/
+**/target/
+
+# Cargo lock is committed for applications
+# Cargo.lock  # Keep committed — we are an application, not a library
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# Database files (contain sensitive taxpayer data)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# User data directory
+/data/
+/profiles/
+
+# Test artifacts
+/test-output/
+
+# Generated PDF files
+*.pdf
