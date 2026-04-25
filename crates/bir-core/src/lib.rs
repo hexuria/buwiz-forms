@@ -20,6 +20,7 @@ pub mod db;
 pub mod form;
 pub mod forms;
 pub mod naming;
+pub mod news_fetcher;
 pub mod profile;
 pub mod receipt;
 pub mod reference;

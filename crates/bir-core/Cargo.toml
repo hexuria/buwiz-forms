@@ -18,6 +18,8 @@ zeroize = { workspace = true }
 aes-gcm = { workspace = true }
 suppaftp = { workspace = true }
 tokio = { workspace = true }
+reqwest = { workspace = true }
+rss = { workspace = true }
 rusqlite = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }

@@ -2,7 +2,6 @@ use bir_core::db::{Announcement, Database, PenaltyCache, TaxDeadline};
 use bir_core::profile::TaxpayerProfile;
 use chrono::{Datelike, Local};
 use gpui::*;
-use gpui::prelude::*;
 use gpui_component::*;
 use std::sync::{Arc, Mutex};
 
@@ -15,9 +14,9 @@ pub struct GlobalDashboardView {
 }
 
 impl GlobalDashboardView {
-    pub fn new(db: Arc<Mutex<Database>>, _window: &mut Window, _cx: &mut Context<'_, Self>) -> Self {
-        let (profiles, mut deadlines, mut announcements, mut penalties) = if let Ok(db_lock) = db.lock() {
-            let mut profiles = db_lock.list_profiles().unwrap_or_default();
+    pub fn new(db: Arc<Mutex<Database>>, _window: &mut Window, cx: &mut Context<'_, Self>) -> Self {
+        let (profiles, deadlines, announcements, penalties) = if let Ok(db_lock) = db.lock() {
+            let profiles = db_lock.list_profiles().unwrap_or_default();
             let mut deadlines = db_lock.list_tax_deadlines().unwrap_or_default();
             let mut announcements = db_lock.list_announcements().unwrap_or_default();
             
@@ -64,7 +63,28 @@ impl GlobalDashboardView {
             (Vec::new(), Vec::new(), Vec::new(), Vec::new())
         };
 
-        Self { db, profiles, deadlines, announcements, penalties }
+        let mut view = Self { db, profiles, deadlines, announcements, penalties };
+        view.refresh_news(cx);
+        view
+    }
+
+    pub fn refresh_news(&mut self, cx: &mut Context<Self>) {
+        let fetch_db = self.db.clone();
+        cx.spawn(async move |view, mut cx| {
+            // Run all blocking reqwest operations on the background thread pool
+            cx.background_executor().spawn(async move {
+                let fetcher = bir_core::news_fetcher::NewsFetcher::new(fetch_db);
+                let _ = fetcher.fetch_and_sync();
+            }).await;
+            
+            // Back on the main thread, reload the announcements
+            let _ = view.update(cx, |view, cx| {
+                if let Ok(db_lock) = view.db.lock() {
+                    view.announcements = db_lock.list_announcements().unwrap_or_default();
+                    cx.notify();
+                }
+            });
+        }).detach();
     }
     pub fn set_profiles(&mut self, profiles: Vec<TaxpayerProfile>, cx: &mut Context<Self>) {
         self.profiles = profiles;
@@ -138,7 +158,7 @@ impl Render for GlobalDashboardView {
                             .flex()
                             .flex_col()
                             .gap_6()
-                            .child(Self::news_section(&self.announcements, cx)),
+                            .child(self.news_section(cx)),
                     ),
             )
     }
@@ -201,12 +221,13 @@ impl GlobalDashboardView {
     }
 
     fn stat_card(title: &str, value: &str, icon: &str, cx: &Context<Self>, is_warning: bool) -> gpui::Div {
+        let warning_color: gpui::Hsla = gpui::rgb(0xef4444).into();
         div()
             .flex_1()
             .p_4()
-            .bg(if is_warning { cx.theme().destructive.opacity(0.05) } else { cx.theme().background })
+            .bg(if is_warning { warning_color.opacity(0.05) } else { cx.theme().background })
             .border_1()
-            .border_color(if is_warning { cx.theme().destructive } else { cx.theme().border })
+            .border_color(if is_warning { warning_color } else { cx.theme().border })
             .rounded_xl()
             .shadow_sm()
             .flex()
@@ -221,7 +242,7 @@ impl GlobalDashboardView {
                         div()
                             .text_sm()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(if is_warning { cx.theme().destructive } else { cx.theme().muted_foreground })
+                            .text_color(if is_warning { warning_color } else { cx.theme().muted_foreground })
                             .child(title.to_string()),
                     )
                     .child(div().text_xl().child(icon.to_string())),
@@ -230,7 +251,7 @@ impl GlobalDashboardView {
                 div()
                     .text_2xl()
                     .font_weight(FontWeight::BOLD)
-                    .text_color(if is_warning { cx.theme().destructive } else { cx.theme().foreground })
+                    .text_color(if is_warning { warning_color } else { cx.theme().foreground })
                     .child(value.to_string()),
             )
     }
@@ -293,6 +314,7 @@ impl GlobalDashboardView {
     }
 
     fn action_row(profile: &str, form: &str, status: &str, is_urgent: bool, cx: &Context<Self>) -> gpui::Div {
+        let warning_color: gpui::Hsla = gpui::rgb(0xef4444).into();
         div()
             .flex()
             .p_3()
@@ -309,9 +331,9 @@ impl GlobalDashboardView {
                     .items_center()
                     .gap_2()
                     .children(if is_urgent {
-                        Some(div().px_2().py_0p5().bg(cx.theme().destructive.opacity(0.1)).text_color(cx.theme().destructive).rounded_md().text_xs().font_weight(FontWeight::BOLD).child("!"))
+                        Some(div().px_2().py_0p5().bg(warning_color.opacity(0.1)).text_color(warning_color).rounded_md().text_xs().font_weight(FontWeight::BOLD).child("!"))
                     } else { None })
-                    .child(div().text_color(if is_urgent { cx.theme().destructive } else { cx.theme().foreground }).child(status.to_string()))
+                    .child(div().text_color(if is_urgent { warning_color } else { cx.theme().foreground }).child(status.to_string()))
             )
             .child(
                 div()
@@ -506,10 +528,17 @@ impl GlobalDashboardView {
             )
     }
 
-    fn news_section(announcements: &[Announcement], cx: &Context<Self>) -> gpui::Div {
-        let mut news_list = div().flex().flex_col().gap_4();
+    fn news_section(&self, cx: &mut Context<Self>) -> gpui::Div {
+        let mut news_list = div()
+            .id("news-list")
+            .flex()
+            .flex_col()
+            .gap_4()
+            .pr_2() // add some padding for scrollbar
+            .max_h(px(600.))
+            .overflow_y_scroll();
         
-        for ann in announcements {
+        for ann in &self.announcements {
             news_list = news_list.child(
                 Self::news_card(&ann.source, &ann.title, &ann.content, &ann.published_at, cx)
             );
@@ -521,10 +550,33 @@ impl GlobalDashboardView {
             .gap_4()
             .child(
                 div()
-                    .text_xl()
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(cx.theme().foreground)
-                    .child("Important News"),
+                    .flex()
+                    .justify_between()
+                    .items_center()
+                    .child(
+                        div()
+                            .text_xl()
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(cx.theme().foreground)
+                            .child("Important News"),
+                    )
+                    .child(
+                        div()
+                            .id("refresh-news")
+                            .px_3()
+                            .py_1()
+                            .bg(cx.theme().primary.opacity(0.1))
+                            .text_color(cx.theme().primary)
+                            .rounded_md()
+                            .text_sm()
+                            .font_weight(FontWeight::BOLD)
+                            .cursor_pointer()
+                            .hover(|s| s.bg(cx.theme().primary).text_color(cx.theme().primary_foreground))
+                            .child("Refresh")
+                            .on_click(cx.listener(|this, _event, _window, cx| {
+                                this.refresh_news(cx);
+                            }))
+                    )
             )
             .child(news_list)
     }
