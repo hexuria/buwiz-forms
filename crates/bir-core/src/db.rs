@@ -101,7 +101,7 @@ impl NoticeSourceKind {
             NoticeSourceKind::FacebookGraph => "FacebookGraph",
         }
     }
-    
+
     pub fn from_str(s: &str) -> Self {
         match s {
             "BirCms" => NoticeSourceKind::BirCms,
@@ -157,7 +157,6 @@ pub struct PenaltyCache {
     pub is_high_risk: bool,
     pub calculated_at: String,
 }
-
 
 #[derive(thiserror::Error, Debug)]
 pub enum DbError {
@@ -549,6 +548,12 @@ impl Database {
         Ok(profiles)
     }
 
+    /// Get a single profile by its TIN.
+    pub fn get_profile_by_tin(&self, tin: &str) -> Result<Option<TaxpayerProfile>, DbError> {
+        let profiles = self.list_profiles()?;
+        Ok(profiles.into_iter().find(|p| p.tin.full() == tin))
+    }
+
     /// Delete a profile by TIN.
     pub fn delete_profile(&self, tin: &str) -> Result<(), DbError> {
         self.conn
@@ -638,6 +643,7 @@ impl Database {
             FilingStatus::Draft => "Draft",
             FilingStatus::Submitted => "Submitted",
             FilingStatus::Confirmed => "Confirmed",
+            FilingStatus::Paid => "Paid",
         };
         let quarter = draft.quarter as i64;
 
@@ -696,6 +702,30 @@ impl Database {
         Ok(())
     }
 
+    /// Save an imported form directly to the form_drafts table to show up in Dashboard.
+    pub fn save_imported_form(
+        &self,
+        tin: &str,
+        form_code: &str,
+        year: u16,
+        quarter: Option<u8>,
+        month: Option<u8>,
+    ) -> Result<i64, DbError> {
+        // We multiplex the `quarter` column to hold either month or quarter depending on form frequency.
+        // For Dashboard compatibility, the UI just filters based on form frequency.
+        let q_or_m = quarter.or(month).map(|v| v as i64);
+
+        self.conn.execute(
+            "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, status, data_json)
+             VALUES (?1, ?2, ?3, ?4, 'Submitted', '{}')
+             ON CONFLICT(tin, form_code, taxable_year, quarter)
+             DO UPDATE SET status = 'Submitted', updated_at = datetime('now')",
+            params![tin, form_code, year as i64, q_or_m],
+        )?;
+
+        Ok(self.conn.last_insert_rowid())
+    }
+
     /// Get filing progress for a form in a given year.
     /// Returns a FormFilingProgress with per-quarter states.
     pub fn get_form_filing_progress(
@@ -719,6 +749,7 @@ impl Database {
             let state = match status_str.as_str() {
                 "Confirmed" => QuarterState::Confirmed,
                 "Submitted" | "Filed" => QuarterState::Submitted,
+                "Paid" => QuarterState::Paid,
                 "Draft" => QuarterState::Draft,
                 _ => QuarterState::Draft,
             };
@@ -758,6 +789,7 @@ impl Database {
                 status: match row.get::<_, String>(5)?.as_str() {
                     "Confirmed" => FilingStatus::Confirmed,
                     "Submitted" | "Filed" => FilingStatus::Submitted,
+                    "Paid" => FilingStatus::Paid,
                     _ => FilingStatus::Draft,
                 },
                 updated_at: row.get(6)?,
@@ -874,7 +906,9 @@ impl Database {
     }
 
     pub fn list_tax_deadlines(&self) -> Result<Vec<TaxDeadline>, DbError> {
-        let mut stmt = self.conn.prepare("SELECT id, form_type, due_date, description FROM tax_deadlines ORDER BY due_date ASC")?;
+        let mut stmt = self.conn.prepare(
+            "SELECT id, form_type, due_date, description FROM tax_deadlines ORDER BY due_date ASC",
+        )?;
         let rows = stmt.query_map([], |row| {
             Ok(TaxDeadline {
                 id: row.get(0)?,
@@ -906,7 +940,7 @@ impl Database {
                  raw_json=excluded.raw_json,
                  fetched_at=datetime('now')"
         )?;
-        
+
         let read_status = if notice.read_status { 1 } else { 0 };
         stmt.execute(params![
             notice.external_id,
@@ -965,7 +999,13 @@ impl Database {
     pub fn save_announcement(&self, ann: &Announcement) -> Result<i64, DbError> {
         self.save_bir_notice(&BirNotice {
             id: None,
-            external_id: format!("legacy-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_micros()),
+            external_id: format!(
+                "legacy-{}",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_micros()
+            ),
             source: ann.source.clone(),
             source_kind: NoticeSourceKind::Rss,
             source_url: None,
@@ -985,14 +1025,17 @@ impl Database {
 
     pub fn list_announcements(&self) -> Result<Vec<Announcement>, DbError> {
         let notices = self.list_bir_notices()?;
-        Ok(notices.into_iter().map(|n| Announcement {
-            id: n.id,
-            source: n.source,
-            title: n.title,
-            content: n.body,
-            published_at: n.posted_at.unwrap_or_default(),
-            read_status: n.read_status,
-        }).collect())
+        Ok(notices
+            .into_iter()
+            .map(|n| Announcement {
+                id: n.id,
+                source: n.source,
+                title: n.title,
+                content: n.body,
+                published_at: n.posted_at.unwrap_or_default(),
+                read_status: n.read_status,
+            })
+            .collect())
     }
 
     // =========================================================================
@@ -1078,6 +1121,11 @@ mod tests {
             taxpayer_type: crate::profile::TaxpayerType::Individual,
             is_vat_registered: false,
             business_start_date: None,
+            email_tracking_enabled: false,
+            email_auth_method: Default::default(),
+            imap_email: None,
+            imap_host: None,
+            _imap_enabled_compat: None,
         };
 
         db.save_profile(profile).expect("Failed to save profile");

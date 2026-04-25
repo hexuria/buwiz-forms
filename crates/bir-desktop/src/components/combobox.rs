@@ -69,9 +69,10 @@ impl ComboboxState {
                 } else if let InputEvent::PressEnter { .. } = event {
                     if this.open
                         && let Some(idx) = this.selected_index
-                            && let Some(option) = this.filtered_options.get(idx).cloned() {
-                                this.select_item(&option, window, cx);
-                            }
+                        && let Some(option) = this.filtered_options.get(idx).cloned()
+                    {
+                        this.select_item(&option, window, cx);
+                    }
                 } else if let InputEvent::Focus = event {
                     this.open = true;
                     cx.notify();

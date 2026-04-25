@@ -1,7 +1,7 @@
 use crate::views::dashboard::{DashboardEvent, DashboardView};
 use crate::views::form_2551q_view::{Form2551QEvent, Form2551QView};
+use crate::views::global_dashboard::{GlobalDashboardEvent, GlobalDashboardView};
 use crate::views::profile_manager::ProfileManagerView;
-use crate::views::global_dashboard::GlobalDashboardView;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::input::{Input, InputEvent, InputState};
@@ -71,10 +71,11 @@ impl AppState {
 
         let db_clone = Arc::clone(&db);
         let profile_manager = cx.new(|cx| ProfileManagerView::new(db_clone, window, cx));
-        
+
         let db_clone_global = Arc::clone(&db);
-        let global_dashboard_view = cx.new(|cx| GlobalDashboardView::new(db_clone_global, window, cx));
-        
+        let global_dashboard_view =
+            cx.new(|cx| GlobalDashboardView::new(db_clone_global, window, cx));
+
         let profile_filter =
             cx.new(|cx| InputState::new(window, cx).placeholder("Search TIN or name"));
         let filter_sub = cx.subscribe_in(
@@ -90,21 +91,35 @@ impl AppState {
         let profile_sub = cx.subscribe(
             &profile_manager,
             |this: &mut Self, _entity, _event: &crate::views::profile_manager::ProfileEvent, cx| {
-                if let Ok(db_lock) = this.db.lock() {
-                    this.profiles = db_lock.list_profiles().unwrap_or_default();
-                    let p_clone = this.profiles.clone();
-                    this.global_dashboard_view.update(cx, |view, cx| {
-                        view.set_profiles(p_clone, cx);
-                    });
-                    if let Some(tin) = &this.active_profile_tin
-                        && let Some(profile) = this.profiles.iter().find(|p| p.tin.full() == *tin) {
-                            let p = profile.clone();
-                            this.dashboard_view.update(cx, |view, cx| {
-                                view.set_profile(p, cx);
-                            });
+                let db_clone = this.db.clone();
+                let active_tin = this.active_profile_tin.clone();
+                
+                cx.spawn(async move |this, cx| {
+                    let profiles = cx.background_executor().spawn(async move {
+                        if let Ok(db) = db_clone.lock() {
+                            db.list_profiles().unwrap_or_default()
+                        } else {
+                            Vec::new()
                         }
-                    cx.notify();
-                }
+                    }).await;
+                    
+                    let _ = this.update(cx, |this, cx| {
+                        this.profiles = profiles.clone();
+                        this.global_dashboard_view.update(cx, |view, cx| {
+                            view.set_profiles(profiles.clone(), cx);
+                        });
+                        
+                        if let Some(tin) = &active_tin {
+                            if let Some(profile) = this.profiles.iter().find(|p| p.tin.full() == *tin) {
+                                let p = profile.clone();
+                                this.dashboard_view.update(cx, |view, cx| {
+                                    view.set_profile(p, cx);
+                                });
+                            }
+                        }
+                        cx.notify();
+                    });
+                }).detach();
             },
         );
 
@@ -112,44 +127,57 @@ impl AppState {
         let dashboard_view = cx.new(|cx| DashboardView::new(db_clone2, window, cx));
 
         cx.subscribe(
-            &dashboard_view,
-            |this: &mut Self, _entity, event: &DashboardEvent, cx| {
-                let DashboardEvent::FileForm {
+            &global_dashboard_view,
+            |this: &mut Self, _entity, event: &GlobalDashboardEvent, cx| match event {
+                GlobalDashboardEvent::OpenForm {
+                    tin,
                     form_code,
                     year,
                     quarter,
-                } = event;
-
-                if form_code == "2551Q"
-                    && let Some(tin) = &this.active_profile_tin
-                        && let Some(profile) = this.profiles.iter().find(|p| p.tin.full() == *tin) {
-                            let draft = if let Ok(db) = this.db.lock() {
-                                let existing =
-                                    db.get_2551q_draft(tin, *year, *quarter).ok().flatten();
-                                if let Some(d) = existing {
-                                    d
-                                } else {
-                                    let prev = if *quarter > 1 {
-                                        db.get_2551q_draft(tin, *year, *quarter - 1).ok().flatten()
-                                    } else {
-                                        None
-                                    };
-                                    let new_draft =
-                                        Form2551QDraft::new_from_profile(profile, *year, *quarter);
-                                    if let Some(prev_draft) = prev {
-                                        new_draft.with_carried_forward(&prev_draft)
-                                    } else {
-                                        new_draft
+                } => {
+                    this.active_profile_tin = Some(tin.clone());
+                    let event = DashboardEvent::FileForm {
+                        form_code: form_code.clone(),
+                        year: *year,
+                        quarter: *quarter,
+                    };
+                    this.handle_file_form(&event, cx);
+                }
+                GlobalDashboardEvent::CheckStatus { tin } => {
+                    if let Ok(db) = this.db.lock() {
+                        if let Ok(Some(profile)) = db.get_profile(tin) {
+                            let db_clone = this.db.clone();
+                            cx.background_executor()
+                                .spawn(async move {
+                                    if let Ok(db) = db_clone.lock() {
+                                        let _ = bir_core::email_fetcher::fetch_and_process_emails(
+                                            &profile, &db,
+                                        );
                                     }
-                                }
-                            } else {
-                                Form2551QDraft::new_from_profile(profile, *year, *quarter)
-                            };
-                            // Store the draft; the view will be created on next render with Window access
-                            this.pending_form_draft = Some(draft);
-                            this.active_view = ActiveView::Form2551Q;
-                            cx.notify();
+                                })
+                                .detach();
                         }
+                    }
+                }
+            },
+        )
+        .detach();
+
+        cx.subscribe(
+            &dashboard_view,
+            |this: &mut Self, _entity, event: &DashboardEvent, cx| match event {
+                DashboardEvent::FileForm { .. } => this.handle_file_form(event, cx),
+                DashboardEvent::Reload => {
+                    if let Some(tin) = &this.active_profile_tin {
+                        if let Some(profile) = this.profiles.iter().find(|p| p.tin.full() == *tin) {
+                            let p = profile.clone();
+                            this.dashboard_view.update(cx, |view, cx| {
+                                view.set_profile(p, cx);
+                            });
+                        }
+                    }
+                    cx.notify();
+                }
             },
         )
         .detach();
@@ -252,84 +280,48 @@ impl AppState {
                     )
                     .child(
                         div()
-                            .text_xs()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(cx.theme().muted_foreground)
-                            .child("TAXPAYER PROFILES"),
-                    )
-                    .child(
-                        gpui_component::button::Button::new("add_profile")
-                            .label("+ Add Profile")
-                            .w_full()
-                            .on_click(cx.listener(|this, _ev, _window, cx| {
-                                this.active_view = ActiveView::ProfileManager;
-                                this.active_profile_tin = None;
-                                this.profile_manager.update(cx, |view, cx| {
-                                    view.reset_for_new(_window, cx);
-                                });
-                                cx.notify();
-                            })),
-                    )
-                    .child(Input::new(&self.profile_filter))
-                    .when(
-                        cfg!(debug_assertions) || std::env::var("PRODUCTION").unwrap_or_default() == "false",
-                        |this| {
-                            this.child(
-                                gpui_component::button::Button::new("generate_mock_profile")
-                                    .label("Generate Profile")
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("TAXPAYER PROFILES"),
+                            )
+                            .child(
+                                gpui_component::button::Button::new("add_profile")
+                                    .label("+")
                                     .small()
                                     .on_click(cx.listener(|this, _ev, _window, cx| {
-                                        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
-                                        let _tin_str = format!(
-                                            "{:03}-{:03}-{:03}-{:03}",
-                                            (now % 900) + 100,
-                                            ((now / 1000) % 900) + 100,
-                                            ((now / 1000000) % 900) + 100,
-                                            now % 1000
-                                        );
-                                        use bir_core::naming::Tin;
-                                        use bir_core::profile::TaxpayerType;
-                                        
-                                        let tin = Tin {
-                                            segment1: format!("{:03}", (now % 900) + 100),
-                                            segment2: format!("{:03}", ((now / 1000) % 900) + 100),
-                                            segment3: format!("{:03}", ((now / 1000000) % 900) + 100),
-                                            branch: format!("{:03}", now % 1000),
-                                        };
-                                        let profile = TaxpayerProfile {
-                                            id: None,
-                                            tin,
-                                            rdo_code: "018".to_string(),
-                                            taxpayer_type: TaxpayerType::Individual,
-                                            line_of_business: "Software Development".to_string(),
-                                            full_name: format!("Generated User {}", now % 10000),
-                                            registered_address: "123 Mock Street, Dev City".to_string(),
-                                            zip_code: "1234".to_string(),
-                                            phone: "09123456789".to_string(),
-                                            email: "mock@example.com".to_string(),
-                                            default_form_type: "2551Qv2018".into(),
-                                            business_start_date: chrono::NaiveDate::from_ymd_opt(2020, 1, 1),
-                                            is_vat_registered: true,
-                                        };
-                                        if let Ok(db) = this.db.lock() {
-                                            let _ = db.save_profile(profile);
-                                            this.profiles = db.list_profiles().unwrap_or_default();
-                                        }
+                                        this.active_view = ActiveView::ProfileManager;
+                                        this.active_profile_tin = None;
+                                        this.profile_manager.update(cx, |view, cx| {
+                                            view.reset_for_new(_window, cx);
+                                        });
                                         cx.notify();
                                     })),
-                            )
-                        },
+                            ),
                     )
+                    .child(Input::new(&self.profile_filter))
                     .child(div().h_2())
+                    .child(
+                        div()
+                            .w_full()
+                            .h_px()
+                            .bg(cx.theme().border)
+                    )
                     .child(
                         v_flex()
                             .id("sidebar-profile-list")
                             .max_h(px(320.))
                             .overflow_y_scroll()
                             .track_scroll(&self.sidebar_scroll)
-                            .pb_12()
+                            .pb_2()
+                            .pt_2()
                             .gap_2()
-                            .children(filtered_profiles.iter().enumerate().map(|(idx, profile)| {
+                            .children(filtered_profiles.iter().map(|profile| {
                                 let is_active =
                                     self.active_profile_tin.as_ref() == Some(&profile.tin.full());
                                 let is_expanded =
@@ -499,41 +491,22 @@ impl AppState {
                                     })
                                     .on_click(cx.listener({
                                         let tin = profile.tin.full();
-                                        let scroll = self.sidebar_scroll.clone();
-                                        let is_last = idx == filtered_profiles.len() - 1;
                                         move |this, _ev, _window, cx| {
                                             if this.expanded_profile_tin.as_ref() == Some(&tin) {
                                                 this.expanded_profile_tin = None;
                                             } else {
                                                 this.expanded_profile_tin = Some(tin.clone());
-                                                if is_last {
-                                                    scroll.set_offset(gpui::Point { x: gpui::px(0.), y: gpui::px(9999.0) });
-                                                }
                                             }
                                             cx.notify();
                                         }
                                     }))
                             }))
-                            .child(
-                                div()
-                                    .w_full()
-                                    .h_px()
-                                    .bg(cx.theme().border)
-                                    .mt_4()
-                                    .mb_2()
-                            )
-                            .child(
-                                div()
-                                    .w_full()
-                                    .flex()
-                                    .justify_center()
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child("End of profiles")
-                                    )
-                            ),
+                    )
+                    .child(
+                        div()
+                            .w_full()
+                            .h_px()
+                            .bg(cx.theme().border)
                     ),
             )
             .child(
@@ -570,18 +543,58 @@ impl AppState {
             _ => div().child("Not implemented").into_any_element(),
         }
     }
+
+    fn handle_file_form(&mut self, event: &DashboardEvent, cx: &mut Context<Self>) {
+        let (form_code, year, quarter) = match event {
+            DashboardEvent::FileForm { form_code, year, quarter } => (form_code, year, quarter),
+            _ => return,
+        };
+        let year = *year;
+        let quarter = *quarter;
+
+        if form_code == "2551Q"
+            && let Some(tin) = &self.active_profile_tin
+            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
+        {
+            let draft = if let Ok(db) = self.db.lock() {
+                let existing = db.get_2551q_draft(tin, year, quarter).ok().flatten();
+                if let Some(d) = existing {
+                    d
+                } else {
+                    let prev = if quarter > 1 {
+                        db.get_2551q_draft(tin, year, quarter - 1).ok().flatten()
+                    } else {
+                        None
+                    };
+                    let new_draft = Form2551QDraft::new_from_profile(profile, year, quarter);
+                    if let Some(prev_draft) = prev {
+                        new_draft.with_carried_forward(&prev_draft)
+                    } else {
+                        new_draft
+                    }
+                }
+            } else {
+                Form2551QDraft::new_from_profile(profile, year, quarter)
+            };
+            // Store the draft; the view will be created on next render with Window access
+            self.pending_form_draft = Some(draft);
+            self.active_view = ActiveView::Form2551Q;
+            cx.notify();
+        }
+    }
 }
 
 fn app_database_path() -> std::path::PathBuf {
     if cfg!(target_os = "macos")
-        && let Some(home) = std::env::var_os("HOME") {
-            return std::path::PathBuf::from(home)
-                .join("Library")
-                .join("Application Support")
-                .join("Taxman")
-                .join("eBIRForms")
-                .join("bir_data.db");
-        }
+        && let Some(home) = std::env::var_os("HOME")
+    {
+        return std::path::PathBuf::from(home)
+            .join("Library")
+            .join("Application Support")
+            .join("Taxman")
+            .join("eBIRForms")
+            .join("bir_data.db");
+    }
 
     if let Some(home) = std::env::var_os("HOME") {
         return std::path::PathBuf::from(home)
@@ -609,12 +622,12 @@ impl Render for AppState {
                         if let Some(tin) = &this.active_profile_tin
                             && let Some(profile) =
                                 this.profiles.iter().find(|p| p.tin.full() == *tin)
-                            {
-                                let p = profile.clone();
-                                this.dashboard_view.update(cx, |view, cx| {
-                                    view.set_profile(p, cx);
-                                });
-                            }
+                        {
+                            let p = profile.clone();
+                            this.dashboard_view.update(cx, |view, cx| {
+                                view.set_profile(p, cx);
+                            });
+                        }
                         cx.notify();
                     }
                     Form2551QEvent::Saved
@@ -628,6 +641,8 @@ impl Render for AppState {
 
             self.form_2551q_view = Some(form_view);
         }
+
+        let notification_layer = Root::render_notification_layer(window, cx);
 
         div()
             .flex()
@@ -644,6 +659,7 @@ impl Render for AppState {
                     .overflow_hidden()
                     .child(self.render_active_view(cx)),
             )
+            .children(notification_layer)
     }
 }
 
@@ -651,8 +667,9 @@ impl Drop for AppState {
     fn drop(&mut self) {
         // Flush any pending WAL data to the main database file before shutdown
         if let Ok(db) = self.db.lock()
-            && let Err(e) = db.checkpoint() {
-                eprintln!("Warning: WAL checkpoint on shutdown failed: {e}");
-            }
+            && let Err(e) = db.checkpoint()
+        {
+            eprintln!("Warning: WAL checkpoint on shutdown failed: {e}");
+        }
     }
 }

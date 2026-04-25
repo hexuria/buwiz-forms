@@ -14,6 +14,7 @@ pub enum FilingStatus {
     #[serde(alias = "Filed")]
     Submitted,
     Confirmed,
+    Paid,
 }
 
 /// One row in Schedule 1 — a single ATC category with its taxable amount.
@@ -204,6 +205,7 @@ impl FormDraftSummary {
             FilingStatus::Draft => QuarterState::Draft,
             FilingStatus::Submitted => QuarterState::Submitted,
             FilingStatus::Confirmed => QuarterState::Confirmed,
+            FilingStatus::Paid => QuarterState::Paid,
         }
     }
 }
@@ -215,6 +217,7 @@ pub enum QuarterState {
     Draft,
     Submitted,
     Confirmed,
+    Paid,
 }
 
 /// Aggregated filing progress for a single form in a given year.
@@ -244,9 +247,18 @@ impl FormFilingProgress {
                 QuarterState::NotStarted,
             ],
             months: [
-                QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted,
-                QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted,
-                QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted,
+                QuarterState::NotStarted,
+                QuarterState::NotStarted,
+                QuarterState::NotStarted,
+                QuarterState::NotStarted,
+                QuarterState::NotStarted,
+                QuarterState::NotStarted,
+                QuarterState::NotStarted,
+                QuarterState::NotStarted,
+                QuarterState::NotStarted,
+                QuarterState::NotStarted,
+                QuarterState::NotStarted,
+                QuarterState::NotStarted,
             ],
             annual_status: QuarterState::NotStarted,
             open_ended_count: 0,
@@ -257,7 +269,11 @@ impl FormFilingProgress {
     pub fn filed_count(&self) -> u32 {
         self.quarters
             .iter()
-            .filter(|q| **q == QuarterState::Submitted || **q == QuarterState::Confirmed)
+            .filter(|q| {
+                **q == QuarterState::Submitted
+                    || **q == QuarterState::Confirmed
+                    || **q == QuarterState::Paid
+            })
             .count() as u32
     }
 

@@ -25,8 +25,15 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 keyring = { workspace = true }
+dotenvy = { workspace = true }
 rand = "0.10.1"
 hex = "0.4.3"
+imap = "2.4.1"
+mailparse = "0.16.1"
+native-tls = "0.2.18"
+data-encoding = "2.11.0"
+open = "5.3.4"
+directories = "6.0.0"
 
 [dev-dependencies]
 insta = "1"

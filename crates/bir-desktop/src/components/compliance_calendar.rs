@@ -1,8 +1,8 @@
-use gpui::*;
+use bir_core::db::{BirNotice, TaxDeadline};
+use chrono::{Datelike, Local, NaiveDate};
 use gpui::prelude::*;
+use gpui::*;
 use gpui_component::*;
-use bir_core::db::{TaxDeadline, Announcement};
-use chrono::{Datelike, NaiveDate, Local};
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum CalendarMode {
@@ -16,46 +16,40 @@ pub struct ComplianceCalendar {
     pub filters: std::collections::HashSet<String>,
     pub available_filters: Vec<String>,
     pub current_month: NaiveDate,
-    
+
     // Extracted props so it can hold the data temporarily during render
     deadlines: Vec<TaxDeadline>,
-    announcements: Vec<Announcement>,
+    announcements: Vec<BirNotice>,
 }
 
 impl ComplianceCalendar {
     pub fn new(cx: &mut Context<Self>) -> Self {
         let current_date = Local::now().date_naive();
-        let current_month = NaiveDate::from_ymd_opt(current_date.year(), current_date.month(), 1).unwrap();
-        
+        let current_month =
+            NaiveDate::from_ymd_opt(current_date.year(), current_date.month(), 1).unwrap();
+
         let mut filters = std::collections::HashSet::new();
         filters.insert("All".to_string());
-        
+
+        let available_filters = bir_core::forms::registry::FORM_REGISTRY
+            .iter()
+            .map(|f| f.code.to_string())
+            .collect();
+
         Self {
             mode: CalendarMode::List,
             filter_open: false,
             filters,
-            available_filters: vec![
-                "2551Q".to_string(),
-                "1701Q".to_string(),
-                "2550M".to_string(),
-                "1601-C".to_string(),
-            ],
+            available_filters,
             current_month,
             deadlines: Vec::new(),
             announcements: Vec::new(),
         }
     }
 
-    pub fn set_data(&mut self, deadlines: Vec<TaxDeadline>, announcements: Vec<Announcement>) {
+    pub fn set_data(&mut self, deadlines: Vec<TaxDeadline>, announcements: Vec<BirNotice>) {
         self.deadlines = deadlines;
         self.announcements = announcements;
-        
-        // Dynamically extract available filters from deadlines
-        for d in &self.deadlines {
-            if !self.available_filters.contains(&d.form_type) {
-                self.available_filters.push(d.form_type.clone());
-            }
-        }
     }
 
     fn toggle_filter(&mut self, filter: &str, cx: &mut Context<Self>) {
@@ -101,8 +95,19 @@ impl ComplianceCalendar {
             .gap_2()
             .cursor_pointer()
             .hover(|s| s.bg(cx.theme().secondary))
-            .child(div().text_sm().font_weight(FontWeight::BOLD).text_color(cx.theme().foreground).child(selected_text))
-            .child(div().text_xs().text_color(cx.theme().muted_foreground).child("▼"))
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(cx.theme().foreground)
+                    .child(selected_text),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child("▼"),
+            )
             .on_click(cx.listener(|this, _, _, cx| {
                 this.filter_open = !this.filter_open;
                 cx.notify();
@@ -110,7 +115,7 @@ impl ComplianceCalendar {
 
         let dropdown = if self.filter_open {
             let mut options_list = div().flex().flex_col().w_full();
-            
+
             // "All" option
             let is_all = self.filters.contains("All");
             options_list = options_list.child(
@@ -131,15 +136,35 @@ impl ComplianceCalendar {
                             .w(px(16.))
                             .h(px(16.))
                             .border_1()
-                            .border_color(if is_all { cx.theme().primary } else { cx.theme().border })
-                            .bg(if is_all { cx.theme().primary } else { cx.theme().background })
+                            .border_color(if is_all {
+                                cx.theme().primary
+                            } else {
+                                cx.theme().border
+                            })
+                            .bg(if is_all {
+                                cx.theme().primary
+                            } else {
+                                cx.theme().background
+                            })
                             .rounded_sm()
                             .flex()
                             .items_center()
                             .justify_center()
-                            .child(if is_all { div().text_xs().text_color(cx.theme().primary_foreground).child("✓") } else { div() })
+                            .child(if is_all {
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().primary_foreground)
+                                    .child("✓")
+                            } else {
+                                div()
+                            }),
                     )
-                    .child(div().text_sm().text_color(cx.theme().foreground).child("All Forms"))
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().foreground)
+                            .child("All Forms"),
+                    ),
             );
 
             // Other options
@@ -167,64 +192,90 @@ impl ComplianceCalendar {
                                 .w(px(16.))
                                 .h(px(16.))
                                 .border_1()
-                                .border_color(if is_selected { cx.theme().primary } else { cx.theme().border })
-                                .bg(if is_selected { cx.theme().primary } else { cx.theme().background })
+                                .border_color(if is_selected {
+                                    cx.theme().primary
+                                } else {
+                                    cx.theme().border
+                                })
+                                .bg(if is_selected {
+                                    cx.theme().primary
+                                } else {
+                                    cx.theme().background
+                                })
                                 .rounded_sm()
                                 .flex()
                                 .items_center()
                                 .justify_center()
-                                .child(if is_selected { div().text_xs().text_color(cx.theme().primary_foreground).child("✓") } else { div() })
+                                .child(if is_selected {
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().primary_foreground)
+                                        .child("✓")
+                                } else {
+                                    div()
+                                }),
                         )
-                        .child(div().text_sm().text_color(cx.theme().foreground).child(opt.clone()))
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(cx.theme().foreground)
+                                .child(opt.clone()),
+                        ),
                 );
             }
 
             deferred(
-                anchored()
-                    .snap_to_window_with_margin(px(8.))
-                    .child(
-                        div()
-                            .occlude()
-                            .mt_1p5()
-                            .w(px(200.))
-                            .border_1()
-                            .border_color(cx.theme().border)
-                            .shadow_lg()
-                            .rounded_md()
-                            .bg(cx.theme().popover)
-                            .child(options_list)
-                    )
-            ).with_priority(2).into_any_element()
+                anchored().snap_to_window_with_margin(px(8.)).child(
+                    div()
+                        .occlude()
+                        .mt_1p5()
+                        .w(px(200.))
+                        .border_1()
+                        .border_color(cx.theme().border)
+                        .shadow_lg()
+                        .rounded_md()
+                        .bg(cx.theme().popover)
+                        .child(options_list),
+                ),
+            )
+            .with_priority(2)
+            .into_any_element()
         } else {
             div().into_any_element()
         };
 
-        div()
-            .relative()
-            .child(filter_button)
-            .child(dropdown)
+        div().relative().child(filter_button).child(dropdown)
     }
 
     fn filtered_deadlines(&self) -> Vec<&TaxDeadline> {
         if self.filters.contains("All") {
             self.deadlines.iter().collect()
         } else {
-            self.deadlines.iter().filter(|d| self.filters.contains(&d.form_type)).collect()
+            self.deadlines
+                .iter()
+                .filter(|d| self.filters.contains(&d.form_type))
+                .collect()
         }
     }
 
     fn render_list_view(&self, cx: &Context<Self>) -> gpui::Div {
         let deadlines = self.filtered_deadlines();
         let mut schedule_list = div().flex().flex_col().gap_3();
-        
+
         if deadlines.is_empty() {
             schedule_list = schedule_list.child(
-                div().text_sm().text_color(cx.theme().muted_foreground).child("No upcoming deadlines for selected filters.")
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
+                    .child("No upcoming deadlines for selected filters."),
             );
         } else {
             for d in deadlines {
-                let has_update = self.announcements.iter().any(|a| a.title.contains(&d.form_type) || a.content.contains(&d.form_type));
-                
+                let has_update = self
+                    .announcements
+                    .iter()
+                    .any(|a| a.title.contains(&d.form_type) || a.body.contains(&d.form_type));
+
                 let date_card = div()
                     .flex()
                     .items_center()
@@ -244,8 +295,20 @@ impl ComplianceCalendar {
                             .p_2()
                             .bg(cx.theme().primary.opacity(0.1))
                             .rounded_md()
-                            .child(div().text_xs().font_weight(FontWeight::BOLD).text_color(cx.theme().primary).child(d.due_date[5..7].to_string())) // month
-                            .child(div().text_lg().font_weight(FontWeight::BOLD).text_color(cx.theme().primary).child(d.due_date[8..10].to_string())) // day
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_color(cx.theme().primary)
+                                    .child(d.due_date[5..7].to_string()),
+                            ) // month
+                            .child(
+                                div()
+                                    .text_lg()
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_color(cx.theme().primary)
+                                    .child(d.due_date[8..10].to_string()),
+                            ), // day
                     )
                     .child(
                         div()
@@ -254,15 +317,38 @@ impl ComplianceCalendar {
                             .flex_col()
                             .gap_1()
                             .child(
-                                div().flex().items_center().gap_2()
-                                    .child(div().text_sm().font_weight(FontWeight::BOLD).text_color(cx.theme().foreground).child(d.form_type.clone()))
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(cx.theme().foreground)
+                                            .child(d.form_type.clone()),
+                                    )
                                     .children(if has_update {
-                                        Some(div().px_2().py_0p5().bg(cx.theme().warning.opacity(0.1)).rounded_md().text_xs().text_color(cx.theme().warning).child("Updated"))
+                                        Some(
+                                            div()
+                                                .px_2()
+                                                .py_0p5()
+                                                .bg(cx.theme().warning.opacity(0.1))
+                                                .rounded_md()
+                                                .text_xs()
+                                                .text_color(cx.theme().warning)
+                                                .child("Updated"),
+                                        )
                                     } else {
                                         None
-                                    })
+                                    }),
                             )
-                            .child(div().text_xs().text_color(cx.theme().muted_foreground).child(d.description.clone()))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(d.description.clone()),
+                            ),
                     );
                 schedule_list = schedule_list.child(date_card);
             }
@@ -281,21 +367,34 @@ impl ComplianceCalendar {
 
     fn render_grid_view(&self, cx: &Context<Self>) -> gpui::Div {
         let deadlines = self.filtered_deadlines();
-        
+
         // Simple 7-column grid logic
         // We'll calculate the start day of the week for `self.current_month`
-        let first_day = NaiveDate::from_ymd_opt(self.current_month.year(), self.current_month.month(), 1).unwrap();
+        let first_day =
+            NaiveDate::from_ymd_opt(self.current_month.year(), self.current_month.month(), 1)
+                .unwrap();
         let start_weekday = first_day.weekday().num_days_from_sunday(); // 0 = Sunday
-        
+
         let days_in_month = if self.current_month.month() == 12 {
             31
         } else {
-            let next_month = NaiveDate::from_ymd_opt(self.current_month.year(), self.current_month.month() + 1, 1).unwrap();
+            let next_month = NaiveDate::from_ymd_opt(
+                self.current_month.year(),
+                self.current_month.month() + 1,
+                1,
+            )
+            .unwrap();
             (next_month - first_day).num_days()
         };
 
-        let mut grid = div().flex().flex_wrap().w_full().border_l_1().border_t_1().border_color(cx.theme().border);
-        
+        let mut grid = div()
+            .flex()
+            .flex_wrap()
+            .w_full()
+            .border_l_1()
+            .border_t_1()
+            .border_color(cx.theme().border);
+
         // Render headers
         let headers = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
         for h in headers {
@@ -311,7 +410,7 @@ impl ComplianceCalendar {
                     .border_r_1()
                     .border_b_1()
                     .border_color(cx.theme().border)
-                    .child(h)
+                    .child(h),
             );
         }
 
@@ -324,17 +423,25 @@ impl ComplianceCalendar {
                     .bg(cx.theme().muted.opacity(0.3))
                     .border_r_1()
                     .border_b_1()
-                    .border_color(cx.theme().border)
+                    .border_color(cx.theme().border),
             );
         }
 
         // Days
         for day in 1..=days_in_month {
-            let date_str = format!("{:04}-{:02}-{:02}", self.current_month.year(), self.current_month.month(), day);
-            
+            let date_str = format!(
+                "{:04}-{:02}-{:02}",
+                self.current_month.year(),
+                self.current_month.month(),
+                day
+            );
+
             // Find deadlines for this day
-            let day_deadlines: Vec<_> = deadlines.iter().filter(|d| d.due_date == date_str).collect();
-            
+            let day_deadlines: Vec<_> = deadlines
+                .iter()
+                .filter(|d| d.due_date == date_str)
+                .collect();
+
             let mut day_cell = div()
                 .w(relative(1.0 / 7.0))
                 .h(px(80.))
@@ -347,9 +454,12 @@ impl ComplianceCalendar {
                 .border_b_1()
                 .border_color(cx.theme().border)
                 .child(
-                    div().text_sm().text_color(cx.theme().foreground).child(day.to_string())
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().foreground)
+                        .child(day.to_string()),
                 );
-                
+
             if !day_deadlines.is_empty() {
                 // Render dots
                 let mut dots = div().flex().flex_wrap().gap_1();
@@ -359,11 +469,12 @@ impl ComplianceCalendar {
                             .w(px(6.))
                             .h(px(6.))
                             .rounded_full()
-                            .bg(cx.theme().primary)
+                            .bg(cx.theme().primary),
                     );
                 }
-                
-                day_cell = day_cell.child(dots)
+
+                day_cell = day_cell
+                    .child(dots)
                     .cursor_pointer()
                     .hover(|s| s.bg(cx.theme().secondary));
             }
@@ -380,38 +491,79 @@ impl ComplianceCalendar {
             .shadow_sm()
             .overflow_hidden()
             .child(
-                div().flex().justify_between().items_center().p_4().border_b_1().border_color(cx.theme().border)
-                .child(
-                    div().text_lg().font_weight(FontWeight::BOLD).text_color(cx.theme().foreground)
-                    .child(self.current_month.format("%B %Y").to_string())
-                )
-                .child(
-                    div().flex().gap_2()
-                        .child(
-                            div().id("prev-month").p_1().rounded_md().cursor_pointer().hover(|s| s.bg(cx.theme().secondary))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if this.current_month.month() == 1 {
-                                    this.current_month = NaiveDate::from_ymd_opt(this.current_month.year() - 1, 12, 1).unwrap();
-                                } else {
-                                    this.current_month = NaiveDate::from_ymd_opt(this.current_month.year(), this.current_month.month() - 1, 1).unwrap();
-                                }
-                                cx.notify();
-                            }))
-                            .child("◀")
-                        )
-                        .child(
-                            div().id("next-month").p_1().rounded_md().cursor_pointer().hover(|s| s.bg(cx.theme().secondary))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if this.current_month.month() == 12 {
-                                    this.current_month = NaiveDate::from_ymd_opt(this.current_month.year() + 1, 1, 1).unwrap();
-                                } else {
-                                    this.current_month = NaiveDate::from_ymd_opt(this.current_month.year(), this.current_month.month() + 1, 1).unwrap();
-                                }
-                                cx.notify();
-                            }))
-                            .child("▶")
-                        )
-                )
+                div()
+                    .flex()
+                    .justify_between()
+                    .items_center()
+                    .p_4()
+                    .border_b_1()
+                    .border_color(cx.theme().border)
+                    .child(
+                        div()
+                            .text_lg()
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(cx.theme().foreground)
+                            .child(self.current_month.format("%B %Y").to_string()),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .id("prev-month")
+                                    .p_1()
+                                    .rounded_md()
+                                    .cursor_pointer()
+                                    .hover(|s| s.bg(cx.theme().secondary))
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        if this.current_month.month() == 1 {
+                                            this.current_month = NaiveDate::from_ymd_opt(
+                                                this.current_month.year() - 1,
+                                                12,
+                                                1,
+                                            )
+                                            .unwrap();
+                                        } else {
+                                            this.current_month = NaiveDate::from_ymd_opt(
+                                                this.current_month.year(),
+                                                this.current_month.month() - 1,
+                                                1,
+                                            )
+                                            .unwrap();
+                                        }
+                                        cx.notify();
+                                    }))
+                                    .child("◀"),
+                            )
+                            .child(
+                                div()
+                                    .id("next-month")
+                                    .p_1()
+                                    .rounded_md()
+                                    .cursor_pointer()
+                                    .hover(|s| s.bg(cx.theme().secondary))
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        if this.current_month.month() == 12 {
+                                            this.current_month = NaiveDate::from_ymd_opt(
+                                                this.current_month.year() + 1,
+                                                1,
+                                                1,
+                                            )
+                                            .unwrap();
+                                        } else {
+                                            this.current_month = NaiveDate::from_ymd_opt(
+                                                this.current_month.year(),
+                                                this.current_month.month() + 1,
+                                                1,
+                                            )
+                                            .unwrap();
+                                        }
+                                        cx.notify();
+                                    }))
+                                    .child("▶"),
+                            ),
+                    ),
             )
             .child(grid)
     }
@@ -456,14 +608,24 @@ impl Render for ComplianceCalendar {
                                             .cursor_pointer()
                                             .text_sm()
                                             .font_weight(FontWeight::BOLD)
-                                            .text_color(if self.mode == CalendarMode::List { cx.theme().foreground } else { cx.theme().muted_foreground })
-                                            .bg(if self.mode == CalendarMode::List { cx.theme().background } else { gpui::transparent_black() })
-                                            .when(self.mode == CalendarMode::List, |s| s.shadow_sm())
+                                            .text_color(if self.mode == CalendarMode::List {
+                                                cx.theme().foreground
+                                            } else {
+                                                cx.theme().muted_foreground
+                                            })
+                                            .bg(if self.mode == CalendarMode::List {
+                                                cx.theme().background
+                                            } else {
+                                                gpui::transparent_black()
+                                            })
+                                            .when(self.mode == CalendarMode::List, |s| {
+                                                s.shadow_sm()
+                                            })
                                             .child("List")
                                             .on_click(cx.listener(|this, _, _, cx| {
                                                 this.mode = CalendarMode::List;
                                                 cx.notify();
-                                            }))
+                                            })),
                                     )
                                     .child(
                                         div()
@@ -474,26 +636,34 @@ impl Render for ComplianceCalendar {
                                             .cursor_pointer()
                                             .text_sm()
                                             .font_weight(FontWeight::BOLD)
-                                            .text_color(if self.mode == CalendarMode::Grid { cx.theme().foreground } else { cx.theme().muted_foreground })
-                                            .bg(if self.mode == CalendarMode::Grid { cx.theme().background } else { gpui::transparent_black() })
-                                            .when(self.mode == CalendarMode::Grid, |s| s.shadow_sm())
+                                            .text_color(if self.mode == CalendarMode::Grid {
+                                                cx.theme().foreground
+                                            } else {
+                                                cx.theme().muted_foreground
+                                            })
+                                            .bg(if self.mode == CalendarMode::Grid {
+                                                cx.theme().background
+                                            } else {
+                                                gpui::transparent_black()
+                                            })
+                                            .when(self.mode == CalendarMode::Grid, |s| {
+                                                s.shadow_sm()
+                                            })
                                             .child("Grid")
                                             .on_click(cx.listener(|this, _, _, cx| {
                                                 this.mode = CalendarMode::Grid;
                                                 cx.notify();
-                                            }))
-                                    )
+                                            })),
+                                    ),
                             )
                             // Filter Combobox
-                            .child(self.render_filter_combobox(cx))
-                    )
+                            .child(self.render_filter_combobox(cx)),
+                    ),
             )
-            .child(
-                if self.mode == CalendarMode::List {
-                    self.render_list_view(cx)
-                } else {
-                    self.render_grid_view(cx)
-                }
-            )
+            .child(if self.mode == CalendarMode::List {
+                self.render_list_view(cx)
+            } else {
+                self.render_grid_view(cx)
+            })
     }
 }

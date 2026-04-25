@@ -8,6 +8,7 @@ use gpui::*;
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::scroll::ScrollableElement as _;
 use gpui_component::*;
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 use bir_core::db::Database;
@@ -49,7 +50,8 @@ pub struct Form2551QView {
     tax_paid_previous_input: Entity<InputState>,
     receipt_input: Entity<InputState>,
 
-    validation_errors: Vec<String>,
+    validation_errors: Vec<(String, String)>,
+    suppressed_sections: HashSet<&'static str>,
     status_message: Option<String>,
     show_filing_period: bool,
     show_background_info: bool,
@@ -120,9 +122,16 @@ impl Form2551QView {
                 &input,
                 window,
                 |this: &mut Self, _, event: &InputEvent, _, cx| {
-                    if matches!(event, InputEvent::Change) {
-                        this.is_validated = false;
-                        this.sync_from_inputs(cx);
+                    match event {
+                        InputEvent::Change => {
+                            this.is_validated = false;
+                            this.sync_from_inputs(cx);
+                        }
+                        InputEvent::Focus => {
+                            this.suppressed_sections.insert("schedule_1");
+                            cx.notify();
+                        }
+                        _ => {}
                     }
                 },
             ));
@@ -137,9 +146,16 @@ impl Form2551QView {
             &creditable_withheld_input,
             window,
             |this: &mut Self, _, event: &InputEvent, _, cx| {
-                if matches!(event, InputEvent::Change) {
-                    this.is_validated = false;
-                    this.sync_from_inputs(cx);
+                match event {
+                    InputEvent::Change => {
+                        this.is_validated = false;
+                        this.sync_from_inputs(cx);
+                    }
+                    InputEvent::Focus => {
+                        this.suppressed_sections.insert("tax_computation");
+                        cx.notify();
+                    }
+                    _ => {}
                 }
             },
         );
@@ -147,9 +163,16 @@ impl Form2551QView {
             &tax_paid_previous_input,
             window,
             |this: &mut Self, _, event: &InputEvent, _, cx| {
-                if matches!(event, InputEvent::Change) {
-                    this.is_validated = false;
-                    this.sync_from_inputs(cx);
+                match event {
+                    InputEvent::Change => {
+                        this.is_validated = false;
+                        this.sync_from_inputs(cx);
+                    }
+                    InputEvent::Focus => {
+                        this.suppressed_sections.insert("tax_computation");
+                        cx.notify();
+                    }
+                    _ => {}
                 }
             },
         );
@@ -170,6 +193,7 @@ impl Form2551QView {
             tax_paid_previous_input,
             receipt_input,
             validation_errors: Vec::new(),
+            suppressed_sections: HashSet::new(),
             status_message: None,
             show_filing_period: true,
             show_background_info: false,
@@ -223,9 +247,16 @@ impl Form2551QView {
                 &input,
                 window,
                 |this: &mut Self, _, event: &InputEvent, _, cx| {
-                    if matches!(event, InputEvent::Change) {
-                        this.is_validated = false;
-                        this.sync_from_inputs(cx);
+                    match event {
+                        InputEvent::Change => {
+                            this.is_validated = false;
+                            this.sync_from_inputs(cx);
+                        }
+                        InputEvent::Focus => {
+                            this.suppressed_sections.insert("schedule_1");
+                            cx.notify();
+                        }
+                        _ => {}
                     }
                 },
             ));
@@ -240,6 +271,7 @@ impl Form2551QView {
     fn save_draft(&mut self, cx: &mut Context<Self>) {
         self.sync_from_inputs(cx);
         self.validation_errors = self.validate_for_submit(cx);
+        self.suppressed_sections.clear();
         if let Ok(db) = self.db.lock() {
             let _ = db.save_2551q_draft(&self.draft);
             self.status_message = Some("Draft saved".to_string());
@@ -250,6 +282,7 @@ impl Form2551QView {
     fn mark_submitted(&mut self, cx: &mut Context<Self>) {
         self.sync_from_inputs(cx);
         self.validation_errors = self.validate_for_submit(cx);
+        self.suppressed_sections.clear();
         if !self.validation_errors.is_empty() {
             self.status_message = Some("Fix validation errors before submitting".to_string());
             cx.notify();
@@ -331,14 +364,186 @@ impl Form2551QView {
         self.mark_submitted(cx);
     }
 
-    fn validate_for_submit(&self, cx: &mut Context<Self>) -> Vec<String> {
+    fn mark_as_paid(&mut self, cx: &mut Context<Self>) {
+        self.draft.status = FilingStatus::Paid;
+        self.draft.updated_at = chrono::Utc::now().to_rfc3339();
+        if let Ok(db) = self.db.lock() {
+            let _ = db.save_2551q_draft(&self.draft);
+        }
+        self.status_message = Some("Marked as paid ✓".to_string());
+        cx.emit(Form2551QEvent::Saved);
+        cx.notify();
+    }
+
+    fn check_confirmation_email(&mut self, cx: &mut Context<Self>) {
+        if self.draft.status != FilingStatus::Submitted {
+            return;
+        }
+
+        self.status_message = Some("Checking email for BIR confirmation...".to_string());
+        cx.notify();
+
+        let db = self.db.clone();
+        let draft = self.draft.clone();
+
+        cx.spawn(async move |this, cx| {
+            let result = cx.background_executor().spawn(async move {
+                let db_guard = db.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+                let profile = db_guard.get_profile_by_tin(&draft.tin)?
+                    .ok_or_else(|| anyhow::anyhow!("Profile not found for TIN {}", draft.tin))?;
+
+                if !profile.is_email_tracking_active() {
+                    return Err(anyhow::anyhow!("Email tracking is not enabled. Go to Email Settings in your profile to set up App Password or Google OAuth2."));
+                }
+
+                // Use existing email fetcher infrastructure
+                let _receipts = bir_core::email::fetcher::fetch_and_process_emails(&profile, &db_guard)?;
+
+                // Check if our draft was updated to Confirmed
+                let our_filename = draft.default_submission_filename();
+                if let Some(updated) = db_guard.get_2551q_draft(&draft.tin, draft.taxable_year, draft.quarter)? {
+                    if updated.status == FilingStatus::Confirmed {
+                        return Ok(Some(updated));
+                    }
+                }
+                // Also check by submission filename match in receipts table
+                if let Some(_receipt) = db_guard.get_submission_receipt_by_filename(&our_filename)? {
+                    // Receipt exists, reload draft
+                    if let Some(updated) = db_guard.get_2551q_draft(&draft.tin, draft.taxable_year, draft.quarter)? {
+                        return Ok(Some(updated));
+                    }
+                }
+                Ok(None)
+            }).await;
+
+            let _ = cx.update(|cx| {
+                if let Some(this) = this.upgrade() {
+                    this.update(cx, |this, cx| {
+                        match result {
+                            Ok(Some(updated_draft)) => {
+                                this.draft = updated_draft;
+                                this.status_message = Some("BIR confirmation received! ✓".to_string());
+                                cx.emit(Form2551QEvent::Confirmed);
+                            }
+                            Ok(None) => {
+                                this.status_message = Some("No confirmation email found yet. Check back later.".to_string());
+                            }
+                            Err(e) => {
+                                this.status_message = Some(format!("Email check failed: {}", e));
+                            }
+                        }
+                        cx.notify();
+                    });
+                }
+            });
+        }).detach();
+    }
+
+    fn render_status_pipeline(&self, cx: &Context<Self>) -> gpui::Div {
+        let steps: [(&str, FilingStatus); 4] = [
+            ("Draft", FilingStatus::Draft),
+            ("Submitted", FilingStatus::Submitted),
+            ("Confirmed", FilingStatus::Confirmed),
+            ("Paid", FilingStatus::Paid),
+        ];
+
+        let step_order = |s: &FilingStatus| -> u8 {
+            match s {
+                FilingStatus::Draft => 0,
+                FilingStatus::Submitted => 1,
+                FilingStatus::Confirmed => 2,
+                FilingStatus::Paid => 3,
+            }
+        };
+        let current_idx = step_order(&self.draft.status);
+
+        let mut row = div().flex().items_center().gap_1().w_full();
+
+        for (i, (label, step_status)) in steps.iter().enumerate() {
+            let idx = step_order(step_status);
+            let is_current = idx == current_idx;
+            let is_completed = idx < current_idx;
+
+            let (bg, text_clr, border_clr) = if is_current {
+                (
+                    match step_status {
+                        FilingStatus::Draft => gpui::rgba(0xfacc1530),
+                        FilingStatus::Submitted => gpui::rgba(0x3b82f630),
+                        FilingStatus::Confirmed => gpui::rgba(0x22c55e30),
+                        FilingStatus::Paid => gpui::rgba(0x10b98130),
+                    },
+                    match step_status {
+                        FilingStatus::Draft => gpui::rgba(0xfacc15ff),
+                        FilingStatus::Submitted => gpui::rgba(0x3b82f6ff),
+                        FilingStatus::Confirmed => gpui::rgba(0x22c55eff),
+                        FilingStatus::Paid => gpui::rgba(0x10b981ff),
+                    },
+                    match step_status {
+                        FilingStatus::Draft => gpui::rgba(0xfacc15ff),
+                        FilingStatus::Submitted => gpui::rgba(0x3b82f6ff),
+                        FilingStatus::Confirmed => gpui::rgba(0x22c55eff),
+                        FilingStatus::Paid => gpui::rgba(0x10b981ff),
+                    },
+                )
+            } else if is_completed {
+                (gpui::rgba(0x22c55e18), gpui::rgba(0x22c55eff), gpui::rgba(0x22c55e60))
+            } else {
+                (gpui::rgba(0x00000000), cx.theme().muted_foreground.into(), cx.theme().border.into())
+            };
+
+            let step_chip = div()
+                .flex_1()
+                .flex()
+                .items_center()
+                .justify_center()
+                .gap_1p5()
+                .px_3()
+                .py_1p5()
+                .rounded_md()
+                .border_1()
+                .border_color(border_clr)
+                .bg(bg)
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(if is_current { FontWeight::BOLD } else { FontWeight::MEDIUM })
+                        .text_color(text_clr)
+                        .child(if is_completed {
+                            format!("✓ {}", label)
+                        } else {
+                            label.to_string()
+                        }),
+                );
+
+            row = row.child(step_chip);
+
+            // Add connector arrow between steps
+            if i < steps.len() - 1 {
+                let arrow_color = if is_completed {
+                    gpui::rgba(0x22c55eff)
+                } else {
+                    cx.theme().muted_foreground.into()
+                };
+                row = row.child(
+                    div()
+                        .text_xs()
+                        .text_color(arrow_color)
+                        .child("→"),
+                );
+            }
+        }
+
+        row
+    }
+
+    fn validate_for_submit(&self, cx: &mut Context<Self>) -> Vec<(String, String)> {
         let mut errors = Vec::new();
         if !(1900..=9999).contains(&self.draft.taxable_year) {
-            errors.push("Taxable year must be a 4-digit year".to_string());
+            errors.push(("taxable_year".to_string(), "Taxable year must be a 4-digit year".to_string()));
         }
 
         if !(1..=4).contains(&self.quarter) {
-            errors.push("Quarter is required".to_string());
+            errors.push(("quarter".to_string(), "Quarter is required".to_string()));
         }
 
         for (label, value) in [
@@ -351,39 +556,39 @@ impl Form2551QView {
             ("Email Address", self.draft.email.as_str()),
         ] {
             if value.trim().is_empty() {
-                errors.push(format!("{label} is required"));
+                errors.push((label.to_string(), format!("{label} is required")));
             }
         }
 
-        if !self.draft.zip_code.trim().is_empty() && !validate_zip(self.draft.zip_code.trim()) {
-            errors.push("ZIP Code must be exactly 4 digits".to_string());
+        if self.draft.zip_code.trim().is_empty() {
+            errors.push(("zip_code".to_string(), "Zip Code is required".to_string()));
+        } else if !validate_zip(&self.draft.zip_code) {
+            errors.push(("zip_code".to_string(), "Zip Code must be 4 digits".to_string()));
         }
-        if !self.draft.contact_number.trim().is_empty()
-            && !validate_ph_phone(&self.draft.contact_number)
-        {
-            errors.push(
-                "Contact number must be a valid Philippine mobile or landline number".to_string(),
-            );
+        if self.draft.contact_number.trim().is_empty() {
+            errors.push(("contact_number".to_string(), "Contact Number is required".to_string()));
+        } else if !validate_ph_phone(&self.draft.contact_number) {
+            errors.push(("contact_number".to_string(), "Contact Number must be valid".to_string()));
         }
         if !self.draft.email.trim().is_empty() && !validate_email(&self.draft.email) {
-            errors.push("Email Address must be a valid email".to_string());
+            errors.push(("email".to_string(), "Email Address must be a valid email".to_string()));
         }
 
         if self.draft.schedule_1.is_empty() {
-            errors.push("Schedule 1 requires at least one ATC row".to_string());
+            errors.push(("schedule_1".to_string(), "Schedule 1 requires at least one ATC row".to_string()));
         }
         for (i, row_input) in self.row_inputs.iter().enumerate() {
             let value = row_input.taxable_amount.read(cx).value();
             if value.trim().is_empty() {
-                errors.push(format!(
+                errors.push((format!("schedule_1_row_{}", i + 1), format!(
                     "Schedule 1 row {} taxable amount is required",
                     i + 1
-                ));
+                )));
             } else if value.parse::<f64>().map(|n| n < 0.0).unwrap_or(true) {
-                errors.push(format!(
+                errors.push((format!("schedule_1_row_{}", i + 1), format!(
                     "Schedule 1 row {} taxable amount must be non-negative",
                     i + 1
-                ));
+                )));
             }
         }
 
@@ -402,9 +607,11 @@ impl Form2551QView {
                 continue;
             }
             if value.trim().is_empty() {
-                errors.push(format!("{label} is required"));
+                let field = if label.starts_with("Creditable") { "creditable_withheld" } else { "tax_paid_previous" };
+                errors.push((field.to_string(), format!("{label} is required")));
             } else if value.parse::<f64>().map(|n| n < 0.0).unwrap_or(true) {
-                errors.push(format!("{label} must be non-negative"));
+                let field = if label.starts_with("Creditable") { "creditable_withheld" } else { "tax_paid_previous" };
+                errors.push((field.to_string(), format!("{label} must be non-negative")));
             }
         }
 
@@ -467,6 +674,34 @@ impl Form2551QView {
             }
         }
         cx.notify();
+    }
+
+    fn get_error(&self, field_id: &str) -> Option<&String> {
+        self.validation_errors.iter().find(|(f, _)| f == field_id).map(|(_, msg)| msg)
+    }
+
+    fn error_icon(_message: &str) -> gpui::Div {
+        div()
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_color(gpui::rgba(0xff6b6bff))
+            .child(Icon::new(IconName::TriangleAlert).small())
+    }
+
+    fn has_section_error(&self, section_id: &'static str) -> bool {
+        if self.suppressed_sections.contains(section_id) {
+            return false;
+        }
+        self.validation_errors.iter().any(|(f, _)| {
+            match section_id {
+                "filing_period" => f == "taxable_year" || f == "quarter",
+                "background_info" => f == "tin" || f == "rdo_code" || f == "taxpayer_name" || f == "registered_address" || f == "zip_code" || f == "contact_number" || f == "email",
+                "schedule_1" => f == "schedule_1" || f.starts_with("schedule_1_row_"),
+                "tax_computation" => f == "creditable_withheld" || f == "tax_paid_previous",
+                _ => false,
+            }
+        })
     }
 
     fn field_label(label: &str, cx: &Context<Self>) -> gpui::Div {
@@ -928,11 +1163,11 @@ impl Render for Form2551QView {
                 .flex()
                 .flex_col()
                 .gap_1()
-                .children(self.validation_errors.iter().map(|err| {
+                .children(self.validation_errors.iter().map(|(_field, msg)| {
                     div()
                         .text_sm()
                         .text_color(gpui::rgba(0xffb4b4ff))
-                        .child(err.clone())
+                        .child(msg.clone())
                 }))
                 .into_any_element()
         };
@@ -959,6 +1194,7 @@ impl Render for Form2551QView {
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.sync_from_inputs(cx);
                                 this.validation_errors = this.validate_for_submit(cx);
+                                this.suppressed_sections.clear();
                                 if this.validation_errors.is_empty() {
                                     this.is_validated = true;
                                     this.status_message = Some("Validation successful. Form is ready to submit.".to_string());
@@ -980,13 +1216,13 @@ impl Render for Form2551QView {
             );
 
         macro_rules! build_accordion {
-            ($id:expr, $label:expr, $is_expanded:expr, $is_valid:expr, $on_click:expr, $content:expr $(,)?) => {
+            ($id:expr, $label:expr, $is_expanded:expr, $is_valid:expr, $has_error:expr, $on_click:expr, $content:expr $(,)?) => {
                 {
                     let mut card = div()
                         .bg(cx.theme().secondary)
                         .rounded_xl()
                         .border_1()
-                        .border_color(cx.theme().border)
+                        .border_color(if $has_error { gpui::rgba(0xff6b6bff).into() } else { cx.theme().border })
                         .p_6()
                         .flex()
                         .flex_col()
@@ -1103,7 +1339,9 @@ impl Render for Form2551QView {
                 "FILING PERIOD",
                 self.show_filing_period,
                 is_filing_period_valid,
+                self.has_section_error("filing_period"),
                 cx.listener(|this, _, _, cx| {
+                    this.suppressed_sections.insert("filing_period");
                     this.show_filing_period = !this.show_filing_period;
                     cx.notify();
                 }),
@@ -1114,7 +1352,9 @@ impl Render for Form2551QView {
                 "PART I — BACKGROUND INFORMATION (pre-filled from profile)",
                 self.show_background_info,
                 is_background_info_valid,
+                self.has_section_error("background_info"),
                 cx.listener(|this, _, _, cx| {
+                    this.suppressed_sections.insert("background_info");
                     this.show_background_info = !this.show_background_info;
                     cx.notify();
                 }),
@@ -1125,7 +1365,9 @@ impl Render for Form2551QView {
                 "SCHEDULE 1 — COMPUTATION OF TAX",
                 self.show_schedule_1,
                 is_schedule_1_valid,
+                self.has_section_error("schedule_1"),
                 cx.listener(|this, _, _, cx| {
+                    this.suppressed_sections.insert("schedule_1");
                     this.show_schedule_1 = !this.show_schedule_1;
                     cx.notify();
                 }),
@@ -1136,7 +1378,9 @@ impl Render for Form2551QView {
                 "PART II — COMPUTATION OF TAX",
                 self.show_tax_computation,
                 is_tax_computation_valid,
+                self.has_section_error("tax_computation"),
                 cx.listener(|this, _, _, cx| {
+                    this.suppressed_sections.insert("tax_computation");
                     this.show_tax_computation = !this.show_tax_computation;
                     cx.notify();
                 }),

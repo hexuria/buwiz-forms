@@ -96,10 +96,9 @@ impl TinInput {
             if index < 3 {
                 self.inputs[index + 1].update(cx, |input, cx| input.focus(window, cx));
             }
-        } else if len == 0 && prev_len > 0
-            && index > 0 {
-                self.inputs[index - 1].update(cx, |input, cx| input.focus(window, cx));
-            }
+        } else if len == 0 && prev_len > 0 && index > 0 {
+            self.inputs[index - 1].update(cx, |input, cx| input.focus(window, cx));
+        }
 
         self.prev_lengths[index] = std::cmp::min(len, max_len);
         cx.emit(ComponentInputEvent::Change);

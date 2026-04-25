@@ -17,6 +17,8 @@
 pub mod bir_xml;
 pub mod crypto;
 pub mod db;
+pub mod email;
+pub mod email_fetcher; // legacy — kept for backward compat, delegates to `email`
 pub mod form;
 pub mod forms;
 pub mod naming;
@@ -27,14 +29,20 @@ pub mod reference;
 pub mod schema;
 pub mod transport;
 pub mod validation;
+pub mod official_import;
 
 // Re-export core types
 pub use bir_xml::{generate_bir_xml, parse_bir_xml};
+pub use email::{
+    fetch_and_process_emails, get_oauth_email, start_oauth_flow, test_connection,
+    ImapAuthenticator,
+};
 pub use forms::{
     ATC_TABLE_2551Q, FilingStatus, Form2551QDraft, FormDraftSummary, FormFilingProgress,
     QuarterState, Schedule1Row, find_atc, find_form, forms_for_taxpayer,
 };
 pub use naming::{Tin, iaf_filename, savefile_name};
-pub use profile::TaxpayerProfile;
+pub use profile::{EmailAuthMethod, TaxpayerProfile};
 pub use receipt::{BirReceiptConfirmation, parse_bir_receipt_email, split_bir_filename};
 pub use validation::{ValidationError, validate_ph_phone, validate_profile, validate_zip};
+pub use official_import::{OfficialSavefile, import_and_submit_savefile, parse_period_code};

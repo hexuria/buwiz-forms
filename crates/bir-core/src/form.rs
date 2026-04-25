@@ -54,23 +54,25 @@ impl FormData {
                             max_length,
                             pattern,
                         } = &field.field_type
+                    {
+                        if let Some(max) = max_length
+                            && val.len() > *max
                         {
-                            if let Some(max) = max_length
-                                && val.len() > *max {
-                                    errors.push(FormError::ValidationFailed {
-                                        field: field.name.clone(),
-                                        reason: format!("exceeds max length of {}", max),
-                                    });
-                                }
-                            if let Some(pat) = pattern
-                                && let Ok(regex) = regex::Regex::new(pat)
-                                    && !regex.is_match(val) {
-                                        errors.push(FormError::ValidationFailed {
-                                            field: field.name.clone(),
-                                            reason: format!("does not match pattern {}", pat),
-                                        });
-                                    }
+                            errors.push(FormError::ValidationFailed {
+                                field: field.name.clone(),
+                                reason: format!("exceeds max length of {}", max),
+                            });
                         }
+                        if let Some(pat) = pattern
+                            && let Ok(regex) = regex::Regex::new(pat)
+                            && !regex.is_match(val)
+                        {
+                            errors.push(FormError::ValidationFailed {
+                                field: field.name.clone(),
+                                reason: format!("does not match pattern {}", pat),
+                            });
+                        }
+                    }
                 }
             }
         }

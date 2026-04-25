@@ -18,6 +18,7 @@ pub enum DashboardEvent {
         year: u16,
         quarter: u8,
     },
+    Reload,
 }
 
 impl EventEmitter<DashboardEvent> for DashboardView {}
@@ -97,6 +98,13 @@ impl DashboardView {
     fn state_style(state: &QuarterState, cx: &Context<DashboardView>) -> (Hsla, Hsla, Hsla, &'static str, &'static str) {
         // Returns (bg_color, border_color, accent_color, icon, status_label)
         match state {
+            QuarterState::Paid => (
+                gpui::rgba(0x10b98120).into(),
+                gpui::rgba(0x10b981ff).into(),
+                gpui::rgba(0x10b981ff).into(),
+                "$",
+                "Paid",
+            ),
             QuarterState::Confirmed => (
                 gpui::rgba(0x22c55e20).into(),
                 gpui::rgba(0x22c55eff).into(),
@@ -131,6 +139,7 @@ impl DashboardView {
     /// Hover background for a given QuarterState
     fn state_hover_bg(state: &QuarterState, cx: &Context<DashboardView>) -> Hsla {
         match state {
+            QuarterState::Paid => gpui::rgba(0x10b98140).into(),
             QuarterState::Confirmed => gpui::rgba(0x22c55e40).into(),
             QuarterState::Submitted => gpui::rgba(0x3b82f640).into(),
             QuarterState::Draft => gpui::rgba(0xfacc1540).into(),
@@ -256,7 +265,7 @@ impl Render for DashboardView {
                     let filed = quarters
                         .iter()
                         .filter(|s| {
-                            **s == QuarterState::Submitted || **s == QuarterState::Confirmed
+                            **s == QuarterState::Submitted || **s == QuarterState::Confirmed || **s == QuarterState::Paid
                         })
                         .count();
 
@@ -393,7 +402,7 @@ impl Render for DashboardView {
                     let filed = months
                         .iter()
                         .filter(|s| {
-                            **s == QuarterState::Submitted || **s == QuarterState::Confirmed
+                            **s == QuarterState::Submitted || **s == QuarterState::Confirmed || **s == QuarterState::Paid
                         })
                         .count();
 
@@ -543,6 +552,7 @@ impl Render for DashboardView {
                                         .font_weight(FontWeight::SEMIBOLD)
                                         .text_color(accent)
                                         .child(match &status {
+                                            QuarterState::Paid => "View Paid Return",
                                             QuarterState::Confirmed => "View Filed Return",
                                             QuarterState::Submitted => "View Submission",
                                             QuarterState::Draft => "Resume Draft",
