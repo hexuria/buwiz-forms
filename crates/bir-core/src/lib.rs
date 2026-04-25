@@ -18,13 +18,22 @@ pub mod bir_xml;
 pub mod crypto;
 pub mod db;
 pub mod form;
+pub mod forms;
 pub mod naming;
 pub mod profile;
+pub mod receipt;
 pub mod reference;
 pub mod schema;
 pub mod transport;
+pub mod validation;
 
 // Re-export core types
-pub use bir_xml::{parse_bir_xml, generate_bir_xml};
-pub use naming::{Tin, savefile_name, iaf_filename};
+pub use bir_xml::{generate_bir_xml, parse_bir_xml};
+pub use forms::{
+    ATC_TABLE_2551Q, FilingStatus, Form2551QDraft, FormDraftSummary, FormFilingProgress,
+    QuarterState, Schedule1Row, find_atc, find_form, forms_for_taxpayer,
+};
+pub use naming::{Tin, iaf_filename, savefile_name};
 pub use profile::TaxpayerProfile;
+pub use receipt::{BirReceiptConfirmation, parse_bir_receipt_email, split_bir_filename};
+pub use validation::{ValidationError, validate_ph_phone, validate_profile, validate_zip};

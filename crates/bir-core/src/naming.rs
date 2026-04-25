@@ -15,12 +15,18 @@ pub struct Tin {
 impl Tin {
     /// Full TIN as a single string (e.g., "010558054000")
     pub fn full(&self) -> String {
-        format!("{}{}{}{}", self.segment1, self.segment2, self.segment3, self.branch)
+        format!(
+            "{}{}{}{}",
+            self.segment1, self.segment2, self.segment3, self.branch
+        )
     }
 
     /// Formatted TIN with dashes (e.g., "010-558-054-000")
     pub fn formatted(&self) -> String {
-        format!("{}-{}-{}-{}", self.segment1, self.segment2, self.segment3, self.branch)
+        format!(
+            "{}-{}-{}-{}",
+            self.segment1, self.segment2, self.segment3, self.branch
+        )
     }
 }
 

@@ -1,8 +1,8 @@
 use aes::Aes256;
-use sha2::{Digest, Sha256};
+use flate2::Compression;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
-use flate2::Compression;
+use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
 
 #[derive(thiserror::Error, Debug)]
@@ -38,7 +38,7 @@ fn derive_key_and_iv(passphrase: &str) -> ([u8; 32], [u8; 16]) {
 
 pub fn decrypt_and_decompress(ciphertext: &[u8], passphrase: &str) -> Result<Vec<u8>, CryptoError> {
     let (key, iv) = derive_key_and_iv(passphrase);
-    
+
     // Decrypt AES-256-CBC
     // Note: DCPcrypt doesn't seem to use standard PKCS7 padding automatically for streams unless specified.
     // It might just process block by block. Wait, `DecryptStream` just processes exact sizes or left over?
@@ -55,7 +55,7 @@ pub fn decrypt_and_decompress(ciphertext: &[u8], passphrase: &str) -> Result<Vec
     // But `TDCP_blockcipher128.EncryptCBC` says:
     // `if (Size mod 16) <> 0 then { EncryptECB(CV, CV); Move(p1^, p2^, Size mod 16); XorBlock(p2^, CV, Size mod 16); }`
     // This is essentially CFB mode for the final incomplete block!
-    
+
     // Since it mixes CBC and CFB for the final block, standard PKCS7 padding won't work.
     // We have to implement DCPcrypt's custom CBC decryption precisely.
     let mut decrypted = vec![0u8; ciphertext.len()];
@@ -74,30 +74,30 @@ fn dcp_decrypt_cbc(key: &[u8; 32], iv: &[u8; 16], indata: &[u8], outdata: &mut [
     use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};
     let cipher = Aes256::new_from_slice(key).unwrap();
     let mut cv = *iv;
-    
+
     let mut i = 0;
     let size = indata.len();
     while i + 16 <= size {
-        let chunk = &indata[i..i+16];
+        let chunk = &indata[i..i + 16];
         let mut block = aes::cipher::generic_array::GenericArray::clone_from_slice(chunk);
         cipher.decrypt_block(&mut block);
         for j in 0..16 {
-            outdata[i+j] = block[j] ^ cv[j];
+            outdata[i + j] = block[j] ^ cv[j];
         }
         cv.copy_from_slice(chunk);
         i += 16;
     }
-    
+
     if i < size {
         // Incomplete block:
         // EncryptECB(CV, CV)
         let mut block = aes::cipher::generic_array::GenericArray::clone_from_slice(&cv);
         cipher.encrypt_block(&mut block);
         cv.copy_from_slice(&block);
-        
+
         let rem = size - i;
         for j in 0..rem {
-            outdata[i+j] = indata[i+j] ^ cv[j];
+            outdata[i + j] = indata[i + j] ^ cv[j];
         }
     }
 }
@@ -107,45 +107,45 @@ fn dcp_encrypt_cbc(key: &[u8; 32], iv: &[u8; 16], indata: &[u8], outdata: &mut [
     use aes::cipher::{BlockEncrypt, KeyInit};
     let cipher = Aes256::new_from_slice(key).unwrap();
     let mut cv = *iv;
-    
+
     let mut i = 0;
     let size = indata.len();
     while i + 16 <= size {
         for j in 0..16 {
-            cv[j] ^= indata[i+j];
+            cv[j] ^= indata[i + j];
         }
         let mut block = aes::cipher::generic_array::GenericArray::clone_from_slice(&cv);
         cipher.encrypt_block(&mut block);
         cv.copy_from_slice(&block);
-        outdata[i..i+16].copy_from_slice(&cv);
+        outdata[i..i + 16].copy_from_slice(&cv);
         i += 16;
     }
-    
+
     if i < size {
         // Incomplete block:
         // EncryptECB(CV, CV)
         let mut block = aes::cipher::generic_array::GenericArray::clone_from_slice(&cv);
         cipher.encrypt_block(&mut block);
         cv.copy_from_slice(&block);
-        
+
         let rem = size - i;
         for j in 0..rem {
-            outdata[i+j] = indata[i+j] ^ cv[j];
-            cv[j] = outdata[i+j]; // Update CV just in case, though it's the end
+            outdata[i + j] = indata[i + j] ^ cv[j];
+            cv[j] = outdata[i + j]; // Update CV just in case, though it's the end
         }
     }
 }
 
 pub fn compress_and_encrypt(plaintext: &[u8], passphrase: &str) -> Result<Vec<u8>, CryptoError> {
     let (key, iv) = derive_key_and_iv(passphrase);
-    
+
     let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
     encoder.write_all(plaintext)?;
     let compressed = encoder.finish()?;
-    
+
     let mut ciphertext = vec![0u8; compressed.len()];
     dcp_encrypt_cbc(&key, &iv, &compressed, &mut ciphertext);
-    
+
     Ok(ciphertext)
 }
 
@@ -156,14 +156,15 @@ mod tests {
 
     #[test]
     fn test_decryption_with_hardcoded_key() {
-        let iaf_path = "../../../IAF_RDO_Copy/010558054000-2551Qv2018-122026Q1#codeitlikemiley@gmail.com#.xml";
+        let iaf_path =
+            "../../../IAF_RDO_Copy/010558054000-2551Qv2018-122026Q1#codeitlikemiley@gmail.com#.xml";
         let ciphertext = fs::read(iaf_path).expect("Missing IAF file");
 
         let passphrase = "T0081gP45sy0rd-To+R3m3m63r!@4/<>"; // Extracted from Encrypt.exe
-        
+
         let decrypted = decrypt_and_decompress(&ciphertext, passphrase).expect("Failed to decrypt");
         let xml_string = String::from_utf8_lossy(&decrypted);
-        
+
         // The decrypted payload is pure XML
         assert!(xml_string.starts_with("<?xml version='1.0'?>"));
         assert!(xml_string.contains("frm2551Qv2018"));

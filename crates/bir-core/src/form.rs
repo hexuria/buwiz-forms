@@ -1,7 +1,7 @@
 //! Form data model and validation engine.
 
+use crate::schema::{FieldType, FormSchema};
 use std::collections::BTreeMap;
-use crate::schema::{FormSchema, FormField, FieldType};
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq)]
@@ -50,7 +50,11 @@ impl FormData {
                         continue;
                     }
                     if !val.is_empty() {
-                        if let FieldType::Text { max_length, pattern } = &field.field_type {
+                        if let FieldType::Text {
+                            max_length,
+                            pattern,
+                        } = &field.field_type
+                        {
                             if let Some(max) = max_length {
                                 if val.len() > *max {
                                     errors.push(FormError::ValidationFailed {
@@ -74,7 +78,11 @@ impl FormData {
                 }
             }
         }
-        if errors.is_empty() { Ok(()) } else { Err(errors) }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
     }
 
     /// Convert to BIR pseudo-XML payload.

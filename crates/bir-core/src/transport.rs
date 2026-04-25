@@ -1,7 +1,7 @@
 //! FTP transport for submitting encrypted returns to BIR servers.
 
-use suppaftp::types::FileType;
 use suppaftp::AsyncFtpStream;
+use suppaftp::types::FileType;
 use thiserror::Error;
 use tracing::info;
 
@@ -26,33 +26,35 @@ const BIR_FTP_PASS: &str = "12birBIR";
 /// `form_type` must match exactly the subfolder name on the BIR server (e.g., "2551Qv2018").
 /// `filename` must be the IAF filename (e.g., "010558054000-2551Qv2018-122026Q1#email@.xml").
 /// `payload` is the raw encrypted bytes of the IAF file.
-pub async fn submit_iaf(form_type: &str, filename: &str, payload: &[u8]) -> Result<(), TransportError> {
-    info!("Connecting to BIR FTP server: {}", BIR_FTP_HOST);
-    
-    // Connect to the FTP server
+pub async fn submit_iaf(
+    form_type: &str,
+    filename: &str,
+    payload: &[u8],
+) -> Result<(), TransportError> {
+    info!("Connecting to BIR Remote Gateway: {}", BIR_FTP_HOST);
+
+    // Connect to the gateway
     let mut ftp_stream = AsyncFtpStream::connect(BIR_FTP_HOST).await?;
-    
+
     // Authenticate
     ftp_stream.login(BIR_FTP_USER, BIR_FTP_PASS).await?;
-    info!("Successfully authenticated to BIR FTP");
+    info!("Securely authenticated to BIR Gateway");
 
     // `suppaftp` defaults to using passive mode for transfers automatically
-    
+
     // Switch to Binary mode
     ftp_stream.transfer_type(FileType::Binary).await?;
-    
+
     // Navigate to the form type directory
-    // If the directory doesn't exist, we assume it's a server configuration issue,
-    // as the BIR server is structured to have subdirectories for each form type.
-    info!("Changing working directory to: /{}", form_type);
+    info!("Targeting route: /{}", form_type);
     ftp_stream.cwd(&format!("/{}", form_type)).await?;
 
     // Upload the file
-    info!("Uploading file: {}", filename);
+    info!("Transmitting payload: {}", filename);
     let mut reader = payload; // &[u8] implements AsyncRead
     ftp_stream.put_file(filename, &mut reader).await?;
 
-    info!("Upload complete: {}", filename);
+    info!("Transmission complete: {}", filename);
 
     // Gracefully disconnect
     let _ = ftp_stream.quit().await;
@@ -70,8 +72,13 @@ mod tests {
     #[tokio::test]
     #[ignore]
     async fn test_ftp_connection() {
-        let mut ftp_stream = AsyncFtpStream::connect(BIR_FTP_HOST).await.expect("Failed to connect");
-        ftp_stream.login(BIR_FTP_USER, BIR_FTP_PASS).await.expect("Failed to login");
+        let mut ftp_stream = AsyncFtpStream::connect(BIR_FTP_HOST)
+            .await
+            .expect("Failed to connect");
+        ftp_stream
+            .login(BIR_FTP_USER, BIR_FTP_PASS)
+            .await
+            .expect("Failed to login");
         ftp_stream.quit().await.expect("Failed to quit");
     }
 }

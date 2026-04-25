@@ -89,7 +89,8 @@ fn init_cities() -> HashMap<String, City> {
 }
 
 fn init_tax_types() -> HashMap<String, TaxTypeCode> {
-    let list: Vec<TaxTypeCode> = serde_json::from_str(TAX_TYPE_JSON).expect("Invalid tax_type_codes.json");
+    let list: Vec<TaxTypeCode> =
+        serde_json::from_str(TAX_TYPE_JSON).expect("Invalid tax_type_codes.json");
     list.into_iter().map(|t| (t.code.clone(), t)).collect()
 }
 
@@ -122,14 +123,22 @@ pub fn get_all_regions() -> Vec<Region> {
 
 pub fn get_provinces_for_region(region_code: &str) -> Vec<Province> {
     let map = PROVINCES_BY_CODE.get_or_init(init_provinces);
-    let mut list: Vec<Province> = map.values().filter(|p| p.region_code == region_code).cloned().collect();
+    let mut list: Vec<Province> = map
+        .values()
+        .filter(|p| p.region_code == region_code)
+        .cloned()
+        .collect();
     list.sort_by(|a, b| a.code.cmp(&b.code));
     list
 }
 
 pub fn get_cities_for_province(province_code: &str) -> Vec<City> {
     let map = CITIES_BY_CODE.get_or_init(init_cities);
-    let mut list: Vec<City> = map.values().filter(|c| c.province_code == province_code).cloned().collect();
+    let mut list: Vec<City> = map
+        .values()
+        .filter(|c| c.province_code == province_code)
+        .cloned()
+        .collect();
     list.sort_by(|a, b| a.code.cmp(&b.code));
     list
 }

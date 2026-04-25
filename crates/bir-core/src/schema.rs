@@ -1,7 +1,7 @@
 //! Form schema engine — JSON-driven form definitions.
 //!
 //! Each BIR form is defined as a JSON schema with fields, types,
-//! validation rules, and layout information. 
+//! validation rules, and layout information.
 
 use serde::{Deserialize, Serialize};
 
@@ -37,16 +37,14 @@ pub struct FormSection {
 #[serde(tag = "type")]
 pub enum FieldType {
     /// Standard text input
-    Text { 
+    Text {
         max_length: Option<usize>,
         pattern: Option<String>,
     },
     /// Numeric input (amounts)
     Currency,
     /// Radio button group
-    Radio { 
-        options: Vec<FieldOption> 
-    },
+    Radio { options: Vec<FieldOption> },
     /// Checkbox boolean
     Checkbox,
     /// TIN segmented input

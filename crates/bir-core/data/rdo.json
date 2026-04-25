@@ -1,554 +1,554 @@
 [
   {
     "code": "001",
-    "description": "Main"
+    "description": "Laoag City"
   },
   {
     "code": "002",
-    "description": "Main"
+    "description": "Vigan City"
   },
   {
     "code": "003",
-    "description": "Main"
+    "description": "San Fernando, La Union"
   },
   {
     "code": "004",
-    "description": "Main"
+    "description": "Calasiao, Pangasinan"
   },
   {
     "code": "005",
-    "description": "Main"
+    "description": "Alaminos City"
   },
   {
     "code": "006",
-    "description": "Main"
+    "description": "Urdaneta City"
   },
   {
     "code": "007",
-    "description": "Main"
+    "description": "Bangued, Abra"
   },
   {
     "code": "008",
-    "description": "Main"
+    "description": "Baguio City"
   },
   {
     "code": "009",
-    "description": "Main"
+    "description": "La Trinidad, Benguet"
   },
   {
     "code": "010",
-    "description": "Main"
+    "description": "Lagawe, Ifugao"
   },
   {
     "code": "011",
-    "description": "Main"
+    "description": "Tabuk City, Kalinga"
   },
   {
     "code": "012",
-    "description": "Main"
+    "description": "Lagawe, Ifugao"
   },
   {
     "code": "013",
-    "description": "Main"
+    "description": "Tuguegarao City"
   },
   {
     "code": "014",
-    "description": "Main"
+    "description": "Bayombong, Nueva Vizcaya"
   },
   {
     "code": "015",
-    "description": "Main"
+    "description": "Ilagan, Isabela"
   },
   {
     "code": "016",
-    "description": "Main"
+    "description": "Cabarroguis, Quirino"
   },
   {
     "code": "17A",
-    "description": "Main"
+    "description": "Tarlac City"
   },
   {
     "code": "17B",
-    "description": "Main"
+    "description": "Paniqui, Tarlac"
   },
   {
     "code": "018",
-    "description": "Main"
+    "description": "Olongapo City"
   },
   {
     "code": "019",
-    "description": "Main"
+    "description": "Subic Bay Freeport Zone"
   },
   {
     "code": "020",
-    "description": "Main"
+    "description": "Balanga City, Bataan"
   },
   {
     "code": "21A",
-    "description": "Main"
+    "description": "North Pampanga"
   },
   {
     "code": "21B",
-    "description": "Main"
+    "description": "South Pampanga"
   },
   {
     "code": "21C",
-    "description": "Main"
+    "description": "Clark Freeport Zone"
   },
   {
     "code": "022",
-    "description": "Main"
+    "description": "Baler, Aurora"
   },
   {
     "code": "23A",
-    "description": "Main"
+    "description": "North Nueva Ecija"
   },
   {
     "code": "23B",
-    "description": "Main"
+    "description": "South Nueva Ecija"
   },
   {
     "code": "024",
-    "description": "Main"
+    "description": "Valenzuela City"
   },
   {
     "code": "25A",
-    "description": "Main"
+    "description": "West Bulacan"
   },
   {
     "code": "25B",
-    "description": "Main"
+    "description": "East Bulacan"
   },
   {
     "code": "026",
-    "description": "Main"
+    "description": "Malabon and Navotas"
   },
   {
     "code": "027",
-    "description": "Main"
+    "description": "Caloocan City"
   },
   {
     "code": "028",
-    "description": "Main"
+    "description": "Novaliches"
   },
   {
     "code": "029",
-    "description": "Main"
+    "description": "San Nicolas"
   },
   {
     "code": "030",
-    "description": "Main"
+    "description": "Binondo"
   },
   {
     "code": "031",
-    "description": "Main"
+    "description": "Sta. Cruz"
   },
   {
     "code": "032",
-    "description": "Main"
+    "description": "Quiapo, Sampaloc"
   },
   {
     "code": "033",
-    "description": "Main"
+    "description": "Intramuros, Ermita, Malate"
   },
   {
     "code": "034",
-    "description": "Main"
+    "description": "Paco, Pandacan, Sta. Ana"
   },
   {
     "code": "035",
-    "description": "Main"
+    "description": "RDO 035"
   },
   {
     "code": "036",
-    "description": "Main"
+    "description": "RDO 036"
   },
   {
     "code": "037",
-    "description": "Main"
+    "description": "RDO 037"
   },
   {
     "code": "038",
-    "description": "Main"
+    "description": "North Quezon City"
   },
   {
     "code": "039",
-    "description": "Main"
+    "description": "South Quezon City"
   },
   {
     "code": "040",
-    "description": "Main"
+    "description": "Cubao"
   },
   {
     "code": "041",
-    "description": "Main"
+    "description": "Mandaluyong City"
   },
   {
     "code": "042",
-    "description": "Main"
+    "description": "San Juan City"
   },
   {
     "code": "043",
-    "description": "Main"
+    "description": "RDO 043"
   },
   {
     "code": "43A",
-    "description": "Main"
+    "description": "East Pasig"
   },
   {
     "code": "43B",
-    "description": "Main"
+    "description": "West Pasig"
   },
   {
     "code": "044",
-    "description": "Main"
+    "description": "Taguig and Pateros"
   },
   {
     "code": "045",
-    "description": "Main"
+    "description": "Marikina City"
   },
   {
     "code": "046",
-    "description": "Main"
+    "description": "Cainta and Taytay"
   },
   {
     "code": "047",
-    "description": "Main"
+    "description": "East Makati"
   },
   {
     "code": "048",
-    "description": "Main"
+    "description": "West Makati"
   },
   {
     "code": "049",
-    "description": "Main"
+    "description": "North Makati"
   },
   {
     "code": "050",
-    "description": "Main"
+    "description": "South Makati"
   },
   {
     "code": "051",
-    "description": "Main"
+    "description": "Pasay City"
   },
   {
     "code": "052",
-    "description": "Main"
+    "description": "Para\u00f1aque City"
   },
   {
     "code": "53A",
-    "description": "Main"
+    "description": "Las Pi\u00f1as City"
   },
   {
     "code": "53B",
-    "description": "Main"
+    "description": "Muntinlupa City"
   },
   {
     "code": "54A",
-    "description": "Main"
+    "description": "Trece Martires City"
   },
   {
     "code": "54B",
-    "description": "Main"
+    "description": "Bacoor City"
   },
   {
     "code": "055",
-    "description": "Main"
+    "description": "San Pablo City"
   },
   {
     "code": "056",
-    "description": "Main"
+    "description": "Calamba City"
   },
   {
     "code": "057",
-    "description": "Main"
+    "description": "Bi\u00f1an City"
   },
   {
     "code": "058",
-    "description": "Main"
+    "description": "Batangas City"
   },
   {
     "code": "059",
-    "description": "Main"
+    "description": "Lipa City"
   },
   {
     "code": "060",
-    "description": "Main"
+    "description": "Lucena City"
   },
   {
     "code": "061",
-    "description": "Main"
+    "description": "Gumaca, Quezon"
   },
   {
     "code": "062",
-    "description": "Main"
+    "description": "Boac, Marinduque"
   },
   {
     "code": "063",
-    "description": "Main"
+    "description": "Calapan City"
   },
   {
     "code": "064",
-    "description": "Main"
+    "description": "San Jose, Occidental Mindoro"
   },
   {
     "code": "065",
-    "description": "Main"
+    "description": "Naga City"
   },
   {
     "code": "066",
-    "description": "Main"
+    "description": "Iriga City"
   },
   {
     "code": "067",
-    "description": "Main"
+    "description": "Legazpi City"
   },
   {
     "code": "068",
-    "description": "Main"
+    "description": "Sorsogon City"
   },
   {
     "code": "069",
-    "description": "Main"
+    "description": "Virac, Catanduanes"
   },
   {
     "code": "070",
-    "description": "Main"
+    "description": "Masbate City"
   },
   {
     "code": "071",
-    "description": "Main"
+    "description": "Kalibo, Aklan"
   },
   {
     "code": "072",
-    "description": "Main"
+    "description": "Roxas City"
   },
   {
     "code": "073",
-    "description": "Main"
+    "description": "San Jose, Antique"
   },
   {
     "code": "074",
-    "description": "Main"
+    "description": "Iloilo City"
   },
   {
     "code": "075",
-    "description": "Main"
+    "description": "Zarraga, Iloilo"
   },
   {
     "code": "076",
-    "description": "Main"
+    "description": "Victorias City"
   },
   {
     "code": "077",
-    "description": "Main"
+    "description": "Bacolod City"
   },
   {
     "code": "078",
-    "description": "Main"
+    "description": "Binalbagan, Negros Occidental"
   },
   {
     "code": "079",
-    "description": "Main"
+    "description": "Dumaguete City"
   },
   {
     "code": "080",
-    "description": "Main"
+    "description": "Mandaue City"
   },
   {
     "code": "081",
-    "description": "Main"
+    "description": "Cebu City North"
   },
   {
     "code": "082",
-    "description": "Main"
+    "description": "Cebu City South"
   },
   {
     "code": "083",
-    "description": "Main"
+    "description": "Talisay City"
   },
   {
     "code": "084",
-    "description": "Main"
+    "description": "Tagbilaran City"
   },
   {
     "code": "085",
-    "description": "Main"
+    "description": "Catarman, Northern Samar"
   },
   {
     "code": "086",
-    "description": "Main"
+    "description": "Borongan City"
   },
   {
     "code": "087",
-    "description": "Main"
+    "description": "Catbalogan City"
   },
   {
     "code": "088",
-    "description": "Main"
+    "description": "Tacloban City"
   },
   {
     "code": "089",
-    "description": "Main"
+    "description": "Ormoc City"
   },
   {
     "code": "090",
-    "description": "Main"
+    "description": "Maasin City"
   },
   {
     "code": "091",
-    "description": "Main"
+    "description": "Dipolog City"
   },
   {
     "code": "092",
-    "description": "Main"
+    "description": "Pagadian City"
   },
   {
     "code": "93A",
-    "description": "Main"
+    "description": "Zamboanga City"
   },
   {
     "code": "93B",
-    "description": "Main"
+    "description": "Zamboanga Sibugay"
   },
   {
     "code": "094",
-    "description": "Main"
+    "description": "Isabela City"
   },
   {
     "code": "095",
-    "description": "Main"
+    "description": "Jolo, Sulu"
   },
   {
     "code": "096",
-    "description": "Main"
+    "description": "Bongao, Tawi-Tawi"
   },
   {
     "code": "097",
-    "description": "Main"
+    "description": "Gingoog City"
   },
   {
     "code": "098",
-    "description": "Main"
+    "description": "Cagayan de Oro City"
   },
   {
     "code": "099",
-    "description": "Main"
+    "description": "Malaybalay City"
   },
   {
     "code": "100",
-    "description": "Main"
+    "description": "Ozamiz City"
   },
   {
     "code": "101",
-    "description": "Main"
+    "description": "Iligan City"
   },
   {
     "code": "102",
-    "description": "Main"
+    "description": "Marawi City"
   },
   {
     "code": "103",
-    "description": "Main"
+    "description": "Butuan City"
   },
   {
     "code": "104",
-    "description": "Main"
+    "description": "Bayugan City"
   },
   {
     "code": "105",
-    "description": "Main"
+    "description": "Surigao City"
   },
   {
     "code": "106",
-    "description": "Main"
+    "description": "Tandag City"
   },
   {
     "code": "107",
-    "description": "Main"
+    "description": "Cotabato City"
   },
   {
     "code": "108",
-    "description": "Main"
+    "description": "Kidapawan City"
   },
   {
     "code": "109",
-    "description": "Main"
+    "description": "Tacurong City"
   },
   {
     "code": "110",
-    "description": "Main"
+    "description": "General Santos City"
   },
   {
     "code": "111",
-    "description": "Main"
+    "description": "Koronadal City"
   },
   {
     "code": "112",
-    "description": "Main"
+    "description": "Tagum City"
   },
   {
     "code": "113",
-    "description": "Main"
+    "description": "Davao City"
   },
   {
     "code": "114",
-    "description": "Main"
+    "description": "Mati City"
   },
   {
     "code": "115",
-    "description": "Main"
+    "description": "Digos City"
   },
   {
     "code": "116",
-    "description": "Main"
+    "description": "Bislig City"
   },
   {
     "code": "117",
-    "description": "Main"
+    "description": "RDO 117"
   },
   {
     "code": "118",
-    "description": "Main"
+    "description": "RDO 118"
   },
   {
     "code": "119",
-    "description": "Main"
+    "description": "RDO 119"
   },
   {
     "code": "120",
-    "description": "Main"
+    "description": "RDO 120"
   },
   {
     "code": "121",
-    "description": "Main"
+    "description": "RDO 121"
   },
   {
     "code": "122",
-    "description": "Main"
+    "description": "RDO 122"
   },
   {
     "code": "123",
-    "description": "Main"
+    "description": "RDO 123"
   },
   {
     "code": "124",
-    "description": "Main"
+    "description": "RDO 124"
   },
   {
     "code": "125",
-    "description": "Main"
+    "description": "RDO 125"
   },
   {
     "code": "126",
-    "description": "Main"
+    "description": "RDO 126"
   },
   {
     "code": "127",
-    "description": "Main"
+    "description": "RDO 127"
   },
   {
     "code": "132",
-    "description": "Main"
+    "description": "RDO 132"
   }
 ]

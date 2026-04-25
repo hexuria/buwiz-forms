@@ -1,0 +1,228 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Checking bir-desktop v0.1.0 (/Volumes/goldcoders/reverse-engineer-ebir-forms/bir/crates/bir-desktop)
+error[E0583]: file not found for module `profile_card`
+ --> crates/bir-desktop/src/components/mod.rs:4:1
+  |
+4 | pub mod profile_card;
+  | ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: to create the module `profile_card`, create file "crates/bir-desktop/src/components/profile_card.rs" or "crates/bir-desktop/src/components/profile_card/mod.rs"
+  = note: if there is a `mod profile_card` elsewhere in the crate already, import it with `use crate::...` instead
+
+error[E0432]: unresolved import `rand`
+   --> crates/bir-desktop/src/app.rs:257:45
+    |
+257 | ...                   use rand::Rng;
+    |                           ^^^^ use of unresolved module or unlinked crate `rand`
+    |
+    = help: if you wanted to use a crate named `rand`, use `cargo add rand` to add it to your `Cargo.toml`
+
+error[E0599]: no method named `when` found for struct `gpui::Div` in the current scope
+   --> crates/bir-desktop/src/app.rs:249:22
+    |
+181 | /                 div()
+182 | |                     .flex()
+183 | |                     .flex_col()
+184 | |                     .gap_4()
+...   |
+248 | |                     .child(Input::new(&self.profile_filter))
+249 | |                     .when(
+    | |                     -^^^^ method not found in `gpui::Div`
+    | |_____________________|
+    |
+    |
+   ::: /Users/uriah/.cargo/git/checkouts/zed-a70e2ad075855582/385f613/crates/gpui/src/util.rs:21:8
+    |
+ 21 |       fn when(self, condition: bool, then: impl FnOnce(Self) -> Self) -> Self
+    |          ---- the method is available for `gpui::Div` here
+    |
+    = help: items from traits can only be used if the trait is in scope
+help: trait `FluentBuilder` which provides `when` is implemented but not in scope; perhaps you want to import it
+    |
+  1 + use gpui::prelude::FluentBuilder;
+    |
+
+error[E0433]: cannot find module or crate `rand` in this scope
+   --> crates/bir-desktop/src/app.rs:258:55
+    |
+258 | ...                   let mut rng = rand::thread_rng();
+    |                                     ^^^^ use of unresolved module or unlinked crate `rand`
+    |
+    = help: if you wanted to use a crate named `rand`, use `cargo add rand` to add it to your `Cargo.toml`
+
+error[E0599]: no function or associated item named `parse` found for struct `bir_core::Tin` in the current scope
+   --> crates/bir-desktop/src/app.rs:268:63
+    |
+268 | ...                   if let Ok(tin) = Tin::parse(&tin_str) {
+    |                                             ^^^^^ function or associated item not found in `bir_core::Tin`
+
+error[E0560]: struct `TaxpayerProfile` has no field named `rdo`
+   --> crates/bir-desktop/src/app.rs:271:49
+    |
+271 | ...                   rdo: "018".to_string(),
+    |                       ^^^ `TaxpayerProfile` does not have this field
+    |
+    = note: available fields are: `id`, `rdo_code`, `phone`, `email`, `default_form_type`
+
+error[E0560]: struct `TaxpayerProfile` has no field named `contact_number`
+   --> crates/bir-desktop/src/app.rs:277:49
+    |
+277 | ...                   contact_number: "09123456789".to_string(),
+    |                       ^^^^^^^^^^^^^^ `TaxpayerProfile` does not have this field
+    |
+    = note: available fields are: `id`, `rdo_code`, `phone`, `email`, `default_form_type`
+
+error[E0560]: struct `TaxpayerProfile` has no field named `email_address`
+   --> crates/bir-desktop/src/app.rs:278:49
+    |
+278 | ...                   email_address: "mock@example.com".to_string(),
+    |                       ^^^^^^^^^^^^^ `TaxpayerProfile` does not have this field
+    |
+    = note: available fields are: `id`, `rdo_code`, `phone`, `email`, `default_form_type`
+
+error[E0308]: mismatched types
+   --> crates/bir-desktop/src/app.rs:283:73
+    |
+283 | ...                   let _ = db.save_profile(&profile);
+    |                                  ------------ ^^^^^^^^ expected `TaxpayerProfile`, found `&TaxpayerProfile`
+    |                                  |
+    |                                  arguments to this method are incorrect
+    |
+note: method defined here
+   --> crates/bir-core/src/db.rs:210:12
+    |
+210 |     pub fn save_profile(&self, mut profile: TaxpayerProfile) -> Result<TaxpayerProfile, DbError> {
+    |            ^^^^^^^^^^^^
+help: consider removing the borrow
+    |
+283 -                                                 let _ = db.save_profile(&profile);
+283 +                                                 let _ = db.save_profile(profile);
+    |
+
+error[E0609]: no field `rdo` on type `&TaxpayerProfile`
+   --> crates/bir-desktop/src/app.rs:314:86
+    |
+314 | ...                   let rdo_desc = bir_core::reference::get_rdo(&profile.rdo)
+    |                                                                            ^^^ unknown field
+    |
+    = note: available fields are: `id`, `full_name`, `tin`, `rdo_code`, `line_of_business` ... and 8 others
+
+error[E0599]: no method named `when` found for struct `gpui::Div` in the current scope
+   --> crates/bir-desktop/src/app.rs:341:46
+    |
+337 | / ...                   div()
+338 | | ...                       .flex()
+339 | | ...                       .items_center()
+340 | | ...                       .gap_3()
+341 | | ...                       .when(is_expanded, |d| d.mb_4())
+    | |                           -^^^^ method not found in `gpui::Div`
+    | |___________________________|
+    |
+    |
+   ::: /Users/uriah/.cargo/git/checkouts/zed-a70e2ad075855582/385f613/crates/gpui/src/util.rs:21:8
+    |
+ 21 |       fn when(self, condition: bool, then: impl FnOnce(Self) -> Self) -> Self
+    |          ---- the method is available for `gpui::Div` here
+    |
+    = help: items from traits can only be used if the trait is in scope
+help: trait `FluentBuilder` which provides `when` is implemented but not in scope; perhaps you want to import it
+    |
+  1 + use gpui::prelude::FluentBuilder;
+    |
+
+error[E0599]: no method named `when` found for struct `Stateful<E>` in the current scope
+   --> crates/bir-desktop/src/app.rs:376:38
+    |
+318 | / ...                   div()
+319 | | ...                       .id(profile.tin.full())
+320 | | ...                       .w_full()
+321 | | ...                       .p_3()
+...   |
+376 | | ...                       .when(is_expanded, |this| {
+    | |                           -^^^^ method not found in `Stateful<gpui::Div>`
+    | |___________________________|
+    |
+    |
+   ::: /Users/uriah/.cargo/git/checkouts/zed-a70e2ad075855582/385f613/crates/gpui/src/util.rs:21:8
+    |
+ 21 |       fn when(self, condition: bool, then: impl FnOnce(Self) -> Self) -> Self
+    |          ---- the method is available for `Stateful<gpui::Div>` here
+    |
+    = help: items from traits can only be used if the trait is in scope
+help: trait `FluentBuilder` which provides `when` is implemented but not in scope; perhaps you want to import it
+    |
+  1 + use gpui::prelude::FluentBuilder;
+    |
+
+error[E0609]: no field `rdo` on type `&TaxpayerProfile`
+   --> crates/bir-desktop/src/app.rs:392:99
+    |
+392 | ...                   .child(format!("{} - {}", profile.rdo, rdo_desc)),
+    |                                                         ^^^ unknown field
+    |
+    = note: available fields are: `id`, `full_name`, `tin`, `rdo_code`, `line_of_business` ... and 8 others
+
+error[E0609]: no field `command` on type `Modifiers`
+   --> crates/bir-desktop/src/views/profile_manager.rs:348:61
+    |
+348 |                 let is_modifier = event.keystroke.modifiers.command || event.keystroke.modifiers.control;
+    |                                                             ^^^^^^^
+    |                                                             |
+    |                                                             this is an associated function, not a method
+    |                                                             unknown field
+    |
+    = note: found the following associated function; to be used as method, it must have a `self` parameter
+note: the candidate is defined in an impl for the type `Modifiers`
+   --> /Users/uriah/.cargo/git/checkouts/zed-a70e2ad075855582/385f613/crates/gpui/src/platform/keystroke.rs:510:5
+    |
+510 |     pub fn command() -> Modifiers {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: use associated function syntax instead
+    |
+348 -                 let is_modifier = event.keystroke.modifiers.command || event.keystroke.modifiers.control;
+348 +                 let is_modifier = Modifiers::command || event.keystroke.modifiers.control;
+    |
+
+warning: unused variable: `event`
+   --> crates/bir-desktop/src/views/profile_manager.rs:195:9
+    |
+195 |         event: &gpui_component::input::InputEvent,
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_event`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `cx`
+   --> crates/bir-desktop/src/views/profile_manager.rs:196:9
+    |
+196 |         cx: &mut Context<Self>,
+    |         ^^ help: if this is intentional, prefix it with an underscore: `_cx`
+
+warning: unused variable: `event`
+   --> crates/bir-desktop/src/views/profile_manager.rs:204:9
+    |
+204 |         event: &InputEvent,
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_event`
+
+warning: unused variable: `cx`
+   --> crates/bir-desktop/src/views/profile_manager.rs:206:9
+    |
+206 |         cx: &mut Context<Self>,
+    |         ^^ help: if this is intentional, prefix it with an underscore: `_cx`
+
+warning: unused variable: `event`
+   --> crates/bir-desktop/src/views/profile_manager.rs:214:9
+    |
+214 |         event: &ComboboxEvent,
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_event`
+
+warning: unused variable: `cx`
+   --> crates/bir-desktop/src/views/profile_manager.rs:215:9
+    |
+215 |         cx: &mut Context<Self>,
+    |         ^^ help: if this is intentional, prefix it with an underscore: `_cx`
+
+Some errors have detailed explanations: E0308, E0432, E0433, E0560, E0583, E0599, E0609.
+For more information about an error, try `rustc --explain E0308`.
+warning: `bir-desktop` (bin "bir") generated 6 warnings
+error: could not compile `bir-desktop` (bin "bir") due to 14 previous errors; 6 warnings emitted
