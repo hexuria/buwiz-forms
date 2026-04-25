@@ -1,117 +1,230 @@
-use crate::db::{Announcement, Database};
+use crate::db::{BirNotice, Database, NoticeSourceKind, NoticeType};
 use anyhow::Result;
 use rss::Channel;
 use std::sync::{Arc, Mutex};
 use tracing::{error, info};
+use serde::Deserialize;
 
-pub struct NewsFetcher {
-    db: Arc<Mutex<Database>>,
-    client: reqwest::blocking::Client,
-    feed_urls: Vec<String>,
+pub trait NoticeProvider: Send + Sync {
+    fn source_kind(&self) -> NoticeSourceKind;
+    fn fetch(&self) -> Result<Vec<BirNotice>>;
 }
 
-impl NewsFetcher {
-    pub fn new(db: Arc<Mutex<Database>>) -> Self {
-        // Here we configure the default URLs.
-        // Due to Facebook's scraping protection, direct Facebook URLs will fail.
-        // Users should use RSS proxy services (like RSS.app, RSS-Bridge, etc.) for Facebook pages.
-        let feed_urls = vec![
-            // Placeholder proxy URL for Facebook Fan Page (Requires a proxy service)
-            "https://rss.app/feeds/facebook_bir_official.xml".to_string(),
-            // Mock standard RSS feed
-            "https://www.officialgazette.gov.ph/feed/".to_string(),
-        ];
+pub struct NoticeFetcher {
+    db: Arc<Mutex<Database>>,
+    providers: Vec<Box<dyn NoticeProvider + Send + Sync>>,
+}
 
+impl NoticeFetcher {
+    pub fn new(db: Arc<Mutex<Database>>) -> Self {
         Self {
             db,
-            client: reqwest::blocking::Client::new(),
-            feed_urls,
+            providers: vec![
+                Box::new(BirCmsProvider::new()),
+                Box::new(RssProvider::new(vec!["https://www.officialgazette.gov.ph/feed/".to_string()])),
+                Box::new(FacebookGraphProvider),
+            ],
         }
     }
 
-    /// Set custom RSS feeds to track.
-    pub fn set_feeds(&mut self, urls: Vec<String>) {
-        self.feed_urls = urls;
-    }
-
-    /// Fetches all configured RSS feeds and saves new items to the local database.
     pub fn fetch_and_sync(&self) -> Result<()> {
-        info!("Starting news fetch from {} sources...", self.feed_urls.len());
+        info!("Starting notice fetch from {} providers...", self.providers.len());
         
-        for url in &self.feed_urls {
-            match self.fetch_feed(url) {
-                Ok(announcements) => {
-                    self.save_to_db(announcements);
-                }
-                Err(e) => {
-                    error!("Failed to fetch feed {}: {}", url, e);
+        if let Ok(db_lock) = self.db.lock() {
+            for provider in &self.providers {
+                match provider.fetch() {
+                    Ok(notices) => {
+                        for notice in notices {
+                            if let Err(e) = db_lock.save_bir_notice(&notice) {
+                                error!("Failed to save notice {}: {}", notice.external_id, e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        error!("Failed to fetch from {:?}: {}", provider.source_kind(), e);
+                    }
                 }
             }
         }
         
         Ok(())
     }
+}
 
-    fn fetch_feed(&self, url: &str) -> Result<Vec<Announcement>> {
-        let response = self.client.get(url).send()?.bytes()?;
-        
-        // Parse the RSS XML
-        let channel = Channel::read_from(&response[..])?;
-        
-        let mut announcements = Vec::new();
-        for item in channel.items() {
-            let title = item.title().unwrap_or("No Title").to_string();
-            let content = item.description().unwrap_or("").to_string();
-            let published_at = item.pub_date().unwrap_or("").to_string();
+pub struct BirCmsProvider {
+    client: reqwest::blocking::Client,
+}
+
+impl BirCmsProvider {
+    pub fn new() -> Self {
+        Self {
+            client: reqwest::blocking::Client::new(),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct BirCmsResponse {
+    data: Vec<BirCmsDataset>,
+}
+
+#[derive(Deserialize)]
+struct BirCmsDataset {
+    id: i64,
+    code: String,
+    name: String,
+    content: Option<BirCmsContent>,
+    is_active: i32,
+}
+
+#[derive(Deserialize)]
+struct BirCmsContent {
+    #[serde(rename = "Contents")]
+    contents: Option<String>,
+}
+
+impl NoticeProvider for BirCmsProvider {
+    fn source_kind(&self) -> NoticeSourceKind {
+        NoticeSourceKind::BirCms
+    }
+
+    fn fetch(&self) -> Result<Vec<BirNotice>> {
+        let url = "https://bir-cms-ws.bir.gov.ph/api/pub/templates/3380/datasets?per_page=3000";
+        let response_bytes = self.client.get(url)
+            .header("client-website-id", "2")
+            .header("origin", "https://www.bir.gov.ph")
+            .send()?
+            .bytes()?;
+        let response: BirCmsResponse = serde_json::from_slice(&response_bytes)?;
+
+        let mut notices = Vec::new();
+
+        for item in response.data {
+            if item.is_active != 1 {
+                continue;
+            }
+
+            // Extract content
+            let html_content = item.content.and_then(|c| c.contents).unwrap_or_default();
             
-            // Basic source determination
-            let source = if url.contains("facebook") {
-                "Facebook (Proxy)".to_string()
-            } else if url.contains("officialgazette") {
-                "Official Gazette".to_string()
-            } else {
-                "RSS Feed".to_string()
-            };
+            // Minimal regex parsing for eBIRForms version and link
+            let mut title = format!("{} Update", item.name);
+            let mut notice_type = NoticeType::General;
+            let mut external_id = format!("bir-cms:{}", item.id);
+            
+            if item.code == "eBIRForms" {
+                notice_type = NoticeType::EbirFormsVersion;
+                // Try to find version
+                if let Some(v_idx) = html_content.find("Offline eBIRForms Package v") {
+                    let end_idx = html_content[v_idx..].find("setup").unwrap_or(30) + v_idx;
+                    title = html_content[v_idx..end_idx].trim().to_string();
+                    external_id = format!("bir-cms:ebirforms:{}", title.replace(" ", "-"));
+                }
+            }
 
-            announcements.push(Announcement {
+            notices.push(BirNotice {
                 id: None,
-                source,
+                external_id,
+                source: "BIR CMS".to_string(),
+                source_kind: NoticeSourceKind::BirCms,
+                source_url: Some("https://www.bir.gov.ph/ebirforms".to_string()),
                 title,
-                content,
-                published_at,
+                body: "New updates available from BIR CMS.".to_string(), // In reality we should parse HTML to text
+                notice_type,
+                rdo_code: None,
+                form_code: None, // Can extract from HTML using regex if needed
+                deadline: None,
+                image_url: None,
+                posted_at: Some(chrono::Local::now().format("%Y-%m-%d").to_string()),
+                fetched_at: chrono::Local::now().to_rfc3339(),
+                raw_json: Some(html_content),
                 read_status: false,
             });
         }
 
-        Ok(announcements)
+        Ok(notices)
+    }
+}
+
+pub struct RssProvider {
+    client: reqwest::blocking::Client,
+    feed_urls: Vec<String>,
+}
+
+impl RssProvider {
+    pub fn new(feed_urls: Vec<String>) -> Self {
+        Self {
+            client: reqwest::blocking::Client::new(),
+            feed_urls,
+        }
+    }
+}
+
+impl NoticeProvider for RssProvider {
+    fn source_kind(&self) -> NoticeSourceKind {
+        NoticeSourceKind::Rss
     }
 
-    fn save_to_db(&self, announcements: Vec<Announcement>) {
-        if let Ok(db_lock) = self.db.lock() {
-            // Very naive insert. In a real scenario, we should check if the announcement already exists
-            // based on title or a unique GUID. For now, we will clear and replace or just insert.
-            // Let's assume we just want to fetch the latest.
-            
-            // To prevent infinite duplication, let's fetch existing titles.
-            let existing_titles: Vec<String> = db_lock.list_announcements()
-                .unwrap_or_default()
-                .into_iter()
-                .map(|a| a.title)
-                .collect();
+    fn fetch(&self) -> Result<Vec<BirNotice>> {
+        let mut notices = Vec::new();
+        
+        for url in &self.feed_urls {
+            let response = self.client.get(url).send()?.bytes()?;
+            if let Ok(channel) = Channel::read_from(&response[..]) {
+                for item in channel.items() {
+                    let title = item.title().unwrap_or("No Title").to_string();
+                    let content = item.description().unwrap_or("").to_string();
+                    let published_at = item.pub_date().unwrap_or("").to_string();
+                    let link = item.link().unwrap_or("").to_string();
+                    let guid = item.guid().map(|g| g.value().to_string()).unwrap_or_else(|| {
+                        use std::hash::{Hash, Hasher};
+                        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                        link.hash(&mut hasher);
+                        title.hash(&mut hasher);
+                        format!("rss-hash-{}", hasher.finish())
+                    });
 
-            for mut ann in announcements {
-                if !existing_titles.contains(&ann.title) {
-                    // Limit content length for UI display
-                    if ann.content.len() > 200 {
-                        ann.content = format!("{}...", &ann.content[..197]);
+                    let mut body = content;
+                    if body.len() > 200 {
+                        body = format!("{}...", &body[..197]);
                     }
-                    if let Err(e) = db_lock.save_announcement(&ann) {
-                        error!("Failed to save announcement to DB: {}", e);
-                    } else {
-                        info!("Saved new announcement: {}", ann.title);
-                    }
+
+                    notices.push(BirNotice {
+                        id: None,
+                        external_id: guid,
+                        source: "RSS Feed".to_string(),
+                        source_kind: NoticeSourceKind::Rss,
+                        source_url: Some(link),
+                        title,
+                        body,
+                        notice_type: NoticeType::General,
+                        rdo_code: None,
+                        form_code: None,
+                        deadline: None,
+                        image_url: None,
+                        posted_at: Some(published_at),
+                        fetched_at: chrono::Local::now().to_rfc3339(),
+                        raw_json: None,
+                        read_status: false,
+                    });
                 }
             }
         }
+        
+        Ok(notices)
+    }
+}
+
+pub struct FacebookGraphProvider;
+
+impl NoticeProvider for FacebookGraphProvider {
+    fn source_kind(&self) -> NoticeSourceKind {
+        NoticeSourceKind::FacebookGraph
+    }
+
+    fn fetch(&self) -> Result<Vec<BirNotice>> {
+        // Scaffold only, do not implement actual scraping per PRD.
+        // Return empty array.
+        Ok(vec![])
     }
 }

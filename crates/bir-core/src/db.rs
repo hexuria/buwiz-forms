@@ -65,6 +65,88 @@ pub struct Announcement {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BirNotice {
+    pub id: Option<i64>,
+    pub external_id: String,
+    pub source: String,
+    pub source_kind: NoticeSourceKind,
+    pub source_url: Option<String>,
+    pub title: String,
+    pub body: String,
+    pub notice_type: NoticeType,
+    pub rdo_code: Option<String>,
+    pub form_code: Option<String>,
+    pub deadline: Option<String>, // NaiveDate format YYYY-MM-DD
+    pub image_url: Option<String>,
+    pub posted_at: Option<String>,
+    pub fetched_at: String,
+    pub raw_json: Option<String>,
+    pub read_status: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum NoticeSourceKind {
+    BirCms,
+    Rss,
+    Manual,
+    FacebookGraph,
+}
+
+impl NoticeSourceKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            NoticeSourceKind::BirCms => "BirCms",
+            NoticeSourceKind::Rss => "Rss",
+            NoticeSourceKind::Manual => "Manual",
+            NoticeSourceKind::FacebookGraph => "FacebookGraph",
+        }
+    }
+    
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "BirCms" => NoticeSourceKind::BirCms,
+            "Manual" => NoticeSourceKind::Manual,
+            "FacebookGraph" => NoticeSourceKind::FacebookGraph,
+            _ => NoticeSourceKind::Rss,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum NoticeType {
+    EbirFormsVersion,
+    Deadline,
+    TaxCalendar,
+    RdoAdvisory,
+    SystemAdvisory,
+    General,
+}
+
+impl NoticeType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            NoticeType::EbirFormsVersion => "EbirFormsVersion",
+            NoticeType::Deadline => "Deadline",
+            NoticeType::TaxCalendar => "TaxCalendar",
+            NoticeType::RdoAdvisory => "RdoAdvisory",
+            NoticeType::SystemAdvisory => "SystemAdvisory",
+            NoticeType::General => "General",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "EbirFormsVersion" => NoticeType::EbirFormsVersion,
+            "Deadline" => NoticeType::Deadline,
+            "TaxCalendar" => NoticeType::TaxCalendar,
+            "RdoAdvisory" => NoticeType::RdoAdvisory,
+            "SystemAdvisory" => NoticeType::SystemAdvisory,
+            _ => NoticeType::General,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PenaltyCache {
     pub id: Option<i64>,
     pub tin: String,
@@ -199,6 +281,49 @@ impl Database {
             )",
             [],
         )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS bir_notices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                external_id TEXT NOT NULL,
+                source TEXT NOT NULL,
+                source_kind TEXT NOT NULL,
+                source_url TEXT,
+                title TEXT NOT NULL,
+                body TEXT NOT NULL,
+                notice_type TEXT NOT NULL,
+                rdo_code TEXT,
+                form_code TEXT,
+                deadline TEXT,
+                image_url TEXT,
+                posted_at TEXT,
+                fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+                raw_json TEXT,
+                read_status BOOLEAN NOT NULL DEFAULT 0,
+                UNIQUE(source_kind, external_id)
+            )",
+            [],
+        )?;
+
+        conn.execute_batch("
+            INSERT INTO bir_notices (external_id, source, source_kind, title, body, notice_type, posted_at, read_status)
+            SELECT
+                'legacy-' || id,
+                source,
+                'Rss',
+                title,
+                content,
+                'General',
+                published_at,
+                read_status
+            FROM announcements
+            WHERE NOT EXISTS (SELECT 1 FROM bir_notices WHERE external_id = 'legacy-' || announcements.id);
+
+            CREATE INDEX IF NOT EXISTS idx_bir_notices_posted_at ON bir_notices(posted_at);
+            CREATE INDEX IF NOT EXISTS idx_bir_notices_deadline ON bir_notices(deadline);
+            CREATE INDEX IF NOT EXISTS idx_bir_notices_form_code ON bir_notices(form_code);
+            CREATE INDEX IF NOT EXISTS idx_bir_notices_rdo_code ON bir_notices(rdo_code);
+        ")?;
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS penalties_cache (
@@ -766,33 +891,108 @@ impl Database {
     }
 
     // =========================================================================
-    // Announcements
+    // Notices and Announcements
     // =========================================================================
-    pub fn save_announcement(&self, ann: &Announcement) -> Result<i64, DbError> {
-        self.conn.execute(
-            "INSERT INTO announcements (source, title, content, published_at, read_status) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![ann.source, ann.title, ann.content, ann.published_at, ann.read_status],
+    pub fn save_bir_notice(&self, notice: &BirNotice) -> Result<i64, DbError> {
+        let mut stmt = self.conn.prepare(
+            "INSERT INTO bir_notices (external_id, source, source_kind, source_url, title, body, notice_type, rdo_code, form_code, deadline, image_url, posted_at, raw_json, read_status)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+             ON CONFLICT(source_kind, external_id) DO UPDATE SET
+                 title=excluded.title,
+                 body=excluded.body,
+                 source_url=excluded.source_url,
+                 notice_type=excluded.notice_type,
+                 posted_at=excluded.posted_at,
+                 raw_json=excluded.raw_json,
+                 fetched_at=datetime('now')"
         )?;
+        
+        let read_status = if notice.read_status { 1 } else { 0 };
+        stmt.execute(params![
+            notice.external_id,
+            notice.source,
+            notice.source_kind.as_str(),
+            notice.source_url,
+            notice.title,
+            notice.body,
+            notice.notice_type.as_str(),
+            notice.rdo_code,
+            notice.form_code,
+            notice.deadline,
+            notice.image_url,
+            notice.posted_at,
+            notice.raw_json,
+            read_status
+        ])?;
         Ok(self.conn.last_insert_rowid())
     }
 
+    pub fn list_bir_notices(&self) -> Result<Vec<BirNotice>, DbError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, external_id, source, source_kind, source_url, title, body, notice_type, rdo_code, form_code, deadline, image_url, posted_at, fetched_at, raw_json, read_status
+             FROM bir_notices ORDER BY posted_at DESC, id DESC LIMIT 50",
+        )?;
+
+        let notices = stmt
+            .query_map([], |row| {
+                let kind_str: String = row.get(3)?;
+                let type_str: String = row.get(7)?;
+                Ok(BirNotice {
+                    id: row.get(0)?,
+                    external_id: row.get(1)?,
+                    source: row.get(2)?,
+                    source_kind: NoticeSourceKind::from_str(&kind_str),
+                    source_url: row.get(4)?,
+                    title: row.get(5)?,
+                    body: row.get(6)?,
+                    notice_type: NoticeType::from_str(&type_str),
+                    rdo_code: row.get(8)?,
+                    form_code: row.get(9)?,
+                    deadline: row.get(10)?,
+                    image_url: row.get(11)?,
+                    posted_at: row.get(12)?,
+                    fetched_at: row.get(13)?,
+                    raw_json: row.get(14)?,
+                    read_status: row.get::<_, i32>(15)? != 0,
+                })
+            })?
+            .filter_map(Result::ok)
+            .collect();
+
+        Ok(notices)
+    }
+
+    pub fn save_announcement(&self, ann: &Announcement) -> Result<i64, DbError> {
+        self.save_bir_notice(&BirNotice {
+            id: None,
+            external_id: format!("legacy-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_micros()),
+            source: ann.source.clone(),
+            source_kind: NoticeSourceKind::Rss,
+            source_url: None,
+            title: ann.title.clone(),
+            body: ann.content.clone(),
+            notice_type: NoticeType::General,
+            rdo_code: None,
+            form_code: None,
+            deadline: None,
+            image_url: None,
+            posted_at: Some(ann.published_at.clone()),
+            fetched_at: "now".to_string(),
+            raw_json: None,
+            read_status: ann.read_status,
+        })
+    }
+
     pub fn list_announcements(&self) -> Result<Vec<Announcement>, DbError> {
-        let mut stmt = self.conn.prepare("SELECT id, source, title, content, published_at, read_status FROM announcements ORDER BY published_at DESC")?;
-        let rows = stmt.query_map([], |row| {
-            Ok(Announcement {
-                id: row.get(0)?,
-                source: row.get(1)?,
-                title: row.get(2)?,
-                content: row.get(3)?,
-                published_at: row.get(4)?,
-                read_status: row.get(5)?,
-            })
-        })?;
-        let mut result = Vec::new();
-        for r in rows {
-            result.push(r?);
-        }
-        Ok(result)
+        let notices = self.list_bir_notices()?;
+        Ok(notices.into_iter().map(|n| Announcement {
+            id: n.id,
+            source: n.source,
+            title: n.title,
+            content: n.body,
+            published_at: n.posted_at.unwrap_or_default(),
+            read_status: n.read_status,
+        }).collect())
     }
 
     // =========================================================================

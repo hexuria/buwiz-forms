@@ -78,15 +78,19 @@ impl Form2551QView {
             String::new()
         };
         let creditable_withheld_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .default_value(cred_str)
-                .placeholder("0.00")
+            InputState::new(window, cx).placeholder("0.00")
         });
+        creditable_withheld_input.update(cx, |input, cx| {
+            input.set_value(cred_str, window, cx);
+        });
+
         let tax_paid_previous_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .default_value(prev_str)
-                .placeholder("0.00")
+            InputState::new(window, cx).placeholder("0.00")
         });
+        tax_paid_previous_input.update(cx, |input, cx| {
+            input.set_value(prev_str, window, cx);
+        });
+
         let receipt_input = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder("Paste BIR receipt email text, then click Import Receipt")
@@ -106,9 +110,10 @@ impl Form2551QView {
                 String::new()
             };
             let input = cx.new(|cx| {
-                InputState::new(window, cx)
-                    .default_value(amt_str)
-                    .placeholder("0.00")
+                InputState::new(window, cx).placeholder("0.00")
+            });
+            input.update(cx, |input, cx| {
+                input.set_value(amt_str, window, cx);
             });
 
             subscriptions.push(cx.subscribe_in(
