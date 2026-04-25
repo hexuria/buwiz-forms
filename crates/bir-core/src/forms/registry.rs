@@ -8,6 +8,8 @@ pub enum FilingFrequency {
     Quarterly,
     /// Filed once per year. Counter: 0/1.
     Annual,
+    /// Filed 12 times per year — one per month. Counter: 0/12.
+    Monthly,
     /// Filed as many times as needed (e.g. payment forms). No counter.
     OpenEnded,
 }
@@ -65,7 +67,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         code: "2550M",
         title: "Monthly Value-Added Tax Declaration",
         category: "Value-Added Tax",
-        frequency: FilingFrequency::OpenEnded,
+        frequency: FilingFrequency::Monthly,
         taxpayer_types: &[
             TaxpayerType::Individual,
             TaxpayerType::Corporation,

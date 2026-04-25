@@ -517,12 +517,10 @@ impl Render for FilterState {
                                 let key = event.keystroke.key.as_str();
                                 if (key == "backspace" || key == "delete")
                                     && this.input_state.read(cx).value().is_empty()
-                                {
-                                    if let Some(chip) = this.active_chips.last() {
+                                    && let Some(chip) = this.active_chips.last() {
                                         let id = chip.id.clone();
                                         this.remove_chip(&id, cx);
                                     }
-                                }
                             }))
                             .child(Input::new(&self.input_state).appearance(false)),
                     )

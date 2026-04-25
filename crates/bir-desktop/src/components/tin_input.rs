@@ -96,11 +96,10 @@ impl TinInput {
             if index < 3 {
                 self.inputs[index + 1].update(cx, |input, cx| input.focus(window, cx));
             }
-        } else if len == 0 && prev_len > 0 {
-            if index > 0 {
+        } else if len == 0 && prev_len > 0
+            && index > 0 {
                 self.inputs[index - 1].update(cx, |input, cx| input.focus(window, cx));
             }
-        }
 
         self.prev_lengths[index] = std::cmp::min(len, max_len);
         cx.emit(ComponentInputEvent::Change);
@@ -181,7 +180,7 @@ impl Render for TinInput {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let is_valid = self.is_valid(cx);
         let val = self.value(cx);
-        let show_error = !is_valid && val.len() > 0;
+        let show_error = !is_valid && !val.is_empty();
 
         div()
             .flex()

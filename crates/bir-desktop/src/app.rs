@@ -1,11 +1,10 @@
 use crate::views::dashboard::{DashboardEvent, DashboardView};
 use crate::views::form_2551q_view::{Form2551QEvent, Form2551QView};
 use crate::views::profile_manager::ProfileManagerView;
+use crate::views::global_dashboard::GlobalDashboardView;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use gpui_component::StyledExt;
 use gpui_component::input::{Input, InputEvent, InputState};
-use gpui_component::scroll::ScrollableElement as _;
 use gpui_component::*;
 
 use bir_core::db::Database;
@@ -15,6 +14,7 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ActiveView {
+    GlobalDashboard,
     Dashboard,
     Form2551Q,
     SavedForms,
@@ -27,6 +27,7 @@ pub struct AppState {
     active_view: ActiveView,
     profile_manager: Entity<ProfileManagerView>,
     dashboard_view: Entity<DashboardView>,
+    global_dashboard_view: Entity<GlobalDashboardView>,
     form_2551q_view: Option<Entity<Form2551QView>>,
     pending_form_draft: Option<Form2551QDraft>,
     db: Arc<Mutex<Database>>,
@@ -34,6 +35,7 @@ pub struct AppState {
     active_profile_tin: Option<String>,
     expanded_profile_tin: Option<String>,
     profile_filter: Entity<InputState>,
+    sidebar_scroll: ScrollHandle,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -61,8 +63,18 @@ impl AppState {
         let profiles = db.list_profiles().unwrap_or_default();
         let db = Arc::new(Mutex::new(db));
 
+        let active_view = if profiles.is_empty() {
+            ActiveView::ProfileManager
+        } else {
+            ActiveView::GlobalDashboard
+        };
+
         let db_clone = Arc::clone(&db);
         let profile_manager = cx.new(|cx| ProfileManagerView::new(db_clone, window, cx));
+        
+        let db_clone_global = Arc::clone(&db);
+        let global_dashboard_view = cx.new(|cx| GlobalDashboardView::new(db_clone_global, window, cx));
+        
         let profile_filter =
             cx.new(|cx| InputState::new(window, cx).placeholder("Search TIN or name"));
         let filter_sub = cx.subscribe_in(
@@ -80,14 +92,17 @@ impl AppState {
             |this: &mut Self, _entity, _event: &crate::views::profile_manager::ProfileEvent, cx| {
                 if let Ok(db_lock) = this.db.lock() {
                     this.profiles = db_lock.list_profiles().unwrap_or_default();
-                    if let Some(tin) = &this.active_profile_tin {
-                        if let Some(profile) = this.profiles.iter().find(|p| p.tin.full() == *tin) {
+                    let p_clone = this.profiles.clone();
+                    this.global_dashboard_view.update(cx, |view, cx| {
+                        view.set_profiles(p_clone, cx);
+                    });
+                    if let Some(tin) = &this.active_profile_tin
+                        && let Some(profile) = this.profiles.iter().find(|p| p.tin.full() == *tin) {
                             let p = profile.clone();
                             this.dashboard_view.update(cx, |view, cx| {
                                 view.set_profile(p, cx);
                             });
                         }
-                    }
                     cx.notify();
                 }
             },
@@ -105,9 +120,9 @@ impl AppState {
                     quarter,
                 } = event;
 
-                if form_code == "2551Q" {
-                    if let Some(tin) = &this.active_profile_tin {
-                        if let Some(profile) = this.profiles.iter().find(|p| p.tin.full() == *tin) {
+                if form_code == "2551Q"
+                    && let Some(tin) = &this.active_profile_tin
+                        && let Some(profile) = this.profiles.iter().find(|p| p.tin.full() == *tin) {
                             let draft = if let Ok(db) = this.db.lock() {
                                 let existing =
                                     db.get_2551q_draft(tin, *year, *quarter).ok().flatten();
@@ -135,16 +150,15 @@ impl AppState {
                             this.active_view = ActiveView::Form2551Q;
                             cx.notify();
                         }
-                    }
-                }
             },
         )
         .detach();
 
         Self {
-            active_view: ActiveView::ProfileManager,
+            active_view,
             profile_manager,
             dashboard_view,
+            global_dashboard_view,
             form_2551q_view: None,
             pending_form_draft: None,
             db,
@@ -152,6 +166,7 @@ impl AppState {
             active_profile_tin: None,
             expanded_profile_tin: None,
             profile_filter,
+            sidebar_scroll: ScrollHandle::new(),
             _subscriptions: vec![filter_sub, profile_sub],
         }
     }
@@ -187,6 +202,7 @@ impl AppState {
                     .gap_4()
                     .child(
                         div()
+                            .id("global_dashboard_btn")
                             .flex()
                             .items_center()
                             .gap_3()
@@ -226,7 +242,13 @@ impl AppState {
                                             .text_color(cx.theme().primary)
                                             .child("OFFLINE SECURE"),
                                     ),
-                            ),
+                            )
+                            .cursor_pointer()
+                            .on_click(cx.listener(|this, _ev, _window, cx| {
+                                this.active_view = ActiveView::GlobalDashboard;
+                                this.active_profile_tin = None;
+                                cx.notify();
+                            })),
                     )
                     .child(
                         div()
@@ -258,7 +280,7 @@ impl AppState {
                                     .small()
                                     .on_click(cx.listener(|this, _ev, _window, cx| {
                                         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
-                                        let tin_str = format!(
+                                        let _tin_str = format!(
                                             "{:03}-{:03}-{:03}-{:03}",
                                             (now % 900) + 100,
                                             ((now / 1000) % 900) + 100,
@@ -304,8 +326,10 @@ impl AppState {
                             .id("sidebar-profile-list")
                             .max_h(px(320.))
                             .overflow_y_scroll()
+                            .track_scroll(&self.sidebar_scroll)
+                            .pb_12()
                             .gap_2()
-                            .children(filtered_profiles.iter().map(|profile| {
+                            .children(filtered_profiles.iter().enumerate().map(|(idx, profile)| {
                                 let is_active =
                                     self.active_profile_tin.as_ref() == Some(&profile.tin.full());
                                 let is_expanded =
@@ -475,16 +499,41 @@ impl AppState {
                                     })
                                     .on_click(cx.listener({
                                         let tin = profile.tin.full();
+                                        let scroll = self.sidebar_scroll.clone();
+                                        let is_last = idx == filtered_profiles.len() - 1;
                                         move |this, _ev, _window, cx| {
                                             if this.expanded_profile_tin.as_ref() == Some(&tin) {
                                                 this.expanded_profile_tin = None;
                                             } else {
                                                 this.expanded_profile_tin = Some(tin.clone());
+                                                if is_last {
+                                                    scroll.set_offset(gpui::Point { x: gpui::px(0.), y: gpui::px(9999.0) });
+                                                }
                                             }
                                             cx.notify();
                                         }
                                     }))
-                            })),
+                            }))
+                            .child(
+                                div()
+                                    .w_full()
+                                    .h_px()
+                                    .bg(cx.theme().border)
+                                    .mt_4()
+                                    .mb_2()
+                            )
+                            .child(
+                                div()
+                                    .w_full()
+                                    .flex()
+                                    .justify_center()
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child("End of profiles")
+                                    )
+                            ),
                     ),
             )
             .child(
@@ -508,6 +557,7 @@ impl AppState {
 
     fn render_active_view(&self, _cx: &mut Context<Self>) -> impl IntoElement {
         match self.active_view {
+            ActiveView::GlobalDashboard => self.global_dashboard_view.clone().into_any_element(),
             ActiveView::ProfileManager => self.profile_manager.clone().into_any_element(),
             ActiveView::Dashboard => self.dashboard_view.clone().into_any_element(),
             ActiveView::Form2551Q => {
@@ -523,8 +573,8 @@ impl AppState {
 }
 
 fn app_database_path() -> std::path::PathBuf {
-    if cfg!(target_os = "macos") {
-        if let Some(home) = std::env::var_os("HOME") {
+    if cfg!(target_os = "macos")
+        && let Some(home) = std::env::var_os("HOME") {
             return std::path::PathBuf::from(home)
                 .join("Library")
                 .join("Application Support")
@@ -532,7 +582,6 @@ fn app_database_path() -> std::path::PathBuf {
                 .join("eBIRForms")
                 .join("bir_data.db");
         }
-    }
 
     if let Some(home) = std::env::var_os("HOME") {
         return std::path::PathBuf::from(home)
@@ -557,8 +606,8 @@ impl Render for AppState {
                 |this: &mut Self, _entity, event: &Form2551QEvent, cx| match event {
                     Form2551QEvent::BackToDashboard => {
                         this.active_view = ActiveView::Dashboard;
-                        if let Some(tin) = &this.active_profile_tin {
-                            if let Some(profile) =
+                        if let Some(tin) = &this.active_profile_tin
+                            && let Some(profile) =
                                 this.profiles.iter().find(|p| p.tin.full() == *tin)
                             {
                                 let p = profile.clone();
@@ -566,7 +615,6 @@ impl Render for AppState {
                                     view.set_profile(p, cx);
                                 });
                             }
-                        }
                         cx.notify();
                     }
                     Form2551QEvent::Saved
@@ -602,10 +650,9 @@ impl Render for AppState {
 impl Drop for AppState {
     fn drop(&mut self) {
         // Flush any pending WAL data to the main database file before shutdown
-        if let Ok(db) = self.db.lock() {
-            if let Err(e) = db.checkpoint() {
+        if let Ok(db) = self.db.lock()
+            && let Err(e) = db.checkpoint() {
                 eprintln!("Warning: WAL checkpoint on shutdown failed: {e}");
             }
-        }
     }
 }

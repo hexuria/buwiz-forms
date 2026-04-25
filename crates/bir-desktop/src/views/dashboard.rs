@@ -384,6 +384,113 @@ impl Render for DashboardView {
                             .child(quarter_dots),
                     )
                 }
+                FilingFrequency::Monthly => {
+                    let months = progress.as_ref().map(|p| p.months.clone()).unwrap_or([
+                        QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted,
+                        QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted,
+                        QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted,
+                    ]);
+                    let filed = months
+                        .iter()
+                        .filter(|s| {
+                            **s == QuarterState::Submitted || **s == QuarterState::Confirmed
+                        })
+                        .count();
+
+                    let month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                    let mut month_dots = div().flex().flex_wrap().gap_2().w_full();
+                    
+                    for (idx, m_state) in months.iter().enumerate() {
+                        let m_num = (idx + 1) as u8;
+                        
+                        let (bg, border_clr, accent, icon, status_label) =
+                            Self::state_style(m_state, cx);
+                        let hover_bg = Self::state_hover_bg(m_state, cx);
+                        let code_click = code.clone();
+
+                        month_dots = month_dots.child(
+                            div()
+                                .id(format!("m_{}_{}_{}", form_def.code, year, m_num))
+                                .flex()
+                                .flex_col()
+                                .items_center()
+                                .w(px(40.))
+                                .gap_1()
+                                .cursor_pointer()
+                                .rounded_lg()
+                                .p_1()
+                                .hover(move |s| s.bg(hover_bg))
+                                .child(
+                                    div()
+                                        .w_8()
+                                        .h_8()
+                                        .rounded_md()
+                                        .border_1()
+                                        .border_color(border_clr)
+                                        .bg(bg)
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::BOLD)
+                                                .text_color(accent)
+                                                .child(icon),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(cx.theme().foreground)
+                                        .child(month_names[idx]),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(accent)
+                                        .child(status_label),
+                                )
+                                .on_click(cx.listener(
+                                    move |_this, _ev, _window, cx| {
+                                        cx.emit(DashboardEvent::FileForm {
+                                            form_code: code_click.clone(),
+                                            year,
+                                            quarter: m_num,
+                                        });
+                                    },
+                                )),
+                        );
+                    }
+
+                    Self::build_card(form_def, year, cx).child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_3()
+                            .child(
+                                div()
+                                    .flex()
+                                    .justify_between()
+                                    .items_center()
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child(format!("Year {}:", year)),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(cx.theme().foreground)
+                                            .child(format!("{}/12 filed", filed)),
+                                    ),
+                            )
+                            .child(month_dots),
+                    )
+                }
                 FilingFrequency::Annual => {
                     let status = progress
                         .as_ref()

@@ -224,6 +224,8 @@ pub struct FormFilingProgress {
     pub taxable_year: u16,
     /// For quarterly forms: index 0 = Q1, 1 = Q2, 2 = Q3, 3 = Q4
     pub quarters: [QuarterState; 4],
+    /// For monthly forms: index 0 = Jan, 11 = Dec
+    pub months: [QuarterState; 12],
     /// For annual forms
     pub annual_status: QuarterState,
     /// For open-ended forms: total filed this year
@@ -240,6 +242,11 @@ impl FormFilingProgress {
                 QuarterState::NotStarted,
                 QuarterState::NotStarted,
                 QuarterState::NotStarted,
+            ],
+            months: [
+                QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted,
+                QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted,
+                QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted,
             ],
             annual_status: QuarterState::NotStarted,
             open_ended_count: 0,

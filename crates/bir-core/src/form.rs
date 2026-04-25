@@ -49,32 +49,28 @@ impl FormData {
                         errors.push(FormError::MissingRequired(field.name.clone()));
                         continue;
                     }
-                    if !val.is_empty() {
-                        if let FieldType::Text {
+                    if !val.is_empty()
+                        && let FieldType::Text {
                             max_length,
                             pattern,
                         } = &field.field_type
                         {
-                            if let Some(max) = max_length {
-                                if val.len() > *max {
+                            if let Some(max) = max_length
+                                && val.len() > *max {
                                     errors.push(FormError::ValidationFailed {
                                         field: field.name.clone(),
                                         reason: format!("exceeds max length of {}", max),
                                     });
                                 }
-                            }
-                            if let Some(pat) = pattern {
-                                if let Ok(regex) = regex::Regex::new(pat) {
-                                    if !regex.is_match(val) {
+                            if let Some(pat) = pattern
+                                && let Ok(regex) = regex::Regex::new(pat)
+                                    && !regex.is_match(val) {
                                         errors.push(FormError::ValidationFailed {
                                             field: field.name.clone(),
                                             reason: format!("does not match pattern {}", pat),
                                         });
                                     }
-                                }
-                            }
                         }
-                    }
                 }
             }
         }

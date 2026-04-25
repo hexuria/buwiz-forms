@@ -56,7 +56,7 @@ impl ComboboxState {
                         cx.background_executor()
                             .timer(std::time::Duration::from_millis(150))
                             .await;
-                        let _ = cx.update(|cx| {
+                        cx.update(|cx| {
                             if let Some(this) = this.upgrade() {
                                 this.update(cx, |this, cx| {
                                     this.open = false;
@@ -67,13 +67,11 @@ impl ComboboxState {
                     })
                     .detach();
                 } else if let InputEvent::PressEnter { .. } = event {
-                    if this.open {
-                        if let Some(idx) = this.selected_index {
-                            if let Some(option) = this.filtered_options.get(idx).cloned() {
+                    if this.open
+                        && let Some(idx) = this.selected_index
+                            && let Some(option) = this.filtered_options.get(idx).cloned() {
                                 this.select_item(&option, window, cx);
                             }
-                        }
-                    }
                 } else if let InputEvent::Focus = event {
                     this.open = true;
                     cx.notify();

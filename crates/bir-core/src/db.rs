@@ -46,6 +46,37 @@ pub struct SubmissionReceipt {
     pub created_at: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaxDeadline {
+    pub id: Option<i64>,
+    pub form_type: String,
+    pub due_date: String,
+    pub description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Announcement {
+    pub id: Option<i64>,
+    pub source: String,
+    pub title: String,
+    pub content: String,
+    pub published_at: String,
+    pub read_status: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PenaltyCache {
+    pub id: Option<i64>,
+    pub tin: String,
+    pub form_type: String,
+    pub period: String,
+    pub penalty_amount: f64,
+    pub reason: String,
+    pub is_high_risk: bool,
+    pub calculated_at: String,
+}
+
+
 #[derive(thiserror::Error, Debug)]
 pub enum DbError {
     #[error("Database error: {0}")]
@@ -147,6 +178,43 @@ impl Database {
         }
 
         // Initialize Schema
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS tax_deadlines (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                form_type TEXT NOT NULL,
+                due_date TEXT NOT NULL,
+                description TEXT NOT NULL
+            )",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS announcements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source TEXT NOT NULL,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                published_at TEXT NOT NULL,
+                read_status BOOLEAN NOT NULL DEFAULT 0
+            )",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS penalties_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tin TEXT NOT NULL,
+                form_type TEXT NOT NULL,
+                period TEXT NOT NULL,
+                penalty_amount REAL NOT NULL,
+                reason TEXT NOT NULL,
+                is_high_risk BOOLEAN NOT NULL DEFAULT 0,
+                calculated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (tin) REFERENCES profiles(tin)
+            )",
+            [],
+        )?;
+
         conn.execute(
             "CREATE TABLE IF NOT EXISTS profiles (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -532,7 +600,10 @@ impl Database {
             if let Some(q) = quarter_opt {
                 let idx = (q - 1) as usize;
                 if idx < 4 {
-                    progress.quarters[idx] = state;
+                    progress.quarters[idx] = state.clone();
+                }
+                if idx < 12 {
+                    progress.months[idx] = state;
                 }
             } else {
                 progress.annual_status = state;
@@ -664,6 +735,96 @@ impl Database {
         draft.receipt_id = receipt.id;
         self.save_2551q_draft(&draft)?;
         Ok(())
+    }
+
+    // =========================================================================
+    // Tax Deadlines
+    // =========================================================================
+    pub fn save_tax_deadline(&self, deadline: &TaxDeadline) -> Result<i64, DbError> {
+        self.conn.execute(
+            "INSERT INTO tax_deadlines (form_type, due_date, description) VALUES (?1, ?2, ?3)",
+            params![deadline.form_type, deadline.due_date, deadline.description],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn list_tax_deadlines(&self) -> Result<Vec<TaxDeadline>, DbError> {
+        let mut stmt = self.conn.prepare("SELECT id, form_type, due_date, description FROM tax_deadlines ORDER BY due_date ASC")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(TaxDeadline {
+                id: row.get(0)?,
+                form_type: row.get(1)?,
+                due_date: row.get(2)?,
+                description: row.get(3)?,
+            })
+        })?;
+        let mut result = Vec::new();
+        for r in rows {
+            result.push(r?);
+        }
+        Ok(result)
+    }
+
+    // =========================================================================
+    // Announcements
+    // =========================================================================
+    pub fn save_announcement(&self, ann: &Announcement) -> Result<i64, DbError> {
+        self.conn.execute(
+            "INSERT INTO announcements (source, title, content, published_at, read_status) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![ann.source, ann.title, ann.content, ann.published_at, ann.read_status],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn list_announcements(&self) -> Result<Vec<Announcement>, DbError> {
+        let mut stmt = self.conn.prepare("SELECT id, source, title, content, published_at, read_status FROM announcements ORDER BY published_at DESC")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(Announcement {
+                id: row.get(0)?,
+                source: row.get(1)?,
+                title: row.get(2)?,
+                content: row.get(3)?,
+                published_at: row.get(4)?,
+                read_status: row.get(5)?,
+            })
+        })?;
+        let mut result = Vec::new();
+        for r in rows {
+            result.push(r?);
+        }
+        Ok(result)
+    }
+
+    // =========================================================================
+    // Penalties Cache
+    // =========================================================================
+    pub fn save_penalty_cache(&self, cache: &PenaltyCache) -> Result<i64, DbError> {
+        self.conn.execute(
+            "INSERT INTO penalties_cache (tin, form_type, period, penalty_amount, reason, is_high_risk) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![cache.tin, cache.form_type, cache.period, cache.penalty_amount, cache.reason, cache.is_high_risk],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn list_penalties_cache(&self, tin: &str) -> Result<Vec<PenaltyCache>, DbError> {
+        let mut stmt = self.conn.prepare("SELECT id, tin, form_type, period, penalty_amount, reason, is_high_risk, calculated_at FROM penalties_cache WHERE tin = ?1 ORDER BY calculated_at DESC")?;
+        let rows = stmt.query_map(params![tin], |row| {
+            Ok(PenaltyCache {
+                id: row.get(0)?,
+                tin: row.get(1)?,
+                form_type: row.get(2)?,
+                period: row.get(3)?,
+                penalty_amount: row.get(4)?,
+                reason: row.get(5)?,
+                is_high_risk: row.get(6)?,
+                calculated_at: row.get(7)?,
+            })
+        })?;
+        let mut result = Vec::new();
+        for r in rows {
+            result.push(r?);
+        }
+        Ok(result)
     }
 }
 

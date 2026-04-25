@@ -188,8 +188,8 @@ impl ProfileManagerView {
     fn on_tin_event(
         &mut self,
         _state: Entity<TinInput>,
-        event: &gpui_component::input::InputEvent,
-        cx: &mut Context<Self>,
+        _event: &gpui_component::input::InputEvent,
+        _cx: &mut Context<Self>,
     ) {
         // No-op since sync_card is removed
     }
@@ -197,9 +197,9 @@ impl ProfileManagerView {
     fn on_input_event(
         &mut self,
         _state: &Entity<InputState>,
-        event: &InputEvent,
+        _event: &InputEvent,
         _window: &mut Window,
-        cx: &mut Context<Self>,
+        _cx: &mut Context<Self>,
     ) {
         // No-op since sync_card is removed
     }
@@ -207,8 +207,8 @@ impl ProfileManagerView {
     fn on_combobox_event(
         &mut self,
         _state: Entity<ComboboxState>,
-        event: &ComboboxEvent,
-        cx: &mut Context<Self>,
+        _event: &ComboboxEvent,
+        _cx: &mut Context<Self>,
     ) {
         // No-op since sync_card is removed
     }

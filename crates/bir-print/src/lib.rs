@@ -156,7 +156,7 @@ fn build_simple_pdf(width: u32, height: u32, lines: &[String]) -> Vec<u8> {
         let stream = page_stream(height, page_lines, i + 1, page_count);
         objects.push(format!(
             "<< /Length {} >>\nstream\n{}\nendstream",
-            stream.as_bytes().len(),
+            stream.len(),
             stream
         ));
     }
@@ -164,10 +164,10 @@ fn build_simple_pdf(width: u32, height: u32, lines: &[String]) -> Vec<u8> {
     let mut pdf = String::from("%PDF-1.4\n");
     let mut offsets = Vec::new();
     for (i, obj) in objects.iter().enumerate() {
-        offsets.push(pdf.as_bytes().len());
+        offsets.push(pdf.len());
         pdf.push_str(&format!("{} 0 obj\n{}\nendobj\n", i + 1, obj));
     }
-    let xref_offset = pdf.as_bytes().len();
+    let xref_offset = pdf.len();
     pdf.push_str(&format!(
         "xref\n0 {}\n0000000000 65535 f \n",
         objects.len() + 1

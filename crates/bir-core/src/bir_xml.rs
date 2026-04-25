@@ -23,8 +23,7 @@ pub fn parse_bir_xml(content: &str) -> BTreeMap<String, String> {
                 let last_eq = inner.rfind('=').unwrap();
                 if last_eq > first_eq {
                     let value_with_key = &inner[first_eq + 1..last_eq];
-                    if value_with_key.ends_with(key) {
-                        let value = &value_with_key[..value_with_key.len() - key.len()];
+                    if let Some(value) = value_with_key.strip_suffix(key) {
                         fields.insert(
                             key.to_string(),
                             urlencoding::decode(value)
