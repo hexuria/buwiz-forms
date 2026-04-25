@@ -5,6 +5,8 @@
 //! Schedule 1 is editable. Part II auto-computes.
 
 use gpui::*;
+use gpui::prelude::FluentBuilder;
+use gpui_component::button::ButtonVariants;
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::scroll::ScrollableElement as _;
 use gpui_component::*;
@@ -268,13 +270,18 @@ impl Form2551QView {
         }
     }
 
-    fn save_draft(&mut self, cx: &mut Context<Self>) {
+    fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.sync_from_inputs(cx);
-        self.validation_errors = self.validate_for_submit(cx);
-        self.suppressed_sections.clear();
         if let Ok(db) = self.db.lock() {
             let _ = db.save_2551q_draft(&self.draft);
-            self.status_message = Some("Draft saved".to_string());
+            use gpui_component::WindowExt;
+            window.push_notification(
+                gpui_component::notification::Notification::new()
+                    .message("Form saved.".to_string())
+                    .with_type(gpui_component::notification::NotificationType::Success)
+                    .autohide(true),
+                cx,
+            );
             cx.emit(Form2551QEvent::Saved);
         }
     }
@@ -370,7 +377,32 @@ impl Form2551QView {
         if let Ok(db) = self.db.lock() {
             let _ = db.save_2551q_draft(&self.draft);
         }
-        self.status_message = Some("Marked as paid ✓".to_string());
+        self.status_message = Some("Paid. Filing complete.".to_string());
+        cx.emit(Form2551QEvent::Saved);
+        cx.notify();
+    }
+
+    fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.draft.status = FilingStatus::Draft;
+        self.draft.submitted_at = None;
+        self.draft.confirmed_at = None;
+        self.draft.receipt_id = None;
+        self.draft.submission_filename = None;
+        self.draft.updated_at = chrono::Utc::now().to_rfc3339();
+        self.is_validated = false;
+        self.validation_errors.clear();
+        self.status_message = None;
+        if let Ok(db) = self.db.lock() {
+            let _ = db.save_2551q_draft(&self.draft);
+        }
+        use gpui_component::WindowExt;
+        window.push_notification(
+            gpui_component::notification::Notification::new()
+                .message("Form reverted to Draft. You may edit and resubmit.".to_string())
+                .with_type(gpui_component::notification::NotificationType::Info)
+                .autohide(true),
+            cx,
+        );
         cx.emit(Form2551QEvent::Saved);
         cx.notify();
     }
@@ -397,7 +429,7 @@ impl Form2551QView {
                 }
 
                 // Use existing email fetcher infrastructure
-                let _receipts = bir_core::email::fetcher::fetch_and_process_emails(&profile, &db_guard)?;
+                let _receipts = bir_core::email::fetch_and_process_emails(&profile, &db_guard)?;
 
                 // Check if our draft was updated to Confirmed
                 let our_filename = draft.default_submission_filename();
@@ -654,7 +686,7 @@ impl Form2551QView {
         cx.notify();
     }
 
-    fn export_pdf(&mut self, cx: &mut Context<Self>) {
+    fn export_pdf(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.sync_from_inputs(cx);
         let dir = std::env::temp_dir().join("taxman-ebir-pdf");
         let filename = format!(
@@ -667,10 +699,122 @@ impl Form2551QView {
         match write_2551q_pdf(&self.draft, PaperSize::A4, &path) {
             Ok(path) => {
                 let _ = std::process::Command::new("open").arg(&path).spawn();
-                self.status_message = Some(format!("PDF generated: {}", path.display()));
+                use gpui_component::WindowExt;
+                window.push_notification(
+                    gpui_component::notification::Notification::new()
+                        .message(format!("PDF generated: {}", path.display()))
+                        .with_type(gpui_component::notification::NotificationType::Success)
+                        .autohide(true),
+                    cx,
+                );
             }
             Err(err) => {
-                self.status_message = Some(format!("PDF generation failed: {err}"));
+                use gpui_component::WindowExt;
+                window.push_notification(
+                    gpui_component::notification::Notification::new()
+                        .message(format!("PDF generation failed: {err}"))
+                        .with_type(gpui_component::notification::NotificationType::Error)
+                        .autohide(true),
+                    cx,
+                );
+            }
+        }
+        cx.notify();
+    }
+
+    fn print_confirmation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let _receipt_id = match self.draft.receipt_id {
+            Some(id) => id,
+            None => {
+                use gpui_component::WindowExt;
+                window.push_notification(
+                    gpui_component::notification::Notification::new()
+                        .message("No confirmation receipt available.".to_string())
+                        .with_type(gpui_component::notification::NotificationType::Warning)
+                        .autohide(true),
+                    cx,
+                );
+                return;
+            }
+        };
+
+        // Load receipt from DB by filename match
+        let receipt = if let Ok(db) = self.db.lock() {
+            let filename = self.draft.submission_filename.clone()
+                .unwrap_or_else(|| self.draft.default_submission_filename());
+            db.get_submission_receipt_by_filename(&filename).ok().flatten()
+        } else {
+            None
+        };
+
+        let Some(receipt) = receipt else {
+            use gpui_component::WindowExt;
+            window.push_notification(
+                gpui_component::notification::Notification::new()
+                    .message("Receipt not found in database.".to_string())
+                    .with_type(gpui_component::notification::NotificationType::Error)
+                    .autohide(true),
+                cx,
+            );
+            return;
+        };
+
+        // Build confirmation PDF
+        let dir = std::env::temp_dir().join("taxman-ebir-pdf");
+        let filename = format!(
+            "confirmation-{}.pdf",
+            self.draft.default_submission_filename().trim_end_matches(".xml")
+        );
+        let path = dir.join(&filename);
+
+        let lines = vec![
+            "BIR e-Filing Confirmation Receipt".to_string(),
+            "=".repeat(40),
+            String::new(),
+            format!("Filename: {}", receipt.filename),
+            format!("TIN: {}", receipt.tin),
+            format!("Form Type: {}", receipt.form_type),
+            format!("Period: {}", receipt.period),
+            format!("Received Date: {}", receipt.received_date),
+            format!("Received Time: {}", receipt.received_time),
+            format!("Source: {}", receipt.source_from.as_deref().unwrap_or("BIR")),
+            String::new(),
+            "=".repeat(40),
+            "Form Summary".to_string(),
+            format!("Taxpayer: {}", self.draft.taxpayer_name),
+            format!("TIN: {}", self.draft.tin),
+            format!("Period: Q{} {}", self.draft.quarter, self.draft.taxable_year),
+            format!("Total Tax Due: {:.2}", self.draft.total_tax_due),
+            format!("Creditable Tax Withheld: {:.2}", self.draft.creditable_tax_withheld),
+            format!("Total Amount Payable: {:.2}", self.draft.tax_payable),
+            format!("Status: {:?}", self.draft.status),
+        ];
+
+        let pdf_bytes = bir_print::build_simple_confirmation_pdf(&lines);
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        match std::fs::write(&path, pdf_bytes) {
+            Ok(()) => {
+                let _ = std::process::Command::new("open").arg(&path).spawn();
+                use gpui_component::WindowExt;
+                window.push_notification(
+                    gpui_component::notification::Notification::new()
+                        .message("Confirmation receipt PDF opened.".to_string())
+                        .with_type(gpui_component::notification::NotificationType::Success)
+                        .autohide(true),
+                    cx,
+                );
+            }
+            Err(err) => {
+                use gpui_component::WindowExt;
+                window.push_notification(
+                    gpui_component::notification::Notification::new()
+                        .message(format!("Failed to generate confirmation PDF: {err}"))
+                        .with_type(gpui_component::notification::NotificationType::Error)
+                        .autohide(true),
+                    cx,
+                );
             }
         }
         cx.notify();
@@ -702,6 +846,27 @@ impl Form2551QView {
                 _ => false,
             }
         })
+    }
+
+    /// Returns true if the form fields should be editable (only in Draft status).
+    fn is_editable(&self) -> bool {
+        matches!(self.draft.status, FilingStatus::Draft)
+    }
+
+    /// Returns a persistent contextual hint based on current status.
+    fn status_hint(&self) -> Option<String> {
+        match &self.draft.status {
+            FilingStatus::Draft => None,
+            FilingStatus::Submitted => {
+                let date = self.draft.submitted_at.as_deref().unwrap_or("unknown date");
+                Some(format!("Submitted on {}. Waiting for BIR confirmation email.", date))
+            }
+            FilingStatus::Confirmed => {
+                let date = self.draft.confirmed_at.as_deref().unwrap_or("unknown date");
+                Some(format!("Confirmed on {}. Print confirmation and proceed to bank payment.", date))
+            }
+            FilingStatus::Paid => Some("Paid. Filing complete.".to_string()),
+        }
     }
 
     fn field_label(label: &str, cx: &Context<Self>) -> gpui::Div {
@@ -746,6 +911,7 @@ impl Render for Form2551QView {
         let is_amended = self.is_amended;
         let total_due = self.draft.total_tax_due;
         let tax_payable = self.draft.tax_payable;
+        let is_editable = self.is_editable();
 
         let title_block = div()
             .flex()
@@ -819,8 +985,9 @@ impl Render for Form2551QView {
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .cursor_pointer()
-                                    .on_click(cx.listener(|this, _, _, cx| {
+                                    .when(is_editable, |el| el.cursor_pointer())
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        if !this.is_editable() { return; }
                                         this.is_amended = !this.is_amended;
                                         if !this.is_amended {
                                             this.draft.tax_paid_previous = 0.0;
@@ -867,8 +1034,9 @@ impl Render for Form2551QView {
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .cursor_pointer()
-                                    .on_click(cx.listener(|this, _, _, cx| {
+                                    .when(is_editable, |el| el.cursor_pointer())
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        if !this.is_editable() { return; }
                                         this.tax_relief = !this.tax_relief;
                                         this.draft.tax_relief = this.tax_relief;
                                         this.is_validated = false;
@@ -1030,7 +1198,7 @@ impl Render for Form2551QView {
                     )
                     .child(div().w(px(140.)).child(
                         if let Some(row_in) = self.row_inputs.get(i) {
-                            Input::new(&row_in.taxable_amount).into_any_element()
+                            Input::new(&row_in.taxable_amount).disabled(!is_editable).into_any_element()
                         } else {
                             div().child("—").into_any_element()
                         },
@@ -1084,7 +1252,7 @@ impl Render for Form2551QView {
                     .child(
                         div()
                             .w(px(180.))
-                            .child(Input::new(&self.creditable_withheld_input)),
+                            .child(Input::new(&self.creditable_withheld_input).disabled(!is_editable)),
                     ),
             )
             .child(
@@ -1120,7 +1288,7 @@ impl Render for Form2551QView {
                         div()
                             .w(px(180.))
                             .opacity(if is_amended { 1.0 } else { 0.4 })
-                            .child(Input::new(&self.tax_paid_previous_input)),
+                            .child(Input::new(&self.tax_paid_previous_input).disabled(!is_editable)),
                     ),
             )
             .child(
@@ -1172,47 +1340,116 @@ impl Render for Form2551QView {
                 .into_any_element()
         };
 
+        let status_pipeline = self.render_status_pipeline(cx);
+
+        let mut action_buttons = div().flex().gap_4();
+
+        match &self.draft.status {
+            FilingStatus::Draft => {
+                // Validate button
+                action_buttons = action_buttons.child(
+                    gpui_component::button::Button::new("validate_btn")
+                        .label("Validate")
+                        .outline()
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.sync_from_inputs(cx);
+                            this.validation_errors = this.validate_for_submit(cx);
+                            this.suppressed_sections.clear();
+                            if this.validation_errors.is_empty() {
+                                this.is_validated = true;
+                                this.status_message = None;
+                                use gpui_component::WindowExt;
+                                window.push_notification(
+                                    gpui_component::notification::Notification::new()
+                                        .message("Validation successful. Form is ready to submit.".to_string())
+                                        .with_type(gpui_component::notification::NotificationType::Success)
+                                        .autohide(true),
+                                    cx,
+                                );
+                            } else {
+                                this.is_validated = false;
+                                this.status_message = Some("Fix validation errors to continue.".to_string());
+                            }
+                            cx.notify();
+                        }))
+                );
+                // Submit button
+                action_buttons = action_buttons.child(
+                    gpui_component::button::Button::new("submit_btn")
+                        .label("Submit to BIR")
+                        .disabled(!self.is_validated)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.mark_submitted(cx);
+                        }))
+                );
+            }
+            FilingStatus::Submitted => {
+                // Revert to Draft
+                action_buttons = action_buttons.child(
+                    gpui_component::button::Button::new("revert_draft_btn")
+                        .label("Revert to Draft")
+                        .ghost()
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.revert_to_draft(window, cx);
+                        }))
+                );
+                // Check for Confirmation
+                action_buttons = action_buttons.child(
+                    gpui_component::button::Button::new("check_email_btn")
+                        .label("Check for Confirmation")
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.check_confirmation_email(cx);
+                        }))
+                );
+            }
+            FilingStatus::Confirmed => {
+                // Revert to Draft
+                action_buttons = action_buttons.child(
+                    gpui_component::button::Button::new("revert_draft_btn")
+                        .label("Revert to Draft")
+                        .ghost()
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.revert_to_draft(window, cx);
+                        }))
+                );
+                // Mark as Paid
+                action_buttons = action_buttons.child(
+                    gpui_component::button::Button::new("mark_paid_btn")
+                        .label("Mark as Paid")
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.mark_as_paid(cx);
+                        }))
+                );
+            }
+            FilingStatus::Paid => {
+                // Lifecycle complete — no actions
+            }
+        }
+
+        // Status hint — persistent contextual message based on status
+        let hint_text = self.status_hint()
+            .or_else(|| self.status_message.clone())
+            .unwrap_or_default();
+
         let actions = div()
             .flex()
-            .justify_between()
-            .items_center()
+            .flex_col()
             .gap_4()
             .pb_12()
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(self.status_message.clone().unwrap_or_default()),
-            )
+            .child(status_pipeline)
             .child(
                 div()
                     .flex()
+                    .justify_between()
+                    .items_center()
                     .gap_4()
                     .child(
-                        gpui_component::button::Button::new("validate_btn")
-                            .label("Validate")
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.sync_from_inputs(cx);
-                                this.validation_errors = this.validate_for_submit(cx);
-                                this.suppressed_sections.clear();
-                                if this.validation_errors.is_empty() {
-                                    this.is_validated = true;
-                                    this.status_message = Some("Validation successful. Form is ready to submit.".to_string());
-                                } else {
-                                    this.is_validated = false;
-                                    this.status_message = Some("Fix validation errors to continue.".to_string());
-                                }
-                                cx.notify();
-                            }))
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(hint_text),
                     )
-                    .child(
-                        gpui_component::button::Button::new("mark_submitted_btn")
-                            .label("Mark as Submitted")
-                            .disabled(!self.is_validated)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.mark_submitted(cx);
-                            }))
-                    ),
+                    .child(action_buttons),
             );
 
         macro_rules! build_accordion {
@@ -1412,26 +1649,42 @@ impl Render for Form2551QView {
                                 cx.emit(Form2551QEvent::BackToDashboard);
                             })),
                     )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_3()
-                            .child(
-                                gpui_component::button::Button::new("save_draft_btn")
-                                    .label("Save Draft")
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.save_draft(cx);
+                    .child({
+                        let mut toolbar = div().flex().items_center().gap_3();
+
+                        // Save button — only in Draft
+                        if is_editable {
+                            toolbar = toolbar.child(
+                                gpui_component::button::Button::new("save_btn")
+                                    .label("Save")
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.save(window, cx);
                                     })),
-                            )
-                            .child(
-                                gpui_component::button::Button::new("print_btn")
-                                    .label("Print PDF")
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.export_pdf(cx);
+                            );
+                        }
+
+                        // Print Confirmation — only when Confirmed or Paid
+                        if matches!(self.draft.status, FilingStatus::Confirmed | FilingStatus::Paid) {
+                            toolbar = toolbar.child(
+                                gpui_component::button::Button::new("print_confirmation_btn")
+                                    .label("Print Confirmation")
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.print_confirmation(window, cx);
                                     })),
-                            ),
-                    ),
+                            );
+                        }
+
+                        // Print PDF — always available
+                        toolbar = toolbar.child(
+                            gpui_component::button::Button::new("print_btn")
+                                .label("Print PDF")
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.export_pdf(window, cx);
+                                })),
+                        );
+
+                        toolbar
+                    }),
             )
             .child(
                 div().flex_1().min_h_0().overflow_hidden().child(

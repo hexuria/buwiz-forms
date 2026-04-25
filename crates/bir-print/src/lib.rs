@@ -210,6 +210,12 @@ fn escape_pdf_text(text: &str) -> String {
         .collect()
 }
 
+/// Build a simple PDF from a list of text lines (used for confirmation receipts).
+pub fn build_simple_confirmation_pdf(lines: &[String]) -> Vec<u8> {
+    let (width, height) = PaperSize::A4.points();
+    build_simple_pdf(width, height, lines)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

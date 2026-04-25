@@ -822,58 +822,70 @@ impl Render for ProfileManagerView {
                                                                         .child(
                                                                             div()
                                                                                 .flex()
-                                                                                .items_center()
-                                                                                .gap_1()
-                                                                                .text_xs()
-                                                                                .text_color(cx.theme().muted_foreground)
-                                                                                .child("Get App Password:")
+                                                                                .flex_col()
+                                                                                .gap_2()
                                                                                 .child(
                                                                                     div()
-                                                                                        .id("link_google_app_pw")
+                                                                                        .flex()
+                                                                                        .items_center()
+                                                                                        .gap_1()
                                                                                         .text_xs()
-                                                                                        .text_color(gpui::Hsla::from(gpui::rgba(0x3b82f6ff)))
-                                                                                        .cursor_pointer()
-                                                                                        .hover(|s| s.underline())
-                                                                                        .child("Google")
-                                                                                        .on_click(|_, _, _| {
-                                                                                            let _ = open::that("https://myaccount.google.com/apppasswords");
-                                                                                        })
+                                                                                        .text_color(cx.theme().muted_foreground)
+                                                                                        .child("Get App Password:")
+                                                                                        .child(
+                                                                                            div()
+                                                                                                .id("link_google_app_pw")
+                                                                                                .text_xs()
+                                                                                                .text_color(gpui::Hsla::from(gpui::rgba(0x3b82f6ff)))
+                                                                                                .cursor_pointer()
+                                                                                                .hover(|s| s.underline())
+                                                                                                .child("Google")
+                                                                                                .on_click(|_, _, _| {
+                                                                                                    let _ = open::that("https://myaccount.google.com/apppasswords");
+                                                                                                })
+                                                                                        )
+                                                                                        .child(
+                                                                                            div()
+                                                                                                .text_xs()
+                                                                                                .text_color(cx.theme().muted_foreground)
+                                                                                                .child("·")
+                                                                                        )
+                                                                                        .child(
+                                                                                            div()
+                                                                                                .id("link_outlook_app_pw")
+                                                                                                .text_xs()
+                                                                                                .text_color(gpui::Hsla::from(gpui::rgba(0x3b82f6ff)))
+                                                                                                .cursor_pointer()
+                                                                                                .hover(|s| s.underline())
+                                                                                                .child("Outlook")
+                                                                                                .on_click(|_, _, _| {
+                                                                                                    let _ = open::that("https://account.live.com/proofs/AppPassword");
+                                                                                                })
+                                                                                        )
+                                                                                        .child(
+                                                                                            div()
+                                                                                                .text_xs()
+                                                                                                .text_color(cx.theme().muted_foreground)
+                                                                                                .child("·")
+                                                                                        )
+                                                                                        .child(
+                                                                                            div()
+                                                                                                .id("link_yahoo_app_pw")
+                                                                                                .text_xs()
+                                                                                                .text_color(gpui::Hsla::from(gpui::rgba(0x3b82f6ff)))
+                                                                                                .cursor_pointer()
+                                                                                                .hover(|s| s.underline())
+                                                                                                .child("Yahoo")
+                                                                                                .on_click(|_, _, _| {
+                                                                                                    let _ = open::that("https://login.yahoo.com/account/security/app-passwords");
+                                                                                                })
+                                                                                        )
                                                                                 )
                                                                                 .child(
                                                                                     div()
                                                                                         .text_xs()
                                                                                         .text_color(cx.theme().muted_foreground)
-                                                                                        .child("·")
-                                                                                )
-                                                                                .child(
-                                                                                    div()
-                                                                                        .id("link_outlook_app_pw")
-                                                                                        .text_xs()
-                                                                                        .text_color(gpui::Hsla::from(gpui::rgba(0x3b82f6ff)))
-                                                                                        .cursor_pointer()
-                                                                                        .hover(|s| s.underline())
-                                                                                        .child("Outlook")
-                                                                                        .on_click(|_, _, _| {
-                                                                                            let _ = open::that("https://account.live.com/proofs/AppPassword");
-                                                                                        })
-                                                                                )
-                                                                                .child(
-                                                                                    div()
-                                                                                        .text_xs()
-                                                                                        .text_color(cx.theme().muted_foreground)
-                                                                                        .child("·")
-                                                                                )
-                                                                                .child(
-                                                                                    div()
-                                                                                        .id("link_yahoo_app_pw")
-                                                                                        .text_xs()
-                                                                                        .text_color(gpui::Hsla::from(gpui::rgba(0x3b82f6ff)))
-                                                                                        .cursor_pointer()
-                                                                                        .hover(|s| s.underline())
-                                                                                        .child("Yahoo")
-                                                                                        .on_click(|_, _, _| {
-                                                                                            let _ = open::that("https://login.yahoo.com/account/security/app-passwords");
-                                                                                        })
+                                                                                        .child("Note: You must enable 2-Step Verification (2FA) in your account settings before you can generate an App Password.")
                                                                                 )
                                                                         ),
                                                                 )
