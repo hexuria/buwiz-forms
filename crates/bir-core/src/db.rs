@@ -1126,6 +1126,9 @@ mod tests {
             imap_email: None,
             imap_host: None,
             _imap_enabled_compat: None,
+            imap_app_password: None,
+            oauth_access_token: None,
+            oauth_refresh_token: None,
         };
 
         db.save_profile(profile).expect("Failed to save profile");

@@ -16,6 +16,10 @@ pub enum GlobalDashboardEvent {
     CheckStatus {
         tin: String,
     },
+    /// Notification to be displayed to the user (level, title, message).
+    PushNotification(String, String, String),
+    /// Signal that a form status has changed and the dashboard should refresh.
+    StatusChanged,
 }
 
 pub struct GlobalDashboardView {
@@ -131,7 +135,7 @@ impl GlobalDashboardView {
 }
 
 impl Render for GlobalDashboardView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let now = Local::now().date_naive();
         let year = now.year();
 
@@ -167,10 +171,14 @@ impl Render for GlobalDashboardView {
             )
             .child(
                 div()
+                    .id("columns-container")
                     .flex()
                     .flex_wrap()
+                    .content_start()
+                    .items_start()
                     .flex_1()
                     .min_h_0()
+                    .overflow_y_scroll()
                     .gap_6()
                     .mt_4()
                     .child(
@@ -179,13 +187,11 @@ impl Render for GlobalDashboardView {
                             .id("left-column")
                             .flex_1()
                             .min_w(px(500.))
-                            .h_full()
-                            .overflow_y_scroll()
                             .pr_2()
                             .flex()
                             .flex_col()
                             .gap_6()
-                            .child(self.urgent_actions_section(cx))
+                            .child(self.urgent_actions_section(window, cx))
                             .child(self.compliance_calendar.clone()),
                     )
                     .child(
@@ -193,7 +199,6 @@ impl Render for GlobalDashboardView {
                         div()
                             .flex_1()
                             .min_w(px(350.))
-                            .h_full()
                             .flex()
                             .flex_col()
                             .gap_6()
@@ -204,50 +209,81 @@ impl Render for GlobalDashboardView {
 }
 
 impl GlobalDashboardView {
-    fn urgent_actions_section(&self, cx: &mut Context<Self>) -> gpui::Div {
-        let mut rows = div().flex().flex_col();
+    /// Reload actionable forms from the database (called after email check updates status).
+    pub fn reload_actionable_forms(&mut self, cx: &mut Context<Self>) {
+        if let Ok(db_lock) = self.db.lock() {
+            let current_year = chrono::Local::now().date_naive().year() as u16;
+            let mut actionable = Vec::new();
+            for p in &self.profiles {
+                if let Ok(summaries) = db_lock.list_draft_summaries(&p.tin.full(), current_year) {
+                    for sum in summaries {
+                        actionable.push((p.full_name.clone(), sum));
+                    }
+                }
+            }
+            self.actionable_forms = actionable;
+        }
+        cx.notify();
+    }
 
+    fn urgent_actions_section(&self, window: &Window, cx: &mut Context<Self>) -> gpui::Div {
         let actionable = self
             .actionable_forms
             .iter()
             .filter(|(_, sum)| {
-                sum.status != bir_core::forms::FilingStatus::Confirmed &&
-                sum.status != bir_core::forms::FilingStatus::Paid
+                sum.status != bir_core::forms::FilingStatus::Confirmed
+                    && sum.status != bir_core::forms::FilingStatus::Paid
             })
             .collect::<Vec<_>>();
 
-        if actionable.is_empty() {
-            rows = rows.child(
-                div()
-                    .p_4()
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground)
-                    .child("No actionable items found."),
-            );
-        } else {
-            for (profile_name, sum) in actionable {
+        // Detect available width to decide table vs card layout
+        // Sidebar is 280px, padding ~64px — if window < 900px, use card view
+        let use_card_view = window.viewport_size().width < px(900.);
+
+        let items: Vec<_> = actionable
+            .iter()
+            .map(|(profile_name, sum)| {
                 let (status_text, action_label, is_urgent) = match sum.status {
                     bir_core::forms::FilingStatus::Draft => ("Draft", "Resume", false),
                     bir_core::forms::FilingStatus::Submitted => {
-                        ("Awaiting Confirmation", "Check Status", true)
+                        ("Awaiting Confirmation", "Check Confirmation", true)
                     }
                     bir_core::forms::FilingStatus::Paid => ("Paid", "View Paid Return", false),
                     _ => ("Unknown", "View", false),
                 };
-
-                rows = rows.child(Self::action_row(
-                    profile_name,
-                    &sum.tin,
-                    &sum.form_code,
+                (
+                    profile_name.as_str(),
+                    sum.tin.as_str(),
+                    sum.form_code.as_str(),
                     sum.taxable_year,
                     sum.quarter,
                     status_text,
                     action_label,
                     is_urgent,
-                    cx,
-                ));
-            }
-        }
+                )
+            })
+            .collect();
+
+        let content = if items.is_empty() {
+            div()
+                .w_full()
+                .bg(cx.theme().background)
+                .border_1()
+                .border_color(cx.theme().border)
+                .rounded_xl()
+                .shadow_sm()
+                .child(
+                    div()
+                        .p_4()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child("No actionable items found."),
+                )
+        } else if use_card_view {
+            self.render_action_cards(&items, cx)
+        } else {
+            self.render_action_table(&items, cx)
+        };
 
         div()
             .flex()
@@ -273,37 +309,83 @@ impl GlobalDashboardView {
                             .child("View All"),
                     ),
             )
-            .child(
-                div()
-                    .w_full()
-                    .bg(cx.theme().background)
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .rounded_xl()
-                    .shadow_sm()
-                    .flex()
-                    .flex_col()
-                    .child(
-                        // Table Header
-                        div()
-                            .flex()
-                            .p_3()
-                            .bg(cx.theme().muted)
-                            .border_b_1()
-                            .border_color(cx.theme().border)
-                            .text_xs()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(cx.theme().muted_foreground)
-                            .child(div().w(px(200.)).child("Profile"))
-                            .child(div().w(px(100.)).child("Form"))
-                            .child(div().flex_1().child("Status / Issue"))
-                            .child(div().w(px(100.)).child("Action")),
-                    )
-                    .child(rows),
-            )
+            .child(content)
     }
 
-    fn action_row(
+    /// Table layout for wider viewports.
+    fn render_action_table(
+        &self,
+        items: &[(&str, &str, &str, u16, Option<u8>, &str, &str, bool)],
+        cx: &mut Context<Self>,
+    ) -> gpui::Div {
+        let mut rows = div().flex().flex_col();
+        for &(profile, tin, form, year, quarter, status, action_label, is_urgent) in items {
+            rows = rows.child(Self::action_table_row(
+                profile,
+                tin,
+                form,
+                year,
+                quarter,
+                status,
+                action_label,
+                is_urgent,
+                cx,
+            ));
+        }
+
+        div()
+            .w_full()
+            .bg(cx.theme().background)
+            .border_1()
+            .border_color(cx.theme().border)
+            .rounded_xl()
+            .shadow_sm()
+            .flex()
+            .flex_col()
+            .child(
+                // Table Header
+                div()
+                    .flex()
+                    .p_3()
+                    .bg(cx.theme().muted)
+                    .border_b_1()
+                    .border_color(cx.theme().border)
+                    .text_xs()
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(cx.theme().muted_foreground)
+                    .child(div().flex_1().child("Profile"))
+                    .child(div().w(px(80.)).child("Form"))
+                    .child(div().flex_1().child("Status / Issue"))
+                    .child(div().w(px(50.)).text_center().child("Action")),
+            )
+            .child(rows)
+    }
+
+    /// Card layout for narrow viewports.
+    fn render_action_cards(
+        &self,
+        items: &[(&str, &str, &str, u16, Option<u8>, &str, &str, bool)],
+        cx: &mut Context<Self>,
+    ) -> gpui::Div {
+        let mut cards = div().flex().flex_col().gap_3();
+        for &(profile, tin, form, year, quarter, status, action_label, is_urgent) in items {
+            cards = cards.child(Self::action_card(
+                profile,
+                tin,
+                form,
+                year,
+                quarter,
+                status,
+                action_label,
+                is_urgent,
+                cx,
+            ));
+        }
+        cards
+    }
+
+    /// Single table row for the action required table.
+    fn action_table_row(
         profile: &str,
         tin: &str,
         form: &str,
@@ -328,14 +410,15 @@ impl GlobalDashboardView {
             .text_sm()
             .child(
                 div()
-                    .w(px(200.))
+                    .flex_1()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(cx.theme().foreground)
+                    .overflow_hidden()
                     .child(profile.to_string()),
             )
             .child(
                 div()
-                    .w(px(100.))
+                    .w(px(80.))
                     .text_color(cx.theme().muted_foreground)
                     .child(form.to_string()),
             )
@@ -345,6 +428,7 @@ impl GlobalDashboardView {
                     .flex()
                     .items_center()
                     .gap_2()
+                    .overflow_hidden()
                     .children(if is_urgent {
                         Some(
                             div()
@@ -371,40 +455,239 @@ impl GlobalDashboardView {
                     ),
             )
             .child(
-                div().w(px(100.)).child(
-                    div()
-                        .id(format!("action-btn-{}-{}-{}", tin_clone, form_clone, q_num))
-                        .px_3()
-                        .py_1()
-                        .bg(cx.theme().secondary)
-                        .text_color(cx.theme().foreground)
-                        .border_1()
-                        .border_color(cx.theme().border)
-                        .rounded_md()
-                        .font_weight(FontWeight::BOLD)
-                        .text_xs()
-                        .cursor_pointer()
-                        .hover(|s| s.bg(cx.theme().secondary_hover))
-                        .child(action_label.to_string())
-                        .on_click(cx.listener({
-                            let is_check_status = action_label == "Check Status";
-                            move |_this, _, _, cx| {
-                                if is_check_status {
-                                    cx.emit(GlobalDashboardEvent::CheckStatus {
-                                        tin: tin_clone.clone(),
-                                    });
-                                } else {
-                                    cx.emit(GlobalDashboardEvent::OpenForm {
-                                        tin: tin_clone.clone(),
-                                        form_code: form_clone.clone(),
-                                        year,
-                                        quarter: q_num,
-                                    });
-                                }
-                            }
-                        })),
-                ),
+                Self::action_icon_button(&tin_clone, &form_clone, year, q_num, action_label, is_urgent, cx),
             )
+    }
+
+    /// Single card for narrow viewport.
+    fn action_card(
+        profile: &str,
+        tin: &str,
+        form: &str,
+        year: u16,
+        quarter: Option<u8>,
+        status: &str,
+        action_label: &str,
+        is_urgent: bool,
+        cx: &mut Context<Self>,
+    ) -> gpui::Div {
+        let warning_color: gpui::Hsla = gpui::rgb(0xef4444).into();
+        let tin_clone = tin.to_string();
+        let form_clone = form.to_string();
+        let q_num = quarter.unwrap_or(0);
+
+        div()
+            .w_full()
+            .p_4()
+            .bg(cx.theme().background)
+            .border_1()
+            .border_color(cx.theme().border)
+            .rounded_lg()
+            .shadow_sm()
+            .flex()
+            .flex_col()
+            .gap_2()
+            // Top row: profile name + action button
+            .child(
+                div()
+                    .flex()
+                    .justify_between()
+                    .items_center()
+                    .child(
+                        div()
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(cx.theme().foreground)
+                            .child(profile.to_string()),
+                    )
+                    .child(
+                        Self::action_icon_button(&tin_clone, &form_clone, year, q_num, action_label, is_urgent, cx),
+                    ),
+            )
+            // Form type
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(format!("Form: {}", form)),
+            )
+            // Status with urgency indicator
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .children(if is_urgent {
+                        Some(
+                            div()
+                                .px_2()
+                                .py_0p5()
+                                .bg(warning_color.opacity(0.1))
+                                .text_color(warning_color)
+                                .rounded_md()
+                                .text_xs()
+                                .font_weight(FontWeight::BOLD)
+                                .child("!"),
+                        )
+                    } else {
+                        None
+                    })
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(if is_urgent {
+                                warning_color
+                            } else {
+                                cx.theme().foreground
+                            })
+                            .child(status.to_string()),
+                    ),
+            )
+    }
+
+    /// Compact icon-only action button with tooltip.
+    fn action_icon_button(
+        tin: &str,
+        form: &str,
+        year: u16,
+        q_num: u8,
+        action_label: &str,
+        is_check_status: bool,
+        cx: &mut Context<Self>,
+    ) -> gpui::Div {
+        let tin_clone = tin.to_string();
+        let form_clone = form.to_string();
+        let tooltip_text = action_label.to_string();
+
+        let icon = if is_check_status { "✉" } else { "▶" };
+
+        div()
+            .w(px(50.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(
+                div()
+                    .id(format!("action-btn-{}-{}-{}", tin, form, q_num))
+                    .w(px(32.))
+                    .h(px(32.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .bg(cx.theme().secondary)
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .rounded_md()
+                    .cursor_pointer()
+                    .hover(|s| s.bg(cx.theme().secondary_hover))
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().foreground)
+                            .child(icon),
+                    )
+                    .tooltip(move |window, cx| {
+                        gpui_component::tooltip::Tooltip::new(tooltip_text.clone())
+                            .build(window, cx)
+                    })
+                    .on_click(cx.listener({
+                        let is_check = is_check_status;
+                        move |this, _, window, cx| {
+                            if is_check {
+                                this.check_status_for_tin(&tin_clone, window, cx);
+                            } else {
+                                cx.emit(GlobalDashboardEvent::OpenForm {
+                                    tin: tin_clone.clone(),
+                                    form_code: form_clone.clone(),
+                                    year,
+                                    quarter: q_num,
+                                });
+                            }
+                        }
+                    })),
+            )
+    }
+
+    /// Run the email check for a specific TIN — the core of the "Check Status" action.
+    fn check_status_for_tin(
+        &mut self,
+        tin: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        use gpui_component::WindowExt;
+
+        // Look up the profile
+        let profile = self.db.lock().ok()
+            .and_then(|db| db.get_profile(tin).ok().flatten());
+
+        let Some(profile) = profile else {
+            window.push_notification(
+                gpui_component::notification::Notification::error("Profile Not Found".to_string())
+                    .message(format!("Could not find profile for TIN {}", tin)),
+                cx,
+            );
+            return;
+        };
+
+        if !profile.is_email_tracking_active() {
+            window.push_notification(
+                gpui_component::notification::Notification::error("Email Tracking Not Enabled".to_string())
+                    .message("Go to Email Settings in your profile to set up App Password or Google OAuth2.".to_string()),
+                cx,
+            );
+            return;
+        }
+
+        // Show progress notification
+        window.push_notification(
+            gpui_component::notification::Notification::new()
+                .message("Checking email for BIR confirmation...".to_string())
+                .with_type(gpui_component::notification::NotificationType::Info)
+                .autohide(true),
+            cx,
+        );
+
+        let db_clone = self.db.clone();
+        cx.spawn(async move |this, cx| {
+            let result = cx.background_executor().spawn(async move {
+                let db = db_clone.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+                bir_core::email::fetch_and_process_emails(&profile, &db)
+            }).await;
+
+            let _ = cx.update(|cx| {
+                if let Some(this) = this.upgrade() {
+                    this.update(cx, |this, cx| {
+                        match result {
+                            Ok(receipts) if !receipts.is_empty() => {
+                                // Refresh actionable forms from DB
+                                this.reload_actionable_forms(cx);
+                                cx.emit(GlobalDashboardEvent::PushNotification(
+                                    "success".to_string(),
+                                    "Confirmation Received!".to_string(),
+                                    format!("{} confirmation(s) processed successfully.", receipts.len()),
+                                ));
+                                cx.emit(GlobalDashboardEvent::StatusChanged);
+                            }
+                            Ok(_) => {
+                                cx.emit(GlobalDashboardEvent::PushNotification(
+                                    "info".to_string(),
+                                    "No Confirmation Yet".to_string(),
+                                    "No new confirmation email from BIR was found. Please try again later.".to_string(),
+                                ));
+                            }
+                            Err(e) => {
+                                cx.emit(GlobalDashboardEvent::PushNotification(
+                                    "error".to_string(),
+                                    "Email Check Failed".to_string(),
+                                    e.to_string(),
+                                ));
+                            }
+                        }
+                        cx.notify();
+                    });
+                }
+            });
+        }).detach();
     }
 
     fn news_section(&self, cx: &mut Context<Self>) -> gpui::Div {
@@ -412,10 +695,8 @@ impl GlobalDashboardView {
             .id("news-list")
             .flex()
             .flex_col()
-            .flex_1()
             .gap_4()
-            .pr_2() // add some padding for scrollbar
-            .overflow_y_scroll();
+            .pr_2(); // add some padding
 
         for ann in &self.announcements {
             news_list = news_list.child(Self::news_card(ann, cx));
@@ -424,7 +705,6 @@ impl GlobalDashboardView {
         div()
             .flex()
             .flex_col()
-            .h_full()
             .gap_4()
             .child(
                 div()
@@ -531,5 +811,4 @@ impl GlobalDashboardView {
                     .child(notice.body.to_string()),
             )
     }
-
 }

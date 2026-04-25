@@ -4,7 +4,6 @@
 
 use super::fetcher::ImapAuthenticator;
 
-
 pub struct AppPasswordAuth {
     email: String,
     password: String,
@@ -27,7 +26,13 @@ impl ImapAuthenticator for AppPasswordAuth {
     fn authenticate(
         &self,
         client: imap::Client<native_tls::TlsStream<std::net::TcpStream>>,
-    ) -> Result<(imap::Session<native_tls::TlsStream<std::net::TcpStream>>, Option<String>), anyhow::Error> {
+    ) -> Result<
+        (
+            imap::Session<native_tls::TlsStream<std::net::TcpStream>>,
+            Option<String>,
+        ),
+        anyhow::Error,
+    > {
         client
             .login(&self.email, &self.password)
             .map(|session| (session, None))

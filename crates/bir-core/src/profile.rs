@@ -64,11 +64,11 @@ pub struct TaxpayerProfile {
     /// Securely stored App Password (encrypted inside DB)
     #[serde(default)]
     pub imap_app_password: Option<String>,
-    
+
     /// Securely stored OAuth Access Token (encrypted inside DB)
     #[serde(default)]
     pub oauth_access_token: Option<String>,
-    
+
     /// Securely stored OAuth Refresh Token (encrypted inside DB)
     #[serde(default)]
     pub oauth_refresh_token: Option<String>,

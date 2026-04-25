@@ -41,11 +41,17 @@ pub struct GoogleOAuthAuth {
 
 impl GoogleOAuthAuth {
     /// Build an authenticator using the provided tokens.
-    pub fn new(email: &str, access_token: &str, refresh_token: &str) -> Result<Self, anyhow::Error> {
+    pub fn new(
+        email: &str,
+        access_token: &str,
+        refresh_token: &str,
+    ) -> Result<Self, anyhow::Error> {
         if access_token.is_empty() && refresh_token.is_empty() {
-            return Err(anyhow::anyhow!("No OAuth tokens provided. Please connect your Google account."));
+            return Err(anyhow::anyhow!(
+                "No OAuth tokens provided. Please connect your Google account."
+            ));
         }
-        
+
         Ok(Self {
             email: email.to_string(),
             access_token: access_token.to_string(),
@@ -58,7 +64,13 @@ impl ImapAuthenticator for GoogleOAuthAuth {
     fn authenticate(
         &self,
         client: imap::Client<native_tls::TlsStream<std::net::TcpStream>>,
-    ) -> Result<(imap::Session<native_tls::TlsStream<std::net::TcpStream>>, Option<String>), anyhow::Error> {
+    ) -> Result<
+        (
+            imap::Session<native_tls::TlsStream<std::net::TcpStream>>,
+            Option<String>,
+        ),
+        anyhow::Error,
+    > {
         // XOAUTH2 SASL mechanism per https://developers.google.com/gmail/imap/xoauth2-protocol
         // Format: "user={email}\x01auth=Bearer {token}\x01\x01"
         // IMPORTANT: The imap crate's `do_auth_handshake` calls base64::encode() on the
@@ -68,28 +80,40 @@ impl ImapAuthenticator for GoogleOAuthAuth {
             self.email, self.access_token
         );
 
-        match client.authenticate("XOAUTH2", &XOAuth2Sasl { raw_data: auth_string.into_bytes() }) {
+        match client.authenticate(
+            "XOAUTH2",
+            &XOAuth2Sasl {
+                raw_data: auth_string.into_bytes(),
+            },
+        ) {
             Ok(session) => Ok((session, None)),
             Err((err, client)) => {
                 let error_msg = format!("{:?}", err);
-                warn!("XOAUTH2 authentication failed for {}: {}. Attempting to refresh access token...", self.email, error_msg);
+                warn!(
+                    "XOAUTH2 authentication failed for {}: {}. Attempting to refresh access token...",
+                    self.email, error_msg
+                );
                 match refresh_access_token(&self.refresh_token) {
                     Ok(new_token) => {
-                        let new_auth_string = format!(
-                            "user={}\x01auth=Bearer {}\x01\x01",
-                            self.email, new_token
-                        );
-                        match client.authenticate("XOAUTH2", &XOAuth2Sasl { raw_data: new_auth_string.into_bytes() }) {
+                        let new_auth_string =
+                            format!("user={}\x01auth=Bearer {}\x01\x01", self.email, new_token);
+                        match client.authenticate(
+                            "XOAUTH2",
+                            &XOAuth2Sasl {
+                                raw_data: new_auth_string.into_bytes(),
+                            },
+                        ) {
                             Ok(session) => Ok((session, Some(new_token))),
-                            Err((e, _)) => Err(anyhow::anyhow!("XOAUTH2 authentication failed even after token refresh. Please reconnect your Google Account. Error: {:?}", e))
+                            Err((e, _)) => Err(anyhow::anyhow!(
+                                "XOAUTH2 authentication failed even after token refresh. Please reconnect your Google Account. Error: {:?}",
+                                e
+                            )),
                         }
                     }
-                    Err(refresh_err) => {
-                        Err(anyhow::anyhow!(
-                            "XOAUTH2 authentication failed and token refresh also failed: {}",
-                            refresh_err
-                        ))
-                    }
+                    Err(refresh_err) => Err(anyhow::anyhow!(
+                        "XOAUTH2 authentication failed and token refresh also failed: {}",
+                        refresh_err
+                    )),
                 }
             }
         }
@@ -167,13 +191,17 @@ pub fn start_oauth_flow() -> Result<(String, String, String), anyhow::Error> {
         .get(USERINFO_URL)
         .header("Authorization", format!("Bearer {}", access_token))
         .send()?;
-    
+
     let userinfo_status = userinfo_resp.status();
     let userinfo_text = userinfo_resp.text()?;
     if !userinfo_status.is_success() {
-        return Err(anyhow::anyhow!("Failed to fetch user email ({}): {}", userinfo_status, userinfo_text));
+        return Err(anyhow::anyhow!(
+            "Failed to fetch user email ({}): {}",
+            userinfo_status,
+            userinfo_text
+        ));
     }
-    
+
     let userinfo: serde_json::Value = serde_json::from_str(&userinfo_text)?;
     let email = userinfo
         .get("email")
@@ -183,7 +211,6 @@ pub fn start_oauth_flow() -> Result<(String, String, String), anyhow::Error> {
 
     Ok((email, access_token, refresh_token))
 }
-
 
 /// Get the email address associated with the stored OAuth token (from Google's userinfo endpoint).
 pub fn get_oauth_email(access_token: &str) -> Result<String, anyhow::Error> {
@@ -206,7 +233,9 @@ pub fn get_oauth_email(access_token: &str) -> Result<String, anyhow::Error> {
 
 fn refresh_access_token(refresh_token: &str) -> Result<String, anyhow::Error> {
     if refresh_token.is_empty() {
-        return Err(anyhow::anyhow!("No refresh token found. Please re-connect your Google account in Profile settings."));
+        return Err(anyhow::anyhow!(
+            "No refresh token found. Please re-connect your Google account in Profile settings."
+        ));
     }
 
     let client_id = get_google_client_id();
@@ -258,7 +287,11 @@ fn exchange_code_for_tokens(
     let status = resp.status();
     let text = resp.text()?;
     if !status.is_success() {
-        return Err(anyhow::anyhow!("Google Token API error ({}): {}", status, text));
+        return Err(anyhow::anyhow!(
+            "Google Token API error ({}): {}",
+            status,
+            text
+        ));
     }
 
     let body: serde_json::Value = serde_json::from_str(&text)?;

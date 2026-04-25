@@ -1,7 +1,7 @@
 use gpui::*;
+use gpui_component::button::ButtonVariants;
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::tab::{Tab, TabBar};
-use gpui_component::button::ButtonVariants;
 use gpui_component::*;
 use std::sync::{Arc, Mutex};
 
@@ -50,7 +50,7 @@ pub struct ProfileManagerView {
     connection_test_message: Option<(bool, String)>,
     oauth_connected: bool,
     active_tab: usize,
-    
+
     // Stored credentials from DB to prevent overwriting when saving
     stored_imap_app_password: Option<String>,
     stored_oauth_access_token: Option<String>,
@@ -227,10 +227,15 @@ impl ProfileManagerView {
 
         self.is_editing_password = profile.imap_app_password.is_none();
         self.imap_password_input.update(cx, |input, cx| {
-            input.set_value(profile.imap_app_password.clone().unwrap_or_default(), window, cx)
+            input.set_value(
+                profile.imap_app_password.clone().unwrap_or_default(),
+                window,
+                cx,
+            )
         });
 
-        self.oauth_connected = profile.oauth_refresh_token.is_some() && !profile.oauth_refresh_token.as_ref().unwrap().is_empty();
+        self.oauth_connected = profile.oauth_refresh_token.is_some()
+            && !profile.oauth_refresh_token.as_ref().unwrap().is_empty();
 
         self.errors.clear();
         self.save_message = None;
@@ -361,17 +366,22 @@ impl ProfileManagerView {
             imap_email: Some(self.imap_email_input.read(cx).value().trim().to_string()),
             imap_host: Some(self.imap_host_input.read(cx).value().trim().to_string()),
             _imap_enabled_compat: None,
-            
+
             // Password logic: use the input if typed, otherwise keep stored
             imap_app_password: {
-                let typed_pw = self.imap_password_input.read(cx).value().to_string().replace(' ', "");
+                let typed_pw = self
+                    .imap_password_input
+                    .read(cx)
+                    .value()
+                    .to_string()
+                    .replace(' ', "");
                 if typed_pw.is_empty() {
                     self.stored_imap_app_password.clone()
                 } else {
                     Some(typed_pw)
                 }
             },
-            
+
             // Tokens logic
             oauth_access_token: self.stored_oauth_access_token.clone(),
             oauth_refresh_token: self.stored_oauth_refresh_token.clone(),
@@ -395,7 +405,12 @@ impl ProfileManagerView {
             ));
         }
 
-        let typed_pw = self.imap_password_input.read(cx).value().to_string().replace(' ', "");
+        let typed_pw = self
+            .imap_password_input
+            .read(cx)
+            .value()
+            .to_string()
+            .replace(' ', "");
         if !typed_pw.is_empty() && typed_pw.len() != 16 {
             self.errors.push(ValidationError::new(
                 "imap_app_password",
@@ -410,7 +425,7 @@ impl ProfileManagerView {
         }
 
         let db_arc = self.db.clone();
-        
+
         // Immediately update stored password so we don't lose it
         if !typed_pw.is_empty() {
             self.stored_imap_app_password = Some(typed_pw);
@@ -421,32 +436,42 @@ impl ProfileManagerView {
         cx.notify();
 
         cx.spawn(async move |this, cx| {
-            let save_result = cx.background_executor().spawn(async move {
-                if let Ok(db) = db_arc.lock() {
-                    db.save_profile(profile).map_err(|e| e.to_string())
-                } else {
-                    Err("Database lock is poisoned".to_string())
-                }
-            }).await;
-            
+            let save_result = cx
+                .background_executor()
+                .spawn(async move {
+                    if let Ok(db) = db_arc.lock() {
+                        db.save_profile(profile).map_err(|e| e.to_string())
+                    } else {
+                        Err("Database lock is poisoned".to_string())
+                    }
+                })
+                .await;
+
             let _ = this.update(cx, |this, cx| {
                 match save_result {
                     Ok(saved) => {
                         let saved_id = saved.id.unwrap();
                         this.editing_id = Some(saved_id);
                         this.save_message = None;
-                        this.pending_notification = Some((gpui_component::notification::NotificationType::Success, "Profile saved".to_string()));
-                        
+                        this.pending_notification = Some((
+                            gpui_component::notification::NotificationType::Success,
+                            "Profile saved".to_string(),
+                        ));
+
                         cx.emit(ProfileEvent::Saved);
                     }
                     Err(err) => {
                         this.save_message = None;
-                        this.pending_notification = Some((gpui_component::notification::NotificationType::Error, format!("Save failed: {err}")));
+                        this.pending_notification = Some((
+                            gpui_component::notification::NotificationType::Error,
+                            format!("Save failed: {err}"),
+                        ));
                     }
                 }
                 cx.notify();
             });
-        }).detach();
+        })
+        .detach();
     }
 
     fn field_label(label: &str, cx: &Context<Self>) -> gpui::Div {

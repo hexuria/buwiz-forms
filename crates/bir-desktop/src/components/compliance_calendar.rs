@@ -368,8 +368,7 @@ impl ComplianceCalendar {
     fn render_grid_view(&self, cx: &Context<Self>) -> gpui::Div {
         let deadlines = self.filtered_deadlines();
 
-        // Simple 7-column grid logic
-        // We'll calculate the start day of the week for `self.current_month`
+        // Calculate the start day of the week for `self.current_month`
         let first_day =
             NaiveDate::from_ymd_opt(self.current_month.year(), self.current_month.month(), 1)
                 .unwrap();
@@ -387,20 +386,21 @@ impl ComplianceCalendar {
             (next_month - first_day).num_days()
         };
 
-        let mut grid = div()
+        // Use explicit rows instead of flex-wrap to avoid fractional pixel rounding gaps
+        let mut rows_container = div().flex().flex_col().w_full();
+
+        // Header row
+        let headers = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        let mut header_row = div()
             .flex()
-            .flex_wrap()
             .w_full()
-            .border_l_1()
             .border_t_1()
             .border_color(cx.theme().border);
-
-        // Render headers
-        let headers = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
         for h in headers {
-            grid = grid.child(
+            header_row = header_row.child(
                 div()
-                    .w(relative(1.0 / 7.0))
+                    .flex_1()
+                    .min_w_0()
                     .p_2()
                     .bg(cx.theme().muted)
                     .text_xs()
@@ -409,77 +409,95 @@ impl ComplianceCalendar {
                     .text_center()
                     .border_r_1()
                     .border_b_1()
+                    .border_l_1()
                     .border_color(cx.theme().border)
                     .child(h),
             );
         }
+        rows_container = rows_container.child(header_row);
 
-        // Blank days
-        for _ in 0..start_weekday {
-            grid = grid.child(
-                div()
-                    .w(relative(1.0 / 7.0))
-                    .h(px(80.))
-                    .bg(cx.theme().muted.opacity(0.3))
-                    .border_r_1()
-                    .border_b_1()
-                    .border_color(cx.theme().border),
-            );
-        }
+        // Calculate total cells needed: leading blanks + days + trailing blanks to complete last row
+        let total_used = start_weekday + days_in_month as u32;
+        let trailing = (7 - (total_used % 7)) % 7;
+        let all_cells = total_used + trailing;
 
-        // Days
-        for day in 1..=days_in_month {
-            let date_str = format!(
-                "{:04}-{:02}-{:02}",
-                self.current_month.year(),
-                self.current_month.month(),
-                day
-            );
-
-            // Find deadlines for this day
-            let day_deadlines: Vec<_> = deadlines
-                .iter()
-                .filter(|d| d.due_date == date_str)
-                .collect();
-
-            let mut day_cell = div()
-                .w(relative(1.0 / 7.0))
-                .h(px(80.))
-                .p_2()
+        // Render in chunks of 7 (one row per week)
+        for week_start in (0..all_cells).step_by(7) {
+            let mut week_row = div()
                 .flex()
-                .flex_col()
-                .gap_1()
-                .bg(cx.theme().background)
-                .border_r_1()
-                .border_b_1()
-                .border_color(cx.theme().border)
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(cx.theme().foreground)
-                        .child(day.to_string()),
-                );
-
-            if !day_deadlines.is_empty() {
-                // Render dots
-                let mut dots = div().flex().flex_wrap().gap_1();
-                for _ in &day_deadlines {
-                    dots = dots.child(
+                .w_full();
+            for slot in week_start..week_start + 7 {
+                if slot < start_weekday || slot >= start_weekday + days_in_month as u32 {
+                    // Blank cell
+                    week_row = week_row.child(
                         div()
-                            .w(px(6.))
-                            .h(px(6.))
-                            .rounded_full()
-                            .bg(cx.theme().primary),
+                            .flex_1()
+                            .min_w_0()
+                            .h(px(80.))
+                            .bg(cx.theme().muted.opacity(0.3))
+                            .border_r_1()
+                            .border_b_1()
+                            .border_l_1()
+                            .border_color(cx.theme().border),
                     );
+                } else {
+                    let day = (slot - start_weekday + 1) as i64;
+                    let date_str = format!(
+                        "{:04}-{:02}-{:02}",
+                        self.current_month.year(),
+                        self.current_month.month(),
+                        day
+                    );
+
+                    // Find deadlines for this day
+                    let day_deadlines: Vec<_> = deadlines
+                        .iter()
+                        .filter(|d| d.due_date == date_str)
+                        .collect();
+
+                    let mut day_cell = div()
+                        .flex_1()
+                        .min_w_0()
+                        .h(px(80.))
+                        .p_2()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .bg(cx.theme().background)
+                        .border_r_1()
+                        .border_b_1()
+                        .border_l_1()
+                        .border_color(cx.theme().border)
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(cx.theme().foreground)
+                                .child(day.to_string()),
+                        );
+
+                    if !day_deadlines.is_empty() {
+                        // Render dots
+                        let mut dots = div().flex().flex_wrap().gap_1();
+                        for _ in &day_deadlines {
+                            dots = dots.child(
+                                div()
+                                    .w(px(6.))
+                                    .h(px(6.))
+                                    .rounded_full()
+                                    .bg(cx.theme().primary),
+                            );
+                        }
+
+                        day_cell = day_cell
+                            .child(dots)
+                            .cursor_pointer()
+                            .hover(|s| s.bg(cx.theme().secondary));
+                    }
+
+                    week_row = week_row.child(day_cell);
                 }
-
-                day_cell = day_cell
-                    .child(dots)
-                    .cursor_pointer()
-                    .hover(|s| s.bg(cx.theme().secondary));
             }
-
-            grid = grid.child(day_cell);
+            rows_container = rows_container.child(week_row);
         }
 
         div()
@@ -565,7 +583,7 @@ impl ComplianceCalendar {
                             ),
                     ),
             )
-            .child(grid)
+            .child(rows_container)
     }
 }
 

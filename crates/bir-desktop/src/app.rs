@@ -37,6 +37,8 @@ pub struct AppState {
     profile_filter: Entity<InputState>,
     sidebar_scroll: ScrollHandle,
     _subscriptions: Vec<Subscription>,
+    /// Whether the window-aware subscription for global dashboard notifications has been set up.
+    global_dashboard_notif_subscribed: bool,
 }
 
 impl AppState {
@@ -93,24 +95,29 @@ impl AppState {
             |this: &mut Self, _entity, _event: &crate::views::profile_manager::ProfileEvent, cx| {
                 let db_clone = this.db.clone();
                 let active_tin = this.active_profile_tin.clone();
-                
+
                 cx.spawn(async move |this, cx| {
-                    let profiles = cx.background_executor().spawn(async move {
-                        if let Ok(db) = db_clone.lock() {
-                            db.list_profiles().unwrap_or_default()
-                        } else {
-                            Vec::new()
-                        }
-                    }).await;
-                    
+                    let profiles = cx
+                        .background_executor()
+                        .spawn(async move {
+                            if let Ok(db) = db_clone.lock() {
+                                db.list_profiles().unwrap_or_default()
+                            } else {
+                                Vec::new()
+                            }
+                        })
+                        .await;
+
                     let _ = this.update(cx, |this, cx| {
                         this.profiles = profiles.clone();
                         this.global_dashboard_view.update(cx, |view, cx| {
                             view.set_profiles(profiles.clone(), cx);
                         });
-                        
+
                         if let Some(tin) = &active_tin {
-                            if let Some(profile) = this.profiles.iter().find(|p| p.tin.full() == *tin) {
+                            if let Some(profile) =
+                                this.profiles.iter().find(|p| p.tin.full() == *tin)
+                            {
                                 let p = profile.clone();
                                 this.dashboard_view.update(cx, |view, cx| {
                                     view.set_profile(p, cx);
@@ -119,7 +126,8 @@ impl AppState {
                         }
                         cx.notify();
                     });
-                }).detach();
+                })
+                .detach();
             },
         );
 
@@ -143,21 +151,14 @@ impl AppState {
                     };
                     this.handle_file_form(&event, cx);
                 }
-                GlobalDashboardEvent::CheckStatus { tin } => {
-                    if let Ok(db) = this.db.lock() {
-                        if let Ok(Some(profile)) = db.get_profile(tin) {
-                            let db_clone = this.db.clone();
-                            cx.background_executor()
-                                .spawn(async move {
-                                    if let Ok(db) = db_clone.lock() {
-                                        let _ = bir_core::email_fetcher::fetch_and_process_emails(
-                                            &profile, &db,
-                                        );
-                                    }
-                                })
-                                .detach();
-                        }
-                    }
+                GlobalDashboardEvent::CheckStatus { .. } => {
+                    // Now handled internally by GlobalDashboardView::check_status_for_tin
+                }
+                GlobalDashboardEvent::PushNotification(_level, _title, _message) => {
+                    // Notifications need window — they'll be handled in the subscribe_in below
+                }
+                GlobalDashboardEvent::StatusChanged => {
+                    cx.notify();
                 }
             },
         )
@@ -196,6 +197,7 @@ impl AppState {
             profile_filter,
             sidebar_scroll: ScrollHandle::new(),
             _subscriptions: vec![filter_sub, profile_sub],
+            global_dashboard_notif_subscribed: false,
         }
     }
 
@@ -546,7 +548,11 @@ impl AppState {
 
     fn handle_file_form(&mut self, event: &DashboardEvent, cx: &mut Context<Self>) {
         let (form_code, year, quarter) = match event {
-            DashboardEvent::FileForm { form_code, year, quarter } => (form_code, year, quarter),
+            DashboardEvent::FileForm {
+                form_code,
+                year,
+                quarter,
+            } => (form_code, year, quarter),
             _ => return,
         };
         let year = *year;
@@ -609,14 +615,39 @@ fn app_database_path() -> std::path::PathBuf {
 
 impl Render for AppState {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Set up window-aware subscription for global dashboard notifications (once)
+        if !self.global_dashboard_notif_subscribed {
+            self.global_dashboard_notif_subscribed = true;
+            cx.subscribe_in(
+                &self.global_dashboard_view,
+                window,
+                |_this: &mut Self, _entity, event: &GlobalDashboardEvent, window, cx| {
+                    if let GlobalDashboardEvent::PushNotification(level, title, message) = event {
+                        use gpui_component::WindowExt;
+                        use gpui_component::notification::Notification;
+                        let notification = match level.as_str() {
+                            "success" => {
+                                Notification::success(title.clone()).message(message.clone())
+                            }
+                            "error" => Notification::error(title.clone()).message(message.clone()),
+                            _ => Notification::info(title.clone()).message(message.clone()),
+                        };
+                        window.push_notification(notification, cx);
+                    }
+                },
+            )
+            .detach();
+        }
+
         // Materialize any pending form view now that we have `window`
         if let Some(draft) = self.pending_form_draft.take() {
             let db_for_view = Arc::clone(&self.db);
             let form_view = cx.new(|cx| Form2551QView::new(draft, db_for_view, window, cx));
 
-            cx.subscribe(
+            cx.subscribe_in(
                 &form_view,
-                |this: &mut Self, _entity, event: &Form2551QEvent, cx| match event {
+                window,
+                |this: &mut Self, _entity, event: &Form2551QEvent, window, cx| match event {
                     Form2551QEvent::BackToDashboard => {
                         this.active_view = ActiveView::Dashboard;
                         if let Some(tin) = &this.active_profile_tin
@@ -629,6 +660,18 @@ impl Render for AppState {
                             });
                         }
                         cx.notify();
+                    }
+                    Form2551QEvent::PushNotification(level, title, message) => {
+                        use gpui_component::WindowExt;
+                        use gpui_component::notification::Notification;
+                        let notification = match level.as_str() {
+                            "success" => {
+                                Notification::success(title.clone()).message(message.clone())
+                            }
+                            "error" => Notification::error(title.clone()).message(message.clone()),
+                            _ => Notification::info(title.clone()).message(message.clone()),
+                        };
+                        window.push_notification(notification, cx);
                     }
                     Form2551QEvent::Saved
                     | Form2551QEvent::Submitted

@@ -23,26 +23,25 @@ pub mod form;
 pub mod forms;
 pub mod naming;
 pub mod news_fetcher;
+pub mod official_import;
 pub mod profile;
 pub mod receipt;
 pub mod reference;
 pub mod schema;
 pub mod transport;
 pub mod validation;
-pub mod official_import;
 
 // Re-export core types
 pub use bir_xml::{generate_bir_xml, parse_bir_xml};
 pub use email::{
-    fetch_and_process_emails, get_oauth_email, start_oauth_flow, test_connection,
-    ImapAuthenticator,
+    ImapAuthenticator, fetch_and_process_emails, get_oauth_email, start_oauth_flow, test_connection,
 };
 pub use forms::{
     ATC_TABLE_2551Q, FilingStatus, Form2551QDraft, FormDraftSummary, FormFilingProgress,
     QuarterState, Schedule1Row, find_atc, find_form, forms_for_taxpayer,
 };
 pub use naming::{Tin, iaf_filename, savefile_name};
+pub use official_import::{OfficialSavefile, import_and_submit_savefile, parse_period_code};
 pub use profile::{EmailAuthMethod, TaxpayerProfile};
 pub use receipt::{BirReceiptConfirmation, parse_bir_receipt_email, split_bir_filename};
 pub use validation::{ValidationError, validate_ph_phone, validate_profile, validate_zip};
-pub use official_import::{OfficialSavefile, import_and_submit_savefile, parse_period_code};

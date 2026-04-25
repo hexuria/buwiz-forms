@@ -1,7 +1,7 @@
 use crate::bir_xml::{generate_bir_xml, parse_bir_xml};
 use crate::crypto::{compress_and_encrypt, decrypt_and_decompress};
 use crate::transport::submit_iaf;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use chrono::Local;
 use std::fs;
 use std::path::Path;
@@ -51,7 +51,9 @@ pub async fn import_and_submit_savefile(
     } else if let Some(fb) = fallback_email {
         fb.to_string()
     } else {
-        return Err(anyhow!("No email found in savefile and no fallback provided"));
+        return Err(anyhow!(
+            "No email found in savefile and no fallback provided"
+        ));
     };
 
     // Inject dynamic date (Heartbeat)

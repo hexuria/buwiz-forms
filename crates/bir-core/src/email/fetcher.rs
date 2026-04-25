@@ -15,7 +15,13 @@ pub trait ImapAuthenticator {
     fn authenticate(
         &self,
         client: imap::Client<native_tls::TlsStream<std::net::TcpStream>>,
-    ) -> Result<(imap::Session<native_tls::TlsStream<std::net::TcpStream>>, Option<String>), anyhow::Error>;
+    ) -> Result<
+        (
+            imap::Session<native_tls::TlsStream<std::net::TcpStream>>,
+            Option<String>,
+        ),
+        anyhow::Error,
+    >;
 
     /// The IMAP server hostname to connect to.
     fn host(&self) -> &str;
@@ -35,25 +41,27 @@ pub fn fetch_and_process_emails(
     let email = profile.imap_email.as_deref().unwrap_or(&profile.email);
 
     // Build the right authenticator
-    let (authenticator, host): (Box<dyn ImapAuthenticator>, String) =
-        match profile.email_auth_method {
-            EmailAuthMethod::AppPassword => {
-                let host = profile
-                    .imap_host
-                    .as_deref()
-                    .unwrap_or("imap.gmail.com")
-                    .to_string();
-                let auth = AppPasswordAuth::new(email, profile.imap_app_password.as_deref().unwrap_or(""))?;
-                (Box::new(auth), host)
-            }
-            EmailAuthMethod::GoogleOAuth => {
-                let access = profile.oauth_access_token.as_deref().unwrap_or("");
-                let refresh = profile.oauth_refresh_token.as_deref().unwrap_or("");
-                let auth = GoogleOAuthAuth::new(email, access, refresh)?;
-                let host = "imap.gmail.com".to_string();
-                (Box::new(auth), host)
-            }
-        };
+    let (authenticator, host): (Box<dyn ImapAuthenticator>, String) = match profile
+        .email_auth_method
+    {
+        EmailAuthMethod::AppPassword => {
+            let host = profile
+                .imap_host
+                .as_deref()
+                .unwrap_or("imap.gmail.com")
+                .to_string();
+            let auth =
+                AppPasswordAuth::new(email, profile.imap_app_password.as_deref().unwrap_or(""))?;
+            (Box::new(auth), host)
+        }
+        EmailAuthMethod::GoogleOAuth => {
+            let access = profile.oauth_access_token.as_deref().unwrap_or("");
+            let refresh = profile.oauth_refresh_token.as_deref().unwrap_or("");
+            let auth = GoogleOAuthAuth::new(email, access, refresh)?;
+            let host = "imap.gmail.com".to_string();
+            (Box::new(auth), host)
+        }
+    };
 
     fetch_with_auth(authenticator.as_ref(), &host, db, profile)
 }
@@ -63,25 +71,27 @@ pub fn fetch_and_process_emails(
 pub fn test_connection(profile: &TaxpayerProfile) -> Result<Option<String>, anyhow::Error> {
     let email = profile.imap_email.as_deref().unwrap_or(&profile.email);
 
-    let (authenticator, host): (Box<dyn ImapAuthenticator>, String) =
-        match profile.email_auth_method {
-            EmailAuthMethod::AppPassword => {
-                let host = profile
-                    .imap_host
-                    .as_deref()
-                    .unwrap_or("imap.gmail.com")
-                    .to_string();
-                let auth = AppPasswordAuth::new(email, profile.imap_app_password.as_deref().unwrap_or(""))?;
-                (Box::new(auth), host)
-            }
-            EmailAuthMethod::GoogleOAuth => {
-                let access = profile.oauth_access_token.as_deref().unwrap_or("");
-                let refresh = profile.oauth_refresh_token.as_deref().unwrap_or("");
-                let auth = GoogleOAuthAuth::new(email, access, refresh)?;
-                let host = "imap.gmail.com".to_string();
-                (Box::new(auth), host)
-            }
-        };
+    let (authenticator, host): (Box<dyn ImapAuthenticator>, String) = match profile
+        .email_auth_method
+    {
+        EmailAuthMethod::AppPassword => {
+            let host = profile
+                .imap_host
+                .as_deref()
+                .unwrap_or("imap.gmail.com")
+                .to_string();
+            let auth =
+                AppPasswordAuth::new(email, profile.imap_app_password.as_deref().unwrap_or(""))?;
+            (Box::new(auth), host)
+        }
+        EmailAuthMethod::GoogleOAuth => {
+            let access = profile.oauth_access_token.as_deref().unwrap_or("");
+            let refresh = profile.oauth_refresh_token.as_deref().unwrap_or("");
+            let auth = GoogleOAuthAuth::new(email, access, refresh)?;
+            let host = "imap.gmail.com".to_string();
+            (Box::new(auth), host)
+        }
+    };
 
     let tls = native_tls::TlsConnector::builder().build()?;
     let client = imap::connect((&*host, 993_u16), &host, &tls)?;
@@ -102,7 +112,7 @@ fn fetch_with_auth(
     let tls = native_tls::TlsConnector::builder().build()?;
     let client = imap::connect((host, 993_u16), host, &tls)?;
     let (mut session, new_access_token) = auth.authenticate(client)?;
-    
+
     // Save the new access token if it was refreshed
     if let Some(token) = new_access_token {
         let mut updated_profile = profile.clone();

@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let period = "122026Q1";
 
     // Format the filename correctly for the BIR FTP server
-    let filename = format!("{}-{}#{}#{}#.xml", tin, form_type, period, email);
+    let filename = format!("{}-{}-{}#{}#.xml", tin, form_type, period, email);
 
     println!("Transmitting {} to Remote Gateway...", filename);
     transport::submit_iaf(form_type, &filename, &encrypted).await?;

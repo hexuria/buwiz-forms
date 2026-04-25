@@ -95,7 +95,10 @@ impl DashboardView {
     }
 
     /// Colors and labels for a given QuarterState
-    fn state_style(state: &QuarterState, cx: &Context<DashboardView>) -> (Hsla, Hsla, Hsla, &'static str, &'static str) {
+    fn state_style(
+        state: &QuarterState,
+        cx: &Context<DashboardView>,
+    ) -> (Hsla, Hsla, Hsla, &'static str, &'static str) {
         // Returns (bg_color, border_color, accent_color, icon, status_label)
         match state {
             QuarterState::Paid => (
@@ -149,7 +152,7 @@ impl DashboardView {
 }
 
 impl Render for DashboardView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let Some(profile) = &self.active_profile else {
             return div()
                 .flex()
@@ -243,6 +246,7 @@ impl Render for DashboardView {
             });
         }
 
+        let is_narrow = window.viewport_size().width < px(900.);
         let mut forms_ui = div().flex().flex_row().flex_wrap().gap_6().w_full();
         let mut cards_rendered = 0;
 
@@ -265,7 +269,9 @@ impl Render for DashboardView {
                     let filed = quarters
                         .iter()
                         .filter(|s| {
-                            **s == QuarterState::Submitted || **s == QuarterState::Confirmed || **s == QuarterState::Paid
+                            **s == QuarterState::Submitted
+                                || **s == QuarterState::Confirmed
+                                || **s == QuarterState::Paid
                         })
                         .count();
 
@@ -347,26 +353,19 @@ impl Render for DashboardView {
                                             .text_color(cx.theme().foreground)
                                             .child(format!("Q{}", q_num)),
                                     )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(accent)
-                                            .child(status_label),
-                                    )
-                                    .on_click(cx.listener(
-                                        move |_this, _ev, _window, cx| {
-                                            cx.emit(DashboardEvent::FileForm {
-                                                form_code: code_click.clone(),
-                                                year,
-                                                quarter: q_num,
-                                            });
-                                        },
-                                    )),
+                                    .child(div().text_xs().text_color(accent).child(status_label))
+                                    .on_click(cx.listener(move |_this, _ev, _window, cx| {
+                                        cx.emit(DashboardEvent::FileForm {
+                                            form_code: code_click.clone(),
+                                            year,
+                                            quarter: q_num,
+                                        });
+                                    })),
                             );
                         }
                     }
 
-                    Self::build_card(form_def, year, cx).child(
+                    Self::build_card(form_def, year, is_narrow, cx).child(
                         div()
                             .flex()
                             .flex_col()
@@ -395,23 +394,37 @@ impl Render for DashboardView {
                 }
                 FilingFrequency::Monthly => {
                     let months = progress.as_ref().map(|p| p.months.clone()).unwrap_or([
-                        QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted,
-                        QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted,
-                        QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted, QuarterState::NotStarted,
+                        QuarterState::NotStarted,
+                        QuarterState::NotStarted,
+                        QuarterState::NotStarted,
+                        QuarterState::NotStarted,
+                        QuarterState::NotStarted,
+                        QuarterState::NotStarted,
+                        QuarterState::NotStarted,
+                        QuarterState::NotStarted,
+                        QuarterState::NotStarted,
+                        QuarterState::NotStarted,
+                        QuarterState::NotStarted,
+                        QuarterState::NotStarted,
                     ]);
                     let filed = months
                         .iter()
                         .filter(|s| {
-                            **s == QuarterState::Submitted || **s == QuarterState::Confirmed || **s == QuarterState::Paid
+                            **s == QuarterState::Submitted
+                                || **s == QuarterState::Confirmed
+                                || **s == QuarterState::Paid
                         })
                         .count();
 
-                    let month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                    let month_names = [
+                        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
+                        "Nov", "Dec",
+                    ];
                     let mut month_dots = div().flex().flex_wrap().gap_2().w_full();
-                    
+
                     for (idx, m_state) in months.iter().enumerate() {
                         let m_num = (idx + 1) as u8;
-                        
+
                         let (bg, border_clr, accent, icon, status_label) =
                             Self::state_style(m_state, cx);
                         let hover_bg = Self::state_hover_bg(m_state, cx);
@@ -455,25 +468,18 @@ impl Render for DashboardView {
                                         .text_color(cx.theme().foreground)
                                         .child(month_names[idx]),
                                 )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(accent)
-                                        .child(status_label),
-                                )
-                                .on_click(cx.listener(
-                                    move |_this, _ev, _window, cx| {
-                                        cx.emit(DashboardEvent::FileForm {
-                                            form_code: code_click.clone(),
-                                            year,
-                                            quarter: m_num,
-                                        });
-                                    },
-                                )),
+                                .child(div().text_xs().text_color(accent).child(status_label))
+                                .on_click(cx.listener(move |_this, _ev, _window, cx| {
+                                    cx.emit(DashboardEvent::FileForm {
+                                        form_code: code_click.clone(),
+                                        year,
+                                        quarter: m_num,
+                                    });
+                                })),
                         );
                     }
 
-                    Self::build_card(form_def, year, cx).child(
+                    Self::build_card(form_def, year, is_narrow, cx).child(
                         div()
                             .flex()
                             .flex_col()
@@ -511,18 +517,14 @@ impl Render for DashboardView {
                     let hover_bg = Self::state_hover_bg(&status, cx);
                     let code_click = code.clone();
 
-                    Self::build_card(form_def, year, cx)
+                    Self::build_card(form_def, year, is_narrow, cx)
                         .child(
-                            div()
-                                .flex()
-                                .justify_between()
-                                .items_center()
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(format!("Year {}:", year)),
-                                ),
+                            div().flex().justify_between().items_center().child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(format!("Year {}:", year)),
+                            ),
                         )
                         .child(
                             div()
@@ -573,7 +575,7 @@ impl Render for DashboardView {
                     let code_click = code.clone();
                     let hover_bg = cx.theme().accent;
 
-                    Self::build_card(form_def, year, cx)
+                    Self::build_card(form_def, year, is_narrow, cx)
                         .child(
                             div()
                                 .flex()
@@ -759,10 +761,10 @@ impl DashboardView {
     fn build_card(
         form_def: &bir_core::forms::registry::FormDefinition,
         _year: u16,
+        is_narrow: bool,
         cx: &Context<Self>,
     ) -> Div {
-        div()
-            .w(px(340.))
+        let mut card_div = div()
             .bg(cx.theme().background)
             .border_1()
             .border_color(cx.theme().border)
@@ -772,8 +774,15 @@ impl DashboardView {
             .flex_col()
             .gap_4()
             .hover(|style| style.border_color(cx.theme().primary))
-            .shadow_sm()
-            .child(
+            .shadow_sm();
+            
+        if is_narrow {
+            card_div = card_div.w_full();
+        } else {
+            card_div = card_div.w(px(340.));
+        }
+
+        card_div.child(
                 div()
                     .flex()
                     .justify_between()
