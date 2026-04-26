@@ -19,12 +19,7 @@ pub struct FormType {
 impl FormType {
     /// Highest page number referenced by any field (at least 2 for 2551Q).
     pub fn page_count(&self) -> usize {
-        self.fields
-            .iter()
-            .map(|f| f.page)
-            .max()
-            .unwrap_or(0)
-            .max(2)
+        self.fields.iter().map(|f| f.page).max().unwrap_or(0).max(2)
     }
 }
 

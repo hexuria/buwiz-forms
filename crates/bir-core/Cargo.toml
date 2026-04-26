@@ -29,13 +29,16 @@ dotenvy = { workspace = true }
 rand = "0.10.1"
 hex = "0.4.3"
 imap = "2.4.1"
-mailparse = "0.16.1"
 native-tls = "0.2.18"
 data-encoding = "2.11.0"
 open = "5.3.4"
 directories = "6.0.0"
 notify-rust = "4.16.0"
 cron = "0.16.0"
+mail-parser = "0.11"
+ammonia = "4.1.2"
+html2text = "0.17"
+html-escape = "0.2"
 
 [dev-dependencies]
 insta = "1"

@@ -343,7 +343,13 @@ impl Render for DashboardView {
                                         div()
                                             .text_sm()
                                             .font_weight(FontWeight::BOLD)
-                                            .text_color(if matches!(q_state, QuarterState::NotStarted) { cx.theme().foreground } else { accent })
+                                            .text_color(
+                                                if matches!(q_state, QuarterState::NotStarted) {
+                                                    cx.theme().foreground
+                                                } else {
+                                                    accent
+                                                },
+                                            )
                                             .child(format!("Q{}", q_num)),
                                     )
                                     .child(
@@ -456,7 +462,7 @@ impl Render for DashboardView {
                                             div()
                                                 .text_xs()
                                                 .text_color(cx.theme().muted_foreground)
-                                                .child("-")
+                                                .child("-"),
                                         ),
                                 );
                             } else {
@@ -485,7 +491,13 @@ impl Render for DashboardView {
                                             div()
                                                 .text_sm()
                                                 .font_weight(FontWeight::BOLD)
-                                                .text_color(if matches!(m_state, QuarterState::NotStarted) { cx.theme().foreground } else { accent })
+                                                .text_color(
+                                                    if matches!(m_state, QuarterState::NotStarted) {
+                                                        cx.theme().foreground
+                                                    } else {
+                                                        accent
+                                                    },
+                                                )
                                                 .child(month_names[absolute_idx]),
                                         )
                                         .child(
@@ -493,7 +505,7 @@ impl Render for DashboardView {
                                                 .text_xs()
                                                 .font_weight(FontWeight::SEMIBOLD)
                                                 .text_color(accent)
-                                                .child(status_label)
+                                                .child(status_label),
                                         )
                                         .on_click(cx.listener(move |_this, _ev, _window, cx| {
                                             cx.emit(DashboardEvent::FileForm {
@@ -581,7 +593,13 @@ impl Render for DashboardView {
                                     div()
                                         .text_sm()
                                         .font_weight(FontWeight::BOLD)
-                                        .text_color(if matches!(&status, QuarterState::NotStarted) { cx.theme().foreground } else { accent })
+                                        .text_color(
+                                            if matches!(&status, QuarterState::NotStarted) {
+                                                cx.theme().foreground
+                                            } else {
+                                                accent
+                                            },
+                                        )
                                         .child(match &status {
                                             QuarterState::Paid => "View Paid Return",
                                             QuarterState::Confirmed => "View Filed Return",

@@ -803,8 +803,8 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let result = render_2551q_editable(&sample_draft(), temp.path())
             .expect("editable render should succeed");
-        let doc = lopdf::Document::load(&result.pdf_path)
-            .expect("editable PDF should load with lopdf");
+        let doc =
+            lopdf::Document::load(&result.pdf_path).expect("editable PDF should load with lopdf");
 
         let mut has_text = false;
         let mut has_btn = false;
@@ -820,8 +820,14 @@ mod tests {
                 }
             }
         }
-        assert!(has_text, "editable PDF should contain text fields (/FT /Tx)");
-        assert!(has_btn, "editable PDF should contain checkbox fields (/FT /Btn)");
+        assert!(
+            has_text,
+            "editable PDF should contain text fields (/FT /Tx)"
+        );
+        assert!(
+            has_btn,
+            "editable PDF should contain checkbox fields (/FT /Btn)"
+        );
     }
 
     #[test]

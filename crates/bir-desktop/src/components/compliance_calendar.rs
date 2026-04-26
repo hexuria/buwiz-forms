@@ -423,9 +423,7 @@ impl ComplianceCalendar {
 
         // Render in chunks of 7 (one row per week)
         for week_start in (0..all_cells).step_by(7) {
-            let mut week_row = div()
-                .flex()
-                .w_full();
+            let mut week_row = div().flex().w_full();
             for slot in week_start..week_start + 7 {
                 if slot < start_weekday || slot >= start_weekday + days_in_month as u32 {
                     // Blank cell

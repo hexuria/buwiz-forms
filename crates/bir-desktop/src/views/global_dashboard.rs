@@ -227,29 +227,23 @@ impl GlobalDashboardView {
     }
 
     fn urgent_actions_section(&self, window: &Window, cx: &mut Context<Self>) -> gpui::Div {
-        let actionable = self
+        let items: Vec<_> = self
             .actionable_forms
             .iter()
             .filter(|(_, sum)| {
-                sum.status != bir_core::forms::FilingStatus::Confirmed
-                    && sum.status != bir_core::forms::FilingStatus::Paid
+                sum.status != bir_core::forms::FilingStatus::Paid
             })
-            .collect::<Vec<_>>();
-
-        // Detect available width to decide table vs card layout
-        // Sidebar is 280px, padding ~64px — if window < 900px, use card view
-        let use_card_view = window.viewport_size().width < px(900.);
-
-        let items: Vec<_> = actionable
-            .iter()
             .map(|(profile_name, sum)| {
                 let (status_text, action_label, is_urgent) = match sum.status {
                     bir_core::forms::FilingStatus::Draft => ("Draft", "Resume", false),
+                    bir_core::forms::FilingStatus::Queued => ("Queued", "Check Status", false),
                     bir_core::forms::FilingStatus::Submitted => {
                         ("Awaiting Confirmation", "Check Confirmation", true)
                     }
+                    bir_core::forms::FilingStatus::Confirmed => {
+                        ("Confirmed", "Upload Receipt", true)
+                    }
                     bir_core::forms::FilingStatus::Paid => ("Paid", "View Paid Return", false),
-                    _ => ("Unknown", "View", false),
                 };
                 (
                     profile_name.as_str(),
@@ -263,6 +257,8 @@ impl GlobalDashboardView {
                 )
             })
             .collect();
+
+        let use_card_view = window.viewport_size().width < px(900.);
 
         let content = if items.is_empty() {
             div()
@@ -454,9 +450,15 @@ impl GlobalDashboardView {
                             .child(status.to_string()),
                     ),
             )
-            .child(
-                Self::action_icon_button(&tin_clone, &form_clone, year, q_num, action_label, is_urgent, cx),
-            )
+            .child(Self::action_icon_button(
+                &tin_clone,
+                &form_clone,
+                year,
+                q_num,
+                action_label,
+                is_urgent,
+                cx,
+            ))
     }
 
     /// Single card for narrow viewport.
@@ -499,9 +501,15 @@ impl GlobalDashboardView {
                             .text_color(cx.theme().foreground)
                             .child(profile.to_string()),
                     )
-                    .child(
-                        Self::action_icon_button(&tin_clone, &form_clone, year, q_num, action_label, is_urgent, cx),
-                    ),
+                    .child(Self::action_icon_button(
+                        &tin_clone,
+                        &form_clone,
+                        year,
+                        q_num,
+                        action_label,
+                        is_urgent,
+                        cx,
+                    )),
             )
             // Form type
             .child(
@@ -551,14 +559,20 @@ impl GlobalDashboardView {
         year: u16,
         q_num: u8,
         action_label: &str,
-        is_check_status: bool,
+        _is_check_status: bool,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
         let tin_clone = tin.to_string();
         let form_clone = form.to_string();
         let tooltip_text = action_label.to_string();
 
-        let icon = if is_check_status { "✉" } else { "▶" };
+        let icon = if action_label == "Check Confirmation" { 
+            "✉" 
+        } else if action_label == "Upload Receipt" {
+            "↑"
+        } else { 
+            "▶" 
+        };
 
         div()
             .w(px(50.))
@@ -590,7 +604,7 @@ impl GlobalDashboardView {
                             .build(window, cx)
                     })
                     .on_click(cx.listener({
-                        let is_check = is_check_status;
+                        let is_check = action_label == "Check Confirmation";
                         move |this, _, window, cx| {
                             if is_check {
                                 this.check_status_for_tin(&tin_clone, window, cx);
@@ -608,16 +622,14 @@ impl GlobalDashboardView {
     }
 
     /// Run the email check for a specific TIN — the core of the "Check Status" action.
-    fn check_status_for_tin(
-        &mut self,
-        tin: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn check_status_for_tin(&mut self, tin: &str, window: &mut Window, cx: &mut Context<Self>) {
         use gpui_component::WindowExt;
 
         // Look up the profile
-        let profile = self.db.lock().ok()
+        let profile = self
+            .db
+            .lock()
+            .ok()
             .and_then(|db| db.get_profile(tin).ok().flatten());
 
         let Some(profile) = profile else {
@@ -631,8 +643,13 @@ impl GlobalDashboardView {
 
         if !profile.is_email_tracking_active() {
             window.push_notification(
-                gpui_component::notification::Notification::error("Email Tracking Not Enabled".to_string())
-                    .message("Go to Email Settings in your profile to set up App Password or Google OAuth2.".to_string()),
+                gpui_component::notification::Notification::error(
+                    "Email Tracking Not Enabled".to_string(),
+                )
+                .message(
+                    "Go to Email Settings in your profile to set up App Password or Google OAuth2."
+                        .to_string(),
+                ),
                 cx,
             );
             return;
@@ -650,8 +667,7 @@ impl GlobalDashboardView {
         let db_clone = self.db.clone();
         cx.spawn(async move |this, cx| {
             let result = cx.background_executor().spawn(async move {
-                let db = db_clone.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
-                bir_core::email::fetch_and_process_emails(&profile, &db)
+                bir_core::email::fetch_and_process_emails(&profile, db_clone)
             }).await;
 
             let _ = cx.update(|cx| {
@@ -691,12 +707,7 @@ impl GlobalDashboardView {
     }
 
     fn news_section(&self, cx: &mut Context<Self>) -> gpui::Div {
-        let mut news_list = div()
-            .id("news-list")
-            .flex()
-            .flex_col()
-            .gap_4()
-            .pr_2(); // add some padding
+        let mut news_list = div().id("news-list").flex().flex_col().gap_4().pr_2(); // add some padding
 
         for ann in &self.announcements {
             news_list = news_list.child(Self::news_card(ann, cx));

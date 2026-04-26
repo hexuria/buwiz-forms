@@ -1,12 +1,12 @@
 use bir_core::db::{Database, Job};
-use gpui::*;
 use gpui::prelude::FluentBuilder;
+use gpui::*;
 
-use gpui_component::*;
-use gpui_component::input::{Input, InputState};
-use crate::components::combobox::{Combobox, ComboboxState, ComboboxEvent};
-use std::sync::{Arc, Mutex};
+use crate::components::combobox::{Combobox, ComboboxEvent, ComboboxState};
 use chrono::Utc;
+use gpui_component::input::{Input, InputState};
+use gpui_component::*;
+use std::sync::{Arc, Mutex};
 
 pub enum CronTasksEvent {
     Reload,
@@ -27,11 +27,13 @@ pub struct JobViewModel {
     pub last_run_at: Option<String>,
     pub next_run_at: Option<String>,
     pub created_at: String,
+    pub output_log: Option<String>,
 }
 
 pub struct CronTasksView {
     db: Arc<Mutex<Database>>,
     background_cron_enabled: bool,
+    error_telemetry_enabled: bool,
     has_profile: bool,
     jobs: Vec<JobViewModel>,
     new_job_name: Entity<InputState>,
@@ -45,21 +47,48 @@ pub struct CronTasksView {
 
 impl CronTasksView {
     pub fn new(db: Arc<Mutex<Database>>, window: &mut Window, cx: &mut Context<'_, Self>) -> Self {
-        let new_job_name = cx.new(|cx| InputState::new(window, cx).placeholder("Job Name (e.g. Sync)"));
+        let new_job_name =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Job Name (e.g. Sync)"));
         let cron_amount = cx.new(|cx| InputState::new(window, cx).placeholder("Amt (e.g. 5)"));
-        let cron_period = cx.new(|cx| ComboboxState::new(vec!["Seconds".into(), "Minutes".into(), "Hours".into(), "Days".into(), "Months".into(), "Raw Cron".into()], window, cx));
-        
+        let cron_period = cx.new(|cx| {
+            ComboboxState::new(
+                vec![
+                    "Seconds".into(),
+                    "Minutes".into(),
+                    "Hours".into(),
+                    "Days".into(),
+                    "Months".into(),
+                    "Raw Cron".into(),
+                ],
+                window,
+                cx,
+            )
+        });
+
         // Default to Minutes
         cron_period.update(cx, |s, cx| s.set_selected_value("Minutes", window, cx));
-        
-        let new_job_command = cx.new(|cx| InputState::new(window, cx).placeholder("Cmd (e.g. osascript -e ...)"));
-        
-        let filter_combobox = cx.new(|cx| ComboboxState::new(vec!["All Jobs".into(), "Queued".into(), "Failed".into(), "Archived".into()], window, cx));
+
+        let new_job_command =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Cmd (e.g. osascript -e ...)"));
+
+        let filter_combobox = cx.new(|cx| {
+            ComboboxState::new(
+                vec![
+                    "All Jobs".into(),
+                    "Queued".into(),
+                    "Failed".into(),
+                    "Archived".into(),
+                ],
+                window,
+                cx,
+            )
+        });
         filter_combobox.update(cx, |s, cx| s.set_selected_value("All Jobs", window, cx));
 
         let mut view = Self {
             db,
             background_cron_enabled: false,
+            error_telemetry_enabled: false,
             has_profile: false,
             jobs: Vec::new(),
             new_job_name,
@@ -70,10 +99,14 @@ impl CronTasksView {
             test_output: None,
             _subscriptions: Vec::new(),
         };
-        
-        let sub = cx.subscribe_in(&filter_combobox, window, |_this: &mut Self, _entity, _event: &ComboboxEvent, _window, cx| {
-            cx.notify();
-        });
+
+        let sub = cx.subscribe_in(
+            &filter_combobox,
+            window,
+            |_this: &mut Self, _entity, _event: &ComboboxEvent, _window, cx| {
+                cx.notify();
+            },
+        );
         view._subscriptions.push(sub);
 
         view.load_settings(cx);
@@ -87,6 +120,7 @@ impl CronTasksView {
                 if let Some(profile) = profiles.first() {
                     self.has_profile = true;
                     self.background_cron_enabled = profile.background_cron_enabled;
+                    self.error_telemetry_enabled = profile.error_telemetry_enabled;
                 } else {
                     self.has_profile = false;
                 }
@@ -105,10 +139,11 @@ impl CronTasksView {
                         last_run_at: job.last_run_at,
                         next_run_at: job.next_run_at,
                         created_at: job.created_at,
+                        output_log: job.output_log,
                     });
                 }
             }
-            
+
             if let Ok(summaries) = db.list_all_queued_submissions() {
                 for sum in summaries {
                     view_jobs.push(JobViewModel {
@@ -123,14 +158,15 @@ impl CronTasksView {
                         last_run_at: None,
                         next_run_at: None,
                         created_at: sum.updated_at,
+                        output_log: None,
                     });
                 }
             }
         }
-        
+
         // Sort descending by created_at (simple string compare works for RFC3339)
         view_jobs.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-        
+
         self.jobs = view_jobs;
         cx.notify();
     }
@@ -140,11 +176,17 @@ impl CronTasksView {
         self.save_to_db(cx);
     }
 
+    fn toggle_telemetry(&mut self, value: bool, cx: &mut Context<'_, Self>) {
+        self.error_telemetry_enabled = value;
+        self.save_to_db(cx);
+    }
+
     fn save_to_db(&mut self, cx: &mut Context<'_, Self>) {
         if let Ok(db) = self.db.lock() {
-            if let Ok(mut profiles) = db.list_profiles() {
-                if let Some(mut profile) = profiles.pop() {
+            if let Ok(profiles) = db.list_profiles() {
+                for mut profile in profiles {
                     profile.background_cron_enabled = self.background_cron_enabled;
+                    profile.error_telemetry_enabled = self.error_telemetry_enabled;
                     let _ = db.save_profile(profile);
                 }
 
@@ -163,8 +205,12 @@ impl CronTasksView {
         if period == "Raw Cron" {
             return Ok(amount.trim().to_string());
         }
-        let amount_num = amount.parse::<u32>().map_err(|_| "Amount must be a number".to_string())?;
-        if amount_num < 1 { return Err("Amount must be >= 1".to_string()); }
+        let amount_num = amount
+            .parse::<u32>()
+            .map_err(|_| "Amount must be a number".to_string())?;
+        if amount_num < 1 {
+            return Err("Amount must be >= 1".to_string());
+        }
 
         let cron = match period {
             "Seconds" => format!("*/{} * * * * *", amount_num),
@@ -184,17 +230,25 @@ impl CronTasksView {
             cx.notify();
             return;
         }
-        
+
         self.test_output = Some("Testing...".to_string());
         cx.notify();
-        
+
         let cmd = cmd_str.clone();
         cx.spawn(async move |this, cx| {
-            let output = match tokio::process::Command::new("sh").arg("-c").arg(&cmd).output().await {
+            let output = match tokio::process::Command::new("sh")
+                .arg("-c")
+                .arg(&cmd)
+                .output()
+                .await
+            {
                 Ok(out) => {
                     let mut res = String::from_utf8_lossy(&out.stdout).to_string();
                     if !out.status.success() {
-                        res.push_str(&format!("\nError: {}", String::from_utf8_lossy(&out.stderr)));
+                        res.push_str(&format!(
+                            "\nError: {}",
+                            String::from_utf8_lossy(&out.stderr)
+                        ));
                     }
                     if res.trim().is_empty() {
                         "Success (no output)".to_string()
@@ -212,7 +266,8 @@ impl CronTasksView {
                     });
                 }
             });
-        }).detach();
+        })
+        .detach();
     }
 
     fn add_job(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
@@ -238,7 +293,11 @@ impl CronTasksView {
             }
         };
 
-        let command = if cmd_str.trim().is_empty() { None } else { Some(cmd_str.trim().to_string()) };
+        let command = if cmd_str.trim().is_empty() {
+            None
+        } else {
+            Some(cmd_str.trim().to_string())
+        };
 
         let job = Job {
             id: None,
@@ -251,15 +310,19 @@ impl CronTasksView {
             last_run_at: None,
             next_run_at: None,
             created_at: "".to_string(),
+            output_log: None,
         };
 
         if let Ok(db) = self.db.lock() {
             let _ = db.save_job(job);
         }
 
-        self.new_job_name.update(cx, |s, cx| s.set_value("", window, cx));
-        self.cron_amount.update(cx, |s, cx| s.set_value("", window, cx));
-        self.new_job_command.update(cx, |s, cx| s.set_value("", window, cx));
+        self.new_job_name
+            .update(cx, |s, cx| s.set_value("", window, cx));
+        self.cron_amount
+            .update(cx, |s, cx| s.set_value("", window, cx));
+        self.new_job_command
+            .update(cx, |s, cx| s.set_value("", window, cx));
         self.test_output = None;
 
         self.load_settings(cx);
@@ -304,6 +367,26 @@ impl CronTasksView {
         }
         self.load_settings(cx);
     }
+
+    fn cancel_system_job(&mut self, db_id: i64, cx: &mut Context<'_, Self>) {
+        if let Ok(db) = self.db.lock() {
+            if let Ok(summaries) = db.list_all_queued_submissions() {
+                if let Some(sum) = summaries.into_iter().find(|s| s.id == db_id) {
+                    if sum.form_code == "2551Q" {
+                        if let Ok(Some(mut draft)) = db.get_2551q_draft(&sum.tin, sum.taxable_year, sum.quarter.unwrap_or(0)) {
+                            draft.status = bir_core::forms::form_2551q::FilingStatus::Draft;
+                            draft.submitted_at = None;
+                            draft.confirmed_at = None;
+                            draft.receipt_id = None;
+                            draft.submission_filename = None;
+                            let _ = db.save_2551q_draft(&draft);
+                        }
+                    }
+                }
+            }
+        }
+        self.load_settings(cx);
+    }
 }
 
 impl Render for CronTasksView {
@@ -322,15 +405,17 @@ impl Render for CronTasksView {
         let border = cx.theme().border;
 
         let selected_filter = self.filter_combobox.read(cx).selected_value(cx);
-        let filtered_jobs: Vec<&JobViewModel> = self.jobs.iter().filter(|j| {
-            match selected_filter.as_str() {
+        let filtered_jobs: Vec<&JobViewModel> = self
+            .jobs
+            .iter()
+            .filter(|j| match selected_filter.as_str() {
                 "All Jobs" => true,
                 "Queued" => j.status == "Queued",
                 "Failed" => j.status == "Failed",
                 "Archived" => j.status == "Archived",
                 _ => true,
-            }
-        }).collect();
+            })
+            .collect();
 
         div()
             .id("cron_tasks_scroll")
@@ -389,7 +474,38 @@ impl Render for CronTasksView {
                                     .on_click(cx.listener(|this, v, _, cx| {
                                         this.toggle_cron(*v, cx);
                                     })),
-                            ),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .items_start()
+                                    .pt_4()
+                                    .gap_4()
+                                    .border_t_1()
+                                    .border_color(border)
+                                    .w_full()
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .gap_1()
+                                            .child(div().font_weight(FontWeight::SEMIBOLD).child("Error Telemetry Reporting"))
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .child("Allows sending automated error logs to support for failed jobs."),
+                                            ),
+                                    )
+                                    .child(
+                                        gpui_component::switch::Switch::new("telemetry_toggle")
+                                            .checked(self.error_telemetry_enabled)
+                                            .on_click(cx.listener(|this, v, _, cx| {
+                                                this.toggle_telemetry(*v, cx);
+                                            })),
+                                    ),
+                            )
                     )
             )
             .child(
@@ -574,6 +690,16 @@ impl Render for CronTasksView {
                                     .flex_row()
                                     .flex_wrap()
                                     .gap_2()
+                                    .when(is_system, |this| {
+                                        this.child(
+                                            gpui_component::button::Button::new(format!("cancel_system_job_{}", i))
+                                                .label("Cancel Submission")
+                                                .small()
+                                                .on_click(cx.listener(move |this, _ev, _window, cx| {
+                                                    this.cancel_system_job(db_id, cx);
+                                                }))
+                                        )
+                                    })
                                     .when(!is_system && job.status != "Archived", |this| {
                                         this.child(
                                             gpui_component::button::Button::new(format!("run_job_{}", i))
@@ -607,6 +733,54 @@ impl Render for CronTasksView {
                                                 .small()
                                                 .on_click(cx.listener(move |this, _ev, _window, cx| {
                                                     this.delete_job(db_id, cx);
+                                                }))
+                                        )
+                                    })
+                                    .when(job.status == "Failed" && self.error_telemetry_enabled, |this| {
+                                        let log = job.output_log.clone().unwrap_or_default();
+                                        let jname = job.name.clone();
+                                        this.child(
+                                            gpui_component::button::Button::new(format!("email_support_{}", i))
+                                                .label("Email Support")
+                                                .small()
+                                                .on_click(cx.listener(move |_this, _ev, _window, cx| {
+                                                    let subject = format!("Job Error: {}", jname).replace(" ", "%20");
+                                                    // Truncate body if it's too long for a mailto link
+                                                    let mut body = log.replace("\n", "%0A").replace(" ", "%20");
+                                                    if body.len() > 1000 {
+                                                        body = body.chars().take(1000).collect::<String>();
+                                                        body.push_str("...[truncated]");
+                                                    }
+                                                    let url = format!("mailto:codeitlikemiley@gmail.com?subject={}&body={}", subject, body);
+                                                    cx.open_url(&url);
+                                                }))
+                                        )
+                                    })
+                                    .when(std::env::var("DEVELOPER_MODE").unwrap_or_default() == "true" && job.output_log.is_some(), |this| {
+                                        let log = job.output_log.clone().unwrap_or_default();
+                                        let jname = job.name.clone();
+                                        this.child(
+                                            gpui_component::button::Button::new(format!("view_log_{}", i))
+                                                .label("👁")
+                                                .small()
+                                                .on_click(cx.listener(move |_this, _ev, _window, cx| {
+                                                    let log = log.clone();
+                                                    let jname = jname.clone();
+                                                    let options = WindowOptions {
+                                                        titlebar: Some(TitlebarOptions {
+                                                            title: None,
+                                                            appears_transparent: true,
+                                                            traffic_light_position: Some(point(px(9.0), px(9.0))),
+                                                        }),
+                                                        window_bounds: Some(WindowBounds::Windowed(Bounds {
+                                                            origin: point(px(100.), px(100.)),
+                                                            size: size(px(800.), px(600.)),
+                                                        })),
+                                                        ..Default::default()
+                                                    };
+                                                    let _ = cx.open_window(options, move |_window, cx| {
+                                                        cx.new(|_cx| crate::views::debug_log_viewer::DebugLogViewerView::new(jname.clone(), log.clone()))
+                                                    });
                                                 }))
                                         )
                                     })

@@ -1,8 +1,8 @@
+use bir_core::db::SubmissionReceipt;
+use bir_core::forms::form_2551q::Form2551QDraft;
 use gpui::*;
 use gpui_component::scroll::ScrollableElement as _;
 use gpui_component::*;
-use bir_core::db::SubmissionReceipt;
-use bir_core::forms::form_2551q::Form2551QDraft;
 
 pub struct EmailConfirmationView {
     receipt: SubmissionReceipt,
@@ -32,18 +32,30 @@ impl EmailConfirmationView {
             format!("Period: {}", self.receipt.period),
             format!("Received Date: {}", self.receipt.received_date),
             format!("Received Time: {}", self.receipt.received_time),
-            format!("Source: {}", self.receipt.source_from.as_deref().unwrap_or("BIR")),
+            format!(
+                "Source: {}",
+                self.receipt.source_from.as_deref().unwrap_or("BIR")
+            ),
             String::new(),
             "=".repeat(40),
             "Form Summary".to_string(),
             format!("Taxpayer: {}", self.draft.taxpayer_name),
             format!("TIN: {}", self.draft.tin),
-            format!("Period: Q{} {}", self.draft.quarter, self.draft.taxable_year),
+            format!(
+                "Period: Q{} {}",
+                self.draft.quarter, self.draft.taxable_year
+            ),
             format!("Total Tax Due: {:.2}", self.draft.total_tax_due),
-            format!("Creditable Tax Withheld: {:.2}", self.draft.creditable_tax_withheld),
+            format!(
+                "Creditable Tax Withheld: {:.2}",
+                self.draft.creditable_tax_withheld
+            ),
             format!("Tax Still Payable: {:.2}", self.draft.tax_payable),
             format!("Penalties: {:.2}", self.draft.total_penalties),
-            format!("Total Amount Payable: {:.2}", self.draft.total_amount_payable),
+            format!(
+                "Total Amount Payable: {:.2}",
+                self.draft.total_amount_payable
+            ),
             format!("Status: {:?}", self.draft.status),
         ];
         bir_print::build_simple_confirmation_pdf(&lines)
@@ -52,7 +64,9 @@ impl EmailConfirmationView {
     fn export_pdf(&mut self, cx: &mut Context<Self>) {
         let default_name = format!(
             "confirmation-{}.pdf",
-            self.draft.default_submission_filename().trim_end_matches(".xml")
+            self.draft
+                .default_submission_filename()
+                .trim_end_matches(".xml")
         );
         let Some(target) = rfd::FileDialog::new()
             .set_file_name(&default_name)
@@ -79,7 +93,7 @@ impl EmailConfirmationView {
         let dir = std::env::temp_dir().join("taxman-ebir-pdf");
         let _ = std::fs::create_dir_all(&dir);
         let path = dir.join("temp-print.pdf");
-        
+
         if let Err(e) = std::fs::write(&path, pdf_bytes) {
             self.status_message = Some(format!("Failed to write temp file: {}", e));
             cx.notify();
@@ -121,7 +135,7 @@ impl Render for EmailConfirmationView {
             .size_full()
             .flex()
             .flex_col()
-            .bg(gpui::rgb(0x0b0b0b))
+            .bg(cx.theme().muted)
             .child(
                 div()
                     .flex()
@@ -156,6 +170,7 @@ impl Render for EmailConfirmationView {
                             .child(
                                 gpui_component::button::Button::new("email_export_btn")
                                     .icon(Icon::empty().path("svg/download.svg"))
+                                    .label("Export")
                                     .outline()
                                     .small()
                                     .tooltip("Export PDF")
@@ -166,6 +181,7 @@ impl Render for EmailConfirmationView {
                             .child(
                                 gpui_component::button::Button::new("email_print_btn")
                                     .icon(Icon::empty().path("svg/printer.svg"))
+                                    .label("Print")
                                     .outline()
                                     .small()
                                     .tooltip("Print")
@@ -207,9 +223,9 @@ impl Render for EmailConfirmationView {
                                                 .text_sm()
                                                 .font_family(".SF NS Mono")
                                                 .text_color(cx.theme().foreground)
-                                                .child(self.receipt.raw_text.clone())
-                                        )
-                                )
+                                                .child(self.receipt.raw_text.clone()),
+                                        ),
+                                ),
                         )
                         .vertical_scrollbar(&self.scroll_handle),
                 ),

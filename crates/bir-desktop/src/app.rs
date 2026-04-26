@@ -1,8 +1,8 @@
+use crate::views::cron_tasks::CronTasksView;
 use crate::views::dashboard::{DashboardEvent, DashboardView};
 use crate::views::form_2551q_view::{Form2551QEvent, Form2551QView};
 use crate::views::global_dashboard::{GlobalDashboardEvent, GlobalDashboardView};
 use crate::views::profile_manager::ProfileManagerView;
-use crate::views::cron_tasks::CronTasksView;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::input::{Input, InputEvent, InputState};
@@ -614,8 +614,6 @@ impl AppState {
     }
 }
 
-
-
 impl Render for AppState {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Set up window-aware subscription for global dashboard notifications (once)
@@ -646,6 +644,7 @@ impl Render for AppState {
         if let Some(draft) = self.pending_form_draft.take() {
             let db_for_view = Arc::clone(&self.db);
             let form_view = cx.new(|cx| Form2551QView::new(draft, db_for_view, window, cx));
+            form_view.update(cx, |view, cx| view.start_polling(cx));
 
             cx.subscribe_in(
                 &form_view,

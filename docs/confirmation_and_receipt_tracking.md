@@ -7,6 +7,27 @@ This document outlines the architecture and implementation of the post-submissio
 
 Once a form has been submitted and the background cron jobs successfully poll and parse the official BIR confirmation email, the system persists this email.
 
+### Email Matching and Parsing Logic
+
+The system utilizes robust logic to parse and match BIR confirmation emails, ensuring accuracy and preventing duplication:
+
+1. **Regex Parsing (`receipt.rs`)**:
+   - The system parses the raw email content using precise regular expressions:
+     - `Filename`: Matches `File name: <filename>` (e.g., `261708015000-2551Qv2018-122026Q1.xml`).
+     - `Date`: Matches `Date received by BIR: <date>` (e.g., `26 April 2026`).
+     - `Time`: Matches `Time received by BIR: <time>` (e.g., `03:51 PM`).
+   - The parsed time (e.g., `03:51 PM`) is flawlessly converted from a 12-hour AM/PM format into a 24-hour internal database time (e.g., `15:51:00`) using `NaiveTime::parse_from_str`.
+
+2. **Deduplication (`db.rs`)**:
+   - When saving a receipt, the system queries the `submission_receipts` table by `filename`. If a receipt with the identical filename, received date, and received time (in 24-hour format) already exists, the system safely ignores the duplicate without generating errors.
+
+3. **Status Confirmation (`db.rs` / `confirm_2551q_from_receipt`)**:
+   - The extracted filename is split to retrieve the TIN, Form Type, and Period (e.g., `122026Q1`).
+   - The system safely extracts the specific Taxable Year (e.g., `2026`) and Quarter (e.g., `1`) from the period string.
+   - It queries the `form_drafts` table for the exact match (TIN, Year, and Quarter).
+   - **Safety Check**: The receipt timestamp (`Date` + `Time`) is compared against the draft's `submitted_at` timestamp. A 5-minute buffer is applied to ensure that older confirmation receipts cannot erroneously override a newly submitted draft.
+   - Once verified, the system transitions the form's status to `Confirmed`, updates the `confirmed_at` timestamp, and associates the receipt's filename.
+
 ### Storage
 - The raw text of the email is saved directly into the database within the `submission_receipts` table under the `raw_text` column.
 - The `FilingStatus` of the form automatically transitions to `Confirmed`.

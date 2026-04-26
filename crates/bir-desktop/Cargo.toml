@@ -3,6 +3,7 @@ name = "bir-desktop"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+default-run = "bir"
 
 [[bin]]
 name = "bir"

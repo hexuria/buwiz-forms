@@ -1,6 +1,7 @@
 use bir_core::forms::form_2551q::Form2551QDraft;
-use bir_print::{render_2551q_print, PrintResult};
+use bir_print::{PrintResult, render_2551q_print};
 use gpui::*;
+use gpui::prelude::FluentBuilder;
 use gpui_component::scroll::ScrollableElement as _;
 use gpui_component::*;
 use std::path::PathBuf;
@@ -11,16 +12,18 @@ pub struct PdfViewerView {
     output_dir: PathBuf,
     scroll_handle: ScrollHandle,
     status_message: Option<String>,
+    raw_html: Option<String>,
 }
 
 impl PdfViewerView {
-    pub fn new(draft: Form2551QDraft, result: PrintResult, output_dir: PathBuf) -> Self {
+    pub fn new(draft: Form2551QDraft, result: PrintResult, output_dir: PathBuf, raw_html: Option<String>) -> Self {
         Self {
             draft,
             result,
             output_dir,
             scroll_handle: ScrollHandle::new(),
             status_message: None,
+            raw_html,
         }
     }
 
@@ -42,6 +45,23 @@ impl PdfViewerView {
             .arg("-R")
             .arg(&self.result.pdf_path)
             .spawn();
+    }
+
+    fn view_bank_receipt(&mut self, cx: &mut Context<Self>) {
+        if let Some(html) = &self.raw_html {
+            let receipt_path = self.output_dir.join("bank_presentation_receipt.html");
+            if let Err(e) = std::fs::write(&receipt_path, html) {
+                self.status_message = Some(format!("Failed to save receipt: {e}"));
+                cx.notify();
+                return;
+            }
+            if let Err(e) = open::that(&receipt_path) {
+                self.status_message = Some(format!("Failed to open receipt: {e}"));
+            } else {
+                self.status_message = Some("Opened receipt in browser".to_string());
+            }
+            cx.notify();
+        }
     }
 
     fn export_pdf(&mut self, cx: &mut Context<Self>) {
@@ -70,22 +90,41 @@ impl PdfViewerView {
         cx.notify();
     }
 
-    fn print_pdf(&mut self, cx: &mut Context<Self>) {
+    fn print_pdf(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let path = &self.result.pdf_path;
         let output = std::process::Command::new("lp").arg(path).output();
-        match output {
+        use gpui_component::WindowExt;
+        
+        let (msg, is_error) = match output {
             Ok(o) if o.status.success() => {
                 self.status_message = Some("Sent to printer".to_string());
+                ("Document sent to the default printer.", false)
             }
             Ok(o) => {
                 let stderr = String::from_utf8_lossy(&o.stderr);
                 self.status_message = Some(format!("Print failed: {stderr}"));
+                let _ = open::that(path);
+                ("Print command failed. Opening document in default viewer so you can print it manually.", true)
             }
             Err(e) => {
-                self.status_message =
-                    Some(format!("No printer available: {e}"));
+                self.status_message = Some(format!("No printer available: {e}"));
+                let _ = open::that(path);
+                ("No default printer found. Opening document in default viewer so you can print it manually.", true)
             }
-        }
+        };
+
+        window.push_notification(
+            gpui_component::notification::Notification::new()
+                .message(msg.to_string())
+                .with_type(if is_error {
+                    gpui_component::notification::NotificationType::Warning
+                } else {
+                    gpui_component::notification::NotificationType::Success
+                })
+                .autohide(true),
+            cx,
+        );
+
         cx.notify();
     }
 
@@ -150,7 +189,7 @@ impl Render for PdfViewerView {
             .size_full()
             .flex()
             .flex_col()
-            .bg(gpui::rgb(0x0b0b0b))
+            .bg(cx.theme().muted)
             .child(
                 div()
                     .flex()
@@ -185,6 +224,7 @@ impl Render for PdfViewerView {
                             .child(
                                 gpui_component::button::Button::new("pdf_viewer_reveal_btn")
                                     .icon(Icon::new(IconName::FolderOpen))
+                                    .label("Reveal")
                                     .outline()
                                     .small()
                                     .tooltip("Reveal in Finder")
@@ -192,9 +232,23 @@ impl Render for PdfViewerView {
                                         this.reveal_pdf();
                                     })),
                             )
+                            .when(self.raw_html.is_some(), |this| {
+                                this.child(
+                                    gpui_component::button::Button::new("pdf_viewer_receipt_btn")
+                                        .icon(Icon::empty().path("svg/receipt.svg"))
+                                        .label("Receipt")
+                                        .outline()
+                                        .small()
+                                        .tooltip("View Bank Presentation Receipt")
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.view_bank_receipt(cx);
+                                        })),
+                                )
+                            })
                             .child(
                                 gpui_component::button::Button::new("pdf_viewer_export_btn")
                                     .icon(Icon::empty().path("svg/download.svg"))
+                                    .label("Export")
                                     .outline()
                                     .small()
                                     .tooltip("Export PDF")
@@ -205,11 +259,12 @@ impl Render for PdfViewerView {
                             .child(
                                 gpui_component::button::Button::new("pdf_viewer_print_btn")
                                     .icon(Icon::empty().path("svg/printer.svg"))
+                                    .label("Print")
                                     .outline()
                                     .small()
                                     .tooltip("Print")
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.print_pdf(cx);
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.print_pdf(window, cx);
                                     })),
                             ),
                     ),

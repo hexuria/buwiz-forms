@@ -110,8 +110,15 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
         match crate::transport::submit_iaf(form_type, &filename, &encrypted).await {
             Ok(_) => {
                 info!("Cron: Successfully submitted queued form {}", filename);
+                
+                let now = Utc::now();
+                let _ = notify_rust::Notification::new()
+                    .summary("BIR Form Submitted")
+                    .body(&format!("Filename: {}\nTimestamp: {}", filename, now.format("%I:%M %p")))
+                    .show();
+
                 draft.status = FilingStatus::Submitted;
-                draft.submitted_at = Some(Utc::now().to_rfc3339());
+                draft.submitted_at = Some(now.to_rfc3339());
                 draft.submission_filename = Some(filename);
                 draft.submission_attempts = 0;
                 draft.next_retry_at = None;
@@ -145,6 +152,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                                 last_run_at: None,
                                 next_run_at: None,
                                 created_at: Utc::now().to_rfc3339(),
+                                output_log: None,
                             };
                             let _ = db_guard.save_job(new_job);
                         }
@@ -259,28 +267,37 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
                     let email = cmd.trim_start_matches("bir_poll_email ").trim();
                     let (poll_success, still_pending) = crate::email::fetch_and_process_emails_for_address(email, db.clone());
                     if poll_success {
+                        let log = "Email polling completed successfully.".to_string();
                         info!("Cron: Email polling job '{}' completed successfully.", job.name);
                         success = true;
+                        job.output_log = Some(log);
                         if !still_pending {
                             job.status = "Archived".to_string(); // Completed processing for this email
                         }
                     } else {
+                        let log = "Email polling failed.".to_string();
                         warn!("Cron: Email polling job '{}' failed.", job.name);
                         success = false;
+                        job.output_log = Some(log);
                     }
                 } else {
                     match tokio::process::Command::new("sh").arg("-c").arg(cmd).output().await {
                         Ok(output) => {
+                            let stdout_str = String::from_utf8_lossy(&output.stdout);
+                            let stderr_str = String::from_utf8_lossy(&output.stderr);
+                            let log = format!("STDOUT:\n{}\n\nSTDERR:\n{}", stdout_str, stderr_str);
+                            job.output_log = Some(log);
                             if output.status.success() {
                                 info!("Cron: Job '{}' completed successfully.", job.name);
                             } else {
-                                let err_output = String::from_utf8_lossy(&output.stderr);
-                                warn!("Cron: Job '{}' failed with code: {:?} stderr: {}", job.name, output.status, err_output);
+                                warn!("Cron: Job '{}' failed with code: {:?} stderr: {}", job.name, output.status, stderr_str);
                                 success = false;
                             }
                         }
                         Err(e) => {
+                            let err_msg = format!("Failed to start job: {}", e);
                             warn!("Cron: Job '{}' failed to start: {}", job.name, e);
+                            job.output_log = Some(err_msg);
                             success = false;
                         }
                     }

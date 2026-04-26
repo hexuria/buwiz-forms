@@ -4,7 +4,6 @@
 //! Data is transparently AES-256 encrypted using SQLCipher.
 //! Master key stored in OS keychain.
 
-use keyring::Entry;
 use rusqlite::{Connection, ErrorCode, params};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -30,6 +29,7 @@ pub struct Job {
     pub last_run_at: Option<String>,
     pub next_run_at: Option<String>,
     pub created_at: String,
+    pub output_log: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,6 +57,7 @@ pub struct SubmissionReceipt {
     pub received_time: String,
     pub source_from: Option<String>,
     pub raw_text: String,
+    pub raw_html: Option<String>,
     pub created_at: Option<String>,
 }
 
@@ -184,10 +185,12 @@ pub enum DbError {
     Serialization(#[from] serde_json::Error),
     #[error("Encryption key invalid or database corrupted")]
     Encryption,
+    #[error("Keychain CLI error: {0}")]
+    KeychainCli(String),
 }
 
 pub struct Database {
-    conn: Connection,
+    pub conn: Connection,
 }
 
 pub fn default_database_path() -> std::path::PathBuf {
@@ -235,41 +238,7 @@ impl Database {
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, DbError> {
         let conn = Connection::open(path)?;
 
-        let entry = Entry::new("com.ebir.rust", "sqlcipher_master_key")?;
-
-        // Verify we have a real credential store, not the in-memory mock
-        #[cfg(debug_assertions)]
-        {
-            let test_entry = Entry::new("com.ebir.rust", "__keyring_test__")?;
-            let _ = test_entry.set_password("test");
-            match test_entry.get_password() {
-                Ok(v) if v == "test" => {
-                    let _ = test_entry.delete_credential();
-                    info!("Keyring backend: native credential store confirmed");
-                }
-                _ => {
-                    tracing::warn!(
-                        "Keyring backend appears to be a mock store! \
-                         Encryption keys will NOT persist across restarts. \
-                         Enable the 'apple-native' feature on the keyring crate."
-                    );
-                }
-            }
-        }
-
-        let key_hex = match entry.get_password() {
-            Ok(hex_key) => {
-                info!("Loaded existing master key from keychain");
-                hex_key
-            }
-            Err(_) => {
-                info!("Generating new master key and storing in keychain");
-                let key: [u8; 32] = rand::random();
-                let hex_key = hex::encode(key);
-                entry.set_password(&hex_key)?;
-                hex_key
-            }
-        };
+        let key_hex = Self::get_or_create_master_key()?;
 
         // Initialize SQLCipher transparent encryption
         conn.execute_batch(&format!("PRAGMA key = \"x'{}'\";", key_hex))?;
@@ -436,6 +405,7 @@ impl Database {
                 received_time TEXT NOT NULL,
                 source_from TEXT,
                 raw_text TEXT NOT NULL,
+                raw_html TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             )",
             [],
@@ -459,6 +429,8 @@ impl Database {
         
         // Silent migration for existing users
         let _ = conn.execute("ALTER TABLE job_queue ADD COLUMN job_type TEXT NOT NULL DEFAULT 'Custom'", []);
+        let _ = conn.execute("ALTER TABLE job_queue ADD COLUMN output_log TEXT", []);
+        let _ = conn.execute("ALTER TABLE submission_receipts ADD COLUMN raw_html TEXT", []);
 
         Ok(Self { conn })
     }
@@ -470,6 +442,107 @@ impl Database {
                 sql_err.code == ErrorCode::NotADatabase
             }
             _ => false,
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    fn get_or_create_master_key() -> Result<String, DbError> {
+        use std::process::Command;
+        use tracing::{info, warn};
+
+        // Try to get from keychain
+        let output = Command::new("security")
+            .args(["find-generic-password", "-s", "com.ebir.rust", "-a", "sqlcipher_master_key", "-w"])
+            .output()?;
+
+        if output.status.success() {
+            let mut key = String::from_utf8_lossy(&output.stdout).to_string();
+            key = key.trim().to_string();
+            if !key.is_empty() {
+                info!("Loaded existing master key from macOS keychain (via CLI)");
+                return Ok(key);
+            }
+        }
+
+        info!("Generating new master key and storing in macOS keychain (via CLI)");
+        let key: [u8; 32] = rand::random();
+        let hex_key = hex::encode(key);
+
+        // Save with -A to allow all apps so both bir and bir-daemon can access without prompting
+        let add_output = Command::new("security")
+            .args([
+                "add-generic-password",
+                "-a", "sqlcipher_master_key",
+                "-s", "com.ebir.rust",
+                "-w", &hex_key,
+                "-A"
+            ])
+            .output()?;
+
+        if !add_output.status.success() {
+            warn!("Failed to add generic password to macOS keychain. Attempting to delete existing and retry.");
+            // If it failed, it might be because a restricted item already exists. Try deleting it first.
+            let _ = Command::new("security")
+                .args(["delete-generic-password", "-a", "sqlcipher_master_key", "-s", "com.ebir.rust"])
+                .output();
+
+            let retry_output = Command::new("security")
+                .args([
+                    "add-generic-password",
+                    "-a", "sqlcipher_master_key",
+                    "-s", "com.ebir.rust",
+                    "-w", &hex_key,
+                    "-A"
+                ])
+                .output()?;
+            
+            if !retry_output.status.success() {
+                let err_msg = String::from_utf8_lossy(&retry_output.stderr);
+                return Err(DbError::KeychainCli(format!("Failed to save key to keychain: {}", err_msg)));
+            }
+        }
+
+        Ok(hex_key)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn get_or_create_master_key() -> Result<String, DbError> {
+        use keyring::Entry;
+        use tracing::{info, warn};
+
+        let entry = Entry::new("com.ebir.rust", "sqlcipher_master_key")?;
+
+        // Verify we have a real credential store, not the in-memory mock
+        #[cfg(debug_assertions)]
+        {
+            let test_entry = Entry::new("com.ebir.rust", "__keyring_test__")?;
+            let _ = test_entry.set_password("test");
+            match test_entry.get_password() {
+                Ok(v) if v == "test" => {
+                    let _ = test_entry.delete_credential();
+                    info!("Keyring backend: native credential store confirmed");
+                }
+                _ => {
+                    warn!(
+                        "Keyring backend appears to be a mock store! \
+                         Encryption keys will NOT persist across restarts."
+                    );
+                }
+            }
+        }
+
+        match entry.get_password() {
+            Ok(hex_key) => {
+                info!("Loaded existing master key from keychain");
+                Ok(hex_key)
+            }
+            Err(_) => {
+                info!("Generating new master key and storing in keychain");
+                let key: [u8; 32] = rand::random();
+                let hex_key = hex::encode(key);
+                entry.set_password(&hex_key)?;
+                Ok(hex_key)
+            }
         }
     }
 
@@ -624,13 +697,13 @@ impl Database {
     pub fn save_job(&self, mut job: Job) -> Result<Job, DbError> {
         if let Some(id) = job.id {
             self.conn.execute(
-                "UPDATE job_queue SET name = ?1, job_type = ?2, cron_expr = ?3, command = ?4, status = ?5, retries = ?6, last_run_at = ?7, next_run_at = ?8 WHERE id = ?9",
-                params![job.name, job.job_type, job.cron_expr, job.command, job.status, job.retries, job.last_run_at, job.next_run_at, id],
+                "UPDATE job_queue SET name = ?1, job_type = ?2, cron_expr = ?3, command = ?4, status = ?5, retries = ?6, last_run_at = ?7, next_run_at = ?8, output_log = ?9 WHERE id = ?10",
+                params![job.name, job.job_type, job.cron_expr, job.command, job.status, job.retries, job.last_run_at, job.next_run_at, job.output_log, id],
             )?;
         } else {
             self.conn.execute(
-                "INSERT INTO job_queue (name, job_type, cron_expr, command, status, retries, last_run_at, next_run_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                params![job.name, job.job_type, job.cron_expr, job.command, job.status, job.retries, job.last_run_at, job.next_run_at],
+                "INSERT INTO job_queue (name, job_type, cron_expr, command, status, retries, last_run_at, next_run_at, output_log) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![job.name, job.job_type, job.cron_expr, job.command, job.status, job.retries, job.last_run_at, job.next_run_at, job.output_log],
             )?;
             job.id = Some(self.conn.last_insert_rowid());
             
@@ -646,7 +719,7 @@ impl Database {
     }
 
     pub fn list_jobs(&self) -> Result<Vec<Job>, DbError> {
-        let mut stmt = self.conn.prepare("SELECT id, name, job_type, cron_expr, command, status, retries, last_run_at, next_run_at, created_at FROM job_queue ORDER BY created_at DESC")?;
+        let mut stmt = self.conn.prepare("SELECT id, name, job_type, cron_expr, command, status, retries, last_run_at, next_run_at, created_at, output_log FROM job_queue ORDER BY created_at DESC")?;
         let rows = stmt.query_map([], |row| {
             Ok(Job {
                 id: row.get(0)?,
@@ -659,6 +732,7 @@ impl Database {
                 last_run_at: row.get(7)?,
                 next_run_at: row.get(8)?,
                 created_at: row.get(9)?,
+                output_log: row.get(10).unwrap_or(None),
             })
         })?;
         let mut jobs = Vec::new();
@@ -956,14 +1030,24 @@ impl Database {
     pub fn save_submission_receipt(
         &self,
         receipt: &BirReceiptConfirmation,
-    ) -> Result<SubmissionReceipt, DbError> {
+    ) -> Result<(SubmissionReceipt, bool), DbError> {
         let (tin, form_type, period) = split_bir_filename(&receipt.filename)
             .unwrap_or_else(|| ("".to_string(), "".to_string(), "".to_string()));
 
+        let received_date_str = receipt.date_received.to_string();
+        let received_time_str = receipt.time_received.format("%H:%M:%S").to_string();
+
+        if let Some(existing) = self.get_submission_receipt_by_filename(&receipt.filename)? {
+            if existing.received_date == received_date_str && existing.received_time == received_time_str {
+                // It's the exact same receipt we already processed. Return false for is_new.
+                return Ok((existing, false));
+            }
+        }
+
         self.conn.execute(
             "INSERT INTO submission_receipts
-                (filename, tin, form_type, period, received_date, received_time, source_from, raw_text)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                (filename, tin, form_type, period, received_date, received_time, source_from, raw_text, raw_html)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
              ON CONFLICT(filename) DO UPDATE SET
                 tin = excluded.tin,
                 form_type = excluded.form_type,
@@ -971,7 +1055,8 @@ impl Database {
                 received_date = excluded.received_date,
                 received_time = excluded.received_time,
                 source_from = excluded.source_from,
-                raw_text = excluded.raw_text",
+                raw_text = excluded.raw_text,
+                raw_html = excluded.raw_html",
             params![
                 receipt.filename,
                 tin,
@@ -981,14 +1066,43 @@ impl Database {
                 receipt.time_received.format("%H:%M:%S").to_string(),
                 receipt.source_from,
                 receipt.raw_text,
+                receipt.raw_html,
             ],
         )?;
 
         let saved = self
             .get_submission_receipt_by_filename(&receipt.filename)?
             .expect("receipt should exist after save");
-        self.confirm_2551q_from_receipt(&saved)?;
-        Ok(saved)
+        Ok((saved, true))
+    }
+
+    pub fn get_submission_receipt_by_id(
+        &self,
+        id: i64,
+    ) -> Result<Option<SubmissionReceipt>, DbError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, filename, tin, form_type, period, received_date, received_time,
+                    source_from, raw_text, raw_html, created_at
+             FROM submission_receipts WHERE id = ?1",
+        )?;
+        let mut rows = stmt.query(params![id])?;
+        if let Some(row) = rows.next()? {
+            Ok(Some(SubmissionReceipt {
+                id: row.get(0)?,
+                filename: row.get(1)?,
+                tin: row.get(2)?,
+                form_type: row.get(3)?,
+                period: row.get(4)?,
+                received_date: row.get(5)?,
+                received_time: row.get(6)?,
+                source_from: row.get(7)?,
+                raw_text: row.get(8)?,
+                raw_html: row.get(9)?,
+                created_at: row.get(10)?,
+            }))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn get_submission_receipt_by_filename(
@@ -997,7 +1111,7 @@ impl Database {
     ) -> Result<Option<SubmissionReceipt>, DbError> {
         let mut stmt = self.conn.prepare(
             "SELECT id, filename, tin, form_type, period, received_date, received_time,
-                    source_from, raw_text, created_at
+                    source_from, raw_text, raw_html, created_at
              FROM submission_receipts WHERE filename = ?1",
         )?;
         let mut rows = stmt.query(params![filename])?;
@@ -1012,7 +1126,8 @@ impl Database {
                 received_time: row.get(6)?,
                 source_from: row.get(7)?,
                 raw_text: row.get(8)?,
-                created_at: row.get(9)?,
+                raw_html: row.get(9)?,
+                created_at: row.get(10)?,
             }))
         } else {
             Ok(None)
@@ -1032,6 +1147,23 @@ impl Database {
             Some(draft) => draft,
             None => return Ok(()),
         };
+
+        if let Some(submitted_at) = &draft.submitted_at {
+            if let Ok(submitted_dt) = chrono::DateTime::parse_from_rfc3339(submitted_at) {
+                let date_str = format!("{}T{}", receipt.received_date, receipt.received_time);
+                if let Ok(receipt_naive) = chrono::NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%dT%H:%M:%S") {
+                    if let Some(offset) = chrono::FixedOffset::east_opt(8 * 3600) {
+                        use chrono::TimeZone;
+                        if let chrono::LocalResult::Single(receipt_dt) = offset.from_local_datetime(&receipt_naive) {
+                            if receipt_dt + chrono::Duration::minutes(5) < submitted_dt {
+                                tracing::info!("Ignoring old receipt {} for draft submitted at {}", receipt.filename, submitted_dt);
+                                return Ok(());
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         draft.status = FilingStatus::Confirmed;
         draft.confirmed_at = Some(format!(
@@ -1221,7 +1353,7 @@ impl Database {
     }
 }
 
-fn parse_2551q_period(period: &str) -> Option<(u16, u8)> {
+pub fn parse_2551q_period(period: &str) -> Option<(u16, u8)> {
     let q_pos = period.rfind('Q')?;
     let quarter = period[q_pos + 1..].parse::<u8>().ok()?;
     let before_q = &period[..q_pos];

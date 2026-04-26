@@ -13,7 +13,7 @@ use bir_core::db::Database;
 use bir_core::naming::Tin;
 use bir_core::profile::{TaxpayerProfile, TaxpayerType};
 use bir_core::reference::get_all_rdos;
-use bir_core::validation::{validate_profile, ValidationError};
+use bir_core::validation::{ValidationError, validate_profile};
 
 pub enum ProfileEvent {
     Saved,
@@ -43,6 +43,7 @@ pub struct ProfileManagerView {
     // Email Tracking Settings
     email_tracking_enabled: bool,
     background_cron_enabled: bool,
+    error_telemetry_enabled: bool,
     email_auth_method: EmailAuthMethod,
     imap_email_input: Entity<InputState>,
     imap_password_input: Entity<InputState>,
@@ -138,6 +139,7 @@ impl ProfileManagerView {
             rdo_options,
             email_tracking_enabled: false,
             background_cron_enabled: true,
+            error_telemetry_enabled: false,
             email_auth_method: EmailAuthMethod::AppPassword,
             imap_email_input,
             imap_password_input,
@@ -162,6 +164,7 @@ impl ProfileManagerView {
         self.save_message = None;
         self.email_tracking_enabled = false;
         self.background_cron_enabled = true;
+        self.error_telemetry_enabled = false;
         self.email_auth_method = EmailAuthMethod::AppPassword;
         self.stored_test_notification_enabled = false;
         self.connection_test_message = None;
@@ -212,6 +215,7 @@ impl ProfileManagerView {
         self.is_vat_registered = profile.is_vat_registered;
         self.email_tracking_enabled = profile.email_tracking_enabled;
         self.background_cron_enabled = profile.background_cron_enabled;
+        self.error_telemetry_enabled = profile.error_telemetry_enabled;
         self.email_auth_method = profile.email_auth_method.clone();
 
         self.imap_email_input.update(cx, |input, cx| {
@@ -371,6 +375,7 @@ impl ProfileManagerView {
             business_start_date,
             email_tracking_enabled: self.email_tracking_enabled,
             background_cron_enabled: self.background_cron_enabled,
+            error_telemetry_enabled: self.error_telemetry_enabled,
             email_auth_method: self.email_auth_method.clone(),
             imap_email: Some(self.imap_email_input.read(cx).value().trim().to_string()),
             imap_host: Some(self.imap_host_input.read(cx).value().trim().to_string()),
@@ -451,10 +456,11 @@ impl ProfileManagerView {
                 .spawn(async move {
                     if let Ok(db) = db_arc.lock() {
                         let res = db.save_profile(profile).map_err(|e| e.to_string());
-                        
+
                         // Check if ANY profile has background cron enabled to toggle OS service
                         if let Ok(profiles) = db.list_profiles() {
-                            let should_run_daemon = profiles.iter().any(|p| p.background_cron_enabled);
+                            let should_run_daemon =
+                                profiles.iter().any(|p| p.background_cron_enabled);
                             if should_run_daemon {
                                 bir_core::daemon_installer::install();
                             } else {

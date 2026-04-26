@@ -33,7 +33,7 @@ pub trait ImapAuthenticator {
 /// Automatically selects the correct auth strategy based on `email_auth_method`.
 pub fn fetch_and_process_emails(
     profile: &TaxpayerProfile,
-    db: &Database,
+    db: std::sync::Arc<std::sync::Mutex<Database>>,
 ) -> Result<Vec<SubmissionReceipt>, anyhow::Error> {
     if !profile.is_email_tracking_active() {
         return Ok(vec![]);
@@ -107,7 +107,7 @@ pub fn test_connection(profile: &TaxpayerProfile) -> Result<Option<String>, anyh
 fn fetch_with_auth(
     auth: &dyn ImapAuthenticator,
     host: &str,
-    db: &Database,
+    db: std::sync::Arc<std::sync::Mutex<Database>>,
     profile: &TaxpayerProfile,
 ) -> Result<Vec<SubmissionReceipt>, anyhow::Error> {
     let tls = native_tls::TlsConnector::builder().build()?;
@@ -118,7 +118,9 @@ fn fetch_with_auth(
     if let Some(token) = new_access_token {
         let mut updated_profile = profile.clone();
         updated_profile.oauth_access_token = Some(token);
-        let _ = db.save_profile(updated_profile);
+        if let Ok(db_guard) = db.lock() {
+            let _ = db_guard.save_profile(updated_profile);
+        }
     }
 
     session.select("INBOX")?;
@@ -146,18 +148,49 @@ fn fetch_with_auth(
         let messages = session.fetch(seq.to_string(), "RFC822")?;
         for msg in messages.iter() {
             if let Some(body) = msg.body() {
-                if let Ok(parsed_mail) = mailparse::parse_mail(body) {
-                    let text_content = extract_text_body(&parsed_mail);
+                if let Some(parsed_mail) = mail_parser::MessageParser::default().parse(body) {
+                    let mut text_content = parsed_mail.body_text(0).map(|s| s.into_owned()).unwrap_or_default();
+                    let html_content = parsed_mail.body_html(0).map(|s| s.into_owned());
+                    
+                    // Sanitize HTML
+                    let safe_html = html_content.map(|html| ammonia::Builder::default().clean(&html).to_string());
+                    
+                    // If text_content is empty but we have HTML, use html2text to render it
+                    if text_content.is_empty() {
+                        if let Some(html) = &safe_html {
+                            text_content = html2text::from_read(html.as_bytes(), 80).unwrap_or_default();
+                        }
+                    }
 
-                    if let Ok(receipt) = parse_bir_receipt_email(&text_content) {
-                        if let Ok(submission_receipt) = db.save_submission_receipt(&receipt) {
-                            // Confirm the draft if we recognise the form type
-                            if submission_receipt.form_type == "2551Qv2018"
-                                || submission_receipt.form_type == "2551Q"
-                            {
-                                let _ = db.confirm_2551q_from_receipt(&submission_receipt);
+                    match parse_bir_receipt_email(&text_content, safe_html) {
+                        Ok(receipt) => {
+                            if let Ok(db_guard) = db.lock() {
+                                if let Ok((submission_receipt, is_new)) = db_guard.save_submission_receipt(&receipt) {
+                                    // Confirm the draft if we recognise the form type and it's a new receipt
+                                    if is_new && (submission_receipt.form_type == "2551Qv2018"
+                                        || submission_receipt.form_type == "2551Q")
+                                    {
+                                        let _ = db_guard.confirm_2551q_from_receipt(&submission_receipt);
+                                        
+                                        // Send OS notification
+                                        if let Some((_, _, period)) = crate::receipt::split_bir_filename(&submission_receipt.filename) {
+                                            if let Some((year, quarter)) = crate::db::parse_2551q_period(&period) {
+                                                let _ = notify_rust::Notification::new()
+                                                    .summary("BIR Confirmation Received")
+                                                    .body(&format!("Form: 2551Q\nYear: {}\nQuarter: {}", year, quarter))
+                                                    .show();
+                                            }
+                                        }
+                                    }
+                                    processed.push(submission_receipt);
+                                }
                             }
-                            processed.push(submission_receipt);
+                        }
+                        Err(e) => {
+                            // If it's truly an email from BIR but we failed to parse it, log it.
+                            if text_content.contains("This confirms receipt of your submission") {
+                                tracing::error!("Failed to parse BIR receipt email. Error: {:?}\nRaw Body snippet: {:.200}", e, text_content);
+                            }
                         }
                     }
                 }
@@ -169,29 +202,7 @@ fn fetch_with_auth(
     Ok(processed)
 }
 
-/// Recursively extract text/plain content from a MIME message.
-fn extract_text_body(mail: &mailparse::ParsedMail) -> String {
-    let mut out = String::new();
 
-    if mail.ctype.mimetype == "text/plain" {
-        if let Ok(body) = mail.get_body() {
-            out.push_str(&body);
-        }
-    }
-
-    for sub in &mail.subparts {
-        out.push_str(&extract_text_body(sub));
-    }
-
-    // Fallback: if no text/plain part found, try the root body
-    if out.is_empty() {
-        if let Ok(body) = mail.get_body() {
-            out = body;
-        }
-    }
-
-    out
-}
 
 /// Fetch emails for a specific email address, across all profiles.
 /// Returns (poll_success, still_pending_forms).
@@ -236,7 +247,7 @@ pub fn fetch_and_process_emails_for_address(
             Ok(g) => g,
             Err(_) => return (false, true),
         };
-        match fetch_and_process_emails(&profile, &db_guard) {
+        match fetch_and_process_emails(&profile, db.clone()) {
             Ok(_) => {
                 let mut remaining_pending = false;
                 let current_year = chrono::Utc::now().naive_utc().date().year() as u16;

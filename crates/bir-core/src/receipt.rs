@@ -10,6 +10,7 @@ pub struct BirReceiptConfirmation {
     pub time_received: NaiveTime,
     pub source_from: Option<String>,
     pub raw_text: String,
+    pub raw_html: Option<String>,
 }
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
@@ -22,7 +23,31 @@ pub enum ReceiptParseError {
     MissingTime,
 }
 
-pub fn parse_bir_receipt_email(raw: &str) -> Result<BirReceiptConfirmation, ReceiptParseError> {
+pub fn parse_bir_receipt_email(raw_input: &str, raw_html: Option<String>) -> Result<BirReceiptConfirmation, ReceiptParseError> {
+    // Strip HTML tags in case the email was parsed as HTML rather than plain text
+    let mut raw = String::with_capacity(raw_input.len());
+    let mut in_tag = false;
+    let mut current_tag = String::new();
+    
+    for c in raw_input.chars() {
+        if c == '<' {
+            in_tag = true;
+            current_tag.clear();
+        } else if c == '>' {
+            in_tag = false;
+            let tag_lower = current_tag.to_lowercase();
+            if tag_lower == "br" || tag_lower == "br/" || tag_lower == "br /" || tag_lower == "p" || tag_lower == "/p" || tag_lower == "div" || tag_lower == "/div" {
+                raw.push('\n');
+            }
+        } else if in_tag {
+            current_tag.push(c);
+        } else {
+            raw.push(c);
+        }
+    }
+    let raw = raw.replace("&nbsp;", " ");
+    let raw = raw.as_str();
+
     static FILENAME_RE: OnceLock<Regex> = OnceLock::new();
     static DATE_RE: OnceLock<Regex> = OnceLock::new();
     static TIME_RE: OnceLock<Regex> = OnceLock::new();
@@ -79,6 +104,7 @@ pub fn parse_bir_receipt_email(raw: &str) -> Result<BirReceiptConfirmation, Rece
         time_received,
         source_from,
         raw_text: raw.to_string(),
+        raw_html,
     })
 }
 
@@ -117,5 +143,25 @@ Time received by BIR: 05:18 AM
                 "122026Q1".to_string()
             ))
         );
+    }
+
+    #[test]
+    fn test_parse_exact_email() {
+        let raw = r#"
+ebirforms-noreply@bir.gov.ph
+1:33 PM (0 minutes ago)
+to me
+
+This confirms receipt of your submission with the following details subject to validation by BIR:
+
+File name: 261708015000-2551Qv2018-122026Q1.xml
+Date received by BIR: 26 April 2026
+Time received by BIR: 01:33 PM
+Penalties may be imposed for any violation of the provisions of the NIRC and issuances thereof.
+"#;
+        let receipt = parse_bir_receipt_email(raw).unwrap();
+        assert_eq!(receipt.filename, "261708015000-2551Qv2018-122026Q1.xml");
+        assert_eq!(receipt.date_received, chrono::NaiveDate::from_ymd_opt(2026, 4, 26).unwrap());
+        assert_eq!(receipt.time_received, chrono::NaiveTime::from_hms_opt(13, 33, 0).unwrap());
     }
 }

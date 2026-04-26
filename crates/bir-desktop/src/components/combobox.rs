@@ -164,16 +164,11 @@ impl Render for ComboboxState {
             .when(is_open, |this| {
                 this.child(
                     deferred(
-                        div()
-                            .absolute()
-                            .top(px(36.))
-                            .left_0()
-                            .w_full()
-                            .child(
-                                div()
-                                    .occlude()
-                                    .mt_1p5()
-                                    .max_h(px(300.))
+                        div().absolute().top(px(36.)).left_0().w_full().child(
+                            div()
+                                .occlude()
+                                .mt_1p5()
+                                .max_h(px(300.))
                                 .overflow_hidden()
                                 .w_full()
                                 .border_1()

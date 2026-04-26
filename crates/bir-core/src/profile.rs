@@ -69,6 +69,10 @@ pub struct TaxpayerProfile {
     #[serde(default)]
     pub test_notification_enabled: bool,
 
+    /// Toggle to enable error telemetry to send debug logs to support.
+    #[serde(default)]
+    pub error_telemetry_enabled: bool,
+
     /// Securely stored App Password (encrypted inside DB)
     #[serde(default)]
     pub imap_app_password: Option<String>,

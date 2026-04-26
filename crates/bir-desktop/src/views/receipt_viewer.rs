@@ -1,6 +1,6 @@
+use bir_core::forms::form_2551q::Form2551QDraft;
 use gpui::*;
 use gpui_component::*;
-use bir_core::forms::form_2551q::Form2551QDraft;
 use std::path::PathBuf;
 
 pub enum ReceiptViewerEvent {
@@ -78,7 +78,9 @@ impl Render for ReceiptViewerView {
             })
             .unwrap_or_else(|| div().into_any_element());
 
-        let is_pdf = self.path.extension().map_or(false, |ext| ext.to_string_lossy().eq_ignore_ascii_case("pdf"));
+        let is_pdf = self.path.extension().map_or(false, |ext| {
+            ext.to_string_lossy().eq_ignore_ascii_case("pdf")
+        });
 
         let content = if is_pdf {
             div()
@@ -88,23 +90,19 @@ impl Render for ReceiptViewerView {
                 .justify_center()
                 .size_full()
                 .gap_4()
-                .child(
-                    div()
-                        .text_2xl()
-                        .child("📄")
-                )
+                .child(div().text_2xl().child("📄"))
                 .child(
                     div()
                         .text_lg()
                         .text_color(cx.theme().foreground)
-                        .child("PDF Receipt")
+                        .child("PDF Receipt"),
                 )
                 .child(
                     gpui_component::button::Button::new("open_sys_btn")
                         .label("Open in System Viewer")
                         .on_click(cx.listener(|this, _, _, _| {
                             this.open_in_system();
-                        }))
+                        })),
                 )
         } else {
             div()
@@ -116,7 +114,7 @@ impl Render for ReceiptViewerView {
                 .child(
                     img(self.path.clone())
                         .size_full()
-                        .object_fit(ObjectFit::Contain)
+                        .object_fit(ObjectFit::Contain),
                 )
         };
 
@@ -124,7 +122,7 @@ impl Render for ReceiptViewerView {
             .size_full()
             .flex()
             .flex_col()
-            .bg(gpui::rgb(0x0b0b0b))
+            .bg(cx.theme().muted)
             .child(
                 div()
                     .flex()

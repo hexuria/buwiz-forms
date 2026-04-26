@@ -24,7 +24,11 @@ fn main() {
     let (db, _recovered) = match Database::open_or_recreate(&db_path) {
         Ok(db) => db,
         Err(e) => {
-            error!("Daemon failed to open database at {}: {}", db_path.display(), e);
+            error!(
+                "Daemon failed to open database at {}: {}",
+                db_path.display(),
+                e
+            );
             std::process::exit(1);
         }
     };
