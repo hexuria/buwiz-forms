@@ -20,6 +20,8 @@ use bir_core::validation::{validate_email, validate_ph_phone, validate_zip};
 use bir_print::render_2551q_print;
 
 use super::pdf_viewer::PdfViewerView;
+use super::email_confirmation_view::EmailConfirmationView;
+use super::receipt_viewer::{ReceiptViewerView, ReceiptViewerEvent};
 
 pub enum Form2551QEvent {
     BackToDashboard,
@@ -74,12 +76,12 @@ impl Form2551QView {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Self {
-        let cred_str = if draft.creditable_tax_withheld > 0.0 {
+        let cred_str = if draft.creditable_tax_withheld >= 0.0 {
             format!("{:.2}", draft.creditable_tax_withheld)
         } else {
             String::new()
         };
-        let prev_str = if draft.tax_paid_previous > 0.0 {
+        let prev_str = if draft.tax_paid_previous >= 0.0 {
             format!("{:.2}", draft.tax_paid_previous)
         } else {
             String::new()
@@ -111,7 +113,7 @@ impl Form2551QView {
         let mut subscriptions = Vec::new();
 
         for row in draft.schedule_1.iter() {
-            let amt_str = if row.taxable_amount > 0.0 {
+            let amt_str = if row.taxable_amount >= 0.0 {
                 format!("{:.2}", row.taxable_amount)
             } else {
                 String::new()
@@ -829,67 +831,130 @@ impl Form2551QView {
             return;
         };
 
-        // Build confirmation PDF
-        let dir = std::env::temp_dir().join("taxman-ebir-pdf");
-        let filename = format!(
-            "confirmation-{}.pdf",
-            self.draft.default_submission_filename().trim_end_matches(".xml")
-        );
-        let path = dir.join(&filename);
+        let draft = self.draft.clone();
+        let options = WindowOptions {
+            window_bounds: Some(WindowBounds::centered(size(px(1000.), px(800.)), cx)),
+            titlebar: Some(TitlebarOptions {
+                title: Some("Email Confirmation".into()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
 
-        let lines = vec![
-            "BIR e-Filing Confirmation Receipt".to_string(),
-            "=".repeat(40),
-            String::new(),
-            format!("Filename: {}", receipt.filename),
-            format!("TIN: {}", receipt.tin),
-            format!("Form Type: {}", receipt.form_type),
-            format!("Period: {}", receipt.period),
-            format!("Received Date: {}", receipt.received_date),
-            format!("Received Time: {}", receipt.received_time),
-            format!("Source: {}", receipt.source_from.as_deref().unwrap_or("BIR")),
-            String::new(),
-            "=".repeat(40),
-            "Form Summary".to_string(),
-            format!("Taxpayer: {}", self.draft.taxpayer_name),
-            format!("TIN: {}", self.draft.tin),
-            format!("Period: Q{} {}", self.draft.quarter, self.draft.taxable_year),
-            format!("Total Tax Due: {:.2}", self.draft.total_tax_due),
-            format!("Creditable Tax Withheld: {:.2}", self.draft.creditable_tax_withheld),
-            format!("Tax Still Payable: {:.2}", self.draft.tax_payable),
-            format!("Penalties: {:.2}", self.draft.total_penalties),
-            format!("Total Amount Payable: {:.2}", self.draft.total_amount_payable),
-            format!("Status: {:?}", self.draft.status),
-        ];
-
-        let pdf_bytes = bir_print::build_simple_confirmation_pdf(&lines);
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
+        if let Err(err) = cx.open_window(options, move |_window, cx| {
+            cx.new(|_cx| EmailConfirmationView::new(receipt, draft))
+        }) {
+            use gpui_component::WindowExt;
+            window.push_notification(
+                gpui_component::notification::Notification::new()
+                    .message(format!("Email Confirmation viewer failed to open: {err}"))
+                    .with_type(gpui_component::notification::NotificationType::Error)
+                    .autohide(true),
+                cx,
+            );
+            return;
         }
-        match std::fs::write(&path, pdf_bytes) {
-            Ok(()) => {
-                let _ = std::process::Command::new("open").arg(&path).spawn();
+
+        use gpui_component::WindowExt;
+        window.push_notification(
+            gpui_component::notification::Notification::new()
+                .message("Email Confirmation viewer opened".to_string())
+                .with_type(gpui_component::notification::NotificationType::Success)
+                .autohide(true),
+            cx,
+        );
+        cx.notify();
+    }
+
+    fn upload_receipt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(file) = rfd::FileDialog::new()
+            .add_filter("Images/PDF", &["png", "jpg", "jpeg", "pdf"])
+            .pick_file()
+        else {
+            return;
+        };
+
+        let data_dir = bir_core::db::default_database_path()
+            .parent()
+            .unwrap()
+            .join("receipts");
+        let _ = std::fs::create_dir_all(&data_dir);
+        let ext = file.extension().and_then(|s| s.to_str()).unwrap_or("bin");
+        let new_filename = format!(
+            "receipt-{}-{}-{}.{}",
+            self.draft.tin, self.draft.taxable_year, self.draft.quarter, ext
+        );
+        let new_path = data_dir.join(new_filename);
+
+        match std::fs::copy(&file, &new_path) {
+            Ok(_) => {
+                self.draft.payment_receipt_path = Some(new_path.to_string_lossy().to_string());
+                if let Ok(db) = self.db.lock() {
+                    let _ = db.save_2551q_draft(&self.draft);
+                }
+                
                 use gpui_component::WindowExt;
                 window.push_notification(
                     gpui_component::notification::Notification::new()
-                        .message("Confirmation receipt PDF opened.".to_string())
+                        .message("Receipt uploaded successfully.".to_string())
                         .with_type(gpui_component::notification::NotificationType::Success)
                         .autohide(true),
                     cx,
                 );
+                cx.notify();
             }
-            Err(err) => {
+            Err(e) => {
                 use gpui_component::WindowExt;
                 window.push_notification(
                     gpui_component::notification::Notification::new()
-                        .message(format!("Failed to generate confirmation PDF: {err}"))
+                        .message(format!("Failed to copy receipt: {}", e))
                         .with_type(gpui_component::notification::NotificationType::Error)
                         .autohide(true),
                     cx,
                 );
             }
         }
-        cx.notify();
+    }
+
+    fn view_receipt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(path) = &self.draft.payment_receipt_path {
+            let draft = self.draft.clone();
+            let path_clone = path.clone();
+            
+            let options = WindowOptions {
+                window_bounds: Some(WindowBounds::centered(size(px(800.), px(800.)), cx)),
+                titlebar: Some(TitlebarOptions {
+                    title: Some("Payment Receipt Viewer".into()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+
+            let view = cx.new(|_cx| ReceiptViewerView::new(draft, path_clone));
+            
+            cx.subscribe(&view, |this: &mut Self, _, event: &ReceiptViewerEvent, cx| {
+                match event {
+                    ReceiptViewerEvent::ReUploaded(new_path) => {
+                        this.draft.payment_receipt_path = Some(new_path.clone());
+                        if let Ok(db) = this.db.lock() {
+                            let _ = db.save_2551q_draft(&this.draft);
+                        }
+                        cx.notify();
+                    }
+                }
+            }).detach();
+
+            if let Err(err) = cx.open_window(options, move |_window, _cx| view.clone()) {
+                use gpui_component::WindowExt;
+                window.push_notification(
+                    gpui_component::notification::Notification::new()
+                        .message(format!("Failed to open receipt viewer: {}", err))
+                        .with_type(gpui_component::notification::NotificationType::Error)
+                        .autohide(true),
+                    cx,
+                );
+            }
+        }
     }
 
     fn get_error(&self, field_id: &str) -> Option<&String> {
@@ -1802,12 +1867,31 @@ impl Render for Form2551QView {
                         if matches!(self.draft.status, FilingStatus::Confirmed | FilingStatus::Paid) {
                             toolbar = toolbar.child(
                                 gpui_component::button::Button::new("print_confirmation_btn")
-                                    .label("Print Confirmation")
+                                    .label("View Confirmation Email")
                                     .outline()
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.print_confirmation(window, cx);
                                     })),
                             );
+
+                            if self.draft.payment_receipt_path.is_some() {
+                                toolbar = toolbar.child(
+                                    gpui_component::button::Button::new("view_receipt_btn")
+                                        .label("View Receipt")
+                                        .outline()
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.view_receipt(window, cx);
+                                        })),
+                                );
+                            } else {
+                                toolbar = toolbar.child(
+                                    gpui_component::button::Button::new("upload_receipt_btn")
+                                        .label("Upload Receipt")
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.upload_receipt(window, cx);
+                                        })),
+                                );
+                            }
                         }
 
                         toolbar = toolbar.child(

@@ -160,7 +160,7 @@ impl DashboardView {
 }
 
 impl Render for DashboardView {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let Some(profile) = &self.active_profile else {
             return div()
                 .flex()

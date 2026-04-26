@@ -1,5 +1,4 @@
 use crate::db::Database;
-use crate::email::fetch_and_process_emails;
 use crate::forms::form_2551q::FilingStatus;
 use crate::profile::TaxpayerProfile;
 use chrono::{Duration, Utc, Datelike};
@@ -125,7 +124,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                         let email = profile.imap_email.clone().unwrap_or_else(|| profile.email.clone());
                         let job_name = format!("Poll Receipts: {}", email);
                         
-                        let mut jobs = db_guard.list_jobs().unwrap_or_default();
+                        let jobs = db_guard.list_jobs().unwrap_or_default();
                         let mut exists = false;
                         for job in jobs.iter() {
                             if job.name == job_name && job.status != "Archived" && job.status != "Done" {

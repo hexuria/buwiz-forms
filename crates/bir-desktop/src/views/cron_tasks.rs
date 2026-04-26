@@ -4,7 +4,7 @@ use gpui::prelude::FluentBuilder;
 
 use gpui_component::*;
 use gpui_component::input::{Input, InputState};
-use crate::components::combobox::{Combobox, ComboboxState};
+use crate::components::combobox::{Combobox, ComboboxState, ComboboxEvent};
 use std::sync::{Arc, Mutex};
 use chrono::Utc;
 
@@ -13,14 +13,6 @@ pub enum CronTasksEvent {
 }
 
 impl EventEmitter<CronTasksEvent> for CronTasksView {}
-
-#[derive(Clone, PartialEq)]
-pub enum JobTab {
-    All,
-    Queued,
-    Failed,
-    Archived,
-}
 
 #[derive(Clone)]
 pub struct JobViewModel {
@@ -40,15 +32,13 @@ pub struct JobViewModel {
 pub struct CronTasksView {
     db: Arc<Mutex<Database>>,
     background_cron_enabled: bool,
-    test_notification_enabled: bool,
     has_profile: bool,
     jobs: Vec<JobViewModel>,
     new_job_name: Entity<InputState>,
     cron_amount: Entity<InputState>,
     cron_period: Entity<ComboboxState>,
     new_job_command: Entity<InputState>,
-    cleanup_days: Entity<InputState>,
-    active_tab: JobTab,
+    filter_combobox: Entity<ComboboxState>,
     test_output: Option<String>,
     _subscriptions: Vec<Subscription>,
 }
@@ -64,25 +54,28 @@ impl CronTasksView {
         
         let new_job_command = cx.new(|cx| InputState::new(window, cx).placeholder("Cmd (e.g. osascript -e ...)"));
         
-        let cleanup_days = cx.new(|cx| InputState::new(window, cx).placeholder("Days"));
-        cleanup_days.update(cx, |s, cx| s.set_value("30".to_string(), window, cx));
+        let filter_combobox = cx.new(|cx| ComboboxState::new(vec!["All Jobs".into(), "Queued".into(), "Failed".into(), "Archived".into()], window, cx));
+        filter_combobox.update(cx, |s, cx| s.set_selected_value("All Jobs", window, cx));
 
         let mut view = Self {
             db,
             background_cron_enabled: false,
-            test_notification_enabled: false,
             has_profile: false,
             jobs: Vec::new(),
             new_job_name,
             cron_amount,
             cron_period,
             new_job_command,
-            cleanup_days,
-            active_tab: JobTab::All,
+            filter_combobox: filter_combobox.clone(),
             test_output: None,
             _subscriptions: Vec::new(),
         };
         
+        let sub = cx.subscribe_in(&filter_combobox, window, |_this: &mut Self, _entity, _event: &ComboboxEvent, _window, cx| {
+            cx.notify();
+        });
+        view._subscriptions.push(sub);
+
         view.load_settings(cx);
         view
     }
@@ -94,7 +87,6 @@ impl CronTasksView {
                 if let Some(profile) = profiles.first() {
                     self.has_profile = true;
                     self.background_cron_enabled = profile.background_cron_enabled;
-                    self.test_notification_enabled = profile.test_notification_enabled;
                 } else {
                     self.has_profile = false;
                 }
@@ -148,21 +140,15 @@ impl CronTasksView {
         self.save_to_db(cx);
     }
 
-    fn toggle_test_notification(&mut self, value: bool, cx: &mut Context<'_, Self>) {
-        self.test_notification_enabled = value;
-        self.save_to_db(cx);
-    }
-
     fn save_to_db(&mut self, cx: &mut Context<'_, Self>) {
         if let Ok(db) = self.db.lock() {
             if let Ok(mut profiles) = db.list_profiles() {
                 if let Some(mut profile) = profiles.pop() {
                     profile.background_cron_enabled = self.background_cron_enabled;
-                    profile.test_notification_enabled = self.test_notification_enabled;
                     let _ = db.save_profile(profile);
                 }
 
-                let should_run = self.background_cron_enabled || self.test_notification_enabled;
+                let should_run = self.background_cron_enabled;
                 if should_run {
                     bir_core::daemon_installer::install();
                 } else {
@@ -203,7 +189,7 @@ impl CronTasksView {
         cx.notify();
         
         let cmd = cmd_str.clone();
-        cx.spawn(async move |this, mut cx| {
+        cx.spawn(async move |this, cx| {
             let output = match tokio::process::Command::new("sh").arg("-c").arg(&cmd).output().await {
                 Ok(out) => {
                     let mut res = String::from_utf8_lossy(&out.stdout).to_string();
@@ -328,27 +314,31 @@ impl Render for CronTasksView {
                 .justify_center()
                 .items_center()
                 .h_full()
-                .child("Please create a Taxpayer Profile first.");
+                .child("Please create a Taxpayer Profile first.")
+                .into_any_element();
         }
 
         let bg = cx.theme().background;
         let border = cx.theme().border;
 
+        let selected_filter = self.filter_combobox.read(cx).selected_value(cx);
         let filtered_jobs: Vec<&JobViewModel> = self.jobs.iter().filter(|j| {
-            match self.active_tab {
-                JobTab::All => true,
-                JobTab::Queued => j.status == "Queued",
-                JobTab::Failed => j.status == "Failed",
-                JobTab::Archived => j.status == "Archived",
+            match selected_filter.as_str() {
+                "All Jobs" => true,
+                "Queued" => j.status == "Queued",
+                "Failed" => j.status == "Failed",
+                "Archived" => j.status == "Archived",
+                _ => true,
             }
         }).collect();
 
         div()
+            .id("cron_tasks_scroll")
             .flex()
             .flex_col()
             .p_8()
             .gap_6()
-            .overflow_y_hidden()
+            .overflow_y_scroll()
             .child(
                 div()
                     .flex()
@@ -365,6 +355,7 @@ impl Render for CronTasksView {
                 div()
                     .flex()
                     .flex_col()
+                    .flex_shrink_0()
                     .bg(bg)
                     .border_1()
                     .border_color(border)
@@ -373,9 +364,10 @@ impl Render for CronTasksView {
                     .child(
                         div()
                             .flex()
-                            .justify_between()
-                            .items_center()
+                            .flex_col()
+                            .items_start()
                             .p_6()
+                            .gap_4()
                             .border_b_1()
                             .border_color(border)
                             .child(
@@ -399,63 +391,52 @@ impl Render for CronTasksView {
                                     })),
                             ),
                     )
-                    .child(
-                        div()
-                            .flex()
-                            .justify_between()
-                            .items_center()
-                            .p_6()
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child(div().font_weight(FontWeight::SEMIBOLD).child("Test OS Notification Ping"))
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child("Sends a native 'Hello' notification every minute while active, even if app is closed."),
-                                    ),
-                            )
-                            .child(
-                                gpui_component::switch::Switch::new("test_ping_toggle")
-                                    .checked(self.test_notification_enabled)
-                                    .on_click(cx.listener(|this, v, _, cx| {
-                                        this.toggle_test_notification(*v, cx);
-                                    })),
-                            ),
-                    )
             )
             .child(
                 div()
                     .flex()
                     .flex_col()
+                    .flex_shrink_0()
                     .gap_4()
                     .mt_4()
                     .child(div().text_xl().font_weight(FontWeight::BOLD).child("Custom Job Builder"))
                     .child(
                         div()
                             .flex()
-                            .gap_2()
-                            .items_center()
-                            .child(div().w(px(200.)).child(Input::new(&self.new_job_name)))
-                            .child(div().w(px(100.)).child(Input::new(&self.cron_amount)))
-                            .child(div().w(px(150.)).child(Combobox::new(&self.cron_period)))
-                            .child(div().w(px(250.)).child(Input::new(&self.new_job_command)))
+                            .flex_col()
+                            .gap_4()
                             .child(
-                                gpui_component::button::Button::new("test_cmd_btn")
-                                    .label("Test Cmd")
-                                    .on_click(cx.listener(|this, _ev, window, cx| {
-                                        this.test_command(window, cx);
-                                    }))
+                                div()
+                                    .flex()
+                                    .flex_row()
+                                    .flex_wrap()
+                                    .gap_2()
+                                    .items_center()
+                                    .child(div().flex_1().min_w(px(200.)).child(Input::new(&self.new_job_name)))
+                                    .child(div().flex_1().min_w(px(200.)).child(Input::new(&self.cron_amount)))
+                                    .child(div().flex_1().min_w(px(200.)).child(Combobox::new(&self.cron_period)))
+                                    .child(div().flex_1().min_w(px(200.)).child(Input::new(&self.new_job_command)))
                             )
                             .child(
-                                gpui_component::button::Button::new("add_job_btn")
-                                    .label("Add Job")
-                                    .on_click(cx.listener(|this, _ev, window, cx| {
-                                        this.add_job(window, cx);
-                                    }))
+                                div()
+                                    .flex()
+                                    .flex_row()
+                                    .justify_end()
+                                    .gap_2()
+                                    .child(
+                                        gpui_component::button::Button::new("test_cmd_btn")
+                                            .label("Test Cmd")
+                                            .on_click(cx.listener(|this, _ev, window, cx| {
+                                                this.test_command(window, cx);
+                                            }))
+                                    )
+                                    .child(
+                                        gpui_component::button::Button::new("add_job_btn")
+                                            .label("Add Job")
+                                            .on_click(cx.listener(|this, _ev, window, cx| {
+                                                this.add_job(window, cx);
+                                            }))
+                                    )
                             )
                     )
                     .when_some(self.test_output.clone(), |this, out| {
@@ -474,72 +455,32 @@ impl Render for CronTasksView {
             .child(
                 div()
                     .flex()
+                    .flex_row()
+                    .flex_wrap()
+                    .flex_shrink_0()
                     .justify_between()
                     .items_center()
                     .mt_6()
+                    .gap_4()
                     .child(
                         div()
                             .flex()
+                            .flex_1()
                             .gap_4()
-                            .child(
-                                div()
-                                    .id("tab_all")
-                                    .cursor_pointer()
-                                    .font_weight(if self.active_tab == JobTab::All { FontWeight::BOLD } else { FontWeight::NORMAL })
-                                    .text_color(if self.active_tab == JobTab::All { cx.theme().foreground } else { cx.theme().muted_foreground })
-                                    .child("All Jobs")
-                                    .on_click(cx.listener(|this, _ev, _window, cx| {
-                                        this.active_tab = JobTab::All;
-                                        cx.notify();
-                                    }))
-                            )
-                            .child(
-                                div()
-                                    .id("tab_queued")
-                                    .cursor_pointer()
-                                    .font_weight(if self.active_tab == JobTab::Queued { FontWeight::BOLD } else { FontWeight::NORMAL })
-                                    .text_color(if self.active_tab == JobTab::Queued { cx.theme().foreground } else { cx.theme().muted_foreground })
-                                    .child("Queued")
-                                    .on_click(cx.listener(|this, _ev, _window, cx| {
-                                        this.active_tab = JobTab::Queued;
-                                        cx.notify();
-                                    }))
-                            )
-                            .child(
-                                div()
-                                    .id("tab_failed")
-                                    .cursor_pointer()
-                                    .font_weight(if self.active_tab == JobTab::Failed { FontWeight::BOLD } else { FontWeight::NORMAL })
-                                    .text_color(if self.active_tab == JobTab::Failed { cx.theme().foreground } else { cx.theme().muted_foreground })
-                                    .child("Failed")
-                                    .on_click(cx.listener(|this, _ev, _window, cx| {
-                                        this.active_tab = JobTab::Failed;
-                                        cx.notify();
-                                    }))
-                            )
-                            .child(
-                                div()
-                                    .id("tab_archived")
-                                    .cursor_pointer()
-                                    .font_weight(if self.active_tab == JobTab::Archived { FontWeight::BOLD } else { FontWeight::NORMAL })
-                                    .text_color(if self.active_tab == JobTab::Archived { cx.theme().foreground } else { cx.theme().muted_foreground })
-                                    .child("Archived")
-                                    .on_click(cx.listener(|this, _ev, _window, cx| {
-                                        this.active_tab = JobTab::Archived;
-                                        cx.notify();
-                                    }))
-                            )
+                            .items_center()
+                            .child(div().flex_1().min_w(px(200.)).child(Combobox::new(&self.filter_combobox)))
                     )
                     .child(
                         div()
                             .flex()
-                            .gap_2()
+                            .flex_row()
+                            .flex_wrap()
+                            .gap_4()
                             .items_center()
-                            .child(div().text_sm().text_color(cx.theme().muted_foreground).child("Archive limit (Days):"))
-                            .child(div().w(px(50.)).child(Input::new(&self.cleanup_days)))
+                            .child(div().text_sm().text_color(cx.theme().muted_foreground).child("Archive Days: 30"))
                             .child(
                                 gpui_component::button::Button::new("purge_archived")
-                                    .label("Purge Archived")
+                                    .label("Purge Archives")
                                     .small()
                                     .on_click(cx.listener(|this, _ev, window, cx| {
                                         this.purge_archived(window, cx);
@@ -565,9 +506,12 @@ impl Render for CronTasksView {
                         };
                         div()
                             .flex()
+                            .flex_row()
+                            .flex_wrap()
                             .justify_between()
                             .items_center()
                             .p_4()
+                            .gap_4()
                             .bg(cx.theme().muted)
                             .border_1()
                             .border_color(cx.theme().border)
@@ -577,12 +521,15 @@ impl Render for CronTasksView {
                                     .flex()
                                     .flex_col()
                                     .gap_1()
+                                    .flex_1()
+                                    .min_w(px(250.))
                                     .child(
                                         div()
                                             .flex()
+                                            .flex_col()
                                             .gap_2()
-                                            .items_center()
-                                            .child(div().font_weight(FontWeight::BOLD).text_color(cx.theme().foreground).child(job.name.clone()))
+                                            .items_start()
+                                            .child(div().w_full().font_weight(FontWeight::BOLD).text_color(cx.theme().foreground).child(job.name.clone()))
                                             .child(
                                                 div()
                                                     .px_2()
@@ -607,6 +554,7 @@ impl Render for CronTasksView {
                                     .child(
                                         div()
                                             .flex()
+                                            .flex_wrap()
                                             .gap_2()
                                             .text_xs()
                                             .child(
@@ -623,6 +571,8 @@ impl Render for CronTasksView {
                             .child(
                                 div()
                                     .flex()
+                                    .flex_row()
+                                    .flex_wrap()
                                     .gap_2()
                                     .when(!is_system && job.status != "Archived", |this| {
                                         this.child(
@@ -663,5 +613,6 @@ impl Render for CronTasksView {
                             )
                     }))
             )
+            .into_any_element()
     }
 }

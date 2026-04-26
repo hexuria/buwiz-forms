@@ -136,6 +136,10 @@ pub struct Form2551QDraft {
     /// Set to true when this draft was pre-filled from a previous quarter.
     /// UI shows a "Pre-filled from Q{n} {year}" banner when true.
     pub carried_forward_from: Option<(u16, u8)>, // (year, quarter)
+    
+    // === Payment / Attachments ===
+    #[serde(default)]
+    pub payment_receipt_path: Option<String>,
 }
 
 impl Form2551QDraft {
@@ -178,6 +182,7 @@ impl Form2551QDraft {
             next_retry_at: None,
             last_error: None,
             carried_forward_from: None,
+            payment_receipt_path: None,
         }
     }
 
@@ -263,7 +268,7 @@ impl Form2551QDraft {
     }
 
     pub fn default_submission_filename(&self) -> String {
-        format!("{}-2551Qv2018-{}.xml", self.tin, self.period_code())
+        format!("{}-2551Qv2018-{}#{}#.xml", self.tin, self.period_code(), self.email)
     }
 }
 

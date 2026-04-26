@@ -108,6 +108,7 @@ impl ComboboxState {
             input.set_value(item.to_string(), window, cx);
         });
         self.open = false;
+        window.blur();
         cx.emit(ComboboxEvent {
             selected: Some(item.to_string()),
         });
@@ -163,11 +164,16 @@ impl Render for ComboboxState {
             .when(is_open, |this| {
                 this.child(
                     deferred(
-                        anchored().snap_to_window_with_margin(px(8.)).child(
-                            div()
-                                .occlude()
-                                .mt_1p5()
-                                .max_h(px(300.))
+                        div()
+                            .absolute()
+                            .top(px(36.))
+                            .left_0()
+                            .w_full()
+                            .child(
+                                div()
+                                    .occlude()
+                                    .mt_1p5()
+                                    .max_h(px(300.))
                                 .overflow_hidden()
                                 .w_full()
                                 .border_1()
