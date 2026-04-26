@@ -13,6 +13,16 @@ impl Form2551QDraft {
                 0.0
             };
 
+        // Legacy / UI Fields from original eBIRForms
+        insert(&mut fields, "driveSelectTPExport", "0");
+        insert(&mut fields, "ebirOnlineConfirmUsername", "");
+        insert(&mut fields, "ebirOnlineSecret", "");
+        insert(&mut fields, "ebirOnlineUsername", "");
+        insert(&mut fields, "txtEnroll", "Y");
+        insert(&mut fields, "txtFinalFlag", "1");
+        insert(&mut fields, "txtDateExpiry", "");
+        insert(&mut fields, "txtTaxAgentNo", "");
+
         insert(&mut fields, "frm2551Qv2018:forThe_1", "true");
         insert(&mut fields, "frm2551Qv2018:forThe_2", "false");
         insert(&mut fields, "frm2551Qv2018:rtnMonth", "12");
@@ -118,7 +128,7 @@ impl Form2551QDraft {
             "frm2551Qv2018:txtPg2TaxpayerName",
             self.taxpayer_name.clone(),
         );
-        insert(&mut fields, "frm2551Qv2018:txtCurrentPage", "2");
+        insert(&mut fields, "frm2551Qv2018:txtCurrentPage", "1");
         insert(&mut fields, "frm2551Qv2018:txtMaxPage", "2");
 
         for field in 25..=28 {
