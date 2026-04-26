@@ -2,6 +2,7 @@ use crate::views::dashboard::{DashboardEvent, DashboardView};
 use crate::views::form_2551q_view::{Form2551QEvent, Form2551QView};
 use crate::views::global_dashboard::{GlobalDashboardEvent, GlobalDashboardView};
 use crate::views::profile_manager::ProfileManagerView;
+use crate::views::cron_tasks::CronTasksView;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::input::{Input, InputEvent, InputState};
@@ -20,6 +21,7 @@ pub enum ActiveView {
     SavedForms,
     SubmissionHistory,
     ProfileManager,
+    CronTasks,
     Settings,
 }
 
@@ -28,6 +30,7 @@ pub struct AppState {
     profile_manager: Entity<ProfileManagerView>,
     dashboard_view: Entity<DashboardView>,
     global_dashboard_view: Entity<GlobalDashboardView>,
+    cron_tasks_view: Entity<CronTasksView>,
     form_2551q_view: Option<Entity<Form2551QView>>,
     pending_form_draft: Option<Form2551QDraft>,
     db: Arc<Mutex<Database>>,
@@ -43,7 +46,7 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let db_path = app_database_path();
+        let db_path = bir_core::db::default_database_path();
         if let Some(parent) = db_path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
@@ -77,6 +80,9 @@ impl AppState {
         let db_clone_global = Arc::clone(&db);
         let global_dashboard_view =
             cx.new(|cx| GlobalDashboardView::new(db_clone_global, window, cx));
+
+        let db_clone_cron = Arc::clone(&db);
+        let cron_tasks_view = cx.new(|cx| CronTasksView::new(db_clone_cron, window, cx));
 
         let profile_filter =
             cx.new(|cx| InputState::new(window, cx).placeholder("Search TIN or name"));
@@ -188,6 +194,7 @@ impl AppState {
             profile_manager,
             dashboard_view,
             global_dashboard_view,
+            cron_tasks_view,
             form_2551q_view: None,
             pending_form_draft: None,
             db,
@@ -512,21 +519,37 @@ impl AppState {
                     ),
             )
             .child(
-                gpui_component::button::Button::new("theme_toggle")
-                    .label(if is_dark {
-                        "Switch to Light Mode"
-                    } else {
-                        "Switch to Dark Mode"
-                    })
-                    .on_click(cx.listener(|_this, _ev, window, cx| {
-                        let is_dark = cx.theme().is_dark();
-                        let new_mode = if is_dark {
-                            ThemeMode::Light
-                        } else {
-                            ThemeMode::Dark
-                        };
-                        Theme::change(new_mode, Some(window), cx);
-                    })),
+                v_flex()
+                    .gap_2()
+                    .w_full()
+                    .child(
+                        gpui_component::button::Button::new("cron_tasks_btn")
+                            .label("⚡ Background Tasks")
+                            .on_click(cx.listener(|this, _ev, _window, cx| {
+                                this.active_view = ActiveView::CronTasks;
+                                this.cron_tasks_view.update(cx, |view, cx| {
+                                    view.load_settings(cx);
+                                });
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        gpui_component::button::Button::new("theme_toggle")
+                            .label(if is_dark {
+                                "Switch to Light Mode"
+                            } else {
+                                "Switch to Dark Mode"
+                            })
+                            .on_click(cx.listener(|_this, _ev, window, cx| {
+                                let is_dark = cx.theme().is_dark();
+                                let new_mode = if is_dark {
+                                    ThemeMode::Light
+                                } else {
+                                    ThemeMode::Dark
+                                };
+                                Theme::change(new_mode, Some(window), cx);
+                            })),
+                    )
             )
     }
 
@@ -534,6 +557,7 @@ impl AppState {
         match self.active_view {
             ActiveView::GlobalDashboard => self.global_dashboard_view.clone().into_any_element(),
             ActiveView::ProfileManager => self.profile_manager.clone().into_any_element(),
+            ActiveView::CronTasks => self.cron_tasks_view.clone().into_any_element(),
             ActiveView::Dashboard => self.dashboard_view.clone().into_any_element(),
             ActiveView::Form2551Q => {
                 if let Some(view) = &self.form_2551q_view {
@@ -590,28 +614,7 @@ impl AppState {
     }
 }
 
-fn app_database_path() -> std::path::PathBuf {
-    if cfg!(target_os = "macos")
-        && let Some(home) = std::env::var_os("HOME")
-    {
-        return std::path::PathBuf::from(home)
-            .join("Library")
-            .join("Application Support")
-            .join("Taxman")
-            .join("eBIRForms")
-            .join("bir_data.db");
-    }
 
-    if let Some(home) = std::env::var_os("HOME") {
-        return std::path::PathBuf::from(home)
-            .join(".taxman-ebir")
-            .join("bir_data.db");
-    }
-
-    std::env::current_dir()
-        .unwrap_or_default()
-        .join("bir_data.db")
-}
 
 impl Render for AppState {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {

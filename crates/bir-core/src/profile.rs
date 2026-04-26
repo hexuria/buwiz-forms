@@ -61,6 +61,14 @@ pub struct TaxpayerProfile {
     #[doc(hidden)]
     pub _imap_enabled_compat: Option<bool>,
 
+    /// Toggle to enable/disable automated background services (email checking and form submission retries).
+    #[serde(default = "default_true")]
+    pub background_cron_enabled: bool,
+
+    /// Toggle to enable/disable test OS notifications every minute.
+    #[serde(default)]
+    pub test_notification_enabled: bool,
+
     /// Securely stored App Password (encrypted inside DB)
     #[serde(default)]
     pub imap_app_password: Option<String>,
@@ -79,4 +87,8 @@ impl TaxpayerProfile {
     pub fn is_email_tracking_active(&self) -> bool {
         self.email_tracking_enabled || self._imap_enabled_compat.unwrap_or(false)
     }
+}
+
+fn default_true() -> bool {
+    true
 }

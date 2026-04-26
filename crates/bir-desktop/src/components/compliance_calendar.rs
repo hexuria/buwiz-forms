@@ -23,7 +23,7 @@ pub struct ComplianceCalendar {
 }
 
 impl ComplianceCalendar {
-    pub fn new(cx: &mut Context<Self>) -> Self {
+    pub fn new(_cx: &mut Context<Self>) -> Self {
         let current_date = Local::now().date_naive();
         let current_month =
             NaiveDate::from_ymd_opt(current_date.year(), current_date.month(), 1).unwrap();

@@ -19,6 +19,20 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Job {
+    pub id: Option<i64>,
+    pub name: String,
+    pub job_type: String, // "System" or "Custom"
+    pub cron_expr: Option<String>,
+    pub command: Option<String>,
+    pub status: String,
+    pub retries: i64,
+    pub last_run_at: Option<String>,
+    pub next_run_at: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Submission {
     pub id: Option<i64>,
     pub tin: String,
@@ -174,6 +188,29 @@ pub enum DbError {
 
 pub struct Database {
     conn: Connection,
+}
+
+pub fn default_database_path() -> std::path::PathBuf {
+    if cfg!(target_os = "macos")
+        && let Some(home) = std::env::var_os("HOME")
+    {
+        return std::path::PathBuf::from(home)
+            .join("Library")
+            .join("Application Support")
+            .join("Taxman")
+            .join("eBIRForms")
+            .join("bir_data.db");
+    }
+
+    if let Some(home) = std::env::var_os("HOME") {
+        return std::path::PathBuf::from(home)
+            .join(".taxman-ebir")
+            .join("bir_data.db");
+    }
+
+    std::env::current_dir()
+        .unwrap_or_default()
+        .join("bir_data.db")
 }
 
 impl Database {
@@ -404,6 +441,25 @@ impl Database {
             [],
         )?;
 
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS job_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                job_type TEXT NOT NULL DEFAULT 'Custom',
+                cron_expr TEXT,
+                command TEXT,
+                status TEXT NOT NULL DEFAULT 'Queued',
+                retries INTEGER NOT NULL DEFAULT 0,
+                last_run_at TEXT,
+                next_run_at TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )",
+            [],
+        )?;
+        
+        // Silent migration for existing users
+        let _ = conn.execute("ALTER TABLE job_queue ADD COLUMN job_type TEXT NOT NULL DEFAULT 'Custom'", []);
+
         Ok(Self { conn })
     }
 
@@ -561,6 +617,67 @@ impl Database {
         Ok(())
     }
 
+    // =========================================================================
+    // Job Queue
+    // =========================================================================
+
+    pub fn save_job(&self, mut job: Job) -> Result<Job, DbError> {
+        if let Some(id) = job.id {
+            self.conn.execute(
+                "UPDATE job_queue SET name = ?1, job_type = ?2, cron_expr = ?3, command = ?4, status = ?5, retries = ?6, last_run_at = ?7, next_run_at = ?8 WHERE id = ?9",
+                params![job.name, job.job_type, job.cron_expr, job.command, job.status, job.retries, job.last_run_at, job.next_run_at, id],
+            )?;
+        } else {
+            self.conn.execute(
+                "INSERT INTO job_queue (name, job_type, cron_expr, command, status, retries, last_run_at, next_run_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                params![job.name, job.job_type, job.cron_expr, job.command, job.status, job.retries, job.last_run_at, job.next_run_at],
+            )?;
+            job.id = Some(self.conn.last_insert_rowid());
+            
+            // Re-fetch to get the created_at timestamp
+            let mut stmt = self.conn.prepare("SELECT created_at FROM job_queue WHERE id = ?1")?;
+            if let Ok(mut rows) = stmt.query(params![job.id]) {
+                if let Ok(Some(row)) = rows.next() {
+                    job.created_at = row.get(0).unwrap_or_default();
+                }
+            }
+        }
+        Ok(job)
+    }
+
+    pub fn list_jobs(&self) -> Result<Vec<Job>, DbError> {
+        let mut stmt = self.conn.prepare("SELECT id, name, job_type, cron_expr, command, status, retries, last_run_at, next_run_at, created_at FROM job_queue ORDER BY created_at DESC")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(Job {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                job_type: row.get(2).unwrap_or_else(|_| "Custom".to_string()),
+                cron_expr: row.get(3)?,
+                command: row.get(4)?,
+                status: row.get(5)?,
+                retries: row.get(6)?,
+                last_run_at: row.get(7)?,
+                next_run_at: row.get(8)?,
+                created_at: row.get(9)?,
+            })
+        })?;
+        let mut jobs = Vec::new();
+        for row in rows {
+            jobs.push(row?);
+        }
+        Ok(jobs)
+    }
+
+    pub fn delete_job(&self, id: i64) -> Result<(), DbError> {
+        self.conn.execute("DELETE FROM job_queue WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    pub fn delete_archived_jobs(&self) -> Result<(), DbError> {
+        self.conn.execute("DELETE FROM job_queue WHERE status = 'Archived'", [])?;
+        Ok(())
+    }
+
     /// Save a submission.
     pub fn save_submission(&self, mut sub: Submission) -> Result<Submission, DbError> {
         let json_data = serde_json::to_string(&sub.form_data)?;
@@ -641,6 +758,7 @@ impl Database {
         let json = serde_json::to_string(draft)?;
         let status = match draft.status {
             FilingStatus::Draft => "Draft",
+            FilingStatus::Queued => "Queued",
             FilingStatus::Submitted => "Submitted",
             FilingStatus::Confirmed => "Confirmed",
             FilingStatus::Paid => "Paid",
@@ -750,6 +868,7 @@ impl Database {
                 "Confirmed" => QuarterState::Confirmed,
                 "Submitted" | "Filed" => QuarterState::Submitted,
                 "Paid" => QuarterState::Paid,
+                "Queued" => QuarterState::Queued,
                 "Draft" => QuarterState::Draft,
                 _ => QuarterState::Draft,
             };
@@ -790,6 +909,37 @@ impl Database {
                     "Confirmed" => FilingStatus::Confirmed,
                     "Submitted" | "Filed" => FilingStatus::Submitted,
                     "Paid" => FilingStatus::Paid,
+                    "Queued" => FilingStatus::Queued,
+                    _ => FilingStatus::Draft,
+                },
+                updated_at: row.get(6)?,
+            })
+        })?;
+
+        let mut summaries = Vec::new();
+        for row in rows {
+            summaries.push(row?);
+        }
+        Ok(summaries)
+    }
+
+    pub fn list_all_queued_submissions(&self) -> Result<Vec<FormDraftSummary>, DbError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, tin, form_code, taxable_year, quarter, status, updated_at
+             FROM form_drafts WHERE status = 'Queued' OR status = 'Submitted'",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(FormDraftSummary {
+                id: row.get(0)?,
+                tin: row.get(1)?,
+                form_code: row.get(2)?,
+                taxable_year: row.get::<_, i64>(3)? as u16,
+                quarter: row.get::<_, Option<i64>>(4)?.map(|q| q as u8),
+                status: match row.get::<_, String>(5)?.as_str() {
+                    "Confirmed" => FilingStatus::Confirmed,
+                    "Submitted" | "Filed" => FilingStatus::Submitted,
+                    "Paid" => FilingStatus::Paid,
+                    "Queued" => FilingStatus::Queued,
                     _ => FilingStatus::Draft,
                 },
                 updated_at: row.get(6)?,

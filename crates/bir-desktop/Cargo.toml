@@ -8,6 +8,10 @@ license.workspace = true
 name = "bir"
 path = "src/main.rs"
 
+[[bin]]
+name = "bir-daemon"
+path = "src/bin/bir_daemon.rs"
+
 [dependencies]
 bir-core = { path = "../bir-core" }
 bir-print = { path = "../bir-print" }
@@ -23,3 +27,4 @@ tokio = { workspace = true }
 chrono = { workspace = true }
 rfd = "0.17.2"
 open = "5.3.4"
+directories = "6.0.0"

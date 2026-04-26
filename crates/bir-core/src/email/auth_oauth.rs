@@ -185,48 +185,54 @@ pub fn start_oauth_flow() -> Result<(String, String, String), anyhow::Error> {
     // 6. Exchange the code for tokens
     let (access_token, refresh_token) = exchange_code_for_tokens(&code, &verifier, &redirect_uri)?;
 
-    // 7. Fetch the user's email
-    let client = reqwest::blocking::Client::new();
-    let userinfo_resp = client
-        .get(USERINFO_URL)
-        .header("Authorization", format!("Bearer {}", access_token))
-        .send()?;
+    let access_token_clone = access_token.clone();
+    let email = std::thread::spawn(move || -> Result<String, anyhow::Error> {
+        let client = reqwest::blocking::Client::new();
+        let userinfo_resp = client
+            .get(USERINFO_URL)
+            .header("Authorization", format!("Bearer {}", access_token_clone))
+            .send()?;
 
-    let userinfo_status = userinfo_resp.status();
-    let userinfo_text = userinfo_resp.text()?;
-    if !userinfo_status.is_success() {
-        return Err(anyhow::anyhow!(
-            "Failed to fetch user email ({}): {}",
-            userinfo_status,
-            userinfo_text
-        ));
-    }
+        let userinfo_status = userinfo_resp.status();
+        let userinfo_text = userinfo_resp.text()?;
+        if !userinfo_status.is_success() {
+            return Err(anyhow::anyhow!(
+                "Failed to fetch user email ({}): {}",
+                userinfo_status,
+                userinfo_text
+            ));
+        }
 
-    let userinfo: serde_json::Value = serde_json::from_str(&userinfo_text)?;
-    let email = userinfo
-        .get("email")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("No email found in userinfo response"))?
-        .to_string();
+        let userinfo: serde_json::Value = serde_json::from_str(&userinfo_text)?;
+        let email = userinfo
+            .get("email")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("No email found in userinfo response"))?
+            .to_string();
+        Ok(email)
+    }).join().unwrap_or_else(|_| Err(anyhow::anyhow!("Thread panicked")))?;
 
     Ok((email, access_token, refresh_token))
 }
 
 /// Get the email address associated with the stored OAuth token (from Google's userinfo endpoint).
 pub fn get_oauth_email(access_token: &str) -> Result<String, anyhow::Error> {
-    let client = reqwest::blocking::Client::new();
-    let resp = client
-        .get("https://www.googleapis.com/oauth2/v3/userinfo")
-        .bearer_auth(access_token)
-        .send()?
-        .error_for_status()?;
+    let access_token = access_token.to_string();
+    std::thread::spawn(move || {
+        let client = reqwest::blocking::Client::new();
+        let resp = client
+            .get("https://www.googleapis.com/oauth2/v3/userinfo")
+            .bearer_auth(access_token)
+            .send()?
+            .error_for_status()?;
 
-    let text = resp.text()?;
-    let info: serde_json::Value = serde_json::from_str(&text)?;
-    info.get("email")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
-        .ok_or_else(|| anyhow::anyhow!("Could not retrieve email from Google userinfo"))
+        let text = resp.text()?;
+        let info: serde_json::Value = serde_json::from_str(&text)?;
+        info.get("email")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .ok_or_else(|| anyhow::anyhow!("Could not retrieve email from Google userinfo"))
+    }).join().unwrap_or_else(|_| Err(anyhow::anyhow!("Thread panicked")))
 }
 
 // ── Token Management ─────────────────────────────────────────────────────────
@@ -238,30 +244,33 @@ fn refresh_access_token(refresh_token: &str) -> Result<String, anyhow::Error> {
         ));
     }
 
-    let client_id = get_google_client_id();
-    let client_secret = get_google_client_secret();
-    let client = reqwest::blocking::Client::new();
-    let resp = client
-        .post(TOKEN_URL)
-        .form(&[
-            ("client_id", client_id.as_str()),
-            ("client_secret", client_secret.as_str()),
-            ("grant_type", "refresh_token"),
-            ("refresh_token", refresh_token),
-        ])
-        .send()?
-        .error_for_status()?;
+    let refresh_token = refresh_token.to_string();
+    std::thread::spawn(move || {
+        let client_id = get_google_client_id();
+        let client_secret = get_google_client_secret();
+        let client = reqwest::blocking::Client::new();
+        let resp = client
+            .post(TOKEN_URL)
+            .form(&[
+                ("client_id", client_id.as_str()),
+                ("client_secret", client_secret.as_str()),
+                ("grant_type", "refresh_token"),
+                ("refresh_token", refresh_token.as_str()),
+            ])
+            .send()?
+            .error_for_status()?;
 
-    let text = resp.text()?;
-    let body: serde_json::Value = serde_json::from_str(&text)?;
-    let access_token = body
-        .get("access_token")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("Google token refresh did not return an access_token"))?
-        .to_string();
+        let text = resp.text()?;
+        let body: serde_json::Value = serde_json::from_str(&text)?;
+        let access_token = body
+            .get("access_token")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Google token refresh did not return an access_token"))?
+            .to_string();
 
-    info!("Refreshed Google OAuth access token successfully");
-    Ok(access_token)
+        info!("Refreshed Google OAuth access token successfully");
+        Ok(access_token)
+    }).join().unwrap_or_else(|_| Err(anyhow::anyhow!("Thread panicked")))
 }
 
 fn exchange_code_for_tokens(
@@ -269,46 +278,52 @@ fn exchange_code_for_tokens(
     verifier: &str,
     redirect_uri: &str,
 ) -> Result<(String, String), anyhow::Error> {
-    let client_id = get_google_client_id();
-    let client_secret = get_google_client_secret();
-    let client = reqwest::blocking::Client::new();
-    let resp = client
-        .post(TOKEN_URL)
-        .form(&[
-            ("client_id", client_id.as_str()),
-            ("client_secret", client_secret.as_str()),
-            ("code", code),
-            ("redirect_uri", redirect_uri),
-            ("grant_type", "authorization_code"),
-            ("code_verifier", verifier),
-        ])
-        .send()?;
+    let code = code.to_string();
+    let verifier = verifier.to_string();
+    let redirect_uri = redirect_uri.to_string();
 
-    let status = resp.status();
-    let text = resp.text()?;
-    if !status.is_success() {
-        return Err(anyhow::anyhow!(
-            "Google Token API error ({}): {}",
-            status,
-            text
-        ));
-    }
+    std::thread::spawn(move || -> Result<(String, String), anyhow::Error> {
+        let client_id = get_google_client_id();
+        let client_secret = get_google_client_secret();
+        let client = reqwest::blocking::Client::new();
+        let resp = client
+            .post(TOKEN_URL)
+            .form(&[
+                ("client_id", client_id.as_str()),
+                ("client_secret", client_secret.as_str()),
+                ("code", code.as_str()),
+                ("redirect_uri", redirect_uri.as_str()),
+                ("grant_type", "authorization_code"),
+                ("code_verifier", verifier.as_str()),
+            ])
+            .send()?;
 
-    let body: serde_json::Value = serde_json::from_str(&text)?;
+        let status = resp.status();
+        let text = resp.text()?;
+        if !status.is_success() {
+            return Err(anyhow::anyhow!(
+                "Google Token API error ({}): {}",
+                status,
+                text
+            ));
+        }
 
-    let access_token = body
-        .get("access_token")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("Missing access_token in token response"))?
-        .to_string();
+        let body: serde_json::Value = serde_json::from_str(&text)?;
 
-    let refresh_token = body
-        .get("refresh_token")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("Missing refresh_token in token response"))?
-        .to_string();
+        let access_token = body
+            .get("access_token")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Missing access_token in token response"))?
+            .to_string();
 
-    Ok((access_token, refresh_token))
+        let refresh_token = body
+            .get("refresh_token")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Missing refresh_token in token response"))?
+            .to_string();
+
+        Ok((access_token, refresh_token))
+    }).join().unwrap_or_else(|_| Err(anyhow::anyhow!("Thread panicked")))
 }
 
 // ── PKCE Helpers ─────────────────────────────────────────────────────────────

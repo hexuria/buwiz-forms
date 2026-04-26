@@ -1,6 +1,7 @@
 use bir_core::forms::form_2551q::Form2551QDraft;
 use bir_print::{render_2551q_print, PrintResult};
 use gpui::*;
+use gpui_component::button::ButtonVariants;
 use gpui_component::scroll::ScrollableElement as _;
 use gpui_component::*;
 use std::path::PathBuf;
@@ -37,12 +38,6 @@ impl PdfViewerView {
         cx.notify();
     }
 
-    fn open_pdf(&self) {
-        let _ = std::process::Command::new("open")
-            .arg(&self.result.pdf_path)
-            .spawn();
-    }
-
     fn reveal_pdf(&self) {
         let _ = std::process::Command::new("open")
             .arg("-R")
@@ -50,7 +45,7 @@ impl PdfViewerView {
             .spawn();
     }
 
-    fn save_pdf_as(&mut self, cx: &mut Context<Self>) {
+    fn export_pdf(&mut self, cx: &mut Context<Self>) {
         let default_name = self
             .draft
             .default_submission_filename()
@@ -67,10 +62,29 @@ impl PdfViewerView {
 
         match std::fs::copy(&self.result.pdf_path, &target) {
             Ok(_) => {
-                self.status_message = Some(format!("PDF saved: {}", target.display()));
+                self.status_message = Some("Exported".to_string());
             }
             Err(err) => {
-                self.status_message = Some(format!("PDF save failed: {err}"));
+                self.status_message = Some(format!("Export failed: {err}"));
+            }
+        }
+        cx.notify();
+    }
+
+    fn print_pdf(&mut self, cx: &mut Context<Self>) {
+        let path = &self.result.pdf_path;
+        let output = std::process::Command::new("lp").arg(path).output();
+        match output {
+            Ok(o) if o.status.success() => {
+                self.status_message = Some("Sent to printer".to_string());
+            }
+            Ok(o) => {
+                let stderr = String::from_utf8_lossy(&o.stderr);
+                self.status_message = Some(format!("Print failed: {stderr}"));
+            }
+            Err(e) => {
+                self.status_message =
+                    Some(format!("No printer available: {e}"));
             }
         }
         cx.notify();
@@ -113,7 +127,7 @@ impl Render for PdfViewerView {
                     .border_1()
                     .border_color(cx.theme().border)
                     .text_color(cx.theme().muted_foreground)
-                    .child("Preview images are unavailable. Use Open PDF to inspect the generated file."),
+                    .child("Preview images are unavailable. Use Export to save the generated PDF."),
             );
         } else {
             for path in &self.result.preview_png_paths {
@@ -167,55 +181,36 @@ impl Render for PdfViewerView {
                     .child(
                         div()
                             .flex()
-                            .flex_wrap()
                             .items_center()
-                            .justify_end()
-                            .gap_2()
-                            .child(
-                                gpui_component::button::Button::new("pdf_viewer_close_btn")
-                                    .label("Close")
-                                    .outline()
-                                    .on_click(cx.listener(|_, _, window, _| {
-                                        window.remove_window();
-                                    })),
-                            )
-                            .child(
-                                gpui_component::button::Button::new("pdf_viewer_regen_btn")
-                                    .label("Regenerate")
-                                    .outline()
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.regenerate(cx);
-                                    })),
-                            )
-                            .child(
-                                gpui_component::button::Button::new("pdf_viewer_open_btn")
-                                    .label("Open PDF")
-                                    .outline()
-                                    .on_click(cx.listener(|this, _, _, _| {
-                                        this.open_pdf();
-                                    })),
-                            )
+                            .gap_1()
                             .child(
                                 gpui_component::button::Button::new("pdf_viewer_reveal_btn")
-                                    .label("Reveal in Finder")
-                                    .outline()
+                                    .icon(Icon::new(IconName::FolderOpen))
+                                    .ghost()
+                                    .small()
+                                    .tooltip("Reveal in Finder")
                                     .on_click(cx.listener(|this, _, _, _| {
                                         this.reveal_pdf();
                                     })),
                             )
                             .child(
-                                gpui_component::button::Button::new("pdf_viewer_save_btn")
-                                    .label("Save as PDF")
-                                    .outline()
+                                gpui_component::button::Button::new("pdf_viewer_export_btn")
+                                    .icon(Icon::empty().path("svg/download.svg"))
+                                    .ghost()
+                                    .small()
+                                    .tooltip("Export PDF")
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        this.save_pdf_as(cx);
+                                        this.export_pdf(cx);
                                     })),
                             )
                             .child(
                                 gpui_component::button::Button::new("pdf_viewer_print_btn")
-                                    .label("Print")
-                                    .on_click(cx.listener(|this, _, _, _| {
-                                        this.open_pdf();
+                                    .icon(Icon::empty().path("svg/printer.svg"))
+                                    .ghost()
+                                    .small()
+                                    .tooltip("Print")
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.print_pdf(cx);
                                     })),
                             ),
                     ),

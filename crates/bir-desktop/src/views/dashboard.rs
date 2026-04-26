@@ -122,6 +122,13 @@ impl DashboardView {
                 "◐",
                 "Sent",
             ),
+            QuarterState::Queued => (
+                gpui::rgba(0xa855f720).into(),
+                gpui::rgba(0xa855f7ff).into(),
+                gpui::rgba(0xa855f7ff).into(),
+                "↻",
+                "Queued",
+            ),
             QuarterState::Draft => (
                 gpui::rgba(0xfacc1520).into(),
                 gpui::rgba(0xfacc15ff).into(),
@@ -130,7 +137,7 @@ impl DashboardView {
                 "Draft",
             ),
             QuarterState::NotStarted => (
-                cx.theme().background,
+                gpui::transparent_black().into(),
                 cx.theme().border,
                 cx.theme().muted_foreground,
                 "+",
@@ -145,6 +152,7 @@ impl DashboardView {
             QuarterState::Paid => gpui::rgba(0x10b98140).into(),
             QuarterState::Confirmed => gpui::rgba(0x22c55e40).into(),
             QuarterState::Submitted => gpui::rgba(0x3b82f640).into(),
+            QuarterState::Queued => gpui::rgba(0xa855f740).into(),
             QuarterState::Draft => gpui::rgba(0xfacc1540).into(),
             QuarterState::NotStarted => cx.theme().accent,
         }
@@ -212,12 +220,12 @@ impl Render for DashboardView {
         let has_month_filter = !active_months.is_empty();
 
         // When quarter filter is active, only show Quarterly forms
-        // When month filter is active, only show Monthly/OpenEnded forms
+        // When month filter is active, only show Monthly forms
         if has_quarter_filter {
             available_forms.retain(|f| matches!(f.frequency, FilingFrequency::Quarterly));
         }
         if has_month_filter {
-            available_forms.retain(|f| matches!(f.frequency, FilingFrequency::OpenEnded));
+            available_forms.retain(|f| matches!(f.frequency, FilingFrequency::Monthly));
         }
 
         // Apply form type and text search filters
@@ -246,7 +254,6 @@ impl Render for DashboardView {
             });
         }
 
-        let is_narrow = window.viewport_size().width < px(900.);
         let mut forms_ui = div().flex().flex_row().flex_wrap().gap_6().w_full();
         let mut cards_rendered = 0;
 
@@ -288,29 +295,30 @@ impl Render for DashboardView {
                                     .flex_1()
                                     .flex_col()
                                     .items_center()
+                                    .justify_center()
                                     .gap_1()
                                     .opacity(0.2)
-                                    .p_2()
+                                    .py_3()
+                                    .rounded_xl()
+                                    .border_1()
+                                    .border_color(cx.theme().border)
+                                    .bg(gpui::transparent_black())
                                     .child(
                                         div()
-                                            .w_10()
-                                            .h_10()
-                                            .rounded_lg()
-                                            .border_1()
-                                            .border_color(cx.theme().border)
-                                            .flex()
-                                            .items_center()
-                                            .justify_center(),
+                                            .text_sm()
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child(format!("Q{}", q_num)),
                                     )
                                     .child(
                                         div()
                                             .text_xs()
                                             .text_color(cx.theme().muted_foreground)
-                                            .child(format!("Q{}", q_num)),
+                                            .child("-"),
                                     ),
                             );
                         } else {
-                            let (bg, border_clr, accent, icon, status_label) =
+                            let (bg, border_clr, accent, _icon, status_label) =
                                 Self::state_style(q_state, cx);
                             let hover_bg = Self::state_hover_bg(q_state, cx);
                             let code_click = code.clone();
@@ -322,38 +330,29 @@ impl Render for DashboardView {
                                     .flex_1()
                                     .flex_col()
                                     .items_center()
+                                    .justify_center()
                                     .gap_1()
+                                    .py_3()
                                     .cursor_pointer()
-                                    .rounded_lg()
-                                    .p_2()
-                                    .hover(move |s| s.bg(hover_bg))
+                                    .rounded_xl()
+                                    .border_1()
+                                    .border_color(border_clr)
+                                    .bg(bg)
+                                    .hover(move |s| s.bg(hover_bg).border_color(accent))
                                     .child(
                                         div()
-                                            .w_10()
-                                            .h_10()
-                                            .rounded_lg()
-                                            .border_1()
-                                            .border_color(border_clr)
-                                            .bg(bg)
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .font_weight(FontWeight::BOLD)
-                                                    .text_color(accent)
-                                                    .child(icon),
-                                            ),
+                                            .text_sm()
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(if matches!(q_state, QuarterState::NotStarted) { cx.theme().foreground } else { accent })
+                                            .child(format!("Q{}", q_num)),
                                     )
                                     .child(
                                         div()
                                             .text_xs()
                                             .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(cx.theme().foreground)
-                                            .child(format!("Q{}", q_num)),
+                                            .text_color(accent)
+                                            .child(status_label),
                                     )
-                                    .child(div().text_xs().text_color(accent).child(status_label))
                                     .on_click(cx.listener(move |_this, _ev, _window, cx| {
                                         cx.emit(DashboardEvent::FileForm {
                                             form_code: code_click.clone(),
@@ -365,7 +364,7 @@ impl Render for DashboardView {
                         }
                     }
 
-                    Self::build_card(form_def, year, is_narrow, cx).child(
+                    Self::build_card(form_def, year, cx).child(
                         div()
                             .flex()
                             .flex_col()
@@ -420,66 +419,96 @@ impl Render for DashboardView {
                         "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
                         "Nov", "Dec",
                     ];
-                    let mut month_dots = div().flex().flex_wrap().gap_2().w_full();
+                    let mut month_dots = div().flex().flex_col().gap_2().w_full();
 
-                    for (idx, m_state) in months.iter().enumerate() {
-                        let m_num = (idx + 1) as u8;
+                    for chunk in months.chunks(4).enumerate() {
+                        let (chunk_idx, chunk) = chunk;
+                        let mut row = div().flex().gap_2().w_full();
 
-                        let (bg, border_clr, accent, icon, status_label) =
-                            Self::state_style(m_state, cx);
-                        let hover_bg = Self::state_hover_bg(m_state, cx);
-                        let code_click = code.clone();
+                        for (idx, m_state) in chunk.iter().enumerate() {
+                            let absolute_idx = chunk_idx * 4 + idx;
+                            let m_num = (absolute_idx + 1) as u8;
+                            let should_dim = has_month_filter && !active_months.contains(&m_num);
 
-                        month_dots = month_dots.child(
-                            div()
-                                .id(format!("m_{}_{}_{}", form_def.code, year, m_num))
-                                .flex()
-                                .flex_col()
-                                .items_center()
-                                .w(px(40.))
-                                .gap_1()
-                                .cursor_pointer()
-                                .rounded_lg()
-                                .p_1()
-                                .hover(move |s| s.bg(hover_bg))
-                                .child(
+                            if should_dim {
+                                row = row.child(
                                     div()
-                                        .w_8()
-                                        .h_8()
-                                        .rounded_md()
-                                        .border_1()
-                                        .border_color(border_clr)
-                                        .bg(bg)
                                         .flex()
+                                        .flex_1()
+                                        .flex_col()
                                         .items_center()
                                         .justify_center()
+                                        .gap_1()
+                                        .opacity(0.2)
+                                        .py_3()
+                                        .rounded_xl()
+                                        .border_1()
+                                        .border_color(cx.theme().border)
+                                        .bg(gpui::transparent_black())
                                         .child(
                                             div()
                                                 .text_sm()
                                                 .font_weight(FontWeight::BOLD)
-                                                .text_color(accent)
-                                                .child(icon),
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child(month_names[absolute_idx]),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child("-")
                                         ),
-                                )
-                                .child(
+                                );
+                            } else {
+                                let (bg, border_clr, accent, _icon, status_label) =
+                                    Self::state_style(m_state, cx);
+                                let hover_bg = Self::state_hover_bg(m_state, cx);
+                                let code_click = code.clone();
+
+                                row = row.child(
                                     div()
-                                        .text_xs()
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .text_color(cx.theme().foreground)
-                                        .child(month_names[idx]),
-                                )
-                                .child(div().text_xs().text_color(accent).child(status_label))
-                                .on_click(cx.listener(move |_this, _ev, _window, cx| {
-                                    cx.emit(DashboardEvent::FileForm {
-                                        form_code: code_click.clone(),
-                                        year,
-                                        quarter: m_num,
-                                    });
-                                })),
-                        );
+                                        .id(format!("m_{}_{}_{}", form_def.code, year, m_num))
+                                        .flex()
+                                        .flex_1()
+                                        .flex_col()
+                                        .items_center()
+                                        .justify_center()
+                                        .gap_1()
+                                        .py_3()
+                                        .cursor_pointer()
+                                        .rounded_xl()
+                                        .border_1()
+                                        .border_color(border_clr)
+                                        .bg(bg)
+                                        .hover(move |s| s.bg(hover_bg).border_color(accent))
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::BOLD)
+                                                .text_color(if matches!(m_state, QuarterState::NotStarted) { cx.theme().foreground } else { accent })
+                                                .child(month_names[absolute_idx]),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .font_weight(FontWeight::SEMIBOLD)
+                                                .text_color(accent)
+                                                .child(status_label)
+                                        )
+                                        .on_click(cx.listener(move |_this, _ev, _window, cx| {
+                                            cx.emit(DashboardEvent::FileForm {
+                                                form_code: code_click.clone(),
+                                                year,
+                                                quarter: m_num,
+                                            });
+                                        })),
+                                );
+                            }
+                        }
+                        month_dots = month_dots.child(row);
                     }
 
-                    Self::build_card(form_def, year, is_narrow, cx).child(
+                    Self::build_card(form_def, year, cx).child(
                         div()
                             .flex()
                             .flex_col()
@@ -517,7 +546,7 @@ impl Render for DashboardView {
                     let hover_bg = Self::state_hover_bg(&status, cx);
                     let code_click = code.clone();
 
-                    Self::build_card(form_def, year, is_narrow, cx)
+                    Self::build_card(form_def, year, cx)
                         .child(
                             div().flex().justify_between().items_center().child(
                                 div()
@@ -532,18 +561,18 @@ impl Render for DashboardView {
                                 .flex()
                                 .items_center()
                                 .justify_center()
-                                .gap_2()
+                                .gap_3()
                                 .py_3()
-                                .px_4()
-                                .rounded_lg()
+                                .px_6()
+                                .rounded_full()
                                 .border_1()
                                 .border_color(border_clr)
                                 .bg(bg)
                                 .cursor_pointer()
-                                .hover(move |s| s.bg(hover_bg))
+                                .hover(move |s| s.bg(hover_bg).border_color(accent))
                                 .child(
                                     div()
-                                        .text_sm()
+                                        .text_base()
                                         .font_weight(FontWeight::BOLD)
                                         .text_color(accent)
                                         .child(icon),
@@ -551,12 +580,13 @@ impl Render for DashboardView {
                                 .child(
                                     div()
                                         .text_sm()
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .text_color(accent)
+                                        .font_weight(FontWeight::BOLD)
+                                        .text_color(if matches!(&status, QuarterState::NotStarted) { cx.theme().foreground } else { accent })
                                         .child(match &status {
                                             QuarterState::Paid => "View Paid Return",
                                             QuarterState::Confirmed => "View Filed Return",
                                             QuarterState::Submitted => "View Submission",
+                                            QuarterState::Queued => "View Queued Return",
                                             QuarterState::Draft => "Resume Draft",
                                             QuarterState::NotStarted => "File Annual Return",
                                         }),
@@ -574,8 +604,9 @@ impl Render for DashboardView {
                     let count = progress.as_ref().map(|p| p.open_ended_count).unwrap_or(0);
                     let code_click = code.clone();
                     let hover_bg = cx.theme().accent;
+                    let primary = cx.theme().primary;
 
-                    Self::build_card(form_def, year, is_narrow, cx)
+                    Self::build_card(form_def, year, cx)
                         .child(
                             div()
                                 .flex()
@@ -601,27 +632,27 @@ impl Render for DashboardView {
                                 .flex()
                                 .items_center()
                                 .justify_center()
-                                .gap_2()
+                                .gap_3()
                                 .py_3()
-                                .px_4()
-                                .rounded_lg()
+                                .px_6()
+                                .rounded_full()
                                 .border_1()
                                 .border_color(cx.theme().border)
-                                .bg(cx.theme().background)
+                                .bg(gpui::transparent_black())
                                 .cursor_pointer()
-                                .hover(move |s| s.bg(hover_bg))
+                                .hover(move |s| s.bg(hover_bg).border_color(primary))
                                 .child(
                                     div()
-                                        .text_sm()
+                                        .text_base()
                                         .font_weight(FontWeight::BOLD)
-                                        .text_color(cx.theme().muted_foreground)
+                                        .text_color(cx.theme().foreground)
                                         .child("+"),
                                 )
                                 .child(
                                     div()
                                         .text_sm()
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .text_color(cx.theme().muted_foreground)
+                                        .font_weight(FontWeight::BOLD)
+                                        .text_color(cx.theme().foreground)
                                         .child("File New Return"),
                                 )
                                 .on_click(cx.listener(move |_this, _ev, _window, cx| {
@@ -761,10 +792,12 @@ impl DashboardView {
     fn build_card(
         form_def: &bir_core::forms::registry::FormDefinition,
         _year: u16,
-        is_narrow: bool,
         cx: &Context<Self>,
     ) -> Div {
-        let mut card_div = div()
+        div()
+            .flex_1()
+            .min_w(px(340.))
+            .max_w(px(460.))
             .bg(cx.theme().background)
             .border_1()
             .border_color(cx.theme().border)
@@ -774,15 +807,8 @@ impl DashboardView {
             .flex_col()
             .gap_4()
             .hover(|style| style.border_color(cx.theme().primary))
-            .shadow_sm();
-            
-        if is_narrow {
-            card_div = card_div.w_full();
-        } else {
-            card_div = card_div.w(px(340.));
-        }
-
-        card_div.child(
+            .shadow_sm()
+            .child(
                 div()
                     .flex()
                     .justify_between()

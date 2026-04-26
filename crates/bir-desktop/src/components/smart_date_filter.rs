@@ -77,6 +77,10 @@ impl Render for SmartDateFilterState {
                         anchored().snap_to_window_with_margin(px(8.)).child(
                             div()
                                 .occlude()
+                                .on_mouse_down_out(cx.listener(|this, _ev, _window, cx| {
+                                    this.open = false;
+                                    cx.notify();
+                                }))
                                 .mt_1p5()
                                 .w(px(240.))
                                 .border_1()

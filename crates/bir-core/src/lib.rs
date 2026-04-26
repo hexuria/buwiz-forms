@@ -30,6 +30,9 @@ pub mod reference;
 pub mod schema;
 pub mod transport;
 pub mod validation;
+pub mod background_cron;
+pub mod penalties;
+pub mod daemon_installer;
 
 // Re-export core types
 pub use bir_xml::{generate_bir_xml, parse_bir_xml};

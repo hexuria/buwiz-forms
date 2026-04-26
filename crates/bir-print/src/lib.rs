@@ -1,15 +1,18 @@
+pub mod editable;
+pub mod formtype;
+
 use bir_core::forms::form_2551q::Form2551QDraft;
-use serde::Deserialize;
+use formtype::{FieldKind, FormField, FormType};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const FORM_2551Q_ID: &str = "2551Qv2018";
-const LAYOUT_2551Q: &str = include_str!("../templates/2551Qv2018/layout.json");
-const TEMPLATE_2551Q: &str = include_str!("../templates/2551Qv2018/template.typ");
-const PAGE1_SVG_2551Q: &str = include_str!("../templates/2551Qv2018/svgbase/page1.svg");
-const PAGE2_SVG_2551Q: &str = include_str!("../templates/2551Qv2018/svgbase/page2.svg");
+const LAYOUT_2551Q: &str = include_str!("../../../formtypes/2551Qv2018/formtype.json");
+const TEMPLATE_2551Q: &str = include_str!("../../../formtypes/2551Qv2018/template.typ");
+const PAGE1_SVG_2551Q: &str = include_str!("../../../formtypes/2551Qv2018/pages/page1.svg");
+const PAGE2_SVG_2551Q: &str = include_str!("../../../formtypes/2551Qv2018/pages/page2.svg");
 
 pub fn print_html_mac(_html_content: &str) {
     /*
@@ -151,26 +154,36 @@ impl TypstCompiler for CliTypstCompiler {
     }
 }
 
-pub fn render_2551q_print(
+/// Render a flat (official-looking) PDF for Form 2551Q.
+pub fn render_2551q_flat(
     draft: &Form2551QDraft,
     output_dir: impl Into<PathBuf>,
 ) -> Result<PrintResult, PrintError> {
-    render_print(PrintRequest::new(
+    render_flat_pdf(PrintRequest::new(
         FORM_2551Q_ID,
         draft.to_bir_field_map(),
         output_dir,
     ))
 }
 
-pub fn render_print(request: PrintRequest) -> Result<PrintResult, PrintError> {
-    let layout = load_layout(&request.form_id)?;
-    validate_fields(&layout, &request.fields)?;
+/// Backward-compatible alias for [`render_2551q_flat`].
+pub fn render_2551q_print(
+    draft: &Form2551QDraft,
+    output_dir: impl Into<PathBuf>,
+) -> Result<PrintResult, PrintError> {
+    render_2551q_flat(draft, output_dir)
+}
+
+/// Render a flat (official-looking) PDF from a `PrintRequest`.
+pub fn render_flat_pdf(request: PrintRequest) -> Result<PrintResult, PrintError> {
+    let formtype = load_formtype(&request.form_id)?;
+    validate_fields(&formtype, &request.fields)?;
     fs::create_dir_all(&request.output_dir)?;
     write_static_assets(&request.form_id, &request.output_dir)?;
 
     let typ_path = request.output_dir.join("generated.typ");
     let pdf_path = request.output_dir.join("generated.pdf");
-    let typst = generate_typst(&layout, &request.fields)?;
+    let typst = generate_typst(&formtype, &request.fields)?;
     fs::write(&typ_path, typst)?;
 
     let embedded = EmbeddedTypstCompiler;
@@ -180,13 +193,44 @@ pub fn render_print(request: PrintRequest) -> Result<PrintResult, PrintError> {
     }
 
     let preview_png_paths =
-        export_preview_pngs(&typ_path, &request.output_dir, layout.page_count())
+        export_preview_pngs(&typ_path, &request.output_dir, formtype.page_count())
             .unwrap_or_default();
 
     Ok(PrintResult {
         pdf_path,
         preview_png_paths,
         typ_path,
+    })
+}
+
+/// Backward-compatible alias for [`render_flat_pdf`].
+pub fn render_print(request: PrintRequest) -> Result<PrintResult, PrintError> {
+    render_flat_pdf(request)
+}
+
+/// Render an editable (AcroForm fillable) PDF for Form 2551Q.
+///
+/// First renders the flat PDF via Typst, then injects real AcroForm widget
+/// annotations so the resulting file can be opened and edited in macOS Preview
+/// or Adobe Acrobat as a real form.
+pub fn render_2551q_editable(
+    draft: &Form2551QDraft,
+    output_dir: impl Into<PathBuf>,
+) -> Result<PrintResult, PrintError> {
+    let output_dir = output_dir.into();
+    let flat = render_2551q_flat(draft, &output_dir)?;
+    let formtype = load_formtype(FORM_2551Q_ID)?;
+    let editable_path = output_dir.join("editable.pdf");
+    editable::inject_acroform(
+        &flat.pdf_path,
+        &formtype,
+        &draft.to_bir_field_map(),
+        &editable_path,
+    )?;
+    Ok(PrintResult {
+        pdf_path: editable_path,
+        preview_png_paths: flat.preview_png_paths,
+        typ_path: flat.typ_path,
     })
 }
 
@@ -221,82 +265,39 @@ pub fn render_2551q_pdf(draft: &Form2551QDraft, _paper_size: PaperSize) -> Vec<u
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct FormLayout {
-    form_id: String,
-    page_width: f64,
-    page_height: f64,
-    fields: Vec<FieldLayout>,
-}
+// FormType, FormField, FieldKind, WidgetSpec, WidgetType
+// are defined in formtype.rs and re-imported above.
 
-impl FormLayout {
-    fn page_count(&self) -> usize {
-        self.fields
-            .iter()
-            .map(|field| field.page)
-            .max()
-            .unwrap_or(0)
-            .max(2)
-    }
-}
-
-#[derive(Debug, Deserialize)]
-struct FieldLayout {
-    key: String,
-    kind: FieldKind,
-    page: usize,
-    x: f64,
-    y: f64,
-    #[serde(default)]
-    cell_w: Option<f64>,
-    #[serde(default)]
-    int_cells: Option<usize>,
-    #[serde(default)]
-    dec_x: Option<f64>,
-    #[serde(default)]
-    size: Option<f64>,
-    #[serde(default)]
-    optional: bool,
-}
-
-#[derive(Debug, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-enum FieldKind {
-    Checkbox,
-    Text,
-    Cells,
-    Amount,
-}
-
-fn load_layout(form_id: &str) -> Result<FormLayout, PrintError> {
+/// Load and validate the [`FormType`] for the given form ID.
+pub fn load_formtype(form_id: &str) -> Result<FormType, PrintError> {
     match form_id {
         FORM_2551Q_ID => {
-            let layout: FormLayout = serde_json::from_str(LAYOUT_2551Q)?;
-            if layout.form_id != form_id {
+            let ft: FormType = serde_json::from_str(LAYOUT_2551Q)?;
+            if ft.form_id != form_id {
                 return Err(PrintError::InvalidLayout(format!(
-                    "layout form_id {} does not match {form_id}",
-                    layout.form_id
+                    "formtype form_id {} does not match {form_id}",
+                    ft.form_id
                 )));
             }
-            if (layout.page_width - 612.0).abs() > f64::EPSILON
-                || (layout.page_height - 936.0).abs() > f64::EPSILON
+            if (ft.page_width - 612.0).abs() > f64::EPSILON
+                || (ft.page_height - 936.0).abs() > f64::EPSILON
             {
                 return Err(PrintError::InvalidLayout(format!(
                     "expected 612 x 936pt, got {} x {}",
-                    layout.page_width, layout.page_height
+                    ft.page_width, ft.page_height
                 )));
             }
-            Ok(layout)
+            Ok(ft)
         }
         other => Err(PrintError::UnsupportedForm(other.to_string())),
     }
 }
 
 fn validate_fields(
-    layout: &FormLayout,
+    formtype: &FormType,
     fields: &BTreeMap<String, String>,
 ) -> Result<(), PrintError> {
-    let missing = layout
+    let missing = formtype
         .fields
         .iter()
         .filter(|field| !field.optional)
@@ -325,26 +326,26 @@ fn write_static_assets(form_id: &str, output_dir: &Path) -> Result<(), PrintErro
 }
 
 fn generate_typst(
-    layout: &FormLayout,
+    formtype: &FormType,
     fields: &BTreeMap<String, String>,
 ) -> Result<String, PrintError> {
     let mut lines = vec![
         format!(
             "#set page(width: {}pt, height: {}pt, margin: 0pt)",
-            fmt_num(layout.page_width),
-            fmt_num(layout.page_height)
+            fmt_num(formtype.page_width),
+            fmt_num(formtype.page_height)
         ),
         TEMPLATE_2551Q.to_string(),
     ];
 
-    for page in 1..=layout.page_count() {
+    for page in 1..=formtype.page_count() {
         lines.push(format!(
             "#page(background: image(\"svgbase/page{page}.svg\", width: {}pt, height: {}pt), foreground: {{",
-            fmt_num(layout.page_width),
-            fmt_num(layout.page_height)
+            fmt_num(formtype.page_width),
+            fmt_num(formtype.page_height)
         ));
 
-        for field in layout.fields.iter().filter(|field| field.page == page) {
+        for field in formtype.fields.iter().filter(|field| field.page == page) {
             if let Some(line) = render_field(field, fields)? {
                 lines.push(format!("  {line}"));
             }
@@ -357,7 +358,7 @@ fn generate_typst(
 }
 
 fn render_field(
-    field: &FieldLayout,
+    field: &FormField,
     fields: &BTreeMap<String, String>,
 ) -> Result<Option<String>, PrintError> {
     let value = fields.get(&field.key).cloned().unwrap_or_default();
@@ -686,6 +687,7 @@ mod tests {
             imap_email: None,
             imap_host: None,
             _imap_enabled_compat: None,
+            background_cron_enabled: true,
             imap_app_password: None,
             oauth_access_token: None,
             oauth_refresh_token: None,
@@ -698,8 +700,8 @@ mod tests {
     }
 
     #[test]
-    fn loads_2551q_layout() {
-        let layout = load_layout(FORM_2551Q_ID).expect("layout should load");
+    fn loads_2551q_formtype() {
+        let layout = load_formtype(FORM_2551Q_ID).expect("formtype should load");
         assert_eq!(layout.page_width, 612.0);
         assert_eq!(layout.page_height, 936.0);
         assert_eq!(layout.page_count(), 2);
@@ -711,14 +713,14 @@ mod tests {
 
     #[test]
     fn sample_data_covers_required_layout_fields() {
-        let layout = load_layout(FORM_2551Q_ID).expect("layout should load");
+        let layout = load_formtype(FORM_2551Q_ID).expect("formtype should load");
         let fields = sample_draft().to_bir_field_map();
         validate_fields(&layout, &fields).expect("sample fields should cover layout");
     }
 
     #[test]
     fn generated_typst_uses_official_page_size() {
-        let layout = load_layout(FORM_2551Q_ID).expect("layout should load");
+        let layout = load_formtype(FORM_2551Q_ID).expect("formtype should load");
         let fields = sample_draft().to_bir_field_map();
         let typst = generate_typst(&layout, &fields).expect("typst should render");
 
@@ -770,11 +772,99 @@ mod tests {
 
     #[test]
     fn layout_keys_are_unique() {
-        let layout = load_layout(FORM_2551Q_ID).expect("layout should load");
+        let layout = load_formtype(FORM_2551Q_ID).expect("formtype should load");
         let mut seen = BTreeSet::new();
         for field in layout.fields {
             assert!(seen.insert(field.key), "duplicate layout field");
         }
+    }
+
+    #[test]
+    fn editable_pdf_contains_acroform() {
+        let temp = tempfile::tempdir().unwrap();
+        let result = render_2551q_editable(&sample_draft(), temp.path())
+            .expect("editable render should succeed");
+        assert!(result.pdf_path.exists(), "editable PDF should exist");
+        let pdf_bytes = std::fs::read(&result.pdf_path).unwrap();
+        let pdf_str = String::from_utf8_lossy(&pdf_bytes);
+        assert!(
+            pdf_str.contains("/AcroForm"),
+            "editable PDF should contain /AcroForm"
+        );
+        assert!(
+            pdf_str.contains("/Widget"),
+            "editable PDF should contain /Widget annotations"
+        );
+    }
+
+    #[test]
+    fn editable_pdf_has_text_and_checkbox_fields() {
+        let temp = tempfile::tempdir().unwrap();
+        let result = render_2551q_editable(&sample_draft(), temp.path())
+            .expect("editable render should succeed");
+        let doc = lopdf::Document::load(&result.pdf_path)
+            .expect("editable PDF should load with lopdf");
+
+        let mut has_text = false;
+        let mut has_btn = false;
+        for (_id, obj) in doc.objects.iter() {
+            if let lopdf::Object::Dictionary(dict) = obj {
+                if let Ok(lopdf::Object::Name(ft)) = dict.get(b"FT") {
+                    if ft == b"Tx" {
+                        has_text = true;
+                    }
+                    if ft == b"Btn" {
+                        has_btn = true;
+                    }
+                }
+            }
+        }
+        assert!(has_text, "editable PDF should contain text fields (/FT /Tx)");
+        assert!(has_btn, "editable PDF should contain checkbox fields (/FT /Btn)");
+    }
+
+    #[test]
+    fn editable_pdf_field_names_present() {
+        let temp = tempfile::tempdir().unwrap();
+        let result = render_2551q_editable(&sample_draft(), temp.path())
+            .expect("editable render should succeed");
+        let pdf_bytes = std::fs::read(&result.pdf_path).unwrap();
+        let pdf_str = String::from_utf8_lossy(&pdf_bytes);
+        // TIN field should be present as a widget
+        assert!(
+            pdf_str.contains("frm2551Qv2018:txtTIN1"),
+            "TIN1 field name should appear in editable PDF"
+        );
+        // A checkbox field should be present
+        assert!(
+            pdf_str.contains("frm2551Qv2018:qtr_"),
+            "quarter checkbox field name should appear in editable PDF"
+        );
+    }
+
+    #[test]
+    fn formtype_widget_specs_deserialize() {
+        let formtype = load_formtype(FORM_2551Q_ID).expect("formtype should load");
+        let text_widgets = formtype
+            .fields
+            .iter()
+            .filter(|f| {
+                f.widget
+                    .as_ref()
+                    .is_some_and(|w| w.widget_type == formtype::WidgetType::Text)
+            })
+            .count();
+        let checkbox_widgets = formtype
+            .fields
+            .iter()
+            .filter(|f| {
+                f.widget
+                    .as_ref()
+                    .is_some_and(|w| w.widget_type == formtype::WidgetType::Checkbox)
+            })
+            .count();
+        assert!(text_widgets > 0, "should have text widgets");
+        assert!(checkbox_widgets > 0, "should have checkbox widgets");
     }
 
     fn assert_preview_content_starts_near_top(path: &Path, max_top: u32) {

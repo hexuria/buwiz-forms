@@ -12,8 +12,6 @@ impl Form2551QDraft {
             } else {
                 0.0
             };
-        let tax_still_due = (self.total_tax_due - total_credits).max(0.0);
-        let penalties = 0.0;
 
         insert(&mut fields, "frm2551Qv2018:forThe_1", "true");
         insert(&mut fields, "frm2551Qv2018:forThe_2", "false");
@@ -82,12 +80,12 @@ impl Form2551QDraft {
         insert(&mut fields, "frm2551Qv2018:txt17Specify", "");
         insert_money(&mut fields, "frm2551Qv2018:txt17", 0.0);
         insert_money(&mut fields, "frm2551Qv2018:txt18", total_credits);
-        insert_money(&mut fields, "frm2551Qv2018:txt19", tax_still_due);
-        insert_money(&mut fields, "frm2551Qv2018:txt20", 0.0);
-        insert_money(&mut fields, "frm2551Qv2018:txt21", 0.0);
-        insert_money(&mut fields, "frm2551Qv2018:txt22", 0.0);
-        insert_money(&mut fields, "frm2551Qv2018:txt23", penalties);
-        insert_money(&mut fields, "frm2551Qv2018:txt24", self.tax_payable);
+        insert_money(&mut fields, "frm2551Qv2018:txt19", self.tax_payable);
+        insert_money(&mut fields, "frm2551Qv2018:txt20", self.surcharge);
+        insert_money(&mut fields, "frm2551Qv2018:txt21", self.interest);
+        insert_money(&mut fields, "frm2551Qv2018:txt22", self.compromise);
+        insert_money(&mut fields, "frm2551Qv2018:txt23", self.total_penalties);
+        insert_money(&mut fields, "frm2551Qv2018:txt24", self.total_amount_payable);
         insert_money(&mut fields, "txtTotalSched1", self.total_tax_due);
         insert(&mut fields, "frm2551Qv2018:overPayment1", "false");
         insert(&mut fields, "frm2551Qv2018:overPayment2", "false");

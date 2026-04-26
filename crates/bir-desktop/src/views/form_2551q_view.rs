@@ -299,102 +299,24 @@ impl Form2551QView {
             return;
         }
 
-        self.status_message = Some("Submitting to BIR Remote Gateway...".to_string());
+        self.status_message = Some("Queuing for background submission...".to_string());
+        self.draft.status = FilingStatus::Queued;
+        self.draft.submission_attempts = 0;
+        self.draft.next_retry_at = Some(chrono::Utc::now().to_rfc3339());
+        self.draft.last_error = None;
+        
+        if let Ok(db) = self.db.lock() {
+            let _ = db.save_2551q_draft(&self.draft);
+        }
+
+        cx.emit(Form2551QEvent::PushNotification(
+            "info".to_string(),
+            "Form Queued".to_string(),
+            "Your form has been queued for background submission.".to_string(),
+        ));
+        cx.emit(Form2551QEvent::Saved);
+        self.status_message = None;
         cx.notify();
-
-        let draft = self.draft.clone();
-        let db = self.db.clone();
-
-        cx.spawn(async move |this, cx| {
-            let form_type = "2551Qv2018";
-            let filename = format!("{}-{}#{}#{}#.xml", draft.tin, form_type, draft.period_code(), draft.email);
-            
-            let xml_payload = draft.to_bir_xml_payload();
-            
-            // Log to debug.log
-            use std::io::Write;
-            if let Ok(mut log_file) = std::fs::OpenOptions::new().create(true).append(true).open("debug.log") {
-                let _ = writeln!(log_file, "--- SUBMISSION AT {} ---", chrono::Utc::now().to_rfc3339());
-                let _ = writeln!(log_file, "Filename: {}", filename);
-                let _ = writeln!(log_file, "Payload:\n{}", xml_payload);
-            }
-            
-            let passphrase = "T0081gP45sy0rd-To+R3m3m63r!@4/<>";
-            let encrypted = match bir_core::crypto::compress_and_encrypt(xml_payload.as_bytes(), passphrase) {
-                Ok(enc) => enc,
-                Err(e) => {
-                    if let Ok(mut log_file) = std::fs::OpenOptions::new().create(true).append(true).open("debug.log") {
-                        let _ = writeln!(log_file, "Encryption Error: {}", e);
-                    }
-                    cx.update(|cx| {
-                        if let Some(this) = this.upgrade() {
-                            this.update(cx, |this, cx| {
-                                this.status_message = None;
-                                cx.emit(Form2551QEvent::PushNotification(
-                                    "error".to_string(),
-                                    "Encryption failed".to_string(),
-                                    e.to_string(),
-                                ));
-                                cx.notify();
-                            });
-                        }
-                    });
-                    return;
-                }
-            };
-            
-            // Transmit
-            match bir_core::transport::submit_iaf(form_type, &filename, &encrypted).await {
-                Ok(_) => {
-                    if let Ok(mut log_file) = std::fs::OpenOptions::new().create(true).append(true).open("debug.log") {
-                        let _ = writeln!(log_file, "Response: OK");
-                    }
-                    let mut final_draft = draft.clone();
-                    final_draft.status = FilingStatus::Submitted;
-                    final_draft.submitted_at = Some(chrono::Utc::now().to_rfc3339());
-                    final_draft.submission_filename = Some(filename);
-                    
-                    if let Ok(db) = db.lock() {
-                        let _ = db.save_2551q_draft(&final_draft);
-                    }
-                    
-                    cx.update(|cx| {
-                        if let Some(this) = this.upgrade() {
-                            this.update(cx, |this, cx| {
-                                this.draft = final_draft;
-                                this.status_message = None;
-                                cx.emit(Form2551QEvent::PushNotification(
-                                    "success".to_string(),
-                                    "Submission Successful".to_string(),
-                                    "Successfully submitted to BIR Remote Gateway.".to_string(),
-                                ));
-                                cx.emit(Form2551QEvent::Submitted);
-                                cx.notify();
-                            });
-                        }
-                    });
-                }
-                Err(e) => {
-                    if let Ok(mut log_file) = std::fs::OpenOptions::new().create(true).append(true).open("debug.log") {
-                        let _ = writeln!(log_file, "Submission Error: {}", e);
-                    }
-                    cx.update(|cx| {
-                        if let Some(this) = this.upgrade() {
-                            this.update(cx, |this, cx| {
-                                this.status_message = None;
-                                cx.emit(Form2551QEvent::PushNotification(
-                                    "error".to_string(),
-                                    "Submission failed".to_string(),
-                                    e.to_string(),
-                                ));
-                                cx.notify();
-                            });
-                        }
-                    });
-                }
-            }
-        })
-        .detach();
     }
 
     fn on_submit_action(
@@ -528,19 +450,21 @@ impl Form2551QView {
     }
 
     fn render_status_pipeline(&self, cx: &Context<Self>) -> gpui::Div {
-        let steps: [(&str, FilingStatus, u8); 4] = [
+        let steps: [(&str, FilingStatus, u8); 5] = [
             ("Draft", FilingStatus::Draft, 1),
-            ("Submitted", FilingStatus::Submitted, 2),
-            ("Confirmed", FilingStatus::Confirmed, 3),
-            ("Paid", FilingStatus::Paid, 4),
+            ("Queued", FilingStatus::Queued, 2),
+            ("Submitted", FilingStatus::Submitted, 3),
+            ("Confirmed", FilingStatus::Confirmed, 4),
+            ("Paid", FilingStatus::Paid, 5),
         ];
 
         let step_order = |s: &FilingStatus| -> u8 {
             match s {
                 FilingStatus::Draft => 0,
-                FilingStatus::Submitted => 1,
-                FilingStatus::Confirmed => 2,
-                FilingStatus::Paid => 3,
+                FilingStatus::Queued => 1,
+                FilingStatus::Submitted => 2,
+                FilingStatus::Confirmed => 3,
+                FilingStatus::Paid => 4,
             }
         };
         let current_idx = step_order(&self.draft.status);
@@ -560,7 +484,7 @@ impl Form2551QView {
                             .flex_1()
                             .max_w(px(80.))
                             .h(px(2.))
-                            .bg(gpui::rgba(0x22c55e80))
+                            .bg(cx.theme().success.opacity(0.5))
                     );
                 } else {
                     row = row.child(
@@ -579,14 +503,20 @@ impl Form2551QView {
                 div()
                     .text_xs()
                     .font_weight(FontWeight::BOLD)
-                    .text_color(gpui::rgba(0xffffffff))
+                    .text_color(cx.theme().success_foreground)
                     .child("✓")
                     .into_any_element()
             } else {
                 let num_color = if is_current {
-                    gpui::rgba(0xffffffff)
+                    match step_status {
+                        FilingStatus::Draft => cx.theme().warning_foreground,
+                        FilingStatus::Queued => cx.theme().primary_foreground,
+                        FilingStatus::Submitted => cx.theme().info_foreground,
+                        FilingStatus::Confirmed => cx.theme().success_foreground,
+                        FilingStatus::Paid => cx.theme().success_foreground,
+                    }
                 } else {
-                    cx.theme().muted_foreground.into()
+                    cx.theme().muted_foreground
                 };
                 div()
                     .text_xs()
@@ -598,31 +528,33 @@ impl Form2551QView {
 
             // Circle colors
             let (circle_bg, circle_border) = if is_completed {
-                (gpui::rgba(0x22c55eff), gpui::rgba(0x22c55eff))
+                (cx.theme().success, cx.theme().success)
             } else if is_current {
                 let color = match step_status {
-                    FilingStatus::Draft => gpui::rgba(0xfacc15ff),
-                    FilingStatus::Submitted => gpui::rgba(0x3b82f6ff),
-                    FilingStatus::Confirmed => gpui::rgba(0x22c55eff),
-                    FilingStatus::Paid => gpui::rgba(0x10b981ff),
+                    FilingStatus::Draft => cx.theme().warning,
+                    FilingStatus::Queued => cx.theme().primary,
+                    FilingStatus::Submitted => cx.theme().info,
+                    FilingStatus::Confirmed => cx.theme().success,
+                    FilingStatus::Paid => cx.theme().success,
                 };
                 (color, color)
             } else {
-                (gpui::rgba(0x00000000), cx.theme().muted_foreground.into())
+                (gpui::rgba(0x00000000).into(), cx.theme().muted_foreground)
             };
 
             // Label color
             let label_color = if is_completed {
-                gpui::rgba(0x22c55eff)
+                cx.theme().success
             } else if is_current {
                 match step_status {
-                    FilingStatus::Draft => gpui::rgba(0xfacc15ff),
-                    FilingStatus::Submitted => gpui::rgba(0x3b82f6ff),
-                    FilingStatus::Confirmed => gpui::rgba(0x22c55eff),
-                    FilingStatus::Paid => gpui::rgba(0x10b981ff),
+                    FilingStatus::Draft => cx.theme().warning,
+                    FilingStatus::Queued => cx.theme().primary,
+                    FilingStatus::Submitted => cx.theme().info,
+                    FilingStatus::Confirmed => cx.theme().success,
+                    FilingStatus::Paid => cx.theme().success,
                 }
             } else {
-                cx.theme().muted_foreground.into()
+                cx.theme().muted_foreground
             };
 
             let mut circle = div()
@@ -924,7 +856,9 @@ impl Form2551QView {
             format!("Period: Q{} {}", self.draft.quarter, self.draft.taxable_year),
             format!("Total Tax Due: {:.2}", self.draft.total_tax_due),
             format!("Creditable Tax Withheld: {:.2}", self.draft.creditable_tax_withheld),
-            format!("Total Amount Payable: {:.2}", self.draft.tax_payable),
+            format!("Tax Still Payable: {:.2}", self.draft.tax_payable),
+            format!("Penalties: {:.2}", self.draft.total_penalties),
+            format!("Total Amount Payable: {:.2}", self.draft.total_amount_payable),
             format!("Status: {:?}", self.draft.status),
         ];
 
@@ -962,12 +896,12 @@ impl Form2551QView {
         self.validation_errors.iter().find(|(f, _)| f == field_id).map(|(_, msg)| msg)
     }
 
-    fn error_icon(_message: &str) -> gpui::Div {
+    fn error_icon(_message: &str, cx: &Context<Self>) -> gpui::Div {
         div()
             .flex()
             .items_center()
             .justify_center()
-            .text_color(gpui::rgba(0xff6b6bff))
+            .text_color(cx.theme().danger)
             .child(Icon::new(IconName::TriangleAlert).small())
     }
 
@@ -995,6 +929,15 @@ impl Form2551QView {
     fn status_hint(&self) -> Option<String> {
         match &self.draft.status {
             FilingStatus::Draft => None,
+            FilingStatus::Queued => {
+                let attempts = self.draft.submission_attempts;
+                let text = if attempts > 0 {
+                    format!("Submission failed {} times. Waiting for next retry.", attempts)
+                } else {
+                    "Queued for background submission.".to_string()
+                };
+                Some(text)
+            }
             FilingStatus::Submitted => {
                 let date = self.draft.submitted_at.as_deref().unwrap_or("unknown date");
                 Some(format!("Submitted on {}. Waiting for BIR confirmation email.", date))
@@ -1441,20 +1384,85 @@ impl Render for Form2551QView {
                     .child(
                         div()
                             .text_sm()
-                            .font_weight(FontWeight::BOLD)
                             .text_color(cx.theme().foreground)
-                            .child("17. Total Amount Payable / (Overpayment)"),
+                            .child("17. Tax Still Payable / (Overpayment)"),
+                    )
+                    .child(Self::currency_display(tax_payable, cx)),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .pt_4()
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().foreground)
+                            .child("18. Add: Penalties"),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .pl_6()
+                            .justify_between()
+                            .items_center()
+                            .child(div().text_sm().text_color(cx.theme().muted_foreground).child("18A. Surcharge"))
+                            .child(Self::currency_display(self.draft.surcharge, cx))
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .pl_6()
+                            .justify_between()
+                            .items_center()
+                            .child(div().text_sm().text_color(cx.theme().muted_foreground).child("18B. Interest"))
+                            .child(Self::currency_display(self.draft.interest, cx))
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .pl_6()
+                            .justify_between()
+                            .items_center()
+                            .child(div().text_sm().text_color(cx.theme().muted_foreground).child("18C. Compromise"))
+                            .child(Self::currency_display(self.draft.compromise, cx))
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .pl_6()
+                            .justify_between()
+                            .items_center()
+                            .child(div().text_sm().font_weight(FontWeight::BOLD).text_color(cx.theme().foreground).child("18D. Total Penalties"))
+                            .child(Self::currency_display(self.draft.total_penalties, cx))
+                    )
+            )
+            .child(
+                div()
+                    .flex()
+                    .justify_between()
+                    .items_center()
+                    .pt_4()
+                    .border_t_1()
+                    .border_color(cx.theme().border)
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::BLACK)
+                            .text_color(cx.theme().foreground)
+                            .child("19. Total Amount Payable / (Overpayment)"),
                     )
                     .child(
                         div()
                             .text_2xl()
                             .font_weight(FontWeight::BLACK)
-                            .text_color(if tax_payable > 0.0 {
+                            .text_color(if self.draft.total_amount_payable > 0.0 {
                                 cx.theme().primary
                             } else {
                                 cx.theme().muted_foreground
                             })
-                            .child(format!("\u{20b1} {:.2}", tax_payable)),
+                            .child(format!("\u{20b1} {:.2}", self.draft.total_amount_payable)),
                     ),
             );
 
@@ -1462,9 +1470,9 @@ impl Render for Form2551QView {
             div().into_any_element()
         } else {
             div()
-                .bg(gpui::rgba(0x7f1d1d33))
+                .bg(cx.theme().danger.opacity(0.1))
                 .border_1()
-                .border_color(gpui::rgba(0xff6b6bff))
+                .border_color(cx.theme().danger)
                 .rounded_lg()
                 .p_4()
                 .flex()
@@ -1473,7 +1481,7 @@ impl Render for Form2551QView {
                 .children(self.validation_errors.iter().map(|(_field, msg)| {
                     div()
                         .text_sm()
-                        .text_color(gpui::rgba(0xffb4b4ff))
+                        .text_color(cx.theme().danger)
                         .child(msg.clone())
                 }))
                 .into_any_element()
@@ -1488,7 +1496,7 @@ impl Render for Form2551QView {
                         .bg(cx.theme().secondary)
                         .rounded_xl()
                         .border_1()
-                        .border_color(if $has_error { gpui::rgba(0xff6b6bff).into() } else { cx.theme().border })
+                        .border_color(if $has_error { cx.theme().danger } else { cx.theme().border })
                         .p_6()
                         .flex()
                         .flex_col()
@@ -1737,10 +1745,20 @@ impl Render for Form2551QView {
                                 );
                                 toolbar = toolbar.child(
                                     gpui_component::button::Button::new("submit_btn")
-                                        .label("Submit to BIR")
+                                        .label("Queue for Submission")
                                         .disabled(!self.is_validated)
                                         .on_click(cx.listener(|this, _, _, cx| {
                                             this.mark_submitted(cx);
+                                        }))
+                                );
+                            }
+                            FilingStatus::Queued => {
+                                toolbar = toolbar.child(
+                                    gpui_component::button::Button::new("cancel_queue_btn")
+                                        .label("Cancel Submission Queue")
+                                        .ghost()
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.revert_to_draft(window, cx);
                                         }))
                                 );
                             }

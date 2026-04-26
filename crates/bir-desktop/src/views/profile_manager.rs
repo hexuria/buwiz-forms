@@ -42,6 +42,7 @@ pub struct ProfileManagerView {
 
     // Email Tracking Settings
     email_tracking_enabled: bool,
+    background_cron_enabled: bool,
     email_auth_method: EmailAuthMethod,
     imap_email_input: Entity<InputState>,
     imap_password_input: Entity<InputState>,
@@ -55,6 +56,7 @@ pub struct ProfileManagerView {
     stored_imap_app_password: Option<String>,
     stored_oauth_access_token: Option<String>,
     stored_oauth_refresh_token: Option<String>,
+    stored_test_notification_enabled: bool,
 
     _subscriptions: Vec<Subscription>,
 }
@@ -135,6 +137,7 @@ impl ProfileManagerView {
             save_message: None,
             rdo_options,
             email_tracking_enabled: false,
+            background_cron_enabled: true,
             email_auth_method: EmailAuthMethod::AppPassword,
             imap_email_input,
             imap_password_input,
@@ -146,6 +149,7 @@ impl ProfileManagerView {
             stored_imap_app_password: None,
             stored_oauth_access_token: None,
             stored_oauth_refresh_token: None,
+            stored_test_notification_enabled: false,
             pending_notification: None,
             _subscriptions: subscriptions,
         }
@@ -157,7 +161,9 @@ impl ProfileManagerView {
         self.errors.clear();
         self.save_message = None;
         self.email_tracking_enabled = false;
+        self.background_cron_enabled = true;
         self.email_auth_method = EmailAuthMethod::AppPassword;
+        self.stored_test_notification_enabled = false;
         self.connection_test_message = None;
         self.oauth_connected = false;
         self.active_tab = 0;
@@ -205,6 +211,7 @@ impl ProfileManagerView {
         self.editing_id = profile.id;
         self.is_vat_registered = profile.is_vat_registered;
         self.email_tracking_enabled = profile.email_tracking_enabled;
+        self.background_cron_enabled = profile.background_cron_enabled;
         self.email_auth_method = profile.email_auth_method.clone();
 
         self.imap_email_input.update(cx, |input, cx| {
@@ -224,6 +231,7 @@ impl ProfileManagerView {
         self.stored_imap_app_password = profile.imap_app_password.clone();
         self.stored_oauth_access_token = profile.oauth_access_token.clone();
         self.stored_oauth_refresh_token = profile.oauth_refresh_token.clone();
+        self.stored_test_notification_enabled = profile.test_notification_enabled;
 
         self.is_editing_password = profile.imap_app_password.is_none();
         self.imap_password_input.update(cx, |input, cx| {
@@ -362,6 +370,7 @@ impl ProfileManagerView {
             is_vat_registered: self.is_vat_registered,
             business_start_date,
             email_tracking_enabled: self.email_tracking_enabled,
+            background_cron_enabled: self.background_cron_enabled,
             email_auth_method: self.email_auth_method.clone(),
             imap_email: Some(self.imap_email_input.read(cx).value().trim().to_string()),
             imap_host: Some(self.imap_host_input.read(cx).value().trim().to_string()),
@@ -385,10 +394,11 @@ impl ProfileManagerView {
             // Tokens logic
             oauth_access_token: self.stored_oauth_access_token.clone(),
             oauth_refresh_token: self.stored_oauth_refresh_token.clone(),
+            test_notification_enabled: self.stored_test_notification_enabled,
         }
     }
 
-    fn save_profile(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn save_profile(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         let profile = self.current_profile(cx);
         self.errors = validate_profile(&profile);
         if !self
@@ -440,7 +450,18 @@ impl ProfileManagerView {
                 .background_executor()
                 .spawn(async move {
                     if let Ok(db) = db_arc.lock() {
-                        db.save_profile(profile).map_err(|e| e.to_string())
+                        let res = db.save_profile(profile).map_err(|e| e.to_string());
+                        
+                        // Check if ANY profile has background cron enabled to toggle OS service
+                        if let Ok(profiles) = db.list_profiles() {
+                            let should_run_daemon = profiles.iter().any(|p| p.background_cron_enabled);
+                            if should_run_daemon {
+                                bir_core::daemon_installer::install();
+                            } else {
+                                bir_core::daemon_installer::uninstall();
+                            }
+                        }
+                        res
                     } else {
                         Err("Database lock is poisoned".to_string())
                     }
@@ -945,9 +966,12 @@ impl Render for ProfileManagerView {
                                                                                 .on_click(cx.listener(|this, _, _, cx| {
                                                                                     let editing_id = this.editing_id;
                                                                                     cx.spawn(async move |this, cx| {
-                                                                                        let result: Result<(String, String, String), anyhow::Error> = cx.background_executor()
-                                                                                            .spawn(async move { bir_core::email::start_oauth_flow() })
-                                                                                            .await;
+                                                                                        let (tx, rx) = tokio::sync::oneshot::channel();
+                                                                                        std::thread::spawn(move || {
+                                                                                            let res = bir_core::email::start_oauth_flow();
+                                                                                            let _ = tx.send(res);
+                                                                                        });
+                                                                                        let result = rx.await.unwrap_or_else(|_| Err(anyhow::anyhow!("OAuth thread failed")));
                                                                                         
                                                                                         let _ = this.update(cx, |this, cx| {
                                                                                             match result {
@@ -1025,11 +1049,12 @@ impl Render for ProfileManagerView {
                                                                         cx.notify();
                                                                         
                                                                         cx.spawn(async move |this, cx| {
-                                                                            let result = cx.background_executor()
-                                                                                .spawn(async move {
-                                                                                    bir_core::email::test_connection(&test_profile) 
-                                                                                })
-                                                                                .await;
+                                                                            let (tx, rx) = tokio::sync::oneshot::channel();
+                                                                            std::thread::spawn(move || {
+                                                                                let res = bir_core::email::test_connection(&test_profile);
+                                                                                let _ = tx.send(res);
+                                                                            });
+                                                                            let result = rx.await.unwrap_or_else(|_| Err(anyhow::anyhow!("Test connection thread failed")));
                                                                             
                                                                             let _ = this.update(cx, |this, cx| {
                                                                                 match result {
@@ -1100,6 +1125,52 @@ impl Render for ProfileManagerView {
                                                                         .text_color(cx.theme().muted_foreground)
                                                                         .child("○ Click Test Connection to activate email tracking")
                                                                 }
+                                                            ),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .id("cron_toggle_wrap")
+                                                            .mt_4()
+                                                            .pt_4()
+                                                            .border_t_1()
+                                                            .border_color(cx.theme().border)
+                                                            .flex()
+                                                            .items_center()
+                                                            .gap_2()
+                                                            .cursor_pointer()
+                                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                                this.background_cron_enabled = !this.background_cron_enabled;
+                                                                cx.notify();
+                                                            }))
+                                                            .child(
+                                                                div()
+                                                                    .w_4()
+                                                                    .h_4()
+                                                                    .rounded_sm()
+                                                                    .border_1()
+                                                                    .border_color(cx.theme().border)
+                                                                    .bg(if self.background_cron_enabled {
+                                                                        cx.theme().primary
+                                                                    } else {
+                                                                        cx.theme().background
+                                                                    })
+                                                                    .flex()
+                                                                    .items_center()
+                                                                    .justify_center()
+                                                                    .child(if self.background_cron_enabled {
+                                                                        div()
+                                                                            .text_xs()
+                                                                            .text_color(cx.theme().primary_foreground)
+                                                                            .child("✓")
+                                                                    } else {
+                                                                        div()
+                                                                    }),
+                                                            )
+                                                            .child(
+                                                                div()
+                                                                    .text_sm()
+                                                                    .text_color(cx.theme().foreground)
+                                                                    .child("Enable Automated Background Services (Retries & Polling)"),
                                                             ),
                                                     )
                                             )

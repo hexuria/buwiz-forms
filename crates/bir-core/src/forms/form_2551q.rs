@@ -5,12 +5,18 @@
 use crate::forms::atc::find_atc;
 use crate::profile::TaxpayerProfile;
 use serde::{Deserialize, Serialize};
+use crate::penalties::{PenaltyContext, PenaltyEngine, PenaltyProfile, TaxpayerClass, PenaltyConfig};
+
+fn default_true() -> bool {
+    true
+}
 
 /// Status of a form draft or filed return.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum FilingStatus {
     #[default]
     Draft,
+    Queued,
     #[serde(alias = "Filed")]
     Submitted,
     Confirmed,
@@ -92,6 +98,20 @@ pub struct Form2551QDraft {
     /// = total_tax_due - creditable_tax_withheld - (tax_paid_previous if amended)
     pub tax_payable: f64,
 
+    // === Penalties ===
+    #[serde(default = "default_true")]
+    pub auto_compute_penalties: bool,
+    #[serde(default)]
+    pub surcharge: f64,
+    #[serde(default)]
+    pub interest: f64,
+    #[serde(default)]
+    pub compromise: f64,
+    #[serde(default)]
+    pub total_penalties: f64,
+    #[serde(default)]
+    pub total_amount_payable: f64,
+
     // === Status & Audit ===
     pub status: FilingStatus,
     pub created_at: String,
@@ -104,6 +124,14 @@ pub struct Form2551QDraft {
     pub submission_filename: Option<String>,
     #[serde(default)]
     pub receipt_id: Option<i64>,
+
+    // === Background Retry Logic ===
+    #[serde(default)]
+    pub submission_attempts: u32,
+    #[serde(default)]
+    pub next_retry_at: Option<String>,
+    #[serde(default)]
+    pub last_error: Option<String>,
 
     /// Set to true when this draft was pre-filled from a previous quarter.
     /// UI shows a "Pre-filled from Q{n} {year}" banner when true.
@@ -133,6 +161,12 @@ impl Form2551QDraft {
             creditable_tax_withheld: 0.0,
             tax_paid_previous: 0.0,
             tax_payable: 0.0,
+            auto_compute_penalties: true,
+            surcharge: 0.0,
+            interest: 0.0,
+            compromise: 0.0,
+            total_penalties: 0.0,
+            total_amount_payable: 0.0,
             status: FilingStatus::Draft,
             created_at: now.clone(),
             updated_at: now,
@@ -140,6 +174,9 @@ impl Form2551QDraft {
             confirmed_at: None,
             submission_filename: None,
             receipt_id: None,
+            submission_attempts: 0,
+            next_retry_at: None,
+            last_error: None,
             carried_forward_from: None,
         }
     }
@@ -168,6 +205,49 @@ impl Form2551QDraft {
         let total_credits = self.creditable_tax_withheld + previous_credit;
         self.tax_payable = ((self.total_tax_due - total_credits) * 100.0).round() / 100.0;
         self.tax_payable = self.tax_payable.max(0.0);
+
+        // Compute deadline and penalties
+        if self.auto_compute_penalties && matches!(self.status, FilingStatus::Draft) {
+            let deadline_month = match self.quarter {
+                1 => 4,
+                2 => 7,
+                3 => 10,
+                _ => 1,
+            };
+            let deadline_year = if self.quarter == 4 { self.taxable_year + 1 } else { self.taxable_year };
+            
+            if let Some(deadline) = chrono::NaiveDate::from_ymd_opt(deadline_year as i32, deadline_month, 25) {
+                let today = chrono::Local::now().date_naive();
+                
+                let config = PenaltyConfig::default_rules(); // Dynamic loading point in the future
+                
+                let gross_sales = self.schedule_1.iter().map(|r| r.taxable_amount).sum::<f64>();
+
+                let ctx = PenaltyContext {
+                    form_code: "2551Qv2018".to_string(),
+                    tax_type: PenaltyProfile::StandardFiling,
+                    taxpayer_class: TaxpayerClass::Regular, // Default until Profile supports classification
+                    taxable_period: format!("Q{} {}", self.quarter, self.taxable_year),
+                    is_amended_return: self.is_amended,
+                    original_was_on_time: true, // Optimistic default for amended returns
+                    is_fraud_or_willful_neglect: false,
+                    basic_tax_due: self.tax_payable,
+                    amount_paid_before_deadline: 0.0, // Form UI does not capture this directly yet
+                    gross_sales_or_receipts: gross_sales,
+                    due_date: deadline,
+                    filing_date: today,
+                    payment_date: None,
+                };
+
+                let penalties = PenaltyEngine::calculate(&ctx, &config);
+                self.surcharge = penalties.surcharge;
+                self.interest = penalties.interest;
+                self.compromise = penalties.compromise;
+            }
+        }
+
+        self.total_penalties = ((self.surcharge + self.interest + self.compromise) * 100.0).round() / 100.0;
+        self.total_amount_payable = ((self.tax_payable + self.total_penalties) * 100.0).round() / 100.0;
 
         self.updated_at = chrono::Utc::now().to_rfc3339();
     }
@@ -203,6 +283,7 @@ impl FormDraftSummary {
     pub fn quarter_state(&self) -> QuarterState {
         match self.status {
             FilingStatus::Draft => QuarterState::Draft,
+            FilingStatus::Queued => QuarterState::Queued,
             FilingStatus::Submitted => QuarterState::Submitted,
             FilingStatus::Confirmed => QuarterState::Confirmed,
             FilingStatus::Paid => QuarterState::Paid,
@@ -215,6 +296,7 @@ impl FormDraftSummary {
 pub enum QuarterState {
     NotStarted,
     Draft,
+    Queued,
     Submitted,
     Confirmed,
     Paid,
@@ -270,7 +352,8 @@ impl FormFilingProgress {
         self.quarters
             .iter()
             .filter(|q| {
-                **q == QuarterState::Submitted
+                **q == QuarterState::Queued
+                    || **q == QuarterState::Submitted
                     || **q == QuarterState::Confirmed
                     || **q == QuarterState::Paid
             })
@@ -291,7 +374,7 @@ impl FormFilingProgress {
         self.quarters
             .iter()
             .enumerate()
-            .find(|(_, s)| **s == QuarterState::Draft)
+            .find(|(_, s)| **s == QuarterState::Draft || **s == QuarterState::Queued)
             .map(|(i, _)| (i + 1) as u8)
     }
 }

@@ -6,6 +6,7 @@
 use crate::db::{Database, SubmissionReceipt};
 use crate::profile::{EmailAuthMethod, TaxpayerProfile};
 use crate::receipt::parse_bir_receipt_email;
+use chrono::Datelike;
 
 use super::auth_oauth::GoogleOAuthAuth;
 use super::auth_password::AppPasswordAuth;
@@ -179,4 +180,74 @@ fn extract_text_body(mail: &mailparse::ParsedMail) -> String {
     }
 
     out
+}
+
+/// Fetch emails for a specific email address, across all profiles.
+/// Returns (poll_success, still_pending_forms).
+pub fn fetch_and_process_emails_for_address(
+    email_address: &str,
+    db: std::sync::Arc<std::sync::Mutex<Database>>,
+) -> (bool, bool) {
+    let (profile, still_pending) = {
+        let db_guard = match db.lock() {
+            Ok(g) => g,
+            Err(_) => return (false, false),
+        };
+        let current_year = chrono::Utc::now().naive_utc().date().year() as u16;
+        let profiles = db_guard.list_profiles().unwrap_or_default();
+        
+        let mut still_pending = false;
+        let mut matched_profile = None;
+        
+        for p in profiles {
+            let p_email = p.imap_email.clone().unwrap_or_else(|| p.email.clone());
+            if p_email == email_address {
+                if matched_profile.is_none() {
+                    matched_profile = Some(p.clone());
+                }
+                if let Ok(summaries) = db_guard.list_draft_summaries(&p.tin.full(), current_year) {
+                    if summaries.iter().any(|s| s.status == crate::forms::form_2551q::FilingStatus::Submitted) {
+                        still_pending = true;
+                    }
+                }
+            }
+        }
+        
+        (matched_profile, still_pending)
+    };
+
+    if !still_pending {
+        return (true, false);
+    }
+
+    if let Some(profile) = profile {
+        let db_guard = match db.lock() {
+            Ok(g) => g,
+            Err(_) => return (false, true),
+        };
+        match fetch_and_process_emails(&profile, &db_guard) {
+            Ok(_) => {
+                let mut remaining_pending = false;
+                let current_year = chrono::Utc::now().naive_utc().date().year() as u16;
+                let profiles = db_guard.list_profiles().unwrap_or_default();
+                for p in profiles {
+                    let p_email = p.imap_email.clone().unwrap_or_else(|| p.email.clone());
+                    if p_email == email_address {
+                        if let Ok(summaries) = db_guard.list_draft_summaries(&p.tin.full(), current_year) {
+                            if summaries.iter().any(|s| s.status == crate::forms::form_2551q::FilingStatus::Submitted) {
+                                remaining_pending = true;
+                            }
+                        }
+                    }
+                }
+                (true, remaining_pending)
+            }
+            Err(e) => {
+                tracing::warn!("Email polling failed for {}: {}", email_address, e);
+                (false, still_pending)
+            }
+        }
+    } else {
+        (false, false)
+    }
 }

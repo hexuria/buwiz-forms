@@ -17,6 +17,7 @@ typst.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+lopdf = "0.34"
 
 [dev-dependencies]
 image = { version = "0.25", default-features = false, features = ["png"] }
