@@ -67,7 +67,7 @@ pub async fn import_and_submit_savefile(
     let new_xml = generate_bir_xml(&fields);
     let encrypted = compress_and_encrypt(new_xml.as_bytes(), passphrase)?;
 
-    let submit_filename = format!("{}-{}#{}#{}#.xml", tin, form_type, period_code, email);
+    let submit_filename = format!("{}-{}-{}#{}#.xml", tin, form_type, period_code, email);
 
     // Transmit to Remote Gateway
     submit_iaf(&form_type, &submit_filename, &encrypted).await?;
