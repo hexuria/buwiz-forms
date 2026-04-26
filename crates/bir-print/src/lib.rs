@@ -688,6 +688,7 @@ mod tests {
             imap_host: None,
             _imap_enabled_compat: None,
             background_cron_enabled: true,
+            test_notification_enabled: false,
             imap_app_password: None,
             oauth_access_token: None,
             oauth_refresh_token: None,

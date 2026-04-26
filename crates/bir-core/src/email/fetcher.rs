@@ -123,8 +123,22 @@ fn fetch_with_auth(
 
     session.select("INBOX")?;
 
-    // Search for unread BIR confirmation emails
-    let seqs = session.search("UNSEEN FROM \"ebirforms-noreply@bir.gov.ph\"")?;
+    // Search ALL BIR confirmation emails from the last 30 days.
+    //
+    // IMPORTANT: We intentionally do NOT use `UNSEEN` here. If the user reads
+    // a confirmation email on their phone or in Gmail web before our background
+    // poller runs, the `UNSEEN` filter would silently skip it, causing the
+    // draft to stay stuck in "Submitted" forever. Instead, we search ALL
+    // matching emails and rely on the `submission_receipts` table's
+    // `UNIQUE(filename)` constraint for deduplication — processing the same
+    // email twice is harmless (ON CONFLICT DO UPDATE is a no-op for identical data).
+    let since_date = {
+        let now = chrono::Utc::now().naive_utc().date();
+        let since = now - chrono::Duration::days(30);
+        since.format("%d-%b-%Y").to_string()
+    };
+    let search_query = format!("FROM \"ebirforms-noreply@bir.gov.ph\" SINCE {}", since_date);
+    let seqs = session.search(&search_query)?;
 
     let mut processed = Vec::new();
 
@@ -144,9 +158,6 @@ fn fetch_with_auth(
                                 let _ = db.confirm_2551q_from_receipt(&submission_receipt);
                             }
                             processed.push(submission_receipt);
-
-                            // Mark as seen so we don't re-process
-                            let _ = session.store(seq.to_string(), "+FLAGS (\\Seen)");
                         }
                     }
                 }
