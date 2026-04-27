@@ -1,9 +1,9 @@
+#![allow(dead_code)]
 use bir_core::db::Database;
 use bir_core::forms::form_2551q::{FormFilingProgress, QuarterState};
 use bir_core::forms::registry::FilingFrequency;
 use bir_core::profile::TaxpayerProfile;
 use chrono::{Datelike, Local};
-use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::*;
 use std::sync::{Arc, Mutex};

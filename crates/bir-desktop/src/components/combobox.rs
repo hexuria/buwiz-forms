@@ -5,10 +5,12 @@ use gpui_component::{
     input::{Input, InputEvent, InputState},
 };
 
+#[allow(dead_code)]
 pub struct ComboboxEvent {
     pub selected: Option<String>,
 }
 
+#[allow(dead_code)]
 pub struct ComboboxState {
     pub input: Entity<InputState>,
     pub options: Vec<String>,

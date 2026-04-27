@@ -260,7 +260,7 @@ impl ComplianceCalendar {
         filtered
     }
 
-    fn render_list_view(&self, window: &Window, cx: &Context<Self>) -> gpui::Div {
+    fn render_list_view(&self, _window: &Window, cx: &Context<Self>) -> gpui::Div {
         let deadlines = self.filtered_deadlines();
         let mut schedule_list = div().flex().flex_col().gap_3();
 
@@ -559,14 +559,32 @@ impl ComplianceCalendar {
                         .child(div().flex().w_full().justify_end().child(day_label));
 
                     if !day_deadlines.is_empty() {
-                        let mut dots = div().flex().flex_wrap().gap_1().justify_end().px_1().pb_1();
+                        let mut adjusted_deadline = current_date;
+                        match current_date.weekday() {
+                            chrono::Weekday::Sat => adjusted_deadline -= chrono::Duration::days(2),
+                            chrono::Weekday::Sun => adjusted_deadline -= chrono::Duration::days(3),
+                            _ => {}
+                        }
+
+                        let days_until = (adjusted_deadline - today).num_days();
+                        let dot_color: gpui::Hsla = if days_until < 0 {
+                            gpui::rgba(0xef4444ff).into() // Missed
+                        } else if days_until <= 1 {
+                            gpui::rgba(0xef4444ff).into() // Urgent
+                        } else if days_until < 7 {
+                            gpui::rgba(0xf97316ff).into() // Warning (Orange)
+                        } else {
+                            cx.theme().foreground // Safe
+                        };
+
+                        let mut dots = div().flex().flex_wrap().gap_1().justify_center().px_1().pb_1();
                         for _ in day_deadlines.iter().take(4) {
                             dots = dots.child(
                                 div()
                                     .w(px(6.))
                                     .h(px(6.))
                                     .rounded_full()
-                                    .bg(cx.theme().primary),
+                                    .bg(dot_color),
                             );
                         }
                         if day_deadlines.len() > 4 {
@@ -575,7 +593,7 @@ impl ComplianceCalendar {
                                     .text_xs()
                                     .line_height(relative(1.0))
                                     .font_weight(FontWeight::BOLD)
-                                    .text_color(cx.theme().primary)
+                                    .text_color(dot_color)
                                     .child("+"),
                             );
                         }

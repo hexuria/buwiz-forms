@@ -46,6 +46,10 @@ pub struct TaxpayerProfile {
     #[serde(default)]
     pub is_archived: bool,
 
+    /// Profile specific 4-digit PIN hash
+    #[serde(default)]
+    pub profile_pin_hash: Option<String>,
+
     // Email Tracking Settings
     /// Master toggle — whether automatic BIR receipt checking is enabled.
     #[serde(default)]

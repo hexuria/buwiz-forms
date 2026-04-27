@@ -8,6 +8,7 @@ pub struct SmartDateFilterEvent {
     pub year: i32,
 }
 
+#[allow(dead_code)]
 pub struct SmartDateFilterState {
     pub open: bool,
     pub selected_year: i32,

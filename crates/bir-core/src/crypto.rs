@@ -209,3 +209,10 @@ mod tests {
         assert_eq!(decrypted, original);
     }
 }
+
+pub fn hash_pin(pin: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(pin.as_bytes());
+    hasher.update(b"e-birforms-pin-salt-2024"); 
+    hex::encode(hasher.finalize())
+}

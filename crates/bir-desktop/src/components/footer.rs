@@ -56,7 +56,7 @@ pub fn render_footer<T>(cx: &mut Context<T>) -> impl IntoElement {
                         .id("goldcoders_logo")
                         .cursor_pointer()
                         .on_click(|_event, _window, cx| {
-                            cx.open_url("https://goldcoders.dev");
+                            cx.open_url("https://www.facebook.com/goldcoders.corp");
                         })
                         .child(
                             img(PathBuf::from("assets/images/goldcoders_logo.png"))

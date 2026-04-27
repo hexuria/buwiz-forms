@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use bir_core::forms::form_2551q::Form2551QDraft;
 use bir_print::{PrintResult, render_2551q_print};
 use gpui::prelude::FluentBuilder;

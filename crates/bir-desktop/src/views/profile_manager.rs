@@ -1,7 +1,7 @@
 use gpui::prelude::*;
 use gpui::*;
 use gpui_component::button::ButtonVariants;
-use gpui_component::input::{Input, InputEvent, InputState};
+use gpui_component::input::{Input, InputEvent, InputState, OtpInput, OtpState};
 use gpui_component::*;
 use std::sync::{Arc, Mutex};
 
@@ -59,6 +59,10 @@ pub struct ProfileManagerView {
     stored_oauth_refresh_token: Option<String>,
     stored_test_notification_enabled: bool,
     stored_is_archived: bool,
+    stored_profile_pin_hash: Option<String>,
+    
+    enable_profile_pin: bool,
+    profile_pin_input: Entity<OtpState>,
 
     _subscriptions: Vec<Subscription>,
 }
@@ -112,6 +116,12 @@ impl ProfileManagerView {
             input.set_value("imap.gmail.com".to_string(), window, cx);
             input
         });
+        
+        let profile_pin_input = cx.new(|cx| {
+            let mut input = OtpState::new(4, window, cx);
+            input = input.masked(true);
+            input
+        });
 
         let subscriptions = vec![
             cx.subscribe(&tin_input, Self::on_tin_event),
@@ -154,6 +164,9 @@ impl ProfileManagerView {
             stored_oauth_refresh_token: None,
             stored_test_notification_enabled: false,
             stored_is_archived: false,
+            stored_profile_pin_hash: None,
+            enable_profile_pin: false,
+            profile_pin_input,
             pending_notification: None,
             _subscriptions: subscriptions,
         }
@@ -178,6 +191,9 @@ impl ProfileManagerView {
         self.stored_oauth_refresh_token = None;
         self.pending_notification = None;
         self.is_editing_password = true;
+        self.enable_profile_pin = false;
+        self.stored_profile_pin_hash = None;
+        self.profile_pin_input.update(cx, |input, cx| input.set_value("", window, cx));
 
         self.imap_email_input
             .update(cx, |input, cx| input.set_value(String::new(), window, cx));
@@ -204,6 +220,13 @@ impl ProfileManagerView {
         });
         self.type_select.update(cx, |select, cx| {
             select.set_selected_value("Individual", window, cx);
+        });
+        cx.notify();
+    }
+
+    pub fn prefill_name(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.name_input.update(cx, |input, cx| {
+            input.set_value(name.to_string(), window, cx);
         });
         cx.notify();
     }
@@ -240,8 +263,17 @@ impl ProfileManagerView {
         self.stored_oauth_refresh_token = profile.oauth_refresh_token.clone();
         self.stored_test_notification_enabled = profile.test_notification_enabled;
         self.stored_is_archived = profile.is_archived;
+        self.stored_profile_pin_hash = profile.profile_pin_hash.clone();
+        self.enable_profile_pin = profile.profile_pin_hash.is_some();
+        self.profile_pin_input.update(cx, |input, cx| input.set_value("", window, cx));
 
-        self.is_editing_password = profile.imap_app_password.is_none();
+        if profile.email_auth_method == EmailAuthMethod::GoogleOAuth
+            && profile.oauth_refresh_token.is_some() {
+            self.is_editing_password = false;
+        } else {
+            self.is_editing_password = profile.imap_app_password.is_none();
+        }
+        
         self.imap_password_input.update(cx, |input, cx| {
             input.set_value(
                 profile.imap_app_password.clone().unwrap_or_default(),
@@ -362,6 +394,17 @@ impl ProfileManagerView {
             .to_string();
 
         let business_start_date = self.business_start_input.read(cx).date;
+        
+        let profile_pin_hash = if self.enable_profile_pin {
+            let pin = self.profile_pin_input.read(cx).value().to_string();
+            if pin.len() == 4 {
+                Some(bir_core::crypto::hash_pin(&pin))
+            } else {
+                self.stored_profile_pin_hash.clone()
+            }
+        } else {
+            None
+        };
 
         TaxpayerProfile {
             id: self.editing_id,
@@ -405,6 +448,7 @@ impl ProfileManagerView {
             oauth_refresh_token: self.stored_oauth_refresh_token.clone(),
             test_notification_enabled: self.stored_test_notification_enabled,
             is_archived: self.stored_is_archived,
+            profile_pin_hash,
         }
     }
 
@@ -790,6 +834,69 @@ impl Render for ProfileManagerView {
                                                             .text_color(cx.theme().foreground)
                                                             .child("VAT registered taxpayer"),
                                                     ),
+                                            )
+                                            .child(
+                                                div()
+                                                    .mt_4()
+                                                    .p_4()
+                                                    .bg(cx.theme().muted)
+                                                    .rounded_md()
+                                                    .flex()
+                                                    .flex_col()
+                                                    .gap_4()
+                                                    .child(
+                                                        div()
+                                                            .id("profile_pin_toggle")
+                                                            .flex()
+                                                            .items_center()
+                                                            .gap_2()
+                                                            .cursor_pointer()
+                                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                                this.enable_profile_pin = !this.enable_profile_pin;
+                                                                cx.notify();
+                                                            }))
+                                                            .child(
+                                                                div()
+                                                                    .w_4()
+                                                                    .h_4()
+                                                                    .rounded_sm()
+                                                                    .border_1()
+                                                                    .border_color(cx.theme().border)
+                                                                    .bg(if self.enable_profile_pin {
+                                                                        cx.theme().primary
+                                                                    } else {
+                                                                        cx.theme().background
+                                                                    })
+                                                                    .flex()
+                                                                    .items_center()
+                                                                    .justify_center()
+                                                                    .child(if self.enable_profile_pin {
+                                                                        div()
+                                                                            .text_xs()
+                                                                            .text_color(cx.theme().primary_foreground)
+                                                                            .child("✓")
+                                                                    } else {
+                                                                        div()
+                                                                    }),
+                                                            )
+                                                            .child(
+                                                                div()
+                                                                    .flex()
+                                                                    .flex_col()
+                                                                    .child(div().text_sm().font_weight(FontWeight::MEDIUM).text_color(cx.theme().foreground).child("Secure this Profile with a PIN"))
+                                                                    .child(div().text_xs().text_color(cx.theme().muted_foreground).child("Require a 4-digit PIN when switching to this profile."))
+                                                            ),
+                                                    )
+                                                    .when(self.enable_profile_pin, |this| {
+                                                        this.child(
+                                                            div()
+                                                                .flex()
+                                                                .flex_col()
+                                                                .gap_2()
+                                                                .child(Self::field_label("4-Digit PIN", cx))
+                                                                .child(OtpInput::new(&self.profile_pin_input).large())
+                                                        )
+                                                    })
                                             )
                                     } else { div() })
                                     .child(if self.active_tab == 1 {

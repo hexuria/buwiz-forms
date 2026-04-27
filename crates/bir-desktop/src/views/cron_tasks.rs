@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use bir_core::db::{Database, Job};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
@@ -139,7 +140,8 @@ impl CronTasksView {
         });
         filter_combobox.update(cx, |s, cx| s.set_selected_value("All Jobs", window, cx));
 
-        let search_input = cx.new(|cx| InputState::new(window, cx).placeholder("Search job name or type..."));
+        let search_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Search job name or type..."));
 
         let mut view = Self {
             db,
@@ -486,7 +488,7 @@ impl Render for CronTasksView {
 
         let selected_filter = self.filter_combobox.read(cx).selected_value(cx);
         let search_query = self.search_input.read(cx).value().to_lowercase();
-        
+
         let filtered_jobs: Vec<&JobViewModel> = self
             .jobs
             .iter()
@@ -501,17 +503,21 @@ impl Render for CronTasksView {
                 if search_query.is_empty() {
                     return true;
                 }
-                j.name.to_lowercase().contains(&search_query) || j.job_type.to_lowercase().contains(&search_query)
+                j.name.to_lowercase().contains(&search_query)
+                    || j.job_type.to_lowercase().contains(&search_query)
             })
             .collect();
 
-        let total_pages = std::cmp::max(1, (filtered_jobs.len() + self.items_per_page - 1) / self.items_per_page);
+        let total_pages = std::cmp::max(
+            1,
+            (filtered_jobs.len() + self.items_per_page - 1) / self.items_per_page,
+        );
         let start = (self.current_page - 1) * self.items_per_page;
         let mut end = start + self.items_per_page;
         if end > filtered_jobs.len() {
             end = filtered_jobs.len();
         }
-        
+
         let paged_jobs = if start < filtered_jobs.len() {
             filtered_jobs[start..end].to_vec()
         } else {

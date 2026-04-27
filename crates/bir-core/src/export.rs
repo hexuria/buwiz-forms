@@ -77,7 +77,23 @@ pub fn export_profile_data(db: &Database, tin: &str, export_file: &Path) -> Resu
     Ok(())
 }
 
-pub fn export_database_zip(db_path: &Path, zip_path: &Path) -> Result<(), DbError> {
+pub fn export_database_zip(db: &Database, zip_path: &Path) -> Result<(), DbError> {
+    let temp_dir = std::env::temp_dir();
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_db_path = temp_dir.join(format!("bir_unencrypted_{}.db", timestamp));
+
+    // Export current encrypted DB to a temporary unencrypted DB
+    db.conn.execute(
+        "ATTACH DATABASE ?1 AS plaintext KEY '';",
+        rusqlite::params![temp_db_path.to_str().unwrap()],
+    )?;
+    db.conn.execute("SELECT sqlcipher_export('plaintext');", [])?;
+    db.conn.execute("DETACH DATABASE plaintext;", [])?;
+
+    // Zip the unencrypted database
     let mut file = fs::File::create(zip_path)?;
     let mut zip = zip::ZipWriter::new(&mut file);
     let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
@@ -85,13 +101,16 @@ pub fn export_database_zip(db_path: &Path, zip_path: &Path) -> Result<(), DbErro
     zip.start_file("bir_data.db", options)
         .map_err(|e| DbError::Other(e.to_string()))?;
 
-    let mut db_file = fs::File::open(db_path)?;
+    let mut db_file = fs::File::open(&temp_db_path)?;
     let mut buffer = Vec::new();
     db_file.read_to_end(&mut buffer)?;
 
     zip.write_all(&buffer)
         .map_err(|e| DbError::Other(e.to_string()))?;
     zip.finish().map_err(|e| DbError::Other(e.to_string()))?;
+
+    // Clean up temporary file
+    let _ = fs::remove_file(&temp_db_path);
 
     Ok(())
 }

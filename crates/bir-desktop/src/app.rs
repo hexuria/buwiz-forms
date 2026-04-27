@@ -3,10 +3,12 @@ use crate::views::dashboard::{DashboardEvent, DashboardView};
 use crate::views::form_2551q_view::{Form2551QEvent, Form2551QView};
 use crate::views::global_dashboard::{GlobalDashboardEvent, GlobalDashboardView};
 use crate::views::import_export::{ImportExportEvent, ImportExportView};
+use crate::views::lock_screen::{LockScreenEvent, LockScreenView};
 use crate::views::profile_manager::ProfileManagerView;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use gpui_component::input::{Input, InputEvent, InputState};
+use gpui_component::button::ButtonVariants;
+use gpui_component::input::{Input, InputEvent, InputState, OtpInput, OtpState};
 use gpui_component::*;
 
 use bir_core::db::Database;
@@ -37,12 +39,15 @@ pub enum ActiveView {
     GlobalDashboard,
     Dashboard,
     Form2551Q,
-    SavedForms,
-    SubmissionHistory,
     ProfileManager,
     CronTasks,
-    Settings,
     ImportExport,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ProfileTargetAction {
+    ViewDashboard,
+    EditProfile,
 }
 
 pub struct AppState {
@@ -68,6 +73,15 @@ pub struct AppState {
     is_sidebar_hidden: bool,
     theme_preference: AppThemeMode,
     focus_handle: FocusHandle,
+    is_command_palette_open: bool,
+    command_palette_view: Option<Entity<crate::components::command_palette::CommandPalette>>,
+    is_locked: bool,
+    lock_screen_view: Option<Entity<LockScreenView>>,
+    pending_profile: Option<(TaxpayerProfile, ProfileTargetAction)>,
+    profile_otp_state: Entity<OtpState>,
+    profile_auth_error: Option<String>,
+    os_auth_triggered: bool,
+    unlocked_profile: Option<(TaxpayerProfile, ProfileTargetAction)>,
 }
 
 impl AppState {
@@ -79,7 +93,11 @@ impl AppState {
         let legacy_db_path = std::env::current_dir()
             .unwrap_or_default()
             .join("bir_data.db");
-        if !db_path.exists() && legacy_db_path.exists() && legacy_db_path != db_path {
+        if !db_path.exists()
+            && legacy_db_path.exists()
+            && legacy_db_path.metadata().map(|m| m.len()).unwrap_or(0) > 0
+            && legacy_db_path != db_path
+        {
             let _ = std::fs::copy(&legacy_db_path, &db_path);
         }
         let (db, recovered_backup) =
@@ -131,6 +149,48 @@ impl AppState {
         let global_dashboard_view =
             cx.new(|cx| GlobalDashboardView::new(db_clone_global, window, cx));
 
+        let is_locked = db.lock().unwrap().get_setting("app_lock_enabled").ok().flatten().as_deref() == Some("true");
+        let db_clone_lock = Arc::clone(&db);
+        let lock_screen_view = Some(cx.new(|cx| LockScreenView::new(db_clone_lock, window, cx)));
+        
+        let profile_otp_state = cx.new(|cx| OtpState::new(4, window, cx).masked(true));
+        
+        cx.subscribe_in(&profile_otp_state, window, |this: &mut Self, _entity, event: &InputEvent, window, cx| match event {
+            InputEvent::Change => {
+                let entered_pin = this.profile_otp_state.read(cx).value().to_string();
+                if entered_pin.len() == 4 {
+                    let hashed = bir_core::crypto::hash_pin(&entered_pin);
+                    if let Some((p, a)) = this.pending_profile.clone() {
+                        if Some(hashed) == p.profile_pin_hash {
+                            this.unlocked_profile = Some((p, a));
+                            this.pending_profile = None;
+                            this.profile_auth_error = None;
+                            this.profile_otp_state.update(cx, |input, cx| input.set_value("", window, cx));
+                            this.focus_handle.focus(window, cx);
+                        } else {
+                            this.profile_auth_error = Some("Incorrect PIN. Please try again.".to_string());
+                            this.profile_otp_state.update(cx, |input, cx| {
+                                input.set_value("", window, cx);
+                                input.focus(window, cx);
+                            });
+                        }
+                    }
+                }
+                cx.notify();
+            }
+            _ => {}
+        }).detach();
+        
+        if let Some(view) = &lock_screen_view {
+            cx.subscribe_in(view, window, |this: &mut Self, _entity, event: &LockScreenEvent, window, cx| match event {
+                LockScreenEvent::Unlocked => {
+                    this.is_locked = false;
+                    this.focus_handle.focus(window, cx);
+                    cx.notify();
+                }
+            }).detach();
+        }
+
         let db_clone_cron = Arc::clone(&db);
         let cron_tasks_view = cx.new(|cx| CronTasksView::new(db_clone_cron, window, cx));
 
@@ -166,6 +226,16 @@ impl AppState {
                     } else {
                         ActiveView::GlobalDashboard
                     };
+
+                    // Re-evaluate settings (like lock and theme)
+                    if let Ok(db) = this.db.lock() {
+                        this.is_locked = db.get_setting("app_lock_enabled").ok().flatten().as_deref() == Some("true");
+                        if let Ok(Some(val)) = db.get_setting("theme_preference") {
+                            this.theme_preference = serde_json::from_str(&val).unwrap_or(AppThemeMode::System);
+                        } else {
+                            this.theme_preference = AppThemeMode::System;
+                        }
+                    }
 
                     cx.notify();
                 }
@@ -229,16 +299,23 @@ impl AppState {
         let db_clone2 = Arc::clone(&db);
         let dashboard_view = cx.new(|cx| DashboardView::new(db_clone2, window, cx));
 
-        cx.subscribe(
+        cx.subscribe_in(
             &global_dashboard_view,
-            |this: &mut Self, _entity, event: &GlobalDashboardEvent, cx| match event {
+            window,
+            |this: &mut Self, _entity, event: &GlobalDashboardEvent, window, cx| match event {
                 GlobalDashboardEvent::OpenForm {
                     tin,
                     form_code,
                     year,
                     quarter,
                 } => {
-                    this.active_profile_tin = Some(tin.clone());
+                    let profile_clone = this.profiles.iter().find(|p| p.tin.full() == *tin).cloned();
+                    if let Some(profile) = profile_clone {
+                        this.select_profile(profile, ProfileTargetAction::ViewDashboard, window, cx);
+                    } else {
+                        this.active_profile_tin = Some(tin.clone());
+                    }
+                    
                     let event = DashboardEvent::FileForm {
                         form_code: form_code.clone(),
                         year: *year,
@@ -300,6 +377,49 @@ impl AppState {
             is_sidebar_hidden: false,
             theme_preference,
             focus_handle: cx.focus_handle(),
+            is_command_palette_open: false,
+            command_palette_view: None,
+            is_locked,
+            lock_screen_view,
+            pending_profile: None,
+            profile_otp_state,
+            profile_auth_error: None,
+            os_auth_triggered: false,
+            unlocked_profile: None,
+        }
+    }
+    
+    fn select_profile(&mut self, profile: TaxpayerProfile, action: ProfileTargetAction, window: &mut Window, cx: &mut Context<Self>) {
+        if profile.profile_pin_hash.is_some() {
+            self.pending_profile = Some((profile, action));
+            self.profile_auth_error = None;
+            self.os_auth_triggered = false;
+            self.profile_otp_state.update(cx, |input, cx| {
+                input.set_value("", window, cx);
+                input.focus(window, cx);
+            });
+        } else {
+            self.apply_profile_action(profile, action, window, cx);
+        }
+        cx.notify();
+    }
+    
+    fn apply_profile_action(&mut self, profile: TaxpayerProfile, action: ProfileTargetAction, window: &mut Window, cx: &mut Context<Self>) {
+        self.active_profile_tin = Some(profile.tin.full());
+        match action {
+            ProfileTargetAction::ViewDashboard => {
+                self.active_view = ActiveView::Dashboard;
+                let p = profile.clone();
+                self.dashboard_view.update(cx, |view, cx| {
+                    view.set_profile(p, cx);
+                });
+            }
+            ProfileTargetAction::EditProfile => {
+                self.active_view = ActiveView::ProfileManager;
+                self.profile_manager.update(cx, |view, cx| {
+                    view.edit_profile(profile.clone(), window, cx);
+                });
+            }
         }
     }
 
@@ -624,16 +744,10 @@ impl AppState {
                                                                     .small()
                                                                     .label("View")
                                                                     .on_click(cx.listener({
-                                                                        let tin = profile.tin.full();
                                                                         let profile_clone = profile.clone();
-                                                                        move |this, _ev, _window, cx| {
+                                                                        move |this, _ev, window, cx| {
                                                                             cx.stop_propagation();
-                                                                            this.active_profile_tin = Some(tin.clone());
-                                                                            this.active_view = ActiveView::Dashboard;
-                                                                            this.dashboard_view.update(cx, |view, cx| {
-                                                                                view.set_profile(profile_clone.clone(), cx);
-                                                                            });
-                                                                            cx.notify();
+                                                                            this.select_profile(profile_clone.clone(), ProfileTargetAction::ViewDashboard, window, cx);
                                                                         }
                                                                     })),
                                                             )
@@ -645,12 +759,7 @@ impl AppState {
                                                                         let profile_clone = profile.clone();
                                                                         move |this, _ev, window, cx| {
                                                                             cx.stop_propagation();
-                                                                            this.active_view = ActiveView::ProfileManager;
-                                                                            this.active_profile_tin = Some(profile_clone.tin.full());
-                                                                            this.profile_manager.update(cx, |view, cx| {
-                                                                                view.edit_profile(profile_clone.clone(), window, cx);
-                                                                            });
-                                                                            cx.notify();
+                                                                            this.select_profile(profile_clone.clone(), ProfileTargetAction::EditProfile, window, cx);
                                                                         }
                                                                     })),
                                                             )
@@ -773,11 +882,7 @@ impl AppState {
                                         let tin = profile_clone.tin.full();
                                         move |this, _ev, window, cx| {
                                             if this.is_mini_sidebar || window.viewport_size().width < px(768.) {
-                                                this.active_profile_tin = Some(tin.clone());
-                                                this.active_view = ActiveView::Dashboard;
-                                                this.dashboard_view.update(cx, |view, cx| {
-                                                    view.set_profile(profile_clone.clone(), cx);
-                                                });
+                                                this.select_profile(profile_clone.clone(), ProfileTargetAction::ViewDashboard, window, cx);
                                             } else {
                                                 if this.expanded_profile_tin.as_ref() == Some(&tin) {
                                                     this.expanded_profile_tin = None;
@@ -1000,7 +1105,6 @@ impl AppState {
                     div().child("No form loaded").into_any_element()
                 }
             }
-            _ => div().child("Not implemented").into_any_element(),
         }
     }
 
@@ -1120,7 +1224,18 @@ impl Render for AppState {
             self.form_2551q_view = Some(form_view);
         }
 
+        if let Some((profile, action)) = self.unlocked_profile.take() {
+            self.apply_profile_action(profile, action, window, cx);
+            self.focus_handle.focus(window, cx);
+        }
+
         let notification_layer = Root::render_notification_layer(window, cx);
+
+        if self.is_locked {
+            if let Some(lock_screen) = &self.lock_screen_view {
+                return div().size_full().child(lock_screen.clone()).into_any_element();
+            }
+        }
 
         div()
             .track_focus(&self.focus_handle)
@@ -1208,6 +1323,56 @@ impl Render for AppState {
                     cx.notify();
                 },
             ))
+            .on_action(cx.listener(
+                |this: &mut Self, _action: &crate::global_actions::OpenGlobalDashboard, _window, cx| {
+                    this.active_view = ActiveView::GlobalDashboard;
+                    this.active_profile_tin = None;
+                    cx.notify();
+                },
+            ))
+            .on_action(cx.listener(
+                |this: &mut Self, _action: &crate::global_actions::OpenCommandPalette, window, cx| {
+                    this.is_command_palette_open = true;
+                    let profiles = this.profiles.clone();
+                    let palette = cx.new(|cx| crate::components::command_palette::CommandPalette::new(profiles, window, cx));
+                    
+                    cx.subscribe_in(&palette, window, |this: &mut Self, _, event: &crate::components::command_palette::CommandPaletteEvent, window, cx| {
+                        match event {
+                            crate::components::command_palette::CommandPaletteEvent::SelectProfile(tin) => {
+                                if let Some(profile) = this.profiles.iter().find(|p| p.tin.full() == *tin).cloned() {
+                                    this.select_profile(profile, ProfileTargetAction::ViewDashboard, window, cx);
+                                }
+                                this.is_command_palette_open = false;
+                                if this.pending_profile.is_none() {
+                                    this.focus_handle.focus(window, cx);
+                                }
+                                cx.notify();
+                            }
+                            crate::components::command_palette::CommandPaletteEvent::CreateProfile(query) => {
+                                this.is_command_palette_open = false;
+                                this.active_view = ActiveView::ProfileManager;
+                                this.profile_manager.update(cx, |view, cx| {
+                                    view.reset_for_new(window, cx);
+                                    view.prefill_name(&query, window, cx);
+                                });
+                                // Focus is already set to the name input by prefill_name
+                                cx.notify();
+                            }
+                            crate::components::command_palette::CommandPaletteEvent::Dismiss => {
+                                this.is_command_palette_open = false;
+                                this.focus_handle.focus(window, cx);
+                                cx.notify();
+                            }
+                        }
+                    }).detach();
+                    
+                    this.command_palette_view = Some(palette.clone());
+                    palette.update(cx, |view, cx| {
+                        view.focus_input(window, cx);
+                    });
+                    cx.notify();
+                },
+            ))
             .child(
                 div()
                     .flex()
@@ -1229,6 +1394,147 @@ impl Render for AppState {
             )
             .child(crate::components::footer::render_footer(cx))
             .children(notification_layer)
+            .when_some(self.pending_profile.clone(), |this, pending| {
+                let (profile, _) = pending;
+                let error_msg = self.profile_auth_error.clone();
+                let os_triggered = self.os_auth_triggered;
+                
+                this.child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .bg(cx.theme().background)
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .justify_center()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .items_center()
+                                .gap_6()
+                                .child(
+                                    gpui::img(std::path::PathBuf::from("assets/svg/ebirforms.png"))
+                                        .w(px(200.))
+                                        .h(px(60.))
+                                        .object_fit(gpui::ObjectFit::Contain)
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .items_center()
+                                        .gap_1()
+                                        .child(
+                                            div()
+                                                .text_xl()
+                                                .font_weight(FontWeight::BOLD)
+                                                .text_color(cx.theme().foreground)
+                                                .child("Enter PIN to unlock Tax Profile")
+                                        )
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child(format!("Profile: {}", profile.tin.full()))
+                                        )
+                                )
+                                .child(
+                                    OtpInput::new(&self.profile_otp_state)
+                                        .groups(1)
+                                        .large()
+                                        .disabled(os_triggered)
+                                )
+                                .when_some(error_msg, |this, msg| {
+                                    this.child(
+                                        div()
+                                            .text_sm()
+                                            .text_color(cx.theme().danger)
+                                            .child(msg)
+                                    )
+                                })
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .items_center()
+                                        .gap_4()
+                                        .child(
+                                            gpui_component::button::Button::new("admin_override")
+                                                .label(if os_triggered { "Waiting for OS..." } else { "Admin Override" })
+                                                .ghost()
+                                                .disabled(os_triggered)
+                                                .on_click(cx.listener(|this, _ev, _window, cx| {
+                                                    if this.os_auth_triggered { return; }
+                                                    this.os_auth_triggered = true;
+                                                    this.profile_auth_error = None;
+                                                    
+                                                    cx.spawn(async move |this, cx| {
+                                                        use robius_authentication::{BiometricStrength, Context, PolicyBuilder, Text, AndroidText, WindowsText};
+                                                        let policy = match PolicyBuilder::new()
+                                                            .biometrics(Some(BiometricStrength::Strong))
+                                                            .password(true)
+                                                            .watch(true)
+                                                            .build() {
+                                                                Some(p) => p,
+                                                                None => return,
+                                                        };
+
+                                                        let text = Text {
+                                                            android: AndroidText {
+                                                                title: "Admin Override",
+                                                                subtitle: None,
+                                                                description: None,
+                                                            },
+                                                            apple: "Admin Override to Unlock Profile",
+                                                            windows: WindowsText::new_truncated("Admin Override", "Authenticate to override profile PIN."),
+                                                        };
+
+                                                        let success = Context::new(())
+                                                            .authenticate(text, &policy)
+                                                            .await
+                                                            .is_ok();
+                                                        
+                                                        let _ = this.update(cx, |this, cx| {
+                                                            this.os_auth_triggered = false;
+                                                            if success {
+                                                                if let Some((p, a)) = this.pending_profile.take() {
+                                                                    this.unlocked_profile = Some((p, a));
+                                                                }
+                                                            } else {
+                                                                this.profile_auth_error = Some("Admin Authentication failed or canceled.".to_string());
+                                                            }
+                                                            cx.notify();
+                                                        });
+                                                    }).detach();
+                                                }))
+                                        )
+                                        .child(
+                                            gpui_component::button::Button::new("cancel_profile_pin")
+                                                .label("Cancel")
+                                                .ghost()
+                                                .small()
+                                                .disabled(os_triggered)
+                                                .on_click(cx.listener(|this, _ev, window, cx| {
+                                                    this.pending_profile = None;
+                                                    this.profile_otp_state.update(cx, |input, cx| input.set_value("", window, cx));
+                                                    this.focus_handle.focus(window, cx);
+                                                    cx.notify();
+                                                }))
+                                        )
+                                )
+                        )
+                )
+            })
+            .when(self.is_command_palette_open, |this| {
+                if let Some(palette) = &self.command_palette_view {
+                    this.child(palette.clone())
+                } else {
+                    this
+                }
+            })
+            .into_any_element()
     }
 }
 

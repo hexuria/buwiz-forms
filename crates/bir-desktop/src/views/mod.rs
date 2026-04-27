@@ -8,3 +8,4 @@ pub mod import_export;
 pub mod pdf_viewer;
 pub mod profile_manager;
 pub mod receipt_viewer;
+pub mod lock_screen;

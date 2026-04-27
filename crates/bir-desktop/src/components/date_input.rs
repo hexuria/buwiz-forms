@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use chrono::Datelike;
 use chrono::NaiveDate;
 use gpui::prelude::FluentBuilder;

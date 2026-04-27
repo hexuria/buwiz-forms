@@ -201,12 +201,17 @@ pub fn default_database_path() -> std::path::PathBuf {
     if cfg!(target_os = "macos")
         && let Some(home) = std::env::var_os("HOME")
     {
-        return std::path::PathBuf::from(home)
+        // For macOS, we use the App Group container to share the database between the main app and daemon.
+        // If not running in a sandbox, this still resolves to a valid user library path.
+        let group_container = std::path::PathBuf::from(home)
             .join("Library")
-            .join("Application Support")
-            .join("Taxman")
-            .join("eBIRForms")
-            .join("bir_data.db");
+            .join("Group Containers")
+            .join("group.com.goldcoders.bir");
+
+        // Create the directory if it doesn't exist
+        let _ = std::fs::create_dir_all(&group_container);
+
+        return group_container.join("bir_data.db");
     }
 
     if let Some(home) = std::env::var_os("HOME") {
@@ -462,95 +467,12 @@ impl Database {
         }
     }
 
-    #[cfg(target_os = "macos")]
-    fn get_or_create_master_key() -> Result<String, DbError> {
-        use std::process::Command;
-        use tracing::{info, warn};
-
-        // Try to get from keychain
-        let output = Command::new("security")
-            .args([
-                "find-generic-password",
-                "-s",
-                "com.ebir.rust",
-                "-a",
-                "sqlcipher_master_key",
-                "-w",
-            ])
-            .output()?;
-
-        if output.status.success() {
-            let mut key = String::from_utf8_lossy(&output.stdout).to_string();
-            key = key.trim().to_string();
-            if !key.is_empty() {
-                info!("Loaded existing master key from macOS keychain (via CLI)");
-                return Ok(key);
-            }
-        }
-
-        info!("Generating new master key and storing in macOS keychain (via CLI)");
-        let key: [u8; 32] = rand::random();
-        let hex_key = hex::encode(key);
-
-        // Save with -A to allow all apps so both bir and bir-daemon can access without prompting
-        let add_output = Command::new("security")
-            .args([
-                "add-generic-password",
-                "-a",
-                "sqlcipher_master_key",
-                "-s",
-                "com.ebir.rust",
-                "-w",
-                &hex_key,
-                "-A",
-            ])
-            .output()?;
-
-        if !add_output.status.success() {
-            warn!(
-                "Failed to add generic password to macOS keychain. Attempting to delete existing and retry."
-            );
-            // If it failed, it might be because a restricted item already exists. Try deleting it first.
-            let _ = Command::new("security")
-                .args([
-                    "delete-generic-password",
-                    "-a",
-                    "sqlcipher_master_key",
-                    "-s",
-                    "com.ebir.rust",
-                ])
-                .output();
-
-            let retry_output = Command::new("security")
-                .args([
-                    "add-generic-password",
-                    "-a",
-                    "sqlcipher_master_key",
-                    "-s",
-                    "com.ebir.rust",
-                    "-w",
-                    &hex_key,
-                    "-A",
-                ])
-                .output()?;
-
-            if !retry_output.status.success() {
-                let err_msg = String::from_utf8_lossy(&retry_output.stderr);
-                return Err(DbError::KeychainCli(format!(
-                    "Failed to save key to keychain: {}",
-                    err_msg
-                )));
-            }
-        }
-
-        Ok(hex_key)
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    fn get_or_create_master_key() -> Result<String, DbError> {
+    pub fn get_or_create_master_key() -> Result<String, DbError> {
         use keyring::Entry;
         use tracing::{info, warn};
 
+        // By using `keyring` on macOS with the `apple-native` feature, this calls `SecItemAdd` and `SecItemCopyMatching` natively.
+        // In a sandboxed App Store environment, this will automatically use the app's Keychain Access Group entitlement.
         let entry = Entry::new("com.ebir.rust", "sqlcipher_master_key")?;
 
         // Verify we have a real credential store, not the in-memory mock
@@ -574,11 +496,11 @@ impl Database {
 
         match entry.get_password() {
             Ok(hex_key) => {
-                info!("Loaded existing master key from keychain");
+                info!("Loaded existing master key from native keychain");
                 Ok(hex_key)
             }
             Err(_) => {
-                info!("Generating new master key and storing in keychain");
+                info!("Generating new master key and storing in native keychain");
                 let key: [u8; 32] = rand::random();
                 let hex_key = hex::encode(key);
                 entry.set_password(&hex_key)?;
@@ -655,10 +577,18 @@ impl Database {
              DELETE FROM submissions;
              DELETE FROM form_drafts;
              DELETE FROM submission_receipts;
-             DELETE FROM job_queue;",
+             DELETE FROM job_queue;
+             DELETE FROM settings;",
         )?;
         // Also vacuum to reclaim space and shrink file
         self.conn.execute_batch("VACUUM;")?;
+
+        // Clean up temporary PDF directory
+        let temp_pdf_dir = std::env::temp_dir().join("taxman-ebir-pdf");
+        if temp_pdf_dir.exists() {
+            let _ = std::fs::remove_dir_all(&temp_pdf_dir);
+        }
+
         Ok(())
     }
 

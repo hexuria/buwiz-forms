@@ -3,6 +3,7 @@
 //! Single scrollable view that mimics the actual BIR form layout.
 //! No wizards. Profile data is pre-filled and read-only.
 //! Schedule 1 is editable. Part II auto-computes.
+#![allow(dead_code)]
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;

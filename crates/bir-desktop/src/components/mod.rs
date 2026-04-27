@@ -1,4 +1,5 @@
 pub mod combobox;
+pub mod command_palette;
 pub mod compliance_calendar;
 pub mod currency_input;
 pub mod date_input;

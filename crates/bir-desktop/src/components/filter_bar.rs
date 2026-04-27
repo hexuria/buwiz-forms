@@ -17,6 +17,7 @@ pub struct FilterChip {
     pub group: String,
 }
 
+#[allow(dead_code)]
 pub struct FilterState {
     pub active_chips: Vec<FilterChip>,
     pub input_state: Entity<InputState>,
@@ -27,6 +28,7 @@ pub struct FilterState {
     pub focus_handle: FocusHandle,
 }
 
+#[allow(dead_code)]
 pub struct FilterEvent {
     pub chips_changed: Vec<FilterChip>,
     pub query_changed: String,

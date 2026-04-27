@@ -19,7 +19,9 @@ pub mod global_actions {
             CreateProfile,
             ToggleTheme,
             OpenCronTasks,
-            OpenSettings
+            OpenSettings,
+            OpenCommandPalette,
+            OpenGlobalDashboard
         ]
     );
 }
@@ -60,24 +62,36 @@ fn main() {
         .with_assets(Assets { base: assets_dir })
         .run(move |cx| {
             gpui_component::init(cx);
+            #[cfg(target_os = "macos")]
             cx.bind_keys([
                 KeyBinding::new("cmd-enter", SubmitCurrentForm, None),
-                KeyBinding::new("ctrl-enter", SubmitCurrentForm, None),
                 KeyBinding::new("cmd-b", ToggleSidebar, None),
-                KeyBinding::new("ctrl-b", ToggleSidebar, None),
                 KeyBinding::new("cmd-shift-b", ToggleSidebarMini, None),
-                KeyBinding::new("ctrl-shift-b", ToggleSidebarMini, None),
                 KeyBinding::new("cmd-f", FocusSearch, None),
-                KeyBinding::new("ctrl-f", FocusSearch, None),
                 KeyBinding::new("cmd-n", CreateProfile, None),
-                KeyBinding::new("ctrl-n", CreateProfile, None),
                 KeyBinding::new("cmd-t", ToggleTheme, None),
-                KeyBinding::new("ctrl-t", ToggleTheme, None),
                 KeyBinding::new("cmd-shift-x", OpenCronTasks, None),
-                KeyBinding::new("ctrl-shift-x", OpenCronTasks, None),
                 KeyBinding::new("cmd-,", OpenSettings, None),
-                KeyBinding::new("ctrl-,", OpenSettings, None),
+                KeyBinding::new("cmd-k", OpenCommandPalette, None),
+                KeyBinding::new("f1", OpenGlobalDashboard, None),
             ]);
+
+            #[cfg(not(target_os = "macos"))]
+            cx.bind_keys([
+                KeyBinding::new("ctrl-enter", SubmitCurrentForm, None),
+                KeyBinding::new("ctrl-b", ToggleSidebar, None),
+                KeyBinding::new("ctrl-shift-b", ToggleSidebarMini, None),
+                KeyBinding::new("ctrl-f", FocusSearch, None),
+                KeyBinding::new("ctrl-n", CreateProfile, None),
+                KeyBinding::new("ctrl-t", ToggleTheme, None),
+                KeyBinding::new("ctrl-shift-x", OpenCronTasks, None),
+                KeyBinding::new("ctrl-,", OpenSettings, None),
+                KeyBinding::new("ctrl-k", OpenCommandPalette, None),
+                KeyBinding::new("f1", OpenGlobalDashboard, None),
+            ]);
+
+            let bounds =
+                gpui::Bounds::centered(None, gpui::size(gpui::px(1024.0), gpui::px(768.0)), cx);
 
             cx.spawn(async move |cx| {
                 let options = WindowOptions {
@@ -85,6 +99,7 @@ fn main() {
                         title: Some("e-BIRForms".into()),
                         ..Default::default()
                     }),
+                    window_bounds: Some(WindowBounds::Maximized(bounds)),
                     window_min_size: Some(gpui::size(gpui::px(620.0), gpui::px(500.0))),
                     ..Default::default()
                 };

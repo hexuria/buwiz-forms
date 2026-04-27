@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use bir_core::db::{BirNotice, Database, TaxDeadline};
 use bir_core::forms::FormDraftSummary;
 use bir_core::profile::TaxpayerProfile;
@@ -728,7 +729,7 @@ impl GlobalDashboardView {
     fn news_section(&self, cx: &mut Context<Self>) -> gpui::Div {
         let mut news_list = div().id("news-list").flex().flex_col().gap_4().pr_2(); // add some padding
 
-        for ann in &self.announcements {
+        for ann in self.announcements.iter().take(25) {
             news_list = news_list.child(Self::news_card(ann, cx));
         }
 

@@ -126,8 +126,40 @@ pub fn extract_database_zip(zip_path: &Path, out_db_path: &Path) -> Result<(), D
         .by_name("bir_data.db")
         .map_err(|e| DbError::Other(e.to_string()))?;
 
-    let mut out_file = fs::File::create(out_db_path)?;
-    std::io::copy(&mut db_file_in_zip, &mut out_file)?;
+    // Extract to temp unencrypted db
+    let temp_dir = std::env::temp_dir();
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_db_path = temp_dir.join(format!("bir_unencrypted_import_{}.db", timestamp));
+    
+    let mut temp_file = fs::File::create(&temp_db_path)?;
+    std::io::copy(&mut db_file_in_zip, &mut temp_file)?;
+    
+    // Delete the current database so we can cleanly export into a new one
+    if out_db_path.exists() {
+        let _ = fs::remove_file(out_db_path);
+    }
+    let wal_path = out_db_path.with_extension("db-wal");
+    let shm_path = out_db_path.with_extension("db-shm");
+    if wal_path.exists() { let _ = fs::remove_file(wal_path); }
+    if shm_path.exists() { let _ = fs::remove_file(shm_path); }
+
+    // Open the unencrypted db
+    let conn = rusqlite::Connection::open(&temp_db_path)?;
+    let key_hex = Database::get_or_create_master_key()?;
+    
+    // Attach the target db (encrypted) and export to it
+    conn.execute(
+        &format!("ATTACH DATABASE ?1 AS encrypted KEY \"x'{}'\";", key_hex),
+        rusqlite::params![out_db_path.to_str().unwrap()],
+    )?;
+    conn.execute("SELECT sqlcipher_export('encrypted');", [])?;
+    conn.execute("DETACH DATABASE encrypted;", [])?;
+
+    // Clean up
+    let _ = fs::remove_file(&temp_db_path);
 
     Ok(())
 }
