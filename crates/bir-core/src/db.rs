@@ -198,31 +198,7 @@ pub struct Database {
 }
 
 pub fn default_database_path() -> std::path::PathBuf {
-    if cfg!(target_os = "macos")
-        && let Some(home) = std::env::var_os("HOME")
-    {
-        // For macOS, we use the App Group container to share the database between the main app and daemon.
-        // If not running in a sandbox, this still resolves to a valid user library path.
-        let group_container = std::path::PathBuf::from(home)
-            .join("Library")
-            .join("Group Containers")
-            .join("group.com.goldcoders.bir");
-
-        // Create the directory if it doesn't exist
-        let _ = std::fs::create_dir_all(&group_container);
-
-        return group_container.join("bir_data.db");
-    }
-
-    if let Some(home) = std::env::var_os("HOME") {
-        return std::path::PathBuf::from(home)
-            .join(".taxman-ebir")
-            .join("bir_data.db");
-    }
-
-    std::env::current_dir()
-        .unwrap_or_default()
-        .join("bir_data.db")
+    crate::platform::data_dir().join("bir_data.db")
 }
 
 impl Database {

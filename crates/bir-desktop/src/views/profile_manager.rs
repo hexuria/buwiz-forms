@@ -16,7 +16,7 @@ use bir_core::reference::get_all_rdos;
 use bir_core::validation::{ValidationError, validate_profile};
 
 pub enum ProfileEvent {
-    Saved,
+    Saved(String),
 }
 
 use bir_core::profile::EmailAuthMethod;
@@ -151,7 +151,7 @@ impl ProfileManagerView {
             email_tracking_enabled: false,
             background_cron_enabled: true,
             error_telemetry_enabled: false,
-            email_auth_method: EmailAuthMethod::AppPassword,
+            email_auth_method: EmailAuthMethod::GoogleOAuth,
             imap_email_input,
             imap_password_input,
             is_editing_password: true,
@@ -178,9 +178,8 @@ impl ProfileManagerView {
         self.errors.clear();
         self.save_message = None;
         self.email_tracking_enabled = false;
-        self.background_cron_enabled = true;
         self.error_telemetry_enabled = false;
-        self.email_auth_method = EmailAuthMethod::AppPassword;
+        self.email_auth_method = EmailAuthMethod::GoogleOAuth;
         self.stored_test_notification_enabled = false;
         self.stored_is_archived = false;
         self.connection_test_message = None;
@@ -191,8 +190,21 @@ impl ProfileManagerView {
         self.stored_oauth_refresh_token = None;
         self.pending_notification = None;
         self.is_editing_password = true;
-        self.enable_profile_pin = false;
         self.stored_profile_pin_hash = None;
+
+        // Auto-derive background_cron from global setting
+        let global_cron_enabled = if let Ok(db) = self.db.lock() {
+            if let Ok(profiles) = db.list_profiles() {
+                profiles.iter().any(|p| p.background_cron_enabled)
+            } else { true }
+        } else { true };
+        self.background_cron_enabled = global_cron_enabled;
+
+        // Auto-check PIN if global "Enable Profile PINs" is on
+        let global_pins_enabled = if let Ok(db) = self.db.lock() {
+            db.get_setting("enable_profile_pins").ok().flatten().as_deref() == Some("true")
+        } else { false };
+        self.enable_profile_pin = global_pins_enabled;
         self.profile_pin_input.update(cx, |input, cx| input.set_value("", window, cx));
 
         self.imap_email_input
@@ -424,8 +436,14 @@ impl ProfileManagerView {
             background_cron_enabled: self.background_cron_enabled,
             error_telemetry_enabled: self.error_telemetry_enabled,
             email_auth_method: self.email_auth_method.clone(),
-            imap_email: Some(self.imap_email_input.read(cx).value().trim().to_string()),
-            imap_host: Some(self.imap_host_input.read(cx).value().trim().to_string()),
+            imap_email: {
+                let val = self.imap_email_input.read(cx).value().trim().to_string();
+                if val.is_empty() { None } else { Some(val) }
+            },
+            imap_host: {
+                let val = self.imap_host_input.read(cx).value().trim().to_string();
+                if val.is_empty() { None } else { Some(val) }
+            },
             _imap_enabled_compat: None,
 
             // Password logic: use the input if typed, otherwise keep stored
@@ -488,6 +506,41 @@ impl ProfileManagerView {
             return;
         }
 
+        // Gate: PIN required when global "Enable Profile PINs" is on
+        let global_pins_enabled = if let Ok(db) = self.db.lock() {
+            db.get_setting("enable_profile_pins").ok().flatten().as_deref() == Some("true")
+        } else { false };
+        if global_pins_enabled && self.enable_profile_pin
+            && self.stored_profile_pin_hash.is_none()
+        {
+            let pin = self.profile_pin_input.read(cx).value().to_string();
+            if pin.len() != 4 {
+                self.pending_notification = Some((
+                    gpui_component::notification::NotificationType::Error,
+                    "A 4-digit PIN is required for this profile.".to_string(),
+                ));
+                self.active_tab = 2;
+                cx.notify();
+                return;
+            }
+        }
+
+        // Gate: Email auth required when background cron (Automated Form Submission) is globally active
+        let global_cron_active = if let Ok(db) = self.db.lock() {
+            if let Ok(profiles) = db.list_profiles() {
+                profiles.iter().any(|p| p.background_cron_enabled)
+            } else { false }
+        } else { false };
+        if global_cron_active && !self.email_tracking_enabled {
+            self.pending_notification = Some((
+                gpui_component::notification::NotificationType::Error,
+                "Email authentication is required. Authenticate your email first.".to_string(),
+            ));
+            self.active_tab = 1;
+            cx.notify();
+            return;
+        }
+
         let db_arc = self.db.clone();
 
         // Immediately update stored password so we don't lose it
@@ -534,7 +587,8 @@ impl ProfileManagerView {
                             "Profile saved".to_string(),
                         ));
 
-                        cx.emit(ProfileEvent::Saved);
+                        let tin_val = this.tin_input.read(cx).value(cx).to_string();
+                        cx.emit(ProfileEvent::Saved(tin_val));
                     }
                     Err(err) => {
                         this.save_message = None;
@@ -598,6 +652,10 @@ impl Render for ProfileManagerView {
         } else {
             "Business Start Date"
         };
+        
+        let global_pins_enabled = if let Ok(db) = self.db.lock() {
+            db.get_setting("enable_profile_pins").ok().flatten().as_deref() == Some("true")
+        } else { false };
 
         div()
             .id("profile-scroll")
@@ -708,7 +766,59 @@ impl Render for ProfileManagerView {
                                                         cx.notify();
                                                     }))
                                                     .child(div().text_sm().child("Email Settings")),
-                                            ),
+                                            )
+                                            .when(global_pins_enabled, |this| {
+                                                this.child(
+                                                    div()
+                                                        .id("tab_2")
+                                                        .px_4()
+                                                        .py_1p5()
+                                                        .rounded_md()
+                                                        .cursor_pointer()
+                                                        .when(self.active_tab == 2, |s| {
+                                                            s.bg(cx.theme().background)
+                                                                .shadow_sm()
+                                                                .text_color(cx.theme().foreground)
+                                                                .font_weight(FontWeight::SEMIBOLD)
+                                                        })
+                                                        .when(self.active_tab != 2, |s| {
+                                                            s.hover(|s| s.bg(cx.theme().muted))
+                                                                .text_color(cx.theme().muted_foreground)
+                                                                .font_weight(FontWeight::MEDIUM)
+                                                        })
+                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                            this.active_tab = 2;
+                                                            cx.notify();
+                                                        }))
+                                                        .child(div().text_sm().child("Security")),
+                                                )
+                                            })
+                                            .when(self.editing_id.is_some(), |this| {
+                                                this.child(
+                                                    div()
+                                                        .id("tab_3")
+                                                        .px_4()
+                                                        .py_1p5()
+                                                        .rounded_md()
+                                                        .cursor_pointer()
+                                                        .when(self.active_tab == 3, |s| {
+                                                            s.bg(cx.theme().background)
+                                                                .shadow_sm()
+                                                                .text_color(cx.theme().foreground)
+                                                                .font_weight(FontWeight::SEMIBOLD)
+                                                        })
+                                                        .when(self.active_tab != 3, |s| {
+                                                            s.hover(|s| s.bg(cx.theme().muted))
+                                                                .text_color(cx.theme().muted_foreground)
+                                                                .font_weight(FontWeight::MEDIUM)
+                                                        })
+                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                            this.active_tab = 3;
+                                                            cx.notify();
+                                                        }))
+                                                        .child(div().text_sm().child("Export")),
+                                                )
+                                            }),
                                     ),
                             )
                             .child(
@@ -834,69 +944,6 @@ impl Render for ProfileManagerView {
                                                             .text_color(cx.theme().foreground)
                                                             .child("VAT registered taxpayer"),
                                                     ),
-                                            )
-                                            .child(
-                                                div()
-                                                    .mt_4()
-                                                    .p_4()
-                                                    .bg(cx.theme().muted)
-                                                    .rounded_md()
-                                                    .flex()
-                                                    .flex_col()
-                                                    .gap_4()
-                                                    .child(
-                                                        div()
-                                                            .id("profile_pin_toggle")
-                                                            .flex()
-                                                            .items_center()
-                                                            .gap_2()
-                                                            .cursor_pointer()
-                                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                                this.enable_profile_pin = !this.enable_profile_pin;
-                                                                cx.notify();
-                                                            }))
-                                                            .child(
-                                                                div()
-                                                                    .w_4()
-                                                                    .h_4()
-                                                                    .rounded_sm()
-                                                                    .border_1()
-                                                                    .border_color(cx.theme().border)
-                                                                    .bg(if self.enable_profile_pin {
-                                                                        cx.theme().primary
-                                                                    } else {
-                                                                        cx.theme().background
-                                                                    })
-                                                                    .flex()
-                                                                    .items_center()
-                                                                    .justify_center()
-                                                                    .child(if self.enable_profile_pin {
-                                                                        div()
-                                                                            .text_xs()
-                                                                            .text_color(cx.theme().primary_foreground)
-                                                                            .child("✓")
-                                                                    } else {
-                                                                        div()
-                                                                    }),
-                                                            )
-                                                            .child(
-                                                                div()
-                                                                    .flex()
-                                                                    .flex_col()
-                                                                    .child(div().text_sm().font_weight(FontWeight::MEDIUM).text_color(cx.theme().foreground).child("Secure this Profile with a PIN"))
-                                                                    .child(div().text_xs().text_color(cx.theme().muted_foreground).child("Require a 4-digit PIN when switching to this profile."))
-                                                            ),
-                                                    )
-                                                    .when(self.enable_profile_pin, |this| {
-                                                        this.child(
-                                                            div()
-                                                                .flex()
-                                                                .flex_col()
-                                                                .gap_2()
-                                                                .child(Self::field_label("4-Digit PIN", cx))
-                                                                .child(OtpInput::new(&self.profile_pin_input).large())
-                                                        )
-                                                    })
                                             )
                                     } else { div() })
                                     .child(if self.active_tab == 1 {
@@ -1146,24 +1193,25 @@ impl Render for ProfileManagerView {
                                                                                         let _ = this.update(cx, |this, cx| {
                                                                                             match result {
                                                                                                 Ok((email, access_token, refresh_token)) => {
+                                                                                                    this.oauth_connected = true;
+                                                                                                    this.email_tracking_enabled = true;
+                                                                                                    this.stored_oauth_access_token = Some(access_token.clone());
+                                                                                                    this.stored_oauth_refresh_token = Some(refresh_token.clone());
+                                                                                                    this.connection_test_message = Some((true, format!("Google account connected successfully for {}.", email)));
+                                                                                                    
+                                                                                                    // If profile is already saved, persist tokens to DB immediately
                                                                                                     if let Some(id) = editing_id {
-                                                                                                        this.oauth_connected = true;
-                                                                                                        this.stored_oauth_access_token = Some(access_token);
-                                                                                                        this.stored_oauth_refresh_token = Some(refresh_token);
-                                                                                                        this.connection_test_message = Some((true, format!("Google account connected successfully for {}.", email)));
-                                                                                                        
-                                                                                                        // Save the email and tokens immediately to DB
                                                                                                         if let Ok(db) = this.db.lock() {
                                                                                                             if let Ok(Some(mut profile)) = db.get_profile(&id.to_string()) {
                                                                                                                 profile.email = email;
-                                                                                                                profile.oauth_access_token = this.stored_oauth_access_token.clone();
-                                                                                                                profile.oauth_refresh_token = this.stored_oauth_refresh_token.clone();
+                                                                                                                profile.oauth_access_token = Some(access_token);
+                                                                                                                profile.oauth_refresh_token = Some(refresh_token);
                                                                                                                 let _ = db.save_profile(profile);
                                                                                                             }
                                                                                                         }
-                                                                                                    } else {
-                                                                                                        this.connection_test_message = Some((false, "Please save the profile first before connecting Google.".to_string()));
                                                                                                     }
+                                                                                                    // For unsaved profiles, tokens are stored in memory and
+                                                                                                    // will be persisted when the profile is saved via current_profile()
                                                                                                 }
                                                                                                 Err(e) => {
                                                                                                     this.connection_test_message = Some((false, format!("OAuth failed: {}", e)));
@@ -1179,7 +1227,12 @@ impl Render for ProfileManagerView {
                                                                                     .text_sm()
                                                                                     .text_color(gpui::Hsla::from(gpui::rgba(0x22c55eff)))
                                                                                     .child("● Connected ✓")
-                                                                        } else { div() }),
+                                                                        } else {
+                                                                            div()
+                                                                                .text_xs()
+                                                                                .text_color(gpui::Hsla::from(gpui::rgba(0xef4444ff)))
+                                                                                .child("You are required to log in to your Google account.")
+                                                                        }),
                                                                 )
                                                         }
                                                     )
@@ -1293,59 +1346,165 @@ impl Render for ProfileManagerView {
                                                                     div()
                                                                         .text_sm()
                                                                         .text_color(cx.theme().muted_foreground)
-                                                                        .child("○ Click Test Connection to activate email tracking")
+                                                                        .child("○ Verify your connection to activate email tracking")
                                                                 }
-                                                            ),
-                                                    )
-                                                    .child(
-                                                        div()
-                                                            .id("cron_toggle_wrap")
-                                                            .mt_4()
-                                                            .pt_4()
-                                                            .border_t_1()
-                                                            .border_color(cx.theme().border)
-                                                            .flex()
-                                                            .items_center()
-                                                            .gap_2()
-                                                            .cursor_pointer()
-                                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                                this.background_cron_enabled = !this.background_cron_enabled;
-                                                                cx.notify();
-                                                            }))
-                                                            .child(
-                                                                div()
-                                                                    .w_4()
-                                                                    .h_4()
-                                                                    .rounded_sm()
-                                                                    .border_1()
-                                                                    .border_color(cx.theme().border)
-                                                                    .bg(if self.background_cron_enabled {
-                                                                        cx.theme().primary
-                                                                    } else {
-                                                                        cx.theme().background
-                                                                    })
-                                                                    .flex()
-                                                                    .items_center()
-                                                                    .justify_center()
-                                                                    .child(if self.background_cron_enabled {
-                                                                        div()
-                                                                            .text_xs()
-                                                                            .text_color(cx.theme().primary_foreground)
-                                                                            .child("✓")
-                                                                    } else {
-                                                                        div()
-                                                                    }),
-                                                            )
-                                                            .child(
-                                                                div()
-                                                                    .text_sm()
-                                                                    .text_color(cx.theme().foreground)
-                                                                    .child("Enable Automated Background Services (Retries & Polling)"),
                                                             ),
                                                     )
                                             )
                                     } else { div() })
                             )
+                            .child(if self.active_tab == 2 && global_pins_enabled {
+                                div()
+                                    .p_4()
+                                    .rounded_lg()
+                                    .border_1()
+                                    .border_color(cx.theme().border)
+                                    .bg(cx.theme().background)
+                                    .flex()
+                                    .flex_col()
+                                    .gap_4()
+                                    .w_full()
+                                    .min_w_0()
+                                    .child(
+                                        div()
+                                            .p_4()
+                                            .bg(cx.theme().muted)
+                                            .rounded_md()
+                                            .flex()
+                                            .flex_col()
+                                            .gap_4()
+                                            .child(
+                                                div()
+                                                    .id("profile_pin_toggle")
+                                                    .flex()
+                                                    .items_center()
+                                                    .gap_2()
+                                                    .cursor_pointer()
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.enable_profile_pin = !this.enable_profile_pin;
+                                                        cx.notify();
+                                                    }))
+                                                    .child(
+                                                        div()
+                                                            .w_4()
+                                                            .h_4()
+                                                            .rounded_sm()
+                                                            .border_1()
+                                                            .border_color(cx.theme().border)
+                                                            .bg(if self.enable_profile_pin {
+                                                                cx.theme().primary
+                                                            } else {
+                                                                cx.theme().background
+                                                            })
+                                                            .flex()
+                                                            .items_center()
+                                                            .justify_center()
+                                                            .child(if self.enable_profile_pin {
+                                                                div()
+                                                                    .text_xs()
+                                                                    .text_color(cx.theme().primary_foreground)
+                                                                    .child("✓")
+                                                            } else {
+                                                                div()
+                                                            }),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .flex()
+                                                            .flex_col()
+                                                            .child(div().text_sm().font_weight(FontWeight::MEDIUM).text_color(cx.theme().foreground).child("Secure this Profile with a PIN"))
+                                                            .child(div().text_xs().text_color(cx.theme().muted_foreground).child("Require a 4-digit PIN when switching to this profile."))
+                                                    ),
+                                            )
+                                            .when(self.enable_profile_pin, |this| {
+                                                this.child(
+                                                    div()
+                                                        .flex()
+                                                        .flex_col()
+                                                        .gap_2()
+                                                        .child(Self::field_label("4-Digit PIN", cx))
+                                                        .child(OtpInput::new(&self.profile_pin_input).large())
+                                                )
+                                            })
+                                    )
+                            } else { div() })
+                            .child(if self.active_tab == 3 && self.editing_id.is_some() {
+                                div()
+                                    .p_4()
+                                    .rounded_lg()
+                                    .border_1()
+                                    .border_color(cx.theme().border)
+                                    .bg(cx.theme().background)
+                                    .flex()
+                                    .flex_col()
+                                    .gap_4()
+                                    .w_full()
+                                    .min_w_0()
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .gap_1()
+                                            .child(div().font_weight(FontWeight::SEMIBOLD).child("Export Profile"))
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .child("Create a complete backup of this profile (JSON)."),
+                                            ),
+                                    )
+                                    .child(
+                                        gpui_component::button::Button::new("export_profile_btn")
+                                            .label("Export Profile Data")
+                                            .on_click(cx.listener(|this, _ev, _window, cx| {
+                                                let tin = this.tin_input.read(cx).value(cx).to_string();
+                                                cx.spawn(async move |this, cx| {
+                                                    let Some(target_dir_handle) = rfd::AsyncFileDialog::new()
+                                                        .set_title("Select Folder to Save Profile Backup")
+                                                        .pick_folder()
+                                                        .await
+                                                    else { return; };
+                                                    
+                                                    let target_dir = target_dir_handle.path().to_path_buf();
+                                                    
+                                                    let res = this.update(cx, |this, _cx| {
+                                                        let timestamp = std::time::SystemTime::now()
+                                                            .duration_since(std::time::UNIX_EPOCH)
+                                                            .unwrap()
+                                                            .as_secs();
+                                                        let backup_path = target_dir.join(format!("BIR_Profile_{}_{}.zip", tin, timestamp));
+                                                        
+                                                        if let Ok(db) = this.db.lock() {
+                                                            match bir_core::export::export_profile_data(&db, &tin, &backup_path) {
+                                                                Ok(_) => Ok(backup_path),
+                                                                Err(e) => Err(e.to_string()),
+                                                            }
+                                                        } else {
+                                                            Err("Failed to acquire database lock".to_string())
+                                                        }
+                                                    });
+                                                    
+                                                    match res {
+                                                        Ok(Ok(path)) => {
+                                                            rfd::AsyncMessageDialog::new()
+                                                                .set_title("Profile Exported")
+                                                                .set_description(&format!("Saved to {}", path.display()))
+                                                                .show()
+                                                                .await;
+                                                        }
+                                                        Ok(Err(e)) => {
+                                                            rfd::AsyncMessageDialog::new()
+                                                                .set_title("Export Failed")
+                                                                .set_description(&e)
+                                                                .show()
+                                                                .await;
+                                                        }
+                                                        _ => {}
+                                                    }
+                                                }).detach();
+                                            }))
+                                    )
+                            } else { div() })
                             .child(
                                 div()
                                     .mt_4()

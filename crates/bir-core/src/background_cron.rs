@@ -322,11 +322,7 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
                         job.output_log = Some(log);
                     }
                 } else {
-                    match tokio::process::Command::new("sh")
-                        .arg("-c")
-                        .arg(cmd)
-                        .output()
-                        .await
+                    match crate::platform::run_shell_command(cmd).await
                     {
                         Ok(output) => {
                             let stdout_str = String::from_utf8_lossy(&output.stdout);

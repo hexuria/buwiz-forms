@@ -1,0 +1,63 @@
+//! Windows-specific UI integrations for bir-desktop.
+
+use gpui::*;
+
+// ── Keybindings ──────────────────────────────────────────────────────────────
+
+/// Register global keybindings using the Windows `ctrl` modifier.
+pub fn bind_global_keys(cx: &mut App) {
+    use crate::global_actions::*;
+
+    cx.bind_keys([
+        KeyBinding::new("ctrl-enter", SubmitCurrentForm, None),
+        KeyBinding::new("ctrl-b", ToggleSidebar, None),
+        KeyBinding::new("ctrl-shift-b", ToggleSidebarMini, None),
+        KeyBinding::new("ctrl-f", FocusSearch, None),
+        KeyBinding::new("ctrl-n", CreateProfile, None),
+        KeyBinding::new("ctrl-t", ToggleTheme, None),
+        KeyBinding::new("ctrl-shift-x", OpenCronTasks, None),
+        KeyBinding::new("ctrl-,", OpenSettings, None),
+        KeyBinding::new("ctrl-k", OpenCommandPalette, None),
+        KeyBinding::new("f1", OpenGlobalDashboard, None),
+    ]);
+}
+
+// ── File Operations ──────────────────────────────────────────────────────────
+
+/// Reveal a file in Windows Explorer using `explorer /select,`.
+pub fn reveal_in_file_manager(path: &std::path::Path) {
+    let _ = std::process::Command::new("explorer")
+        .arg("/select,")
+        .arg(path)
+        .spawn();
+}
+
+/// Open a file with the default system application.
+pub fn open_in_system(path: &std::path::Path) {
+    let _ = open::that(path);
+}
+
+// ── Native Print ─────────────────────────────────────────────────────────────
+
+/// Print a PDF using the Windows ShellExecute "print" verb.
+///
+/// Falls back to `open::that` if print fails.
+pub fn print_pdf(path: &std::path::Path) {
+    let path = path.to_path_buf();
+
+    std::thread::spawn(move || {
+        let result = std::process::Command::new("rundll32")
+            .arg("mshtml.dll,PrintHTML")
+            .arg(&path)
+            .spawn();
+
+        if result.is_err() {
+            let _ = open::that(&path);
+        }
+    });
+}
+
+// ── Typography ───────────────────────────────────────────────────────────────
+
+/// The platform's preferred monospace font family.
+pub const MONOSPACE_FONT: &str = "Cascadia Mono";

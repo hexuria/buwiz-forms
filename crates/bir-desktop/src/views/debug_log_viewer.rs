@@ -53,7 +53,7 @@ impl Render for DebugLogViewerView {
                         div()
                             .text_sm()
                             // using monospaced if possible or just standard text
-                            .font_family(".SF NS Mono, SF Mono, Menlo, Consolas, monospace")
+                            .font_family(crate::platform::MONOSPACE_FONT)
                             .text_color(cx.theme().foreground)
                             .child(self.log_text.clone()),
                     ),

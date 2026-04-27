@@ -14,6 +14,7 @@ const TEMPLATE_2551Q: &str = include_str!("../../../formtypes/2551Qv2018/templat
 const PAGE1_SVG_2551Q: &str = include_str!("../../../formtypes/2551Qv2018/pages/page1.svg");
 const PAGE2_SVG_2551Q: &str = include_str!("../../../formtypes/2551Qv2018/pages/page2.svg");
 
+#[cfg(target_os = "macos")]
 pub fn print_html_mac(_html_content: &str) {
     /*
     let mtm = unsafe { MainThreadMarker::new_unchecked() };
@@ -243,7 +244,7 @@ pub fn write_2551q_pdf(
     let output_dir = output_path
         .parent()
         .map(Path::to_path_buf)
-        .unwrap_or_else(std::env::temp_dir);
+        .unwrap_or_else(bir_core::platform::temp_dir);
     let result = render_2551q_print(draft, &output_dir)
         .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err.to_string()))?;
 

@@ -12,6 +12,7 @@ use crate::components::filter_bar::{FilterBar, FilterEvent, FilterState};
 use crate::components::smart_date_filter::{
     SmartDateFilter, SmartDateFilterEvent, SmartDateFilterState,
 };
+use gpui::prelude::FluentBuilder;
 
 pub enum DashboardEvent {
     FileForm {
@@ -20,6 +21,7 @@ pub enum DashboardEvent {
         quarter: u8,
     },
     Reload,
+    LogoutProfile(String),
 }
 
 impl EventEmitter<DashboardEvent> for DashboardView {}
@@ -63,6 +65,7 @@ pub struct DashboardView {
     filing_progress:
         std::collections::HashMap<String, std::collections::HashMap<u16, FormFilingProgress>>,
     is_mini_sidebar: bool,
+    pub hide_tax_profiles: bool,
 }
 
 impl DashboardView {
@@ -102,6 +105,7 @@ impl DashboardView {
             filter_state,
             filing_progress: std::collections::HashMap::new(),
             is_mini_sidebar: false,
+            hide_tax_profiles: false,
         }
     }
 
@@ -818,32 +822,38 @@ impl Render for DashboardView {
                     .child(
                         div()
                             .flex()
-                            .flex_col()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .text_3xl()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(cx.theme().foreground)
-                                    .child(profile.full_name.clone()),
+                            .justify_between()
+                                    .items_start()
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .gap_2()
+                                            .child(
+                                                div()
+                                                    .text_3xl()
+                                                    .font_weight(FontWeight::BOLD)
+                                                    .text_color(cx.theme().foreground)
+                                                    .child(profile.full_name.clone()),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_base()
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .child(format!(
+                                                        "TIN: {} • Type: {:?} • {} • {}",
+                                                        profile.tin.full(),
+                                                        profile.taxpayer_type,
+                                                        period_desc,
+                                                        if profile.is_vat_registered {
+                                                            "VAT"
+                                                        } else {
+                                                            "Non-VAT"
+                                                        }
+                                                    )),
+                                            )
+                                    )
                             )
-                            .child(
-                                div()
-                                    .text_base()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(format!(
-                                        "TIN: {} • Type: {:?} • {} • {}",
-                                        profile.tin.full(),
-                                        profile.taxpayer_type,
-                                        period_desc,
-                                        if profile.is_vat_registered {
-                                            "VAT"
-                                        } else {
-                                            "Non-VAT"
-                                        }
-                                    )),
-                            ),
-                    )
                     .child(
                         div()
                             .flex()

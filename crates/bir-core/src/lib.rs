@@ -19,6 +19,7 @@ pub mod bir_xml;
 pub mod crypto;
 pub mod daemon_installer;
 pub mod db;
+pub mod platform;
 pub mod email;
 pub mod email_fetcher; // legacy — kept for backward compat, delegates to `email`
 pub mod export;

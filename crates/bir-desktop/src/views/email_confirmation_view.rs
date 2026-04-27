@@ -56,7 +56,7 @@ impl EmailConfirmationView {
 
     fn print_pdf(&mut self, cx: &mut Context<Self>) {
         let pdf_bytes = self.generate_pdf_bytes();
-        let dir = std::env::temp_dir().join("taxman-ebir-pdf");
+        let dir = bir_core::platform::temp_dir().join("taxman-ebir-pdf");
         let _ = std::fs::create_dir_all(&dir);
         let path = dir.join("temp-print.pdf");
 
@@ -66,59 +66,7 @@ impl EmailConfirmationView {
             return;
         }
 
-        let script = r#"
-import AppKit
-import PDFKit
-
-func printPDF(path: String) {
-    let url = URL(fileURLWithPath: path)
-    guard let pdfDoc = PDFDocument(url: url) else { exit(1) }
-    
-    let printInfo = NSPrintInfo.shared
-    printInfo.isHorizontallyCentered = true
-    printInfo.isVerticallyCentered = true
-    
-    let printOp = pdfDoc.printOperation(for: printInfo, scalingMode: .pageScaleDownToFit, autoRotate: true)
-    
-    let app = NSApplication.shared
-    app.setActivationPolicy(.accessory)
-    app.activate(ignoringOtherApps: true)
-    
-    printOp?.showsPrintPanel = true
-    printOp?.showsProgressPanel = true
-    printOp?.run()
-}
-
-let args = CommandLine.arguments
-if args.count > 1 {
-    printPDF(path: args[1])
-}
-"#;
-
-        std::thread::spawn(move || {
-            use std::io::Write;
-            let mut child = match std::process::Command::new("swift")
-                .arg("-")
-                .arg(&path)
-                .stdin(std::process::Stdio::piped())
-                .spawn()
-            {
-                Ok(child) => child,
-                Err(_) => {
-                    let _ = open::that(&path);
-                    return;
-                }
-            };
-
-            if let Some(mut stdin) = child.stdin.take() {
-                let _ = stdin.write_all(script.as_bytes());
-            }
-
-            let output = child.wait();
-            if output.is_err() || !output.unwrap().success() {
-                let _ = open::that(&path);
-            }
-        });
+        crate::platform::print_pdf(&path);
     }
 }
 
@@ -255,7 +203,7 @@ impl Render for EmailConfirmationView {
 
                                             div()
                                                 .text_sm()
-                                                .font_family(".SF NS Mono")
+                                                .font_family(crate::platform::MONOSPACE_FONT)
                                                 .text_color(cx.theme().foreground)
                                                 .child(
                                                     gpui_component::text::TextView::markdown(

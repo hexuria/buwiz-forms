@@ -5,6 +5,7 @@ use crate::views::global_dashboard::{GlobalDashboardEvent, GlobalDashboardView};
 use crate::views::import_export::{ImportExportEvent, ImportExportView};
 use crate::views::lock_screen::{LockScreenEvent, LockScreenView};
 use crate::views::profile_manager::ProfileManagerView;
+use crate::views::settings::{SettingsEvent, SettingsView};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::button::ButtonVariants;
@@ -42,6 +43,7 @@ pub enum ActiveView {
     ProfileManager,
     CronTasks,
     ImportExport,
+    Settings,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -57,6 +59,7 @@ pub struct AppState {
     global_dashboard_view: Entity<GlobalDashboardView>,
     cron_tasks_view: Entity<CronTasksView>,
     import_export_view: Entity<ImportExportView>,
+    settings_view: Entity<SettingsView>,
     form_2551q_view: Option<Entity<Form2551QView>>,
     pending_form_draft: Option<Form2551QDraft>,
     db: Arc<Mutex<Database>>,
@@ -82,6 +85,14 @@ pub struct AppState {
     profile_auth_error: Option<String>,
     os_auth_triggered: bool,
     unlocked_profile: Option<(TaxpayerProfile, ProfileTargetAction)>,
+    hide_tax_profiles: bool,
+    enable_profile_pins: bool,
+    pending_admin_view: Option<ActiveView>,
+    admin_otp_state: Entity<OtpState>,
+    admin_auth_error: Option<String>,
+    admin_os_auth_triggered: bool,
+    /// The TIN of the currently active/unlocked profile session (only meaningful when hide_tax_profiles is enabled)
+    active_session_tin: Option<String>,
 }
 
 impl AppState {
@@ -109,11 +120,23 @@ impl AppState {
                 backup_path.display()
             );
         }
+        
+        // Phase 2: Automated Cleanup of Regenerated PDFs
+        // Safely clear out the temporary directory on application startup so it doesn't grow indefinitely.
+        cx.background_executor().spawn(async move {
+            let temp_pdf_dir = bir_core::platform::temp_dir().join("taxman-ebir-pdf");
+            if temp_pdf_dir.exists() {
+                let _ = std::fs::remove_dir_all(&temp_pdf_dir);
+            }
+        }).detach();
+
         let theme_preference = if let Ok(Some(val)) = db.get_setting("theme_preference") {
             serde_json::from_str(&val).unwrap_or(AppThemeMode::System)
         } else {
             AppThemeMode::System
         };
+        let hide_tax_profiles = db.get_setting("hide_tax_profiles").ok().flatten().as_deref() == Some("true");
+        let enable_profile_pins = db.get_setting("enable_profile_pins").ok().flatten().as_deref() == Some("true");
 
         let target_mode = match theme_preference {
             AppThemeMode::Light => ThemeMode::Light,
@@ -154,6 +177,7 @@ impl AppState {
         let lock_screen_view = Some(cx.new(|cx| LockScreenView::new(db_clone_lock, window, cx)));
         
         let profile_otp_state = cx.new(|cx| OtpState::new(4, window, cx).masked(true));
+        let admin_otp_state = cx.new(|cx| OtpState::new(4, window, cx).masked(true));
         
         cx.subscribe_in(&profile_otp_state, window, |this: &mut Self, _entity, event: &InputEvent, window, cx| match event {
             InputEvent::Change => {
@@ -174,6 +198,39 @@ impl AppState {
                                 input.focus(window, cx);
                             });
                         }
+                    }
+                }
+                cx.notify();
+            }
+            _ => {}
+        }).detach();
+
+        cx.subscribe_in(&admin_otp_state, window, |this: &mut Self, _entity, event: &InputEvent, window, cx| match event {
+            InputEvent::Change => {
+                let entered_pin = this.admin_otp_state.read(cx).value().to_string();
+                if entered_pin.len() == 4 {
+                    let hashed = bir_core::crypto::hash_pin(&entered_pin);
+                    let valid = if let Ok(db) = this.db.lock() {
+                        let hash = db.get_setting("app_lock_pin_hash").ok().flatten();
+                        hash.as_deref() == Some(&hashed)
+                    } else { false };
+                    
+                    if valid {
+                        if let Some(target) = this.pending_admin_view.take() {
+                            this.active_view = target;
+                            if target == ActiveView::CronTasks {
+                                this.cron_tasks_view.update(cx, |view, cx| view.load_settings(cx));
+                            }
+                        }
+                        this.admin_auth_error = None;
+                        this.admin_otp_state.update(cx, |input, cx| input.set_value("", window, cx));
+                        this.focus_handle.focus(window, cx);
+                    } else {
+                        this.admin_auth_error = Some("Incorrect Admin PIN.".to_string());
+                        this.admin_otp_state.update(cx, |input, cx| {
+                            input.set_value("", window, cx);
+                            input.focus(window, cx);
+                        });
                     }
                 }
                 cx.notify();
@@ -229,7 +286,6 @@ impl AppState {
 
                     // Re-evaluate settings (like lock and theme)
                     if let Ok(db) = this.db.lock() {
-                        this.is_locked = db.get_setting("app_lock_enabled").ok().flatten().as_deref() == Some("true");
                         if let Ok(Some(val)) = db.get_setting("theme_preference") {
                             this.theme_preference = serde_json::from_str(&val).unwrap_or(AppThemeMode::System);
                         } else {
@@ -242,22 +298,80 @@ impl AppState {
             },
         )
         .detach();
+        
+        let db_clone_settings = Arc::clone(&db);
+        let settings_view = cx.new(|cx| SettingsView::new(db_clone_settings, window, cx));
+        cx.subscribe(
+            &settings_view,
+            |this: &mut Self, _entity, event: &SettingsEvent, cx| match event {
+                SettingsEvent::ReloadApp => {
+                    if let Ok(db) = this.db.lock() {
+                        this.hide_tax_profiles = db.get_setting("hide_tax_profiles").ok().flatten().as_deref() == Some("true");
+                        this.enable_profile_pins = db.get_setting("enable_profile_pins").ok().flatten().as_deref() == Some("true");
+                    }
+                    // Sync dashboard
+                    let htp = this.hide_tax_profiles;
+                    this.dashboard_view.update(cx, |view, _cx| {
+                        view.hide_tax_profiles = htp;
+                    });
+                    // Clear session if privacy mode was disabled
+                    if !this.hide_tax_profiles {
+                        this.active_session_tin = None;
+                    }
+                    cx.notify();
+                }
+            }
+        ).detach();
 
+        let hide_profiles_placeholder = if hide_tax_profiles {
+            "Enter full TIN to access profile..."
+        } else {
+            "Search TIN or name"
+        };
         let profile_filter =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Search TIN or name"));
+            cx.new(|cx| InputState::new(window, cx).placeholder(hide_profiles_placeholder));
         let filter_sub = cx.subscribe_in(
             &profile_filter,
             window,
-            |_: &mut Self, _, event: &InputEvent, _, cx| {
-                if matches!(event, InputEvent::Change) {
-                    cx.notify();
+            |this: &mut Self, _, event: &InputEvent, window, cx| {
+                match event {
+                    InputEvent::Change => {
+                        cx.notify();
+                    }
+                    InputEvent::PressEnter { .. } => {
+                        let query = this.profile_filter.read(cx).value().trim().to_string();
+                        // Match both raw digits (e.g. 261708015000) and formatted (e.g. 261-708-015-000)
+                        if let Some(profile) = this.profiles.iter().find(|p| {
+                            p.tin.full() == query || p.tin.formatted() == query
+                        }).cloned() {
+                            if this.hide_tax_profiles {
+                                // End current session and start new one
+                                this.active_session_tin = Some(profile.tin.full());
+                            }
+                            this.profile_filter.update(cx, |input, cx| {
+                                input.set_value("", window, cx);
+                            });
+                            this.select_profile(profile, ProfileTargetAction::ViewDashboard, window, cx);
+                        }
+                    }
+                    _ => {}
                 }
             },
         );
 
         let profile_sub = cx.subscribe(
             &profile_manager,
-            |this: &mut Self, _entity, _event: &crate::views::profile_manager::ProfileEvent, cx| {
+            |this: &mut Self, _entity, event: &crate::views::profile_manager::ProfileEvent, cx| {
+                let saved_tin = match event {
+                    crate::views::profile_manager::ProfileEvent::Saved(tin) => Some(tin.clone()),
+                };
+                
+                if let Some(tin) = &saved_tin {
+                    if this.hide_tax_profiles {
+                        this.active_session_tin = Some(tin.clone());
+                    }
+                }
+
                 let db_clone = this.db.clone();
                 let active_tin = this.active_profile_tin.clone();
 
@@ -351,6 +465,12 @@ impl AppState {
                     }
                     cx.notify();
                 }
+                DashboardEvent::LogoutProfile(_tin) => {
+                    this.active_session_tin = None;
+                    this.active_profile_tin = None;
+                    this.active_view = ActiveView::GlobalDashboard;
+                    cx.notify();
+                }
             },
         )
         .detach();
@@ -386,11 +506,33 @@ impl AppState {
             profile_auth_error: None,
             os_auth_triggered: false,
             unlocked_profile: None,
+            settings_view,
+            hide_tax_profiles,
+            enable_profile_pins,
+            pending_admin_view: None,
+            admin_otp_state,
+            admin_auth_error: None,
+            admin_os_auth_triggered: false,
+            active_session_tin: None,
         }
     }
     
     fn select_profile(&mut self, profile: TaxpayerProfile, action: ProfileTargetAction, window: &mut Window, cx: &mut Context<Self>) {
-        if profile.profile_pin_hash.is_some() {
+        let tin = profile.tin.full();
+
+        // If this profile is already the active session, skip PIN entirely
+        if self.hide_tax_profiles && self.active_session_tin.as_ref() == Some(&tin) {
+            self.apply_profile_action(profile, action, window, cx);
+            cx.notify();
+            return;
+        }
+
+        // Switching profiles: set new session (old one is automatically replaced)
+        if self.hide_tax_profiles {
+            self.active_session_tin = Some(tin);
+        }
+
+        if self.enable_profile_pins && profile.profile_pin_hash.is_some() {
             self.pending_profile = Some((profile, action));
             self.profile_auth_error = None;
             self.os_auth_triggered = false;
@@ -406,6 +548,13 @@ impl AppState {
     
     fn apply_profile_action(&mut self, profile: TaxpayerProfile, action: ProfileTargetAction, window: &mut Window, cx: &mut Context<Self>) {
         self.active_profile_tin = Some(profile.tin.full());
+
+        // Keep dashboard in sync with hide_tax_profiles state
+        let htp = self.hide_tax_profiles;
+        self.dashboard_view.update(cx, |view, _cx| {
+            view.hide_tax_profiles = htp;
+        });
+
         match action {
             ProfileTargetAction::ViewDashboard => {
                 self.active_view = ActiveView::Dashboard;
@@ -421,6 +570,28 @@ impl AppState {
                 });
             }
         }
+    }
+    
+    fn request_admin_access(&mut self, target: ActiveView, window: &mut Window, cx: &mut Context<Self>) {
+        let is_app_lock_enabled = if let Ok(db) = self.db.lock() {
+            db.get_setting("app_lock_enabled").ok().flatten().as_deref() == Some("true")
+        } else { false };
+        
+        if is_app_lock_enabled {
+            self.pending_admin_view = Some(target);
+            self.admin_auth_error = None;
+            self.admin_os_auth_triggered = false;
+            self.admin_otp_state.update(cx, |input, cx| {
+                input.set_value("", window, cx);
+                input.focus(window, cx);
+            });
+        } else {
+            self.active_view = target;
+            if target == ActiveView::CronTasks {
+                self.cron_tasks_view.update(cx, |view, cx| view.load_settings(cx));
+            }
+        }
+        cx.notify();
     }
 
     fn render_sidebar(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -441,13 +612,25 @@ impl AppState {
                 if self.show_archived != profile.is_archived {
                     return false;
                 }
-                filter.trim().is_empty()
-                    || profile
-                        .full_name
-                        .to_lowercase()
-                        .contains(&filter.trim().to_lowercase())
-                    || profile.tin.full().contains(filter.trim())
-                    || profile.tin.formatted().contains(filter.trim())
+                if self.hide_tax_profiles {
+                    let is_active_session = self.active_session_tin.as_ref() == Some(&profile.tin.full());
+                    // When filter is empty, show only the active session profile
+                    if filter.trim().is_empty() {
+                        return is_active_session;
+                    }
+                    // When typing, only exact full TIN match (digits or formatted) reveals a profile
+                    let is_exact_tin_match = filter.trim() == profile.tin.full().to_lowercase()
+                        || filter.trim() == profile.tin.formatted().to_lowercase();
+                    is_active_session || is_exact_tin_match
+                } else {
+                    filter.trim().is_empty()
+                        || profile
+                            .full_name
+                            .to_lowercase()
+                            .contains(&filter.trim().to_lowercase())
+                        || profile.tin.full().contains(filter.trim())
+                        || profile.tin.formatted().contains(filter.trim())
+                }
             })
             .cloned()
             .collect();
@@ -531,7 +714,7 @@ impl AppState {
                             ),
                     )
                     .child(
-                        div()
+                            div()
                             .flex()
                             .items_center()
                             .justify_between()
@@ -558,6 +741,8 @@ impl AppState {
                                     .cursor_pointer()
                                     .hover(|s| s.bg(cx.theme().muted).rounded_md())
                                     .on_click(cx.listener(|this, _ev, _window, cx| {
+                                        // End any active session when creating a new profile
+                                        this.active_session_tin = None;
                                         this.active_view = ActiveView::ProfileManager;
                                         this.active_profile_tin = None;
                                         this.profile_manager.update(cx, |view, cx| {
@@ -936,6 +1121,52 @@ impl AppState {
                                 )
                             })
                     )
+                    .when(self.hide_tax_profiles && self.active_session_tin.is_some(), |this| {
+                        this.child(
+                            div()
+                                .w_full()
+                                .py_2()
+                                .when(!is_mini, |this| this.px_6())
+                                .when(is_mini, |this| this.px_3())
+                                .flex()
+                                .justify_center()
+                                .child(
+                                    if is_mini {
+                                        div()
+                                            .id("exit_session_mini_btn")
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .size(px(48.))
+                                            .flex_shrink_0()
+                                            .rounded_full()
+                                            .bg(gpui::rgba(0xef444420))
+                                            .cursor_pointer()
+                                            .hover(|s| s.bg(gpui::rgba(0xef444440)))
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.active_session_tin = None;
+                                                this.active_profile_tin = None;
+                                                this.active_view = ActiveView::GlobalDashboard;
+                                                cx.notify();
+                                            }))
+                                            .child(Icon::new(IconName::CircleX).size(px(20.)).text_color(Hsla::from(gpui::rgba(0xef4444ff))))
+                                            .into_any_element()
+                                    } else {
+                                        gpui_component::button::Button::new("exit_session")
+                                            .small()
+                                            .label("Exit Session")
+                                            .icon(IconName::CircleX)
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.active_session_tin = None;
+                                                this.active_profile_tin = None;
+                                                this.active_view = ActiveView::GlobalDashboard;
+                                                cx.notify();
+                                            }))
+                                            .into_any_element()
+                                    }
+                                )
+                        )
+                    })
                     .child(
                         div()
                             .w_full()
@@ -950,143 +1181,116 @@ impl AppState {
                     .when(!is_mini, |this| this.px_6())
                     .when(is_mini, |this| this.px_3())
                     .child(
-                        if is_mini {
-                            div().flex().justify_center().w_full().child(
-                                div()
-                                    .id("import_export_mini_btn")
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .size(px(48.))
-                                    .flex_shrink_0()
-                                    .rounded_full()
-                                    .bg(cx.theme().secondary)
-                                    .cursor_pointer()
-                                    .hover(|s| s.bg(cx.theme().muted))
-                                    .on_click(cx.listener(|this, _ev, _window, cx| {
-                                        this.active_view = ActiveView::ImportExport;
-                                        cx.notify();
-                                    }))
-                                    .child(Icon::new(IconName::HardDrive).size(px(20.)).text_color(cx.theme().foreground))
-                            ).into_any_element()
-                        } else {
-                            gpui_component::button::Button::new("import_export_btn")
-                                .icon(IconName::HardDrive)
-                                .label("Import/Export DB")
-                                .on_click(cx.listener(|this, _ev, _window, cx| {
-                                    this.active_view = ActiveView::ImportExport;
-                                    cx.notify();
-                                }))
-                                .into_any_element()
-                        }
+                        div()
+                            .id("import_export_sidebar_btn")
+                            .flex()
+                            .items_center()
+                            .w_full()
+                            .cursor_pointer()
+                            .hover(|s| s.bg(cx.theme().muted))
+                            .when(is_mini, |this| {
+                                this.justify_center().size(px(48.)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
+                            })
+                            .when(!is_mini, |this| {
+                                this.justify_start().h_10().px_3().gap_3().rounded_md().bg(cx.theme().secondary)
+                            })
+                            .on_click(cx.listener(|this, _ev, _window, cx| {
+                                this.active_view = ActiveView::ImportExport;
+                                cx.notify();
+                            }))
+                            .child(Icon::new(IconName::HardDrive).size(px(20.)).text_color(cx.theme().foreground))
+                            .when(!is_mini, |this| {
+                                this.child(div().text_sm().text_color(cx.theme().foreground).child("Import Data"))
+                            })
                     )
                     .child(
-                        if is_mini {
-                            div().flex().justify_center().w_full().child(
-                                div()
-                                    .id("cron_tasks_mini_btn")
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .size(px(48.))
-                                    .flex_shrink_0()
-                                    .rounded_full()
-                                    .bg(cx.theme().secondary)
-                                    .cursor_pointer()
-                                    .hover(|s| s.bg(cx.theme().muted))
-                                    .on_click(cx.listener(|this, _ev, _window, cx| {
-                                        this.active_view = ActiveView::CronTasks;
-                                        this.cron_tasks_view.update(cx, |view, cx| {
-                                            view.load_settings(cx);
-                                        });
-                                        cx.notify();
-                                    }))
-                                    .child(Icon::new(IconName::SquareTerminal).size(px(20.)).text_color(cx.theme().foreground))
-                            ).into_any_element()
-                        } else {
-                            gpui_component::button::Button::new("cron_tasks_btn")
-                                .icon(IconName::SquareTerminal)
-                                .label("Background Tasks")
-                                .on_click(cx.listener(|this, _ev, _window, cx| {
-                                    this.active_view = ActiveView::CronTasks;
-                                    this.cron_tasks_view.update(cx, |view, cx| {
-                                        view.load_settings(cx);
-                                    });
-                                    cx.notify();
-                                }))
-                                .into_any_element()
-                        }
-                    )
-                    .child(
-                        if is_mini {
-                            div().flex().justify_center().w_full().child(
-                                div()
-                                    .id("theme_toggle_mini_btn")
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .size(px(48.))
-                                    .flex_shrink_0()
-                                    .rounded_full()
-                                    .bg(cx.theme().secondary)
-                                    .cursor_pointer()
-                                    .hover(|s| s.bg(cx.theme().muted))
-                                    .on_click(cx.listener(|this, _ev, window, cx| {
-                                        this.theme_preference = this.theme_preference.next();
-                                        if let Ok(db) = this.db.lock() {
-                                            if let Ok(val) = serde_json::to_string(&this.theme_preference) {
-                                                let _ = db.set_setting("theme_preference", &val);
-                                            }
-                                        }
-                                        let target_mode = match this.theme_preference {
-                                            AppThemeMode::Light => ThemeMode::Light,
-                                            AppThemeMode::Dark => ThemeMode::Dark,
-                                            AppThemeMode::System => match window.appearance() {
-                                                gpui::WindowAppearance::Light | gpui::WindowAppearance::VibrantLight => ThemeMode::Light,
-                                                gpui::WindowAppearance::Dark | gpui::WindowAppearance::VibrantDark => ThemeMode::Dark,
-                                            },
-                                        };
-                                        Theme::change(target_mode, Some(window), cx);
-                                        cx.notify();
-                                    }))
-                                    .child(match self.theme_preference {
-                                        AppThemeMode::Dark => Icon::new(IconName::Moon).size(px(20.)).text_color(cx.theme().foreground),
-                                        AppThemeMode::Light => Icon::new(IconName::Sun).size(px(20.)).text_color(cx.theme().foreground),
-                                        AppThemeMode::System => Icon::new(IconName::Settings).size(px(20.)).text_color(cx.theme().foreground),
-                                    })
-                            ).into_any_element()
-                        } else {
-                            gpui_component::button::Button::new("theme_toggle")
-                                .label(match self.theme_preference {
-                                    AppThemeMode::Light => "Light Mode",
-                                    AppThemeMode::Dark => "Dark Mode",
-                                    AppThemeMode::System => "System Theme",
-                                })
-                                .icon(match self.theme_preference {
-                                    AppThemeMode::Dark => IconName::Moon,
-                                    AppThemeMode::Light => IconName::Sun,
-                                    AppThemeMode::System => IconName::Settings,
-                                })
-                                .on_click(cx.listener(|this, _ev, window, cx| {
-                                    this.theme_preference = this.theme_preference.next();
-                                    if let Ok(db) = this.db.lock() {
-                                        if let Ok(val) = serde_json::to_string(&this.theme_preference) {
-                                            let _ = db.set_setting("theme_preference", &val);
-                                        }
+                        div()
+                            .id("theme_toggle_sidebar_btn")
+                            .flex()
+                            .items_center()
+                            .w_full()
+                            .cursor_pointer()
+                            .hover(|s| s.bg(cx.theme().muted))
+                            .when(is_mini, |this| {
+                                this.justify_center().size(px(48.)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
+                            })
+                            .when(!is_mini, |this| {
+                                this.justify_start().h_10().px_3().gap_3().rounded_md().bg(cx.theme().secondary)
+                            })
+                            .on_click(cx.listener(|this, _ev, window, cx| {
+                                this.theme_preference = this.theme_preference.next();
+                                if let Ok(db) = this.db.lock() {
+                                    if let Ok(val) = serde_json::to_string(&this.theme_preference) {
+                                        let _ = db.set_setting("theme_preference", &val);
                                     }
-                                    let target_mode = match this.theme_preference {
-                                        AppThemeMode::Light => ThemeMode::Light,
-                                        AppThemeMode::Dark => ThemeMode::Dark,
-                                        AppThemeMode::System => match window.appearance() {
-                                            gpui::WindowAppearance::Light | gpui::WindowAppearance::VibrantLight => ThemeMode::Light,
-                                            gpui::WindowAppearance::Dark | gpui::WindowAppearance::VibrantDark => ThemeMode::Dark,
-                                        },
-                                    };
-                                    Theme::change(target_mode, Some(window), cx);
-                                    cx.notify();
+                                }
+                                let target_mode = match this.theme_preference {
+                                    AppThemeMode::Light => ThemeMode::Light,
+                                    AppThemeMode::Dark => ThemeMode::Dark,
+                                    AppThemeMode::System => match window.appearance() {
+                                        gpui::WindowAppearance::Light | gpui::WindowAppearance::VibrantLight => ThemeMode::Light,
+                                        gpui::WindowAppearance::Dark | gpui::WindowAppearance::VibrantDark => ThemeMode::Dark,
+                                    },
+                                };
+                                Theme::change(target_mode, Some(window), cx);
+                                cx.notify();
+                            }))
+                            .child(match self.theme_preference {
+                                AppThemeMode::Dark => Icon::new(IconName::Moon).size(px(20.)).text_color(cx.theme().foreground),
+                                AppThemeMode::Light => Icon::new(IconName::Sun).size(px(20.)).text_color(cx.theme().foreground),
+                                AppThemeMode::System => Icon::new(IconName::Settings).size(px(20.)).text_color(cx.theme().foreground),
+                            })
+                            .when(!is_mini, |this| {
+                                this.child(div().text_sm().text_color(cx.theme().foreground).child(match self.theme_preference {
+                                    AppThemeMode::Dark => "Dark Mode",
+                                    AppThemeMode::Light => "Light Mode",
+                                    AppThemeMode::System => "System Theme",
                                 }))
-                                .into_any_element()
-                        }
+                            })
+                    )
+                    .child(
+                        div()
+                            .id("cron_tasks_sidebar_btn")
+                            .flex()
+                            .items_center()
+                            .w_full()
+                            .cursor_pointer()
+                            .hover(|s| s.bg(cx.theme().muted))
+                            .when(is_mini, |this| {
+                                this.justify_center().size(px(48.)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
+                            })
+                            .when(!is_mini, |this| {
+                                this.justify_start().h_10().px_3().gap_3().rounded_md().bg(cx.theme().secondary)
+                            })
+                            .on_click(cx.listener(|this, _ev, window, cx| {
+                                this.request_admin_access(ActiveView::CronTasks, window, cx);
+                            }))
+                            .child(Icon::new(IconName::SquareTerminal).size(px(20.)).text_color(cx.theme().foreground))
+                            .when(!is_mini, |this| {
+                                this.child(div().text_sm().text_color(cx.theme().foreground).child("Background Tasks"))
+                            })
+                    )
+                    .child(
+                        div()
+                            .id("settings_sidebar_btn")
+                            .flex()
+                            .items_center()
+                            .w_full()
+                            .cursor_pointer()
+                            .hover(|s| s.bg(cx.theme().muted))
+                            .when(is_mini, |this| {
+                                this.justify_center().size(px(48.)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
+                            })
+                            .when(!is_mini, |this| {
+                                this.justify_start().h_10().px_3().gap_3().rounded_md().bg(cx.theme().secondary)
+                            })
+                            .on_click(cx.listener(|this, _ev, window, cx| {
+                                this.request_admin_access(ActiveView::Settings, window, cx);
+                            }))
+                            .child(Icon::new(IconName::Settings).size(px(20.)).text_color(cx.theme().foreground))
+                            .when(!is_mini, |this| {
+                                this.child(div().text_sm().text_color(cx.theme().foreground).child("Settings"))
+                            })
                     )
             )
     }
@@ -1097,6 +1301,7 @@ impl AppState {
             ActiveView::ProfileManager => self.profile_manager.clone().into_any_element(),
             ActiveView::CronTasks => self.cron_tasks_view.clone().into_any_element(),
             ActiveView::ImportExport => self.import_export_view.clone().into_any_element(),
+            ActiveView::Settings => self.settings_view.clone().into_any_element(),
             ActiveView::Dashboard => self.dashboard_view.clone().into_any_element(),
             ActiveView::Form2551Q => {
                 if let Some(view) = &self.form_2551q_view {
@@ -1318,9 +1523,8 @@ impl Render for AppState {
                 },
             ))
             .on_action(cx.listener(
-                |this: &mut Self, _action: &crate::global_actions::OpenSettings, _window, cx| {
-                    this.active_view = ActiveView::ImportExport;
-                    cx.notify();
+                |this: &mut Self, _action: &crate::global_actions::OpenSettings, window, cx| {
+                    this.request_admin_access(ActiveView::Settings, window, cx);
                 },
             ))
             .on_action(cx.listener(
@@ -1334,12 +1538,17 @@ impl Render for AppState {
                 |this: &mut Self, _action: &crate::global_actions::OpenCommandPalette, window, cx| {
                     this.is_command_palette_open = true;
                     let profiles = this.profiles.clone();
-                    let palette = cx.new(|cx| crate::components::command_palette::CommandPalette::new(profiles, window, cx));
+                    let hide_tax_profiles = this.hide_tax_profiles;
+                    let active_session_tin = this.active_session_tin.clone();
+                    let palette = cx.new(|cx| crate::components::command_palette::CommandPalette::new(profiles, hide_tax_profiles, active_session_tin, window, cx));
                     
                     cx.subscribe_in(&palette, window, |this: &mut Self, _, event: &crate::components::command_palette::CommandPaletteEvent, window, cx| {
                         match event {
                             crate::components::command_palette::CommandPaletteEvent::SelectProfile(tin) => {
                                 if let Some(profile) = this.profiles.iter().find(|p| p.tin.full() == *tin).cloned() {
+                                    if this.hide_tax_profiles {
+                                        this.active_session_tin = Some(tin.clone());
+                                    }
                                     this.select_profile(profile, ProfileTargetAction::ViewDashboard, window, cx);
                                 }
                                 this.is_command_palette_open = false;
@@ -1356,6 +1565,19 @@ impl Render for AppState {
                                     view.prefill_name(&query, window, cx);
                                 });
                                 // Focus is already set to the name input by prefill_name
+                                cx.notify();
+                            }
+                            crate::components::command_palette::CommandPaletteEvent::EditProfile(tin) => {
+                                if let Some(profile) = this.profiles.iter().find(|p| p.tin.full() == *tin).cloned() {
+                                    if this.hide_tax_profiles {
+                                        this.active_session_tin = Some(tin.clone());
+                                    }
+                                    this.select_profile(profile, ProfileTargetAction::EditProfile, window, cx);
+                                }
+                                this.is_command_palette_open = false;
+                                if this.pending_profile.is_none() {
+                                    this.focus_handle.focus(window, cx);
+                                }
                                 cx.notify();
                             }
                             crate::components::command_palette::CommandPaletteEvent::Dismiss => {
@@ -1519,6 +1741,145 @@ impl Render for AppState {
                                                 .on_click(cx.listener(|this, _ev, window, cx| {
                                                     this.pending_profile = None;
                                                     this.profile_otp_state.update(cx, |input, cx| input.set_value("", window, cx));
+                                                    this.focus_handle.focus(window, cx);
+                                                    cx.notify();
+                                                }))
+                                        )
+                                )
+                        )
+                )
+            })
+            .when_some(self.pending_admin_view, |this, target| {
+                let error_msg = self.admin_auth_error.clone();
+                let os_triggered = self.admin_os_auth_triggered;
+                
+                this.child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .bg(cx.theme().background)
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .justify_center()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .items_center()
+                                .gap_6()
+                                .child(
+                                    gpui::img(std::path::PathBuf::from("assets/svg/ebirforms.png"))
+                                        .w(px(200.))
+                                        .h(px(60.))
+                                        .object_fit(gpui::ObjectFit::Contain)
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .items_center()
+                                        .gap_1()
+                                        .child(
+                                            div()
+                                                .text_xl()
+                                                .font_weight(FontWeight::BOLD)
+                                                .text_color(cx.theme().foreground)
+                                                .child("Admin Access Required")
+                                        )
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child(match target {
+                                                    ActiveView::Settings => "Enter App Lock PIN to access Settings",
+                                                    ActiveView::CronTasks => "Enter App Lock PIN to access Background Tasks",
+                                                    _ => "Enter App Lock PIN to continue",
+                                                })
+                                        )
+                                )
+                                .child(
+                                    OtpInput::new(&self.admin_otp_state)
+                                        .groups(1)
+                                        .large()
+                                        .disabled(os_triggered)
+                                )
+                                .when_some(error_msg, |this, msg| {
+                                    this.child(
+                                        div()
+                                            .text_sm()
+                                            .text_color(cx.theme().danger)
+                                            .child(msg)
+                                    )
+                                })
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .items_center()
+                                        .gap_4()
+                                        .child(
+                                            gpui_component::button::Button::new("admin_os_override")
+                                                .label(if os_triggered { "Waiting for OS..." } else { "OS Auth Override" })
+                                                .ghost()
+                                                .disabled(os_triggered)
+                                                .on_click(cx.listener(move |this, _ev, _window, cx| {
+                                                    if this.admin_os_auth_triggered { return; }
+                                                    this.admin_os_auth_triggered = true;
+                                                    this.admin_auth_error = None;
+                                                    
+                                                    cx.spawn(async move |this, cx| {
+                                                        use robius_authentication::{BiometricStrength, Context, PolicyBuilder, Text, AndroidText, WindowsText};
+                                                        let policy = match PolicyBuilder::new()
+                                                            .biometrics(Some(BiometricStrength::Strong))
+                                                            .password(true)
+                                                            .watch(true)
+                                                            .build() {
+                                                                Some(p) => p,
+                                                                None => return,
+                                                        };
+
+                                                        let text = Text {
+                                                            android: AndroidText {
+                                                                title: "Admin Override",
+                                                                subtitle: None,
+                                                                description: None,
+                                                            },
+                                                            apple: "OS Authentication to Override App Lock",
+                                                            windows: WindowsText::new_truncated("Admin Override", "Authenticate to override App Lock PIN."),
+                                                        };
+
+                                                        let success = Context::new(())
+                                                            .authenticate(text, &policy)
+                                                            .await
+                                                            .is_ok();
+                                                        
+                                                        let _ = this.update(cx, |this, cx| {
+                                                            this.admin_os_auth_triggered = false;
+                                                            if success {
+                                                                if let Some(target) = this.pending_admin_view.take() {
+                                                                    this.active_view = target;
+                                                                    if target == ActiveView::CronTasks {
+                                                                        this.cron_tasks_view.update(cx, |view, cx| view.load_settings(cx));
+                                                                    }
+                                                                }
+                                                            } else {
+                                                                this.admin_auth_error = Some("OS Authentication failed or canceled.".to_string());
+                                                            }
+                                                            cx.notify();
+                                                        });
+                                                    }).detach();
+                                                }))
+                                        )
+                                        .child(
+                                            gpui_component::button::Button::new("cancel_admin_pin")
+                                                .label("Cancel")
+                                                .ghost()
+                                                .small()
+                                                .disabled(os_triggered)
+                                                .on_click(cx.listener(|this, _ev, window, cx| {
+                                                    this.pending_admin_view = None;
+                                                    this.admin_otp_state.update(cx, |input, cx| input.set_value("", window, cx));
                                                     this.focus_handle.focus(window, cx);
                                                     cx.notify();
                                                 }))

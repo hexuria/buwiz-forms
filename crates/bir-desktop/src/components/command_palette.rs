@@ -9,6 +9,7 @@ use gpui_component::{ActiveTheme, Icon, IconName, IndexPath, h_flex, v_flex};
 pub enum CommandPaletteEvent {
     SelectProfile(String),
     CreateProfile(String),
+    EditProfile(String),
     Dismiss,
 }
 
@@ -18,6 +19,7 @@ pub struct ProfileListDelegate {
     pub archived_items: Vec<TaxpayerProfile>,
     pub selected_index: Option<IndexPath>,
     pub create_query: Option<String>,
+    pub hide_tax_profiles: bool,
 }
 
 impl ListDelegate for ProfileListDelegate {
@@ -189,15 +191,26 @@ impl ListDelegate for ProfileListDelegate {
         _cx: &mut Context<ListState<Self>>,
     ) -> Task<()> {
         let q = query.to_lowercase();
-        let filtered: Vec<TaxpayerProfile> = self
-            .all_items
-            .iter()
-            .filter(|p| {
-                q.is_empty() || p.full_name.to_lowercase().contains(&q) || p.tin.full().contains(&q)
-            })
-            .take(5) // Limit to 5 max
-            .cloned()
-            .collect();
+        let filtered: Vec<TaxpayerProfile> = if self.hide_tax_profiles {
+            if q.is_empty() {
+                Vec::new()
+            } else {
+                self.all_items
+                    .iter()
+                    .filter(|p| p.tin.full() == q.trim() || p.tin.formatted().to_lowercase() == q.trim())
+                    .cloned()
+                    .collect()
+            }
+        } else {
+            self.all_items
+                .iter()
+                .filter(|p| {
+                    q.is_empty() || p.full_name.to_lowercase().contains(&q) || p.tin.full().contains(&q)
+                })
+                .take(5) // Limit to 5 max
+                .cloned()
+                .collect()
+        };
 
         self.active_items = filtered
             .iter()
@@ -229,10 +242,21 @@ pub struct CommandPalette {
 impl CommandPalette {
     pub fn new(
         profiles: Vec<TaxpayerProfile>,
+        hide_tax_profiles: bool,
+        active_session_tin: Option<String>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let filtered: Vec<TaxpayerProfile> = profiles.clone().into_iter().take(5).collect();
+        let filtered: Vec<TaxpayerProfile> = if hide_tax_profiles {
+            // Show only the active session profile if one exists
+            if let Some(ref session_tin) = active_session_tin {
+                profiles.iter().filter(|p| p.tin.full() == *session_tin).cloned().collect()
+            } else {
+                Vec::new()
+            }
+        } else {
+            profiles.clone().into_iter().take(5).collect()
+        };
         let active_items: Vec<TaxpayerProfile> = filtered
             .iter()
             .filter(|p| !p.is_archived)
@@ -255,6 +279,7 @@ impl CommandPalette {
             archived_items,
             selected_index: initial_selection,
             create_query: None,
+            hide_tax_profiles,
         };
 
         let list_state = cx.new(|cx| ListState::new(delegate, window, cx));
@@ -326,7 +351,11 @@ impl CommandPalette {
                                         .get(ix.row)
                                 };
                                 if let Some(tin) = profile.map(|p| p.tin.full()) {
-                                    cx.emit(CommandPaletteEvent::SelectProfile(tin));
+                                    if window.modifiers().platform || window.modifiers().control {
+                                        cx.emit(CommandPaletteEvent::EditProfile(tin));
+                                    } else {
+                                        cx.emit(CommandPaletteEvent::SelectProfile(tin));
+                                    }
                                 }
                             }
                         }

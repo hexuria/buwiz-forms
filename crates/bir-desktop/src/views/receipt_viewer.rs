@@ -25,7 +25,7 @@ impl ReceiptViewerView {
     }
 
     fn open_in_system(&self) {
-        let _ = std::process::Command::new("open").arg(&self.path).spawn();
+        crate::platform::open_in_system(&self.path);
     }
 
     fn re_upload(&mut self, cx: &mut Context<Self>) {

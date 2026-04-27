@@ -60,6 +60,9 @@ impl LockScreenView {
                     if is_valid {
                         this.has_error = false;
                         this.failed_attempts = 0;
+                        this.otp_state.update(cx, |state, cx| {
+                            state.set_value("", window, cx);
+                        });
                         cx.emit(LockScreenEvent::Unlocked);
                     } else {
                         this.has_error = true;

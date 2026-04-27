@@ -48,3 +48,15 @@ Desktop.ini
 # Generated PDF files
 *.pdf
 *.lock
+
+# AI Agent Artifacts & Scratchpads
+artifacts/
+.agent_scratch/
+
+# Test Logs
+bruteforce/logs/
+scripts/logs/
+bruteforce/bruteforce.db
+
+# Node JS
+node_modules/

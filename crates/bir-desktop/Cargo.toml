@@ -32,3 +32,25 @@ directories = "6.0.0"
 zip = "2"
 uuid = { version = "1.23.1", features = ["v4"] }
 robius-authentication = { version = "0.1.1", features = ["async"] }
+
+[package.metadata.deb]
+name = "ebirforms"
+priority = "optional"
+section = "utils"
+depends = "$auto, libvulkan1, libxkbcommon0, libwayland-client0, fontconfig, libfreetype6"
+extended-description = """eBIRForms Desktop — Philippine BIR tax return filing application.
+Supports form preparation, validation, submission via FTP, email confirmation
+tracking, and PDF generation for BIR Form 2551Q and related forms."""
+assets = [
+    ["target/release/bir", "usr/bin/ebirforms", "755"],
+    ["target/release/bir-daemon", "usr/bin/ebirforms-daemon", "755"],
+    ["../../assets/**/*", "usr/share/ebirforms/assets/", "644"],
+    ["../../formtypes/**/*", "usr/share/ebirforms/formtypes/", "644"],
+]
+
+[package.metadata.bundle]
+name = "eBIRForms"
+identifier = "com.goldcoders.bir"
+category = "public.app-category.finance"
+short_description = "Philippine BIR tax return filing application"
+osx_minimum_system_version = "13.0"

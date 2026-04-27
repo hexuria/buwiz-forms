@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/bir-core",
     "crates/bir-desktop",
+    "crates/bir-print",
 ]
 default-members = ["crates/bir-desktop"]
 

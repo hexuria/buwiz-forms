@@ -316,12 +316,7 @@ impl CronTasksView {
 
         let cmd = cmd_str.clone();
         cx.spawn(async move |this, cx| {
-            let output = match tokio::process::Command::new("sh")
-                .arg("-c")
-                .arg(&cmd)
-                .output()
-                .await
-            {
+            let output = match bir_core::platform::run_shell_command(&cmd).await {
                 Ok(out) => {
                     let mut res = String::from_utf8_lossy(&out.stdout).to_string();
                     if !out.status.success() {

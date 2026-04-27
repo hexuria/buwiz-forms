@@ -46,10 +46,7 @@ impl PdfViewerView {
     }
 
     fn reveal_pdf(&self) {
-        let _ = std::process::Command::new("open")
-            .arg("-R")
-            .arg(&self.result.pdf_path)
-            .spawn();
+        crate::platform::reveal_in_file_manager(&self.result.pdf_path);
     }
 
     fn view_bank_receipt(&mut self, cx: &mut Context<Self>) {
@@ -89,64 +86,7 @@ impl PdfViewerView {
     }
 
     fn print_pdf(&mut self, _cx: &mut Context<Self>) {
-        let pdf_path = self.result.pdf_path.clone();
-
-        let script = r#"
-import AppKit
-import PDFKit
-
-func printPDF(path: String) {
-    let url = URL(fileURLWithPath: path)
-    guard let pdfDoc = PDFDocument(url: url) else { exit(1) }
-    
-    let printInfo = NSPrintInfo.shared
-    printInfo.isHorizontallyCentered = true
-    printInfo.isVerticallyCentered = true
-    
-    let printOp = pdfDoc.printOperation(for: printInfo, scalingMode: .pageScaleDownToFit, autoRotate: true)
-    
-    let app = NSApplication.shared
-    app.setActivationPolicy(.accessory)
-    app.activate(ignoringOtherApps: true)
-    
-    printOp?.showsPrintPanel = true
-    printOp?.showsProgressPanel = true
-    printOp?.run()
-}
-
-let args = CommandLine.arguments
-if args.count > 1 {
-    printPDF(path: args[1])
-}
-"#;
-
-        // Run synchronously in a detached background thread to avoid blocking the GPUI executor
-        std::thread::spawn(move || {
-            use std::io::Write;
-
-            let mut child = match std::process::Command::new("swift")
-                .arg("-")
-                .arg(&pdf_path)
-                .stdin(std::process::Stdio::piped())
-                .spawn()
-            {
-                Ok(child) => child,
-                Err(_) => {
-                    let _ = open::that(&pdf_path);
-                    return;
-                }
-            };
-
-            if let Some(mut stdin) = child.stdin.take() {
-                let _ = stdin.write_all(script.as_bytes());
-            }
-
-            let output = child.wait();
-            if output.is_err() || !output.unwrap().success() {
-                // Silent fallback to standard open if the Swift script fails
-                let _ = open::that(&pdf_path);
-            }
-        });
+        crate::platform::print_pdf(&self.result.pdf_path);
     }
 
     fn render_page(&self, path: PathBuf) -> impl IntoElement {

@@ -58,7 +58,7 @@ pub fn fetch_and_process_emails(
         EmailAuthMethod::GoogleOAuth => {
             let access = profile.oauth_access_token.as_deref().unwrap_or("");
             let refresh = profile.oauth_refresh_token.as_deref().unwrap_or("");
-            let auth = GoogleOAuthAuth::new(email, access, refresh)?;
+            let auth = GoogleOAuthAuth::new(&profile.email, access, refresh)?;
             let host = "imap.gmail.com".to_string();
             (Box::new(auth), host)
         }
@@ -88,7 +88,7 @@ pub fn test_connection(profile: &TaxpayerProfile) -> Result<Option<String>, anyh
         EmailAuthMethod::GoogleOAuth => {
             let access = profile.oauth_access_token.as_deref().unwrap_or("");
             let refresh = profile.oauth_refresh_token.as_deref().unwrap_or("");
-            let auth = GoogleOAuthAuth::new(email, access, refresh)?;
+            let auth = GoogleOAuthAuth::new(&profile.email, access, refresh)?;
             let host = "imap.gmail.com".to_string();
             (Box::new(auth), host)
         }

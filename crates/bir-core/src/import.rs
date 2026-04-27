@@ -9,108 +9,126 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
     let file = fs::File::open(import_file)?;
     let mut archive = ZipArchive::new(file).map_err(|e| DbError::Other(e.to_string()))?;
 
-    // Helper to read file from archive
-    let mut read_from_zip = |name: &str| -> Result<String, DbError> {
-        let mut file = archive
-            .by_name(name)
-            .map_err(|e| DbError::Other(e.to_string()))?;
-        let mut content = String::new();
-        file.read_to_string(&mut content)?;
-        Ok(content)
-    };
-
-    // 1. Read profile.json
-    let profile_json = read_from_zip("profile.json")?;
-    let profile: TaxpayerProfile = serde_json::from_str(&profile_json)?;
-    let tin = profile.tin.full();
-    db.save_profile(profile)?;
-
-    // 2. Read submissions.json
-    if let Ok(submissions_json) = read_from_zip("submissions.json") {
-        let submissions: Vec<Submission> = serde_json::from_str(&submissions_json)?;
-        for mut sub in submissions {
-            sub.id = None; // clear ID to insert as new
-            db.save_submission(sub)?;
-        }
-    }
-
-    // 3. Read drafts.json
-    if let Ok(drafts_json) = read_from_zip("drafts.json") {
-        let drafts: Vec<serde_json::Value> = serde_json::from_str(&drafts_json)?;
-
-        for draft in drafts {
-            if let (Some(form_code), Some(taxable_year), Some(status), Some(data_json)) = (
-                draft.get("form_code").and_then(|v| v.as_str()),
-                draft.get("taxable_year").and_then(|v| v.as_i64()),
-                draft.get("status").and_then(|v| v.as_str()),
-                draft.get("data_json").and_then(|v| v.as_str()),
-            ) {
-                let quarter = draft.get("quarter").and_then(|v| v.as_i64());
-
-                db.conn.execute(
-                    "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, status, data_json)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-                     ON CONFLICT(tin, form_code, taxable_year, quarter)
-                     DO UPDATE SET status = excluded.status,
-                                   data_json = excluded.data_json,
-                                   updated_at = datetime('now')",
-                    rusqlite::params![
-                        tin,
-                        form_code,
-                        taxable_year,
-                        quarter,
-                        status,
-                        data_json
-                    ],
-                )?;
+    let mut base_dirs = Vec::new();
+    for i in 0..archive.len() {
+        if let Ok(file) = archive.by_index(i) {
+            let name = file.name();
+            if name.ends_with("profile.json") {
+                let base_dir = name.strip_suffix("profile.json").unwrap();
+                base_dirs.push(base_dir.to_string());
             }
         }
     }
 
-    // 4. Read receipts
-    if let Ok(manifest_json) = read_from_zip("receipts_manifest.json") {
-        let manifest: Vec<String> = serde_json::from_str(&manifest_json)?;
+    if base_dirs.is_empty() {
+        return Err(DbError::Other("No profile.json found in archive".to_string()));
+    }
 
-        for filename in manifest {
-            let txt_name = format!("Receipts/{}.txt", filename);
-            let html_name = format!("Receipts/{}.html", filename);
+    for base_dir in base_dirs {
+        // Helper to read file from archive
+        let mut read_from_zip = |name: &str| -> Result<String, DbError> {
+            let full_name = format!("{}{}", base_dir, name);
+            let mut file = archive
+                .by_name(&full_name)
+                .map_err(|e| DbError::Other(e.to_string()))?;
+            let mut content = String::new();
+            file.read_to_string(&mut content)?;
+            Ok(content)
+        };
 
-            if let Ok(raw_text) = read_from_zip(&txt_name) {
-                let raw_html = read_from_zip(&html_name).ok();
+        // 1. Read profile.json
+        let profile_json = read_from_zip("profile.json")?;
+        let profile: TaxpayerProfile = serde_json::from_str(&profile_json)?;
+        let tin = profile.tin.full();
+        db.save_profile(profile)?;
 
-                let mut form_type = "Unknown".to_string();
-                let mut period = "Unknown".to_string();
-                let mut received_date = "Unknown".to_string();
-                let mut received_time = "Unknown".to_string();
+        // 2. Read submissions.json
+        if let Ok(submissions_json) = read_from_zip("submissions.json") {
+            let submissions: Vec<Submission> = serde_json::from_str(&submissions_json)?;
+            for mut sub in submissions {
+                sub.id = None; // clear ID to insert as new
+                db.save_submission(sub)?;
+            }
+        }
 
-                if let Ok(parsed) =
-                    crate::receipt::parse_bir_receipt_email(&raw_text, raw_html.clone())
-                {
-                    received_date = parsed.date_received.to_string();
-                    received_time = parsed.time_received.to_string();
+        // 3. Read drafts.json
+        if let Ok(drafts_json) = read_from_zip("drafts.json") {
+            let drafts: Vec<serde_json::Value> = serde_json::from_str(&drafts_json)?;
+
+            for draft in drafts {
+                if let (Some(form_code), Some(taxable_year), Some(status), Some(data_json)) = (
+                    draft.get("form_code").and_then(|v| v.as_str()),
+                    draft.get("taxable_year").and_then(|v| v.as_i64()),
+                    draft.get("status").and_then(|v| v.as_str()),
+                    draft.get("data_json").and_then(|v| v.as_str()),
+                ) {
+                    let quarter = draft.get("quarter").and_then(|v| v.as_i64());
+
+                    db.conn.execute(
+                        "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, status, data_json)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                         ON CONFLICT(tin, form_code, taxable_year, quarter)
+                         DO UPDATE SET status = excluded.status,
+                                       data_json = excluded.data_json,
+                                       updated_at = datetime('now')",
+                        rusqlite::params![
+                            tin,
+                            form_code,
+                            taxable_year,
+                            quarter,
+                            status,
+                            data_json
+                        ],
+                    )?;
                 }
+            }
+        }
 
-                if let Some(split) = crate::receipt::split_bir_filename(&filename) {
-                    form_type = split.1;
-                    period = split.2;
+        // 4. Read receipts
+        if let Ok(manifest_json) = read_from_zip("receipts_manifest.json") {
+            let manifest: Vec<String> = serde_json::from_str(&manifest_json)?;
+
+            for filename in manifest {
+                let txt_name = format!("Receipts/{}.txt", filename);
+                let html_name = format!("Receipts/{}.html", filename);
+
+                if let Ok(raw_text) = read_from_zip(&txt_name) {
+                    let raw_html = read_from_zip(&html_name).ok();
+
+                    let mut form_type = "Unknown".to_string();
+                    let mut period = "Unknown".to_string();
+                    let mut received_date = "Unknown".to_string();
+                    let mut received_time = "Unknown".to_string();
+
+                    if let Ok(parsed) =
+                        crate::receipt::parse_bir_receipt_email(&raw_text, raw_html.clone())
+                    {
+                        received_date = parsed.date_received.to_string();
+                        received_time = parsed.time_received.to_string();
+                    }
+
+                    if let Some(split) = crate::receipt::split_bir_filename(&filename) {
+                        form_type = split.1;
+                        period = split.2;
+                    }
+
+                    let _ = db.conn.execute(
+                        "INSERT INTO submission_receipts (filename, tin, form_type, period, received_date, received_time, source_from, raw_text, raw_html)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                         ON CONFLICT(filename) DO UPDATE SET raw_text = excluded.raw_text, raw_html = excluded.raw_html",
+                        rusqlite::params![
+                            filename,
+                            tin,
+                            form_type,
+                            period,
+                            received_date,
+                            received_time,
+                            "Import",
+                            raw_text,
+                            raw_html
+                        ],
+                    );
                 }
-
-                let _ = db.conn.execute(
-                    "INSERT INTO submission_receipts (filename, tin, form_type, period, received_date, received_time, source_from, raw_text, raw_html)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-                     ON CONFLICT(filename) DO UPDATE SET raw_text = excluded.raw_text, raw_html = excluded.raw_html",
-                    rusqlite::params![
-                        filename,
-                        tin,
-                        form_type,
-                        period,
-                        received_date,
-                        received_time,
-                        "Import",
-                        raw_text,
-                        raw_html
-                    ],
-                );
             }
         }
     }
@@ -209,6 +227,7 @@ mod tests {
             imap_app_password: None,
             oauth_access_token: None,
             oauth_refresh_token: None,
+            profile_pin_hash: None,
         };
         db.save_profile(profile.clone()).unwrap();
 
@@ -283,12 +302,13 @@ mod tests {
             imap_app_password: None,
             oauth_access_token: None,
             oauth_refresh_token: None,
+            profile_pin_hash: None,
         };
         db.save_profile(profile).unwrap();
         db.checkpoint().unwrap();
 
         let backup_zip = dir.path().join("backup.db.zip");
-        crate::export::export_database_zip(&db_path, &backup_zip).unwrap();
+        crate::export::export_database_zip(&db, &backup_zip).unwrap();
         assert!(backup_zip.exists());
 
         let restored_db_path = dir.path().join("restored.db");
