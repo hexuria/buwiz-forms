@@ -8,7 +8,22 @@ mod components;
 pub mod events;
 mod views;
 
-actions!(bir_desktop, [SubmitCurrentForm]);
+pub mod global_actions {
+    gpui::actions!(
+        bir_desktop,
+        [
+            SubmitCurrentForm,
+            ToggleSidebar,
+            ToggleSidebarMini,
+            FocusSearch,
+            CreateProfile,
+            ToggleTheme,
+            OpenCronTasks,
+            OpenSettings
+        ]
+    );
+}
+use global_actions::*;
 
 use std::path::PathBuf;
 
@@ -48,6 +63,20 @@ fn main() {
             cx.bind_keys([
                 KeyBinding::new("cmd-enter", SubmitCurrentForm, None),
                 KeyBinding::new("ctrl-enter", SubmitCurrentForm, None),
+                KeyBinding::new("cmd-b", ToggleSidebar, None),
+                KeyBinding::new("ctrl-b", ToggleSidebar, None),
+                KeyBinding::new("cmd-shift-b", ToggleSidebarMini, None),
+                KeyBinding::new("ctrl-shift-b", ToggleSidebarMini, None),
+                KeyBinding::new("cmd-f", FocusSearch, None),
+                KeyBinding::new("ctrl-f", FocusSearch, None),
+                KeyBinding::new("cmd-n", CreateProfile, None),
+                KeyBinding::new("ctrl-n", CreateProfile, None),
+                KeyBinding::new("cmd-t", ToggleTheme, None),
+                KeyBinding::new("ctrl-t", ToggleTheme, None),
+                KeyBinding::new("cmd-shift-x", OpenCronTasks, None),
+                KeyBinding::new("ctrl-shift-x", OpenCronTasks, None),
+                KeyBinding::new("cmd-,", OpenSettings, None),
+                KeyBinding::new("ctrl-,", OpenSettings, None),
             ]);
 
             cx.spawn(async move |cx| {

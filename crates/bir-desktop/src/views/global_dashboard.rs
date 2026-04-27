@@ -85,8 +85,8 @@ impl GlobalDashboardView {
             (Vec::new(), Vec::new(), Vec::new(), Vec::new())
         };
 
-        let compliance_calendar =
-            cx.new(|cx| crate::components::compliance_calendar::ComplianceCalendar::new(window, cx));
+        let compliance_calendar = cx
+            .new(|cx| crate::components::compliance_calendar::ComplianceCalendar::new(window, cx));
 
         let mut view = Self {
             db,

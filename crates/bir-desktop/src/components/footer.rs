@@ -23,9 +23,19 @@ pub fn render_footer<T>(cx: &mut Context<T>) -> impl IntoElement {
                 .items_center()
                 .gap_4()
                 // Bagong Pilipinas Logo
-                .child(img(PathBuf::from("assets/svg/bagong-pilipinas.svg")).w_12().h_12().object_fit(ObjectFit::Contain))
+                .child(
+                    img(PathBuf::from("assets/svg/bagong-pilipinas.svg"))
+                        .w_12()
+                        .h_12()
+                        .object_fit(ObjectFit::Contain),
+                )
                 // BIR Logo
-                .child(img(PathBuf::from("assets/images/bir-new-logo.png")).w_12().h_12().object_fit(ObjectFit::Contain))
+                .child(
+                    img(PathBuf::from("assets/images/bir-new-logo.png"))
+                        .w_12()
+                        .h_12()
+                        .object_fit(ObjectFit::Contain),
+                ),
         )
         .child(
             div()
@@ -38,7 +48,7 @@ pub fn render_footer<T>(cx: &mut Context<T>) -> impl IntoElement {
                     div()
                         .text_xs()
                         .text_color(cx.theme().muted_foreground)
-                        .child("© 2026 Goldcoders Corp. goldcoders.dev")
+                        .child("© 2026 Goldcoders Corp. goldcoders.dev"),
                 )
                 // Goldcoders Logo
                 .child(
@@ -48,7 +58,12 @@ pub fn render_footer<T>(cx: &mut Context<T>) -> impl IntoElement {
                         .on_click(|_event, _window, cx| {
                             cx.open_url("https://goldcoders.dev");
                         })
-                        .child(img(PathBuf::from("assets/images/goldcoders_logo.png")).w_12().h_12().object_fit(ObjectFit::Contain))
-                )
+                        .child(
+                            img(PathBuf::from("assets/images/goldcoders_logo.png"))
+                                .w_12()
+                                .h_12()
+                                .object_fit(ObjectFit::Contain),
+                        ),
+                ),
         )
 }

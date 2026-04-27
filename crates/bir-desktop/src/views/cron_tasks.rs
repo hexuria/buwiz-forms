@@ -92,8 +92,11 @@ pub struct CronTasksView {
     cron_period: Entity<ComboboxState>,
     new_job_command: Entity<InputState>,
     filter_combobox: Entity<ComboboxState>,
+    search_input: Entity<InputState>,
     test_output: Option<String>,
     _subscriptions: Vec<Subscription>,
+    current_page: usize,
+    items_per_page: usize,
 }
 
 impl CronTasksView {
@@ -136,6 +139,8 @@ impl CronTasksView {
         });
         filter_combobox.update(cx, |s, cx| s.set_selected_value("All Jobs", window, cx));
 
+        let search_input = cx.new(|cx| InputState::new(window, cx).placeholder("Search job name or type..."));
+
         let mut view = Self {
             db,
             background_cron_enabled: false,
@@ -147,18 +152,34 @@ impl CronTasksView {
             cron_period,
             new_job_command,
             filter_combobox: filter_combobox.clone(),
+            search_input: search_input.clone(),
             test_output: None,
             _subscriptions: Vec::new(),
+            current_page: 1,
+            items_per_page: 5,
         };
 
         let sub = cx.subscribe_in(
             &filter_combobox,
             window,
             |_this: &mut Self, _entity, _event: &ComboboxEvent, _window, cx| {
+                _this.current_page = 1;
                 cx.notify();
             },
         );
         view._subscriptions.push(sub);
+
+        let sub2 = cx.subscribe_in(
+            &search_input,
+            window,
+            |_this: &mut Self, _entity, event: &gpui_component::input::InputEvent, _window, cx| {
+                if let gpui_component::input::InputEvent::Change = event {
+                    _this.current_page = 1;
+                    cx.notify();
+                }
+            },
+        );
+        view._subscriptions.push(sub2);
 
         view.load_settings(cx);
         view
@@ -181,7 +202,8 @@ impl CronTasksView {
                     let mut display_name = job.name.clone();
                     if display_name.starts_with("Poll Receipts: ") {
                         let email = display_name.trim_start_matches("Poll Receipts: ");
-                        display_name = format!("Waiting for 2551Q confirmation email for {}", email);
+                        display_name =
+                            format!("Waiting for 2551Q confirmation email for {}", email);
                     }
                     view_jobs.push(JobViewModel {
                         is_system: false,
@@ -463,6 +485,8 @@ impl Render for CronTasksView {
         let border = cx.theme().border;
 
         let selected_filter = self.filter_combobox.read(cx).selected_value(cx);
+        let search_query = self.search_input.read(cx).value().to_lowercase();
+        
         let filtered_jobs: Vec<&JobViewModel> = self
             .jobs
             .iter()
@@ -473,7 +497,26 @@ impl Render for CronTasksView {
                 "Archived" => j.status == "Archived",
                 _ => true,
             })
+            .filter(|j| {
+                if search_query.is_empty() {
+                    return true;
+                }
+                j.name.to_lowercase().contains(&search_query) || j.job_type.to_lowercase().contains(&search_query)
+            })
             .collect();
+
+        let total_pages = std::cmp::max(1, (filtered_jobs.len() + self.items_per_page - 1) / self.items_per_page);
+        let start = (self.current_page - 1) * self.items_per_page;
+        let mut end = start + self.items_per_page;
+        if end > filtered_jobs.len() {
+            end = filtered_jobs.len();
+        }
+        
+        let paged_jobs = if start < filtered_jobs.len() {
+            filtered_jobs[start..end].to_vec()
+        } else {
+            Vec::new()
+        };
 
         div()
             .id("cron_tasks_scroll")
@@ -645,7 +688,8 @@ impl Render for CronTasksView {
                             .flex_1()
                             .gap_4()
                             .items_center()
-                            .child(div().flex_1().min_w(px(200.)).child(Combobox::new(&self.filter_combobox)))
+                            .child(div().w_48().child(Combobox::new(&self.filter_combobox)))
+                            .child(div().flex_1().min_w(px(200.)).child(Input::new(&self.search_input)))
                     )
                     .child(
                         div()
@@ -670,7 +714,7 @@ impl Render for CronTasksView {
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .children(filtered_jobs.into_iter().enumerate().map(|(i, job)| {
+                    .children(paged_jobs.into_iter().enumerate().map(|(i, job)| {
                         let _id = job.id.unwrap_or(0);
                         let db_id = job.id.unwrap_or(0);
                         let is_system = job.is_system;
@@ -852,6 +896,19 @@ impl Render for CronTasksView {
                                     })
                             )
                     }))
+            )
+            .child(
+                div().flex().justify_center().pt_4().pb_8().when(total_pages > 1, |this| {
+                    this.child(
+                        gpui_component::pagination::Pagination::new("job-pagination")
+                            .current_page(self.current_page)
+                            .total_pages(total_pages)
+                            .on_click(cx.listener(|this, page, _window, cx| {
+                                this.current_page = *page;
+                                cx.notify();
+                            }))
+                    )
+                })
             )
             .into_any_element()
     }

@@ -65,7 +65,9 @@ pub struct AppState {
     /// Whether the window-aware subscription for global dashboard notifications has been set up.
     global_dashboard_notif_subscribed: bool,
     is_mini_sidebar: bool,
+    is_sidebar_hidden: bool,
     theme_preference: AppThemeMode,
+    focus_handle: FocusHandle,
 }
 
 impl AppState {
@@ -99,8 +101,12 @@ impl AppState {
             AppThemeMode::Light => ThemeMode::Light,
             AppThemeMode::Dark => ThemeMode::Dark,
             AppThemeMode::System => match window.appearance() {
-                gpui::WindowAppearance::Light | gpui::WindowAppearance::VibrantLight => ThemeMode::Light,
-                gpui::WindowAppearance::Dark | gpui::WindowAppearance::VibrantDark => ThemeMode::Dark,
+                gpui::WindowAppearance::Light | gpui::WindowAppearance::VibrantLight => {
+                    ThemeMode::Light
+                }
+                gpui::WindowAppearance::Dark | gpui::WindowAppearance::VibrantDark => {
+                    ThemeMode::Dark
+                }
             },
         };
         Theme::change(target_mode, Some(window), cx);
@@ -291,7 +297,9 @@ impl AppState {
             _subscriptions: vec![profile_sub, filter_sub],
             global_dashboard_notif_subscribed: false,
             is_mini_sidebar: false,
+            is_sidebar_hidden: false,
             theme_preference,
+            focus_handle: cx.focus_handle(),
         }
     }
 
@@ -1115,17 +1123,100 @@ impl Render for AppState {
         let notification_layer = Root::render_notification_layer(window, cx);
 
         div()
+            .track_focus(&self.focus_handle)
             .flex()
             .flex_col()
             .size_full()
             .bg(cx.theme().background)
+            .on_action(cx.listener(
+                |this: &mut Self, _action: &crate::global_actions::ToggleSidebar, window, cx| {
+                    this.is_sidebar_hidden = !this.is_sidebar_hidden;
+                    if this.is_sidebar_hidden {
+                        this.focus_handle.focus(window, cx);
+                    }
+                    cx.notify();
+                },
+            ))
+            .on_action(cx.listener(
+                |this: &mut Self,
+                 _action: &crate::global_actions::ToggleSidebarMini,
+                 _window,
+                 cx| {
+                    this.is_mini_sidebar = !this.is_mini_sidebar;
+                    this.dashboard_view.update(cx, |view, cx| {
+                        view.set_mini_sidebar(this.is_mini_sidebar, cx);
+                    });
+                    cx.notify();
+                },
+            ))
+            .on_action(cx.listener(
+                |this: &mut Self, _action: &crate::global_actions::FocusSearch, window, cx| {
+                    this.is_sidebar_hidden = false;
+                    this.is_mini_sidebar = false;
+                    this.dashboard_view.update(cx, |view, cx| {
+                        view.set_mini_sidebar(this.is_mini_sidebar, cx);
+                    });
+                    cx.focus_view(&this.profile_filter, window);
+                    cx.notify();
+                },
+            ))
+            .on_action(cx.listener(
+                |this: &mut Self, _action: &crate::global_actions::CreateProfile, window, cx| {
+                    this.active_view = ActiveView::ProfileManager;
+                    this.active_profile_tin = None;
+                    this.profile_manager.update(cx, |view, cx| {
+                        view.reset_for_new(window, cx);
+                    });
+                    cx.notify();
+                },
+            ))
+            .on_action(cx.listener(
+                |this: &mut Self, _action: &crate::global_actions::ToggleTheme, window, cx| {
+                    this.theme_preference = this.theme_preference.next();
+                    if let Ok(db) = this.db.lock() {
+                        if let Ok(val) = serde_json::to_string(&this.theme_preference) {
+                            let _ = db.set_setting("theme_preference", &val);
+                        }
+                    }
+                    let target_mode = match this.theme_preference {
+                        AppThemeMode::Light => ThemeMode::Light,
+                        AppThemeMode::Dark => ThemeMode::Dark,
+                        AppThemeMode::System => match window.appearance() {
+                            gpui::WindowAppearance::Light
+                            | gpui::WindowAppearance::VibrantLight => ThemeMode::Light,
+                            gpui::WindowAppearance::Dark | gpui::WindowAppearance::VibrantDark => {
+                                ThemeMode::Dark
+                            }
+                        },
+                    };
+                    Theme::change(target_mode, Some(window), cx);
+                    cx.notify();
+                },
+            ))
+            .on_action(cx.listener(
+                |this: &mut Self, _action: &crate::global_actions::OpenCronTasks, _window, cx| {
+                    this.active_view = ActiveView::CronTasks;
+                    this.cron_tasks_view.update(cx, |view, cx| {
+                        view.load_settings(cx);
+                    });
+                    cx.notify();
+                },
+            ))
+            .on_action(cx.listener(
+                |this: &mut Self, _action: &crate::global_actions::OpenSettings, _window, cx| {
+                    this.active_view = ActiveView::ImportExport;
+                    cx.notify();
+                },
+            ))
             .child(
                 div()
                     .flex()
                     .flex_row()
                     .flex_1()
                     .min_h_0()
-                    .child(self.render_sidebar(window, cx))
+                    .when(!self.is_sidebar_hidden, |this| {
+                        this.child(self.render_sidebar(window, cx))
+                    })
                     .child(
                         div()
                             .flex_1()
