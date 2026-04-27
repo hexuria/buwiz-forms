@@ -608,13 +608,11 @@ impl Database {
                 )?;
                 profile.id = Some(self.conn.last_insert_rowid());
             }
-        } else if let Some(existing) = self.get_profile(&tin)? {
-            profile.id = existing.id;
-            let json_data = serde_json::to_string(&profile)?;
-            self.conn.execute(
-                "UPDATE profiles SET data_json = ?1 WHERE tin = ?2",
-                params![json_data, tin],
-            )?;
+        } else if let Some(_existing) = self.get_profile(&tin)? {
+            return Err(DbError::Sqlite(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ErrorCode::ConstraintViolation as i32),
+                Some(format!("A profile with TIN {} already exists", tin)),
+            )));
         } else {
             self.conn.execute(
                 "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",

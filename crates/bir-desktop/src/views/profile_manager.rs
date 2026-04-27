@@ -35,6 +35,7 @@ pub struct ProfileManagerView {
     business_start_input: Entity<DateInputState>,
     is_vat_registered: bool,
     editing_id: Option<i64>,
+    tin_duplicate_error: Option<String>,
     errors: Vec<ValidationError>,
     save_message: Option<String>,
     pending_notification: Option<(gpui_component::notification::NotificationType, String)>,
@@ -145,6 +146,7 @@ impl ProfileManagerView {
             business_start_input,
             is_vat_registered: false,
             editing_id: None,
+            tin_duplicate_error: None,
             errors: Vec::new(),
             save_message: None,
             rdo_options,
@@ -174,6 +176,7 @@ impl ProfileManagerView {
 
     pub fn reset_for_new(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.editing_id = None;
+        self.tin_duplicate_error = None;
         self.is_vat_registered = false;
         self.errors.clear();
         self.save_message = None;
@@ -346,9 +349,36 @@ impl ProfileManagerView {
         &mut self,
         _state: Entity<TinInput>,
         _event: &gpui_component::input::InputEvent,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) {
-        // No-op since sync_card is removed
+        let tin_val = self.tin_input.read(cx).value(cx);
+        let is_valid_format = tin_val.len() == 12 || tin_val.len() == 13;
+
+        if !is_valid_format {
+            self.tin_duplicate_error = None;
+            cx.notify();
+            return;
+        }
+
+        // Only check for duplicates when creating a new profile (not editing)
+        if self.editing_id.is_some() {
+            self.tin_duplicate_error = None;
+            cx.notify();
+            return;
+        }
+
+        // Check DB for existing profile with same TIN
+        if let Ok(db) = self.db.lock() {
+            if let Ok(Some(_existing)) = db.get_profile(&tin_val) {
+                self.tin_duplicate_error = Some(
+                    format!("A profile with TIN {} already exists. Each TIN must be unique.",
+                        self.tin_input.read(cx).formatted_value(cx))
+                );
+            } else {
+                self.tin_duplicate_error = None;
+            }
+        }
+        cx.notify();
     }
 
     fn on_input_event(
@@ -473,6 +503,23 @@ impl ProfileManagerView {
     fn save_profile(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         let profile = self.current_profile(cx);
         self.errors = validate_profile(&profile);
+
+        // Gate: Duplicate TIN check (defense in depth — also checked reactively)
+        if self.editing_id.is_none() {
+            let tin_str = profile.tin.full();
+            if let Ok(db) = self.db.lock() {
+                if let Ok(Some(_)) = db.get_profile(&tin_str) {
+                    self.tin_duplicate_error = Some(
+                        format!("A profile with TIN {} already exists.", profile.tin.formatted())
+                    );
+                    self.errors.push(ValidationError::new(
+                        "tin",
+                        "This TIN is already registered to another profile.",
+                    ));
+                }
+            }
+        }
+
         if !self
             .business_start_input
             .read(cx)
@@ -833,6 +880,34 @@ impl Render for ProfileManagerView {
                                             .flex_col()
                                             .gap_4()
                                             .child(self.tin_input.clone().into_any_element())
+                                            .when(self.tin_duplicate_error.is_some(), |this| {
+                                                let msg = self.tin_duplicate_error.clone().unwrap_or_default();
+                                                this.child(
+                                                    div()
+                                                        .px_2()
+                                                        .py_1()
+                                                        .rounded_md()
+                                                        .bg(gpui::rgba(0xef444415))
+                                                        .border_1()
+                                                        .border_color(gpui::Hsla::from(gpui::rgba(0xef444460)))
+                                                        .flex()
+                                                        .items_center()
+                                                        .gap_2()
+                                                        .child(
+                                                            div()
+                                                                .text_sm()
+                                                                .font_weight(FontWeight::BOLD)
+                                                                .text_color(gpui::Hsla::from(gpui::rgba(0xef4444ff)))
+                                                                .child("⚠")
+                                                        )
+                                                        .child(
+                                                            div()
+                                                                .text_sm()
+                                                                .text_color(gpui::Hsla::from(gpui::rgba(0xef4444ff)))
+                                                                .child(msg)
+                                                        )
+                                                )
+                                            })
                                             .child(
                                                 div()
                                                     .flex()
