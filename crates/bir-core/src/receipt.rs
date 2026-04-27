@@ -23,12 +23,15 @@ pub enum ReceiptParseError {
     MissingTime,
 }
 
-pub fn parse_bir_receipt_email(raw_input: &str, raw_html: Option<String>) -> Result<BirReceiptConfirmation, ReceiptParseError> {
+pub fn parse_bir_receipt_email(
+    raw_input: &str,
+    raw_html: Option<String>,
+) -> Result<BirReceiptConfirmation, ReceiptParseError> {
     // Strip HTML tags in case the email was parsed as HTML rather than plain text
     let mut raw = String::with_capacity(raw_input.len());
     let mut in_tag = false;
     let mut current_tag = String::new();
-    
+
     for c in raw_input.chars() {
         if c == '<' {
             in_tag = true;
@@ -36,7 +39,14 @@ pub fn parse_bir_receipt_email(raw_input: &str, raw_html: Option<String>) -> Res
         } else if c == '>' {
             in_tag = false;
             let tag_lower = current_tag.to_lowercase();
-            if tag_lower == "br" || tag_lower == "br/" || tag_lower == "br /" || tag_lower == "p" || tag_lower == "/p" || tag_lower == "div" || tag_lower == "/div" {
+            if tag_lower == "br"
+                || tag_lower == "br/"
+                || tag_lower == "br /"
+                || tag_lower == "p"
+                || tag_lower == "/p"
+                || tag_lower == "div"
+                || tag_lower == "/div"
+            {
                 raw.push('\n');
             }
         } else if in_tag {
@@ -131,7 +141,7 @@ File name: 779025068000-2551Qv2018-122026Q1.xml
 Date received by BIR: 24 April 2026
 Time received by BIR: 05:18 AM
 "#;
-        let receipt = parse_bir_receipt_email(raw).unwrap();
+        let receipt = parse_bir_receipt_email(raw, None).unwrap();
         assert_eq!(receipt.filename, "779025068000-2551Qv2018-122026Q1.xml");
         assert_eq!(receipt.date_received.to_string(), "2026-04-24");
         assert_eq!(receipt.time_received.format("%H:%M").to_string(), "05:18");
@@ -159,9 +169,15 @@ Date received by BIR: 26 April 2026
 Time received by BIR: 01:33 PM
 Penalties may be imposed for any violation of the provisions of the NIRC and issuances thereof.
 "#;
-        let receipt = parse_bir_receipt_email(raw).unwrap();
+        let receipt = parse_bir_receipt_email(raw, None).unwrap();
         assert_eq!(receipt.filename, "261708015000-2551Qv2018-122026Q1.xml");
-        assert_eq!(receipt.date_received, chrono::NaiveDate::from_ymd_opt(2026, 4, 26).unwrap());
-        assert_eq!(receipt.time_received, chrono::NaiveTime::from_hms_opt(13, 33, 0).unwrap());
+        assert_eq!(
+            receipt.date_received,
+            chrono::NaiveDate::from_ymd_opt(2026, 4, 26).unwrap()
+        );
+        assert_eq!(
+            receipt.time_received,
+            chrono::NaiveTime::from_hms_opt(13, 33, 0).unwrap()
+        );
     }
 }

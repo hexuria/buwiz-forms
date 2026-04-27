@@ -3,9 +3,11 @@
 //! Data model, carry-forward logic, and auto-computation.
 
 use crate::forms::atc::find_atc;
+use crate::penalties::{
+    PenaltyConfig, PenaltyContext, PenaltyEngine, PenaltyProfile, TaxpayerClass,
+};
 use crate::profile::TaxpayerProfile;
 use serde::{Deserialize, Serialize};
-use crate::penalties::{PenaltyContext, PenaltyEngine, PenaltyProfile, TaxpayerClass, PenaltyConfig};
 
 fn default_true() -> bool {
     true
@@ -136,7 +138,7 @@ pub struct Form2551QDraft {
     /// Set to true when this draft was pre-filled from a previous quarter.
     /// UI shows a "Pre-filled from Q{n} {year}" banner when true.
     pub carried_forward_from: Option<(u16, u8)>, // (year, quarter)
-    
+
     // === Payment / Attachments ===
     #[serde(default)]
     pub payment_receipt_path: Option<String>,
@@ -219,14 +221,24 @@ impl Form2551QDraft {
                 3 => 10,
                 _ => 1,
             };
-            let deadline_year = if self.quarter == 4 { self.taxable_year + 1 } else { self.taxable_year };
-            
-            if let Some(deadline) = chrono::NaiveDate::from_ymd_opt(deadline_year as i32, deadline_month, 25) {
+            let deadline_year = if self.quarter == 4 {
+                self.taxable_year + 1
+            } else {
+                self.taxable_year
+            };
+
+            if let Some(deadline) =
+                chrono::NaiveDate::from_ymd_opt(deadline_year as i32, deadline_month, 25)
+            {
                 let today = chrono::Local::now().date_naive();
-                
+
                 let config = PenaltyConfig::default_rules(); // Dynamic loading point in the future
-                
-                let gross_sales = self.schedule_1.iter().map(|r| r.taxable_amount).sum::<f64>();
+
+                let gross_sales = self
+                    .schedule_1
+                    .iter()
+                    .map(|r| r.taxable_amount)
+                    .sum::<f64>();
 
                 let ctx = PenaltyContext {
                     form_code: "2551Qv2018".to_string(),
@@ -251,8 +263,10 @@ impl Form2551QDraft {
             }
         }
 
-        self.total_penalties = ((self.surcharge + self.interest + self.compromise) * 100.0).round() / 100.0;
-        self.total_amount_payable = ((self.tax_payable + self.total_penalties) * 100.0).round() / 100.0;
+        self.total_penalties =
+            ((self.surcharge + self.interest + self.compromise) * 100.0).round() / 100.0;
+        self.total_amount_payable =
+            ((self.tax_payable + self.total_penalties) * 100.0).round() / 100.0;
 
         self.updated_at = chrono::Utc::now().to_rfc3339();
     }
@@ -268,7 +282,12 @@ impl Form2551QDraft {
     }
 
     pub fn default_submission_filename(&self) -> String {
-        format!("{}-2551Qv2018-{}#{}#.xml", self.tin, self.period_code(), self.email)
+        format!(
+            "{}-2551Qv2018-{}#{}#.xml",
+            self.tin,
+            self.period_code(),
+            self.email
+        )
     }
 }
 
@@ -381,5 +400,111 @@ impl FormFilingProgress {
             .enumerate()
             .find(|(_, s)| **s == QuarterState::Draft || **s == QuarterState::Queued)
             .map(|(i, _)| (i + 1) as u8)
+    }
+}
+
+use super::FormValidator;
+use crate::validation::{validate_email, validate_ph_phone, validate_zip};
+
+impl FormValidator for Form2551QDraft {
+    fn validate(&self) -> Vec<(String, String)> {
+        let mut errors = Vec::new();
+        if !(1900..=9999).contains(&self.taxable_year) {
+            errors.push((
+                "taxable_year".to_string(),
+                "Taxable year must be a 4-digit year".to_string(),
+            ));
+        }
+
+        if !(1..=4).contains(&self.quarter) {
+            errors.push(("quarter".to_string(), "Quarter is required".to_string()));
+        }
+
+        for (key, label, value) in [
+            ("tin", "TIN", self.tin.as_str()),
+            ("rdo_code", "RDO Code", self.rdo_code.as_str()),
+            (
+                "taxpayer_name",
+                "Taxpayer Name",
+                self.taxpayer_name.as_str(),
+            ),
+            (
+                "registered_address",
+                "Registered Address",
+                self.registered_address.as_str(),
+            ),
+            ("zip_code", "ZIP Code", self.zip_code.as_str()),
+            (
+                "contact_number",
+                "Contact Number",
+                self.contact_number.as_str(),
+            ),
+            ("email", "Email Address", self.email.as_str()),
+        ] {
+            if value.trim().is_empty() {
+                errors.push((key.to_string(), format!("{label} is required")));
+            }
+        }
+
+        if self.zip_code.trim().is_empty() {
+            // Already handled by the loop above, but we keep it here if we want to separate logic
+        } else if !validate_zip(&self.zip_code) {
+            errors.push((
+                "zip_code".to_string(),
+                "Zip Code must be 4 digits".to_string(),
+            ));
+        }
+
+        if self.contact_number.trim().is_empty() {
+            // Already handled
+        } else if !validate_ph_phone(&self.contact_number) {
+            errors.push((
+                "contact_number".to_string(),
+                "Contact Number must be valid".to_string(),
+            ));
+        }
+
+        if !self.email.trim().is_empty() && !validate_email(&self.email) {
+            errors.push((
+                "email".to_string(),
+                "Email Address must be a valid email".to_string(),
+            ));
+        }
+
+        if self.schedule_1.is_empty() {
+            errors.push((
+                "schedule_1".to_string(),
+                "Schedule 1 requires at least one ATC row".to_string(),
+            ));
+        }
+        for (i, row) in self.schedule_1.iter().enumerate() {
+            if row.taxable_amount < 0.0 {
+                errors.push((
+                    format!("schedule_1_row_{}", i + 1),
+                    format!(
+                        "Schedule 1 row {} taxable amount must be non-negative",
+                        i + 1
+                    ),
+                ));
+            }
+        }
+
+        if self.creditable_tax_withheld < 0.0 {
+            errors.push((
+                "creditable_withheld".to_string(),
+                "Creditable percentage tax withheld must be non-negative".to_string(),
+            ));
+        }
+
+        if self.is_amended {
+            if self.tax_paid_previous < 0.0 {
+                errors.push((
+                    "tax_paid_previous".to_string(),
+                    "Tax paid in return previously filed must be non-negative".to_string(),
+                ));
+            }
+        }
+
+        errors
     }
 }

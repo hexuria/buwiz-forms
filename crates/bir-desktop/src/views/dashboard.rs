@@ -3,6 +3,7 @@ use bir_core::forms::form_2551q::{FormFilingProgress, QuarterState};
 use bir_core::forms::registry::FilingFrequency;
 use bir_core::profile::TaxpayerProfile;
 use chrono::{Datelike, Local};
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::*;
 use std::sync::{Arc, Mutex};
@@ -23,6 +24,35 @@ pub enum DashboardEvent {
 
 impl EventEmitter<DashboardEvent> for DashboardView {}
 
+const SIDEBAR_FULL_WIDTH: f32 = 280.0;
+const SIDEBAR_MINI_WIDTH: f32 = 70.0;
+const CONTENT_PADDING_X: f32 = 64.0;
+const _CARD_MIN_WIDTH: f32 = 365.0;
+const GRID_GAP: f32 = 20.0;
+const DESKTOP_3_COL_MIN_CONTENT: f32 = 1135.0; // 365 * 3 + 20 * 2
+const TABLET_2_COL_MIN_CONTENT: f32 = 750.0;   // 365 * 2 + 20 * 1
+
+fn tax_form_grid_columns(window_width: f32, sidebar_width: f32) -> usize {
+    let available_content_width = window_width - sidebar_width - CONTENT_PADDING_X;
+    if available_content_width >= DESKTOP_3_COL_MIN_CONTENT {
+        3
+    } else if available_content_width >= TABLET_2_COL_MIN_CONTENT {
+        2
+    } else {
+        1
+    }
+}
+
+fn tax_form_card_width(window_width: f32, sidebar_width: f32, columns: usize) -> f32 {
+    let available_content_width = window_width - sidebar_width - CONTENT_PADDING_X;
+    if columns <= 1 {
+        available_content_width
+    } else {
+        let total_gap_width = GRID_GAP * (columns as f32 - 1.0);
+        (available_content_width - total_gap_width) / columns as f32
+    }
+}
+
 pub struct DashboardView {
     active_profile: Option<TaxpayerProfile>,
     db: Arc<Mutex<Database>>,
@@ -32,9 +62,15 @@ pub struct DashboardView {
     /// Cached filing progress per form code -> per year
     filing_progress:
         std::collections::HashMap<String, std::collections::HashMap<u16, FormFilingProgress>>,
+    is_mini_sidebar: bool,
 }
 
 impl DashboardView {
+    pub fn set_mini_sidebar(&mut self, is_mini: bool, cx: &mut Context<Self>) {
+        self.is_mini_sidebar = is_mini;
+        cx.notify();
+    }
+
     pub fn new(db: Arc<Mutex<Database>>, window: &mut Window, cx: &mut Context<'_, Self>) -> Self {
         let now = Local::now().date_naive();
 
@@ -65,6 +101,7 @@ impl DashboardView {
             smart_date_filter,
             filter_state,
             filing_progress: std::collections::HashMap::new(),
+            is_mini_sidebar: false,
         }
     }
 
@@ -113,7 +150,7 @@ impl DashboardView {
                 gpui::rgba(0x22c55eff).into(),
                 gpui::rgba(0x22c55eff).into(),
                 "✓",
-                "Filed",
+                "Confirmed",
             ),
             QuarterState::Submitted => (
                 gpui::rgba(0x3b82f620).into(),
@@ -254,10 +291,19 @@ impl Render for DashboardView {
             });
         }
 
-        let mut forms_ui = div().flex().flex_row().flex_wrap().gap_6().w_full();
+        let vp_width: f32 = _window.viewport_size().width.into();
+        let is_mini = self.is_mini_sidebar || vp_width < 768.0;
+        let sidebar_width: f32 = if is_mini { SIDEBAR_MINI_WIDTH } else { SIDEBAR_FULL_WIDTH };
+        
+        let cols = tax_form_grid_columns(vp_width, sidebar_width);
+        let card_width = tax_form_card_width(vp_width, sidebar_width, cols);
+
+        let mut forms_ui = div().flex().flex_col().gap(px(GRID_GAP)).w_full();
         let mut cards_rendered = 0;
 
-        for form_def in &available_forms {
+        for chunk in available_forms.chunks(cols) {
+            let mut row = div().flex().flex_row().gap(px(GRID_GAP)).w_full();
+            for form_def in chunk {
             let code = form_def.code.to_string();
             let progress = self
                 .filing_progress
@@ -370,7 +416,7 @@ impl Render for DashboardView {
                         }
                     }
 
-                    Self::build_card(form_def, year, cx).child(
+                    Self::build_card(form_def, year, card_width, cx).child(
                         div()
                             .flex()
                             .flex_col()
@@ -520,7 +566,7 @@ impl Render for DashboardView {
                         month_dots = month_dots.child(row);
                     }
 
-                    Self::build_card(form_def, year, cx).child(
+                    Self::build_card(form_def, year, card_width, cx).child(
                         div()
                             .flex()
                             .flex_col()
@@ -558,7 +604,7 @@ impl Render for DashboardView {
                     let hover_bg = Self::state_hover_bg(&status, cx);
                     let code_click = code.clone();
 
-                    Self::build_card(form_def, year, cx)
+                    Self::build_card(form_def, year, card_width, cx)
                         .child(
                             div().flex().justify_between().items_center().child(
                                 div()
@@ -602,7 +648,7 @@ impl Render for DashboardView {
                                         )
                                         .child(match &status {
                                             QuarterState::Paid => "View Paid Return",
-                                            QuarterState::Confirmed => "View Filed Return",
+                                            QuarterState::Confirmed => "View Confirmed Return",
                                             QuarterState::Submitted => "View Submission",
                                             QuarterState::Queued => "View Queued Return",
                                             QuarterState::Draft => "Resume Draft",
@@ -624,7 +670,7 @@ impl Render for DashboardView {
                     let hover_bg = cx.theme().accent;
                     let primary = cx.theme().primary;
 
-                    Self::build_card(form_def, year, cx)
+                    Self::build_card(form_def, year, card_width, cx)
                         .child(
                             div()
                                 .flex()
@@ -684,8 +730,21 @@ impl Render for DashboardView {
                 }
             };
 
-            forms_ui = forms_ui.child(card);
-            cards_rendered += 1;
+                row = row.child(card);
+                cards_rendered += 1;
+            }
+
+            // Add spacers to maintain identical column widths
+            let empty_slots = cols - chunk.len();
+            for _ in 0..empty_slots {
+                row = row.child(
+                    div()
+                        .w(px(card_width))
+                        .child(div().h(px(1.)))
+                );
+            }
+
+            forms_ui = forms_ui.child(row);
         }
 
         let main_content = if cards_rendered == 0 {
@@ -747,7 +806,8 @@ impl Render for DashboardView {
                     .w_full()
                     .justify_start()
                     .gap_6()
-                    .p_6()
+                    .px_8()
+                    .py_6()
                     .child(
                         div()
                             .flex()
@@ -758,7 +818,7 @@ impl Render for DashboardView {
                                     .text_3xl()
                                     .font_weight(FontWeight::BOLD)
                                     .text_color(cx.theme().foreground)
-                                    .child(format!("{} Dashboard", profile.full_name)),
+                                    .child(profile.full_name.clone()),
                             )
                             .child(
                                 div()
@@ -810,17 +870,17 @@ impl DashboardView {
     fn build_card(
         form_def: &bir_core::forms::registry::FormDefinition,
         _year: u16,
+        card_width: f32,
         cx: &Context<Self>,
     ) -> Div {
         div()
-            .flex_1()
-            .min_w(px(340.))
-            .max_w(px(460.))
+            .w(px(card_width))
             .bg(cx.theme().background)
             .border_1()
             .border_color(cx.theme().border)
             .rounded_xl()
             .p_6()
+            .overflow_hidden()
             .flex()
             .flex_col()
             .gap_4()

@@ -95,7 +95,11 @@ impl Form2551QDraft {
         insert_money(&mut fields, "frm2551Qv2018:txt21", self.interest);
         insert_money(&mut fields, "frm2551Qv2018:txt22", self.compromise);
         insert_money(&mut fields, "frm2551Qv2018:txt23", self.total_penalties);
-        insert_money(&mut fields, "frm2551Qv2018:txt24", self.total_amount_payable);
+        insert_money(
+            &mut fields,
+            "frm2551Qv2018:txt24",
+            self.total_amount_payable,
+        );
         insert_money(&mut fields, "txtTotalSched1", self.total_tax_due);
         insert(&mut fields, "frm2551Qv2018:overPayment1", "false");
         insert(&mut fields, "frm2551Qv2018:overPayment2", "false");
@@ -220,6 +224,7 @@ mod tests {
             taxpayer_type: TaxpayerType::Individual,
             is_vat_registered: false,
             business_start_date: None,
+            is_archived: false,
             email_tracking_enabled: false,
             email_auth_method: Default::default(),
             imap_email: None,
@@ -227,6 +232,7 @@ mod tests {
             _imap_enabled_compat: None,
             background_cron_enabled: true,
             test_notification_enabled: false,
+            error_telemetry_enabled: false,
             imap_app_password: None,
             oauth_access_token: None,
             oauth_refresh_token: None,

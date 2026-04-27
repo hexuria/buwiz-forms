@@ -149,35 +149,53 @@ fn fetch_with_auth(
         for msg in messages.iter() {
             if let Some(body) = msg.body() {
                 if let Some(parsed_mail) = mail_parser::MessageParser::default().parse(body) {
-                    let mut text_content = parsed_mail.body_text(0).map(|s| s.into_owned()).unwrap_or_default();
+                    let mut text_content = parsed_mail
+                        .body_text(0)
+                        .map(|s| s.into_owned())
+                        .unwrap_or_default();
                     let html_content = parsed_mail.body_html(0).map(|s| s.into_owned());
-                    
+
                     // Sanitize HTML
-                    let safe_html = html_content.map(|html| ammonia::Builder::default().clean(&html).to_string());
-                    
+                    let safe_html = html_content
+                        .map(|html| ammonia::Builder::default().clean(&html).to_string());
+
                     // If text_content is empty but we have HTML, use html2text to render it
                     if text_content.is_empty() {
                         if let Some(html) = &safe_html {
-                            text_content = html2text::from_read(html.as_bytes(), 80).unwrap_or_default();
+                            text_content =
+                                html2text::from_read(html.as_bytes(), 80).unwrap_or_default();
                         }
                     }
 
                     match parse_bir_receipt_email(&text_content, safe_html) {
                         Ok(receipt) => {
                             if let Ok(db_guard) = db.lock() {
-                                if let Ok((submission_receipt, is_new)) = db_guard.save_submission_receipt(&receipt) {
+                                if let Ok((submission_receipt, is_new)) =
+                                    db_guard.save_submission_receipt(&receipt)
+                                {
                                     // Confirm the draft if we recognise the form type and it's a new receipt
-                                    if is_new && (submission_receipt.form_type == "2551Qv2018"
-                                        || submission_receipt.form_type == "2551Q")
+                                    if is_new
+                                        && (submission_receipt.form_type == "2551Qv2018"
+                                            || submission_receipt.form_type == "2551Q")
                                     {
-                                        let _ = db_guard.confirm_2551q_from_receipt(&submission_receipt);
-                                        
+                                        let _ = db_guard
+                                            .confirm_2551q_from_receipt(&submission_receipt);
+
                                         // Send OS notification
-                                        if let Some((_, _, period)) = crate::receipt::split_bir_filename(&submission_receipt.filename) {
-                                            if let Some((year, quarter)) = crate::db::parse_2551q_period(&period) {
+                                        if let Some((_, _, period)) =
+                                            crate::receipt::split_bir_filename(
+                                                &submission_receipt.filename,
+                                            )
+                                        {
+                                            if let Some((year, quarter)) =
+                                                crate::db::parse_2551q_period(&period)
+                                            {
                                                 let _ = notify_rust::Notification::new()
                                                     .summary("BIR Confirmation Received")
-                                                    .body(&format!("Form: 2551Q\nYear: {}\nQuarter: {}", year, quarter))
+                                                    .body(&format!(
+                                                        "Form: 2551Q\nYear: {}\nQuarter: {}",
+                                                        year, quarter
+                                                    ))
                                                     .show();
                                             }
                                         }
@@ -189,7 +207,11 @@ fn fetch_with_auth(
                         Err(e) => {
                             // If it's truly an email from BIR but we failed to parse it, log it.
                             if text_content.contains("This confirms receipt of your submission") {
-                                tracing::error!("Failed to parse BIR receipt email. Error: {:?}\nRaw Body snippet: {:.200}", e, text_content);
+                                tracing::error!(
+                                    "Failed to parse BIR receipt email. Error: {:?}\nRaw Body snippet: {:.200}",
+                                    e,
+                                    text_content
+                                );
                             }
                         }
                     }
@@ -201,8 +223,6 @@ fn fetch_with_auth(
     session.logout()?;
     Ok(processed)
 }
-
-
 
 /// Fetch emails for a specific email address, across all profiles.
 /// Returns (poll_success, still_pending_forms).
@@ -217,10 +237,10 @@ pub fn fetch_and_process_emails_for_address(
         };
         let current_year = chrono::Utc::now().naive_utc().date().year() as u16;
         let profiles = db_guard.list_profiles().unwrap_or_default();
-        
+
         let mut still_pending = false;
         let mut matched_profile = None;
-        
+
         for p in profiles {
             let p_email = p.imap_email.clone().unwrap_or_else(|| p.email.clone());
             if p_email == email_address {
@@ -228,13 +248,16 @@ pub fn fetch_and_process_emails_for_address(
                     matched_profile = Some(p.clone());
                 }
                 if let Ok(summaries) = db_guard.list_draft_summaries(&p.tin.full(), current_year) {
-                    if summaries.iter().any(|s| s.status == crate::forms::form_2551q::FilingStatus::Submitted) {
+                    if summaries
+                        .iter()
+                        .any(|s| s.status == crate::forms::form_2551q::FilingStatus::Submitted)
+                    {
                         still_pending = true;
                     }
                 }
             }
         }
-        
+
         (matched_profile, still_pending)
     };
 
@@ -243,20 +266,24 @@ pub fn fetch_and_process_emails_for_address(
     }
 
     if let Some(profile) = profile {
-        let db_guard = match db.lock() {
-            Ok(g) => g,
-            Err(_) => return (false, true),
-        };
         match fetch_and_process_emails(&profile, db.clone()) {
             Ok(_) => {
+                let db_guard = match db.lock() {
+                    Ok(g) => g,
+                    Err(_) => return (false, true),
+                };
                 let mut remaining_pending = false;
                 let current_year = chrono::Utc::now().naive_utc().date().year() as u16;
                 let profiles = db_guard.list_profiles().unwrap_or_default();
                 for p in profiles {
                     let p_email = p.imap_email.clone().unwrap_or_else(|| p.email.clone());
                     if p_email == email_address {
-                        if let Ok(summaries) = db_guard.list_draft_summaries(&p.tin.full(), current_year) {
-                            if summaries.iter().any(|s| s.status == crate::forms::form_2551q::FilingStatus::Submitted) {
+                        if let Ok(summaries) =
+                            db_guard.list_draft_summaries(&p.tin.full(), current_year)
+                        {
+                            if summaries.iter().any(|s| {
+                                s.status == crate::forms::form_2551q::FilingStatus::Submitted
+                            }) {
                                 remaining_pending = true;
                             }
                         }

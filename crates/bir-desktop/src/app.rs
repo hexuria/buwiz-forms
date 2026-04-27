@@ -2,6 +2,7 @@ use crate::views::cron_tasks::CronTasksView;
 use crate::views::dashboard::{DashboardEvent, DashboardView};
 use crate::views::form_2551q_view::{Form2551QEvent, Form2551QView};
 use crate::views::global_dashboard::{GlobalDashboardEvent, GlobalDashboardView};
+use crate::views::import_export::{ImportExportEvent, ImportExportView};
 use crate::views::profile_manager::ProfileManagerView;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
@@ -13,6 +14,24 @@ use bir_core::forms::form_2551q::Form2551QDraft;
 use bir_core::profile::TaxpayerProfile;
 use std::sync::{Arc, Mutex};
 
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
+pub enum AppThemeMode {
+    Light,
+    Dark,
+    #[default]
+    System,
+}
+
+impl AppThemeMode {
+    pub fn next(&self) -> Self {
+        match self {
+            Self::System => Self::Dark,
+            Self::Dark => Self::Light,
+            Self::Light => Self::System,
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ActiveView {
     GlobalDashboard,
@@ -23,6 +42,7 @@ pub enum ActiveView {
     ProfileManager,
     CronTasks,
     Settings,
+    ImportExport,
 }
 
 pub struct AppState {
@@ -31,6 +51,7 @@ pub struct AppState {
     dashboard_view: Entity<DashboardView>,
     global_dashboard_view: Entity<GlobalDashboardView>,
     cron_tasks_view: Entity<CronTasksView>,
+    import_export_view: Entity<ImportExportView>,
     form_2551q_view: Option<Entity<Form2551QView>>,
     pending_form_draft: Option<Form2551QDraft>,
     db: Arc<Mutex<Database>>,
@@ -39,9 +60,12 @@ pub struct AppState {
     expanded_profile_tin: Option<String>,
     profile_filter: Entity<InputState>,
     sidebar_scroll: ScrollHandle,
+    show_archived: bool,
     _subscriptions: Vec<Subscription>,
     /// Whether the window-aware subscription for global dashboard notifications has been set up.
     global_dashboard_notif_subscribed: bool,
+    is_mini_sidebar: bool,
+    theme_preference: AppThemeMode,
 }
 
 impl AppState {
@@ -65,6 +89,22 @@ impl AppState {
                 backup_path.display()
             );
         }
+        let theme_preference = if let Ok(Some(val)) = db.get_setting("theme_preference") {
+            serde_json::from_str(&val).unwrap_or(AppThemeMode::System)
+        } else {
+            AppThemeMode::System
+        };
+
+        let target_mode = match theme_preference {
+            AppThemeMode::Light => ThemeMode::Light,
+            AppThemeMode::Dark => ThemeMode::Dark,
+            AppThemeMode::System => match window.appearance() {
+                gpui::WindowAppearance::Light | gpui::WindowAppearance::VibrantLight => ThemeMode::Light,
+                gpui::WindowAppearance::Dark | gpui::WindowAppearance::VibrantDark => ThemeMode::Dark,
+            },
+        };
+        Theme::change(target_mode, Some(window), cx);
+
         let profiles = db.list_profiles().unwrap_or_default();
         let db = Arc::new(Mutex::new(db));
 
@@ -73,6 +113,10 @@ impl AppState {
         } else {
             ActiveView::GlobalDashboard
         };
+
+        let bus = cx.new(|_| crate::events::EventBus {});
+        cx.set_global(crate::events::GlobalEventBus(bus));
+        crate::events::start_db_watcher(Arc::clone(&db), cx);
 
         let db_clone = Arc::clone(&db);
         let profile_manager = cx.new(|cx| ProfileManagerView::new(db_clone, window, cx));
@@ -83,6 +127,45 @@ impl AppState {
 
         let db_clone_cron = Arc::clone(&db);
         let cron_tasks_view = cx.new(|cx| CronTasksView::new(db_clone_cron, window, cx));
+
+        let db_clone_import = Arc::clone(&db);
+        let import_export_view = cx.new(|cx| ImportExportView::new(db_clone_import, window, cx));
+
+        cx.subscribe(
+            &import_export_view,
+            |this: &mut Self, _entity, event: &ImportExportEvent, cx| match event {
+                ImportExportEvent::ReloadApp => {
+                    // Re-open DB
+                    let db_path = bir_core::db::default_database_path();
+                    let (new_db, _) = Database::open_or_recreate(&db_path)
+                        .expect("Failed to open database on reload");
+                    let profiles = new_db.list_profiles().unwrap_or_default();
+
+                    if let Ok(mut locked_db) = this.db.lock() {
+                        *locked_db = new_db;
+                    }
+
+                    this.profiles = profiles.clone();
+                    this.global_dashboard_view.update(cx, |view, cx| {
+                        view.set_profiles(profiles.clone(), cx);
+                    });
+                    this.cron_tasks_view.update(cx, |view, cx| {
+                        view.load_settings(cx);
+                    });
+
+                    this.active_profile_tin = None;
+                    this.expanded_profile_tin = None;
+                    this.active_view = if this.profiles.is_empty() {
+                        ActiveView::ProfileManager
+                    } else {
+                        ActiveView::GlobalDashboard
+                    };
+
+                    cx.notify();
+                }
+            },
+        )
+        .detach();
 
         let profile_filter =
             cx.new(|cx| InputState::new(window, cx).placeholder("Search TIN or name"));
@@ -195,6 +278,7 @@ impl AppState {
             dashboard_view,
             global_dashboard_view,
             cron_tasks_view,
+            import_export_view,
             form_2551q_view: None,
             pending_form_draft: None,
             db,
@@ -203,32 +287,50 @@ impl AppState {
             expanded_profile_tin: None,
             profile_filter,
             sidebar_scroll: ScrollHandle::new(),
-            _subscriptions: vec![filter_sub, profile_sub],
+            show_archived: false,
+            _subscriptions: vec![profile_sub, filter_sub],
             global_dashboard_notif_subscribed: false,
+            is_mini_sidebar: false,
+            theme_preference,
         }
     }
 
-    fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let is_dark = cx.theme().is_dark();
+    fn render_sidebar(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let is_mini = self.is_mini_sidebar || window.viewport_size().width < px(768.);
         let filter = self.profile_filter.read(cx).value().to_lowercase();
+        let mut archived_count = 0;
+
+        for p in &self.profiles {
+            if p.is_archived {
+                archived_count += 1;
+            }
+        }
+
         let filtered_profiles: Vec<TaxpayerProfile> = self
             .profiles
             .iter()
             .filter(|profile| {
+                if self.show_archived != profile.is_archived {
+                    return false;
+                }
                 filter.trim().is_empty()
-                    || profile.full_name.to_lowercase().contains(filter.trim())
+                    || profile
+                        .full_name
+                        .to_lowercase()
+                        .contains(&filter.trim().to_lowercase())
                     || profile.tin.full().contains(filter.trim())
                     || profile.tin.formatted().contains(filter.trim())
             })
             .cloned()
             .collect();
         div()
-            .w(px(280.))
+            .w(if is_mini { px(72.) } else { px(280.) })
             .h_full()
             .bg(cx.theme().background)
             .border_r_1()
             .border_color(cx.theme().border)
-            .p_6()
+            .when(!is_mini, |this| this.py_6())
+            .when(is_mini, |this| this.py_3())
             .flex()
             .flex_col()
             .justify_between()
@@ -239,70 +341,94 @@ impl AppState {
                     .gap_4()
                     .child(
                         div()
-                            .id("global_dashboard_btn")
                             .flex()
-                            .items_center()
-                            .gap_3()
-                            .mb_6()
-                            .child(
-                                div()
-                                    .w_10()
-                                    .h_10()
-                                    .bg(cx.theme().primary)
-                                    .rounded_lg()
-                                    .flex()
-                                    .justify_center()
-                                    .items_center()
-                                    .child(
-                                        div()
-                                            .text_xl()
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(cx.theme().primary_foreground)
-                                            .child("e"),
-                                    ),
-                            )
+                            .flex_col()
+                            .w_full()
+                            .when(!is_mini, |this| this.px_6())
+                            .when(is_mini, |this| this.px_3())
                             .child(
                                 div()
                                     .flex()
-                                    .flex_col()
+                                    .w_full()
+                                    .when(!is_mini, |this| this.justify_end())
+                                    .when(is_mini, |this| this.justify_center())
+                                    .mb(px(10.))
                                     .child(
                                         div()
-                                            .text_lg()
-                                            .font_weight(FontWeight::BLACK)
-                                            .text_color(cx.theme().foreground)
-                                            .child("BIR Vault"),
+                                            .id("sidebar_toggle_btn")
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .size(px(40.))
+                                            .flex_shrink_0()
+                                            .cursor_pointer()
+                                            .hover(|s| s.bg(cx.theme().muted).rounded_md())
+                                            .on_click(cx.listener(|this, _ev, _window, cx| {
+                                                this.is_mini_sidebar = !this.is_mini_sidebar;
+                                                this.dashboard_view.update(cx, |view, cx| {
+                                                    view.set_mini_sidebar(this.is_mini_sidebar, cx);
+                                                });
+                                                cx.notify();
+                                            }))
+                                            .child(
+                                                Icon::new(if is_mini { IconName::ChevronRight } else { IconName::ChevronLeft })
+                                                    .size(px(28.))
+                                                    .text_color(cx.theme().foreground)
+                                            )
                                     )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(cx.theme().primary)
-                                            .child("OFFLINE SECURE"),
-                                    ),
                             )
-                            .cursor_pointer()
-                            .on_click(cx.listener(|this, _ev, _window, cx| {
-                                this.active_view = ActiveView::GlobalDashboard;
-                                this.active_profile_tin = None;
-                                cx.notify();
-                            })),
+                            .child(
+                                div()
+                                    .id("global_dashboard_btn")
+                                    .w_full()
+                                    .cursor_pointer()
+                                    .on_click(cx.listener(|this, _ev, _window, cx| {
+                                        this.active_view = ActiveView::GlobalDashboard;
+                                        this.active_profile_tin = None;
+                                        cx.notify();
+                                    }))
+                                    .child(
+                                        if is_mini {
+                                            gpui::img(std::path::PathBuf::from("assets/svg/e_logo.svg"))
+                                                .w_full()
+                                                .h_8()
+                                                .object_fit(gpui::ObjectFit::Contain)
+                                        } else {
+                                            gpui::img(std::path::PathBuf::from("assets/svg/ebirforms.png"))
+                                                .w_full()
+                                                .h_10()
+                                                .object_fit(gpui::ObjectFit::Contain)
+                                        }
+                                    )
+                            ),
                     )
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .justify_between()
+                            .when(!is_mini, |this| this.px_6())
+                            .when(is_mini, |this| this.px_3())
+                            .when(!is_mini, |this| {
+                                this.child(
+                                    div()
+                                        .text_xs()
+                                        .font_weight(FontWeight::BOLD)
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child("TAXPAYER PROFILES"),
+                                )
+                            })
+                            .when(is_mini, |this| this.justify_center())
                             .child(
                                 div()
-                                    .text_xs()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("TAXPAYER PROFILES"),
-                            )
-                            .child(
-                                gpui_component::button::Button::new("add_profile")
-                                    .label("+")
-                                    .small()
+                                    .id("add_profile_mini_btn")
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .size(px(40.))
+                                    .flex_shrink_0()
+                                    .cursor_pointer()
+                                    .hover(|s| s.bg(cx.theme().muted).rounded_md())
                                     .on_click(cx.listener(|this, _ev, _window, cx| {
                                         this.active_view = ActiveView::ProfileManager;
                                         this.active_profile_tin = None;
@@ -310,10 +436,48 @@ impl AppState {
                                             view.reset_for_new(_window, cx);
                                         });
                                         cx.notify();
-                                    })),
+                                    }))
+                                    .child(
+                                        div()
+                                            .text_color(cx.theme().foreground)
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_xl()
+                                            .child("+"),
+                                    )
                             ),
                     )
-                    .child(Input::new(&self.profile_filter))
+                    .child(
+                        if is_mini {
+                            div().px_3().flex().justify_center().w_full().child(
+                                div()
+                                    .id("sidebar_search_mini_btn")
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .size(px(48.))
+                                    .rounded_full()
+                                    .bg(cx.theme().secondary)
+                                    .flex_shrink_0()
+                                    .cursor_pointer()
+                                    .hover(|s| s.bg(cx.theme().muted))
+                                    .on_click(cx.listener(|this, _ev, window, cx| {
+                                        this.is_mini_sidebar = false;
+                                        this.dashboard_view.update(cx, |view, cx| {
+                                            view.set_mini_sidebar(this.is_mini_sidebar, cx);
+                                        });
+                                        cx.focus_view(&this.profile_filter, window);
+                                        cx.notify();
+                                    }))
+                                    .child(
+                                        Icon::new(IconName::Search)
+                                            .size(px(20.))
+                                            .text_color(cx.theme().foreground)
+                                    )
+                            ).into_any_element()
+                        } else {
+                            div().px_6().w_full().child(Input::new(&self.profile_filter)).into_any_element()
+                        }
+                    )
                     .child(div().h_2())
                     .child(
                         div()
@@ -353,8 +517,8 @@ impl AppState {
                                 div()
                                     .id(profile.tin.full())
                                     .w_full()
-                                    .p_3()
-                                    .rounded_lg()
+                                    .when(!is_mini, |this| this.py_2().px_6())
+                                    .when(is_mini, |this| this.py_2().px_3())
                                     .bg(bg_color)
                                     .border_1()
                                     .border_color(border_color)
@@ -373,42 +537,55 @@ impl AppState {
                                             .flex()
                                             .items_center()
                                             .gap_3()
-                                            .when(is_expanded, |d| d.mb_4())
-                                            .child(
-                                                div()
-                                                    .size(px(32.))
-                                                    .rounded_full()
-                                                    .bg(cx.theme().secondary)
-                                                    .flex()
-                                                    .items_center()
-                                                    .justify_center()
-                                                    .child(
-                                                        div()
-                                                            .text_lg()
-                                                            .text_color(cx.theme().primary)
-                                                            .font_weight(FontWeight::BOLD)
-                                                            .child("👤"),
-                                                    ),
-                                            )
-                                            .child(
-                                                div()
-                                                    .flex()
-                                                    .flex_col()
-                                                    .child(
-                                                        div()
-                                                            .font_weight(FontWeight::BOLD)
-                                                            .text_color(cx.theme().foreground)
-                                                            .child(profile.full_name.clone()),
-                                                    )
-                                                    .child(
-                                                        div()
-                                                            .text_sm()
-                                                            .text_color(cx.theme().muted_foreground)
-                                                            .child(format!("TIN: {}", profile.tin.full())),
-                                                    ),
-                                            ),
+                                            .when(is_expanded && !is_mini, |d| d.mb_4())
+                                            .when(is_mini, |this| this.justify_center())
+                                            .when(is_mini, |this| {
+                                                let initials = profile.full_name
+                                                    .split_whitespace()
+                                                    .filter_map(|w| w.chars().next())
+                                                    .take(2)
+                                                    .collect::<String>()
+                                                    .to_uppercase();
+                                                
+                                                this.child(
+                                                    div()
+                                                        .size(px(48.))
+                                                        .flex_shrink_0()
+                                                        .rounded_full()
+                                                        .bg(cx.theme().secondary)
+                                                        .flex()
+                                                        .items_center()
+                                                        .justify_center()
+                                                        .child(
+                                                            div()
+                                                                .text_sm()
+                                                                .text_color(cx.theme().primary)
+                                                                .font_weight(FontWeight::BOLD)
+                                                                .child(initials)
+                                                        )
+                                                )
+                                            })
+                                            .when(!is_mini, |this| {
+                                                this.child(
+                                                    div()
+                                                        .flex()
+                                                        .flex_col()
+                                                        .child(
+                                                            div()
+                                                                .font_weight(FontWeight::BOLD)
+                                                                .text_color(if profile.is_archived { cx.theme().muted_foreground } else { cx.theme().foreground })
+                                                                .child(if profile.is_archived { format!("{} (Archived)", profile.full_name) } else { profile.full_name.clone() }),
+                                                        )
+                                                        .child(
+                                                            div()
+                                                                .text_sm()
+                                                                .text_color(cx.theme().muted_foreground)
+                                                                .child(format!("TIN: {}", profile.tin.full())),
+                                                        ),
+                                                )
+                                            }),
                                     )
-                                    .when(is_expanded, |this| {
+                                    .when(is_expanded && !is_mini, |this| {
                                         this.child(
                                             div()
                                                 .flex()
@@ -433,64 +610,149 @@ impl AppState {
                                                         .justify_between()
                                                         .gap_2()
                                                         .mt_2()
-                                                        .child(
-                                                            gpui_component::button::Button::new(format!("view_{}", profile.tin.full()))
-                                                                .small()
-                                                                .label("View")
-                                                                .on_click(cx.listener({
-                                                                    let tin = profile.tin.full();
-                                                                    let profile_clone = profile.clone();
-                                                                    move |this, _ev, _window, cx| {
-                                                                        cx.stop_propagation();
-                                                                        this.active_profile_tin = Some(tin.clone());
-                                                                        this.active_view = ActiveView::Dashboard;
-                                                                        this.dashboard_view.update(cx, |view, cx| {
-                                                                            view.set_profile(profile_clone.clone(), cx);
-                                                                        });
-                                                                        cx.notify();
-                                                                    }
-                                                                })),
-                                                        )
-                                                        .child(
-                                                            gpui_component::button::Button::new(format!("edit_{}", profile.tin.full()))
-                                                                .small()
-                                                                .label("Edit")
-                                                                .on_click(cx.listener({
-                                                                    let profile_clone = profile.clone();
-                                                                    move |this, _ev, window, cx| {
-                                                                        cx.stop_propagation();
-                                                                        this.active_view = ActiveView::ProfileManager;
-                                                                        this.active_profile_tin = Some(profile_clone.tin.full());
-                                                                        this.profile_manager.update(cx, |view, cx| {
-                                                                            view.edit_profile(profile_clone.clone(), window, cx);
-                                                                        });
-                                                                        cx.notify();
-                                                                    }
-                                                                })),
-                                                        )
-                                                        .child(
-                                                            gpui_component::button::Button::new(format!("delete_{}", profile.tin.full()))
-                                                                .small()
-                                                                .label("Delete")
-                                                                .on_click(cx.listener({
-                                                                    let tin = profile.tin.full();
-                                                                    move |this, _ev, _window, cx| {
-                                                                        cx.stop_propagation();
-                                                                        if let Ok(db) = this.db.lock() {
-                                                                            let _ = db.delete_profile(&tin);
+                                                        .when(!profile.is_archived, |this| {
+                                                            this.child(
+                                                                gpui_component::button::Button::new(format!("view_{}", profile.tin.full()))
+                                                                    .small()
+                                                                    .label("View")
+                                                                    .on_click(cx.listener({
+                                                                        let tin = profile.tin.full();
+                                                                        let profile_clone = profile.clone();
+                                                                        move |this, _ev, _window, cx| {
+                                                                            cx.stop_propagation();
+                                                                            this.active_profile_tin = Some(tin.clone());
+                                                                            this.active_view = ActiveView::Dashboard;
+                                                                            this.dashboard_view.update(cx, |view, cx| {
+                                                                                view.set_profile(profile_clone.clone(), cx);
+                                                                            });
+                                                                            cx.notify();
                                                                         }
-                                                                        this.profiles.retain(|p| p.tin.full() != tin);
-                                                                        if this.active_profile_tin.as_ref() == Some(&tin) {
-                                                                            this.active_profile_tin = None;
+                                                                    })),
+                                                            )
+                                                            .child(
+                                                                gpui_component::button::Button::new(format!("edit_{}", profile.tin.full()))
+                                                                    .small()
+                                                                    .label("Edit")
+                                                                    .on_click(cx.listener({
+                                                                        let profile_clone = profile.clone();
+                                                                        move |this, _ev, window, cx| {
+                                                                            cx.stop_propagation();
                                                                             this.active_view = ActiveView::ProfileManager;
+                                                                            this.active_profile_tin = Some(profile_clone.tin.full());
+                                                                            this.profile_manager.update(cx, |view, cx| {
+                                                                                view.edit_profile(profile_clone.clone(), window, cx);
+                                                                            });
+                                                                            cx.notify();
                                                                         }
-                                                                        if this.expanded_profile_tin.as_ref() == Some(&tin) {
-                                                                            this.expanded_profile_tin = None;
+                                                                    })),
+                                                            )
+                                                            .child(
+                                                                gpui_component::button::Button::new(format!("archive_{}", profile.tin.full()))
+                                                                    .small()
+                                                                    .label("Archive")
+                                                                    .on_click(cx.listener({
+                                                                        let profile_clone = profile.clone();
+                                                                        let tin = profile_clone.tin.full();
+                                                                        move |this, _ev, _window, cx| {
+                                                                            cx.stop_propagation();
+                                                                            let mut profile_mut = profile_clone.clone();
+                                                                            profile_mut.is_archived = true;
+                                                                            if let Ok(db) = this.db.lock() {
+                                                                                let _ = db.save_profile(profile_mut);
+                                                                            }
+                                                                            if let Some(p) = this.profiles.iter_mut().find(|p| p.tin.full() == tin) {
+                                                                                p.is_archived = true;
+                                                                            }
+                                                                            cx.notify();
                                                                         }
-                                                                        cx.notify();
-                                                                    }
-                                                                })),
-                                                        ),
+                                                                    })),
+                                                            )
+                                                        })
+                                                        .when(profile.is_archived, |this| {
+                                                            this.child(
+                                                                gpui_component::button::Button::new(format!("restore_{}", profile.tin.full()))
+                                                                    .small()
+                                                                    .label("Restore")
+                                                                    .on_click(cx.listener({
+                                                                        let profile_clone = profile.clone();
+                                                                        let tin = profile_clone.tin.full();
+                                                                        move |this, _ev, _window, cx| {
+                                                                            cx.stop_propagation();
+                                                                            let mut profile_mut = profile_clone.clone();
+                                                                            profile_mut.is_archived = false;
+                                                                            if let Ok(db) = this.db.lock() {
+                                                                                let _ = db.save_profile(profile_mut);
+                                                                            }
+                                                                            if let Some(p) = this.profiles.iter_mut().find(|p| p.tin.full() == tin) {
+                                                                                p.is_archived = false;
+                                                                            }
+                                                                            cx.notify();
+                                                                        }
+                                                                    })),
+                                                            )
+                                                            .child(
+                                                                gpui_component::button::Button::new(format!("delete_{}", profile.tin.full()))
+                                                                    .small()
+                                                                    .label("Delete")
+                                                                    .on_click(cx.listener({
+                                                                        let profile_clone = profile.clone();
+                                                                        let tin = profile_clone.tin.full();
+                                                                        move |_this, _ev, _window, cx| {
+                                                                            cx.stop_propagation();
+                                                                            cx.spawn({
+                                                                                let tin = tin.clone();
+                                                                                async move |this, cx| {
+                                                                                    let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+                                                                                    let Some(export_handle) = rfd::AsyncFileDialog::new()
+                                                                                        .set_title("Save Profile Archive")
+                                                                                        .set_file_name(&format!("BIR_Archive_{}_{}.zip", tin, timestamp))
+                                                                                        .add_filter("Zip Archive", &["zip"])
+                                                                                        .save_file()
+                                                                                        .await
+                                                                                    else {
+                                                                                        return;
+                                                                                    };
+                                                                                    let export_dir = export_handle.path().to_path_buf();
+                                                                                    
+                                                                                    let success = this.update(cx, |this, cx| {
+                                                                                        if let Ok(db) = this.db.lock() {
+                                                                                            if let Err(e) = bir_core::export_profile_data(&db, &tin, &export_dir) {
+                                                                                                println!("Export failed: {}", e);
+                                                                                            } else {
+                                                                                                let _ = db.delete_profile(&tin);
+                                                                                                this.profiles.retain(|p| p.tin.full() != tin);
+                                                                                                
+                                                                                                if !this.profiles.iter().any(|p| p.is_archived) {
+                                                                                                    this.show_archived = false;
+                                                                                                }
+                                                                                                
+                                                                                                if this.active_profile_tin.as_ref() == Some(&tin) {
+                                                                                                    this.active_profile_tin = None;
+                                                                                                    this.active_view = ActiveView::ProfileManager;
+                                                                                                }
+                                                                                                if this.expanded_profile_tin.as_ref() == Some(&tin) {
+                                                                                                    this.expanded_profile_tin = None;
+                                                                                                }
+                                                                                                cx.notify();
+                                                                                                return true;
+                                                                                            }
+                                                                                        }
+                                                                                        false
+                                                                                    });
+                                                                                    
+                                                                                    if let Ok(true) = success {
+                                                                                        rfd::AsyncMessageDialog::new()
+                                                                                            .set_title("Profile Exported & Deleted")
+                                                                                            .set_description(&format!("Saved to {}", export_dir.display()))
+                                                                                            .show()
+                                                                                            .await;
+                                                                                    }
+                                                                                }
+                                                                            }).detach();
+                                                                        }
+                                                                    })),
+                                                            )
+                                                        })
                                                 )
                                         )
                                         .on_mouse_down_out(cx.listener(|this, _ev, _window, cx| {
@@ -499,17 +761,67 @@ impl AppState {
                                         }))
                                     })
                                     .on_click(cx.listener({
-                                        let tin = profile.tin.full();
-                                        move |this, _ev, _window, cx| {
-                                            if this.expanded_profile_tin.as_ref() == Some(&tin) {
-                                                this.expanded_profile_tin = None;
+                                        let profile_clone = profile.clone();
+                                        let tin = profile_clone.tin.full();
+                                        move |this, _ev, window, cx| {
+                                            if this.is_mini_sidebar || window.viewport_size().width < px(768.) {
+                                                this.active_profile_tin = Some(tin.clone());
+                                                this.active_view = ActiveView::Dashboard;
+                                                this.dashboard_view.update(cx, |view, cx| {
+                                                    view.set_profile(profile_clone.clone(), cx);
+                                                });
                                             } else {
-                                                this.expanded_profile_tin = Some(tin.clone());
+                                                if this.expanded_profile_tin.as_ref() == Some(&tin) {
+                                                    this.expanded_profile_tin = None;
+                                                } else {
+                                                    this.expanded_profile_tin = Some(tin.clone());
+                                                }
                                             }
                                             cx.notify();
                                         }
                                     }))
                             }))
+                            .when(archived_count > 0 || self.show_archived, |this| {
+                                this.child(
+                                    div()
+                                        .w_full()
+                                        .py_2()
+                                        .when(!is_mini, |this| this.px_6())
+                                        .when(is_mini, |this| this.px_3())
+                                        .flex()
+                                        .justify_center()
+                                        .child(
+                                            if is_mini {
+                                                div()
+                                                    .id("toggle_archived_mini_btn")
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_center()
+                                                    .size(px(48.))
+                                                    .flex_shrink_0()
+                                                    .rounded_full()
+                                                    .bg(cx.theme().secondary)
+                                                    .cursor_pointer()
+                                                    .hover(|s| s.bg(cx.theme().muted))
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.show_archived = !this.show_archived;
+                                                        cx.notify();
+                                                    }))
+                                                    .child(Icon::new(if self.show_archived { IconName::EyeOff } else { IconName::Eye }).size(px(20.)).text_color(cx.theme().foreground))
+                                                    .into_any_element()
+                                            } else {
+                                                gpui_component::button::Button::new("toggle_archived")
+                                                    .small()
+                                                    .label(if self.show_archived { "Hide Archived Profiles".to_string() } else { format!("Show {} Archived", archived_count) })
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.show_archived = !this.show_archived;
+                                                        cx.notify();
+                                                    }))
+                                                    .into_any_element()
+                                            }
+                                        )
+                                )
+                            })
                     )
                     .child(
                         div()
@@ -522,33 +834,146 @@ impl AppState {
                 v_flex()
                     .gap_2()
                     .w_full()
+                    .when(!is_mini, |this| this.px_6())
+                    .when(is_mini, |this| this.px_3())
                     .child(
-                        gpui_component::button::Button::new("cron_tasks_btn")
-                            .label("⚡ Background Tasks")
-                            .on_click(cx.listener(|this, _ev, _window, cx| {
-                                this.active_view = ActiveView::CronTasks;
-                                this.cron_tasks_view.update(cx, |view, cx| {
-                                    view.load_settings(cx);
-                                });
-                                cx.notify();
-                            })),
+                        if is_mini {
+                            div().flex().justify_center().w_full().child(
+                                div()
+                                    .id("import_export_mini_btn")
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .size(px(48.))
+                                    .flex_shrink_0()
+                                    .rounded_full()
+                                    .bg(cx.theme().secondary)
+                                    .cursor_pointer()
+                                    .hover(|s| s.bg(cx.theme().muted))
+                                    .on_click(cx.listener(|this, _ev, _window, cx| {
+                                        this.active_view = ActiveView::ImportExport;
+                                        cx.notify();
+                                    }))
+                                    .child(Icon::new(IconName::HardDrive).size(px(20.)).text_color(cx.theme().foreground))
+                            ).into_any_element()
+                        } else {
+                            gpui_component::button::Button::new("import_export_btn")
+                                .icon(IconName::HardDrive)
+                                .label("Import/Export DB")
+                                .on_click(cx.listener(|this, _ev, _window, cx| {
+                                    this.active_view = ActiveView::ImportExport;
+                                    cx.notify();
+                                }))
+                                .into_any_element()
+                        }
                     )
                     .child(
-                        gpui_component::button::Button::new("theme_toggle")
-                            .label(if is_dark {
-                                "Switch to Light Mode"
-                            } else {
-                                "Switch to Dark Mode"
-                            })
-                            .on_click(cx.listener(|_this, _ev, window, cx| {
-                                let is_dark = cx.theme().is_dark();
-                                let new_mode = if is_dark {
-                                    ThemeMode::Light
-                                } else {
-                                    ThemeMode::Dark
-                                };
-                                Theme::change(new_mode, Some(window), cx);
-                            })),
+                        if is_mini {
+                            div().flex().justify_center().w_full().child(
+                                div()
+                                    .id("cron_tasks_mini_btn")
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .size(px(48.))
+                                    .flex_shrink_0()
+                                    .rounded_full()
+                                    .bg(cx.theme().secondary)
+                                    .cursor_pointer()
+                                    .hover(|s| s.bg(cx.theme().muted))
+                                    .on_click(cx.listener(|this, _ev, _window, cx| {
+                                        this.active_view = ActiveView::CronTasks;
+                                        this.cron_tasks_view.update(cx, |view, cx| {
+                                            view.load_settings(cx);
+                                        });
+                                        cx.notify();
+                                    }))
+                                    .child(Icon::new(IconName::SquareTerminal).size(px(20.)).text_color(cx.theme().foreground))
+                            ).into_any_element()
+                        } else {
+                            gpui_component::button::Button::new("cron_tasks_btn")
+                                .icon(IconName::SquareTerminal)
+                                .label("Background Tasks")
+                                .on_click(cx.listener(|this, _ev, _window, cx| {
+                                    this.active_view = ActiveView::CronTasks;
+                                    this.cron_tasks_view.update(cx, |view, cx| {
+                                        view.load_settings(cx);
+                                    });
+                                    cx.notify();
+                                }))
+                                .into_any_element()
+                        }
+                    )
+                    .child(
+                        if is_mini {
+                            div().flex().justify_center().w_full().child(
+                                div()
+                                    .id("theme_toggle_mini_btn")
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .size(px(48.))
+                                    .flex_shrink_0()
+                                    .rounded_full()
+                                    .bg(cx.theme().secondary)
+                                    .cursor_pointer()
+                                    .hover(|s| s.bg(cx.theme().muted))
+                                    .on_click(cx.listener(|this, _ev, window, cx| {
+                                        this.theme_preference = this.theme_preference.next();
+                                        if let Ok(db) = this.db.lock() {
+                                            if let Ok(val) = serde_json::to_string(&this.theme_preference) {
+                                                let _ = db.set_setting("theme_preference", &val);
+                                            }
+                                        }
+                                        let target_mode = match this.theme_preference {
+                                            AppThemeMode::Light => ThemeMode::Light,
+                                            AppThemeMode::Dark => ThemeMode::Dark,
+                                            AppThemeMode::System => match window.appearance() {
+                                                gpui::WindowAppearance::Light | gpui::WindowAppearance::VibrantLight => ThemeMode::Light,
+                                                gpui::WindowAppearance::Dark | gpui::WindowAppearance::VibrantDark => ThemeMode::Dark,
+                                            },
+                                        };
+                                        Theme::change(target_mode, Some(window), cx);
+                                        cx.notify();
+                                    }))
+                                    .child(match self.theme_preference {
+                                        AppThemeMode::Dark => Icon::new(IconName::Moon).size(px(20.)).text_color(cx.theme().foreground),
+                                        AppThemeMode::Light => Icon::new(IconName::Sun).size(px(20.)).text_color(cx.theme().foreground),
+                                        AppThemeMode::System => Icon::new(IconName::Settings).size(px(20.)).text_color(cx.theme().foreground),
+                                    })
+                            ).into_any_element()
+                        } else {
+                            gpui_component::button::Button::new("theme_toggle")
+                                .label(match self.theme_preference {
+                                    AppThemeMode::Light => "Light Mode",
+                                    AppThemeMode::Dark => "Dark Mode",
+                                    AppThemeMode::System => "System Theme",
+                                })
+                                .icon(match self.theme_preference {
+                                    AppThemeMode::Dark => IconName::Moon,
+                                    AppThemeMode::Light => IconName::Sun,
+                                    AppThemeMode::System => IconName::Settings,
+                                })
+                                .on_click(cx.listener(|this, _ev, window, cx| {
+                                    this.theme_preference = this.theme_preference.next();
+                                    if let Ok(db) = this.db.lock() {
+                                        if let Ok(val) = serde_json::to_string(&this.theme_preference) {
+                                            let _ = db.set_setting("theme_preference", &val);
+                                        }
+                                    }
+                                    let target_mode = match this.theme_preference {
+                                        AppThemeMode::Light => ThemeMode::Light,
+                                        AppThemeMode::Dark => ThemeMode::Dark,
+                                        AppThemeMode::System => match window.appearance() {
+                                            gpui::WindowAppearance::Light | gpui::WindowAppearance::VibrantLight => ThemeMode::Light,
+                                            gpui::WindowAppearance::Dark | gpui::WindowAppearance::VibrantDark => ThemeMode::Dark,
+                                        },
+                                    };
+                                    Theme::change(target_mode, Some(window), cx);
+                                    cx.notify();
+                                }))
+                                .into_any_element()
+                        }
                     )
             )
     }
@@ -558,6 +983,7 @@ impl AppState {
             ActiveView::GlobalDashboard => self.global_dashboard_view.clone().into_any_element(),
             ActiveView::ProfileManager => self.profile_manager.clone().into_any_element(),
             ActiveView::CronTasks => self.cron_tasks_view.clone().into_any_element(),
+            ActiveView::ImportExport => self.import_export_view.clone().into_any_element(),
             ActiveView::Dashboard => self.dashboard_view.clone().into_any_element(),
             ActiveView::Form2551Q => {
                 if let Some(view) = &self.form_2551q_view {
@@ -644,7 +1070,6 @@ impl Render for AppState {
         if let Some(draft) = self.pending_form_draft.take() {
             let db_for_view = Arc::clone(&self.db);
             let form_view = cx.new(|cx| Form2551QView::new(draft, db_for_view, window, cx));
-            form_view.update(cx, |view, cx| view.start_polling(cx));
 
             cx.subscribe_in(
                 &form_view,
@@ -691,19 +1116,27 @@ impl Render for AppState {
 
         div()
             .flex()
-            .flex_row()
+            .flex_col()
             .size_full()
             .bg(cx.theme().background)
-            .child(self.render_sidebar(cx))
             .child(
                 div()
-                    .flex_1()
                     .flex()
-                    .flex_col()
-                    .h_full()
-                    .overflow_hidden()
-                    .child(self.render_active_view(cx)),
+                    .flex_row()
+                    .flex_1()
+                    .min_h_0()
+                    .child(self.render_sidebar(window, cx))
+                    .child(
+                        div()
+                            .flex_1()
+                            .flex()
+                            .flex_col()
+                            .h_full()
+                            .overflow_hidden()
+                            .child(self.render_active_view(cx)),
+                    ),
             )
+            .child(crate::components::footer::render_footer(cx))
             .children(notification_layer)
     }
 }

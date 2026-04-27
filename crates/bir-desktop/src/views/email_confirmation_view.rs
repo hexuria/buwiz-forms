@@ -1,5 +1,6 @@
 use bir_core::db::SubmissionReceipt;
 use bir_core::forms::form_2551q::Form2551QDraft;
+use gpui::prelude::*;
 use gpui::*;
 use gpui_component::scroll::ScrollableElement as _;
 use gpui_component::*;
@@ -22,42 +23,12 @@ impl EmailConfirmationView {
     }
 
     fn generate_pdf_bytes(&self) -> Vec<u8> {
-        let lines = vec![
-            "BIR e-Filing Confirmation Receipt".to_string(),
-            "=".repeat(40),
-            String::new(),
-            format!("Filename: {}", self.receipt.filename),
-            format!("TIN: {}", self.receipt.tin),
-            format!("Form Type: {}", self.receipt.form_type),
-            format!("Period: {}", self.receipt.period),
-            format!("Received Date: {}", self.receipt.received_date),
-            format!("Received Time: {}", self.receipt.received_time),
-            format!(
-                "Source: {}",
-                self.receipt.source_from.as_deref().unwrap_or("BIR")
-            ),
-            String::new(),
-            "=".repeat(40),
-            "Form Summary".to_string(),
-            format!("Taxpayer: {}", self.draft.taxpayer_name),
-            format!("TIN: {}", self.draft.tin),
-            format!(
-                "Period: Q{} {}",
-                self.draft.quarter, self.draft.taxable_year
-            ),
-            format!("Total Tax Due: {:.2}", self.draft.total_tax_due),
-            format!(
-                "Creditable Tax Withheld: {:.2}",
-                self.draft.creditable_tax_withheld
-            ),
-            format!("Tax Still Payable: {:.2}", self.draft.tax_payable),
-            format!("Penalties: {:.2}", self.draft.total_penalties),
-            format!(
-                "Total Amount Payable: {:.2}",
-                self.draft.total_amount_payable
-            ),
-            format!("Status: {:?}", self.draft.status),
-        ];
+        let lines: Vec<String> = self
+            .receipt
+            .raw_text
+            .lines()
+            .map(|s| s.to_string())
+            .collect();
         bir_print::build_simple_confirmation_pdf(&lines)
     }
 
@@ -77,15 +48,10 @@ impl EmailConfirmationView {
         };
 
         let pdf_bytes = self.generate_pdf_bytes();
-        match std::fs::write(&target, pdf_bytes) {
-            Ok(_) => {
-                self.status_message = Some("Exported".to_string());
-            }
-            Err(err) => {
-                self.status_message = Some(format!("Export failed: {}", err));
-            }
+        if let Err(err) = std::fs::write(&target, pdf_bytes) {
+            self.status_message = Some(format!("Export failed: {}", err));
+            cx.notify();
         }
-        cx.notify();
     }
 
     fn print_pdf(&mut self, cx: &mut Context<Self>) {
@@ -100,25 +66,66 @@ impl EmailConfirmationView {
             return;
         }
 
-        let output = std::process::Command::new("lp").arg(&path).output();
-        match output {
-            Ok(o) if o.status.success() => {
-                self.status_message = Some("Sent to printer".to_string());
+        let script = r#"
+import AppKit
+import PDFKit
+
+func printPDF(path: String) {
+    let url = URL(fileURLWithPath: path)
+    guard let pdfDoc = PDFDocument(url: url) else { exit(1) }
+    
+    let printInfo = NSPrintInfo.shared
+    printInfo.isHorizontallyCentered = true
+    printInfo.isVerticallyCentered = true
+    
+    let printOp = pdfDoc.printOperation(for: printInfo, scalingMode: .pageScaleDownToFit, autoRotate: true)
+    
+    let app = NSApplication.shared
+    app.setActivationPolicy(.accessory)
+    app.activate(ignoringOtherApps: true)
+    
+    printOp?.showsPrintPanel = true
+    printOp?.showsProgressPanel = true
+    printOp?.run()
+}
+
+let args = CommandLine.arguments
+if args.count > 1 {
+    printPDF(path: args[1])
+}
+"#;
+
+        std::thread::spawn(move || {
+            use std::io::Write;
+            let mut child = match std::process::Command::new("swift")
+                .arg("-")
+                .arg(&path)
+                .stdin(std::process::Stdio::piped())
+                .spawn()
+            {
+                Ok(child) => child,
+                Err(_) => {
+                    let _ = open::that(&path);
+                    return;
+                }
+            };
+
+            if let Some(mut stdin) = child.stdin.take() {
+                let _ = stdin.write_all(script.as_bytes());
             }
-            Ok(o) => {
-                let stderr = String::from_utf8_lossy(&o.stderr);
-                self.status_message = Some(format!("Print failed: {}", stderr));
+
+            let output = child.wait();
+            if output.is_err() || !output.unwrap().success() {
+                let _ = open::that(&path);
             }
-            Err(e) => {
-                self.status_message = Some(format!("No printer available: {}", e));
-            }
-        }
-        cx.notify();
+        });
     }
 }
 
 impl Render for EmailConfirmationView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+        let is_mobile = window.viewport_size().width < px(600.);
+
         let status = self
             .status_message
             .as_ref()
@@ -135,7 +142,7 @@ impl Render for EmailConfirmationView {
             .size_full()
             .flex()
             .flex_col()
-            .bg(cx.theme().muted)
+            .bg(cx.theme().background)
             .child(
                 div()
                     .flex()
@@ -168,23 +175,34 @@ impl Render for EmailConfirmationView {
                             .items_center()
                             .gap_1()
                             .child(
+                                gpui_component::button::Button::new("email_copy_btn")
+                                    .outline()
+                                    .small()
+                                    .tooltip("Copy Text")
+                                    .icon(Icon::empty().path("svg/copy.svg").small())
+                                    .when(!is_mobile, |this| this.label("Copy Text"))
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(this.receipt.raw_text.clone()));
+                                    })),
+                            )
+                            .child(
                                 gpui_component::button::Button::new("email_export_btn")
-                                    .icon(Icon::empty().path("svg/download.svg"))
-                                    .label("Export")
                                     .outline()
                                     .small()
                                     .tooltip("Export PDF")
+                                    .icon(Icon::empty().path("svg/download.svg").small())
+                                    .when(!is_mobile, |this| this.label("Export"))
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.export_pdf(cx);
                                     })),
                             )
                             .child(
                                 gpui_component::button::Button::new("email_print_btn")
-                                    .icon(Icon::empty().path("svg/printer.svg"))
-                                    .label("Print")
                                     .outline()
                                     .small()
                                     .tooltip("Print")
+                                    .icon(Icon::empty().path("svg/printer.svg").small())
+                                    .when(!is_mobile, |this| this.label("Print"))
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.print_pdf(cx);
                                     })),
@@ -212,19 +230,42 @@ impl Render for EmailConfirmationView {
                                         .w_full()
                                         .max_w(px(900.))
                                         .mx_auto()
-                                        .mt_6()
-                                        .mb_6()
                                         .p_6()
-                                        .bg(cx.theme().background)
-                                        .rounded_md()
-                                        .shadow_sm()
-                                        .child(
+                                        .child({
+                                            let highlight_theme = std::sync::Arc::new(gpui_component::highlighter::HighlightTheme {
+                                                name: "plain".into(),
+                                                appearance: gpui_component::ThemeMode::Dark,
+                                                style: gpui_component::highlighter::HighlightThemeStyle {
+                                                    editor_background: Some(gpui::transparent_black()),
+                                                    editor_foreground: Some(cx.theme().foreground),
+                                                    editor_active_line: None,
+                                                    editor_line_number: None,
+                                                    editor_active_line_number: None,
+                                                    editor_invisible: None,
+                                                    status: gpui_component::highlighter::StatusColors::default(),
+                                                    syntax: gpui_component::highlighter::SyntaxColors::default(),
+                                                },
+                                            });
+
+                                            let mut text_style = gpui_component::text::TextViewStyle::default();
+                                            text_style.highlight_theme = highlight_theme;
+                                            text_style.code_block = gpui::StyleRefinement::default()
+                                                .bg(gpui::transparent_black())
+                                                .text_color(cx.theme().foreground);
+
                                             div()
                                                 .text_sm()
                                                 .font_family(".SF NS Mono")
                                                 .text_color(cx.theme().foreground)
-                                                .child(self.receipt.raw_text.clone()),
-                                        ),
+                                                .child(
+                                                    gpui_component::text::TextView::markdown(
+                                                        "email-text",
+                                                        format!("```\n{}\n```", self.receipt.raw_text.clone())
+                                                    )
+                                                    .selectable(true)
+                                                    .style(text_style)
+                                                )
+                                        }),
                                 ),
                         )
                         .vertical_scrollbar(&self.scroll_handle),

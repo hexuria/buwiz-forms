@@ -1,7 +1,7 @@
+use gpui::prelude::*;
 use gpui::*;
 use gpui_component::button::ButtonVariants;
 use gpui_component::input::{Input, InputEvent, InputState};
-use gpui_component::tab::{Tab, TabBar};
 use gpui_component::*;
 use std::sync::{Arc, Mutex};
 
@@ -58,6 +58,7 @@ pub struct ProfileManagerView {
     stored_oauth_access_token: Option<String>,
     stored_oauth_refresh_token: Option<String>,
     stored_test_notification_enabled: bool,
+    stored_is_archived: bool,
 
     _subscriptions: Vec<Subscription>,
 }
@@ -152,6 +153,7 @@ impl ProfileManagerView {
             stored_oauth_access_token: None,
             stored_oauth_refresh_token: None,
             stored_test_notification_enabled: false,
+            stored_is_archived: false,
             pending_notification: None,
             _subscriptions: subscriptions,
         }
@@ -167,6 +169,7 @@ impl ProfileManagerView {
         self.error_telemetry_enabled = false;
         self.email_auth_method = EmailAuthMethod::AppPassword;
         self.stored_test_notification_enabled = false;
+        self.stored_is_archived = false;
         self.connection_test_message = None;
         self.oauth_connected = false;
         self.active_tab = 0;
@@ -236,6 +239,7 @@ impl ProfileManagerView {
         self.stored_oauth_access_token = profile.oauth_access_token.clone();
         self.stored_oauth_refresh_token = profile.oauth_refresh_token.clone();
         self.stored_test_notification_enabled = profile.test_notification_enabled;
+        self.stored_is_archived = profile.is_archived;
 
         self.is_editing_password = profile.imap_app_password.is_none();
         self.imap_password_input.update(cx, |input, cx| {
@@ -400,6 +404,7 @@ impl ProfileManagerView {
             oauth_access_token: self.stored_oauth_access_token.clone(),
             oauth_refresh_token: self.stored_oauth_refresh_token.clone(),
             test_notification_enabled: self.stored_test_notification_enabled,
+            is_archived: self.stored_is_archived,
         }
     }
 
@@ -601,14 +606,66 @@ impl Render for ProfileManagerView {
                                     ),
                             )
                             .child(
-                                TabBar::new("profile-tabs")
-                                    .selected_index(self.active_tab)
-                                    .on_click(cx.listener(|this, index, _, cx| {
-                                        this.active_tab = *index;
-                                        cx.notify();
-                                    }))
-                                    .child(Tab::new().label("Tax Profile"))
-                                    .child(Tab::new().label("Email Settings"))
+                                div()
+                                    .flex()
+                                    .justify_start()
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap_1()
+                                            .p_1()
+                                            .rounded_lg()
+                                            .bg(cx.theme().secondary)
+                                            .child(
+                                                div()
+                                                    .id("tab_0")
+                                                    .px_4()
+                                                    .py_1p5()
+                                                    .rounded_md()
+                                                    .cursor_pointer()
+                                                    .when(self.active_tab == 0, |s| {
+                                                        s.bg(cx.theme().background)
+                                                            .shadow_sm()
+                                                            .text_color(cx.theme().foreground)
+                                                            .font_weight(FontWeight::SEMIBOLD)
+                                                    })
+                                                    .when(self.active_tab != 0, |s| {
+                                                        s.hover(|s| s.bg(cx.theme().muted))
+                                                            .text_color(cx.theme().muted_foreground)
+                                                            .font_weight(FontWeight::MEDIUM)
+                                                    })
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.active_tab = 0;
+                                                        cx.notify();
+                                                    }))
+                                                    .child(div().text_sm().child("Tax Profile")),
+                                            )
+                                            .child(
+                                                div()
+                                                    .id("tab_1")
+                                                    .px_4()
+                                                    .py_1p5()
+                                                    .rounded_md()
+                                                    .cursor_pointer()
+                                                    .when(self.active_tab == 1, |s| {
+                                                        s.bg(cx.theme().background)
+                                                            .shadow_sm()
+                                                            .text_color(cx.theme().foreground)
+                                                            .font_weight(FontWeight::SEMIBOLD)
+                                                    })
+                                                    .when(self.active_tab != 1, |s| {
+                                                        s.hover(|s| s.bg(cx.theme().muted))
+                                                            .text_color(cx.theme().muted_foreground)
+                                                            .font_weight(FontWeight::MEDIUM)
+                                                    })
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.active_tab = 1;
+                                                        cx.notify();
+                                                    }))
+                                                    .child(div().text_sm().child("Email Settings")),
+                                            ),
+                                    ),
                             )
                             .child(
                                 div()

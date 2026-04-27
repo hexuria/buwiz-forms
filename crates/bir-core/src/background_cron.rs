@@ -1,9 +1,9 @@
 use crate::db::Database;
 use crate::forms::form_2551q::FilingStatus;
 use crate::profile::TaxpayerProfile;
-use chrono::{Duration, Utc, Datelike};
-use std::sync::{Arc, Mutex};
+use chrono::{Datelike, Duration, Utc};
 use std::str::FromStr;
+use std::sync::{Arc, Mutex};
 use tracing::{error, info, warn};
 
 pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
@@ -12,9 +12,9 @@ pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
     loop {
         // Run every 1 minute
         tokio::time::sleep(std::time::Duration::from_secs(60)).await;
-        
+
         info!("Running background cron jobs...");
-        
+
         // Ensure we don't hold the DB lock across async network calls.
         // First, fetch profiles that have background cron enabled.
         let profiles = {
@@ -42,7 +42,10 @@ pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
                 .show();
         }
 
-        let cron_profiles = profiles.into_iter().filter(|p| p.background_cron_enabled).collect::<Vec<_>>();
+        let cron_profiles = profiles
+            .into_iter()
+            .filter(|p| p.background_cron_enabled)
+            .collect::<Vec<_>>();
 
         for profile in cron_profiles {
             // Task A: Form Submission Retries
@@ -56,25 +59,34 @@ pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
 
 async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Database>>) {
     let current_year = Utc::now().naive_utc().date().year() as u16;
-    
-    // We only retry current year forms to avoid excessive queries, 
+
+    // We only retry current year forms to avoid excessive queries,
     // but we can query `list_draft_summaries` for the profile.
     let summaries = {
         let db_guard = match db.lock() {
             Ok(g) => g,
             Err(_) => return,
         };
-        db_guard.list_draft_summaries(&profile.tin.full(), current_year).unwrap_or_default()
+        db_guard
+            .list_draft_summaries(&profile.tin.full(), current_year)
+            .unwrap_or_default()
     };
 
-    for summary in summaries.into_iter().filter(|s| s.status == FilingStatus::Queued) {
+    for summary in summaries
+        .into_iter()
+        .filter(|s| s.status == FilingStatus::Queued)
+    {
         let mut draft = {
             let db_guard = match db.lock() {
                 Ok(g) => g,
                 Err(_) => return,
             };
             if summary.form_code == "2551Q" {
-                match db_guard.get_2551q_draft(&profile.tin.full(), summary.taxable_year, summary.quarter.unwrap_or(0)) {
+                match db_guard.get_2551q_draft(
+                    &profile.tin.full(),
+                    summary.taxable_year,
+                    summary.quarter.unwrap_or(0),
+                ) {
                     Ok(Some(d)) => d,
                     _ => continue,
                 }
@@ -92,29 +104,38 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
             }
         }
 
-        info!("Cron: Attempting to submit queued form {} for {}", draft.period_code(), profile.tin.full());
-        
+        info!(
+            "Cron: Attempting to submit queued form {} for {}",
+            draft.period_code(),
+            profile.tin.full()
+        );
+
         let form_type = "2551Qv2018"; // hardcoded for 2551Q for now
         let filename = draft.default_submission_filename();
         let xml_payload = draft.to_bir_xml_payload();
         let passphrase = "T0081gP45sy0rd-To+R3m3m63r!@4/<>";
-        
-        let encrypted = match crate::crypto::compress_and_encrypt(xml_payload.as_bytes(), passphrase) {
-            Ok(enc) => enc,
-            Err(e) => {
-                fail_draft(&mut draft, db.clone(), e.to_string());
-                continue;
-            }
-        };
+
+        let encrypted =
+            match crate::crypto::compress_and_encrypt(xml_payload.as_bytes(), passphrase) {
+                Ok(enc) => enc,
+                Err(e) => {
+                    fail_draft(&mut draft, db.clone(), e.to_string());
+                    continue;
+                }
+            };
 
         match crate::transport::submit_iaf(form_type, &filename, &encrypted).await {
             Ok(_) => {
                 info!("Cron: Successfully submitted queued form {}", filename);
-                
+
                 let now = Utc::now();
                 let _ = notify_rust::Notification::new()
                     .summary("BIR Form Submitted")
-                    .body(&format!("Filename: {}\nTimestamp: {}", filename, now.format("%I:%M %p")))
+                    .body(&format!(
+                        "Filename: {}\nTimestamp: {}",
+                        filename,
+                        now.format("%I:%M %p")
+                    ))
                     .show();
 
                 draft.status = FilingStatus::Submitted;
@@ -123,23 +144,30 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                 draft.submission_attempts = 0;
                 draft.next_retry_at = None;
                 draft.last_error = None;
-                
+
                 if let Ok(db_guard) = db.lock() {
                     let _ = db_guard.save_2551q_draft(&draft);
-                    
+
                     if profile.is_email_tracking_active() {
-                        let email = profile.imap_email.clone().unwrap_or_else(|| profile.email.clone());
-                        let job_name = format!("Poll Receipts: {}", email);
-                        
+                        let email = profile
+                            .imap_email
+                            .clone()
+                            .unwrap_or_else(|| profile.email.clone());
+                        let job_name = format!("Waiting for 2551Q confirmation email for {}", email);
+                        let legacy_job_name = format!("Poll Receipts: {}", email);
+
                         let jobs = db_guard.list_jobs().unwrap_or_default();
                         let mut exists = false;
                         for job in jobs.iter() {
-                            if job.name == job_name && job.status != "Archived" && job.status != "Done" {
+                            if (job.name == job_name || job.name == legacy_job_name)
+                                && job.status != "Archived"
+                                && job.status != "Done"
+                            {
                                 exists = true;
                                 break;
                             }
                         }
-                        
+
                         if !exists {
                             let new_job = crate::db::Job {
                                 id: None,
@@ -166,14 +194,25 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
     }
 }
 
-fn fail_draft(draft: &mut crate::forms::form_2551q::Form2551QDraft, db: Arc<Mutex<Database>>, error_msg: String) {
-    warn!("Cron: Submission failed for {}: {}", draft.period_code(), error_msg);
+fn fail_draft(
+    draft: &mut crate::forms::form_2551q::Form2551QDraft,
+    db: Arc<Mutex<Database>>,
+    error_msg: String,
+) {
+    warn!(
+        "Cron: Submission failed for {}: {}",
+        draft.period_code(),
+        error_msg
+    );
     draft.submission_attempts += 1;
     draft.last_error = Some(error_msg);
-    
+
     // Exponential backoff up to 5 attempts
     if draft.submission_attempts >= 5 {
-        warn!("Cron: Max attempts reached for {}. Giving up.", draft.period_code());
+        warn!(
+            "Cron: Max attempts reached for {}. Giving up.",
+            draft.period_code()
+        );
         draft.status = FilingStatus::Draft; // Revert to draft
         draft.next_retry_at = None;
     } else {
@@ -183,13 +222,11 @@ fn fail_draft(draft: &mut crate::forms::form_2551q::Form2551QDraft, db: Arc<Mute
         draft.next_retry_at = Some(next_time.to_rfc3339());
         info!("Cron: Next retry scheduled in {} mins", delay_mins);
     }
-    
+
     if let Ok(db_guard) = db.lock() {
         let _ = db_guard.save_2551q_draft(draft);
     }
 }
-
-
 
 async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
     let jobs = {
@@ -265,10 +302,14 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
             if !cmd.trim().is_empty() {
                 if cmd.starts_with("bir_poll_email ") {
                     let email = cmd.trim_start_matches("bir_poll_email ").trim();
-                    let (poll_success, still_pending) = crate::email::fetch_and_process_emails_for_address(email, db.clone());
+                    let (poll_success, still_pending) =
+                        crate::email::fetch_and_process_emails_for_address(email, db.clone());
                     if poll_success {
                         let log = "Email polling completed successfully.".to_string();
-                        info!("Cron: Email polling job '{}' completed successfully.", job.name);
+                        info!(
+                            "Cron: Email polling job '{}' completed successfully.",
+                            job.name
+                        );
                         success = true;
                         job.output_log = Some(log);
                         if !still_pending {
@@ -281,7 +322,12 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
                         job.output_log = Some(log);
                     }
                 } else {
-                    match tokio::process::Command::new("sh").arg("-c").arg(cmd).output().await {
+                    match tokio::process::Command::new("sh")
+                        .arg("-c")
+                        .arg(cmd)
+                        .output()
+                        .await
+                    {
                         Ok(output) => {
                             let stdout_str = String::from_utf8_lossy(&output.stdout);
                             let stderr_str = String::from_utf8_lossy(&output.stderr);
@@ -290,7 +336,10 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
                             if output.status.success() {
                                 info!("Cron: Job '{}' completed successfully.", job.name);
                             } else {
-                                warn!("Cron: Job '{}' failed with code: {:?} stderr: {}", job.name, output.status, stderr_str);
+                                warn!(
+                                    "Cron: Job '{}' failed with code: {:?} stderr: {}",
+                                    job.name, output.status, stderr_str
+                                );
                                 success = false;
                             }
                         }

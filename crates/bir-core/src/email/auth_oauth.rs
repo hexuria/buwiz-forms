@@ -210,7 +210,9 @@ pub fn start_oauth_flow() -> Result<(String, String, String), anyhow::Error> {
             .ok_or_else(|| anyhow::anyhow!("No email found in userinfo response"))?
             .to_string();
         Ok(email)
-    }).join().unwrap_or_else(|_| Err(anyhow::anyhow!("Thread panicked")))?;
+    })
+    .join()
+    .unwrap_or_else(|_| Err(anyhow::anyhow!("Thread panicked")))?;
 
     Ok((email, access_token, refresh_token))
 }
@@ -232,7 +234,9 @@ pub fn get_oauth_email(access_token: &str) -> Result<String, anyhow::Error> {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .ok_or_else(|| anyhow::anyhow!("Could not retrieve email from Google userinfo"))
-    }).join().unwrap_or_else(|_| Err(anyhow::anyhow!("Thread panicked")))
+    })
+    .join()
+    .unwrap_or_else(|_| Err(anyhow::anyhow!("Thread panicked")))
 }
 
 // ── Token Management ─────────────────────────────────────────────────────────
@@ -270,7 +274,9 @@ fn refresh_access_token(refresh_token: &str) -> Result<String, anyhow::Error> {
 
         info!("Refreshed Google OAuth access token successfully");
         Ok(access_token)
-    }).join().unwrap_or_else(|_| Err(anyhow::anyhow!("Thread panicked")))
+    })
+    .join()
+    .unwrap_or_else(|_| Err(anyhow::anyhow!("Thread panicked")))
 }
 
 fn exchange_code_for_tokens(
@@ -323,7 +329,9 @@ fn exchange_code_for_tokens(
             .to_string();
 
         Ok((access_token, refresh_token))
-    }).join().unwrap_or_else(|_| Err(anyhow::anyhow!("Thread panicked")))
+    })
+    .join()
+    .unwrap_or_else(|_| Err(anyhow::anyhow!("Thread panicked")))
 }
 
 // ── PKCE Helpers ─────────────────────────────────────────────────────────────

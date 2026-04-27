@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use super::taxpayer::TaxpayerClass;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InterestRateRule {
@@ -27,25 +27,80 @@ impl PenaltyConfig {
     pub fn default_rules() -> Self {
         Self {
             interest_rates: vec![
-                InterestRateRule { taxpayer_class: TaxpayerClass::Micro, annual_rate: 0.06 },
-                InterestRateRule { taxpayer_class: TaxpayerClass::Small, annual_rate: 0.06 },
-                InterestRateRule { taxpayer_class: TaxpayerClass::Medium, annual_rate: 0.12 },
-                InterestRateRule { taxpayer_class: TaxpayerClass::Large, annual_rate: 0.12 },
-                InterestRateRule { taxpayer_class: TaxpayerClass::Regular, annual_rate: 0.12 },
+                InterestRateRule {
+                    taxpayer_class: TaxpayerClass::Micro,
+                    annual_rate: 0.06,
+                },
+                InterestRateRule {
+                    taxpayer_class: TaxpayerClass::Small,
+                    annual_rate: 0.06,
+                },
+                InterestRateRule {
+                    taxpayer_class: TaxpayerClass::Medium,
+                    annual_rate: 0.12,
+                },
+                InterestRateRule {
+                    taxpayer_class: TaxpayerClass::Large,
+                    annual_rate: 0.12,
+                },
+                InterestRateRule {
+                    taxpayer_class: TaxpayerClass::Regular,
+                    annual_rate: 0.12,
+                },
             ],
             surcharge_rates: vec![
                 // Non-fraud
-                SurchargeRateRule { taxpayer_class: TaxpayerClass::Micro, is_fraud: false, rate: 0.10 },
-                SurchargeRateRule { taxpayer_class: TaxpayerClass::Small, is_fraud: false, rate: 0.10 },
-                SurchargeRateRule { taxpayer_class: TaxpayerClass::Medium, is_fraud: false, rate: 0.25 },
-                SurchargeRateRule { taxpayer_class: TaxpayerClass::Large, is_fraud: false, rate: 0.25 },
-                SurchargeRateRule { taxpayer_class: TaxpayerClass::Regular, is_fraud: false, rate: 0.25 },
+                SurchargeRateRule {
+                    taxpayer_class: TaxpayerClass::Micro,
+                    is_fraud: false,
+                    rate: 0.10,
+                },
+                SurchargeRateRule {
+                    taxpayer_class: TaxpayerClass::Small,
+                    is_fraud: false,
+                    rate: 0.10,
+                },
+                SurchargeRateRule {
+                    taxpayer_class: TaxpayerClass::Medium,
+                    is_fraud: false,
+                    rate: 0.25,
+                },
+                SurchargeRateRule {
+                    taxpayer_class: TaxpayerClass::Large,
+                    is_fraud: false,
+                    rate: 0.25,
+                },
+                SurchargeRateRule {
+                    taxpayer_class: TaxpayerClass::Regular,
+                    is_fraud: false,
+                    rate: 0.25,
+                },
                 // Fraud
-                SurchargeRateRule { taxpayer_class: TaxpayerClass::Micro, is_fraud: true, rate: 0.50 },
-                SurchargeRateRule { taxpayer_class: TaxpayerClass::Small, is_fraud: true, rate: 0.50 },
-                SurchargeRateRule { taxpayer_class: TaxpayerClass::Medium, is_fraud: true, rate: 0.50 },
-                SurchargeRateRule { taxpayer_class: TaxpayerClass::Large, is_fraud: true, rate: 0.50 },
-                SurchargeRateRule { taxpayer_class: TaxpayerClass::Regular, is_fraud: true, rate: 0.50 },
+                SurchargeRateRule {
+                    taxpayer_class: TaxpayerClass::Micro,
+                    is_fraud: true,
+                    rate: 0.50,
+                },
+                SurchargeRateRule {
+                    taxpayer_class: TaxpayerClass::Small,
+                    is_fraud: true,
+                    rate: 0.50,
+                },
+                SurchargeRateRule {
+                    taxpayer_class: TaxpayerClass::Medium,
+                    is_fraud: true,
+                    rate: 0.50,
+                },
+                SurchargeRateRule {
+                    taxpayer_class: TaxpayerClass::Large,
+                    is_fraud: true,
+                    rate: 0.50,
+                },
+                SurchargeRateRule {
+                    taxpayer_class: TaxpayerClass::Regular,
+                    is_fraud: true,
+                    rate: 0.50,
+                },
             ],
         }
     }

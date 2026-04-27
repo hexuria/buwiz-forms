@@ -480,7 +480,7 @@ impl Render for FilterState {
                     .items_center()
                     .gap_1()
                     .px_3()
-                    .py_1p5()
+                    .h_11()
                     .border_1()
                     .border_color(cx.theme().border)
                     .rounded_lg()
@@ -555,7 +555,13 @@ impl Render for FilterState {
                     .on_open_change(cx.listener(|this, open: &bool, _, cx| {
                         this.set_popover_open(*open, cx);
                     }))
-                    .trigger(Button::new("filter-btn").ghost().label("Filters"))
+                    .trigger(
+                        Button::new("filter-btn")
+                            .ghost()
+                            .label("Filters")
+                            .large()
+                            .h_11(),
+                    )
                     .content({
                         let entity = cx.entity().clone();
                         move |_, _, cx| Self::render_popover(&entity, cx).into_any_element()

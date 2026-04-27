@@ -11,3 +11,8 @@ pub use form_2551q::{
 pub use registry::{FORM_REGISTRY, FilingFrequency, FormDefinition, find_form, forms_for_taxpayer};
 
 pub mod form_2551q_xml;
+
+pub trait FormValidator {
+    /// Returns a list of (field_id, error_message)
+    fn validate(&self) -> Vec<(String, String)>;
+}

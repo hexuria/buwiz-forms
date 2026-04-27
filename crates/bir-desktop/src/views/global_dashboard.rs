@@ -2,6 +2,7 @@ use bir_core::db::{BirNotice, Database, TaxDeadline};
 use bir_core::forms::FormDraftSummary;
 use bir_core::profile::TaxpayerProfile;
 use chrono::{Datelike, Local};
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::*;
 use std::sync::{Arc, Mutex};
@@ -35,7 +36,7 @@ pub struct GlobalDashboardView {
 impl EventEmitter<GlobalDashboardEvent> for GlobalDashboardView {}
 
 impl GlobalDashboardView {
-    pub fn new(db: Arc<Mutex<Database>>, _window: &mut Window, cx: &mut Context<'_, Self>) -> Self {
+    pub fn new(db: Arc<Mutex<Database>>, window: &mut Window, cx: &mut Context<'_, Self>) -> Self {
         let (profiles, deadlines, announcements, actionable_forms) = if let Ok(db_lock) = db.lock()
         {
             let profiles = db_lock.list_profiles().unwrap_or_default();
@@ -85,7 +86,7 @@ impl GlobalDashboardView {
         };
 
         let compliance_calendar =
-            cx.new(|cx| crate::components::compliance_calendar::ComplianceCalendar::new(cx));
+            cx.new(|cx| crate::components::compliance_calendar::ComplianceCalendar::new(window, cx));
 
         let mut view = Self {
             db,
@@ -96,6 +97,21 @@ impl GlobalDashboardView {
             is_fetching_news: false,
             compliance_calendar,
         };
+
+        let bus = cx.global::<crate::events::GlobalEventBus>().0.clone();
+        cx.subscribe(
+            &bus,
+            |this: &mut Self, _bus, event: &crate::events::AppEvent, cx| {
+                match event {
+                    crate::events::AppEvent::DatabaseChanged => {
+                        this.reload_actionable_forms(cx);
+                        // Also refresh profiles and other DB-backed info if needed
+                    }
+                }
+            },
+        )
+        .detach();
+
         view.refresh_news(cx);
         view
     }
@@ -139,6 +155,8 @@ impl Render for GlobalDashboardView {
         let now = Local::now().date_naive();
         let year = now.year();
 
+        let is_narrow = window.viewport_size().width < px(768.);
+
         self.compliance_calendar.update(cx, |calendar, _| {
             calendar.set_data(self.deadlines.clone(), self.announcements.clone());
         });
@@ -148,7 +166,8 @@ impl Render for GlobalDashboardView {
             .size_full()
             .flex()
             .flex_col()
-            .p_8()
+            .when(is_narrow, |this| this.p_4())
+            .when(!is_narrow, |this| this.p_8())
             .gap_6()
             .child(
                 div()
@@ -186,7 +205,7 @@ impl Render for GlobalDashboardView {
                         div()
                             .id("left-column")
                             .flex_1()
-                            .min_w(px(500.))
+                            .min_w(px(320.))
                             .pr_2()
                             .flex()
                             .flex_col()
@@ -198,7 +217,7 @@ impl Render for GlobalDashboardView {
                         // Right Column
                         div()
                             .flex_1()
-                            .min_w(px(350.))
+                            .min_w(px(320.))
                             .flex()
                             .flex_col()
                             .gap_6()
@@ -230,9 +249,7 @@ impl GlobalDashboardView {
         let items: Vec<_> = self
             .actionable_forms
             .iter()
-            .filter(|(_, sum)| {
-                sum.status != bir_core::forms::FilingStatus::Paid
-            })
+            .filter(|(_, sum)| sum.status != bir_core::forms::FilingStatus::Paid)
             .map(|(profile_name, sum)| {
                 let (status_text, action_label, is_urgent) = match sum.status {
                     bir_core::forms::FilingStatus::Draft => ("Draft", "Resume", false),
@@ -288,6 +305,8 @@ impl GlobalDashboardView {
             .child(
                 div()
                     .flex()
+                    .flex_wrap()
+                    .gap_2()
                     .justify_between()
                     .items_center()
                     .child(
@@ -566,12 +585,12 @@ impl GlobalDashboardView {
         let form_clone = form.to_string();
         let tooltip_text = action_label.to_string();
 
-        let icon = if action_label == "Check Confirmation" { 
-            "✉" 
+        let icon = if action_label == "Check Confirmation" {
+            "✉"
         } else if action_label == "Upload Receipt" {
             "↑"
-        } else { 
-            "▶" 
+        } else {
+            "▶"
         };
 
         div()
@@ -720,6 +739,8 @@ impl GlobalDashboardView {
             .child(
                 div()
                     .flex()
+                    .flex_wrap()
+                    .gap_2()
                     .justify_between()
                     .items_center()
                     .child(

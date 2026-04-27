@@ -42,6 +42,10 @@ pub struct TaxpayerProfile {
     #[serde(default)]
     pub business_start_date: Option<NaiveDate>,
 
+    /// Soft delete flag. If true, the profile is archived and can be exported/hard-deleted.
+    #[serde(default)]
+    pub is_archived: bool,
+
     // Email Tracking Settings
     /// Master toggle — whether automatic BIR receipt checking is enabled.
     #[serde(default)]

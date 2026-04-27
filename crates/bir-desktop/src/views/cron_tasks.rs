@@ -14,6 +14,57 @@ pub enum CronTasksEvent {
 
 impl EventEmitter<CronTasksEvent> for CronTasksView {}
 
+fn humanize_cron(expr: &str) -> String {
+    let expr = expr.trim();
+    if expr == "0 * * * * *" || expr == "* * * * *" {
+        return "Every minute".to_string();
+    }
+    if let Some(stripped) = expr.strip_prefix("*/") {
+        if stripped.ends_with(" * * * * *") {
+            let num = stripped.trim_end_matches(" * * * * *");
+            return format!("Every {} seconds", num);
+        }
+    }
+    if let Some(stripped) = expr.strip_prefix("0 */") {
+        if stripped.ends_with(" * * * *") {
+            let num = stripped.trim_end_matches(" * * * *");
+            if num == "1" {
+                return "Every minute".to_string();
+            }
+            return format!("Every {} minutes", num);
+        }
+    }
+    if let Some(stripped) = expr.strip_prefix("0 0 */") {
+        if stripped.ends_with(" * * *") {
+            let num = stripped.trim_end_matches(" * * *");
+            if num == "1" {
+                return "Every hour".to_string();
+            }
+            return format!("Every {} hours", num);
+        }
+    }
+    if let Some(stripped) = expr.strip_prefix("0 0 0 */") {
+        if stripped.ends_with(" * *") {
+            let num = stripped.trim_end_matches(" * *");
+            if num == "1" {
+                return "Everyday".to_string();
+            }
+            return format!("Every {} days", num);
+        }
+    }
+    if let Some(stripped) = expr.strip_prefix("0 0 0 1 */") {
+        if stripped.ends_with(" *") {
+            let num = stripped.trim_end_matches(" *");
+            if num == "1" {
+                return "Every month".to_string();
+            }
+            return format!("Every {} months", num);
+        }
+    }
+    // Fallback
+    format!("Frequency: {}", expr)
+}
+
 #[derive(Clone)]
 pub struct JobViewModel {
     pub is_system: bool,
@@ -127,10 +178,15 @@ impl CronTasksView {
             }
             if let Ok(jobs) = db.list_jobs() {
                 for job in jobs {
+                    let mut display_name = job.name.clone();
+                    if display_name.starts_with("Poll Receipts: ") {
+                        let email = display_name.trim_start_matches("Poll Receipts: ");
+                        display_name = format!("Waiting for 2551Q confirmation email for {}", email);
+                    }
                     view_jobs.push(JobViewModel {
                         is_system: false,
                         id: job.id,
-                        name: job.name,
+                        name: display_name,
                         job_type: job.job_type,
                         cron_expr: job.cron_expr,
                         command: job.command,
@@ -373,7 +429,9 @@ impl CronTasksView {
             if let Ok(summaries) = db.list_all_queued_submissions() {
                 if let Some(sum) = summaries.into_iter().find(|s| s.id == db_id) {
                     if sum.form_code == "2551Q" {
-                        if let Ok(Some(mut draft)) = db.get_2551q_draft(&sum.tin, sum.taxable_year, sum.quarter.unwrap_or(0)) {
+                        if let Ok(Some(mut draft)) =
+                            db.get_2551q_draft(&sum.tin, sum.taxable_year, sum.quarter.unwrap_or(0))
+                        {
                             draft.status = bir_core::forms::form_2551q::FilingStatus::Draft;
                             draft.submitted_at = None;
                             draft.confirmed_at = None;
@@ -506,6 +564,7 @@ impl Render for CronTasksView {
                                             })),
                                     ),
                             )
+
                     )
             )
             .child(
@@ -515,57 +574,59 @@ impl Render for CronTasksView {
                     .flex_shrink_0()
                     .gap_4()
                     .mt_4()
-                    .child(div().text_xl().font_weight(FontWeight::BOLD).child("Custom Job Builder"))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_4()
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_row()
-                                    .flex_wrap()
-                                    .gap_2()
-                                    .items_center()
-                                    .child(div().flex_1().min_w(px(200.)).child(Input::new(&self.new_job_name)))
-                                    .child(div().flex_1().min_w(px(200.)).child(Input::new(&self.cron_amount)))
-                                    .child(div().flex_1().min_w(px(200.)).child(Combobox::new(&self.cron_period)))
-                                    .child(div().flex_1().min_w(px(200.)).child(Input::new(&self.new_job_command)))
-                            )
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_row()
-                                    .justify_end()
-                                    .gap_2()
-                                    .child(
-                                        gpui_component::button::Button::new("test_cmd_btn")
-                                            .label("Test Cmd")
-                                            .on_click(cx.listener(|this, _ev, window, cx| {
-                                                this.test_command(window, cx);
-                                            }))
-                                    )
-                                    .child(
-                                        gpui_component::button::Button::new("add_job_btn")
-                                            .label("Add Job")
-                                            .on_click(cx.listener(|this, _ev, window, cx| {
-                                                this.add_job(window, cx);
-                                            }))
-                                    )
-                            )
-                    )
-                    .when_some(self.test_output.clone(), |this, out| {
-                        this.child(
+                    .when(std::env::var("DEVELOPER_MODE").unwrap_or_default() == "true", |this| {
+                        this.child(div().text_xl().font_weight(FontWeight::BOLD).child("Custom Job Builder"))
+                        .child(
                             div()
-                                .p_2()
-                                .bg(cx.theme().muted)
-                                .border_1()
-                                .border_color(cx.theme().border)
-                                .rounded_md()
-                                .text_sm()
-                                .child(out)
+                                .flex()
+                                .flex_col()
+                                .gap_4()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .flex_wrap()
+                                        .gap_2()
+                                        .items_center()
+                                        .child(div().flex_1().min_w(px(200.)).child(Input::new(&self.new_job_name)))
+                                        .child(div().flex_1().min_w(px(200.)).child(Input::new(&self.cron_amount)))
+                                        .child(div().flex_1().min_w(px(200.)).child(Combobox::new(&self.cron_period)))
+                                        .child(div().flex_1().min_w(px(200.)).child(Input::new(&self.new_job_command)))
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .justify_end()
+                                        .gap_2()
+                                        .child(
+                                            gpui_component::button::Button::new("test_cmd_btn")
+                                                .label("Test Cmd")
+                                                .on_click(cx.listener(|this, _ev, window, cx| {
+                                                    this.test_command(window, cx);
+                                                }))
+                                        )
+                                        .child(
+                                            gpui_component::button::Button::new("add_job_btn")
+                                                .label("Add Job")
+                                                .on_click(cx.listener(|this, _ev, window, cx| {
+                                                    this.add_job(window, cx);
+                                                }))
+                                        )
+                                )
                         )
+                        .when_some(self.test_output.clone(), |this, out| {
+                            this.child(
+                                div()
+                                    .p_2()
+                                    .bg(cx.theme().muted)
+                                    .border_1()
+                                    .border_color(cx.theme().border)
+                                    .rounded_md()
+                                    .text_sm()
+                                    .child(out)
+                            )
+                        })
                     })
             )
             .child(
@@ -664,7 +725,12 @@ impl Render for CronTasksView {
                                             .child(if is_system {
                                                 "Managed by System Daemon (Automatic Backoff)".to_string()
                                             } else {
-                                                format!("Cron: {} | Cmd: {}", job.cron_expr.clone().unwrap_or_else(|| "One-off".to_string()), job.command.clone().unwrap_or_else(|| "None".to_string()))
+                                                let cron_str = job.cron_expr.clone().unwrap_or_default();
+                                                if cron_str.is_empty() {
+                                                    "One-off".to_string()
+                                                } else {
+                                                    humanize_cron(&cron_str)
+                                                }
                                             })
                                     )
                                     .child(

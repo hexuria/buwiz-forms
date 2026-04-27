@@ -53,7 +53,7 @@ impl Render for SmartDateFilterState {
                     .items_center()
                     .gap_2()
                     .px_3()
-                    .py_1p5()
+                    .h_11()
                     .rounded_lg()
                     .border_1()
                     .border_color(cx.theme().border)

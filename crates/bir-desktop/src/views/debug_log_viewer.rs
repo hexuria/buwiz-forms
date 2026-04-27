@@ -1,6 +1,6 @@
 use gpui::*;
-use gpui_component::scroll::ScrollableElement;
 use gpui_component::ActiveTheme;
+use gpui_component::scroll::ScrollableElement;
 
 pub struct DebugLogViewerView {
     job_name: String,
@@ -9,10 +9,7 @@ pub struct DebugLogViewerView {
 
 impl DebugLogViewerView {
     pub fn new(job_name: String, log_text: String) -> Self {
-        Self {
-            job_name,
-            log_text,
-        }
+        Self { job_name, log_text }
     }
 }
 
@@ -36,17 +33,13 @@ impl Render for DebugLogViewerView {
                     .border_color(cx.theme().border)
                     .bg(cx.theme().background)
                     .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .text_lg()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(cx.theme().foreground)
-                                    .child(format!("Debug Log: {}", self.job_name)),
-                            ),
+                        div().flex().items_center().gap_3().child(
+                            div()
+                                .text_lg()
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(cx.theme().foreground)
+                                .child(format!("Debug Log: {}", self.job_name)),
+                        ),
                     ),
             )
             .child(

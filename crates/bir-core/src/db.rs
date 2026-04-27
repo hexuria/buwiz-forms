@@ -187,6 +187,10 @@ pub enum DbError {
     Encryption,
     #[error("Keychain CLI error: {0}")]
     KeychainCli(String),
+    #[error("Zip error: {0}")]
+    Zip(#[from] zip::result::ZipError),
+    #[error("Other error: {0}")]
+    Other(String),
 }
 
 pub struct Database {
@@ -426,11 +430,24 @@ impl Database {
             )",
             [],
         )?;
-        
+
         // Silent migration for existing users
-        let _ = conn.execute("ALTER TABLE job_queue ADD COLUMN job_type TEXT NOT NULL DEFAULT 'Custom'", []);
+        let _ = conn.execute(
+            "CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE job_queue ADD COLUMN job_type TEXT NOT NULL DEFAULT 'Custom'",
+            [],
+        );
         let _ = conn.execute("ALTER TABLE job_queue ADD COLUMN output_log TEXT", []);
-        let _ = conn.execute("ALTER TABLE submission_receipts ADD COLUMN raw_html TEXT", []);
+        let _ = conn.execute(
+            "ALTER TABLE submission_receipts ADD COLUMN raw_html TEXT",
+            [],
+        );
 
         Ok(Self { conn })
     }
@@ -452,7 +469,14 @@ impl Database {
 
         // Try to get from keychain
         let output = Command::new("security")
-            .args(["find-generic-password", "-s", "com.ebir.rust", "-a", "sqlcipher_master_key", "-w"])
+            .args([
+                "find-generic-password",
+                "-s",
+                "com.ebir.rust",
+                "-a",
+                "sqlcipher_master_key",
+                "-w",
+            ])
             .output()?;
 
         if output.status.success() {
@@ -472,33 +496,50 @@ impl Database {
         let add_output = Command::new("security")
             .args([
                 "add-generic-password",
-                "-a", "sqlcipher_master_key",
-                "-s", "com.ebir.rust",
-                "-w", &hex_key,
-                "-A"
+                "-a",
+                "sqlcipher_master_key",
+                "-s",
+                "com.ebir.rust",
+                "-w",
+                &hex_key,
+                "-A",
             ])
             .output()?;
 
         if !add_output.status.success() {
-            warn!("Failed to add generic password to macOS keychain. Attempting to delete existing and retry.");
+            warn!(
+                "Failed to add generic password to macOS keychain. Attempting to delete existing and retry."
+            );
             // If it failed, it might be because a restricted item already exists. Try deleting it first.
             let _ = Command::new("security")
-                .args(["delete-generic-password", "-a", "sqlcipher_master_key", "-s", "com.ebir.rust"])
+                .args([
+                    "delete-generic-password",
+                    "-a",
+                    "sqlcipher_master_key",
+                    "-s",
+                    "com.ebir.rust",
+                ])
                 .output();
 
             let retry_output = Command::new("security")
                 .args([
                     "add-generic-password",
-                    "-a", "sqlcipher_master_key",
-                    "-s", "com.ebir.rust",
-                    "-w", &hex_key,
-                    "-A"
+                    "-a",
+                    "sqlcipher_master_key",
+                    "-s",
+                    "com.ebir.rust",
+                    "-w",
+                    &hex_key,
+                    "-A",
                 ])
                 .output()?;
-            
+
             if !retry_output.status.success() {
                 let err_msg = String::from_utf8_lossy(&retry_output.stderr);
-                return Err(DbError::KeychainCli(format!("Failed to save key to keychain: {}", err_msg)));
+                return Err(DbError::KeychainCli(format!(
+                    "Failed to save key to keychain: {}",
+                    err_msg
+                )));
             }
         }
 
@@ -601,6 +642,47 @@ impl Database {
                 info!("Cleaned up old backup: {}", entry.path().display());
             }
         }
+    }
+
+    /// Factory Reset: Deletes all data from the database.
+    pub fn factory_reset(&self) -> Result<(), DbError> {
+        self.conn.execute_batch(
+            "DELETE FROM tax_deadlines;
+             DELETE FROM announcements;
+             DELETE FROM bir_notices;
+             DELETE FROM penalties_cache;
+             DELETE FROM profiles;
+             DELETE FROM submissions;
+             DELETE FROM form_drafts;
+             DELETE FROM submission_receipts;
+             DELETE FROM job_queue;",
+        )?;
+        // Also vacuum to reclaim space and shrink file
+        self.conn.execute_batch("VACUUM;")?;
+        Ok(())
+    }
+
+    /// Retrieve a global setting value by key.
+    pub fn get_setting(&self, key: &str) -> Result<Option<String>, DbError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT value FROM settings WHERE key = ?1")?;
+        let mut rows = stmt.query(params![key])?;
+        if let Some(row) = rows.next()? {
+            Ok(Some(row.get(0)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Set a global setting value.
+    pub fn set_setting(&self, key: &str, value: &str) -> Result<(), DbError> {
+        self.conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = ?2",
+            params![key, value],
+        )?;
+        Ok(())
     }
 
     /// Saves a taxpayer profile (insert or replace).
@@ -706,9 +788,11 @@ impl Database {
                 params![job.name, job.job_type, job.cron_expr, job.command, job.status, job.retries, job.last_run_at, job.next_run_at, job.output_log],
             )?;
             job.id = Some(self.conn.last_insert_rowid());
-            
+
             // Re-fetch to get the created_at timestamp
-            let mut stmt = self.conn.prepare("SELECT created_at FROM job_queue WHERE id = ?1")?;
+            let mut stmt = self
+                .conn
+                .prepare("SELECT created_at FROM job_queue WHERE id = ?1")?;
             if let Ok(mut rows) = stmt.query(params![job.id]) {
                 if let Ok(Some(row)) = rows.next() {
                     job.created_at = row.get(0).unwrap_or_default();
@@ -743,12 +827,14 @@ impl Database {
     }
 
     pub fn delete_job(&self, id: i64) -> Result<(), DbError> {
-        self.conn.execute("DELETE FROM job_queue WHERE id = ?1", params![id])?;
+        self.conn
+            .execute("DELETE FROM job_queue WHERE id = ?1", params![id])?;
         Ok(())
     }
 
     pub fn delete_archived_jobs(&self) -> Result<(), DbError> {
-        self.conn.execute("DELETE FROM job_queue WHERE status = 'Archived'", [])?;
+        self.conn
+            .execute("DELETE FROM job_queue WHERE status = 'Archived'", [])?;
         Ok(())
     }
 
@@ -1038,7 +1124,9 @@ impl Database {
         let received_time_str = receipt.time_received.format("%H:%M:%S").to_string();
 
         if let Some(existing) = self.get_submission_receipt_by_filename(&receipt.filename)? {
-            if existing.received_date == received_date_str && existing.received_time == received_time_str {
+            if existing.received_date == received_date_str
+                && existing.received_time == received_time_str
+            {
                 // It's the exact same receipt we already processed. Return false for is_new.
                 return Ok((existing, false));
             }
@@ -1151,12 +1239,20 @@ impl Database {
         if let Some(submitted_at) = &draft.submitted_at {
             if let Ok(submitted_dt) = chrono::DateTime::parse_from_rfc3339(submitted_at) {
                 let date_str = format!("{}T{}", receipt.received_date, receipt.received_time);
-                if let Ok(receipt_naive) = chrono::NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%dT%H:%M:%S") {
+                if let Ok(receipt_naive) =
+                    chrono::NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%dT%H:%M:%S")
+                {
                     if let Some(offset) = chrono::FixedOffset::east_opt(8 * 3600) {
                         use chrono::TimeZone;
-                        if let chrono::LocalResult::Single(receipt_dt) = offset.from_local_datetime(&receipt_naive) {
+                        if let chrono::LocalResult::Single(receipt_dt) =
+                            offset.from_local_datetime(&receipt_naive)
+                        {
                             if receipt_dt + chrono::Duration::minutes(5) < submitted_dt {
-                                tracing::info!("Ignoring old receipt {} for draft submitted at {}", receipt.filename, submitted_dt);
+                                tracing::info!(
+                                    "Ignoring old receipt {} for draft submitted at {}",
+                                    receipt.filename,
+                                    submitted_dt
+                                );
                                 return Ok(());
                             }
                         }
@@ -1396,6 +1492,18 @@ mod tests {
             rdo_code: "039".into(),
             line_of_business: "Software".into(),
             registered_address: "QC".into(),
+            is_archived: false,
+            email_tracking_enabled: false,
+            email_auth_method: crate::profile::EmailAuthMethod::AppPassword,
+            imap_email: None,
+            imap_host: None,
+            _imap_enabled_compat: None,
+            background_cron_enabled: true,
+            test_notification_enabled: false,
+            error_telemetry_enabled: false,
+            imap_app_password: None,
+            oauth_access_token: None,
+            oauth_refresh_token: None,
             zip_code: "1103".into(),
             phone: "0999".into(),
             email: "miley@example.com".into(),
@@ -1403,16 +1511,6 @@ mod tests {
             taxpayer_type: crate::profile::TaxpayerType::Individual,
             is_vat_registered: false,
             business_start_date: None,
-            email_tracking_enabled: false,
-            email_auth_method: Default::default(),
-            imap_email: None,
-            imap_host: None,
-            _imap_enabled_compat: None,
-            background_cron_enabled: true,
-            test_notification_enabled: false,
-            imap_app_password: None,
-            oauth_access_token: None,
-            oauth_refresh_token: None,
         };
 
         db.save_profile(profile).expect("Failed to save profile");

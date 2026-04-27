@@ -29,3 +29,4 @@ chrono = { workspace = true }
 rfd = "0.17.2"
 open = "5.3.4"
 directories = "6.0.0"
+zip = "2"
