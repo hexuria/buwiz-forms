@@ -78,7 +78,7 @@ impl Render for ReceiptViewerView {
             })
             .unwrap_or_else(|| div().into_any_element());
 
-        let is_pdf = self.path.extension().map_or(false, |ext| {
+        let is_pdf = self.path.extension().is_some_and(|ext| {
             ext.to_string_lossy().eq_ignore_ascii_case("pdf")
         });
 

@@ -73,8 +73,8 @@ impl Mapper2551Q {
     /// and taxpayer profile.
     fn resolve_atc_code(source: &IncomeSource) -> &'static str {
         // If the source has an explicit override, validate and use it
-        if let Some(ref override_code) = source.atc_code_override {
-            if find_atc(override_code).is_some() {
+        if let Some(ref override_code) = source.atc_code_override
+            && find_atc(override_code).is_some() {
                 // We can't return a reference to a String field, so we match
                 // against known codes. For unknown overrides, fall through.
                 return match override_code.as_str() {
@@ -95,7 +95,6 @@ impl Mapper2551Q {
                     _ => "PT010", // Unknown override — fall back to default
                 };
             }
-        }
 
         // Auto-detect based on income category
         match source.category {
@@ -200,11 +199,10 @@ pub fn resolve_mappers(payload: &UniversalTaxPayload) -> Vec<Box<dyn FormMapper>
     let mut mappers: Vec<Box<dyn FormMapper>> = Vec::new();
 
     if let Some(ref target) = payload.target_form {
-        match target.as_str() {
-            "2551Q" => mappers.push(Box::new(Mapper2551Q)),
+        if target.as_str() == "2551Q" {
+            mappers.push(Box::new(Mapper2551Q));
             // Future: "1701Q" => mappers.push(Box::new(Mapper1701Q)),
-            _ => {} // Unknown form — returns empty, caller handles the error
-        }
+        } // Unknown form — returns empty, caller handles the error
     } else {
         // Auto-detect: check if any income sources are percentage-tax eligible
         let has_percentage_tax_income = payload.income_sources.iter().any(|s| {

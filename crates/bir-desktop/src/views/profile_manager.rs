@@ -519,8 +519,8 @@ impl ProfileManagerView {
         // Gate: Duplicate TIN check (defense in depth — also checked reactively)
         if self.editing_id.is_none() {
             let tin_str = profile.tin.full();
-            if let Ok(db) = self.db.lock() {
-                if let Ok(Some(_)) = db.get_profile(&tin_str) {
+            if let Ok(db) = self.db.lock()
+                && let Ok(Some(_)) = db.get_profile(&tin_str) {
                     self.tin_duplicate_error = Some(format!(
                         "A profile with TIN {} already exists.",
                         profile.tin.formatted()
@@ -530,7 +530,6 @@ impl ProfileManagerView {
                         "This TIN is already registered to another profile.",
                     ));
                 }
-            }
         }
 
         if !self
@@ -625,9 +624,9 @@ impl ProfileManagerView {
                 .background_executor()
                 .spawn(async move {
                     if let Ok(db) = db_arc.lock() {
-                        let res = db.save_profile(profile).map_err(|e| e.to_string());
+                        
 
-                        res
+                        db.save_profile(profile).map_err(|e| e.to_string())
                     } else {
                         Err("Database lock is poisoned".to_string())
                     }
@@ -1292,16 +1291,14 @@ impl Render for ProfileManagerView {
                                                                                                     this.connection_test_message = Some((true, format!("Google account connected successfully for {}.", email)));
                                                                                                     
                                                                                                     // If profile is already saved, persist tokens to DB immediately
-                                                                                                    if let Some(id) = editing_id {
-                                                                                                        if let Ok(db) = this.db.lock() {
-                                                                                                            if let Ok(Some(mut profile)) = db.get_profile(&id.to_string()) {
+                                                                                                    if let Some(id) = editing_id
+                                                                                                        && let Ok(db) = this.db.lock()
+                                                                                                            && let Ok(Some(mut profile)) = db.get_profile(&id.to_string()) {
                                                                                                                 profile.email = email;
                                                                                                                 profile.oauth_access_token = Some(access_token);
                                                                                                                 profile.oauth_refresh_token = Some(refresh_token);
                                                                                                                 let _ = db.save_profile(profile);
                                                                                                             }
-                                                                                                        }
-                                                                                                    }
                                                                                                     // For unsaved profiles, tokens are stored in memory and
                                                                                                     // will be persisted when the profile is saved via current_profile()
                                                                                                 }
@@ -1385,14 +1382,12 @@ impl Render for ProfileManagerView {
                                                                                         // If token refreshed, save it
                                                                                         if let Some(token) = new_access_token {
                                                                                             this.stored_oauth_access_token = Some(token.clone());
-                                                                                            if let Ok(db) = this.db.lock() {
-                                                                                                if let Some(id) = this.editing_id {
-                                                                                                    if let Ok(Some(mut prof)) = db.get_profile(&id.to_string()) {
+                                                                                            if let Ok(db) = this.db.lock()
+                                                                                                && let Some(id) = this.editing_id
+                                                                                                    && let Ok(Some(mut prof)) = db.get_profile(&id.to_string()) {
                                                                                                         prof.oauth_access_token = Some(token);
                                                                                                         let _ = db.save_profile(prof);
                                                                                                     }
-                                                                                                }
-                                                                                            }
                                                                                         }
                                                                                     }
                                                                                     Err(e) => {
@@ -1580,7 +1575,7 @@ impl Render for ProfileManagerView {
                                                         Ok(Ok(path)) => {
                                                             rfd::AsyncMessageDialog::new()
                                                                 .set_title("Profile Exported")
-                                                                .set_description(&format!("Saved to {}", path.display()))
+                                                                .set_description(format!("Saved to {}", path.display()))
                                                                 .show()
                                                                 .await;
                                                         }

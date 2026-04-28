@@ -66,22 +66,19 @@ impl SettingsView {
         cx.subscribe_in(
             &setup_otp,
             window,
-            |this: &mut Self, _entity, event: &InputEvent, _window, cx| match event {
-                InputEvent::Change => {
-                    let pin = this.setup_otp.read(cx).value().to_string();
-                    if pin.len() == 4 {
-                        let hashed = bir_core::crypto::hash_pin(&pin);
+            |this: &mut Self, _entity, event: &InputEvent, _window, cx| if let InputEvent::Change = event {
+                let pin = this.setup_otp.read(cx).value().to_string();
+                if pin.len() == 4 {
+                    let hashed = bir_core::crypto::hash_pin(&pin);
 
-                        if let Ok(db_guard) = this.db.lock() {
-                            let _ = db_guard.set_setting("app_lock_pin_hash", &hashed);
-                            let _ = db_guard.set_setting("app_lock_enabled", "true");
-                        }
-                        this.is_app_lock_enabled = true;
-                        this.show_pin_setup = false;
-                        cx.notify();
+                    if let Ok(db_guard) = this.db.lock() {
+                        let _ = db_guard.set_setting("app_lock_pin_hash", &hashed);
+                        let _ = db_guard.set_setting("app_lock_enabled", "true");
                     }
+                    this.is_app_lock_enabled = true;
+                    this.show_pin_setup = false;
+                    cx.notify();
                 }
-                _ => {}
             },
         )
         .detach();
@@ -356,7 +353,7 @@ impl Render for SettingsView {
                                                         Ok(Ok(path)) => {
                                                             rfd::AsyncMessageDialog::new()
                                                                 .set_title("Database Exported")
-                                                                .set_description(&format!("Saved to {}", path.display()))
+                                                                .set_description(format!("Saved to {}", path.display()))
                                                                 .show()
                                                                 .await;
                                                         }
@@ -406,7 +403,7 @@ impl Render for SettingsView {
                                                         Ok(Ok(path)) => {
                                                             rfd::AsyncMessageDialog::new()
                                                                 .set_title("Profiles Exported")
-                                                                .set_description(&format!("Saved to {}", path.display()))
+                                                                .set_description(format!("Saved to {}", path.display()))
                                                                 .show()
                                                                 .await;
                                                         }
@@ -489,7 +486,7 @@ impl Render for SettingsView {
                                                         Ok(Ok(path)) => {
                                                             let continue_reset = rfd::AsyncMessageDialog::new()
                                                                 .set_title("Backup Successful")
-                                                                .set_description(&format!("Backup saved to {}. Proceed with Factory Reset?", path.display()))
+                                                                .set_description(format!("Backup saved to {}. Proceed with Factory Reset?", path.display()))
                                                                 .set_buttons(rfd::MessageButtons::OkCancel)
                                                                 .show()
                                                                 .await;
@@ -498,7 +495,7 @@ impl Render for SettingsView {
                                                         Ok(Err(e)) => {
                                                             rfd::AsyncMessageDialog::new()
                                                                 .set_title("Backup Failed")
-                                                                .set_description(&format!("Backup failed: {}. Factory Reset cancelled.", e))
+                                                                .set_description(format!("Backup failed: {}. Factory Reset cancelled.", e))
                                                                 .show()
                                                                 .await;
                                                             false

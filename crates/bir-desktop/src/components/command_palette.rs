@@ -33,13 +33,10 @@ impl ListDelegate for ProfileListDelegate {
         match section {
             0 => self.active_items.len(),
             1 => self.archived_items.len(),
-            2 => {
-                if self.create_query.is_some() {
+            2
+                if self.create_query.is_some() => {
                     1
-                } else {
-                    0
                 }
-            }
             _ => 0,
         }
     }
@@ -90,8 +87,8 @@ impl ListDelegate for ProfileListDelegate {
             gpui::rgba(0x00000000).into()
         };
 
-        if ix.section == 2 {
-            if let Some(query) = &self.create_query {
+        if ix.section == 2
+            && let Some(query) = &self.create_query {
                 return Some(
                     ListItem::new(ix)
                         .bg(bg_color)
@@ -122,7 +119,6 @@ impl ListDelegate for ProfileListDelegate {
                         .selected(selected),
                 );
             }
-        }
 
         let profile = if ix.section == 0 {
             self.active_items.get(ix.row)

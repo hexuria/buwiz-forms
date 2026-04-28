@@ -329,6 +329,7 @@ impl GlobalDashboardView {
     }
 
     /// Table layout for wider viewports.
+    #[allow(clippy::type_complexity)]
     fn render_action_table(
         &self,
         items: &[(&str, &str, &str, u16, Option<u8>, &str, &str, bool)],
@@ -378,6 +379,7 @@ impl GlobalDashboardView {
     }
 
     /// Card layout for narrow viewports.
+    #[allow(clippy::type_complexity)]
     fn render_action_cards(
         &self,
         items: &[(&str, &str, &str, u16, Option<u8>, &str, &str, bool)],
@@ -401,6 +403,7 @@ impl GlobalDashboardView {
     }
 
     /// Single table row for the action required table.
+    #[allow(clippy::too_many_arguments)]
     fn action_table_row(
         profile: &str,
         tin: &str,
@@ -482,6 +485,7 @@ impl GlobalDashboardView {
     }
 
     /// Single card for narrow viewport.
+    #[allow(clippy::too_many_arguments)]
     fn action_card(
         profile: &str,
         tin: &str,
@@ -690,7 +694,7 @@ impl GlobalDashboardView {
                 bir_core::email::fetch_and_process_emails(&profile, db_clone)
             }).await;
 
-            let _ = cx.update(|cx| {
+            cx.update(|cx| {
                 if let Some(this) = this.upgrade() {
                     this.update(cx, |this, cx| {
                         match result {

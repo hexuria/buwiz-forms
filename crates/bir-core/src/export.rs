@@ -67,10 +67,8 @@ fn write_profile_to_zip<W: Write + std::io::Seek>(
         }))
     })?;
     let mut drafts = Vec::new();
-    for draft in drafts_iter {
-        if let Ok(d) = draft {
-            drafts.push(d);
-        }
+    for d in drafts_iter.flatten() {
+        drafts.push(d);
     }
     let drafts_json = serde_json::to_string_pretty(&drafts)?;
     zip.start_file(format!("{}drafts.json", base_dir), options)?;

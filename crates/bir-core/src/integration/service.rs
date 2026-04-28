@@ -107,11 +107,10 @@ pub fn process_sync(
     }
 
     // ── Step 3: Check form applicability ─────────────────────────────
-    if let Some(ref target_form) = payload.target_form {
-        if let Some(err) = validate_form_applicability(target_form, &profile) {
+    if let Some(ref target_form) = payload.target_form
+        && let Some(err) = validate_form_applicability(target_form, &profile) {
             return Err(SyncError::FormNotApplicable(err.message));
         }
-    }
 
     // ── Step 4: Resolve mappers ──────────────────────────────────────
     let mappers = resolve_mappers(payload);

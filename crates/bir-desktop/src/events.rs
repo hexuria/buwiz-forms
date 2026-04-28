@@ -37,20 +37,19 @@ pub fn start_db_watcher(db: Arc<Mutex<Database>>, cx: &mut gpui::Context<crate::
                 continue;
             };
 
-            if let Some(lv) = last_version {
-                if lv != current_version {
+            if let Some(lv) = last_version
+                && lv != current_version {
                     tracing::info!(
                         "Database Watcher: External DB change detected (v{} -> v{})",
                         lv,
                         current_version
                     );
-                    let _ = cx.update(|cx| {
+                    cx.update(|cx| {
                         bus.update(cx, |_, cx| {
                             cx.emit(AppEvent::DatabaseChanged);
                         })
                     });
                 }
-            }
             last_version = Some(current_version);
         }
     })

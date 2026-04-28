@@ -104,7 +104,7 @@ pub fn parse_period_code(period_code: &str) -> (u16, Option<u8>, Option<u8>) {
 
         let mut quarter = None;
         if period_code.len() > 6 && period_code.contains('Q') {
-            let q_part = period_code.split('Q').last().unwrap_or("");
+            let q_part = period_code.split('Q').next_back().unwrap_or("");
             quarter = q_part.parse().ok();
         }
 

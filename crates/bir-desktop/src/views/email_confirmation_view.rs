@@ -195,11 +195,13 @@ impl Render for EmailConfirmationView {
                                                 },
                                             });
 
-                                            let mut text_style = gpui_component::text::TextViewStyle::default();
-                                            text_style.highlight_theme = highlight_theme;
-                                            text_style.code_block = gpui::StyleRefinement::default()
-                                                .bg(gpui::transparent_black())
-                                                .text_color(cx.theme().foreground);
+                                            let text_style = gpui_component::text::TextViewStyle {
+                                                highlight_theme,
+                                                code_block: gpui::StyleRefinement::default()
+                                                    .bg(gpui::transparent_black())
+                                                    .text_color(cx.theme().foreground),
+                                                ..Default::default()
+                                            };
 
                                             div()
                                                 .text_sm()

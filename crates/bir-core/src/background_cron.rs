@@ -99,13 +99,11 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
         };
 
         // Check if we should retry now
-        if let Some(next_retry) = &draft.next_retry_at {
-            if let Ok(next_time) = chrono::DateTime::parse_from_rfc3339(next_retry) {
-                if Utc::now() < next_time.with_timezone(&Utc) {
+        if let Some(next_retry) = &draft.next_retry_at
+            && let Ok(next_time) = chrono::DateTime::parse_from_rfc3339(next_retry)
+                && Utc::now() < next_time.with_timezone(&Utc) {
                     continue; // not time yet
                 }
-            }
-        }
 
         info!(
             "Cron: Attempting to submit queued form {} for {}",
@@ -245,8 +243,8 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
 
     for mut job in jobs {
         // Self-heal legacy bad cron strings
-        if let Some(ref mut expr) = job.cron_expr {
-            if expr.trim() == "* * * * *" {
+        if let Some(ref mut expr) = job.cron_expr
+            && expr.trim() == "* * * * *" {
                 *expr = "0 * * * * *".to_string();
                 if job.status == "Failed" {
                     job.status = "Queued".to_string();
@@ -255,7 +253,6 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
                     let _ = db_guard.save_job(job.clone());
                 }
             }
-        }
 
         let should_run = if let Some(ref next_run_str) = job.next_run_at {
             if let Ok(next_time) = chrono::DateTime::parse_from_rfc3339(next_run_str) {
@@ -269,14 +266,13 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
                 if let Some(ref expr) = job.cron_expr {
                     if !expr.trim().is_empty() {
                         // Initialize next run time
-                        if let Ok(schedule) = cron::Schedule::from_str(expr) {
-                            if let Some(next_run) = schedule.upcoming(Utc).next() {
+                        if let Ok(schedule) = cron::Schedule::from_str(expr)
+                            && let Some(next_run) = schedule.upcoming(Utc).next() {
                                 job.next_run_at = Some(next_run.to_rfc3339());
                                 if let Ok(db_guard) = db.lock() {
                                     let _ = db_guard.save_job(job.clone());
                                 }
                             }
-                        }
                         false // Wait for scheduled time
                     } else {
                         true // One-off job, run now
@@ -302,8 +298,8 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
         info!("Cron: Executing job '{}'", job.name);
         let mut success = true;
 
-        if let Some(ref cmd) = job.command {
-            if !cmd.trim().is_empty() {
+        if let Some(ref cmd) = job.command
+            && !cmd.trim().is_empty() {
                 if cmd.starts_with("bir_poll_email ") {
                     let email = cmd.trim_start_matches("bir_poll_email ").trim();
                     let (poll_success, still_pending, err_msg) =
@@ -352,7 +348,6 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
                     }
                 }
             }
-        }
 
         job.last_run_at = Some(now.to_rfc3339());
 

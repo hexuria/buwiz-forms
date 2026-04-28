@@ -178,7 +178,7 @@ impl DashboardView {
                 "Draft",
             ),
             QuarterState::NotStarted => (
-                gpui::transparent_black().into(),
+                gpui::transparent_black(),
                 cx.theme().border,
                 cx.theme().muted_foreground,
                 "+",

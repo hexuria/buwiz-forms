@@ -117,7 +117,7 @@ impl NoticeSourceKind {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
+    pub fn from_string(s: &str) -> Self {
         match s {
             "BirCms" => NoticeSourceKind::BirCms,
             "Manual" => NoticeSourceKind::Manual,
@@ -149,7 +149,7 @@ impl NoticeType {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
+    pub fn from_string(s: &str) -> Self {
         match s {
             "EbirFormsVersion" => NoticeType::EbirFormsVersion,
             "Deadline" => NoticeType::Deadline,
@@ -696,11 +696,10 @@ impl Database {
             let mut stmt = self
                 .conn
                 .prepare("SELECT created_at FROM job_queue WHERE id = ?1")?;
-            if let Ok(mut rows) = stmt.query(params![job.id]) {
-                if let Ok(Some(row)) = rows.next() {
+            if let Ok(mut rows) = stmt.query(params![job.id])
+                && let Ok(Some(row)) = rows.next() {
                     job.created_at = row.get(0).unwrap_or_default();
                 }
-            }
         }
         Ok(job)
     }
@@ -1026,14 +1025,13 @@ impl Database {
         let received_date_str = receipt.date_received.to_string();
         let received_time_str = receipt.time_received.format("%H:%M:%S").to_string();
 
-        if let Some(existing) = self.get_submission_receipt_by_filename(&receipt.filename)? {
-            if existing.received_date == received_date_str
+        if let Some(existing) = self.get_submission_receipt_by_filename(&receipt.filename)?
+            && existing.received_date == received_date_str
                 && existing.received_time == received_time_str
             {
                 // It's the exact same receipt we already processed. Return false for is_new.
                 return Ok((existing, false));
             }
-        }
 
         self.conn.execute(
             "INSERT INTO submission_receipts
@@ -1139,18 +1137,16 @@ impl Database {
             None => return Ok(()),
         };
 
-        if let Some(submitted_at) = &draft.submitted_at {
-            if let Ok(submitted_dt) = chrono::DateTime::parse_from_rfc3339(submitted_at) {
+        if let Some(submitted_at) = &draft.submitted_at
+            && let Ok(submitted_dt) = chrono::DateTime::parse_from_rfc3339(submitted_at) {
                 let date_str = format!("{}T{}", receipt.received_date, receipt.received_time);
                 if let Ok(receipt_naive) =
                     chrono::NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%dT%H:%M:%S")
-                {
-                    if let Some(offset) = chrono::FixedOffset::east_opt(8 * 3600) {
+                    && let Some(offset) = chrono::FixedOffset::east_opt(8 * 3600) {
                         use chrono::TimeZone;
                         if let chrono::LocalResult::Single(receipt_dt) =
                             offset.from_local_datetime(&receipt_naive)
-                        {
-                            if receipt_dt + chrono::Duration::minutes(5) < submitted_dt {
+                            && receipt_dt + chrono::Duration::minutes(5) < submitted_dt {
                                 tracing::info!(
                                     "Ignoring old receipt {} for draft submitted at {}",
                                     receipt.filename,
@@ -1158,11 +1154,8 @@ impl Database {
                                 );
                                 return Ok(());
                             }
-                        }
                     }
-                }
             }
-        }
 
         draft.status = FilingStatus::Confirmed;
         draft.confirmed_at = Some(format!(
@@ -1256,11 +1249,11 @@ impl Database {
                     id: row.get(0)?,
                     external_id: row.get(1)?,
                     source: row.get(2)?,
-                    source_kind: NoticeSourceKind::from_str(&kind_str),
+                    source_kind: NoticeSourceKind::from_string(&kind_str),
                     source_url: row.get(4)?,
                     title: row.get(5)?,
                     body: row.get(6)?,
-                    notice_type: NoticeType::from_str(&type_str),
+                    notice_type: NoticeType::from_string(&type_str),
                     rdo_code: row.get(8)?,
                     form_code: row.get(9)?,
                     deadline: row.get(10)?,

@@ -77,14 +77,13 @@ pub fn validate_payload(payload: &UniversalTaxPayload) -> Vec<PayloadValidationE
                 "Gross amount must be non-negative",
             ));
         }
-        if let Some(rate) = source.tax_rate_override {
-            if rate < 0.0 || rate > 1.0 {
+        if let Some(rate) = source.tax_rate_override
+            && (!(0.0..=1.0).contains(&rate)) {
                 errors.push(PayloadValidationError::new(
                     format!("income_sources[{i}].tax_rate_override"),
                     "Tax rate override must be between 0.0 and 1.0",
                 ));
             }
-        }
     }
 
     if payload.creditable_withholdings < 0.0 {

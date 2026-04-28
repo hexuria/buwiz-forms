@@ -64,6 +64,7 @@ impl AssetSource for Assets {
 }
 
 fn main() {
+    dotenvy::dotenv().ok();
     let current_exe = std::env::current_exe().unwrap_or_default();
     let is_app_bundle = current_exe.to_string_lossy().contains("Contents/MacOS");
     let assets_dir = if is_app_bundle {

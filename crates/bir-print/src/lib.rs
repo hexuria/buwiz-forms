@@ -245,7 +245,7 @@ pub fn write_2551q_pdf(
         .map(Path::to_path_buf)
         .unwrap_or_else(bir_core::platform::temp_dir);
     let result = render_2551q_print(draft, &output_dir)
-        .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err.to_string()))?;
+        .map_err(|err| std::io::Error::other(err.to_string()))?;
 
     if result.pdf_path != output_path {
         fs::copy(&result.pdf_path, &output_path)?;

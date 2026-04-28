@@ -567,10 +567,8 @@ impl ComplianceCalendar {
                         }
 
                         let days_until = (adjusted_deadline - today).num_days();
-                        let dot_color: gpui::Hsla = if days_until < 0 {
-                            gpui::rgba(0xef4444ff).into() // Missed
-                        } else if days_until <= 1 {
-                            gpui::rgba(0xef4444ff).into() // Urgent
+                        let dot_color: gpui::Hsla = if days_until <= 1 {
+                            gpui::rgba(0xef4444ff).into() // Missed or Urgent
                         } else if days_until < 7 {
                             gpui::rgba(0xf97316ff).into() // Warning (Orange)
                         } else {

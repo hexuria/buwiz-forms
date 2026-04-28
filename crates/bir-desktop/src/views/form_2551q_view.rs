@@ -185,17 +185,15 @@ impl Form2551QView {
                     let tin = this.draft.tin.clone();
                     let year = this.draft.taxable_year;
                     let quarter = this.draft.quarter;
-                    if let Ok(db_guard) = this.db.lock() {
-                        if let Ok(Some(updated)) = db_guard.get_2551q_draft(&tin, year, quarter) {
-                            if this.draft.status != updated.status {
+                    if let Ok(db_guard) = this.db.lock()
+                        && let Ok(Some(updated)) = db_guard.get_2551q_draft(&tin, year, quarter)
+                            && this.draft.status != updated.status {
                                 this.draft = updated;
                                 if this.draft.status == FilingStatus::Confirmed {
                                     cx.emit(Form2551QEvent::Confirmed);
                                 }
                                 cx.notify();
                             }
-                        }
-                    }
                 }
             },
         );
@@ -418,11 +416,10 @@ impl Form2551QView {
                 let db_guard = db.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
                 // Check if our draft was updated to Confirmed
                 let our_filename = draft.default_submission_filename();
-                if let Some(updated) = db_guard.get_2551q_draft(&draft.tin, draft.taxable_year, draft.quarter)? {
-                    if updated.status == FilingStatus::Confirmed {
+                if let Some(updated) = db_guard.get_2551q_draft(&draft.tin, draft.taxable_year, draft.quarter)?
+                    && updated.status == FilingStatus::Confirmed {
                         return Ok(Some(updated));
                     }
-                }
                 // Also check by submission filename match in receipts table (BIR strips the #email# suffix)
                 let stripped_filename = bir_core::receipt::split_bir_filename(&our_filename)
                     .map(|(t, f, p)| format!("{}-{}-{}.xml", t, f, p.split('#').next().unwrap_or(&p)))
@@ -438,7 +435,7 @@ impl Form2551QView {
                 Ok(None)
             }).await;
 
-            let _ = cx.update(|cx| {
+            cx.update(|cx| {
                 if let Some(this) = this.upgrade() {
                     this.update(cx, |this, cx| {
                         match result {
@@ -764,13 +761,11 @@ impl Form2551QView {
                 };
 
                 let mut raw_html = None;
-                if let Some(receipt_id) = draft.receipt_id {
-                    if let Ok(db) = self.db.lock() {
-                        if let Ok(Some(receipt)) = db.get_submission_receipt_by_id(receipt_id) {
+                if let Some(receipt_id) = draft.receipt_id
+                    && let Ok(db) = self.db.lock()
+                        && let Ok(Some(receipt)) = db.get_submission_receipt_by_id(receipt_id) {
                             raw_html = receipt.raw_html;
                         }
-                    }
-                }
 
                 if let Err(err) = cx.open_window(options, move |_window, cx| {
                     cx.new(|_cx| PdfViewerView::new(draft, result, output_dir, raw_html))

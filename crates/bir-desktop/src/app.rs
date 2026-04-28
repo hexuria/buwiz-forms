@@ -201,32 +201,29 @@ impl AppState {
         cx.subscribe_in(
             &profile_otp_state,
             window,
-            |this: &mut Self, _entity, event: &InputEvent, window, cx| match event {
-                InputEvent::Change => {
-                    let entered_pin = this.profile_otp_state.read(cx).value().to_string();
-                    if entered_pin.len() == 4 {
-                        let hashed = bir_core::crypto::hash_pin(&entered_pin);
-                        if let Some((p, a)) = this.pending_profile.clone() {
-                            if Some(hashed) == p.profile_pin_hash {
-                                this.unlocked_profile = Some((p, a));
-                                this.pending_profile = None;
-                                this.profile_auth_error = None;
-                                this.profile_otp_state
-                                    .update(cx, |input, cx| input.set_value("", window, cx));
-                                this.focus_handle.focus(window, cx);
-                            } else {
-                                this.profile_auth_error =
-                                    Some("Incorrect PIN. Please try again.".to_string());
-                                this.profile_otp_state.update(cx, |input, cx| {
-                                    input.set_value("", window, cx);
-                                    input.focus(window, cx);
-                                });
-                            }
+            |this: &mut Self, _entity, event: &InputEvent, window, cx| if let InputEvent::Change = event {
+                let entered_pin = this.profile_otp_state.read(cx).value().to_string();
+                if entered_pin.len() == 4 {
+                    let hashed = bir_core::crypto::hash_pin(&entered_pin);
+                    if let Some((p, a)) = this.pending_profile.clone() {
+                        if Some(hashed) == p.profile_pin_hash {
+                            this.unlocked_profile = Some((p, a));
+                            this.pending_profile = None;
+                            this.profile_auth_error = None;
+                            this.profile_otp_state
+                                .update(cx, |input, cx| input.set_value("", window, cx));
+                            this.focus_handle.focus(window, cx);
+                        } else {
+                            this.profile_auth_error =
+                                Some("Incorrect PIN. Please try again.".to_string());
+                            this.profile_otp_state.update(cx, |input, cx| {
+                                input.set_value("", window, cx);
+                                input.focus(window, cx);
+                            });
                         }
                     }
-                    cx.notify();
                 }
-                _ => {}
+                cx.notify();
             },
         )
         .detach();
@@ -234,41 +231,38 @@ impl AppState {
         cx.subscribe_in(
             &admin_otp_state,
             window,
-            |this: &mut Self, _entity, event: &InputEvent, window, cx| match event {
-                InputEvent::Change => {
-                    let entered_pin = this.admin_otp_state.read(cx).value().to_string();
-                    if entered_pin.len() == 4 {
-                        let hashed = bir_core::crypto::hash_pin(&entered_pin);
-                        let valid = if let Ok(db) = this.db.lock() {
-                            let hash = db.get_setting("app_lock_pin_hash").ok().flatten();
-                            hash.as_deref() == Some(&hashed)
-                        } else {
-                            false
-                        };
+            |this: &mut Self, _entity, event: &InputEvent, window, cx| if let InputEvent::Change = event {
+                let entered_pin = this.admin_otp_state.read(cx).value().to_string();
+                if entered_pin.len() == 4 {
+                    let hashed = bir_core::crypto::hash_pin(&entered_pin);
+                    let valid = if let Ok(db) = this.db.lock() {
+                        let hash = db.get_setting("app_lock_pin_hash").ok().flatten();
+                        hash.as_deref() == Some(&hashed)
+                    } else {
+                        false
+                    };
 
-                        if valid {
-                            if let Some(target) = this.pending_admin_view.take() {
-                                this.active_view = target;
-                                if target == ActiveView::CronTasks {
-                                    this.cron_tasks_view
-                                        .update(cx, |view, cx| view.load_settings(cx));
-                                }
+                    if valid {
+                        if let Some(target) = this.pending_admin_view.take() {
+                            this.active_view = target;
+                            if target == ActiveView::CronTasks {
+                                this.cron_tasks_view
+                                    .update(cx, |view, cx| view.load_settings(cx));
                             }
-                            this.admin_auth_error = None;
-                            this.admin_otp_state
-                                .update(cx, |input, cx| input.set_value("", window, cx));
-                            this.focus_handle.focus(window, cx);
-                        } else {
-                            this.admin_auth_error = Some("Incorrect Admin PIN.".to_string());
-                            this.admin_otp_state.update(cx, |input, cx| {
-                                input.set_value("", window, cx);
-                                input.focus(window, cx);
-                            });
                         }
+                        this.admin_auth_error = None;
+                        this.admin_otp_state
+                            .update(cx, |input, cx| input.set_value("", window, cx));
+                        this.focus_handle.focus(window, cx);
+                    } else {
+                        this.admin_auth_error = Some("Incorrect Admin PIN.".to_string());
+                        this.admin_otp_state.update(cx, |input, cx| {
+                            input.set_value("", window, cx);
+                            input.focus(window, cx);
+                        });
                     }
-                    cx.notify();
                 }
-                _ => {}
+                cx.notify();
             },
         )
         .detach();
@@ -445,11 +439,10 @@ impl AppState {
                     crate::views::profile_manager::ProfileEvent::Saved(tin) => Some(tin.clone()),
                 };
 
-                if let Some(tin) = &saved_tin {
-                    if this.hide_tax_profiles {
+                if let Some(tin) = &saved_tin
+                    && this.hide_tax_profiles {
                         this.active_session_tin = Some(tin.clone());
                     }
-                }
 
                 let db_clone = this.db.clone();
                 let active_tin = this.active_profile_tin.clone();
@@ -472,8 +465,8 @@ impl AppState {
                             view.set_profiles(profiles.clone(), cx);
                         });
 
-                        if let Some(tin) = &active_tin {
-                            if let Some(profile) =
+                        if let Some(tin) = &active_tin
+                            && let Some(profile) =
                                 this.profiles.iter().find(|p| p.tin.full() == *tin)
                             {
                                 let p = profile.clone();
@@ -481,7 +474,6 @@ impl AppState {
                                     view.set_profile(p, cx);
                                 });
                             }
-                        }
                         cx.notify();
                     });
                 })
@@ -540,14 +532,13 @@ impl AppState {
             |this: &mut Self, _entity, event: &DashboardEvent, cx| match event {
                 DashboardEvent::FileForm { .. } => this.handle_file_form(event, cx),
                 DashboardEvent::Reload => {
-                    if let Some(tin) = &this.active_profile_tin {
-                        if let Some(profile) = this.profiles.iter().find(|p| p.tin.full() == *tin) {
+                    if let Some(tin) = &this.active_profile_tin
+                        && let Some(profile) = this.profiles.iter().find(|p| p.tin.full() == *tin) {
                             let p = profile.clone();
                             this.dashboard_view.update(cx, |view, cx| {
                                 view.set_profile(p, cx);
                             });
                         }
-                    }
                     cx.notify();
                 }
                 DashboardEvent::LogoutProfile(_tin) => {
@@ -1113,7 +1104,7 @@ impl AppState {
                                                                                     let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
                                                                                     let Some(export_handle) = rfd::AsyncFileDialog::new()
                                                                                         .set_title("Save Profile Archive")
-                                                                                        .set_file_name(&format!("BIR_Archive_{}_{}.zip", tin, timestamp))
+                                                                                        .set_file_name(format!("BIR_Archive_{}_{}.zip", tin, timestamp))
                                                                                         .add_filter("Zip Archive", &["zip"])
                                                                                         .save_file()
                                                                                         .await
@@ -1151,7 +1142,7 @@ impl AppState {
                                                                                     if let Ok(true) = success {
                                                                                         rfd::AsyncMessageDialog::new()
                                                                                             .set_title("Profile Exported & Deleted")
-                                                                                            .set_description(&format!("Saved to {}", export_dir.display()))
+                                                                                            .set_description(format!("Saved to {}", export_dir.display()))
                                                                                             .show()
                                                                                             .await;
                                                                                     }
@@ -1325,11 +1316,10 @@ impl AppState {
                             })
                             .on_click(cx.listener(|this, _ev, window, cx| {
                                 this.theme_preference = this.theme_preference.next();
-                                if let Ok(db) = this.db.lock() {
-                                    if let Ok(val) = serde_json::to_string(&this.theme_preference) {
+                                if let Ok(db) = this.db.lock()
+                                    && let Ok(val) = serde_json::to_string(&this.theme_preference) {
                                         let _ = db.set_setting("theme_preference", &val);
                                     }
-                                }
                                 let target_mode = match this.theme_preference {
                                     AppThemeMode::Light => ThemeMode::Light,
                                     AppThemeMode::Dark => ThemeMode::Dark,
@@ -1542,14 +1532,13 @@ impl Render for AppState {
 
         let notification_layer = Root::render_notification_layer(window, cx);
 
-        if self.is_locked {
-            if let Some(lock_screen) = &self.lock_screen_view {
+        if self.is_locked
+            && let Some(lock_screen) = &self.lock_screen_view {
                 return div()
                     .size_full()
                     .child(lock_screen.clone())
                     .into_any_element();
             }
-        }
 
         div()
             .track_focus(&self.focus_handle)
@@ -1602,11 +1591,10 @@ impl Render for AppState {
             .on_action(cx.listener(
                 |this: &mut Self, _action: &crate::global_actions::ToggleTheme, window, cx| {
                     this.theme_preference = this.theme_preference.next();
-                    if let Ok(db) = this.db.lock() {
-                        if let Ok(val) = serde_json::to_string(&this.theme_preference) {
+                    if let Ok(db) = this.db.lock()
+                        && let Ok(val) = serde_json::to_string(&this.theme_preference) {
                             let _ = db.set_setting("theme_preference", &val);
                         }
-                    }
                     let target_mode = match this.theme_preference {
                         AppThemeMode::Light => ThemeMode::Light,
                         AppThemeMode::Dark => ThemeMode::Dark,
@@ -1672,9 +1660,9 @@ impl Render for AppState {
                                     let query_digits: String = query.chars().filter(|c| c.is_ascii_digit()).collect();
                                     
                                     if is_tin_like && query_digits.len() >= 9 {
-                                        view.prefill_tin(&query, window, cx);
+                                        view.prefill_tin(query, window, cx);
                                     } else {
-                                        view.prefill_name(&query, window, cx);
+                                        view.prefill_name(query, window, cx);
                                     }
                                 });
                                 cx.notify();

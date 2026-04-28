@@ -23,8 +23,8 @@ impl TinInput {
             prev_lengths: [0; 4],
         };
 
-        for i in 0..4 {
-            let input_clone = inputs[i].clone();
+        for (i, input) in inputs.iter().enumerate() {
+            let input_clone = input.clone();
             cx.subscribe_in(
                 &input_clone,
                 window,

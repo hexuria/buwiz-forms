@@ -30,48 +30,43 @@ fn humanize_cron(expr: &str) -> String {
     if expr == "0 * * * * *" || expr == "* * * * *" {
         return "Every minute".to_string();
     }
-    if let Some(stripped) = expr.strip_prefix("*/") {
-        if stripped.ends_with(" * * * * *") {
+    if let Some(stripped) = expr.strip_prefix("*/")
+        && stripped.ends_with(" * * * * *") {
             let num = stripped.trim_end_matches(" * * * * *");
             return format!("Every {} seconds", num);
         }
-    }
-    if let Some(stripped) = expr.strip_prefix("0 */") {
-        if stripped.ends_with(" * * * *") {
+    if let Some(stripped) = expr.strip_prefix("0 */")
+        && stripped.ends_with(" * * * *") {
             let num = stripped.trim_end_matches(" * * * *");
             if num == "1" {
                 return "Every minute".to_string();
             }
             return format!("Every {} minutes", num);
         }
-    }
-    if let Some(stripped) = expr.strip_prefix("0 0 */") {
-        if stripped.ends_with(" * * *") {
+    if let Some(stripped) = expr.strip_prefix("0 0 */")
+        && stripped.ends_with(" * * *") {
             let num = stripped.trim_end_matches(" * * *");
             if num == "1" {
                 return "Every hour".to_string();
             }
             return format!("Every {} hours", num);
         }
-    }
-    if let Some(stripped) = expr.strip_prefix("0 0 0 */") {
-        if stripped.ends_with(" * *") {
+    if let Some(stripped) = expr.strip_prefix("0 0 0 */")
+        && stripped.ends_with(" * *") {
             let num = stripped.trim_end_matches(" * *");
             if num == "1" {
                 return "Everyday".to_string();
             }
             return format!("Every {} days", num);
         }
-    }
-    if let Some(stripped) = expr.strip_prefix("0 0 0 1 */") {
-        if stripped.ends_with(" *") {
+    if let Some(stripped) = expr.strip_prefix("0 0 0 1 */")
+        && stripped.ends_with(" *") {
             let num = stripped.trim_end_matches(" *");
             if num == "1" {
                 return "Every month".to_string();
             }
             return format!("Every {} months", num);
         }
-    }
     // Fallback
     format!("Frequency: {}", expr)
 }
@@ -294,7 +289,7 @@ impl CronTasksView {
             cx.background_executor()
                 .timer(std::time::Duration::from_millis(500))
                 .await;
-            let _ = cx.update(|cx| {
+            cx.update(|cx| {
                 if let Some(view) = view.upgrade() {
                     view.update(cx, |this, cx| {
                         this.daemon_running = is_daemon_running();
@@ -381,7 +376,7 @@ impl CronTasksView {
                 }
                 Err(e) => format!("Failed to execute: {}", e),
             };
-            let _ = cx.update(|cx| {
+            cx.update(|cx| {
                 if let Some(this) = this.upgrade() {
                     this.update(cx, |this, cx| {
                         this.test_output = Some(output);
@@ -459,14 +454,12 @@ impl CronTasksView {
     }
 
     fn archive_job(&mut self, id: i64, cx: &mut Context<'_, Self>) {
-        if let Ok(db) = self.db.lock() {
-            if let Ok(jobs) = db.list_jobs() {
-                if let Some(mut job) = jobs.into_iter().find(|j| j.id == Some(id)) {
+        if let Ok(db) = self.db.lock()
+            && let Ok(jobs) = db.list_jobs()
+                && let Some(mut job) = jobs.into_iter().find(|j| j.id == Some(id)) {
                     job.status = "Archived".to_string();
                     let _ = db.save_job(job);
                 }
-            }
-        }
         self.load_settings(cx);
     }
 
@@ -492,21 +485,19 @@ impl CronTasksView {
         let Some(job) = job else { return };
 
         // For email polling jobs, execute inline instead of waiting for daemon
-        if let Some(ref cmd) = job.command {
-            if cmd.starts_with("bir_poll_email ") {
+        if let Some(ref cmd) = job.command
+            && cmd.starts_with("bir_poll_email ") {
                 let email = cmd.trim_start_matches("bir_poll_email ").trim().to_string();
                 let db = self.db.clone();
                 let job_id = db_id;
 
                 // Mark as Running
-                if let Ok(db_guard) = db.lock() {
-                    if let Ok(jobs) = db_guard.list_jobs() {
-                        if let Some(mut j) = jobs.into_iter().find(|j| j.id == Some(job_id)) {
+                if let Ok(db_guard) = db.lock()
+                    && let Ok(jobs) = db_guard.list_jobs()
+                        && let Some(mut j) = jobs.into_iter().find(|j| j.id == Some(job_id)) {
                             j.status = "Running".to_string();
                             let _ = db_guard.save_job(j);
                         }
-                    }
-                }
                 self.load_settings(cx);
 
                 cx.spawn(async move |this, cx| {
@@ -520,9 +511,9 @@ impl CronTasksView {
                                 );
 
                             // Update the job in DB
-                            if let Ok(db_guard) = db.lock() {
-                                if let Ok(jobs) = db_guard.list_jobs() {
-                                    if let Some(mut j) =
+                            if let Ok(db_guard) = db.lock()
+                                && let Ok(jobs) = db_guard.list_jobs()
+                                    && let Some(mut j) =
                                         jobs.into_iter().find(|j| j.id == Some(job_id))
                                     {
                                         j.last_run_at = Some(Utc::now().to_rfc3339());
@@ -536,8 +527,8 @@ impl CronTasksView {
                                             } else {
                                                 j.status = "Queued".to_string();
                                                 // Set next run from cron
-                                                if let Some(ref expr) = j.cron_expr {
-                                                    if let Ok(schedule) =
+                                                if let Some(ref expr) = j.cron_expr
+                                                    && let Ok(schedule) =
                                                         std::str::FromStr::from_str(expr)
                                                     {
                                                         let schedule: cron::Schedule = schedule;
@@ -547,7 +538,6 @@ impl CronTasksView {
                                                             j.next_run_at = Some(next.to_rfc3339());
                                                         }
                                                     }
-                                                }
                                             }
                                         } else {
                                             j.output_log = Some(err_msg.unwrap_or_else(|| {
@@ -555,8 +545,8 @@ impl CronTasksView {
                                             }));
                                             j.retries += 1;
                                             j.status = "Queued".to_string();
-                                            if let Some(ref expr) = j.cron_expr {
-                                                if let Ok(schedule) =
+                                            if let Some(ref expr) = j.cron_expr
+                                                && let Ok(schedule) =
                                                     std::str::FromStr::from_str(expr)
                                                 {
                                                     let schedule: cron::Schedule = schedule;
@@ -566,17 +556,14 @@ impl CronTasksView {
                                                         j.next_run_at = Some(next.to_rfc3339());
                                                     }
                                                 }
-                                            }
                                         }
                                         let _ = db_guard.save_job(j);
                                     }
-                                }
-                            }
                             poll_success
                         })
                         .await;
 
-                    let _ = cx.update(|cx| {
+                    cx.update(|cx| {
                         if let Some(view) = this.upgrade() {
                             view.update(cx, |this, cx| {
                                 this.load_settings(cx);
@@ -587,28 +574,25 @@ impl CronTasksView {
                 .detach();
                 return;
             }
-        }
 
         // Fallback: for non-email jobs, just mark for daemon pickup
-        if let Ok(db) = self.db.lock() {
-            if let Ok(jobs) = db.list_jobs() {
-                if let Some(mut job) = jobs.into_iter().find(|j| j.id == Some(db_id)) {
+        if let Ok(db) = self.db.lock()
+            && let Ok(jobs) = db.list_jobs()
+                && let Some(mut job) = jobs.into_iter().find(|j| j.id == Some(db_id)) {
                     job.next_run_at = Some(Utc::now().to_rfc3339());
                     job.status = "Queued".to_string();
                     job.retries = 0;
                     let _ = db.save_job(job);
                 }
-            }
-        }
         self.load_settings(cx);
     }
 
     fn cancel_system_job(&mut self, db_id: i64, cx: &mut Context<'_, Self>) {
-        if let Ok(db) = self.db.lock() {
-            if let Ok(summaries) = db.list_all_queued_submissions() {
-                if let Some(sum) = summaries.into_iter().find(|s| s.id == db_id) {
-                    if sum.form_code == "2551Q" {
-                        if let Ok(Some(mut draft)) =
+        if let Ok(db) = self.db.lock()
+            && let Ok(summaries) = db.list_all_queued_submissions()
+                && let Some(sum) = summaries.into_iter().find(|s| s.id == db_id)
+                    && sum.form_code == "2551Q"
+                        && let Ok(Some(mut draft)) =
                             db.get_2551q_draft(&sum.tin, sum.taxable_year, sum.quarter.unwrap_or(0))
                         {
                             draft.status = bir_core::forms::form_2551q::FilingStatus::Draft;
@@ -618,10 +602,6 @@ impl CronTasksView {
                             draft.submission_filename = None;
                             let _ = db.save_2551q_draft(&draft);
                         }
-                    }
-                }
-            }
-        }
         self.load_settings(cx);
     }
 }
@@ -655,7 +635,7 @@ impl Render for CronTasksView {
 
         let total_pages = std::cmp::max(
             1,
-            (filtered_jobs.len() + self.items_per_page - 1) / self.items_per_page,
+            filtered_jobs.len().div_ceil(self.items_per_page),
         );
         let start = (self.current_page - 1) * self.items_per_page;
         let mut end = start + self.items_per_page;

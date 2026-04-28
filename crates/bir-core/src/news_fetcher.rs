@@ -41,11 +41,10 @@ impl NoticeFetcher {
         let config_path = proj_dirs.config_dir().join("rss_feeds.json");
 
         if let Ok(contents) = std::fs::read_to_string(&config_path) {
-            if let Ok(feeds) = serde_json::from_str::<Vec<String>>(&contents) {
-                if !feeds.is_empty() {
+            if let Ok(feeds) = serde_json::from_str::<Vec<String>>(&contents)
+                && !feeds.is_empty() {
                     return feeds;
                 }
-            }
         } else {
             // Write default config if missing
             if let Ok(()) = std::fs::create_dir_all(proj_dirs.config_dir()) {
@@ -87,6 +86,12 @@ impl NoticeFetcher {
 }
 
 pub struct BirCmsProvider;
+
+impl Default for BirCmsProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl BirCmsProvider {
     pub fn new() -> Self {

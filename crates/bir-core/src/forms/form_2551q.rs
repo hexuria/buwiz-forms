@@ -496,14 +496,13 @@ impl FormValidator for Form2551QDraft {
             ));
         }
 
-        if self.is_amended {
-            if self.tax_paid_previous < 0.0 {
+        if self.is_amended
+            && self.tax_paid_previous < 0.0 {
                 errors.push((
                     "tax_paid_previous".to_string(),
                     "Tax paid in return previously filed must be non-negative".to_string(),
                 ));
             }
-        }
 
         errors
     }

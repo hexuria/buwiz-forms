@@ -24,8 +24,7 @@ pub fn inject_acroform(
     output_path: &Path,
 ) -> Result<(), PrintError> {
     let mut doc = Document::load(base_pdf_path).map_err(|e| {
-        PrintError::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        PrintError::Io(std::io::Error::other(
             format!("lopdf load failed: {e}"),
         ))
     })?;
@@ -81,35 +80,30 @@ pub fn inject_acroform(
     let acroform_id = doc.add_object(Object::Dictionary(acroform_dict));
 
     // Patch the catalog with /AcroForm reference.
-    if let Some(Object::Reference(root_id)) = doc.trailer.get(b"Root").ok() {
+    if let Ok(Object::Reference(root_id)) = doc.trailer.get(b"Root") {
         let root_id = *root_id;
-        if let Ok(root_obj) = doc.get_object_mut(root_id) {
-            if let Object::Dictionary(ref mut d) = root_obj {
-                d.set("AcroForm", Object::Reference(acroform_id));
-            }
+        if let Ok(Object::Dictionary(ref mut d)) = doc.get_object_mut(root_id) {
+            d.set("AcroForm", Object::Reference(acroform_id));
         }
     }
 
     // Add /Annots to each page that has widgets.
     for (page_num, annot_refs) in &page_annots {
         if let Some((_, page_oid)) = sorted_pages.iter().find(|(n, _)| *n == *page_num) {
-            if let Ok(page_obj) = doc.get_object_mut(*page_oid) {
-                if let Object::Dictionary(ref mut page_dict) = page_obj {
-                    // Merge with any existing /Annots.
-                    let mut existing = match page_dict.get(b"Annots") {
-                        Ok(Object::Array(arr)) => arr.clone(),
-                        _ => Vec::new(),
-                    };
-                    existing.extend(annot_refs.iter().cloned());
-                    page_dict.set("Annots", Object::Array(existing));
-                }
+            if let Ok(Object::Dictionary(ref mut page_dict)) = doc.get_object_mut(*page_oid) {
+                // Merge with any existing /Annots.
+                let mut existing = match page_dict.get(b"Annots") {
+                    Ok(Object::Array(arr)) => arr.clone(),
+                    _ => Vec::new(),
+                };
+                existing.extend(annot_refs.iter().cloned());
+                page_dict.set("Annots", Object::Array(existing));
             }
         }
     }
 
     doc.save(output_path).map_err(|e| {
-        PrintError::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        PrintError::Io(std::io::Error::other(
             format!("lopdf save failed: {e}"),
         ))
     })?;

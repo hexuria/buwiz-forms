@@ -6,9 +6,9 @@
 use bir_core::db::Database;
 use std::sync::{Arc, Mutex};
 use tracing::{error, info};
-use tracing_subscriber;
 
 fn main() {
+    dotenvy::dotenv().ok();
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
         .init();

@@ -4,6 +4,7 @@ use std::fs;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenvy::dotenv().ok();
     let xml_path = "../savefile/010558054000-2551Qv2018-122026Q1.xml";
     let passphrase = "T0081gP45sy0rd-To+R3m3m63r!@4/<>";
 
