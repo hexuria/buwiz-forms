@@ -57,7 +57,14 @@ jobs:
           libfontconfig1-dev \
           libfreetype-dev \
           libssl-dev \
+          libpolkit-gobject-1-dev \
           mesa-vulkan-drivers
+
+    - name: Install Windows Dependencies
+      if: runner.os == 'Windows'
+      run: |
+        choco install openssl
+        echo "OPENSSL_DIR=C:\Program Files\OpenSSL-Win64" >> $env:GITHUB_ENV
 
     - name: Check
       run: cargo check --workspace --target ${{ matrix.target }}
