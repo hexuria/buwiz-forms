@@ -210,6 +210,7 @@ impl ListDelegate for ProfileListDelegate {
                     q.is_empty()
                         || p.full_name.to_lowercase().contains(&q)
                         || p.tin.full().contains(&q)
+                        || p.tin.formatted().to_lowercase().contains(&q)
                 })
                 .take(5) // Limit to 5 max
                 .cloned()
@@ -223,7 +224,12 @@ impl ListDelegate for ProfileListDelegate {
             .collect();
         self.archived_items = filtered.iter().filter(|p| p.is_archived).cloned().collect();
 
+        let exact_tin_match = self.all_items.iter().any(|p| {
+            p.tin.full() == q.trim() || p.tin.formatted().to_lowercase() == q.trim()
+        });
+
         if !query.trim().is_empty()
+            && !exact_tin_match
             && !self
                 .all_items
                 .iter()
