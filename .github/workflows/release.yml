@@ -169,8 +169,8 @@ jobs:
       - name: Install Windows Dependencies
         shell: pwsh
         run: |
-          choco install openssl
-          echo "OPENSSL_DIR=C:\Program Files\OpenSSL-Win64" >> $env:GITHUB_ENV
+          vcpkg install openssl:x64-windows
+          echo "OPENSSL_DIR=C:\vcpkg\installed\x64-windows" >> $env:GITHUB_ENV
 
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable

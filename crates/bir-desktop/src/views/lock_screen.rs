@@ -83,6 +83,7 @@ impl LockScreenView {
         view
     }
 
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     fn trigger_os_auth(&mut self, cx: &mut Context<Self>) {
         self.os_auth_triggered = true;
         self.os_auth_error = None;
@@ -137,6 +138,13 @@ impl LockScreenView {
             });
         })
         .detach();
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    fn trigger_os_auth(&mut self, cx: &mut Context<Self>) {
+        self.os_auth_triggered = false;
+        self.os_auth_error = Some("Operating System Authentication is not supported on this platform.".to_string());
+        cx.notify();
     }
 }
 
