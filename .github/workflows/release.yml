@@ -169,7 +169,7 @@ jobs:
       - name: Install Windows Dependencies
         shell: pwsh
         run: |
-          choco install openssl -y
+          choco install openssl typst -y
           if (Test-Path "C:\Program Files\OpenSSL\include") {
               echo "OPENSSL_DIR=C:\Program Files\OpenSSL" >> $env:GITHUB_ENV
           } elseif (Test-Path "C:\Program Files\OpenSSL-Win64\include") {

@@ -36,9 +36,17 @@ jobs:
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
 
+    - name: Install macOS Dependencies
+      if: runner.os == 'macOS'
+      run: brew install typst
+
     - name: Install Linux Dependencies
       if: runner.os == 'Linux'
       run: |
+        wget https://github.com/typst/typst/releases/latest/download/typst-x86_64-unknown-linux-musl.tar.xz
+        tar -xf typst-x86_64-unknown-linux-musl.tar.xz
+        sudo mv typst-*/typst /usr/local/bin/
+        
         sudo apt-get update
         sudo apt-get install -y \
           pkg-config \
@@ -64,7 +72,7 @@ jobs:
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        choco install openssl -y
+        choco install openssl typst -y
         if (Test-Path "C:\Program Files\OpenSSL\include") {
             echo "OPENSSL_DIR=C:\Program Files\OpenSSL" >> $env:GITHUB_ENV
         } elseif (Test-Path "C:\Program Files\OpenSSL-Win64\include") {
