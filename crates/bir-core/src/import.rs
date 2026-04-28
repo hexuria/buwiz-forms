@@ -232,11 +232,13 @@ mod tests {
             oauth_access_token: None,
             oauth_refresh_token: None,
             profile_pin_hash: None,
+            tax_classification: None,
+            opted_for_8_percent_flat_rate: false,
         };
         db.save_profile(profile.clone()).unwrap();
 
         // Create mock submission
-        let mut sub = Submission {
+        let sub = Submission {
             id: None,
             tin: "123456789000".to_string(),
             form_type: "2551Q".to_string(),
@@ -305,6 +307,8 @@ mod tests {
             oauth_access_token: None,
             oauth_refresh_token: None,
             profile_pin_hash: None,
+            tax_classification: None,
+            opted_for_8_percent_flat_rate: false,
         };
         db.save_profile(profile).unwrap();
         db.checkpoint().unwrap();

@@ -121,7 +121,6 @@ impl TypstCompiler for EmbeddedTypstCompiler {
         _pdf_path: &Path,
         _root_dir: &Path,
     ) -> Result<(), PrintError> {
-        let _typst_link = std::any::type_name::<typst::diag::FileError>();
         Err(PrintError::EmbeddedUnavailable(
             "full embedded Typst world is not wired yet; falling back to typst CLI".to_string(),
         ))
@@ -693,6 +692,10 @@ mod tests {
             imap_app_password: None,
             oauth_access_token: None,
             oauth_refresh_token: None,
+            tax_classification: None,
+            opted_for_8_percent_flat_rate: false,
+            is_archived: false,
+            profile_pin_hash: None,
         };
         let mut draft = Form2551QDraft::new_from_profile(&profile, 2026, 1);
         draft.schedule_1[0].taxable_amount = 10_000.0;

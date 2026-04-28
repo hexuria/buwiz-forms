@@ -38,8 +38,7 @@ rss = "2.0"
 # Database
 rusqlite = { version = "0.32", features = ["bundled-sqlcipher"] }
 
-# PDF
-typst = "0.13"
+
 
 # Error handling
 thiserror = "2"
@@ -55,3 +54,10 @@ keyring = { version = "3", features = ["apple-native"] }
 gpui = { git = "https://github.com/zed-industries/zed" }
 gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit"] }
 gpui-component = { git = "https://github.com/longbridge/gpui-component" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+opt-level = "z"

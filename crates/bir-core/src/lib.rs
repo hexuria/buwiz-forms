@@ -25,6 +25,7 @@ pub mod export;
 pub mod form;
 pub mod forms;
 pub mod import;
+pub mod integration;
 pub mod naming;
 pub mod news_fetcher;
 pub mod notification;
@@ -49,8 +50,15 @@ pub use forms::{
     QuarterState, Schedule1Row, find_atc, find_form, forms_for_taxpayer,
 };
 pub use import::{extract_database_zip, import_profile_data};
+pub use integration::{
+    FormDraftOutput, FormMapper, IncomeCategory, IncomeSource, MapperError, Mapper2551Q,
+    PayloadValidationError, SyncError, SyncResponse, SyncResult, UniversalTaxPayload,
+    applicable_forms_for_profile, import_payload_directory, import_payload_file, process_sync,
+    process_sync_json, validate_form_applicability, validate_payload,
+};
 pub use naming::{Tin, iaf_filename, savefile_name};
 pub use official_import::{OfficialSavefile, import_and_submit_savefile, parse_period_code};
-pub use profile::{EmailAuthMethod, TaxpayerProfile};
+pub use profile::{EmailAuthMethod, TaxClassification, TaxpayerProfile};
 pub use receipt::{BirReceiptConfirmation, parse_bir_receipt_email, split_bir_filename};
 pub use validation::{ValidationError, validate_ph_phone, validate_profile, validate_zip};
+

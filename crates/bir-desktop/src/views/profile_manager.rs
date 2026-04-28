@@ -507,6 +507,8 @@ impl ProfileManagerView {
             test_notification_enabled: self.stored_test_notification_enabled,
             is_archived: self.stored_is_archived,
             profile_pin_hash,
+            tax_classification: None,
+            opted_for_8_percent_flat_rate: false,
         }
     }
 

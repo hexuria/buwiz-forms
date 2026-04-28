@@ -13,11 +13,11 @@ use sha2::{Digest, Sha256};
 use tracing::{info, warn};
 
 fn get_google_client_id() -> String {
-    env!("GOOGLE_CLIENT_ID").to_string()
+    std::env::var("GOOGLE_CLIENT_ID").unwrap_or_default()
 }
 
 fn get_google_client_secret() -> String {
-    env!("GOOGLE_CLIENT_SECRET").to_string()
+    std::env::var("GOOGLE_CLIENT_SECRET").unwrap_or_default()
 }
 
 /// Google's OAuth2 endpoints.

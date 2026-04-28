@@ -665,8 +665,7 @@ impl Database {
 
     /// Get a single profile by its TIN.
     pub fn get_profile_by_tin(&self, tin: &str) -> Result<Option<TaxpayerProfile>, DbError> {
-        let profiles = self.list_profiles()?;
-        Ok(profiles.into_iter().find(|p| p.tin.full() == tin))
+        self.get_profile(tin)
     }
 
     /// Delete a profile by TIN.
@@ -1412,6 +1411,10 @@ mod tests {
             taxpayer_type: crate::profile::TaxpayerType::Individual,
             is_vat_registered: false,
             business_start_date: None,
+            tax_classification: None,
+            opted_for_8_percent_flat_rate: false,
+            profile_pin_hash: None,
+            _imap_enabled_compat: None,
         };
 
         db.save_profile(profile).expect("Failed to save profile");

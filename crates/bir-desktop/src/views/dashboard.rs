@@ -12,7 +12,7 @@ use crate::components::filter_bar::{FilterBar, FilterEvent, FilterState};
 use crate::components::smart_date_filter::{
     SmartDateFilter, SmartDateFilterEvent, SmartDateFilterState,
 };
-use gpui::prelude::FluentBuilder;
+
 
 pub enum DashboardEvent {
     FileForm {

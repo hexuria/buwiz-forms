@@ -12,6 +12,31 @@ pub enum TaxpayerType {
     Partnership,
 }
 
+/// Refined tax classification that drives filing behavior.
+///
+/// This is a refinement of `TaxpayerType` — it specifies *how* the taxpayer
+/// files (which forms are required, which ATC/tax rules apply), whereas
+/// `TaxpayerType` specifies *what kind* of entity they are.
+///
+/// For example, an `Individual` taxpayer could be classified as
+/// `PurelyCompensation`, `ProfessionalOrFreelancer`, `SoleProprietorNonVat`,
+/// `SoleProprietorVat`, or `MixedIncome`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TaxClassification {
+    /// Individual with only employment income — files 1700/1701 only.
+    PurelyCompensation,
+    /// Self-employed professional or freelancer — files 1701Q, 2551Q/2550M.
+    ProfessionalOrFreelancer,
+    /// Sole proprietor NOT registered for VAT — files 2551Q (percentage tax).
+    SoleProprietorNonVat,
+    /// Sole proprietor registered for VAT — files 2550M/2550Q.
+    SoleProprietorVat,
+    /// Individual with both compensation and business/professional income.
+    MixedIncome,
+    /// Corporation — files 1702Q, 1702RT.
+    Corporation,
+}
+
 /// How the app authenticates to the user's mail server.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum EmailAuthMethod {
@@ -41,6 +66,16 @@ pub struct TaxpayerProfile {
     pub is_vat_registered: bool,
     #[serde(default)]
     pub business_start_date: Option<NaiveDate>,
+
+    /// Refined classification that drives form applicability and ATC rules.
+    /// Optional — existing profiles default to None until the user configures it.
+    #[serde(default)]
+    pub tax_classification: Option<TaxClassification>,
+
+    /// Whether the taxpayer opted for the 8% flat income tax rate
+    /// (available for self-employed individuals with gross sales ≤ ₱3M).
+    #[serde(default)]
+    pub opted_for_8_percent_flat_rate: bool,
 
     /// Soft delete flag. If true, the profile is archived and can be exported/hard-deleted.
     #[serde(default)]

@@ -1,7 +1,7 @@
 use gpui::prelude::*;
 use gpui::*;
 use gpui_component::ActiveTheme;
-use std::path::PathBuf;
+
 
 pub fn render_footer<T>(cx: &mut Context<T>) -> impl IntoElement {
     div()

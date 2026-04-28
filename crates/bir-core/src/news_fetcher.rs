@@ -7,21 +7,24 @@ use tracing::{error, info};
 
 pub trait NoticeProvider: Send + Sync {
     fn source_kind(&self) -> NoticeSourceKind;
-    fn fetch(&self) -> Result<Vec<BirNotice>>;
+    fn fetch(&self, client: &reqwest::blocking::Client) -> Result<Vec<BirNotice>>;
 }
 
 pub struct NoticeFetcher {
     db: Arc<Mutex<Database>>,
+    client: reqwest::blocking::Client,
     providers: Vec<Box<dyn NoticeProvider + Send + Sync>>,
 }
 
 impl NoticeFetcher {
     pub fn new(db: Arc<Mutex<Database>>) -> Self {
         let rss_feeds = Self::load_rss_configs();
+        let client = reqwest::blocking::Client::new();
         Self {
             db,
+            client,
             providers: vec![
-                Box::new(BirCmsProvider::new()),
+                Box::new(BirCmsProvider),
                 Box::new(RssProvider::new(rss_feeds)),
                 Box::new(FacebookGraphProvider),
             ],
@@ -64,7 +67,7 @@ impl NoticeFetcher {
 
         if let Ok(db_lock) = self.db.lock() {
             for provider in &self.providers {
-                match provider.fetch() {
+                match provider.fetch(&self.client) {
                     Ok(notices) => {
                         for notice in notices {
                             if let Err(e) = db_lock.save_bir_notice(&notice) {
@@ -83,15 +86,11 @@ impl NoticeFetcher {
     }
 }
 
-pub struct BirCmsProvider {
-    client: reqwest::blocking::Client,
-}
+pub struct BirCmsProvider;
 
 impl BirCmsProvider {
     pub fn new() -> Self {
-        Self {
-            client: reqwest::blocking::Client::new(),
-        }
+        Self
     }
 }
 
@@ -120,10 +119,9 @@ impl NoticeProvider for BirCmsProvider {
         NoticeSourceKind::BirCms
     }
 
-    fn fetch(&self) -> Result<Vec<BirNotice>> {
+    fn fetch(&self, client: &reqwest::blocking::Client) -> Result<Vec<BirNotice>> {
         let url = "https://bir-cms-ws.bir.gov.ph/api/pub/templates/3380/datasets?per_page=3000";
-        let response_bytes = self
-            .client
+        let response_bytes = client
             .get(url)
             .header("client-website-id", "2")
             .header("origin", "https://www.bir.gov.ph")
@@ -183,14 +181,12 @@ impl NoticeProvider for BirCmsProvider {
 }
 
 pub struct RssProvider {
-    client: reqwest::blocking::Client,
     feed_urls: Vec<String>,
 }
 
 impl RssProvider {
     pub fn new(feed_urls: Vec<String>) -> Self {
         Self {
-            client: reqwest::blocking::Client::new(),
             feed_urls,
         }
     }
@@ -201,11 +197,11 @@ impl NoticeProvider for RssProvider {
         NoticeSourceKind::Rss
     }
 
-    fn fetch(&self) -> Result<Vec<BirNotice>> {
+    fn fetch(&self, client: &reqwest::blocking::Client) -> Result<Vec<BirNotice>> {
         let mut notices = Vec::new();
 
         for url in &self.feed_urls {
-            let response = self.client.get(url).send()?.bytes()?;
+            let response = client.get(url).send()?.bytes()?;
             if let Ok(channel) = Channel::read_from(&response[..]) {
                 for item in channel.items() {
                     let title = item.title().unwrap_or("No Title").to_string();
@@ -263,7 +259,7 @@ impl NoticeProvider for FacebookGraphProvider {
         NoticeSourceKind::FacebookGraph
     }
 
-    fn fetch(&self) -> Result<Vec<BirNotice>> {
+    fn fetch(&self, _client: &reqwest::blocking::Client) -> Result<Vec<BirNotice>> {
         // Scaffold only, do not implement actual scraping per PRD.
         // Return empty array.
         Ok(vec![])
