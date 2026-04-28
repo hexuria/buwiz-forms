@@ -289,6 +289,118 @@ impl Form2551QDraft {
             self.email
         )
     }
+
+    // ── State Transition Methods ──
+    // These centralize all status mutations with precondition checks.
+    // Callers should use these instead of directly assigning `self.status`.
+
+    /// Returns true if the form fields should be editable (only in Draft status).
+    pub fn is_editable(&self) -> bool {
+        matches!(self.status, FilingStatus::Draft)
+    }
+
+    /// Transition: Draft → Queued.
+    /// Validates the form first. Returns Err with validation errors if invalid.
+    pub fn transition_to_queued(&mut self) -> Result<(), Vec<(String, String)>> {
+        assert!(
+            matches!(self.status, FilingStatus::Draft),
+            "Cannot queue form in {:?} status — must be Draft",
+            self.status
+        );
+        let errors = <Self as super::FormValidator>::validate(self);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        self.status = FilingStatus::Queued;
+        self.submission_attempts = 0;
+        self.next_retry_at = Some(chrono::Utc::now().to_rfc3339());
+        self.last_error = None;
+        self.updated_at = chrono::Utc::now().to_rfc3339();
+        Ok(())
+    }
+
+    /// Transition: Queued → Submitted (called by background cron after successful FTP upload).
+    pub fn transition_to_submitted(&mut self, filename: String) {
+        assert!(
+            matches!(self.status, FilingStatus::Queued),
+            "Cannot submit form in {:?} status — must be Queued",
+            self.status
+        );
+        let now = chrono::Utc::now();
+        self.status = FilingStatus::Submitted;
+        self.submitted_at = Some(now.to_rfc3339());
+        self.submission_filename = Some(filename);
+        self.submission_attempts = 0;
+        self.next_retry_at = None;
+        self.last_error = None;
+        self.updated_at = now.to_rfc3339();
+    }
+
+    /// Transition: Submitted → Confirmed (called when BIR confirmation email is matched).
+    pub fn transition_to_confirmed(&mut self, confirmed_at: String, receipt_id: Option<i64>, filename: Option<String>) {
+        assert!(
+            matches!(self.status, FilingStatus::Submitted),
+            "Cannot confirm form in {:?} status — must be Submitted",
+            self.status
+        );
+        self.status = FilingStatus::Confirmed;
+        self.confirmed_at = Some(confirmed_at);
+        self.receipt_id = receipt_id;
+        if let Some(f) = filename {
+            self.submission_filename = Some(f);
+        }
+        self.updated_at = chrono::Utc::now().to_rfc3339();
+    }
+
+    /// Transition: Confirmed → Paid (called by user action after bank payment).
+    pub fn transition_to_paid(&mut self) {
+        assert!(
+            matches!(self.status, FilingStatus::Confirmed),
+            "Cannot mark as paid in {:?} status — must be Confirmed",
+            self.status
+        );
+        self.status = FilingStatus::Paid;
+        self.updated_at = chrono::Utc::now().to_rfc3339();
+    }
+
+    /// Transition: Any non-terminal → Draft (revert). Clears submission metadata.
+    pub fn revert_to_draft(&mut self) {
+        assert!(
+            !matches!(self.status, FilingStatus::Paid),
+            "Cannot revert a Paid form to Draft"
+        );
+        self.status = FilingStatus::Draft;
+        self.submitted_at = None;
+        self.confirmed_at = None;
+        self.receipt_id = None;
+        self.submission_filename = None;
+        self.submission_attempts = 0;
+        self.next_retry_at = None;
+        self.last_error = None;
+        self.updated_at = chrono::Utc::now().to_rfc3339();
+    }
+
+    /// Record a failed submission attempt with exponential backoff.
+    /// After 5 failures, automatically reverts to Draft.
+    pub fn record_submission_failure(&mut self, error_msg: String) {
+        assert!(
+            matches!(self.status, FilingStatus::Queued),
+            "Cannot record submission failure in {:?} status — must be Queued",
+            self.status
+        );
+        self.submission_attempts += 1;
+        self.last_error = Some(error_msg);
+
+        if self.submission_attempts >= 5 {
+            self.status = FilingStatus::Draft;
+            self.next_retry_at = None;
+        } else {
+            let delay_mins = 2i64.pow(self.submission_attempts - 1);
+            let next_time = chrono::Utc::now() + chrono::Duration::minutes(delay_mins);
+            self.next_retry_at = Some(next_time.to_rfc3339());
+        }
+        self.updated_at = chrono::Utc::now().to_rfc3339();
+    }
 }
 
 /// Summary record returned by database list queries (no full JSON needed).

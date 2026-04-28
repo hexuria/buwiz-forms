@@ -595,12 +595,10 @@ impl CronTasksView {
                         && let Ok(Some(mut draft)) =
                             db.get_2551q_draft(&sum.tin, sum.taxable_year, sum.quarter.unwrap_or(0))
                         {
-                            draft.status = bir_core::forms::form_2551q::FilingStatus::Draft;
-                            draft.submitted_at = None;
-                            draft.confirmed_at = None;
-                            draft.receipt_id = None;
-                            draft.submission_filename = None;
-                            let _ = db.save_2551q_draft(&draft);
+                            if !matches!(draft.status, bir_core::forms::form_2551q::FilingStatus::Paid) {
+                                draft.revert_to_draft();
+                                let _ = db.save_2551q_draft(&draft);
+                            }
                         }
         self.load_settings(cx);
     }

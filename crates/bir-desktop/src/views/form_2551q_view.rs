@@ -347,8 +347,10 @@ impl Form2551QView {
     }
 
     fn mark_as_paid(&mut self, cx: &mut Context<Self>) {
-        self.draft.status = FilingStatus::Paid;
-        self.draft.updated_at = chrono::Utc::now().to_rfc3339();
+        if !matches!(self.draft.status, FilingStatus::Confirmed) {
+            return; // Guard: only Confirmed forms can be marked as Paid
+        }
+        self.draft.transition_to_paid();
         if let Ok(db) = self.db.lock() {
             let _ = db.save_2551q_draft(&self.draft);
         }
@@ -358,12 +360,10 @@ impl Form2551QView {
     }
 
     fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.draft.status = FilingStatus::Draft;
-        self.draft.submitted_at = None;
-        self.draft.confirmed_at = None;
-        self.draft.receipt_id = None;
-        self.draft.submission_filename = None;
-        self.draft.updated_at = chrono::Utc::now().to_rfc3339();
+        if matches!(self.draft.status, FilingStatus::Paid) {
+            return; // Guard: cannot revert a Paid form
+        }
+        self.draft.revert_to_draft();
         self.is_validated = false;
         self.validation_errors.clear();
         self.status_message = None;
@@ -538,13 +538,11 @@ impl Form2551QView {
                                 || self.draft.submission_filename.as_deref()
                                     == Some(&saved.filename)
                             {
-                                self.draft.status = FilingStatus::Confirmed;
-                                self.draft.confirmed_at = Some(format!(
-                                    "{}T{}",
-                                    saved.received_date, saved.received_time
-                                ));
-                                self.draft.receipt_id = saved.id;
-                                self.draft.submission_filename = Some(saved.filename);
+                                self.draft.transition_to_confirmed(
+                                    format!("{}T{}", saved.received_date, saved.received_time),
+                                    saved.id,
+                                    Some(saved.filename),
+                                );
                                 let _ = db.save_2551q_draft(&self.draft);
                                 cx.emit(Form2551QEvent::Confirmed);
                             }

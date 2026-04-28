@@ -1,7 +1,7 @@
 use crate::db::Database;
 use crate::forms::form_2551q::FilingStatus;
 use crate::profile::TaxpayerProfile;
-use chrono::{Datelike, Duration, Utc};
+use chrono::{Datelike, Utc};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use tracing::{error, info, warn};
@@ -137,12 +137,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                     ),
                 );
 
-                draft.status = FilingStatus::Submitted;
-                draft.submitted_at = Some(now.to_rfc3339());
-                draft.submission_filename = Some(filename);
-                draft.submission_attempts = 0;
-                draft.next_retry_at = None;
-                draft.last_error = None;
+                draft.transition_to_submitted(filename.clone());
 
                 if let Ok(db_guard) = db.lock() {
                     let _ = db_guard.save_2551q_draft(&draft);
@@ -204,22 +199,17 @@ fn fail_draft(
         draft.period_code(),
         error_msg
     );
-    draft.submission_attempts += 1;
-    draft.last_error = Some(error_msg);
 
-    // Exponential backoff up to 5 attempts
-    if draft.submission_attempts >= 5 {
+    let attempts_before = draft.submission_attempts;
+    draft.record_submission_failure(error_msg);
+
+    if draft.submission_attempts >= 5 || attempts_before >= 4 {
         warn!(
             "Cron: Max attempts reached for {}. Giving up.",
             draft.period_code()
         );
-        draft.status = FilingStatus::Draft; // Revert to draft
-        draft.next_retry_at = None;
     } else {
-        // 1min, 2min, 4min, 8min
         let delay_mins = 2i64.pow(draft.submission_attempts - 1);
-        let next_time = Utc::now() + Duration::minutes(delay_mins);
-        draft.next_retry_at = Some(next_time.to_rfc3339());
         info!("Cron: Next retry scheduled in {} mins", delay_mins);
     }
 

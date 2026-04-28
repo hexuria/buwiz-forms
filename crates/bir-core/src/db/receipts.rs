@@ -129,6 +129,11 @@ impl Database {
             None => return Ok(()),
         };
 
+        // Only confirm forms that are currently in Submitted status
+        if !matches!(draft.status, FilingStatus::Submitted) {
+            return Ok(());
+        }
+
         if let Some(submitted_at) = &draft.submitted_at
             && let Ok(submitted_dt) = chrono::DateTime::parse_from_rfc3339(submitted_at) {
                 let date_str = format!("{}T{}", receipt.received_date, receipt.received_time);
@@ -149,13 +154,11 @@ impl Database {
                     }
             }
 
-        draft.status = FilingStatus::Confirmed;
-        draft.confirmed_at = Some(format!(
-            "{}T{}",
-            receipt.received_date, receipt.received_time
-        ));
-        draft.submission_filename = Some(receipt.filename.clone());
-        draft.receipt_id = receipt.id;
+        draft.transition_to_confirmed(
+            format!("{}T{}", receipt.received_date, receipt.received_time),
+            receipt.id,
+            Some(receipt.filename.clone()),
+        );
         self.save_2551q_draft(&draft)?;
         Ok(())
     }
