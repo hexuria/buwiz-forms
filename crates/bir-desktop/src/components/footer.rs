@@ -24,14 +24,14 @@ pub fn render_footer<T>(cx: &mut Context<T>) -> impl IntoElement {
                 .gap_4()
                 // Bagong Pilipinas Logo
                 .child(
-                    img(PathBuf::from("assets/svg/bagong-pilipinas.svg"))
+                    img("svg/bagong-pilipinas.svg")
                         .w_12()
                         .h_12()
                         .object_fit(ObjectFit::Contain),
                 )
                 // BIR Logo
                 .child(
-                    img(PathBuf::from("assets/images/bir-new-logo.png"))
+                    img("images/bir-new-logo.png")
                         .w_12()
                         .h_12()
                         .object_fit(ObjectFit::Contain),
@@ -59,7 +59,7 @@ pub fn render_footer<T>(cx: &mut Context<T>) -> impl IntoElement {
                             cx.open_url("https://www.facebook.com/goldcoders.corp");
                         })
                         .child(
-                            img(PathBuf::from("assets/images/goldcoders_logo.png"))
+                            img("images/goldcoders_logo.png")
                                 .w_12()
                                 .h_12()
                                 .object_fit(ObjectFit::Contain),

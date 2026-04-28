@@ -190,13 +190,13 @@ fn fetch_with_auth(
                                             if let Some((year, quarter)) =
                                                 crate::db::parse_2551q_period(&period)
                                             {
-                                                let _ = notify_rust::Notification::new()
-                                                    .summary("BIR Confirmation Received")
-                                                    .body(&format!(
+                                                crate::notification::send_notification(
+                                                    "BIR Confirmation Received",
+                                                    &format!(
                                                         "Form: 2551Q\nYear: {}\nQuarter: {}",
                                                         year, quarter
-                                                    ))
-                                                    .show();
+                                                    )
+                                                );
                                             }
                                         }
                                     }

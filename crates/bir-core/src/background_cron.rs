@@ -36,10 +36,10 @@ pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
 
         let test_enabled = profiles.iter().any(|p| p.test_notification_enabled);
         if test_enabled {
-            let _ = notify_rust::Notification::new()
-                .summary("BIR Vault Daemon")
-                .body("Hello! The background cron is active.")
-                .show();
+            crate::notification::send_notification(
+                "BIR Vault Daemon",
+                "Hello! The background cron is active."
+            );
         }
 
         let cron_profiles = profiles
@@ -129,14 +129,14 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                 info!("Cron: Successfully submitted queued form {}", filename);
 
                 let now = Utc::now();
-                let _ = notify_rust::Notification::new()
-                    .summary("BIR Form Submitted")
-                    .body(&format!(
+                crate::notification::send_notification(
+                    "BIR Form Submitted",
+                    &format!(
                         "Filename: {}\nTimestamp: {}",
                         filename,
                         now.format("%I:%M %p")
-                    ))
-                    .show();
+                    )
+                );
 
                 draft.status = FilingStatus::Submitted;
                 draft.submitted_at = Some(now.to_rfc3339());

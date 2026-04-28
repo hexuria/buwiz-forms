@@ -28,6 +28,7 @@ pub mod forms;
 pub mod import;
 pub mod naming;
 pub mod news_fetcher;
+pub mod notification;
 pub mod official_import;
 pub mod penalties;
 pub mod profile;

@@ -700,12 +700,12 @@ impl AppState {
                                     }))
                                     .child(
                                         if is_mini {
-                                            gpui::img(std::path::PathBuf::from("assets/svg/e_logo.svg"))
+                                            gpui::img("svg/e_logo.svg")
                                                 .w_full()
                                                 .h_8()
                                                 .object_fit(gpui::ObjectFit::Contain)
                                         } else {
-                                            gpui::img(std::path::PathBuf::from("assets/svg/ebirforms.png"))
+                                            gpui::img("svg/ebirforms.png")
                                                 .w_full()
                                                 .h_10()
                                                 .object_fit(gpui::ObjectFit::Contain)
