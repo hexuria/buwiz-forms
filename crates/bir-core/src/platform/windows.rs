@@ -1,7 +1,7 @@
 //! Windows-specific implementations for bir-core platform services.
 
 use std::path::PathBuf;
-use tracing::{info, warn};
+use tracing::info;
 
 // ── Data Directory ───────────────────────────────────────────────────────────
 
@@ -40,7 +40,7 @@ pub fn install_daemon() {
         let daemon_path_str = daemon_path.to_string_lossy().to_string();
 
         let _ = std::process::Command::new("reg")
-            .args(&[
+            .args([
                 "add",
                 "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
                 "/v",
@@ -61,7 +61,7 @@ pub fn install_daemon() {
 
 pub fn uninstall_daemon() {
     let _ = std::process::Command::new("reg")
-        .args(&[
+        .args([
             "delete",
             "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
             "/v",
@@ -72,7 +72,7 @@ pub fn uninstall_daemon() {
 
     // Kill the process if running
     let _ = std::process::Command::new("taskkill")
-        .args(&["/F", "/IM", "bir-daemon.exe"])
+        .args(["/F", "/IM", "bir-daemon.exe"])
         .output();
     info!("Windows Registry Run key removed");
 }
