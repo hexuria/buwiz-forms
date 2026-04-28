@@ -197,6 +197,17 @@ impl CronTasksView {
         );
         view._subscriptions.push(sub2);
 
+        let bus = cx.global::<crate::events::GlobalEventBus>().0.clone();
+        cx.subscribe(
+            &bus,
+            |_this: &mut Self, _bus, event: &crate::events::AppEvent, cx| match event {
+                crate::events::AppEvent::DatabaseChanged => {
+                    _this.load_settings(cx);
+                }
+            },
+        )
+        .detach();
+
         view.load_settings(cx);
         view
     }
