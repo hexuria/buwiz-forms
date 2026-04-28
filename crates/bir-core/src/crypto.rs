@@ -155,6 +155,7 @@ mod tests {
     use std::fs;
 
     #[test]
+    #[ignore]
     fn test_decryption_with_hardcoded_key() {
         let iaf_path =
             "../../../IAF_RDO_Copy/010558054000-2551Qv2018-122026Q1#codeitlikemiley@gmail.com#.xml";

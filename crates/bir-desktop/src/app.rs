@@ -1823,6 +1823,7 @@ impl Render for AppState {
                                                     this.os_auth_triggered = true;
                                                     this.profile_auth_error = None;
                                                     
+                                                    #[cfg(any(target_os = "macos", target_os = "windows"))]
                                                     cx.spawn(async move |this, cx| {
                                                         use robius_authentication::{BiometricStrength, Context, PolicyBuilder, Text, AndroidText, WindowsText};
                                                         let policy = match PolicyBuilder::new()
@@ -1861,6 +1862,13 @@ impl Render for AppState {
                                                             cx.notify();
                                                         });
                                                     }).detach();
+
+                                                    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+                                                    {
+                                                        this.os_auth_triggered = false;
+                                                        this.profile_auth_error = Some("Admin Override is not supported on this platform.".to_string());
+                                                        cx.notify();
+                                                    }
                                                 }))
                                         )
                                         .child(
@@ -1959,6 +1967,7 @@ impl Render for AppState {
                                                     this.admin_os_auth_triggered = true;
                                                     this.admin_auth_error = None;
                                                     
+                                                    #[cfg(any(target_os = "macos", target_os = "windows"))]
                                                     cx.spawn(async move |this, cx| {
                                                         use robius_authentication::{BiometricStrength, Context, PolicyBuilder, Text, AndroidText, WindowsText};
                                                         let policy = match PolicyBuilder::new()
@@ -2000,6 +2009,13 @@ impl Render for AppState {
                                                             cx.notify();
                                                         });
                                                     }).detach();
+
+                                                    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+                                                    {
+                                                        this.admin_os_auth_triggered = false;
+                                                        this.admin_auth_error = Some("OS Authentication is not supported on this platform.".to_string());
+                                                        cx.notify();
+                                                    }
                                                 }))
                                         )
                                         .child(

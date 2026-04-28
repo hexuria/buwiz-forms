@@ -179,7 +179,7 @@ pub fn extract_database_zip(zip_path: &Path, out_db_path: &Path) -> Result<(), D
         &format!("ATTACH DATABASE ?1 AS encrypted KEY \"x'{}'\";", key_hex),
         rusqlite::params![out_db_path.to_str().unwrap()],
     )?;
-    conn.execute("SELECT sqlcipher_export('encrypted');", [])?;
+    conn.execute_batch("SELECT sqlcipher_export('encrypted');")?;
     conn.execute("DETACH DATABASE encrypted;", [])?;
 
     // Clean up
