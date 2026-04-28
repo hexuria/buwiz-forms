@@ -1,5 +1,7 @@
 # E-BIRForms
 
+[![CI](https://github.com/codeitlikemiley/ebirforms/actions/workflows/ci.yml/badge.svg)](https://github.com/codeitlikemiley/ebirforms/actions/workflows/ci.yml)
+
 A modern, native, and secure desktop application for managing and filing eBIRForms in the Philippines. Built in Rust using the [GPUI](https://gpui.rs/) framework, E-BIRForms delivers a highly responsive, offline-first experience that fully respects your data privacy. E-BIRForms completely reverse-engineers the traditional eBIRForms workflow into a seamless, native Mac, Windows, and Linux application.
 
 ---

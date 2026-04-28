@@ -205,9 +205,17 @@ sign-mac: ## Codesign + notarize (requires RELEASE_SIGNING_IDENTITY, APPLE_ID, A
 	@echo "✅ Signed and notarized"
 
 # ── Publish ───────────────────────────────────────────────────────────────────
+# If the first argument is "publish", extract the remaining arguments
+ifeq (publish,$(firstword $(MAKECMDGOALS)))
+  PUBLISH_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  # Turn them into do-nothing targets so make doesn't complain about missing rules
+  $(eval $(PUBLISH_ARGS):;@:)
+endif
 
 publish: ## Auto-increment patch version, tag, and push (triggers release workflow)
-ifdef VERSION_OVERRIDE
+ifneq ($(PUBLISH_ARGS),)
+	./scripts/version.sh set $(PUBLISH_ARGS)
+else ifdef VERSION_OVERRIDE
 	./scripts/version.sh set $(VERSION_OVERRIDE)
 else
 	./scripts/version.sh bump
@@ -242,5 +250,5 @@ help: ## Show this help
 	@echo ""
 	@echo "  Publish:"
 	@echo "    make publish                   Auto-increment patch, tag, push"
-	@echo "    make publish VERSION_OVERRIDE=0.1.1   Force specific version"
+	@echo "    make publish 0.1.1             Force specific version"
 	@echo ""
