@@ -5,6 +5,11 @@ use flate2::write::ZlibEncoder;
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
 
+/// The BIR-mandated AES passphrase for encrypting/decrypting IAF XML files.
+/// Extracted from the official eBIRForms `Encrypt.exe` binary (DCPcrypt2 pipeline).
+/// This is a protocol constant, not a secret — every eBIRForms installation uses the same key.
+pub const BIR_IAF_PASSPHRASE: &str = "T0081gP45sy0rd-To+R3m3m63r!@4/<>";
+
 #[derive(thiserror::Error, Debug)]
 pub enum CryptoError {
     #[error("Decryption failed: {0}")]

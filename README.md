@@ -111,9 +111,25 @@ sudo apt-get install -y \
 ## 📂 Architecture
 
 - `crates/bir-core/`: Contains all domain logic, SQLite database integrations, API communications, IMAP automated email tracking, cryptography, and XML generation logic.
+  - `forms/` — Form data models, `FormValidator` trait, ATC tax code tables, and the form registry.
+  - `db/` — Decomposed database layer with domain-specific modules (`profiles.rs`, `drafts.rs`, `submissions.rs`, `receipts.rs`, `jobs.rs`, `notices.rs`, `migrations.rs`).
 - `crates/bir-desktop/`: The GPUI-based frontend application managing windows, forms, inputs, locking, and theming.
+  - `components/form_engine.rs` — `FormViewTrait` providing shared status pipeline, header, and action infrastructure for all tax forms.
+  - `components/form_parts.rs` — Reusable UI primitives: `form_accordion`, `taxpayer_info_section`, `atc_schedule_table`, `computation_row_*`, `penalty_summary_section`, and more.
+  - `views/` — Per-form view implementations (e.g., `form_2551q_view.rs`, `form_1701q_view.rs`) that compose the shared components.
 - `crates/bir-print/`: High-performance PDF generation and native OS printing integrations.
 - `crates/gpui-component/`: A centralized design system and UI toolkit customized exclusively for GPUI.
+
+### 🧩 Form Engine
+
+Adding a new BIR tax form follows a standardized 4-phase lifecycle:
+
+1. **Core Model** (`bir-core/forms/`) — Draft struct + `FormValidator` + optional `recompute()`
+2. **Database** (`bir-core/db/`) — Migration + CRUD methods for draft persistence
+3. **UI View** (`bir-desktop/views/`) — Implement `FormViewTrait` + compose UI from `form_parts`
+4. **Submission** — XML field mapping + PDF rendering
+
+See [docs/adding-a-new-form.md](docs/adding-a-new-form.md) for the comprehensive developer guide with code examples and a 16-step checklist.
 
 ---
 
@@ -123,3 +139,6 @@ sudo apt-get install -y \
   - macOS: `~/Library/Application Support/Taxman/eBIRForms/bir_data.db`
   - Linux/Windows: `~/.taxman-ebir/bir_data.db`
 - **Background Daemon:** Background cron tasks (auto-fetch) are decoupled from the active taxpayer profile and can be managed globally in the settings.
+- **Schema Migrations:** Managed via a `schema_version` table with forward-only numbered migrations in `bir-core/src/db/migrations.rs`.
+- **Security:** Sensitive credential fields (`imap_app_password`, `oauth_access_token`, `oauth_refresh_token`, `profile_pin_hash`) are zeroed on `Drop` via the `zeroize` crate.
+

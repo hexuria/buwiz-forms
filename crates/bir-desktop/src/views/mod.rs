@@ -3,6 +3,7 @@ pub mod dashboard;
 pub mod debug_log_viewer;
 pub mod email_confirmation_view;
 pub mod form_2551q_view;
+pub mod form_1701q_view;
 pub mod global_dashboard;
 pub mod import_export;
 pub mod lock_screen;

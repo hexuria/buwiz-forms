@@ -23,6 +23,7 @@ use bir_print::render_2551q_print;
 use super::email_confirmation_view::EmailConfirmationView;
 use super::pdf_viewer::PdfViewerView;
 use super::receipt_viewer::{ReceiptViewerEvent, ReceiptViewerView};
+use crate::components::form_engine::FormViewTrait;
 
 pub enum Form2551QEvent {
     BackToDashboard,
@@ -473,188 +474,6 @@ impl Form2551QView {
         }).detach();
     }
 
-    fn render_status_pipeline(&self, cx: &Context<Self>) -> gpui::Div {
-        let steps: [(&str, FilingStatus, u8); 5] = [
-            ("Draft", FilingStatus::Draft, 1),
-            ("Queued", FilingStatus::Queued, 2),
-            ("Submitted", FilingStatus::Submitted, 3),
-            ("Confirmed", FilingStatus::Confirmed, 4),
-            ("Paid", FilingStatus::Paid, 5),
-        ];
-
-        let step_order = |s: &FilingStatus| -> u8 {
-            match s {
-                FilingStatus::Draft => 0,
-                FilingStatus::Queued => 1,
-                FilingStatus::Submitted => 2,
-                FilingStatus::Confirmed => 3,
-                FilingStatus::Paid => 4,
-            }
-        };
-        let current_idx = step_order(&self.draft.status);
-
-        let mut row = div().flex().items_center().w_full().justify_center();
-
-        for (i, (label, step_status, step_num)) in steps.iter().enumerate() {
-            let idx = step_order(step_status);
-            let is_current = idx == current_idx;
-            let is_completed = idx < current_idx;
-
-            // Connector line before this step (not before the first)
-            if i > 0 {
-                if idx <= current_idx {
-                    row = row.child(
-                        div()
-                            .flex_1()
-                            .max_w(px(80.))
-                            .h(px(2.))
-                            .bg(cx.theme().success.opacity(0.5)),
-                    );
-                } else {
-                    row = row.child(
-                        div()
-                            .flex_1()
-                            .max_w(px(80.))
-                            .border_t_2()
-                            .border_dashed()
-                            .border_color(cx.theme().muted_foreground),
-                    );
-                }
-            }
-
-            // Circle content: checkmark for completed, number for current/future
-            let circle_content = if is_completed {
-                div()
-                    .text_xs()
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(cx.theme().success_foreground)
-                    .child("✓")
-                    .into_any_element()
-            } else {
-                let num_color = if is_current {
-                    match step_status {
-                        FilingStatus::Draft => cx.theme().warning_foreground,
-                        FilingStatus::Queued => cx.theme().primary_foreground,
-                        FilingStatus::Submitted => cx.theme().info_foreground,
-                        FilingStatus::Confirmed => cx.theme().success_foreground,
-                        FilingStatus::Paid => cx.theme().success_foreground,
-                    }
-                } else {
-                    cx.theme().muted_foreground
-                };
-                div()
-                    .text_xs()
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(num_color)
-                    .child(format!("{}", step_num))
-                    .into_any_element()
-            };
-
-            // Circle colors
-            let (circle_bg, circle_border) = if is_completed {
-                (cx.theme().success, cx.theme().success)
-            } else if is_current {
-                let color = match step_status {
-                    FilingStatus::Draft => cx.theme().warning,
-                    FilingStatus::Queued => cx.theme().primary,
-                    FilingStatus::Submitted => cx.theme().info,
-                    FilingStatus::Confirmed => cx.theme().success,
-                    FilingStatus::Paid => cx.theme().success,
-                };
-                (color, color)
-            } else {
-                (gpui::rgba(0x00000000).into(), cx.theme().muted_foreground)
-            };
-
-            // Label color
-            let label_color = if is_completed {
-                cx.theme().success
-            } else if is_current {
-                match step_status {
-                    FilingStatus::Draft => cx.theme().warning,
-                    FilingStatus::Queued => cx.theme().primary,
-                    FilingStatus::Submitted => cx.theme().info,
-                    FilingStatus::Confirmed => cx.theme().success,
-                    FilingStatus::Paid => cx.theme().success,
-                }
-            } else {
-                cx.theme().muted_foreground
-            };
-
-            let mut circle = div()
-                .size(px(28.))
-                .rounded_full()
-                .border_2()
-                .border_color(circle_border)
-                .bg(circle_bg)
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(circle_content);
-
-            if !is_completed && !is_current {
-                circle = circle.border_dashed();
-            }
-
-            // Build step group: circle + label inline
-            let mut step_group = div()
-                .id(format!("step_{}", idx))
-                .flex()
-                .items_center()
-                .gap_2();
-
-            step_group = step_group.child(circle).child(
-                div()
-                    .text_xs()
-                    .text_color(label_color)
-                    .font_weight(if is_current {
-                        FontWeight::BOLD
-                    } else {
-                        FontWeight::MEDIUM
-                    })
-                    .child(*label),
-            );
-
-            // Add tooltip with submission date on the active Submitted step or Confirmed step
-            if matches!(step_status, FilingStatus::Submitted)
-                || matches!(step_status, FilingStatus::Confirmed)
-            {
-                let date_opt = match step_status {
-                    FilingStatus::Submitted => self.draft.submitted_at.as_deref(),
-                    FilingStatus::Confirmed => self.draft.confirmed_at.as_deref(),
-                    _ => None,
-                };
-                if let Some(date_str) = date_opt {
-                    let formatted_date =
-                        if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(date_str) {
-                            dt.format("%B %e, %Y %I:%M %p").to_string()
-                        } else if let Ok(dt) =
-                            chrono::NaiveDateTime::parse_from_str(date_str, "%Y-%m-%dT%H:%M:%S")
-                        {
-                            dt.format("%B %e, %Y %I:%M %p").to_string()
-                        } else {
-                            date_str.to_string()
-                        };
-
-                    let tooltip_text = match step_status {
-                        FilingStatus::Submitted => format!("Submitted on {}", formatted_date),
-                        FilingStatus::Confirmed => format!("Confirmed on {}", formatted_date),
-                        _ => unreachable!(),
-                    };
-
-                    step_group = step_group.tooltip(move |window, cx| {
-                        gpui_component::tooltip::Tooltip::new(tooltip_text.clone())
-                            .build(window, cx)
-                    });
-                }
-            }
-
-            row = row.child(step_group);
-        }
-
-        row
-    }
-
     fn validate_for_submit(&self, cx: &Context<Self>) -> Vec<(String, String)> {
         use bir_core::forms::FormValidator;
         let mut errors = FormValidator::validate(&self.draft);
@@ -1045,11 +864,7 @@ impl Form2551QView {
     }
 
     fn field_label(label: &str, cx: &Context<Self>) -> gpui::Div {
-        div()
-            .text_xs()
-            .text_color(cx.theme().muted_foreground)
-            .mb_1()
-            .child(label.to_string())
+        crate::components::form_parts::field_label(label, cx)
     }
 
     fn readonly_field(
@@ -1058,48 +873,27 @@ impl Form2551QView {
         error: Option<&String>,
         cx: &Context<Self>,
     ) -> gpui::Div {
-        let text_col = if error.is_some() {
-            cx.theme().danger
-        } else {
-            cx.theme().foreground
-        };
-
-        let mut d = div()
-            .flex()
-            .flex_col()
-            .gap_1()
-            .child(Self::field_label(label, cx))
-            .child(
-                div()
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(text_col)
-                    .text_sm()
-                    .child(if value.is_empty() {
-                        "—".to_string()
-                    } else {
-                        value.to_string()
-                    }),
-            );
-
-        if let Some(err_msg) = error {
-            d = d.child(
-                div()
-                    .text_xs()
-                    .text_color(cx.theme().danger)
-                    .child(err_msg.clone()),
-            );
-        }
-
-        d
+        crate::components::form_parts::readonly_field(label, value, error, cx)
     }
 
     fn currency_display(amount: f64, cx: &Context<Self>) -> gpui::Div {
-        div()
-            .font_weight(FontWeight::BOLD)
-            .text_color(cx.theme().primary)
-            .text_sm()
-            .child(format!("\u{20b1} {:.2}", amount))
+        crate::components::form_parts::currency_display(amount, cx)
     }
+}
+
+impl FormViewTrait for Form2551QView {
+    fn form_title(&self) -> &'static str { "BIR Form No. 2551Q" }
+    fn form_subtitle(&self) -> &'static str { "Quarterly Percentage Tax Return" }
+    fn form_version(&self) -> &'static str { "January 2018 (ENCS)" }
+    fn current_status(&self) -> FilingStatus { self.draft.status.clone() }
+    fn submitted_at(&self) -> Option<&str> { self.draft.submitted_at.as_deref() }
+    fn confirmed_at(&self) -> Option<&str> { self.draft.confirmed_at.as_deref() }
+    fn save_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) { self.save(window, cx); }
+    fn mark_submitted(&mut self, _window: &mut Window, cx: &mut Context<Self>) { self.mark_submitted(cx); }
+    fn mark_paid(&mut self, _window: &mut Window, cx: &mut Context<Self>) { self.mark_as_paid(cx); }
+    fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) { self.revert_to_draft(window, cx); }
+    fn preview_pdf(&mut self, window: &mut Window, cx: &mut Context<Self>) { self.preview_pdf(window, cx); }
+    fn print_confirmation(&mut self, window: &mut Window, cx: &mut Context<Self>) { self.print_confirmation(window, cx); }
 }
 
 impl Render for Form2551QView {
@@ -1111,70 +905,7 @@ impl Render for Form2551QView {
         let tax_payable = self.draft.tax_payable;
         let is_editable = self.is_editable();
 
-        let mut action_buttons = div().flex().justify_end().gap_2().w_full();
-
-        if matches!(
-            self.draft.status,
-            FilingStatus::Confirmed | FilingStatus::Paid
-        ) {
-            action_buttons = action_buttons.child(
-                gpui_component::button::Button::new("print_confirmation_btn")
-                    .label("View Confirmation Email")
-                    .outline()
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.print_confirmation(window, cx);
-                    })),
-            );
-        }
-
-        action_buttons = action_buttons.child(
-            gpui_component::button::Button::new("print_btn")
-                .label("PDF Viewer")
-                .icon(
-                    gpui_component::Icon::empty()
-                        .path("svg/printer.svg")
-                        .small(),
-                )
-                .outline()
-                .on_click(cx.listener(|this, _, window, cx| {
-                    this.preview_pdf(window, cx);
-                })),
-        );
-
-        let title_block = div()
-            .w_full()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(action_buttons)
-            .child(
-                div()
-                    .w_full()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_2xl()
-                            .font_weight(FontWeight::BLACK)
-                            .text_color(cx.theme().foreground)
-                            .child("BIR Form No. 2551Q"),
-                    )
-                    .child(
-                        div()
-                            .text_base()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(cx.theme().foreground)
-                            .child("Quarterly Percentage Tax Return"),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("January 2018 (ENCS)"),
-                    ),
-            );
+        let title_block = <Self as FormViewTrait>::render_header(self, cx);
 
         let carry_banner = if let Some(label) = carry_label {
             div()
@@ -1330,688 +1061,139 @@ impl Render for Form2551QView {
             );
 
         // background_info content
-        let background_info_content = div()
-            .flex()
-            .flex_col()
-            .gap_4()
-            .child(
-                div()
-                    .flex()
-                    .gap_8()
-                    .child(
-                        Self::readonly_field("1. TIN", &self.draft.tin, self.get_error("tin"), cx)
-                            .flex_1(),
-                    )
-                    .child(
-                        Self::readonly_field(
-                            "2. RDO Code",
-                            &self.draft.rdo_code,
-                            self.get_error("rdo_code"),
-                            cx,
-                        )
-                        .flex_1(),
-                    ),
-            )
-            .child(Self::readonly_field(
-                "3. Taxpayer's Name",
-                &self.draft.taxpayer_name,
-                self.get_error("taxpayer_name"),
-                cx,
-            ))
-            .child(Self::readonly_field(
-                "4. Registered Address",
-                &self.draft.registered_address,
-                self.get_error("registered_address"),
-                cx,
-            ))
-            .child(
-                div()
-                    .flex()
-                    .gap_8()
-                    .child(
-                        Self::readonly_field(
-                            "5. Zip Code",
-                            &self.draft.zip_code,
-                            self.get_error("zip_code"),
-                            cx,
-                        )
-                        .flex_1(),
-                    )
-                    .child(
-                        Self::readonly_field(
-                            "6. Contact Number",
-                            &self.draft.contact_number,
-                            self.get_error("contact_number"),
-                            cx,
-                        )
-                        .flex_1(),
-                    ),
-            )
-            .child(Self::readonly_field(
-                "7. Email Address",
-                &self.draft.email,
-                self.get_error("email"),
-                cx,
-            ));
+        let background_info_content = crate::components::form_parts::taxpayer_info_section(
+            crate::components::form_parts::TaxpayerInfoProps {
+                tin: &self.draft.tin,
+                tin_err: self.get_error("tin"),
+                rdo: &self.draft.rdo_code,
+                rdo_err: self.get_error("rdo_code"),
+                name: &self.draft.taxpayer_name,
+                name_err: self.get_error("taxpayer_name"),
+                address: &self.draft.registered_address,
+                address_err: self.get_error("registered_address"),
+                zip: &self.draft.zip_code,
+                zip_err: self.get_error("zip_code"),
+                contact: &self.draft.contact_number,
+                contact_err: self.get_error("contact_number"),
+                email: &self.draft.email,
+                email_err: self.get_error("email"),
+            },
+            cx,
+        );
 
         // schedule_one content
-        let schedule_one_content = div()
-            .flex()
-            .flex_col()
-            .gap_4()
-            .children(if is_mobile {
-                None
-            } else {
-                Some(
-                    div()
-                        .flex()
-                        .gap_2()
-                        .pb_2()
-                        .border_b_1()
-                        .border_color(cx.theme().border)
-                        .child(
-                            div()
-                                .w(px(80.))
-                                .text_xs()
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(cx.theme().muted_foreground)
-                                .child("ATC"),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .text_xs()
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(cx.theme().muted_foreground)
-                                .child("DESCRIPTION"),
-                        )
-                        .child(
-                            div()
-                                .w(px(140.))
-                                .text_xs()
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(cx.theme().muted_foreground)
-                                .child("TAXABLE AMOUNT (₱)"),
-                        )
-                        .child(
-                            div()
-                                .w(px(50.))
-                                .text_xs()
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(cx.theme().muted_foreground)
-                                .child("RATE"),
-                        )
-                        .child(
-                            div()
-                                .w(px(120.))
-                                .text_xs()
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(cx.theme().muted_foreground)
-                                .child("TAX DUE (₱)"),
-                        ),
-                )
-            })
-            .children(self.draft.schedule_1.iter().enumerate().map(|(i, row)| {
-                let atc = row.atc.clone();
-                let desc = row.atc_description.clone();
-                let rate_pct = format!("{:.1}%", row.tax_rate * 100.0);
-                let tax_due = row.tax_due;
-                let err_id = format!("schedule_1_row_{}", i + 1);
-                let has_err = self.get_error(&err_id).is_some();
-
-                let input_component = if let Some(row_in) = self.row_inputs.get(i) {
-                    div()
-                        .bg(cx.theme().background)
-                        .border_1()
-                        .rounded_md()
-                        .border_color(if has_err {
-                            cx.theme().danger
-                        } else {
-                            cx.theme().border
-                        })
-                        .px_2()
-                        .py_1()
-                        .child(
-                            Input::new(&row_in.taxable_amount)
-                                .disabled(!is_editable)
-                                .appearance(false),
-                        )
-                        .into_any_element()
-                } else {
-                    div().child("—").into_any_element()
-                };
-
-                let row_content = if is_mobile {
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap_3()
-                        .py_4()
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_1()
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .font_weight(FontWeight::BOLD)
-                                        .text_color(cx.theme().primary)
-                                        .child(atc),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(cx.theme().foreground)
-                                        .child(desc),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_1()
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .font_weight(FontWeight::BOLD)
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child("TAXABLE AMOUNT (₱)"),
-                                )
-                                .child(div().w_full().child(input_component)),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .justify_between()
-                                .items_center()
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .font_weight(FontWeight::BOLD)
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child("RATE"),
-                                )
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(rate_pct),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .justify_between()
-                                .items_center()
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .font_weight(FontWeight::BOLD)
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child("TAX DUE (₱)"),
-                                )
-                                .child(
-                                    div()
-                                        .font_weight(FontWeight::BOLD)
-                                        .text_color(cx.theme().primary)
-                                        .text_sm()
-                                        .child(format!("{:.2}", tax_due)),
-                                ),
-                        )
-                } else {
-                    div()
-                        .flex()
-                        .gap_2()
-                        .items_center()
-                        .py_2()
-                        .child(
-                            div()
-                                .w(px(80.))
-                                .text_sm()
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(cx.theme().primary)
-                                .child(atc),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .text_xs()
-                                .text_color(cx.theme().foreground)
-                                .child(desc),
-                        )
-                        .child(div().w(px(140.)).child(input_component))
-                        .child(
-                            div()
-                                .w(px(50.))
-                                .text_sm()
-                                .text_color(cx.theme().muted_foreground)
-                                .child(rate_pct),
-                        )
-                        .child(
-                            div()
-                                .w(px(120.))
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(cx.theme().primary)
-                                .text_sm()
-                                .child(format!("{:.2}", tax_due)),
-                        )
-                };
-
+        let schedule_rows = self.draft.schedule_1.iter().enumerate().map(|(i, row)| {
+            let err_id = format!("schedule_1_row_{}", i + 1);
+            let has_err = self.get_error(&err_id).is_some();
+            let input_component = if let Some(row_in) = self.row_inputs.get(i) {
                 div()
-                    .flex()
-                    .flex_col()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .child(row_content)
-                    .children(self.get_error(&err_id).map(|err_msg| {
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().danger)
-                            .pb_2()
-                            .child(err_msg.clone())
-                    }))
-            }));
+                    .bg(cx.theme().background)
+                    .border_1()
+                    .rounded_md()
+                    .border_color(if has_err { cx.theme().danger } else { cx.theme().border })
+                    .px_2()
+                    .py_1()
+                    .child(Input::new(&row_in.taxable_amount).disabled(!is_editable).appearance(false))
+                    .into_any_element()
+            } else {
+                div().child("—").into_any_element()
+            };
+            crate::components::form_parts::ScheduleRowProps {
+                atc: row.atc.clone(),
+                description: row.atc_description.clone(),
+                amount_label: "TAXABLE AMOUNT (₱)".to_string(),
+                rate: format!("{:.1}%", row.tax_rate * 100.0),
+                tax_due: row.tax_due,
+                error_message: self.get_error(&err_id),
+                input_component,
+            }
+        }).collect::<Vec<_>>();
+
+        let schedule_one_content = crate::components::form_parts::atc_schedule_table(
+            crate::components::form_parts::AtcScheduleTableProps {
+                title: "",
+                amount_col_label: "TAXABLE AMOUNT (₱)",
+                is_mobile,
+                rows: schedule_rows,
+            },
+            cx,
+        );
 
         // tax_computation content
         let tax_computation_content = div()
             .flex()
             .flex_col()
             .gap_4()
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap_x_4()
-                    .gap_y_2()
-                    .justify_between()
-                    .items_center()
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().foreground)
-                            .child("14. Total Tax Due (from Schedule 1)"),
-                    )
-                    .child(Self::currency_display(total_due, cx)),
-            )
-            .child({
-                let input_15 = {
-                    let has_err = self.get_error("creditable_withheld").is_some();
-                    div()
+            .child(crate::components::form_parts::computation_row_readonly(
+                "14. Total Tax Due (from Schedule 1)",
+                total_due,
+                false,
+                cx,
+            ))
+            .child(crate::components::form_parts::computation_row_input(
+                crate::components::form_parts::ComputationRowInputProps {
+                    label: "15. Less: Creditable Percentage Tax Withheld (BIR Form 2307)",
+                    input_component: div()
                         .bg(cx.theme().background)
                         .border_1()
                         .rounded_md()
-                        .border_color(if has_err {
-                            cx.theme().danger
-                        } else {
-                            cx.theme().border
-                        })
+                        .border_color(if self.get_error("creditable_withheld").is_some() { cx.theme().danger } else { cx.theme().border })
                         .px_2()
                         .py_1()
-                        .child(
-                            Input::new(&self.creditable_withheld_input)
-                                .disabled(!is_editable)
-                                .appearance(false),
-                        )
-                };
-                let row_15 =
-                    if is_mobile {
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_2()
-                            .child(div().text_sm().text_color(cx.theme().foreground).child(
-                                "15. Less: Creditable Percentage Tax Withheld (BIR Form 2307)",
-                            ))
-                            .child(div().w_full().child(input_15))
-                    } else {
-                        div()
-                            .flex()
-                            .justify_between()
-                            .items_center()
-                            .child(div().text_sm().text_color(cx.theme().foreground).child(
-                                "15. Less: Creditable Percentage Tax Withheld (BIR Form 2307)",
-                            ))
-                            .child(div().w(px(180.)).child(input_15))
-                    };
-                div().flex().flex_col().gap_1().child(row_15).children(
-                    self.get_error("creditable_withheld").map(|err| {
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().danger)
-                            .child(err.clone())
-                    }),
-                )
-            })
-            .child({
-                let input_16 = {
-                    let has_err = self.get_error("tax_paid_previous").is_some();
-                    div()
+                        .child(Input::new(&self.creditable_withheld_input).disabled(!is_editable).appearance(false))
+                        .into_any_element(),
+                    error_message: self.get_error("creditable_withheld"),
+                    locked_message: None,
+                    is_mobile,
+                },
+                cx,
+            ))
+            .child(crate::components::form_parts::computation_row_input(
+                crate::components::form_parts::ComputationRowInputProps {
+                    label: "16. Less: Tax Paid in Return Previously Filed",
+                    input_component: div()
                         .bg(cx.theme().background)
                         .border_1()
                         .rounded_md()
-                        .border_color(if has_err {
-                            cx.theme().danger
-                        } else {
-                            cx.theme().border
-                        })
+                        .border_color(if self.get_error("tax_paid_previous").is_some() { cx.theme().danger } else { cx.theme().border })
                         .px_2()
                         .py_1()
-                        .child(
-                            Input::new(&self.tax_paid_previous_input)
-                                .disabled(!is_editable)
-                                .appearance(false),
-                        )
-                };
-                let row_16 = if is_mobile {
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap_2()
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_1()
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(if is_amended {
-                                            cx.theme().foreground
-                                        } else {
-                                            cx.theme().muted_foreground
-                                        })
-                                        .child("16. Less: Tax Paid in Return Previously Filed"),
-                                )
-                                .child(if !is_amended {
-                                    div()
-                                        .text_xs()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child("Check Amended Return to unlock")
-                                } else {
-                                    div()
-                                }),
-                        )
-                        .child(
-                            div()
-                                .w_full()
-                                .opacity(if is_amended { 1.0 } else { 0.4 })
-                                .child(input_16),
-                        )
-                } else {
-                    div()
-                        .flex()
-                        .justify_between()
-                        .items_center()
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap_2()
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(if is_amended {
-                                            cx.theme().foreground
-                                        } else {
-                                            cx.theme().muted_foreground
-                                        })
-                                        .child("16. Less: Tax Paid in Return Previously Filed"),
-                                )
-                                .child(if !is_amended {
-                                    div()
-                                        .text_xs()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child("Check Amended Return to unlock")
-                                } else {
-                                    div()
-                                }),
-                        )
-                        .child(
-                            div()
-                                .w(px(180.))
-                                .opacity(if is_amended { 1.0 } else { 0.4 })
-                                .child(input_16),
-                        )
-                };
-                div().flex().flex_col().gap_1().child(row_16).children(
-                    self.get_error("tax_paid_previous").map(|err| {
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().danger)
-                            .child(err.clone())
-                    }),
-                )
-            })
+                        .child(Input::new(&self.tax_paid_previous_input).disabled(!is_editable).appearance(false))
+                        .into_any_element(),
+                    error_message: self.get_error("tax_paid_previous"),
+                    locked_message: if is_amended { None } else { Some("Check Amended Return to unlock") },
+                    is_mobile,
+                },
+                cx,
+            ))
             .child(
                 div()
-                    .flex()
-                    .flex_wrap()
-                    .gap_x_4()
-                    .gap_y_2()
-                    .justify_between()
-                    .items_center()
                     .pt_4()
                     .border_t_1()
                     .border_color(cx.theme().border)
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().foreground)
-                            .child("17. Tax Still Payable / (Overpayment)"),
-                    )
-                    .child(Self::currency_display(tax_payable, cx)),
+                    .child(crate::components::form_parts::computation_row_readonly(
+                        "17. Tax Still Payable / (Overpayment)",
+                        tax_payable,
+                        true,
+                        cx,
+                    ))
             )
             .child(
                 div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
                     .pt_4()
                     .child(
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().foreground)
-                            .child("18. Add: Penalties"),
+                        crate::components::form_parts::penalty_summary_section(
+                            self.draft.surcharge,
+                            self.draft.interest,
+                            self.draft.compromise,
+                            self.draft.total_penalties,
+                            self.draft.total_amount_payable,
+                            cx,
+                        )
                     )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .gap_x_4()
-                            .gap_y_2()
-                            .pl_6()
-                            .justify_between()
-                            .items_center()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("18A. Surcharge"),
-                            )
-                            .child(Self::currency_display(self.draft.surcharge, cx)),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .gap_x_4()
-                            .gap_y_2()
-                            .pl_6()
-                            .justify_between()
-                            .items_center()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("18B. Interest"),
-                            )
-                            .child(Self::currency_display(self.draft.interest, cx)),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .gap_x_4()
-                            .gap_y_2()
-                            .pl_6()
-                            .justify_between()
-                            .items_center()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("18C. Compromise"),
-                            )
-                            .child(Self::currency_display(self.draft.compromise, cx)),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .gap_x_4()
-                            .gap_y_2()
-                            .pl_6()
-                            .justify_between()
-                            .items_center()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(cx.theme().foreground)
-                                    .child("18D. Total Penalties"),
-                            )
-                            .child(Self::currency_display(self.draft.total_penalties, cx)),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap_x_4()
-                    .gap_y_2()
-                    .justify_between()
-                    .items_center()
-                    .pt_4()
-                    .border_t_1()
-                    .border_color(cx.theme().border)
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::BLACK)
-                            .text_color(cx.theme().foreground)
-                            .child("19. Total Amount Payable / (Overpayment)"),
-                    )
-                    .child(
-                        div()
-                            .text_2xl()
-                            .font_weight(FontWeight::BLACK)
-                            .text_color(if self.draft.total_amount_payable > 0.0 {
-                                cx.theme().primary
-                            } else {
-                                cx.theme().muted_foreground
-                            })
-                            .child(format!("\u{20b1} {:.2}", self.draft.total_amount_payable)),
-                    ),
             );
 
         // Actions moved to toolbar
-
-        macro_rules! build_accordion {
-            ($id:expr, $label:expr, $is_expanded:expr, $is_valid:expr, $has_error:expr, $on_click:expr, $content:expr $(,)?) => {{
-                let mut card = div()
-                    .bg(cx.theme().secondary)
-                    .rounded_xl()
-                    .border_1()
-                    .border_color(if $has_error {
-                        cx.theme().danger
-                    } else {
-                        cx.theme().border
-                    })
-                    .p_6()
-                    .flex()
-                    .flex_col()
-                    .child(
-                        div()
-                            .id($id)
-                            .flex()
-                            .justify_between()
-                            .items_center()
-                            .cursor_pointer()
-                            .w_full()
-                            .p_2()
-                            .rounded_md()
-                            .hover(|style| style.bg(cx.theme().muted.opacity(0.5)))
-                            .on_click($on_click)
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_3()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .child(
-                                        div()
-                                            .w_5()
-                                            .h_5()
-                                            .flex_shrink_0()
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .child(if $is_valid {
-                                                div()
-                                                    .text_color(gpui::rgba(0x22c55eff))
-                                                    .font_weight(FontWeight::BLACK)
-                                                    .text_lg()
-                                                    .child("✓")
-                                                    .into_any_element()
-                                            } else {
-                                                div().into_any_element()
-                                            }),
-                                    )
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .min_w_0()
-                                            .text_sm()
-                                            .whitespace_normal()
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(cx.theme().foreground)
-                                            .child($label),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .w_6()
-                                    .h_6()
-                                    .flex_shrink_0()
-                                    .rounded_full()
-                                    .bg(cx.theme().muted)
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child(if $is_expanded { "▲" } else { "▼" }),
-                                    ),
-                            ),
-                    );
-
-                if $is_expanded {
-                    card = card.child(
-                        div()
-                            .mt_4()
-                            .pt_4()
-                            .border_t_1()
-                            .border_color(cx.theme().border)
-                            .child($content),
-                    );
-                }
-                card
-            }};
-        }
 
         let is_submitted = !matches!(self.draft.status, FilingStatus::Draft);
 
@@ -2062,56 +1244,60 @@ impl Render for Form2551QView {
             .gap_8()
             .child(title_block)
             .child(carry_banner)
-            .child(build_accordion!(
+            .child(crate::components::form_parts::form_accordion(
                 "acc_filing_period",
                 "FILING PERIOD",
                 self.show_filing_period,
                 is_filing_period_valid,
                 self.has_section_error("filing_period"),
-                cx.listener(|this, _, _, cx| {
+                cx.listener(|this: &mut Self, _, _, cx| {
                     this.show_filing_period = !this.show_filing_period;
                     cx.notify();
                 }),
-                filing_period_content,
+                filing_period_content.into_any_element(),
+                cx,
             ))
-            .child(build_accordion!(
+            .child(crate::components::form_parts::form_accordion(
                 "acc_background_info",
                 "PART I — BACKGROUND INFORMATION (pre-filled from profile)",
                 self.show_background_info,
                 is_background_info_valid,
                 self.has_section_error("background_info"),
-                cx.listener(|this, _, _, cx| {
+                cx.listener(|this: &mut Self, _, _, cx| {
                     this.show_background_info = !this.show_background_info;
                     cx.notify();
                 }),
-                background_info_content,
+                background_info_content.into_any_element(),
+                cx,
             ))
-            .child(build_accordion!(
+            .child(crate::components::form_parts::form_accordion(
                 "acc_schedule_1",
                 "SCHEDULE 1 — COMPUTATION OF TAX",
                 self.show_schedule_1,
                 is_schedule_1_valid,
                 self.has_section_error("schedule_1"),
-                cx.listener(|this, _, _, cx| {
+                cx.listener(|this: &mut Self, _, _, cx| {
                     this.show_schedule_1 = !this.show_schedule_1;
                     cx.notify();
                 }),
-                schedule_one_content,
+                schedule_one_content.into_any_element(),
+                cx,
             ))
-            .child(build_accordion!(
+            .child(crate::components::form_parts::form_accordion(
                 "acc_tax_computation",
                 "PART II — COMPUTATION OF TAX",
                 self.show_tax_computation,
                 is_tax_computation_valid,
                 self.has_section_error("tax_computation"),
-                cx.listener(|this, _, _, cx| {
+                cx.listener(|this: &mut Self, _, _, cx| {
                     this.show_tax_computation = !this.show_tax_computation;
                     cx.notify();
                 }),
-                tax_computation_content,
+                tax_computation_content.into_any_element(),
+                cx,
             ));
 
-        let status_pipeline = self.render_status_pipeline(cx);
+        let status_pipeline = <Self as FormViewTrait>::render_status_pipeline(self, cx);
 
         let status_banner = div()
             .flex()

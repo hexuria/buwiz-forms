@@ -1,5 +1,5 @@
 use crate::bir_xml::{generate_bir_xml, parse_bir_xml};
-use crate::crypto::{compress_and_encrypt, decrypt_and_decompress};
+use crate::crypto::{BIR_IAF_PASSPHRASE, compress_and_encrypt, decrypt_and_decompress};
 use crate::transport::submit_iaf;
 use anyhow::{Result, anyhow};
 use chrono::Local;
@@ -37,10 +37,8 @@ pub async fn import_and_submit_savefile(
     let form_type = parts[1].to_string();
     let period_code = parts[2..].join("-");
 
-    let passphrase = "T0081gP45sy0rd-To+R3m3m63r!@4/<>";
-
     let ciphertext = fs::read(file_path)?;
-    let plaintext_bytes = decrypt_and_decompress(&ciphertext, passphrase)?;
+    let plaintext_bytes = decrypt_and_decompress(&ciphertext, BIR_IAF_PASSPHRASE)?;
     let plaintext_str = String::from_utf8_lossy(&plaintext_bytes);
 
     let mut fields = parse_bir_xml(&plaintext_str);
@@ -65,7 +63,7 @@ pub async fn import_and_submit_savefile(
     fields.insert("txtEmail".to_string(), email.clone());
 
     let new_xml = generate_bir_xml(&fields);
-    let encrypted = compress_and_encrypt(new_xml.as_bytes(), passphrase)?;
+    let encrypted = compress_and_encrypt(new_xml.as_bytes(), BIR_IAF_PASSPHRASE)?;
 
     let submit_filename = format!("{}-{}-{}#{}#.xml", tin, form_type, period_code, email);
 

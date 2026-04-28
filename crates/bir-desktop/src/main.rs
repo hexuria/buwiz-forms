@@ -3,10 +3,14 @@
 use gpui::*;
 use gpui_component::*;
 
+mod actions;
 mod app;
+mod auth_overlays;
 mod components;
 pub mod events;
 mod platform;
+mod sidebar;
+mod theme;
 mod views;
 
 pub mod global_actions {

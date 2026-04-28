@@ -128,3 +128,21 @@ impl TaxpayerProfile {
     }
 }
 
+impl Drop for TaxpayerProfile {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        if let Some(ref mut pw) = self.imap_app_password {
+            pw.zeroize();
+        }
+        if let Some(ref mut t) = self.oauth_access_token {
+            t.zeroize();
+        }
+        if let Some(ref mut t) = self.oauth_refresh_token {
+            t.zeroize();
+        }
+        if let Some(ref mut h) = self.profile_pin_hash {
+            h.zeroize();
+        }
+    }
+}
+

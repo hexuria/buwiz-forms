@@ -1,6 +1,7 @@
 use crate::views::cron_tasks::CronTasksView;
 use crate::views::dashboard::{DashboardEvent, DashboardView};
 use crate::views::form_2551q_view::{Form2551QEvent, Form2551QView};
+use crate::views::form_1701q_view::{Form1701QEvent, Form1701QView};
 use crate::views::global_dashboard::{GlobalDashboardEvent, GlobalDashboardView};
 use crate::views::import_export::{ImportExportEvent, ImportExportView};
 use crate::views::lock_screen::{LockScreenEvent, LockScreenView};
@@ -8,12 +9,12 @@ use crate::views::profile_manager::ProfileManagerView;
 use crate::views::settings::{SettingsEvent, SettingsView};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use gpui_component::button::ButtonVariants;
-use gpui_component::input::{Input, InputEvent, InputState, OtpInput, OtpState};
+use gpui_component::input::{InputEvent, InputState, OtpState};
 use gpui_component::*;
 
 use bir_core::db::Database;
 use bir_core::forms::form_2551q::Form2551QDraft;
+use bir_core::forms::Form1701QDraft;
 use bir_core::profile::TaxpayerProfile;
 use std::sync::{Arc, Mutex};
 
@@ -40,6 +41,7 @@ pub enum ActiveView {
     GlobalDashboard,
     Dashboard,
     Form2551Q,
+    Form1701Q,
     ProfileManager,
     CronTasks,
     ImportExport,
@@ -53,46 +55,48 @@ pub enum ProfileTargetAction {
 }
 
 pub struct AppState {
-    active_view: ActiveView,
-    profile_manager: Entity<ProfileManagerView>,
-    dashboard_view: Entity<DashboardView>,
-    global_dashboard_view: Entity<GlobalDashboardView>,
-    cron_tasks_view: Entity<CronTasksView>,
-    import_export_view: Entity<ImportExportView>,
-    settings_view: Entity<SettingsView>,
-    form_2551q_view: Option<Entity<Form2551QView>>,
-    pending_form_draft: Option<Form2551QDraft>,
-    db: Arc<Mutex<Database>>,
-    profiles: Vec<TaxpayerProfile>,
-    active_profile_tin: Option<String>,
-    expanded_profile_tin: Option<String>,
-    profile_filter: Entity<InputState>,
-    sidebar_scroll: ScrollHandle,
-    show_archived: bool,
-    _subscriptions: Vec<Subscription>,
+    pub(crate) active_view: ActiveView,
+    pub(crate) profile_manager: Entity<ProfileManagerView>,
+    pub(crate) dashboard_view: Entity<DashboardView>,
+    pub(crate) global_dashboard_view: Entity<GlobalDashboardView>,
+    pub(crate) cron_tasks_view: Entity<CronTasksView>,
+    pub(crate) import_export_view: Entity<ImportExportView>,
+    pub(crate) settings_view: Entity<SettingsView>,
+    pub(crate) form_2551q_view: Option<Entity<Form2551QView>>,
+    pub(crate) pending_form_draft: Option<Form2551QDraft>,
+    pub(crate) form_1701q_view: Option<Entity<Form1701QView>>,
+    pub(crate) pending_form_1701q_draft: Option<Form1701QDraft>,
+    pub(crate) db: Arc<Mutex<Database>>,
+    pub(crate) profiles: Vec<TaxpayerProfile>,
+    pub(crate) active_profile_tin: Option<String>,
+    pub(crate) expanded_profile_tin: Option<String>,
+    pub(crate) profile_filter: Entity<InputState>,
+    pub(crate) sidebar_scroll: ScrollHandle,
+    pub(crate) show_archived: bool,
+    pub(crate) _subscriptions: Vec<Subscription>,
     /// Whether the window-aware subscription for global dashboard notifications has been set up.
-    global_dashboard_notif_subscribed: bool,
-    is_mini_sidebar: bool,
-    is_sidebar_hidden: bool,
-    theme_preference: AppThemeMode,
-    focus_handle: FocusHandle,
-    is_command_palette_open: bool,
-    command_palette_view: Option<Entity<crate::components::command_palette::CommandPalette>>,
-    is_locked: bool,
-    lock_screen_view: Option<Entity<LockScreenView>>,
-    pending_profile: Option<(TaxpayerProfile, ProfileTargetAction)>,
-    profile_otp_state: Entity<OtpState>,
-    profile_auth_error: Option<String>,
-    os_auth_triggered: bool,
-    unlocked_profile: Option<(TaxpayerProfile, ProfileTargetAction)>,
-    hide_tax_profiles: bool,
-    enable_profile_pins: bool,
-    pending_admin_view: Option<ActiveView>,
-    admin_otp_state: Entity<OtpState>,
-    admin_auth_error: Option<String>,
-    admin_os_auth_triggered: bool,
+    pub(crate) global_dashboard_notif_subscribed: bool,
+    pub(crate) is_mini_sidebar: bool,
+    pub(crate) is_sidebar_hidden: bool,
+    pub(crate) theme_preference: AppThemeMode,
+    pub(crate) focus_handle: FocusHandle,
+    pub(crate) is_command_palette_open: bool,
+    pub(crate) command_palette_view: Option<Entity<crate::components::command_palette::CommandPalette>>,
+    pub(crate) is_locked: bool,
+    pub(crate) lock_screen_view: Option<Entity<LockScreenView>>,
+    pub(crate) pending_profile: Option<(TaxpayerProfile, ProfileTargetAction)>,
+    pub(crate) profile_otp_state: Entity<OtpState>,
+    pub(crate) profile_auth_error: Option<String>,
+    pub(crate) os_auth_triggered: bool,
+    pub(crate) unlocked_profile: Option<(TaxpayerProfile, ProfileTargetAction)>,
+    pub(crate) hide_tax_profiles: bool,
+    pub(crate) enable_profile_pins: bool,
+    pub(crate) pending_admin_view: Option<ActiveView>,
+    pub(crate) admin_otp_state: Entity<OtpState>,
+    pub(crate) admin_auth_error: Option<String>,
+    pub(crate) admin_os_auth_triggered: bool,
     /// The TIN of the currently active/unlocked profile session (only meaningful when hide_tax_profiles is enabled)
-    active_session_tin: Option<String>,
+    pub(crate) active_session_tin: Option<String>,
 }
 
 impl AppState {
@@ -150,18 +154,7 @@ impl AppState {
             .as_deref()
             == Some("true");
 
-        let target_mode = match theme_preference {
-            AppThemeMode::Light => ThemeMode::Light,
-            AppThemeMode::Dark => ThemeMode::Dark,
-            AppThemeMode::System => match window.appearance() {
-                gpui::WindowAppearance::Light | gpui::WindowAppearance::VibrantLight => {
-                    ThemeMode::Light
-                }
-                gpui::WindowAppearance::Dark | gpui::WindowAppearance::VibrantDark => {
-                    ThemeMode::Dark
-                }
-            },
-        };
+        let target_mode = crate::theme::resolve_theme_mode(theme_preference, window);
         Theme::change(target_mode, Some(window), cx);
 
         let profiles = db.list_profiles().unwrap_or_default();
@@ -560,6 +553,8 @@ impl AppState {
             import_export_view,
             form_2551q_view: None,
             pending_form_draft: None,
+            form_1701q_view: None,
+            pending_form_1701q_draft: None,
             db,
             profiles,
             active_profile_tin: None,
@@ -593,7 +588,7 @@ impl AppState {
         }
     }
 
-    fn select_profile(
+    pub(crate) fn select_profile(
         &mut self,
         profile: TaxpayerProfile,
         action: ProfileTargetAction,
@@ -660,7 +655,7 @@ impl AppState {
         }
     }
 
-    fn request_admin_access(
+    pub(crate) fn request_admin_access(
         &mut self,
         target: ActiveView,
         window: &mut Window,
@@ -690,706 +685,7 @@ impl AppState {
         cx.notify();
     }
 
-    fn render_sidebar(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let is_mini = self.is_mini_sidebar || window.viewport_size().width < px(768.);
-        let filter = self.profile_filter.read(cx).value().to_lowercase();
-        let mut archived_count = 0;
-
-        for p in &self.profiles {
-            if p.is_archived {
-                archived_count += 1;
-            }
-        }
-
-        let filtered_profiles: Vec<TaxpayerProfile> = self
-            .profiles
-            .iter()
-            .filter(|profile| {
-                if self.show_archived != profile.is_archived {
-                    return false;
-                }
-                if self.hide_tax_profiles {
-                    let is_active_session =
-                        self.active_session_tin.as_ref() == Some(&profile.tin.full());
-                    // When filter is empty, show only the active session profile
-                    if filter.trim().is_empty() {
-                        return is_active_session;
-                    }
-                    // When typing, only exact full TIN match (digits or formatted) reveals a profile
-                    let is_exact_tin_match = filter.trim() == profile.tin.full().to_lowercase()
-                        || filter.trim() == profile.tin.formatted().to_lowercase();
-                    is_active_session || is_exact_tin_match
-                } else {
-                    filter.trim().is_empty()
-                        || profile
-                            .full_name
-                            .to_lowercase()
-                            .contains(&filter.trim().to_lowercase())
-                        || profile.tin.full().contains(filter.trim())
-                        || profile.tin.formatted().contains(filter.trim())
-                }
-            })
-            .cloned()
-            .collect();
-        div()
-            .w(if is_mini { px(72.) } else { px(280.) })
-            .h_full()
-            .bg(cx.theme().background)
-            .border_r_1()
-            .border_color(cx.theme().border)
-            .when(!is_mini, |this| this.py_6())
-            .when(is_mini, |this| this.py_3())
-            .flex()
-            .flex_col()
-            .justify_between()
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_4()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .w_full()
-                            .when(!is_mini, |this| this.px_6())
-                            .when(is_mini, |this| this.px_3())
-                            .child(
-                                div()
-                                    .flex()
-                                    .w_full()
-                                    .when(!is_mini, |this| this.justify_end())
-                                    .when(is_mini, |this| this.justify_center())
-                                    .mb(px(10.))
-                                    .child(
-                                        div()
-                                            .id("sidebar_toggle_btn")
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .size(px(40.))
-                                            .flex_shrink_0()
-                                            .cursor_pointer()
-                                            .hover(|s| s.bg(cx.theme().muted).rounded_md())
-                                            .on_click(cx.listener(|this, _ev, _window, cx| {
-                                                this.is_mini_sidebar = !this.is_mini_sidebar;
-                                                this.dashboard_view.update(cx, |view, cx| {
-                                                    view.set_mini_sidebar(this.is_mini_sidebar, cx);
-                                                });
-                                                cx.notify();
-                                            }))
-                                            .child(
-                                                Icon::new(if is_mini { IconName::ChevronRight } else { IconName::ChevronLeft })
-                                                    .size(px(28.))
-                                                    .text_color(cx.theme().foreground)
-                                            )
-                                    )
-                            )
-                            .child(
-                                div()
-                                    .id("global_dashboard_btn")
-                                    .w_full()
-                                    .cursor_pointer()
-                                    .on_click(cx.listener(|this, _ev, _window, cx| {
-                                        this.active_view = ActiveView::GlobalDashboard;
-                                        this.active_profile_tin = None;
-                                        cx.notify();
-                                    }))
-                                    .child(
-                                        if is_mini {
-                                            gpui::img("svg/e_logo.svg")
-                                                .w_full()
-                                                .h_8()
-                                                .object_fit(gpui::ObjectFit::Contain)
-                                        } else {
-                                            gpui::img("svg/ebirforms.png")
-                                                .w_full()
-                                                .h_10()
-                                                .object_fit(gpui::ObjectFit::Contain)
-                                        }
-                                    )
-                            ),
-                    )
-                    .child(
-                            div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .when(!is_mini, |this| this.px_6())
-                            .when(is_mini, |this| this.px_3())
-                            .when(!is_mini, |this| {
-                                this.child(
-                                    div()
-                                        .text_xs()
-                                        .font_weight(FontWeight::BOLD)
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child("TAXPAYER PROFILES"),
-                                )
-                            })
-                            .when(is_mini, |this| this.justify_center())
-                            .child(
-                                div()
-                                    .id("add_profile_mini_btn")
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .size(px(40.))
-                                    .flex_shrink_0()
-                                    .cursor_pointer()
-                                    .hover(|s| s.bg(cx.theme().muted).rounded_md())
-                                    .on_click(cx.listener(|this, _ev, _window, cx| {
-                                        // End any active session when creating a new profile
-                                        this.active_session_tin = None;
-                                        this.active_view = ActiveView::ProfileManager;
-                                        this.active_profile_tin = None;
-                                        this.profile_manager.update(cx, |view, cx| {
-                                            view.reset_for_new(_window, cx);
-                                        });
-                                        cx.notify();
-                                    }))
-                                    .child(
-                                        div()
-                                            .text_color(cx.theme().foreground)
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_xl()
-                                            .child("+"),
-                                    )
-                            ),
-                    )
-                    .child(
-                        if is_mini {
-                            div().px_3().flex().justify_center().w_full().child(
-                                div()
-                                    .id("sidebar_search_mini_btn")
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .size(px(48.))
-                                    .rounded_full()
-                                    .bg(cx.theme().secondary)
-                                    .flex_shrink_0()
-                                    .cursor_pointer()
-                                    .hover(|s| s.bg(cx.theme().muted))
-                                    .on_click(cx.listener(|this, _ev, window, cx| {
-                                        this.is_mini_sidebar = false;
-                                        this.dashboard_view.update(cx, |view, cx| {
-                                            view.set_mini_sidebar(this.is_mini_sidebar, cx);
-                                        });
-                                        cx.focus_view(&this.profile_filter, window);
-                                        cx.notify();
-                                    }))
-                                    .child(
-                                        Icon::new(IconName::Search)
-                                            .size(px(20.))
-                                            .text_color(cx.theme().foreground)
-                                    )
-                            ).into_any_element()
-                        } else {
-                            div().px_6().w_full().child(Input::new(&self.profile_filter)).into_any_element()
-                        }
-                    )
-                    .child(div().h_2())
-                    .child(
-                        div()
-                            .w_full()
-                            .h_px()
-                            .bg(cx.theme().border)
-                    )
-                    .child(
-                        v_flex()
-                            .id("sidebar-profile-list")
-                            .max_h(px(320.))
-                            .overflow_y_scroll()
-                            .track_scroll(&self.sidebar_scroll)
-                            .pb_2()
-                            .pt_2()
-                            .gap_2()
-                            .children(filtered_profiles.iter().map(|profile| {
-                                let is_active =
-                                    self.active_profile_tin.as_ref() == Some(&profile.tin.full());
-                                let is_expanded =
-                                    self.expanded_profile_tin.as_ref() == Some(&profile.tin.full());
-                                let bg_color = if is_active {
-                                    cx.theme().accent
-                                } else {
-                                    gpui::rgba(0x00000000).into()
-                                };
-                                let border_color = if is_active {
-                                    cx.theme().border
-                                } else {
-                                    gpui::rgba(0x00000000).into()
-                                };
-
-                                let rdo_desc = bir_core::reference::get_rdo(&profile.rdo_code)
-                                    .map(|r| r.description.clone())
-                                    .unwrap_or_else(|| "Unknown".to_string());
-
-                                div()
-                                    .id(profile.tin.full())
-                                    .w_full()
-                                    .when(!is_mini, |this| this.py_2().px_6())
-                                    .when(is_mini, |this| this.py_2().px_3())
-                                    .bg(bg_color)
-                                    .border_1()
-                                    .border_color(border_color)
-                                    .flex()
-                                    .flex_col()
-                                    .cursor_pointer()
-                                    .hover(|s| {
-                                        if !is_active {
-                                            s.bg(cx.theme().muted)
-                                        } else {
-                                            s
-                                        }
-                                    })
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap_3()
-                                            .when(is_expanded && !is_mini, |d| d.mb_4())
-                                            .when(is_mini, |this| this.justify_center())
-                                            .when(is_mini, |this| {
-                                                let initials = profile.full_name
-                                                    .split_whitespace()
-                                                    .filter_map(|w| w.chars().next())
-                                                    .take(2)
-                                                    .collect::<String>()
-                                                    .to_uppercase();
-                                                
-                                                this.child(
-                                                    div()
-                                                        .size(px(48.))
-                                                        .flex_shrink_0()
-                                                        .rounded_full()
-                                                        .bg(cx.theme().secondary)
-                                                        .flex()
-                                                        .items_center()
-                                                        .justify_center()
-                                                        .child(
-                                                            div()
-                                                                .text_sm()
-                                                                .text_color(cx.theme().primary)
-                                                                .font_weight(FontWeight::BOLD)
-                                                                .child(initials)
-                                                        )
-                                                )
-                                            })
-                                            .when(!is_mini, |this| {
-                                                this.child(
-                                                    div()
-                                                        .flex()
-                                                        .flex_col()
-                                                        .child(
-                                                            div()
-                                                                .font_weight(FontWeight::BOLD)
-                                                                .text_color(if profile.is_archived { cx.theme().muted_foreground } else { cx.theme().foreground })
-                                                                .child(if profile.is_archived { format!("{} (Archived)", profile.full_name) } else { profile.full_name.clone() }),
-                                                        )
-                                                        .child(
-                                                            div()
-                                                                .text_sm()
-                                                                .text_color(cx.theme().muted_foreground)
-                                                                .child(format!("TIN: {}", profile.tin.full())),
-                                                        ),
-                                                )
-                                            }),
-                                    )
-                                    .when(is_expanded && !is_mini, |this| {
-                                        this.child(
-                                            div()
-                                                .flex()
-                                                .flex_col()
-                                                .gap_2()
-                                                .child(
-                                                    div()
-                                                        .flex()
-                                                        .justify_between()
-                                                        .child(div().text_sm().text_color(cx.theme().muted_foreground).child("RDO:"))
-                                                        .child(
-                                                            div()
-                                                                .text_sm()
-                                                                .font_weight(FontWeight::BOLD)
-                                                                .text_color(cx.theme().foreground)
-                                                                .child(format!("{} - {}", profile.rdo_code, rdo_desc)),
-                                                        ),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .flex()
-                                                        .justify_between()
-                                                        .gap_2()
-                                                        .mt_2()
-                                                        .when(!profile.is_archived, |this| {
-                                                            this.child(
-                                                                gpui_component::button::Button::new(format!("view_{}", profile.tin.full()))
-                                                                    .small()
-                                                                    .label("View")
-                                                                    .on_click(cx.listener({
-                                                                        let profile_clone = profile.clone();
-                                                                        move |this, _ev, window, cx| {
-                                                                            cx.stop_propagation();
-                                                                            this.select_profile(profile_clone.clone(), ProfileTargetAction::ViewDashboard, window, cx);
-                                                                        }
-                                                                    })),
-                                                            )
-                                                            .child(
-                                                                gpui_component::button::Button::new(format!("edit_{}", profile.tin.full()))
-                                                                    .small()
-                                                                    .label("Edit")
-                                                                    .on_click(cx.listener({
-                                                                        let profile_clone = profile.clone();
-                                                                        move |this, _ev, window, cx| {
-                                                                            cx.stop_propagation();
-                                                                            this.select_profile(profile_clone.clone(), ProfileTargetAction::EditProfile, window, cx);
-                                                                        }
-                                                                    })),
-                                                            )
-                                                            .child(
-                                                                gpui_component::button::Button::new(format!("archive_{}", profile.tin.full()))
-                                                                    .small()
-                                                                    .label("Archive")
-                                                                    .on_click(cx.listener({
-                                                                        let profile_clone = profile.clone();
-                                                                        let tin = profile_clone.tin.full();
-                                                                        move |this, _ev, _window, cx| {
-                                                                            cx.stop_propagation();
-                                                                            let mut profile_mut = profile_clone.clone();
-                                                                            profile_mut.is_archived = true;
-                                                                            if let Ok(db) = this.db.lock() {
-                                                                                let _ = db.save_profile(profile_mut);
-                                                                            }
-                                                                            if let Some(p) = this.profiles.iter_mut().find(|p| p.tin.full() == tin) {
-                                                                                p.is_archived = true;
-                                                                            }
-                                                                            cx.notify();
-                                                                        }
-                                                                    })),
-                                                            )
-                                                        })
-                                                        .when(profile.is_archived, |this| {
-                                                            this.child(
-                                                                gpui_component::button::Button::new(format!("restore_{}", profile.tin.full()))
-                                                                    .small()
-                                                                    .label("Restore")
-                                                                    .on_click(cx.listener({
-                                                                        let profile_clone = profile.clone();
-                                                                        let tin = profile_clone.tin.full();
-                                                                        move |this, _ev, _window, cx| {
-                                                                            cx.stop_propagation();
-                                                                            let mut profile_mut = profile_clone.clone();
-                                                                            profile_mut.is_archived = false;
-                                                                            if let Ok(db) = this.db.lock() {
-                                                                                let _ = db.save_profile(profile_mut);
-                                                                            }
-                                                                            if let Some(p) = this.profiles.iter_mut().find(|p| p.tin.full() == tin) {
-                                                                                p.is_archived = false;
-                                                                            }
-                                                                            cx.notify();
-                                                                        }
-                                                                    })),
-                                                            )
-                                                            .child(
-                                                                gpui_component::button::Button::new(format!("delete_{}", profile.tin.full()))
-                                                                    .small()
-                                                                    .label("Delete")
-                                                                    .on_click(cx.listener({
-                                                                        let profile_clone = profile.clone();
-                                                                        let tin = profile_clone.tin.full();
-                                                                        move |_this, _ev, _window, cx| {
-                                                                            cx.stop_propagation();
-                                                                            cx.spawn({
-                                                                                let tin = tin.clone();
-                                                                                async move |this, cx| {
-                                                                                    let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-                                                                                    let Some(export_handle) = rfd::AsyncFileDialog::new()
-                                                                                        .set_title("Save Profile Archive")
-                                                                                        .set_file_name(format!("BIR_Archive_{}_{}.zip", tin, timestamp))
-                                                                                        .add_filter("Zip Archive", &["zip"])
-                                                                                        .save_file()
-                                                                                        .await
-                                                                                    else {
-                                                                                        return;
-                                                                                    };
-                                                                                    let export_dir = export_handle.path().to_path_buf();
-                                                                                    
-                                                                                    let success = this.update(cx, |this, cx| {
-                                                                                        if let Ok(db) = this.db.lock() {
-                                                                                            if let Err(e) = bir_core::export_profile_data(&db, &tin, &export_dir) {
-                                                                                                println!("Export failed: {}", e);
-                                                                                            } else {
-                                                                                                let _ = db.delete_profile(&tin);
-                                                                                                this.profiles.retain(|p| p.tin.full() != tin);
-                                                                                                
-                                                                                                if !this.profiles.iter().any(|p| p.is_archived) {
-                                                                                                    this.show_archived = false;
-                                                                                                }
-                                                                                                
-                                                                                                if this.active_profile_tin.as_ref() == Some(&tin) {
-                                                                                                    this.active_profile_tin = None;
-                                                                                                    this.active_view = ActiveView::ProfileManager;
-                                                                                                }
-                                                                                                if this.expanded_profile_tin.as_ref() == Some(&tin) {
-                                                                                                    this.expanded_profile_tin = None;
-                                                                                                }
-                                                                                                cx.notify();
-                                                                                                return true;
-                                                                                            }
-                                                                                        }
-                                                                                        false
-                                                                                    });
-                                                                                    
-                                                                                    if let Ok(true) = success {
-                                                                                        rfd::AsyncMessageDialog::new()
-                                                                                            .set_title("Profile Exported & Deleted")
-                                                                                            .set_description(format!("Saved to {}", export_dir.display()))
-                                                                                            .show()
-                                                                                            .await;
-                                                                                    }
-                                                                                }
-                                                                            }).detach();
-                                                                        }
-                                                                    })),
-                                                            )
-                                                        })
-                                                )
-                                        )
-                                        .on_mouse_down_out(cx.listener(|this, _ev, _window, cx| {
-                                            this.expanded_profile_tin = None;
-                                            cx.notify();
-                                        }))
-                                    })
-                                    .on_click(cx.listener({
-                                        let profile_clone = profile.clone();
-                                        let tin = profile_clone.tin.full();
-                                        move |this, _ev, window, cx| {
-                                            if this.is_mini_sidebar || window.viewport_size().width < px(768.) {
-                                                this.select_profile(profile_clone.clone(), ProfileTargetAction::ViewDashboard, window, cx);
-                                            } else {
-                                                if this.expanded_profile_tin.as_ref() == Some(&tin) {
-                                                    this.expanded_profile_tin = None;
-                                                } else {
-                                                    this.expanded_profile_tin = Some(tin.clone());
-                                                }
-                                            }
-                                            cx.notify();
-                                        }
-                                    }))
-                            }))
-                            .when(archived_count > 0 || self.show_archived, |this| {
-                                this.child(
-                                    div()
-                                        .w_full()
-                                        .py_2()
-                                        .when(!is_mini, |this| this.px_6())
-                                        .when(is_mini, |this| this.px_3())
-                                        .flex()
-                                        .justify_center()
-                                        .child(
-                                            if is_mini {
-                                                div()
-                                                    .id("toggle_archived_mini_btn")
-                                                    .flex()
-                                                    .items_center()
-                                                    .justify_center()
-                                                    .size(px(48.))
-                                                    .flex_shrink_0()
-                                                    .rounded_full()
-                                                    .bg(cx.theme().secondary)
-                                                    .cursor_pointer()
-                                                    .hover(|s| s.bg(cx.theme().muted))
-                                                    .on_click(cx.listener(|this, _, _, cx| {
-                                                        this.show_archived = !this.show_archived;
-                                                        cx.notify();
-                                                    }))
-                                                    .child(Icon::new(if self.show_archived { IconName::EyeOff } else { IconName::Eye }).size(px(20.)).text_color(cx.theme().foreground))
-                                                    .into_any_element()
-                                            } else {
-                                                gpui_component::button::Button::new("toggle_archived")
-                                                    .small()
-                                                    .label(if self.show_archived { "Hide Archived Profiles".to_string() } else { format!("Show {} Archived", archived_count) })
-                                                    .on_click(cx.listener(|this, _, _, cx| {
-                                                        this.show_archived = !this.show_archived;
-                                                        cx.notify();
-                                                    }))
-                                                    .into_any_element()
-                                            }
-                                        )
-                                )
-                            })
-                    )
-                    .when(self.hide_tax_profiles && self.active_session_tin.is_some(), |this| {
-                        this.child(
-                            div()
-                                .w_full()
-                                .py_2()
-                                .when(!is_mini, |this| this.px_6())
-                                .when(is_mini, |this| this.px_3())
-                                .flex()
-                                .justify_center()
-                                .child(
-                                    if is_mini {
-                                        div()
-                                            .id("exit_session_mini_btn")
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .size(px(48.))
-                                            .flex_shrink_0()
-                                            .rounded_full()
-                                            .bg(gpui::rgba(0xef444420))
-                                            .cursor_pointer()
-                                            .hover(|s| s.bg(gpui::rgba(0xef444440)))
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.active_session_tin = None;
-                                                this.active_profile_tin = None;
-                                                this.active_view = ActiveView::GlobalDashboard;
-                                                cx.notify();
-                                            }))
-                                            .child(Icon::new(IconName::CircleX).size(px(20.)).text_color(Hsla::from(gpui::rgba(0xef4444ff))))
-                                            .into_any_element()
-                                    } else {
-                                        gpui_component::button::Button::new("exit_session")
-                                            .small()
-                                            .label("Exit Session")
-                                            .icon(IconName::CircleX)
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.active_session_tin = None;
-                                                this.active_profile_tin = None;
-                                                this.active_view = ActiveView::GlobalDashboard;
-                                                cx.notify();
-                                            }))
-                                            .into_any_element()
-                                    }
-                                )
-                        )
-                    })
-                    .child(
-                        div()
-                            .w_full()
-                            .h_px()
-                            .bg(cx.theme().border)
-                    ),
-            )
-            .child(
-                v_flex()
-                    .gap_2()
-                    .w_full()
-                    .when(!is_mini, |this| this.px_6())
-                    .when(is_mini, |this| this.px_3())
-                    .child(
-                        div()
-                            .id("import_export_sidebar_btn")
-                            .flex()
-                            .items_center()
-                            .w_full()
-                            .cursor_pointer()
-                            .hover(|s| s.bg(cx.theme().muted))
-                            .when(is_mini, |this| {
-                                this.justify_center().size(px(48.)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
-                            })
-                            .when(!is_mini, |this| {
-                                this.justify_start().h_10().px_3().gap_3().rounded_md().bg(cx.theme().secondary)
-                            })
-                            .on_click(cx.listener(|this, _ev, _window, cx| {
-                                this.active_view = ActiveView::ImportExport;
-                                cx.notify();
-                            }))
-                            .child(Icon::new(IconName::HardDrive).size(px(20.)).text_color(cx.theme().foreground))
-                            .when(!is_mini, |this| {
-                                this.child(div().text_sm().text_color(cx.theme().foreground).child("Import Data"))
-                            })
-                    )
-                    .child(
-                        div()
-                            .id("theme_toggle_sidebar_btn")
-                            .flex()
-                            .items_center()
-                            .w_full()
-                            .cursor_pointer()
-                            .hover(|s| s.bg(cx.theme().muted))
-                            .when(is_mini, |this| {
-                                this.justify_center().size(px(48.)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
-                            })
-                            .when(!is_mini, |this| {
-                                this.justify_start().h_10().px_3().gap_3().rounded_md().bg(cx.theme().secondary)
-                            })
-                            .on_click(cx.listener(|this, _ev, window, cx| {
-                                this.theme_preference = this.theme_preference.next();
-                                if let Ok(db) = this.db.lock()
-                                    && let Ok(val) = serde_json::to_string(&this.theme_preference) {
-                                        let _ = db.set_setting("theme_preference", &val);
-                                    }
-                                let target_mode = match this.theme_preference {
-                                    AppThemeMode::Light => ThemeMode::Light,
-                                    AppThemeMode::Dark => ThemeMode::Dark,
-                                    AppThemeMode::System => match window.appearance() {
-                                        gpui::WindowAppearance::Light | gpui::WindowAppearance::VibrantLight => ThemeMode::Light,
-                                        gpui::WindowAppearance::Dark | gpui::WindowAppearance::VibrantDark => ThemeMode::Dark,
-                                    },
-                                };
-                                Theme::change(target_mode, Some(window), cx);
-                                cx.notify();
-                            }))
-                            .child(match self.theme_preference {
-                                AppThemeMode::Dark => Icon::new(IconName::Moon).size(px(20.)).text_color(cx.theme().foreground),
-                                AppThemeMode::Light => Icon::new(IconName::Sun).size(px(20.)).text_color(cx.theme().foreground),
-                                AppThemeMode::System => Icon::new(IconName::Settings).size(px(20.)).text_color(cx.theme().foreground),
-                            })
-                            .when(!is_mini, |this| {
-                                this.child(div().text_sm().text_color(cx.theme().foreground).child(match self.theme_preference {
-                                    AppThemeMode::Dark => "Dark Mode",
-                                    AppThemeMode::Light => "Light Mode",
-                                    AppThemeMode::System => "System Theme",
-                                }))
-                            })
-                    )
-                    .child(
-                        div()
-                            .id("cron_tasks_sidebar_btn")
-                            .flex()
-                            .items_center()
-                            .w_full()
-                            .cursor_pointer()
-                            .hover(|s| s.bg(cx.theme().muted))
-                            .when(is_mini, |this| {
-                                this.justify_center().size(px(48.)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
-                            })
-                            .when(!is_mini, |this| {
-                                this.justify_start().h_10().px_3().gap_3().rounded_md().bg(cx.theme().secondary)
-                            })
-                            .on_click(cx.listener(|this, _ev, window, cx| {
-                                this.request_admin_access(ActiveView::CronTasks, window, cx);
-                            }))
-                            .child(Icon::new(IconName::SquareTerminal).size(px(20.)).text_color(cx.theme().foreground))
-                            .when(!is_mini, |this| {
-                                this.child(div().text_sm().text_color(cx.theme().foreground).child("Background Tasks"))
-                            })
-                    )
-                    .child(
-                        div()
-                            .id("settings_sidebar_btn")
-                            .flex()
-                            .items_center()
-                            .w_full()
-                            .cursor_pointer()
-                            .hover(|s| s.bg(cx.theme().muted))
-                            .when(is_mini, |this| {
-                                this.justify_center().size(px(48.)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
-                            })
-                            .when(!is_mini, |this| {
-                                this.justify_start().h_10().px_3().gap_3().rounded_md().bg(cx.theme().secondary)
-                            })
-                            .on_click(cx.listener(|this, _ev, window, cx| {
-                                this.request_admin_access(ActiveView::Settings, window, cx);
-                            }))
-                            .child(Icon::new(IconName::Settings).size(px(20.)).text_color(cx.theme().foreground))
-                            .when(!is_mini, |this| {
-                                this.child(div().text_sm().text_color(cx.theme().foreground).child("Settings"))
-                            })
-                    )
-            )
-    }
+    // NOTE: render_sidebar() is implemented in sidebar.rs
 
     fn render_active_view(&self, _cx: &mut Context<Self>) -> impl IntoElement {
         match self.active_view {
@@ -1401,6 +697,13 @@ impl AppState {
             ActiveView::Dashboard => self.dashboard_view.clone().into_any_element(),
             ActiveView::Form2551Q => {
                 if let Some(view) = &self.form_2551q_view {
+                    view.clone().into_any_element()
+                } else {
+                    div().child("No form loaded").into_any_element()
+                }
+            }
+            ActiveView::Form1701Q => {
+                if let Some(view) = &self.form_1701q_view {
                     view.clone().into_any_element()
                 } else {
                     div().child("No form loaded").into_any_element()
@@ -1449,8 +752,28 @@ impl AppState {
             self.pending_form_draft = Some(draft);
             self.active_view = ActiveView::Form2551Q;
             cx.notify();
+        } else if form_code == "1701Q"
+            && let Some(tin) = &self.active_profile_tin
+            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
+        {
+            let draft = Form1701QDraft::new_from_profile(profile, year, quarter);
+            self.pending_form_1701q_draft = Some(draft);
+            self.active_view = ActiveView::Form1701Q;
+            cx.notify();
         }
     }
+}
+
+/// Push a typed notification to the GPUI window overlay.
+fn push_notification(level: &str, title: &str, message: &str, window: &mut Window, cx: &mut App) {
+    use gpui_component::notification::Notification;
+    use gpui_component::WindowExt;
+    let notification = match level {
+        "success" => Notification::success(title.to_string()).message(message.to_string()),
+        "error" => Notification::error(title.to_string()).message(message.to_string()),
+        _ => Notification::info(title.to_string()).message(message.to_string()),
+    };
+    window.push_notification(notification, cx);
 }
 
 impl Render for AppState {
@@ -1463,16 +786,7 @@ impl Render for AppState {
                 window,
                 |_this: &mut Self, _entity, event: &GlobalDashboardEvent, window, cx| {
                     if let GlobalDashboardEvent::PushNotification(level, title, message) = event {
-                        use gpui_component::WindowExt;
-                        use gpui_component::notification::Notification;
-                        let notification = match level.as_str() {
-                            "success" => {
-                                Notification::success(title.clone()).message(message.clone())
-                            }
-                            "error" => Notification::error(title.clone()).message(message.clone()),
-                            _ => Notification::info(title.clone()).message(message.clone()),
-                        };
-                        window.push_notification(notification, cx);
+                        push_notification(level, title, message, window, cx);
                     }
                 },
             )
@@ -1502,16 +816,7 @@ impl Render for AppState {
                         cx.notify();
                     }
                     Form2551QEvent::PushNotification(level, title, message) => {
-                        use gpui_component::WindowExt;
-                        use gpui_component::notification::Notification;
-                        let notification = match level.as_str() {
-                            "success" => {
-                                Notification::success(title.clone()).message(message.clone())
-                            }
-                            "error" => Notification::error(title.clone()).message(message.clone()),
-                            _ => Notification::info(title.clone()).message(message.clone()),
-                        };
-                        window.push_notification(notification, cx);
+                        push_notification(level, title, message, window, cx);
                     }
                     Form2551QEvent::Saved
                     | Form2551QEvent::Submitted
@@ -1523,6 +828,22 @@ impl Render for AppState {
             .detach();
 
             self.form_2551q_view = Some(form_view);
+        }
+
+        if let Some(draft) = self.pending_form_1701q_draft.take() {
+            let form_view = cx.new(|_cx| Form1701QView::new(draft));
+            cx.subscribe_in(
+                &form_view,
+                window,
+                |this: &mut Self, _entity, event: &Form1701QEvent, _window, cx| match event {
+                    Form1701QEvent::BackToDashboard => {
+                        this.active_view = ActiveView::Dashboard;
+                        cx.notify();
+                    }
+                },
+            )
+            .detach();
+            self.form_1701q_view = Some(form_view);
         }
 
         if let Some((profile, action)) = self.unlocked_profile.take() {
@@ -1546,186 +867,21 @@ impl Render for AppState {
             .flex_col()
             .size_full()
             .bg(cx.theme().background)
-            .on_action(cx.listener(
-                |this: &mut Self, _action: &crate::global_actions::ToggleSidebar, window, cx| {
-                    this.is_sidebar_hidden = !this.is_sidebar_hidden;
-                    if this.is_sidebar_hidden {
-                        this.focus_handle.focus(window, cx);
-                    }
-                    cx.notify();
-                },
-            ))
-            .on_action(cx.listener(
-                |this: &mut Self,
-                 _action: &crate::global_actions::ToggleSidebarMini,
-                 _window,
-                 cx| {
-                    this.is_mini_sidebar = !this.is_mini_sidebar;
-                    this.dashboard_view.update(cx, |view, cx| {
-                        view.set_mini_sidebar(this.is_mini_sidebar, cx);
-                    });
-                    cx.notify();
-                },
-            ))
-            .on_action(cx.listener(
-                |this: &mut Self, _action: &crate::global_actions::FocusSearch, window, cx| {
-                    this.is_sidebar_hidden = false;
-                    this.is_mini_sidebar = false;
-                    this.dashboard_view.update(cx, |view, cx| {
-                        view.set_mini_sidebar(this.is_mini_sidebar, cx);
-                    });
-                    cx.focus_view(&this.profile_filter, window);
-                    cx.notify();
-                },
-            ))
-            .on_action(cx.listener(
-                |this: &mut Self, _action: &crate::global_actions::CreateProfile, window, cx| {
-                    this.active_view = ActiveView::ProfileManager;
-                    this.active_profile_tin = None;
-                    this.profile_manager.update(cx, |view, cx| {
-                        view.reset_for_new(window, cx);
-                    });
-                    cx.notify();
-                },
-            ))
-            .on_action(cx.listener(
-                |this: &mut Self, _action: &crate::global_actions::ToggleTheme, window, cx| {
-                    this.theme_preference = this.theme_preference.next();
-                    if let Ok(db) = this.db.lock()
-                        && let Ok(val) = serde_json::to_string(&this.theme_preference) {
-                            let _ = db.set_setting("theme_preference", &val);
-                        }
-                    let target_mode = match this.theme_preference {
-                        AppThemeMode::Light => ThemeMode::Light,
-                        AppThemeMode::Dark => ThemeMode::Dark,
-                        AppThemeMode::System => match window.appearance() {
-                            gpui::WindowAppearance::Light
-                            | gpui::WindowAppearance::VibrantLight => ThemeMode::Light,
-                            gpui::WindowAppearance::Dark | gpui::WindowAppearance::VibrantDark => {
-                                ThemeMode::Dark
-                            }
-                        },
-                    };
-                    Theme::change(target_mode, Some(window), cx);
-                    cx.notify();
-                },
-            ))
-            .on_action(cx.listener(
-                |this: &mut Self, _action: &crate::global_actions::OpenCronTasks, window, cx| {
-                    this.request_admin_access(ActiveView::CronTasks, window, cx);
-                },
-            ))
-            .on_action(cx.listener(
-                |this: &mut Self, _action: &crate::global_actions::OpenSettings, window, cx| {
-                    this.request_admin_access(ActiveView::Settings, window, cx);
-                },
-            ))
-            .on_action(cx.listener(
-                |this: &mut Self, _action: &crate::global_actions::OpenGlobalDashboard, _window, cx| {
-                    this.active_view = ActiveView::GlobalDashboard;
-                    this.active_profile_tin = None;
-                    cx.notify();
-                },
-            ))
-            .on_action(cx.listener(
-                |this: &mut Self, _action: &crate::global_actions::OpenCommandPalette, window, cx| {
-                    this.is_command_palette_open = true;
-                    let profiles = this.profiles.clone();
-                    let hide_tax_profiles = this.hide_tax_profiles;
-                    let active_session_tin = this.active_session_tin.clone();
-                    let palette = cx.new(|cx| crate::components::command_palette::CommandPalette::new(profiles, hide_tax_profiles, active_session_tin, window, cx));
-                    
-                    cx.subscribe_in(&palette, window, |this: &mut Self, _, event: &crate::components::command_palette::CommandPaletteEvent, window, cx| {
-                        match event {
-                            crate::components::command_palette::CommandPaletteEvent::SelectProfile(tin) => {
-                                if let Some(profile) = this.profiles.iter().find(|p| p.tin.full() == *tin).cloned() {
-                                    if this.hide_tax_profiles {
-                                        this.active_session_tin = Some(tin.clone());
-                                    }
-                                    this.select_profile(profile, ProfileTargetAction::ViewDashboard, window, cx);
-                                }
-                                this.is_command_palette_open = false;
-                                if this.pending_profile.is_none() {
-                                    this.focus_handle.focus(window, cx);
-                                }
-                                cx.notify();
-                            }
-                            crate::components::command_palette::CommandPaletteEvent::CreateProfile(query) => {
-                                this.is_command_palette_open = false;
-                                this.active_view = ActiveView::ProfileManager;
-                                this.profile_manager.update(cx, |view, cx| {
-                                    view.reset_for_new(window, cx);
-                                    
-                                    let is_tin_like = !query.is_empty() && query.chars().all(|c| c.is_ascii_digit() || c == '-');
-                                    let query_digits: String = query.chars().filter(|c| c.is_ascii_digit()).collect();
-                                    
-                                    if is_tin_like && query_digits.len() >= 9 {
-                                        view.prefill_tin(query, window, cx);
-                                    } else {
-                                        view.prefill_name(query, window, cx);
-                                    }
-                                });
-                                cx.notify();
-                            }
-                            crate::components::command_palette::CommandPaletteEvent::EditProfile(tin) => {
-                                if let Some(profile) = this.profiles.iter().find(|p| p.tin.full() == *tin).cloned() {
-                                    if this.hide_tax_profiles {
-                                        this.active_session_tin = Some(tin.clone());
-                                    }
-                                    this.select_profile(profile, ProfileTargetAction::EditProfile, window, cx);
-                                }
-                                this.is_command_palette_open = false;
-                                if this.pending_profile.is_none() {
-                                    this.focus_handle.focus(window, cx);
-                                }
-                                cx.notify();
-                            }
-                            crate::components::command_palette::CommandPaletteEvent::Dismiss => {
-                                this.is_command_palette_open = false;
-                                this.focus_handle.focus(window, cx);
-                                cx.notify();
-                            }
-                        }
-                    }).detach();
-                    
-                    this.command_palette_view = Some(palette.clone());
-                    palette.update(cx, |view, cx| {
-                        view.focus_input(window, cx);
-                    });
-                    cx.notify();
-                },
-            ))
-            .on_action(cx.listener(
-                |_this: &mut Self, _action: &crate::global_actions::QuitApplication, _window, cx| {
-                    cx.quit();
-                },
-            ))
-            .on_action(cx.listener(
-                |_this: &mut Self, _action: &crate::global_actions::HideApplication, _window, cx| {
-                    cx.hide();
-                },
-            ))
-            .on_action(cx.listener(
-                |_this: &mut Self, _action: &crate::global_actions::HideOthers, _window, cx| {
-                    // Hide other applications (macOS mainly)
-                    cx.hide_other_apps();
-                },
-            ))
-            .on_action(cx.listener(
-                |_this: &mut Self, _action: &crate::global_actions::CloseWindow, window, _cx| {
-                    window.remove_window();
-                },
-            ))
-            .on_action(cx.listener(
-                |_this: &mut Self, _action: &crate::global_actions::MinimizeWindow, window, _cx| {
-                    window.minimize_window();
-                },
-            ))
-            .on_action(cx.listener(
-                |_this: &mut Self, _action: &crate::global_actions::ToggleFullScreen, window, _cx| {
-                    window.toggle_fullscreen();
-                },
-            ))
+            .on_action(cx.listener(Self::handle_toggle_sidebar))
+            .on_action(cx.listener(Self::handle_toggle_sidebar_mini))
+            .on_action(cx.listener(Self::handle_focus_search))
+            .on_action(cx.listener(Self::handle_create_profile))
+            .on_action(cx.listener(Self::handle_toggle_theme))
+            .on_action(cx.listener(Self::handle_open_cron_tasks))
+            .on_action(cx.listener(Self::handle_open_settings))
+            .on_action(cx.listener(Self::handle_open_global_dashboard))
+            .on_action(cx.listener(Self::handle_open_command_palette))
+            .on_action(cx.listener(Self::handle_quit_application))
+            .on_action(cx.listener(Self::handle_hide_application))
+            .on_action(cx.listener(Self::handle_hide_others))
+            .on_action(cx.listener(Self::handle_close_window))
+            .on_action(cx.listener(Self::handle_minimize_window))
+            .on_action(cx.listener(Self::handle_toggle_fullscreen))
             .child(
                 div()
                     .flex()
@@ -1747,294 +903,8 @@ impl Render for AppState {
             )
             .child(crate::components::footer::render_footer(cx))
             .children(notification_layer)
-            .when_some(self.pending_profile.clone(), |this, pending| {
-                let (profile, _) = pending;
-                let error_msg = self.profile_auth_error.clone();
-                let os_triggered = self.os_auth_triggered;
-                
-                this.child(
-                    div()
-                        .absolute()
-                        .inset_0()
-                        .bg(cx.theme().background)
-                        .flex()
-                        .flex_col()
-                        .items_center()
-                        .justify_center()
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .items_center()
-                                .gap_6()
-                                .child(
-                                    gpui::img("svg/ebirforms.png")
-                                        .w(px(200.))
-                                        .h(px(60.))
-                                        .object_fit(gpui::ObjectFit::Contain)
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_col()
-                                        .items_center()
-                                        .gap_1()
-                                        .child(
-                                            div()
-                                                .text_xl()
-                                                .font_weight(FontWeight::BOLD)
-                                                .text_color(cx.theme().foreground)
-                                                .child("Enter PIN to unlock Tax Profile")
-                                        )
-                                        .child(
-                                            div()
-                                                .text_sm()
-                                                .text_color(cx.theme().muted_foreground)
-                                                .child(format!("Profile: {}", profile.tin.full()))
-                                        )
-                                )
-                                .child(
-                                    OtpInput::new(&self.profile_otp_state)
-                                        .groups(1)
-                                        .large()
-                                        .disabled(os_triggered)
-                                )
-                                .when_some(error_msg, |this, msg| {
-                                    this.child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(cx.theme().danger)
-                                            .child(msg)
-                                    )
-                                })
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_col()
-                                        .items_center()
-                                        .gap_4()
-                                        .child(
-                                            gpui_component::button::Button::new("admin_override")
-                                                .label(if os_triggered { "Waiting for OS..." } else { "Admin Override" })
-                                                .ghost()
-                                                .disabled(os_triggered)
-                                                .on_click(cx.listener(|this, _ev, _window, cx| {
-                                                    if this.os_auth_triggered { return; }
-                                                    this.os_auth_triggered = true;
-                                                    this.profile_auth_error = None;
-                                                    
-                                                    #[cfg(any(target_os = "macos", target_os = "windows"))]
-                                                    cx.spawn(async move |this, cx| {
-                                                        use robius_authentication::{BiometricStrength, Context, PolicyBuilder, Text, AndroidText, WindowsText};
-                                                        let policy = match PolicyBuilder::new()
-                                                            .biometrics(Some(BiometricStrength::Strong))
-                                                            .password(true)
-                                                            .watch(true)
-                                                            .build() {
-                                                                Some(p) => p,
-                                                                None => return,
-                                                        };
-
-                                                        let text = Text {
-                                                            android: AndroidText {
-                                                                title: "Admin Override",
-                                                                subtitle: None,
-                                                                description: None,
-                                                            },
-                                                            apple: "Admin Override to Unlock Profile",
-                                                            windows: WindowsText::new_truncated("Admin Override", "Authenticate to override profile PIN."),
-                                                        };
-
-                                                        let success = Context::new(())
-                                                            .authenticate(text, &policy)
-                                                            .await
-                                                            .is_ok();
-                                                        
-                                                        let _ = this.update(cx, |this, cx| {
-                                                            this.os_auth_triggered = false;
-                                                            if success {
-                                                                if let Some((p, a)) = this.pending_profile.take() {
-                                                                    this.unlocked_profile = Some((p, a));
-                                                                }
-                                                            } else {
-                                                                this.profile_auth_error = Some("Admin Authentication failed or canceled.".to_string());
-                                                            }
-                                                            cx.notify();
-                                                        });
-                                                    }).detach();
-
-                                                    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-                                                    {
-                                                        this.os_auth_triggered = false;
-                                                        this.profile_auth_error = Some("Admin Override is not supported on this platform.".to_string());
-                                                        cx.notify();
-                                                    }
-                                                }))
-                                        )
-                                        .child(
-                                            gpui_component::button::Button::new("cancel_profile_pin")
-                                                .label("Cancel")
-                                                .ghost()
-                                                .small()
-                                                .disabled(os_triggered)
-                                                .on_click(cx.listener(|this, _ev, window, cx| {
-                                                    this.pending_profile = None;
-                                                    this.profile_otp_state.update(cx, |input, cx| input.set_value("", window, cx));
-                                                    this.focus_handle.focus(window, cx);
-                                                    cx.notify();
-                                                }))
-                                        )
-                                )
-                        )
-                )
-            })
-            .when_some(self.pending_admin_view, |this, target| {
-                let error_msg = self.admin_auth_error.clone();
-                let os_triggered = self.admin_os_auth_triggered;
-                
-                this.child(
-                    div()
-                        .absolute()
-                        .inset_0()
-                        .bg(cx.theme().background)
-                        .flex()
-                        .flex_col()
-                        .items_center()
-                        .justify_center()
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .items_center()
-                                .gap_6()
-                                .child(
-                                    gpui::img("images/ebirforms.png")
-                                        .w(px(200.))
-                                        .h(px(60.))
-                                        .object_fit(gpui::ObjectFit::Contain)
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_col()
-                                        .items_center()
-                                        .gap_1()
-                                        .child(
-                                            div()
-                                                .text_xl()
-                                                .font_weight(FontWeight::BOLD)
-                                                .text_color(cx.theme().foreground)
-                                                .child("Admin Access Required")
-                                        )
-                                        .child(
-                                            div()
-                                                .text_sm()
-                                                .text_color(cx.theme().muted_foreground)
-                                                .child(match target {
-                                                    ActiveView::Settings => "Enter App Lock PIN to access Settings",
-                                                    ActiveView::CronTasks => "Enter App Lock PIN to access Background Tasks",
-                                                    _ => "Enter App Lock PIN to continue",
-                                                })
-                                        )
-                                )
-                                .child(
-                                    OtpInput::new(&self.admin_otp_state)
-                                        .groups(1)
-                                        .large()
-                                        .disabled(os_triggered)
-                                )
-                                .when_some(error_msg, |this, msg| {
-                                    this.child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(cx.theme().danger)
-                                            .child(msg)
-                                    )
-                                })
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_col()
-                                        .items_center()
-                                        .gap_4()
-                                        .child(
-                                            gpui_component::button::Button::new("admin_os_override")
-                                                .label(if os_triggered { "Waiting for OS..." } else { "OS Auth Override" })
-                                                .ghost()
-                                                .disabled(os_triggered)
-                                                .on_click(cx.listener(move |this, _ev, _window, cx| {
-                                                    if this.admin_os_auth_triggered { return; }
-                                                    this.admin_os_auth_triggered = true;
-                                                    this.admin_auth_error = None;
-                                                    
-                                                    #[cfg(any(target_os = "macos", target_os = "windows"))]
-                                                    cx.spawn(async move |this, cx| {
-                                                        use robius_authentication::{BiometricStrength, Context, PolicyBuilder, Text, AndroidText, WindowsText};
-                                                        let policy = match PolicyBuilder::new()
-                                                            .biometrics(Some(BiometricStrength::Strong))
-                                                            .password(true)
-                                                            .watch(true)
-                                                            .build() {
-                                                                Some(p) => p,
-                                                                None => return,
-                                                        };
-
-                                                        let text = Text {
-                                                            android: AndroidText {
-                                                                title: "Admin Override",
-                                                                subtitle: None,
-                                                                description: None,
-                                                            },
-                                                            apple: "OS Authentication to Override App Lock",
-                                                            windows: WindowsText::new_truncated("Admin Override", "Authenticate to override App Lock PIN."),
-                                                        };
-
-                                                        let success = Context::new(())
-                                                            .authenticate(text, &policy)
-                                                            .await
-                                                            .is_ok();
-                                                        
-                                                        let _ = this.update(cx, |this, cx| {
-                                                            this.admin_os_auth_triggered = false;
-                                                            if success {
-                                                                if let Some(target) = this.pending_admin_view.take() {
-                                                                    this.active_view = target;
-                                                                    if target == ActiveView::CronTasks {
-                                                                        this.cron_tasks_view.update(cx, |view, cx| view.load_settings(cx));
-                                                                    }
-                                                                }
-                                                            } else {
-                                                                this.admin_auth_error = Some("OS Authentication failed or canceled.".to_string());
-                                                            }
-                                                            cx.notify();
-                                                        });
-                                                    }).detach();
-
-                                                    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-                                                    {
-                                                        this.admin_os_auth_triggered = false;
-                                                        this.admin_auth_error = Some("OS Authentication is not supported on this platform.".to_string());
-                                                        cx.notify();
-                                                    }
-                                                }))
-                                        )
-                                        .child(
-                                            gpui_component::button::Button::new("cancel_admin_pin")
-                                                .label("Cancel")
-                                                .ghost()
-                                                .small()
-                                                .disabled(os_triggered)
-                                                .on_click(cx.listener(|this, _ev, window, cx| {
-                                                    this.pending_admin_view = None;
-                                                    this.admin_otp_state.update(cx, |input, cx| input.set_value("", window, cx));
-                                                    this.focus_handle.focus(window, cx);
-                                                    cx.notify();
-                                                }))
-                                        )
-                                )
-                        )
-                )
-            })
+            .children(self.render_profile_auth_overlay(window, cx))
+            .children(self.render_admin_auth_overlay(window, cx))
             .when(self.is_command_palette_open, |this| {
                 if let Some(palette) = &self.command_palette_view {
                     this.child(palette.clone())

@@ -114,10 +114,8 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
         let form_type = "2551Qv2018"; // hardcoded for 2551Q for now
         let filename = draft.default_submission_filename();
         let xml_payload = draft.to_bir_xml_payload();
-        let passphrase = "T0081gP45sy0rd-To+R3m3m63r!@4/<>";
-
         let encrypted =
-            match crate::crypto::compress_and_encrypt(xml_payload.as_bytes(), passphrase) {
+            match crate::crypto::compress_and_encrypt(xml_payload.as_bytes(), crate::crypto::BIR_IAF_PASSPHRASE) {
                 Ok(enc) => enc,
                 Err(e) => {
                     fail_draft(&mut draft, db.clone(), e.to_string());
