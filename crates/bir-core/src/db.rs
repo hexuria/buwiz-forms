@@ -445,12 +445,12 @@ impl Database {
 
     pub fn get_or_create_master_key() -> Result<String, DbError> {
         #[cfg(test)]
-        {
-            return Ok("0000000000000000000000000000000000000000000000000000000000000000".to_string());
-        }
+        return Ok("0000000000000000000000000000000000000000000000000000000000000000".to_string());
 
-        use keyring::Entry;
-        use tracing::{info, warn};
+        #[cfg(not(test))]
+        {
+            use keyring::Entry;
+            use tracing::{info, warn};
 
         // By using `keyring` on macOS with the `apple-native` feature, this calls `SecItemAdd` and `SecItemCopyMatching` natively.
         // In a sandboxed App Store environment, this will automatically use the app's Keychain Access Group entitlement.
@@ -475,17 +475,18 @@ impl Database {
             }
         }
 
-        match entry.get_password() {
-            Ok(hex_key) => {
-                info!("Loaded existing master key from native keychain");
-                Ok(hex_key)
-            }
-            Err(_) => {
-                info!("Generating new master key and storing in native keychain");
-                let key: [u8; 32] = rand::random();
-                let hex_key = hex::encode(key);
-                entry.set_password(&hex_key)?;
-                Ok(hex_key)
+            match entry.get_password() {
+                Ok(hex_key) => {
+                    info!("Loaded existing master key from native keychain");
+                    Ok(hex_key)
+                }
+                Err(_) => {
+                    info!("Generating new master key and storing in native keychain");
+                    let key: [u8; 32] = rand::random();
+                    let hex_key = hex::encode(key);
+                    entry.set_password(&hex_key)?;
+                    Ok(hex_key)
+                }
             }
         }
     }
