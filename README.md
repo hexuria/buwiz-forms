@@ -1,26 +1,46 @@
-# BIR Vault (eBIRForms Helper)
+# E-BIRForms
 
-A modern, fast, and secure desktop application for managing and filing eBIRForms in the Philippines. Built in Rust using the [GPUI](https://gpui.rs/) framework for a native, responsive experience.
+A modern, native, and secure desktop application for managing and filing eBIRForms in the Philippines. Built in Rust using the [GPUI](https://gpui.rs/) framework, E-BIRForms delivers a highly responsive, offline-first experience that fully respects your data privacy. E-BIRForms completely reverse-engineers the traditional eBIRForms workflow into a seamless, native Mac, Windows, and Linux application.
 
-## Features
+---
 
-- **Taxpayer Profile Management**: Securely store and manage multiple taxpayer profiles locally.
-- **Global Dashboard**: Unified view of all actionable tax forms across your profiles.
-- **Compliance Calendar**: Track your upcoming tax deadlines and historical filings.
-- **Form Generation**: Easy-to-use form filling (e.g. 2551Q, 1701Q) with automatic field computations.
-- **Local Database**: All data, including encrypted form drafts and profiles, is saved securely on your local machine (`bir_data.db`).
-- **Automated Filing Feedback**: Track the status of your submitted forms, up to "Paid" and "Confirmed" through receipt email parsing.
-- **BIR News & Advisories**: Built-in news fetcher to keep you up to date on RDO advisories and tax deadlines.
+## 🌟 Key Features
 
-## Prerequisites
+### 🔐 Security & Privacy
+- **Touch ID / Biometrics & App Lock**: Lock the application securely with a 4-digit PIN. Leverage native OS-level authentication (Touch ID on macOS, Windows Hello) via Robius Authentication for seamless unlocking.
+- **Offline-First & Local Storage**: All profiles, TINs, and drafts are securely encrypted and stored entirely on your local machine using SQLite (`bir_data.db`). 
 
-- **Rust Toolchain**: You need the latest stable Rust installed. Install via [rustup](https://rustup.rs/):
+### ⚡️ Power User Capabilities
+- **Keyboard Shortcuts**: Built for speed with global shortcuts.
+  - `Cmd + Enter`: Submit Current Form
+  - `Cmd + N`: Create New Profile
+  - `Cmd + B`: Toggle Sidebar
+  - `Cmd + F`: Focus Search / Command Palette
+  - `Cmd + Shift + X`: Open Cron Tasks
+  - `Cmd + K`: Open Command Palette
+- **Advanced Easy Filters**: Instantly sort and filter your dashboard by predefined timeframes: **Q1-Q4, Monthly, Yearly**, and by status (Pending, Confirmed, Paid).
+
+### 🤖 Automation & Background Tasks
+- **Cron Jobs & Background Service**: A robust standalone daemon (`bir-daemon`) handles background tasks without needing the main UI open.
+- **Auto Fetch & Auto Receipt Tracking**: Integrated IMAP fetching automatically scans your inbox for official BIR confirmation receipts and automatically updates the status of your submitted forms from "Submitted" to "Confirmed" and "Paid".
+
+### 💼 Taxpayer Management
+- **Multi-Profile Support**: Seamlessly manage multiple taxpayer profiles from a single unified workspace.
+- **Global Dashboard**: A comprehensive overview of all actionable tax deadlines and historical filings across all profiles.
+- **Form Generation**: Robust, schema-driven form generation (e.g., 2551Q) mapping directly to official BIR XML standards.
+
+---
+
+## 🛠 Prerequisites
+
+- **Rust Toolchain**: Ensure you have the latest stable Rust installed.
   ```bash
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
   ```
-- **macOS (Recommended)**: GPUI is currently optimized for macOS, though Linux and Windows support is available/experimental.
 
-## Getting Started
+---
+
+## 🚀 Getting Started
 
 1. **Clone the Repository**
    ```bash
@@ -28,46 +48,49 @@ A modern, fast, and secure desktop application for managing and filing eBIRForms
    cd bir
    ```
 
-2. **Build and Run**
-   The project is organized as a Cargo workspace with `bir-core` (business logic) and `bir-desktop` (UI).
-   
-   To run the application:
+2. **Build and Run using Make**
+   The project is completely standardized via a `Makefile`. We rarely use raw `cargo` commands unless doing specific deep-dives.
+
+   To see all available commands, run:
    ```bash
-   cargo run --release -p bir-desktop
+   make help
    ```
-   
-   To run in development/debug mode (which includes mock data generation tools in the sidebar):
+
+   **To run the application (development mode):**
    ```bash
    cargo run -p bir-desktop
    ```
+   *(Note: The main entry points are `bir-desktop` for the UI and `bir-daemon` for background tasks).*
 
-## Architecture
+---
 
-- `crates/bir-core/`: Contains all the domain logic, SQLite database integration (`rusqlite`), API communication, email IMAP tracking, and XML generation for eBIRForms.
-- `crates/bir-desktop/`: Contains the GPUI-based frontend, managing windows, states, rendering components, and handling user input.
-- `crates/bir-print/`: Module for generating PDF prints for forms.
-- `crates/gpui-component/`: A custom library of pre-built UI components customized for the GPUI framework.
+## 🏗 Available Make Commands
 
-## Data Privacy & Security
+- `make check`: Run `cargo check` across the entire workspace.
+- `make clippy`: Run strict linting.
+- `make test`: Run all test suites.
+- `make build-mac`: Build a release for your current macOS architecture.
+- `make build-mac-universal`: Build a Universal Binary (ARM64 + x86_64) for macOS.
+- `make build-win`: Build release for Windows.
+- `make build-linux`: Build release for Linux.
+- `make package-mac`: Package the `.app` bundle and generate a `.dmg`.
+- `make sign-mac`: Sign and notarize the macOS application for distribution.
+- `make clean`: Clean release artifacts and cargo cache.
 
-**Offline Secure**: By default, BIR Vault works entirely offline.
-- Your profiles, TINs, and form data never leave your computer unless you explicitly submit a form.
-- The local SQLite database is stored at: `~/Library/Application Support/Taxman/eBIRForms/bir_data.db` (on macOS) or `~/.taxman-ebir/bir_data.db` (on Linux/Windows).
-- Sensitive operations like uploading XML files use secure encryption mechanisms before transmitting to the eBIRForms platform.
+---
 
-## Development Commands
+## 📂 Architecture
 
-**Format Code**
-```bash
-cargo fmt
-```
+- `crates/bir-core/`: Contains all domain logic, SQLite database integrations, API communications, IMAP automated email tracking, cryptography, and XML generation logic.
+- `crates/bir-desktop/`: The GPUI-based frontend application managing windows, forms, inputs, locking, and theming.
+- `crates/bir-print/`: High-performance PDF generation and native OS printing integrations.
+- `crates/gpui-component/`: A centralized design system and UI toolkit customized exclusively for GPUI.
 
-**Check Compilation**
-```bash
-cargo check -p bir-desktop -p bir-core
-```
+---
 
-**Run Unit Tests**
-```bash
-cargo test -p bir-core
-```
+## 📜 Development Notes
+
+- **Database Location:** 
+  - macOS: `~/Library/Application Support/Taxman/eBIRForms/bir_data.db`
+  - Linux/Windows: `~/.taxman-ebir/bir_data.db`
+- **Background Daemon:** Background cron tasks (auto-fetch) are decoupled from the active taxpayer profile and can be managed globally in the settings.
