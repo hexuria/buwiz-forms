@@ -444,6 +444,11 @@ impl Database {
     }
 
     pub fn get_or_create_master_key() -> Result<String, DbError> {
+        #[cfg(test)]
+        {
+            return Ok("0000000000000000000000000000000000000000000000000000000000000000".to_string());
+        }
+
         use keyring::Entry;
         use tracing::{info, warn};
 
