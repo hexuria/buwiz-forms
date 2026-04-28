@@ -12,49 +12,56 @@ pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
     loop {
         // Run every 1 minute
         tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+        run_cron_tick(db.clone()).await;
+    }
+}
 
-        info!("Running background cron jobs...");
+/// Execute a single cron tick: process submissions and generic jobs.
+///
+/// This is extracted so the tray daemon can call it from its own loop
+/// with pause/resume control via `AtomicBool`.
+pub async fn run_cron_tick(db: Arc<Mutex<Database>>) {
+    info!("Running background cron jobs...");
 
-        // Ensure we don't hold the DB lock across async network calls.
-        // First, fetch profiles that have background cron enabled.
-        let profiles = {
-            let db_guard = match db.lock() {
-                Ok(guard) => guard,
-                Err(e) => {
-                    error!("Failed to lock database for cron: {}", e);
-                    continue;
-                }
-            };
-            match db_guard.list_profiles() {
-                Ok(p) => p,
-                Err(e) => {
-                    error!("Failed to fetch profiles in cron: {}", e);
-                    continue;
-                }
+    // Ensure we don't hold the DB lock across async network calls.
+    // First, fetch profiles that have background cron enabled.
+    let profiles = {
+        let db_guard = match db.lock() {
+            Ok(guard) => guard,
+            Err(e) => {
+                error!("Failed to lock database for cron: {}", e);
+                return;
             }
         };
-
-        let test_enabled = profiles.iter().any(|p| p.test_notification_enabled);
-        if test_enabled {
-            crate::notification::send_notification(
-                "BIR Vault Daemon",
-                "Hello! The background cron is active."
-            );
+        match db_guard.list_profiles() {
+            Ok(p) => p,
+            Err(e) => {
+                error!("Failed to fetch profiles in cron: {}", e);
+                return;
+            }
         }
+    };
 
-        let cron_profiles = profiles
-            .into_iter()
-            .filter(|p| p.background_cron_enabled)
-            .collect::<Vec<_>>();
-
-        for profile in cron_profiles {
-            // Task A: Form Submission Retries
-            process_submission_queue(&profile, db.clone()).await;
-        }
-
-        // Task C: Generic Job Queue (Custom Cron & One-off commands)
-        process_generic_jobs(db.clone()).await;
+    let test_enabled = profiles.iter().any(|p| p.test_notification_enabled);
+    if test_enabled {
+        crate::notification::send_notification(
+            "BIR Vault Daemon",
+            "Hello! The background cron is active."
+        );
     }
+
+    let cron_profiles = profiles
+        .into_iter()
+        .filter(|p| p.background_cron_enabled)
+        .collect::<Vec<_>>();
+
+    for profile in cron_profiles {
+        // Task A: Form Submission Retries
+        process_submission_queue(&profile, db.clone()).await;
+    }
+
+    // Task C: Generic Job Queue (Custom Cron & One-off commands)
+    process_generic_jobs(db.clone()).await;
 }
 
 async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Database>>) {
