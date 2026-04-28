@@ -24,6 +24,7 @@ A modern, native, and secure desktop application for managing and filing eBIRFor
 - **Advanced Easy Filters**: Instantly sort and filter your dashboard by predefined timeframes: **Q1-Q4, Monthly, Yearly**, and by status (Pending, Confirmed, Paid).
 
 ### 🤖 Automation & Background Tasks
+- **Zero-Latency Event Bus**: UI components instantly react to database updates triggered by background jobs. On macOS, this leverages `NSDistributedNotificationCenter` for true native zero-polling IPC between the daemon and desktop app.
 - **Cron Jobs & Background Service**: A robust standalone daemon (`bir-daemon`) handles background tasks without needing the main UI open.
 - **Auto Fetch & Auto Receipt Tracking**: Integrated IMAP fetching automatically scans your inbox for official BIR confirmation receipts and automatically updates the status of your submitted forms from "Submitted" to "Confirmed" and "Paid".
 
