@@ -40,6 +40,7 @@ ammonia = "4.1.2"
 html2text = "0.17"
 html-escape = "0.2"
 zip = "2"
+mac-notification-sys = "0.6.12"
 
 [dev-dependencies]
 insta = "1"
