@@ -96,6 +96,21 @@ impl DashboardView {
         })
         .detach();
 
+        // Auto-refresh when bir-daemon updates the database (e.g., form status changes)
+        let bus = cx.global::<crate::events::GlobalEventBus>().0.clone();
+        cx.subscribe(
+            &bus,
+            |this: &mut Self, _bus, event: &crate::events::AppEvent, cx| match event {
+                crate::events::AppEvent::DatabaseChanged => {
+                    if let Some(profile) = this.active_profile.clone() {
+                        this.reload_filing_progress(&profile);
+                        cx.notify();
+                    }
+                }
+            },
+        )
+        .detach();
+
         Self {
             active_profile: None,
             db,
