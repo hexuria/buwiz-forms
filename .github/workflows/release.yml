@@ -222,6 +222,17 @@ jobs:
           $VERSION = "${{ github.ref_name }}".TrimStart('v')
           iscc "/DMyAppVersion=$VERSION" installer.iss
 
+      - name: Create MSI Installer
+        shell: pwsh
+        run: |
+          $VERSION = "${{ github.ref_name }}".TrimStart('v')
+          $PKG = "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}"
+          $env:PATH += ";C:\Program Files (x86)\WiX Toolset v3.11\bin"
+          
+          heat.exe dir "$PKG" -dr INSTALLDIR -cg HarvestedComponents -gg -g1 -sf -srd -var "var.SourceDir" -out harvest.wxs
+          candle.exe installer.wxs harvest.wxs -dSourceDir="$PKG" -dVersion="$VERSION" -ext WixUIExtension
+          light.exe installer.wixobj harvest.wixobj -out "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}.msi" -ext WixUIExtension -sval
+
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -229,6 +240,7 @@ jobs:
           path: |
             target/release-artifacts/*.zip
             target/release-artifacts/*-Setup.exe
+            target/release-artifacts/*.msi
 
   # ── Linux ────────────────────────────────────────────────────────────────
   build-linux:
