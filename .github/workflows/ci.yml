@@ -73,13 +73,27 @@ jobs:
       shell: pwsh
       run: |
         choco install openssl typst -y
+        $openssl_dir = ""
         if (Test-Path "C:\Program Files\OpenSSL\include") {
-            echo "OPENSSL_DIR=C:\Program Files\OpenSSL" >> $env:GITHUB_ENV
+            $openssl_dir = "C:\Program Files\OpenSSL"
         } elseif (Test-Path "C:\Program Files\OpenSSL-Win64\include") {
-            echo "OPENSSL_DIR=C:\Program Files\OpenSSL-Win64" >> $env:GITHUB_ENV
+            $openssl_dir = "C:\Program Files\OpenSSL-Win64"
         } else {
             Write-Error "OpenSSL include directory not found!"
             exit 1
+        }
+        
+        echo "OPENSSL_DIR=$openssl_dir" >> $env:GITHUB_ENV
+        
+        # Find the actual library directory
+        $lib_file = Get-ChildItem -Path $openssl_dir -Filter "*crypto*.lib" -Recurse | Select-Object -First 1
+        if ($lib_file) {
+            echo "OPENSSL_LIB_DIR=$($lib_file.DirectoryName)" >> $env:GITHUB_ENV
+            if ($lib_file.Name -ne "libcrypto.lib") {
+                Copy-Item $lib_file.FullName "$($lib_file.DirectoryName)\libcrypto.lib"
+            }
+        } else {
+            Write-Warning "Could not find *crypto*.lib inside $openssl_dir"
         }
 
     - name: Check

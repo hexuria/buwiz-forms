@@ -38,6 +38,32 @@ A modern, native, and secure desktop application for managing and filing eBIRFor
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
   ```
 
+### 🍏 macOS Dependencies
+- **Typst** (Required for PDF generation & tests):
+  ```bash
+  brew install typst
+  ```
+
+### 🪟 Windows Dependencies
+- **OpenSSL** & **Typst** (Required for SQLCipher, networking, and PDF generation):
+  ```powershell
+  choco install openssl typst -y
+  ```
+  *Note: Ensure the `OPENSSL_DIR` environment variable is set to your OpenSSL installation path (e.g., `C:\Program Files\OpenSSL`).*
+
+### 🐧 Linux Dependencies (Ubuntu/Debian)
+Building the GPUI frontend and running tests requires various graphic, windowing, and system libraries:
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  pkg-config libx11-dev libxcb1-dev libxcb-render0-dev libxcb-shape0-dev \
+  libxcb-xfixes0-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
+  libwayland-client0 libasound2-dev libudev-dev libvulkan-dev \
+  libfontconfig1-dev libfreetype-dev libssl-dev libpolkit-gobject-1-dev \
+  mesa-vulkan-drivers libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+```
+- **Typst**: Download the latest Linux binary from the [Typst GitHub Releases](https://github.com/typst/typst/releases) and place it in your `PATH` (e.g., `/usr/local/bin/`).
+
 ---
 
 ## 🚀 Getting Started
