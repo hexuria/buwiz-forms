@@ -182,14 +182,56 @@ impl Form2550MDraft {
 }
 ```
 
-### Step 1.5 — Register in `forms/mod.rs`
+### Step 1.5 — Add State Transition Methods
+
+**IMPORTANT:** Never assign `self.status = FilingStatus::X` directly. Use transition methods with precondition checks:
+
+```rust
+impl Form2550MDraft {
+    pub fn is_editable(&self) -> bool {
+        matches!(self.status, FilingStatus::Draft)
+    }
+
+    /// Draft → Queued (validates first)
+    pub fn transition_to_queued(&mut self) -> Result<(), Vec<(String, String)>> {
+        assert!(matches!(self.status, FilingStatus::Draft));
+        let errors = <Self as FormValidator>::validate(self);
+        if !errors.is_empty() { return Err(errors); }
+        self.status = FilingStatus::Queued;
+        self.submission_attempts = 0;
+        self.next_retry_at = Some(chrono::Utc::now().to_rfc3339());
+        self.last_error = None;
+        self.updated_at = chrono::Utc::now().to_rfc3339();
+        Ok(())
+    }
+
+    /// Queued → Submitted (after FTP upload)
+    pub fn transition_to_submitted(&mut self, filename: String) { /* ... */ }
+
+    /// Submitted → Confirmed (when email receipt matched)
+    pub fn transition_to_confirmed(&mut self, confirmed_at: String, receipt_id: Option<i64>, filename: Option<String>) { /* ... */ }
+
+    /// Confirmed → Paid (user action)
+    pub fn transition_to_paid(&mut self) { /* ... */ }
+
+    /// Any non-Paid → Draft (revert, clears metadata)
+    pub fn revert_to_draft(&mut self) { /* ... */ }
+
+    /// Track failed submission with exponential backoff (auto-reverts after 5 failures)
+    pub fn record_submission_failure(&mut self, error_msg: String) { /* ... */ }
+}
+```
+
+> **Reference:** See `form_2551q.rs` lines 293–408 for the complete implementation of all transition methods.
+
+### Step 1.6 — Register in `forms/mod.rs`
 
 ```rust
 pub mod form_2550m;
 pub use form_2550m::Form2550MDraft;
 ```
 
-### Step 1.6 — Register in `forms/registry.rs`
+### Step 1.7 — Register in `forms/registry.rs`
 
 Add your form to `FORM_REGISTRY` so it appears in the Dashboard's form selection dropdown:
 
@@ -548,8 +590,9 @@ The production `form_2551q_view.rs` (1,473 LOC) demonstrates the full integratio
 
 - [ ] **bir-core**: Create `forms/form_<code>.rs` with Draft struct + `Default`
 - [ ] **bir-core**: Add `new_from_profile()` constructor
-- [ ] **bir-core**: Implement `FormValidator` with field-level validations
+- [ ] **bir-core**: Implement `FormValidator` (shared trait from `forms/mod.rs`) with field-level validations
 - [ ] **bir-core**: Add `recompute()` if the form has auto-calculated fields
+- [ ] **bir-core**: Add state transition methods (`transition_to_queued()`, `transition_to_paid()`, `revert_to_draft()`, etc.)
 - [ ] **bir-core**: Register in `forms/mod.rs` (`pub mod` + `pub use`)
 - [ ] **bir-core**: Register in `forms/registry.rs` (`FORM_REGISTRY`)
 - [ ] **bir-core/db**: Add migration for the new draft table
