@@ -51,7 +51,7 @@ assets = [
 
 [package.metadata.bundle]
 name = "eBIRForms"
-identifier = "com.goldcoders.bir"
+identifier = "dev.goldcoders.bir"
 category = "public.app-category.finance"
 short_description = "Philippine BIR tax return filing application"
 osx_minimum_system_version = "13.0"

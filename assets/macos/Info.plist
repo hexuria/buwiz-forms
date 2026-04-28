@@ -9,7 +9,7 @@
     <key>CFBundleExecutable</key>
     <string>bir</string>
     <key>CFBundleIdentifier</key>
-    <string>com.goldcoders.ebirforms</string>
+    <string>dev.goldcoders.ebirforms</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>

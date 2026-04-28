@@ -14,7 +14,7 @@ pub fn data_dir() -> PathBuf {
         let group_container = PathBuf::from(home)
             .join("Library")
             .join("Group Containers")
-            .join("group.com.goldcoders.bir");
+            .join("group.dev.goldcoders.bir");
 
         let _ = std::fs::create_dir_all(&group_container);
         return group_container;

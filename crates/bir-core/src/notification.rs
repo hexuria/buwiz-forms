@@ -9,7 +9,7 @@ pub fn send_notification(title: &str, body: &str) {
         use std::sync::Once;
         static SET_APP: Once = Once::new();
         SET_APP.call_once(|| {
-            let _ = mac_notification_sys::set_application("com.goldcoders.bir");
+            let _ = mac_notification_sys::set_application("dev.goldcoders.bir");
         });
     }
 

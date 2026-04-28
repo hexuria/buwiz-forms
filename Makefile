@@ -17,7 +17,7 @@ APP_PASSWORD := $(subst ",,$(APP_PASSWORD))
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 APP_NAME        := eBIRForms
-BUNDLE_ID       := com.goldcoders.bir
+BUNDLE_ID       := dev.goldcoders.bir
 MAC_ARM_TARGET  := aarch64-apple-darwin
 MAC_X86_TARGET  := x86_64-apple-darwin
 WIN_TARGET      := x86_64-pc-windows-msvc

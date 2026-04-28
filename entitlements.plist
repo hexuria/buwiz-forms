@@ -17,13 +17,13 @@
     <!-- Keychain access for encrypted database password -->
     <key>com.apple.security.keychain-access-groups</key>
     <array>
-        <string>TEAM_ID_PLACEHOLDER.com.goldcoders.bir</string>
+        <string>TEAM_ID_PLACEHOLDER.dev.goldcoders.bir</string>
     </array>
 
     <!-- App Groups for shared container with daemon -->
     <key>com.apple.security.application-groups</key>
     <array>
-        <string>TEAM_ID_PLACEHOLDER.com.goldcoders.bir.group</string>
+        <string>TEAM_ID_PLACEHOLDER.dev.goldcoders.bir.group</string>
     </array>
 
     <!-- File access via user-initiated dialogs (rfd) -->
