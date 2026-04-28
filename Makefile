@@ -81,6 +81,7 @@ package-mac: build-mac-universal ## Create macOS .app bundle + DMG
 	@cp $(RELEASE_DIR)/bir-daemon "$(MAC_APP)/Contents/MacOS/"
 	@# Copy runtime assets
 	@cp -R assets "$(MAC_APP)/Contents/Resources/"
+	@cp assets/AppIcon.icns "$(MAC_APP)/Contents/Resources/"
 	@cp -R formtypes "$(MAC_APP)/Contents/Resources/"
 	@# Generate Info.plist
 	@echo '<?xml version="1.0" encoding="UTF-8"?>' > "$(MAC_APP)/Contents/Info.plist"
