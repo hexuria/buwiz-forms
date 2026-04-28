@@ -154,7 +154,7 @@ sign-mac: ## Codesign + notarize (requires APPLE_IDENTITY, APPLE_ID, APPLE_APP_P
 	@echo "Signing $(MAC_APP)..."
 	codesign --deep --force --options runtime \
 		--sign "$(APPLE_IDENTITY)" \
-		--entitlements scripts/entitlements.plist \
+		--entitlements entitlements.plist \
 		"$(MAC_APP)"
 	@echo "Notarizing..."
 	xcrun notarytool submit "$(RELEASE_DIR)/$(APP_NAME)-macOS-$(VERSION).dmg" \
