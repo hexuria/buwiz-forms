@@ -9,6 +9,16 @@ use gpui_component::input::{Input, InputState};
 use gpui_component::*;
 use std::sync::{Arc, Mutex};
 
+/// Check if the bir-daemon process is currently running.
+fn is_daemon_running() -> bool {
+    std::process::Command::new("pgrep")
+        .arg("-x")
+        .arg("bir-daemon")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
 pub enum CronTasksEvent {
     Reload,
 }
@@ -86,6 +96,7 @@ pub struct CronTasksView {
     db: Arc<Mutex<Database>>,
     background_cron_enabled: bool,
     error_telemetry_enabled: bool,
+    daemon_running: bool,
     has_profile: bool,
     jobs: Vec<JobViewModel>,
     new_job_name: Entity<InputState>,
@@ -143,10 +154,13 @@ impl CronTasksView {
         let search_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Search job name or type..."));
 
+        let daemon_running = is_daemon_running();
+
         let mut view = Self {
             db,
             background_cron_enabled: false,
             error_telemetry_enabled: false,
+            daemon_running,
             has_profile: false,
             jobs: Vec::new(),
             new_job_name,
@@ -261,6 +275,37 @@ impl CronTasksView {
         self.save_to_db(cx);
     }
 
+    fn toggle_daemon(&mut self, value: bool, cx: &mut Context<'_, Self>) {
+        self.daemon_running = value;
+        if value {
+            // Start the daemon
+            bir_core::daemon_installer::install();
+        } else {
+            // Stop the daemon: unload from launchctl and kill the process
+            bir_core::daemon_installer::uninstall();
+            let _ = std::process::Command::new("killall")
+                .arg("bir-daemon")
+                .output();
+        }
+        // Re-check actual state after a brief delay
+        let view = cx.entity().downgrade();
+        cx.spawn(async move |_, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(500))
+                .await;
+            let _ = cx.update(|cx| {
+                if let Some(view) = view.upgrade() {
+                    view.update(cx, |this, cx| {
+                        this.daemon_running = is_daemon_running();
+                        cx.notify();
+                    });
+                }
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
     fn save_to_db(&mut self, cx: &mut Context<'_, Self>) {
         if let Ok(db) = self.db.lock() {
             if let Ok(profiles) = db.list_profiles() {
@@ -268,13 +313,6 @@ impl CronTasksView {
                     profile.background_cron_enabled = self.background_cron_enabled;
                     profile.error_telemetry_enabled = self.error_telemetry_enabled;
                     let _ = db.save_profile(profile);
-                }
-
-                let should_run = self.background_cron_enabled;
-                if should_run {
-                    bir_core::daemon_installer::install();
-                } else {
-                    bir_core::daemon_installer::uninstall();
                 }
             }
         }
@@ -430,6 +468,97 @@ impl CronTasksView {
     }
 
     fn run_job_now(&mut self, db_id: i64, cx: &mut Context<'_, Self>) {
+        // Find the job
+        let job = if let Ok(db) = self.db.lock() {
+            if let Ok(jobs) = db.list_jobs() {
+                jobs.into_iter().find(|j| j.id == Some(db_id))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let Some(job) = job else { return };
+
+        // For email polling jobs, execute inline instead of waiting for daemon
+        if let Some(ref cmd) = job.command {
+            if cmd.starts_with("bir_poll_email ") {
+                let email = cmd.trim_start_matches("bir_poll_email ").trim().to_string();
+                let db = self.db.clone();
+                let job_id = db_id;
+
+                // Mark as Running
+                if let Ok(db_guard) = db.lock() {
+                    if let Ok(jobs) = db_guard.list_jobs() {
+                        if let Some(mut j) = jobs.into_iter().find(|j| j.id == Some(job_id)) {
+                            j.status = "Running".to_string();
+                            let _ = db_guard.save_job(j);
+                        }
+                    }
+                }
+                self.load_settings(cx);
+
+                cx.spawn(async move |this, cx| {
+                    let _result = cx.background_executor().spawn(async move {
+                        let (poll_success, still_pending, err_msg) =
+                            bir_core::email::fetch_and_process_emails_for_address(&email, db.clone());
+
+                        // Update the job in DB
+                        if let Ok(db_guard) = db.lock() {
+                            if let Ok(jobs) = db_guard.list_jobs() {
+                                if let Some(mut j) = jobs.into_iter().find(|j| j.id == Some(job_id)) {
+                                    j.last_run_at = Some(Utc::now().to_rfc3339());
+                                    if poll_success {
+                                        j.output_log = Some("Email polling completed successfully.".to_string());
+                                        j.retries = 0;
+                                        if !still_pending {
+                                            j.status = "Archived".to_string();
+                                        } else {
+                                            j.status = "Queued".to_string();
+                                            // Set next run from cron
+                                            if let Some(ref expr) = j.cron_expr {
+                                                if let Ok(schedule) = std::str::FromStr::from_str(expr) {
+                                                    let schedule: cron::Schedule = schedule;
+                                                    if let Some(next) = schedule.upcoming(chrono::Utc).next() {
+                                                        j.next_run_at = Some(next.to_rfc3339());
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        j.output_log = Some(err_msg.unwrap_or_else(|| "Email polling failed (unknown).".to_string()));
+                                        j.retries += 1;
+                                        j.status = "Queued".to_string();
+                                        if let Some(ref expr) = j.cron_expr {
+                                            if let Ok(schedule) = std::str::FromStr::from_str(expr) {
+                                                let schedule: cron::Schedule = schedule;
+                                                if let Some(next) = schedule.upcoming(chrono::Utc).next() {
+                                                    j.next_run_at = Some(next.to_rfc3339());
+                                                }
+                                            }
+                                        }
+                                    }
+                                    let _ = db_guard.save_job(j);
+                                }
+                            }
+                        }
+                        poll_success
+                    }).await;
+
+                    let _ = cx.update(|cx| {
+                        if let Some(view) = this.upgrade() {
+                            view.update(cx, |this, cx| {
+                                this.load_settings(cx);
+                            });
+                        }
+                    });
+                }).detach();
+                return;
+            }
+        }
+
+        // Fallback: for non-email jobs, just mark for daemon pickup
         if let Ok(db) = self.db.lock() {
             if let Ok(jobs) = db.list_jobs() {
                 if let Some(mut job) = jobs.into_iter().find(|j| j.id == Some(db_id)) {
@@ -605,6 +734,39 @@ impl Render for CronTasksView {
                                             .checked(self.error_telemetry_enabled)
                                             .on_click(cx.listener(|this, v, _, cx| {
                                                 this.toggle_telemetry(*v, cx);
+                                            })),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .items_start()
+                                    .pt_4()
+                                    .gap_4()
+                                    .border_t_1()
+                                    .border_color(border)
+                                    .w_full()
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .gap_1()
+                                            .child(div().font_weight(FontWeight::SEMIBOLD).child(
+                                                if self.daemon_running { "Job Queue: On" } else { "Job Queue: Off" }
+                                            ))
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .child("Controls the background daemon process. Turn off before installing app updates."),
+                                            ),
+                                    )
+                                    .child(
+                                        gpui_component::switch::Switch::new("daemon_toggle")
+                                            .checked(self.daemon_running)
+                                            .on_click(cx.listener(|this, v, _, cx| {
+                                                this.toggle_daemon(*v, cx);
                                             })),
                                     ),
                             )

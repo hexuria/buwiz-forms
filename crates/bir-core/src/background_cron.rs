@@ -302,7 +302,7 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
             if !cmd.trim().is_empty() {
                 if cmd.starts_with("bir_poll_email ") {
                     let email = cmd.trim_start_matches("bir_poll_email ").trim();
-                    let (poll_success, still_pending) =
+                    let (poll_success, still_pending, err_msg) =
                         crate::email::fetch_and_process_emails_for_address(email, db.clone());
                     if poll_success {
                         let log = "Email polling completed successfully.".to_string();
@@ -316,8 +316,8 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
                             job.status = "Archived".to_string(); // Completed processing for this email
                         }
                     } else {
-                        let log = "Email polling failed.".to_string();
-                        warn!("Cron: Email polling job '{}' failed.", job.name);
+                        let log = err_msg.unwrap_or_else(|| "Email polling failed (unknown error).".to_string());
+                        warn!("Cron: Email polling job '{}' failed: {}", job.name, log);
                         success = false;
                         job.output_log = Some(log);
                     }

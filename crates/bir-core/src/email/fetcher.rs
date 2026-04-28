@@ -225,15 +225,15 @@ fn fetch_with_auth(
 }
 
 /// Fetch emails for a specific email address, across all profiles.
-/// Returns (poll_success, still_pending_forms).
+/// Returns (poll_success, still_pending_forms, error_message).
 pub fn fetch_and_process_emails_for_address(
     email_address: &str,
     db: std::sync::Arc<std::sync::Mutex<Database>>,
-) -> (bool, bool) {
+) -> (bool, bool, Option<String>) {
     let (profile, still_pending) = {
         let db_guard = match db.lock() {
             Ok(g) => g,
-            Err(_) => return (false, false),
+            Err(e) => return (false, false, Some(format!("DB lock failed: {}", e))),
         };
         let current_year = chrono::Utc::now().naive_utc().date().year() as u16;
         let profiles = db_guard.list_profiles().unwrap_or_default();
@@ -262,7 +262,7 @@ pub fn fetch_and_process_emails_for_address(
     };
 
     if !still_pending {
-        return (true, false);
+        return (true, false, None);
     }
 
     if let Some(profile) = profile {
@@ -270,7 +270,7 @@ pub fn fetch_and_process_emails_for_address(
             Ok(_) => {
                 let db_guard = match db.lock() {
                     Ok(g) => g,
-                    Err(_) => return (false, true),
+                    Err(_) => return (false, true, Some("DB lock failed after fetch".to_string())),
                 };
                 let mut remaining_pending = false;
                 let current_year = chrono::Utc::now().naive_utc().date().year() as u16;
@@ -289,14 +289,16 @@ pub fn fetch_and_process_emails_for_address(
                         }
                     }
                 }
-                (true, remaining_pending)
+                (true, remaining_pending, None)
             }
             Err(e) => {
-                tracing::warn!("Email polling failed for {}: {}", email_address, e);
-                (false, still_pending)
+                let err_msg = format!("{}", e);
+                tracing::warn!("Email polling failed for {}: {}", email_address, err_msg);
+                (false, still_pending, Some(err_msg))
             }
         }
     } else {
-        (false, false)
+        (false, false, Some(format!("No profile found matching email: {}", email_address)))
     }
 }
+
