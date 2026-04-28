@@ -21,7 +21,7 @@ pub fn bind_global_keys(cx: &mut App) {
         KeyBinding::new("f1", OpenGlobalDashboard, None),
         KeyBinding::new("cmd-q", QuitApplication, None),
         KeyBinding::new("cmd-h", HideApplication, None),
-        KeyBinding::new("cmd-opt-h", HideOthers, None),
+        KeyBinding::new("cmd-alt-h", HideOthers, None),
         KeyBinding::new("cmd-w", CloseWindow, None),
         KeyBinding::new("cmd-m", MinimizeWindow, None),
         KeyBinding::new("cmd-ctrl-f", ToggleFullScreen, None),

@@ -64,7 +64,19 @@ impl AssetSource for Assets {
 }
 
 fn main() {
-    let assets_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets");
+    let current_exe = std::env::current_exe().unwrap_or_default();
+    let is_app_bundle = current_exe.to_string_lossy().contains("Contents/MacOS");
+    let assets_dir = if is_app_bundle {
+        current_exe
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("Resources/assets")
+    } else {
+        // Fallback for `cargo run`
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets")
+    };
     gpui_platform::application()
         .with_assets(Assets { base: assets_dir })
         .run(move |cx| {

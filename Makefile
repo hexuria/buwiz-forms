@@ -8,6 +8,12 @@
 -include .env
 export
 
+# Strip literal quotes from .env variables to prevent shell syntax errors
+RELEASE_SIGNING_IDENTITY := $(subst ",,$(RELEASE_SIGNING_IDENTITY))
+APPLE_ID := $(subst ",,$(APPLE_ID))
+APPLE_TEAM_ID := $(subst ",,$(APPLE_TEAM_ID))
+APP_PASSWORD := $(subst ",,$(APP_PASSWORD))
+
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 APP_NAME        := eBIRForms
@@ -77,32 +83,30 @@ package-mac: build-mac-universal ## Create macOS .app bundle + DMG
 	@cp -R assets "$(MAC_APP)/Contents/Resources/"
 	@cp -R formtypes "$(MAC_APP)/Contents/Resources/"
 	@# Generate Info.plist
-	@cat > "$(MAC_APP)/Contents/Info.plist" <<'PLIST'
-	<?xml version="1.0" encoding="UTF-8"?>
-	<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-	<plist version="1.0">
-	<dict>
-		<key>CFBundleExecutable</key>
-		<string>bir</string>
-		<key>CFBundleIdentifier</key>
-		<string>$(BUNDLE_ID)</string>
-		<key>CFBundleName</key>
-		<string>$(APP_NAME)</string>
-		<key>CFBundleVersion</key>
-		<string>$(VERSION)</string>
-		<key>CFBundleShortVersionString</key>
-		<string>$(VERSION)</string>
-		<key>CFBundlePackageType</key>
-		<string>APPL</string>
-		<key>LSMinimumSystemVersion</key>
-		<string>13.0</string>
-		<key>NSHighResolutionCapable</key>
-		<true/>
-		<key>CFBundleIconFile</key>
-		<string>AppIcon</string>
-	</dict>
-	</plist>
-	PLIST
+	@echo '<?xml version="1.0" encoding="UTF-8"?>' > "$(MAC_APP)/Contents/Info.plist"
+	@echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '<plist version="1.0">' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '<dict>' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '	<key>CFBundleExecutable</key>' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '	<string>bir</string>' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '	<key>CFBundleIdentifier</key>' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '	<string>$(BUNDLE_ID)</string>' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '	<key>CFBundleName</key>' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '	<string>$(APP_NAME)</string>' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '	<key>CFBundleVersion</key>' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '	<string>$(VERSION)</string>' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '	<key>CFBundleShortVersionString</key>' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '	<string>$(VERSION)</string>' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '	<key>CFBundlePackageType</key>' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '	<string>APPL</string>' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '	<key>LSMinimumSystemVersion</key>' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '	<string>13.0</string>' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '	<key>NSHighResolutionCapable</key>' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '	<true/>' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '	<key>CFBundleIconFile</key>' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '	<string>AppIcon</string>' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '</dict>' >> "$(MAC_APP)/Contents/Info.plist"
+	@echo '</plist>' >> "$(MAC_APP)/Contents/Info.plist"
 	@echo "✅ $(MAC_APP) created"
 	@# Create DMG (requires create-dmg: brew install create-dmg)
 	@if command -v create-dmg >/dev/null 2>&1; then \
@@ -173,6 +177,23 @@ sign-mac: ## Codesign + notarize (requires RELEASE_SIGNING_IDENTITY, APPLE_ID, A
 		"$(MAC_APP)"
 		
 	@rm -f app.entitlements.tmp daemon.entitlements.tmp
+	
+	@echo "Packaging signed app into DMG..."
+	@rm -f "$(RELEASE_DIR)/$(APP_NAME)-macOS-$(VERSION).dmg"
+	@if command -v create-dmg >/dev/null 2>&1; then \
+		create-dmg \
+			--volname "$(APP_NAME)" \
+			--window-size 600 400 \
+			--icon-size 100 \
+			--icon "$(APP_NAME).app" 150 190 \
+			--app-drop-link 450 190 \
+			"$(RELEASE_DIR)/$(APP_NAME)-macOS-$(VERSION).dmg" \
+			"$(MAC_APP)"; \
+	else \
+		echo "⚠️  create-dmg not found. Install with: brew install create-dmg"; \
+		exit 1; \
+	fi
+
 	@echo "Notarizing..."
 	xcrun notarytool submit "$(RELEASE_DIR)/$(APP_NAME)-macOS-$(VERSION).dmg" \
 		--apple-id "$(APPLE_ID)" \
