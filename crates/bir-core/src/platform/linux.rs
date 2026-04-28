@@ -59,10 +59,10 @@ WantedBy=default.target"#,
         }
 
         let _ = std::process::Command::new("systemctl")
-            .args(&["--user", "daemon-reload"])
+            .args(["--user", "daemon-reload"])
             .output();
         let _ = std::process::Command::new("systemctl")
-            .args(&["--user", "enable", "--now", "bir-vault-daemon.service"])
+            .args(["--user", "enable", "--now", "bir-vault-daemon.service"])
             .output();
         info!("Linux systemd service installed");
     }
@@ -70,7 +70,7 @@ WantedBy=default.target"#,
 
 pub fn uninstall_daemon() {
     let _ = std::process::Command::new("systemctl")
-        .args(&["--user", "disable", "--now", "bir-vault-daemon.service"])
+        .args(["--user", "disable", "--now", "bir-vault-daemon.service"])
         .output();
 
     let home_dir = std::env::var("HOME").unwrap_or_default();
@@ -82,7 +82,7 @@ pub fn uninstall_daemon() {
     let _ = std::fs::remove_file(service_path);
 
     let _ = std::process::Command::new("systemctl")
-        .args(&["--user", "daemon-reload"])
+        .args(["--user", "daemon-reload"])
         .output();
     info!("Linux systemd service uninstalled");
 }
