@@ -82,6 +82,35 @@ fn main() {
         });
     }
 
+    // ── macOS: hide from Dock ────────────────────────────────────────────
+    #[cfg(target_os = "macos")]
+    {
+        // Must be set before the event loop is created/run.
+        // Accessory = shows in menu bar only, no Dock icon.
+        // NOTE: tao's EventLoopBuilder doesn't expose set_activation_policy
+        // so we use the Cocoa API directly.
+        unsafe {
+            use std::ffi::c_void;
+            #[link(name = "AppKit", kind = "framework")]
+            unsafe extern "C" {
+                fn NSApplicationLoad() -> bool;
+            }
+            #[link(name = "objc", kind = "dylib")]
+            unsafe extern "C" {
+                fn objc_getClass(name: *const u8) -> *mut c_void;
+                fn sel_registerName(name: *const u8) -> *mut c_void;
+                fn objc_msgSend(receiver: *mut c_void, sel: *mut c_void, ...) -> *mut c_void;
+            }
+            NSApplicationLoad();
+            let ns_app_class = objc_getClass(b"NSApplication\0".as_ptr());
+            let shared_app_sel = sel_registerName(b"sharedApplication\0".as_ptr());
+            let app = objc_msgSend(ns_app_class, shared_app_sel);
+            let set_policy_sel = sel_registerName(b"setActivationPolicy:\0".as_ptr());
+            // 1 = NSApplicationActivationPolicyAccessory (no Dock icon)
+            objc_msgSend(app, set_policy_sel, 1i64);
+        }
+    }
+
     // ── Event Loop ───────────────────────────────────────────────────────
     let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
 
@@ -183,9 +212,30 @@ fn open_main_app() {
     info!("Opening main eBIRForms app...");
     #[cfg(target_os = "macos")]
     {
+        // Use `open -a` to launch by app name. This ensures macOS launches
+        // the main `bir` executable (CFBundleExecutable) rather than
+        // potentially activating the daemon process.
+        // Try the installed path first, then fall back to app name.
+        let exe = std::env::current_exe().unwrap_or_default();
+        // bir-daemon lives at eBIRForms.app/Contents/MacOS/bir-daemon
+        // so the .app bundle is 3 levels up
+        let app_bundle = exe
+            .parent() // MacOS/
+            .and_then(|p| p.parent()) // Contents/
+            .and_then(|p| p.parent()); // eBIRForms.app/
+
+        if let Some(bundle) = app_bundle {
+            if bundle.extension().map(|e| e == "app").unwrap_or(false) {
+                let _ = std::process::Command::new("open")
+                    .arg(bundle)
+                    .spawn();
+                return;
+            }
+        }
+        // Fallback: open by name
         let _ = std::process::Command::new("open")
-            .arg("-b")
-            .arg("com.goldcoders.bir")
+            .arg("-a")
+            .arg("eBIRForms")
             .spawn();
     }
     #[cfg(not(target_os = "macos"))]
