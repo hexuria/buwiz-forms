@@ -1623,12 +1623,8 @@ impl Render for AppState {
                 },
             ))
             .on_action(cx.listener(
-                |this: &mut Self, _action: &crate::global_actions::OpenCronTasks, _window, cx| {
-                    this.active_view = ActiveView::CronTasks;
-                    this.cron_tasks_view.update(cx, |view, cx| {
-                        view.load_settings(cx);
-                    });
-                    cx.notify();
+                |this: &mut Self, _action: &crate::global_actions::OpenCronTasks, window, cx| {
+                    this.request_admin_access(ActiveView::CronTasks, window, cx);
                 },
             ))
             .on_action(cx.listener(
@@ -1916,7 +1912,7 @@ impl Render for AppState {
                                 .items_center()
                                 .gap_6()
                                 .child(
-                                    gpui::img("svg/ebirforms.png")
+                                    gpui::img("images/ebirforms.png")
                                         .w(px(200.))
                                         .h(px(60.))
                                         .object_fit(gpui::ObjectFit::Contain)
