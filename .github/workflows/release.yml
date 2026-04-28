@@ -169,8 +169,15 @@ jobs:
       - name: Install Windows Dependencies
         shell: pwsh
         run: |
-          vcpkg install openssl:x64-windows
-          echo "OPENSSL_DIR=C:\vcpkg\installed\x64-windows" >> $env:GITHUB_ENV
+          choco install openssl -y
+          if (Test-Path "C:\Program Files\OpenSSL\include") {
+              echo "OPENSSL_DIR=C:\Program Files\OpenSSL" >> $env:GITHUB_ENV
+          } elseif (Test-Path "C:\Program Files\OpenSSL-Win64\include") {
+              echo "OPENSSL_DIR=C:\Program Files\OpenSSL-Win64" >> $env:GITHUB_ENV
+          } else {
+              Write-Error "OpenSSL include directory not found!"
+              exit 1
+          }
 
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
