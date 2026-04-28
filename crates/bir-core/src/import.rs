@@ -179,8 +179,16 @@ pub fn extract_database_zip(zip_path: &Path, out_db_path: &Path) -> Result<(), D
         &format!("ATTACH DATABASE ?1 AS encrypted KEY \"x'{}'\";", key_hex),
         rusqlite::params![out_db_path.to_str().unwrap()],
     )?;
-    conn.execute_batch("SELECT sqlcipher_export('encrypted');")?;
+    let mut stmt = conn.prepare("SELECT sqlcipher_export('encrypted');")?;
+    let _ = stmt.query([])?.next()?;
+    drop(stmt);
     conn.execute("DETACH DATABASE encrypted;", [])?;
+
+    // Explicitly close the connection to ensure all data is flushed
+    drop(conn);
+    
+    // Small delay to ensure file system operations complete
+    std::thread::sleep(std::time::Duration::from_millis(100));
 
     // Clean up
     let _ = fs::remove_file(&temp_db_path);
