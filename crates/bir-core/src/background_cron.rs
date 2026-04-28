@@ -242,6 +242,10 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
     let now = Utc::now();
 
     for mut job in jobs {
+        if job.status == "Archived" || job.status == "Done" {
+            continue;
+        }
+
         // Self-heal legacy bad cron strings
         if let Some(ref mut expr) = job.cron_expr
             && expr.trim() == "* * * * *" {
@@ -356,7 +360,9 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
                 if let Ok(schedule) = cron::Schedule::from_str(cron_expr) {
                     if let Some(next_run) = schedule.upcoming(Utc).next() {
                         job.next_run_at = Some(next_run.to_rfc3339());
-                        job.status = "Queued".to_string();
+                        if job.status != "Archived" && job.status != "Done" {
+                            job.status = "Queued".to_string();
+                        }
                         job.retries = if success { 0 } else { job.retries + 1 };
                     } else {
                         job.status = "Done".to_string(); // cron will never run again
