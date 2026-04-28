@@ -33,7 +33,7 @@ bump_version() {
 
 tag_release() {
     local current_version=$(get_version)
-    git add "$CARGO_FILE" Cargo.lock
+    git add "$CARGO_FILE"
     # Only commit if there are changes
     git diff --cached --quiet || git commit -m "chore: bump version to v${current_version}"
     git tag -a "v${current_version}" -m "Release v${current_version}"
