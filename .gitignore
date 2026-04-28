@@ -50,13 +50,7 @@ Desktop.ini
 *.lock
 
 # AI Agent Artifacts & Scratchpads
-artifacts/
-.agent_scratch/
-
-# Test Logs
-bruteforce/logs/
-scripts/logs/
-bruteforce/bruteforce.db
+.scratch/
 
 # Node JS
 node_modules/
@@ -67,23 +61,7 @@ node_modules/
 # Stowed & Experimental Ideation Files
 .windsurfrules
 .agent/
-bruteforce/
-fb-news/
-test2.rs
-test_imap.py
-test_modifiers.rs
-tests/
 
 # Internal documentation and exploratory scripts
-docs/audit_report.md
-docs/brute_forcing.md
-docs/github-secrets.md
-docs/keychain_resolution.md
-docs/platform_gating_plan.md
-docs/print-preview-template-plan.md
-docs/taxman-integration.md
-docs/confirmation_and_receipt_tracking.md
-docs/pdf_viewer_and_fillable_forms.md
-scripts/experiment_bir.py
-scripts/generate_formtype.py
-scripts/pdf_to_typst_form_prototype.py
+.docs/
+.scripts/
