@@ -57,6 +57,11 @@ pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
 
         // Task C: Generic Job Queue (Custom Cron & One-off commands)
         process_generic_jobs(db.clone()).await;
+
+        // Signal the desktop app that the database was modified.
+        // On macOS: instant via NSDistributedNotificationCenter.
+        // On Linux/Windows: no-op (desktop uses PRAGMA data_version polling).
+        crate::ipc::post_db_changed();
     }
 }
 

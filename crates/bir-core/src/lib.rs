@@ -26,6 +26,7 @@ pub mod form;
 pub mod forms;
 pub mod import;
 pub mod integration;
+pub mod ipc;
 pub mod naming;
 pub mod news_fetcher;
 pub mod notification;

@@ -16,36 +16,68 @@
 
 ## How It Works
 
+### macOS (Dual-Mode — Event-Driven + Polling Fallback)
+
+```
+┌───────────────┐       writes        ┌──────────┐
+│  bir-daemon   │ ──────────────────▶ │  SQLite  │
+│  (background) │                     │  (WAL)   │
+└───────┬───────┘                     └────┬─────┘
+        │                                  │
+        │  ipc::post_db_changed()           │ PRAGMA data_version
+        ▼                                  │ (5s fallback)
+┌───────────────────┐                      │
+│ NSDistributed     │                      │
+│ NotificationCenter│                      │
+└───────┬───────────┘                      │
+        │ instant (<100ms)                 │
+┌───────┼──────────────────────────────────┼──────────────────────┐
+│       ▼  bir-desktop (UI)                ▼                     │
+│                                                                │
+│  ┌──────────────────┐    ┌──────────────────┐                  │
+│  │ macOS Listener   │    │  DB Watcher      │                  │
+│  │ (AtomicBool flag)│    │  (5s polling)    │                  │
+│  └────────┬─────────┘    └────────┬─────────┘                  │
+│           │                       │                            │
+│           └─────────┬─────────────┘                            │
+│                     ▼                                          │
+│  ┌──────────────────────┐                                      │
+│  │  GlobalEventBus      │  cx.emit(AppEvent::DatabaseChanged)  │
+│  └──────────┬───────────┘                                      │
+│             │ broadcast to all subscribers                     │
+│             ├──▶ GlobalDashboardView::reload_actionable_forms()│
+│             ├──▶ DashboardView::reload_filing_progress()       │
+│             ├──▶ Form2551QView::reload draft if status changed │
+│             └──▶ CronTasksView::load_settings()               │
+└────────────────────────────────────────────────────────────────┘
+```
+
+### Linux / Windows (Polling Only)
+
 ```
 ┌───────────────┐       writes        ┌──────────┐
 │  bir-daemon   │ ──────────────────▶ │  SQLite  │
 │  (background) │                     │  (WAL)   │
 └───────────────┘                     └────┬─────┘
                                            │
-                      PRAGMA data_version  │ changes
+                      PRAGMA data_version  │ (1s polling)
                                            │
 ┌──────────────────────────────────────────┼──────────────────────┐
 │  bir-desktop (UI)                        ▼                     │
-│                                                                │
 │  ┌──────────────────┐                                          │
 │  │  DB Watcher      │  polls every 1 second                    │
 │  │  (events.rs)     │  compares PRAGMA data_version            │
 │  └────────┬─────────┘                                          │
-│           │ version changed?                                   │
 │           ▼                                                    │
-│  ┌──────────────────┐                                          │
-│  │  GlobalEventBus  │  cx.emit(AppEvent::DatabaseChanged)      │
-│  │  (GPUI Global)   │                                          │
-│  └────────┬─────────┘                                          │
-│           │ broadcast to all subscribers                       │
-│           ├──▶ GlobalDashboardView::reload_actionable_forms()  │
-│           ├──▶ DashboardView::reload_filing_progress()         │
-│           ├──▶ Form2551QView::reload draft if status changed   │
-│           └──▶ CronTasksView::load_settings()                 │
-└────────────────────────────────────────────────────────────────┘
+│  ┌──────────────────────┐                                      │
+│  │  GlobalEventBus      │  cx.emit(AppEvent::DatabaseChanged)  │
+│  └──────────┬───────────┘                                      │
+│             │ broadcast to all subscribers                     │
+│             ├──▶ (same subscriber list as macOS)               │
+└─────────────┴──────────────────────────────────────────────────┘
 ```
 
-**Key insight:** SQLite's `PRAGMA data_version` increments when a *different connection* commits. Since `bir-daemon` is a separate process with its own connection, any write it makes is detected by the desktop app's watcher within 1 second.
+**Key insight:** On macOS, the daemon calls `bir_core::ipc::post_db_changed()` which posts a `CFNotification`. The desktop app receives it within ~100ms via an `AtomicBool` flag. The PRAGMA polling still runs at 5s as a safety net. On Linux/Windows, `post_db_changed()` is a no-op and 1s PRAGMA polling is the primary mechanism.
 
 ---
 
@@ -184,14 +216,22 @@ The DB watcher uses `PRAGMA data_version`, which only increments when a **differ
 
 > **⚠️ Warning:** If you ever introduce a second `Connection` in the desktop process (e.g., for async DB access on a background thread), writes through that connection WILL trigger `DatabaseChanged` and cause unexpected reloads. Stick to the single shared `Arc<Mutex<Database>>`.
 
-### 2. Handler Performance
+### 2. macOS Distributed Notifications
 
-The `DatabaseChanged` event fires at most once per second (the polling interval). Your handler runs on the main thread, so keep it fast:
+On macOS, the daemon posts a `CFNotification` named `dev.goldcoders.bir.DatabaseChanged` via `CoreFoundation` at the end of each cron cycle. The desktop app observes this via an `AtomicBool` flag that a C callback sets, checked every 100ms by a lightweight GPUI task.
+
+This gives us **<100ms latency** on macOS vs ~1000ms on Linux/Windows.
+
+If you add a new daemon or background process that writes to the DB, call `bir_core::ipc::post_db_changed()` after your writes.
+
+### 3. Handler Performance
+
+The `DatabaseChanged` event fires at most once per second on Linux/Windows (the polling interval), or instantly on macOS. Your handler runs on the main thread, so keep it fast:
 - ✅ SQLite queries on a small dataset — fine
 - ✅ Replacing a `Vec<JobViewModel>` — fine
 - ❌ Heavy computation or network calls — use `cx.spawn()` to move to background
 
-### 3. Init Order
+### 4. Init Order
 
 The `GlobalEventBus` is set as a GPUI global in `app.rs` **before** any views are created:
 
@@ -204,17 +244,30 @@ Line 172: crate::events::start_db_watcher(Arc::clone(&db), cx);
 
 If you create a view before line 171, calling `cx.global::<GlobalEventBus>()` will panic.
 
-### 4. Detach vs Store
+### 5. Detach vs Store
 
 - Use `.detach()` for views that live the entire app lifetime.
 - Store `Subscription` objects in a `Vec<Subscription>` field if the view is created/destroyed dynamically, so the subscription is dropped with the view.
 
-### 5. Testing
+### 6. Testing
 
-To manually trigger a `DatabaseChanged` event in development, open a second terminal and run:
+To manually trigger a `DatabaseChanged` event in development:
 
+**On any platform (via PRAGMA polling):**
 ```bash
 sqlite3 /path/to/ebirforms.db "UPDATE settings SET value = value WHERE key = 'background_cron_enabled';"
 ```
-
 This commits through a different connection, incrementing `data_version` and firing the event.
+
+**On macOS (via distributed notification — instant):**
+```bash
+# From a Rust scratch file or test:
+bir_core::ipc::post_db_changed();
+```
+Or trigger it from Swift/ObjC for testing:
+```swift
+DistributedNotificationCenter.default().postNotificationName(
+    NSNotification.Name("dev.goldcoders.bir.DatabaseChanged"),
+    object: nil
+)
+```

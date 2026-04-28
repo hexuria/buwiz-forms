@@ -169,6 +169,12 @@ impl AppState {
 
         let bus = cx.new(|_| crate::events::EventBus {});
         cx.set_global(crate::events::GlobalEventBus(bus));
+
+        // On macOS: instant event-driven notifications from the daemon via NSDistributedNotificationCenter.
+        #[cfg(target_os = "macos")]
+        crate::events::start_macos_notification_listener(cx);
+
+        // On all platforms: PRAGMA data_version polling as primary (Linux/Windows) or fallback (macOS).
         crate::events::start_db_watcher(Arc::clone(&db), cx);
 
         let db_clone = Arc::clone(&db);
