@@ -204,7 +204,7 @@ jobs:
       - name: Build
         run: cargo build --release --target x86_64-pc-windows-msvc
 
-      - name: Package
+      - name: Package (.zip)
         shell: pwsh
         run: |
           $VERSION = "${{ github.ref_name }}".TrimStart('v')
@@ -216,11 +216,19 @@ jobs:
           Copy-Item -Recurse "formtypes" "$PKG/"
           Compress-Archive -Path "$PKG" -DestinationPath "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}.zip"
 
+      - name: Create EXE Installer
+        shell: pwsh
+        run: |
+          $VERSION = "${{ github.ref_name }}".TrimStart('v')
+          iscc "/DMyAppVersion=$VERSION" installer.iss
+
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-release
-          path: target/release-artifacts/*.zip
+          path: |
+            target/release-artifacts/*.zip
+            target/release-artifacts/*-Setup.exe
 
   # ── Linux ────────────────────────────────────────────────────────────────
   build-linux:
