@@ -1595,6 +1595,37 @@ impl Render for AppState {
                     cx.notify();
                 },
             ))
+            .on_action(cx.listener(
+                |_this: &mut Self, _action: &crate::global_actions::QuitApplication, _window, cx| {
+                    cx.quit();
+                },
+            ))
+            .on_action(cx.listener(
+                |_this: &mut Self, _action: &crate::global_actions::HideApplication, _window, cx| {
+                    cx.hide();
+                },
+            ))
+            .on_action(cx.listener(
+                |_this: &mut Self, _action: &crate::global_actions::HideOthers, _window, cx| {
+                    // Hide other applications (macOS mainly)
+                    cx.hide_other_apps();
+                },
+            ))
+            .on_action(cx.listener(
+                |_this: &mut Self, _action: &crate::global_actions::CloseWindow, window, _cx| {
+                    window.remove_window();
+                },
+            ))
+            .on_action(cx.listener(
+                |_this: &mut Self, _action: &crate::global_actions::MinimizeWindow, window, _cx| {
+                    window.minimize_window();
+                },
+            ))
+            .on_action(cx.listener(
+                |_this: &mut Self, _action: &crate::global_actions::ToggleFullScreen, window, _cx| {
+                    window.toggle_fullscreen();
+                },
+            ))
             .child(
                 div()
                     .flex()

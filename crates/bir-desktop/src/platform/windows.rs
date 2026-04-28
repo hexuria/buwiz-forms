@@ -19,6 +19,10 @@ pub fn bind_global_keys(cx: &mut App) {
         KeyBinding::new("ctrl-,", OpenSettings, None),
         KeyBinding::new("ctrl-k", OpenCommandPalette, None),
         KeyBinding::new("f1", OpenGlobalDashboard, None),
+        KeyBinding::new("alt-f4", QuitApplication, None),
+        KeyBinding::new("ctrl-w", CloseWindow, None),
+        KeyBinding::new("f11", ToggleFullScreen, None),
+        KeyBinding::new("win-m", MinimizeWindow, None),
     ]);
 }
 

@@ -22,7 +22,13 @@ pub mod global_actions {
             OpenCronTasks,
             OpenSettings,
             OpenCommandPalette,
-            OpenGlobalDashboard
+            OpenGlobalDashboard,
+            QuitApplication,
+            HideApplication,
+            HideOthers,
+            CloseWindow,
+            MinimizeWindow,
+            ToggleFullScreen
         ]
     );
 }
