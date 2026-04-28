@@ -43,8 +43,7 @@ pub struct ProfileManagerView {
 
     // Email Tracking Settings
     email_tracking_enabled: bool,
-    background_cron_enabled: bool,
-    error_telemetry_enabled: bool,
+
     email_auth_method: EmailAuthMethod,
     imap_email_input: Entity<InputState>,
     imap_password_input: Entity<InputState>,
@@ -61,7 +60,7 @@ pub struct ProfileManagerView {
     stored_test_notification_enabled: bool,
     stored_is_archived: bool,
     stored_profile_pin_hash: Option<String>,
-    
+
     enable_profile_pin: bool,
     profile_pin_input: Entity<OtpState>,
 
@@ -117,7 +116,7 @@ impl ProfileManagerView {
             input.set_value("imap.gmail.com".to_string(), window, cx);
             input
         });
-        
+
         let profile_pin_input = cx.new(|cx| {
             let mut input = OtpState::new(4, window, cx);
             input = input.masked(true);
@@ -151,8 +150,7 @@ impl ProfileManagerView {
             save_message: None,
             rdo_options,
             email_tracking_enabled: false,
-            background_cron_enabled: true,
-            error_telemetry_enabled: false,
+
             email_auth_method: EmailAuthMethod::GoogleOAuth,
             imap_email_input,
             imap_password_input,
@@ -180,8 +178,7 @@ impl ProfileManagerView {
         self.is_vat_registered = false;
         self.errors.clear();
         self.save_message = None;
-        self.email_tracking_enabled = false;
-        self.error_telemetry_enabled = false;
+
         self.email_auth_method = EmailAuthMethod::GoogleOAuth;
         self.stored_test_notification_enabled = false;
         self.stored_is_archived = false;
@@ -195,20 +192,19 @@ impl ProfileManagerView {
         self.is_editing_password = true;
         self.stored_profile_pin_hash = None;
 
-        // Auto-derive background_cron from global setting
-        let global_cron_enabled = if let Ok(db) = self.db.lock() {
-            if let Ok(profiles) = db.list_profiles() {
-                profiles.iter().any(|p| p.background_cron_enabled)
-            } else { true }
-        } else { true };
-        self.background_cron_enabled = global_cron_enabled;
-
         // Auto-check PIN if global "Enable Profile PINs" is on
         let global_pins_enabled = if let Ok(db) = self.db.lock() {
-            db.get_setting("enable_profile_pins").ok().flatten().as_deref() == Some("true")
-        } else { false };
+            db.get_setting("enable_profile_pins")
+                .ok()
+                .flatten()
+                .as_deref()
+                == Some("true")
+        } else {
+            false
+        };
         self.enable_profile_pin = global_pins_enabled;
-        self.profile_pin_input.update(cx, |input, cx| input.set_value("", window, cx));
+        self.profile_pin_input
+            .update(cx, |input, cx| input.set_value("", window, cx));
 
         self.imap_email_input
             .update(cx, |input, cx| input.set_value(String::new(), window, cx));
@@ -246,6 +242,20 @@ impl ProfileManagerView {
         cx.notify();
     }
 
+    pub fn prefill_tin(&mut self, tin_str: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let tin_clean = tin_str.replace("-", "");
+        let tin = bir_core::naming::Tin {
+            segment1: tin_clean.get(0..3).unwrap_or("").to_string(),
+            segment2: tin_clean.get(3..6).unwrap_or("").to_string(),
+            segment3: tin_clean.get(6..9).unwrap_or("").to_string(),
+            branch: tin_clean.get(9..).unwrap_or("").to_string(),
+        };
+        self.tin_input.update(cx, |input, cx| {
+            input.set_from_tin(&tin, window, cx);
+        });
+        cx.notify();
+    }
+
     pub fn edit_profile(
         &mut self,
         profile: TaxpayerProfile,
@@ -255,8 +265,7 @@ impl ProfileManagerView {
         self.editing_id = profile.id;
         self.is_vat_registered = profile.is_vat_registered;
         self.email_tracking_enabled = profile.email_tracking_enabled;
-        self.background_cron_enabled = profile.background_cron_enabled;
-        self.error_telemetry_enabled = profile.error_telemetry_enabled;
+
         self.email_auth_method = profile.email_auth_method.clone();
 
         self.imap_email_input.update(cx, |input, cx| {
@@ -280,15 +289,17 @@ impl ProfileManagerView {
         self.stored_is_archived = profile.is_archived;
         self.stored_profile_pin_hash = profile.profile_pin_hash.clone();
         self.enable_profile_pin = profile.profile_pin_hash.is_some();
-        self.profile_pin_input.update(cx, |input, cx| input.set_value("", window, cx));
+        self.profile_pin_input
+            .update(cx, |input, cx| input.set_value("", window, cx));
 
         if profile.email_auth_method == EmailAuthMethod::GoogleOAuth
-            && profile.oauth_refresh_token.is_some() {
+            && profile.oauth_refresh_token.is_some()
+        {
             self.is_editing_password = false;
         } else {
             self.is_editing_password = profile.imap_app_password.is_none();
         }
-        
+
         self.imap_password_input.update(cx, |input, cx| {
             input.set_value(
                 profile.imap_app_password.clone().unwrap_or_default(),
@@ -370,10 +381,10 @@ impl ProfileManagerView {
         // Check DB for existing profile with same TIN
         if let Ok(db) = self.db.lock() {
             if let Ok(Some(_existing)) = db.get_profile(&tin_val) {
-                self.tin_duplicate_error = Some(
-                    format!("A profile with TIN {} already exists. Each TIN must be unique.",
-                        self.tin_input.read(cx).formatted_value(cx))
-                );
+                self.tin_duplicate_error = Some(format!(
+                    "A profile with TIN {} already exists. Each TIN must be unique.",
+                    self.tin_input.read(cx).formatted_value(cx)
+                ));
             } else {
                 self.tin_duplicate_error = None;
             }
@@ -436,7 +447,7 @@ impl ProfileManagerView {
             .to_string();
 
         let business_start_date = self.business_start_input.read(cx).date;
-        
+
         let profile_pin_hash = if self.enable_profile_pin {
             let pin = self.profile_pin_input.read(cx).value().to_string();
             if pin.len() == 4 {
@@ -463,8 +474,7 @@ impl ProfileManagerView {
             is_vat_registered: self.is_vat_registered,
             business_start_date,
             email_tracking_enabled: self.email_tracking_enabled,
-            background_cron_enabled: self.background_cron_enabled,
-            error_telemetry_enabled: self.error_telemetry_enabled,
+
             email_auth_method: self.email_auth_method.clone(),
             imap_email: {
                 let val = self.imap_email_input.read(cx).value().trim().to_string();
@@ -509,9 +519,10 @@ impl ProfileManagerView {
             let tin_str = profile.tin.full();
             if let Ok(db) = self.db.lock() {
                 if let Ok(Some(_)) = db.get_profile(&tin_str) {
-                    self.tin_duplicate_error = Some(
-                        format!("A profile with TIN {} already exists.", profile.tin.formatted())
-                    );
+                    self.tin_duplicate_error = Some(format!(
+                        "A profile with TIN {} already exists.",
+                        profile.tin.formatted()
+                    ));
                     self.errors.push(ValidationError::new(
                         "tin",
                         "This TIN is already registered to another profile.",
@@ -555,10 +566,15 @@ impl ProfileManagerView {
 
         // Gate: PIN required when global "Enable Profile PINs" is on
         let global_pins_enabled = if let Ok(db) = self.db.lock() {
-            db.get_setting("enable_profile_pins").ok().flatten().as_deref() == Some("true")
-        } else { false };
-        if global_pins_enabled && self.enable_profile_pin
-            && self.stored_profile_pin_hash.is_none()
+            db.get_setting("enable_profile_pins")
+                .ok()
+                .flatten()
+                .as_deref()
+                == Some("true")
+        } else {
+            false
+        };
+        if global_pins_enabled && self.enable_profile_pin && self.stored_profile_pin_hash.is_none()
         {
             let pin = self.profile_pin_input.read(cx).value().to_string();
             if pin.len() != 4 {
@@ -574,10 +590,13 @@ impl ProfileManagerView {
 
         // Gate: Email auth required when background cron (Automated Form Submission) is globally active
         let global_cron_active = if let Ok(db) = self.db.lock() {
-            if let Ok(profiles) = db.list_profiles() {
-                profiles.iter().any(|p| p.background_cron_enabled)
-            } else { false }
-        } else { false };
+            db.get_setting("background_cron_enabled")
+                .unwrap_or(Some("true".to_string()))
+                .map(|s| s == "true")
+                .unwrap_or(true)
+        } else {
+            false
+        };
         if global_cron_active && !self.email_tracking_enabled {
             self.pending_notification = Some((
                 gpui_component::notification::NotificationType::Error,
@@ -606,16 +625,6 @@ impl ProfileManagerView {
                     if let Ok(db) = db_arc.lock() {
                         let res = db.save_profile(profile).map_err(|e| e.to_string());
 
-                        // Check if ANY profile has background cron enabled to toggle OS service
-                        if let Ok(profiles) = db.list_profiles() {
-                            let should_run_daemon =
-                                profiles.iter().any(|p| p.background_cron_enabled);
-                            if should_run_daemon {
-                                bir_core::daemon_installer::install();
-                            } else {
-                                bir_core::daemon_installer::uninstall();
-                            }
-                        }
                         res
                     } else {
                         Err("Database lock is poisoned".to_string())
@@ -699,10 +708,16 @@ impl Render for ProfileManagerView {
         } else {
             "Business Start Date"
         };
-        
+
         let global_pins_enabled = if let Ok(db) = self.db.lock() {
-            db.get_setting("enable_profile_pins").ok().flatten().as_deref() == Some("true")
-        } else { false };
+            db.get_setting("enable_profile_pins")
+                .ok()
+                .flatten()
+                .as_deref()
+                == Some("true")
+        } else {
+            false
+        };
 
         div()
             .id("profile-scroll")

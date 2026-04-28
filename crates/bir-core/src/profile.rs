@@ -69,17 +69,9 @@ pub struct TaxpayerProfile {
     #[doc(hidden)]
     pub _imap_enabled_compat: Option<bool>,
 
-    /// Toggle to enable/disable automated background services (email checking and form submission retries).
-    #[serde(default = "default_true")]
-    pub background_cron_enabled: bool,
-
     /// Toggle to enable/disable test OS notifications every minute.
     #[serde(default)]
     pub test_notification_enabled: bool,
-
-    /// Toggle to enable error telemetry to send debug logs to support.
-    #[serde(default)]
-    pub error_telemetry_enabled: bool,
 
     /// Securely stored App Password (encrypted inside DB)
     #[serde(default)]
@@ -101,6 +93,3 @@ impl TaxpayerProfile {
     }
 }
 
-fn default_true() -> bool {
-    true
-}

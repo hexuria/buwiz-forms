@@ -197,7 +197,9 @@ impl ListDelegate for ProfileListDelegate {
             } else {
                 self.all_items
                     .iter()
-                    .filter(|p| p.tin.full() == q.trim() || p.tin.formatted().to_lowercase() == q.trim())
+                    .filter(|p| {
+                        p.tin.full() == q.trim() || p.tin.formatted().to_lowercase() == q.trim()
+                    })
                     .cloned()
                     .collect()
             }
@@ -205,7 +207,9 @@ impl ListDelegate for ProfileListDelegate {
             self.all_items
                 .iter()
                 .filter(|p| {
-                    q.is_empty() || p.full_name.to_lowercase().contains(&q) || p.tin.full().contains(&q)
+                    q.is_empty()
+                        || p.full_name.to_lowercase().contains(&q)
+                        || p.tin.full().contains(&q)
                 })
                 .take(5) // Limit to 5 max
                 .cloned()
@@ -250,7 +254,11 @@ impl CommandPalette {
         let filtered: Vec<TaxpayerProfile> = if hide_tax_profiles {
             // Show only the active session profile if one exists
             if let Some(ref session_tin) = active_session_tin {
-                profiles.iter().filter(|p| p.tin.full() == *session_tin).cloned().collect()
+                profiles
+                    .iter()
+                    .filter(|p| p.tin.full() == *session_tin)
+                    .cloned()
+                    .collect()
             } else {
                 Vec::new()
             }

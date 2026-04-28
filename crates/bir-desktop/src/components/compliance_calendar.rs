@@ -577,15 +577,16 @@ impl ComplianceCalendar {
                             cx.theme().foreground // Safe
                         };
 
-                        let mut dots = div().flex().flex_wrap().gap_1().justify_center().px_1().pb_1();
+                        let mut dots = div()
+                            .flex()
+                            .flex_wrap()
+                            .gap_1()
+                            .justify_center()
+                            .px_1()
+                            .pb_1();
                         for _ in day_deadlines.iter().take(4) {
-                            dots = dots.child(
-                                div()
-                                    .w(px(6.))
-                                    .h(px(6.))
-                                    .rounded_full()
-                                    .bg(dot_color),
-                            );
+                            dots =
+                                dots.child(div().w(px(6.)).h(px(6.)).rounded_full().bg(dot_color));
                         }
                         if day_deadlines.len() > 4 {
                             dots = dots.child(

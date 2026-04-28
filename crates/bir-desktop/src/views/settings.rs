@@ -1,9 +1,9 @@
 use bir_core::db::Database;
-use gpui::*;
 use gpui::prelude::FluentBuilder;
-use gpui_component::*;
+use gpui::*;
+use gpui_component::input::{InputEvent, OtpInput, OtpState};
 use gpui_component::switch::Switch;
-use gpui_component::input::{OtpInput, OtpState, InputEvent};
+use gpui_component::*;
 use std::sync::{Arc, Mutex};
 
 pub enum SettingsEvent {
@@ -22,27 +22,39 @@ pub struct SettingsView {
 }
 
 impl SettingsView {
-    pub fn new(
-        db: Arc<Mutex<Database>>,
-        window: &mut Window,
-        cx: &mut Context<'_, Self>,
-    ) -> Self {
-        let (is_app_lock_enabled, hide_tax_profiles, enable_profile_pins) = if let Ok(guard) = db.lock() {
-            let lock = guard.get_setting("app_lock_enabled").ok().flatten().as_deref() == Some("true");
-            let hide = guard.get_setting("hide_tax_profiles").ok().flatten().as_deref() == Some("true");
-            let pins = guard.get_setting("enable_profile_pins").ok().flatten().as_deref() == Some("true");
-            (lock, hide, pins)
-        } else {
-            (false, false, false)
-        };
+    pub fn new(db: Arc<Mutex<Database>>, window: &mut Window, cx: &mut Context<'_, Self>) -> Self {
+        let (is_app_lock_enabled, hide_tax_profiles, enable_profile_pins) =
+            if let Ok(guard) = db.lock() {
+                let lock = guard
+                    .get_setting("app_lock_enabled")
+                    .ok()
+                    .flatten()
+                    .as_deref()
+                    == Some("true");
+                let hide = guard
+                    .get_setting("hide_tax_profiles")
+                    .ok()
+                    .flatten()
+                    .as_deref()
+                    == Some("true");
+                let pins = guard
+                    .get_setting("enable_profile_pins")
+                    .ok()
+                    .flatten()
+                    .as_deref()
+                    == Some("true");
+                (lock, hide, pins)
+            } else {
+                (false, false, false)
+            };
 
         let setup_otp = cx.new(|cx| {
             let mut state = OtpState::new(4, window, cx);
             state = state.masked(true);
             state
         });
-        
-        let view = Self { 
+
+        let view = Self {
             db: db.clone(),
             is_app_lock_enabled,
             show_pin_setup: false,
@@ -51,23 +63,28 @@ impl SettingsView {
             enable_profile_pins,
         };
 
-        cx.subscribe_in(&setup_otp, window, |this: &mut Self, _entity, event: &InputEvent, _window, cx| match event {
-            InputEvent::Change => {
-                let pin = this.setup_otp.read(cx).value().to_string();
-                if pin.len() == 4 {
-                    let hashed = bir_core::crypto::hash_pin(&pin);
-                    
-                    if let Ok(db_guard) = this.db.lock() {
-                        let _ = db_guard.set_setting("app_lock_pin_hash", &hashed);
-                        let _ = db_guard.set_setting("app_lock_enabled", "true");
+        cx.subscribe_in(
+            &setup_otp,
+            window,
+            |this: &mut Self, _entity, event: &InputEvent, _window, cx| match event {
+                InputEvent::Change => {
+                    let pin = this.setup_otp.read(cx).value().to_string();
+                    if pin.len() == 4 {
+                        let hashed = bir_core::crypto::hash_pin(&pin);
+
+                        if let Ok(db_guard) = this.db.lock() {
+                            let _ = db_guard.set_setting("app_lock_pin_hash", &hashed);
+                            let _ = db_guard.set_setting("app_lock_enabled", "true");
+                        }
+                        this.is_app_lock_enabled = true;
+                        this.show_pin_setup = false;
+                        cx.notify();
                     }
-                    this.is_app_lock_enabled = true;
-                    this.show_pin_setup = false;
-                    cx.notify();
                 }
-            }
-            _ => {}
-        }).detach();
+                _ => {}
+            },
+        )
+        .detach();
 
         view
     }

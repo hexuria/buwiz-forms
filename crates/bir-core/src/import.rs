@@ -21,7 +21,9 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
     }
 
     if base_dirs.is_empty() {
-        return Err(DbError::Other("No profile.json found in archive".to_string()));
+        return Err(DbError::Other(
+            "No profile.json found in archive".to_string(),
+        ));
     }
 
     for base_dir in base_dirs {
@@ -151,23 +153,27 @@ pub fn extract_database_zip(zip_path: &Path, out_db_path: &Path) -> Result<(), D
         .unwrap()
         .as_nanos();
     let temp_db_path = temp_dir.join(format!("bir_unencrypted_import_{}.db", timestamp));
-    
+
     let mut temp_file = fs::File::create(&temp_db_path)?;
     std::io::copy(&mut db_file_in_zip, &mut temp_file)?;
-    
+
     // Delete the current database so we can cleanly export into a new one
     if out_db_path.exists() {
         let _ = fs::remove_file(out_db_path);
     }
     let wal_path = out_db_path.with_extension("db-wal");
     let shm_path = out_db_path.with_extension("db-shm");
-    if wal_path.exists() { let _ = fs::remove_file(wal_path); }
-    if shm_path.exists() { let _ = fs::remove_file(shm_path); }
+    if wal_path.exists() {
+        let _ = fs::remove_file(wal_path);
+    }
+    if shm_path.exists() {
+        let _ = fs::remove_file(shm_path);
+    }
 
     // Open the unencrypted db
     let conn = rusqlite::Connection::open(&temp_db_path)?;
     let key_hex = Database::get_or_create_master_key()?;
-    
+
     // Attach the target db (encrypted) and export to it
     conn.execute(
         &format!("ATTACH DATABASE ?1 AS encrypted KEY \"x'{}'\";", key_hex),
@@ -221,9 +227,7 @@ mod tests {
             imap_email: None,
             imap_host: None,
             _imap_enabled_compat: None,
-            background_cron_enabled: true,
             test_notification_enabled: false,
-            error_telemetry_enabled: false,
             imap_app_password: None,
             oauth_access_token: None,
             oauth_refresh_token: None,
@@ -296,9 +300,7 @@ mod tests {
             imap_email: None,
             imap_host: None,
             _imap_enabled_compat: None,
-            background_cron_enabled: true,
             test_notification_enabled: false,
-            error_telemetry_enabled: false,
             imap_app_password: None,
             oauth_access_token: None,
             oauth_refresh_token: None,

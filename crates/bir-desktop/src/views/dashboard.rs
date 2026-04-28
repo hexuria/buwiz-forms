@@ -820,40 +820,36 @@ impl Render for DashboardView {
                     .px_8()
                     .py_6()
                     .child(
-                        div()
-                            .flex()
-                            .justify_between()
-                                    .items_start()
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .flex_col()
-                                            .gap_2()
-                                            .child(
-                                                div()
-                                                    .text_3xl()
-                                                    .font_weight(FontWeight::BOLD)
-                                                    .text_color(cx.theme().foreground)
-                                                    .child(profile.full_name.clone()),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_base()
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child(format!(
-                                                        "TIN: {} • Type: {:?} • {} • {}",
-                                                        profile.tin.full(),
-                                                        profile.taxpayer_type,
-                                                        period_desc,
-                                                        if profile.is_vat_registered {
-                                                            "VAT"
-                                                        } else {
-                                                            "Non-VAT"
-                                                        }
-                                                    )),
-                                            )
-                                    )
-                            )
+                        div().flex().justify_between().items_start().child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .text_3xl()
+                                        .font_weight(FontWeight::BOLD)
+                                        .text_color(cx.theme().foreground)
+                                        .child(profile.full_name.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .text_base()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child(format!(
+                                            "TIN: {} • Type: {:?} • {} • {}",
+                                            profile.tin.full(),
+                                            profile.taxpayer_type,
+                                            period_desc,
+                                            if profile.is_vat_registered {
+                                                "VAT"
+                                            } else {
+                                                "Non-VAT"
+                                            }
+                                        )),
+                                ),
+                        ),
+                    )
                     .child(
                         div()
                             .flex()

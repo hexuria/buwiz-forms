@@ -120,23 +120,35 @@ impl AppState {
                 backup_path.display()
             );
         }
-        
+
         // Phase 2: Automated Cleanup of Regenerated PDFs
         // Safely clear out the temporary directory on application startup so it doesn't grow indefinitely.
-        cx.background_executor().spawn(async move {
-            let temp_pdf_dir = bir_core::platform::temp_dir().join("taxman-ebir-pdf");
-            if temp_pdf_dir.exists() {
-                let _ = std::fs::remove_dir_all(&temp_pdf_dir);
-            }
-        }).detach();
+        cx.background_executor()
+            .spawn(async move {
+                let temp_pdf_dir = bir_core::platform::temp_dir().join("taxman-ebir-pdf");
+                if temp_pdf_dir.exists() {
+                    let _ = std::fs::remove_dir_all(&temp_pdf_dir);
+                }
+            })
+            .detach();
 
         let theme_preference = if let Ok(Some(val)) = db.get_setting("theme_preference") {
             serde_json::from_str(&val).unwrap_or(AppThemeMode::System)
         } else {
             AppThemeMode::System
         };
-        let hide_tax_profiles = db.get_setting("hide_tax_profiles").ok().flatten().as_deref() == Some("true");
-        let enable_profile_pins = db.get_setting("enable_profile_pins").ok().flatten().as_deref() == Some("true");
+        let hide_tax_profiles = db
+            .get_setting("hide_tax_profiles")
+            .ok()
+            .flatten()
+            .as_deref()
+            == Some("true");
+        let enable_profile_pins = db
+            .get_setting("enable_profile_pins")
+            .ok()
+            .flatten()
+            .as_deref()
+            == Some("true");
 
         let target_mode = match theme_preference {
             AppThemeMode::Light => ThemeMode::Light,
@@ -172,80 +184,108 @@ impl AppState {
         let global_dashboard_view =
             cx.new(|cx| GlobalDashboardView::new(db_clone_global, window, cx));
 
-        let is_locked = db.lock().unwrap().get_setting("app_lock_enabled").ok().flatten().as_deref() == Some("true");
+        let is_locked = db
+            .lock()
+            .unwrap()
+            .get_setting("app_lock_enabled")
+            .ok()
+            .flatten()
+            .as_deref()
+            == Some("true");
         let db_clone_lock = Arc::clone(&db);
         let lock_screen_view = Some(cx.new(|cx| LockScreenView::new(db_clone_lock, window, cx)));
-        
+
         let profile_otp_state = cx.new(|cx| OtpState::new(4, window, cx).masked(true));
         let admin_otp_state = cx.new(|cx| OtpState::new(4, window, cx).masked(true));
-        
-        cx.subscribe_in(&profile_otp_state, window, |this: &mut Self, _entity, event: &InputEvent, window, cx| match event {
-            InputEvent::Change => {
-                let entered_pin = this.profile_otp_state.read(cx).value().to_string();
-                if entered_pin.len() == 4 {
-                    let hashed = bir_core::crypto::hash_pin(&entered_pin);
-                    if let Some((p, a)) = this.pending_profile.clone() {
-                        if Some(hashed) == p.profile_pin_hash {
-                            this.unlocked_profile = Some((p, a));
-                            this.pending_profile = None;
-                            this.profile_auth_error = None;
-                            this.profile_otp_state.update(cx, |input, cx| input.set_value("", window, cx));
+
+        cx.subscribe_in(
+            &profile_otp_state,
+            window,
+            |this: &mut Self, _entity, event: &InputEvent, window, cx| match event {
+                InputEvent::Change => {
+                    let entered_pin = this.profile_otp_state.read(cx).value().to_string();
+                    if entered_pin.len() == 4 {
+                        let hashed = bir_core::crypto::hash_pin(&entered_pin);
+                        if let Some((p, a)) = this.pending_profile.clone() {
+                            if Some(hashed) == p.profile_pin_hash {
+                                this.unlocked_profile = Some((p, a));
+                                this.pending_profile = None;
+                                this.profile_auth_error = None;
+                                this.profile_otp_state
+                                    .update(cx, |input, cx| input.set_value("", window, cx));
+                                this.focus_handle.focus(window, cx);
+                            } else {
+                                this.profile_auth_error =
+                                    Some("Incorrect PIN. Please try again.".to_string());
+                                this.profile_otp_state.update(cx, |input, cx| {
+                                    input.set_value("", window, cx);
+                                    input.focus(window, cx);
+                                });
+                            }
+                        }
+                    }
+                    cx.notify();
+                }
+                _ => {}
+            },
+        )
+        .detach();
+
+        cx.subscribe_in(
+            &admin_otp_state,
+            window,
+            |this: &mut Self, _entity, event: &InputEvent, window, cx| match event {
+                InputEvent::Change => {
+                    let entered_pin = this.admin_otp_state.read(cx).value().to_string();
+                    if entered_pin.len() == 4 {
+                        let hashed = bir_core::crypto::hash_pin(&entered_pin);
+                        let valid = if let Ok(db) = this.db.lock() {
+                            let hash = db.get_setting("app_lock_pin_hash").ok().flatten();
+                            hash.as_deref() == Some(&hashed)
+                        } else {
+                            false
+                        };
+
+                        if valid {
+                            if let Some(target) = this.pending_admin_view.take() {
+                                this.active_view = target;
+                                if target == ActiveView::CronTasks {
+                                    this.cron_tasks_view
+                                        .update(cx, |view, cx| view.load_settings(cx));
+                                }
+                            }
+                            this.admin_auth_error = None;
+                            this.admin_otp_state
+                                .update(cx, |input, cx| input.set_value("", window, cx));
                             this.focus_handle.focus(window, cx);
                         } else {
-                            this.profile_auth_error = Some("Incorrect PIN. Please try again.".to_string());
-                            this.profile_otp_state.update(cx, |input, cx| {
+                            this.admin_auth_error = Some("Incorrect Admin PIN.".to_string());
+                            this.admin_otp_state.update(cx, |input, cx| {
                                 input.set_value("", window, cx);
                                 input.focus(window, cx);
                             });
                         }
                     }
-                }
-                cx.notify();
-            }
-            _ => {}
-        }).detach();
-
-        cx.subscribe_in(&admin_otp_state, window, |this: &mut Self, _entity, event: &InputEvent, window, cx| match event {
-            InputEvent::Change => {
-                let entered_pin = this.admin_otp_state.read(cx).value().to_string();
-                if entered_pin.len() == 4 {
-                    let hashed = bir_core::crypto::hash_pin(&entered_pin);
-                    let valid = if let Ok(db) = this.db.lock() {
-                        let hash = db.get_setting("app_lock_pin_hash").ok().flatten();
-                        hash.as_deref() == Some(&hashed)
-                    } else { false };
-                    
-                    if valid {
-                        if let Some(target) = this.pending_admin_view.take() {
-                            this.active_view = target;
-                            if target == ActiveView::CronTasks {
-                                this.cron_tasks_view.update(cx, |view, cx| view.load_settings(cx));
-                            }
-                        }
-                        this.admin_auth_error = None;
-                        this.admin_otp_state.update(cx, |input, cx| input.set_value("", window, cx));
-                        this.focus_handle.focus(window, cx);
-                    } else {
-                        this.admin_auth_error = Some("Incorrect Admin PIN.".to_string());
-                        this.admin_otp_state.update(cx, |input, cx| {
-                            input.set_value("", window, cx);
-                            input.focus(window, cx);
-                        });
-                    }
-                }
-                cx.notify();
-            }
-            _ => {}
-        }).detach();
-        
-        if let Some(view) = &lock_screen_view {
-            cx.subscribe_in(view, window, |this: &mut Self, _entity, event: &LockScreenEvent, window, cx| match event {
-                LockScreenEvent::Unlocked => {
-                    this.is_locked = false;
-                    this.focus_handle.focus(window, cx);
                     cx.notify();
                 }
-            }).detach();
+                _ => {}
+            },
+        )
+        .detach();
+
+        if let Some(view) = &lock_screen_view {
+            cx.subscribe_in(
+                view,
+                window,
+                |this: &mut Self, _entity, event: &LockScreenEvent, window, cx| match event {
+                    LockScreenEvent::Unlocked => {
+                        this.is_locked = false;
+                        this.focus_handle.focus(window, cx);
+                        cx.notify();
+                    }
+                },
+            )
+            .detach();
         }
 
         let db_clone_cron = Arc::clone(&db);
@@ -287,7 +327,8 @@ impl AppState {
                     // Re-evaluate settings (like lock and theme)
                     if let Ok(db) = this.db.lock() {
                         if let Ok(Some(val)) = db.get_setting("theme_preference") {
-                            this.theme_preference = serde_json::from_str(&val).unwrap_or(AppThemeMode::System);
+                            this.theme_preference =
+                                serde_json::from_str(&val).unwrap_or(AppThemeMode::System);
                         } else {
                             this.theme_preference = AppThemeMode::System;
                         }
@@ -298,7 +339,7 @@ impl AppState {
             },
         )
         .detach();
-        
+
         let db_clone_settings = Arc::clone(&db);
         let settings_view = cx.new(|cx| SettingsView::new(db_clone_settings, window, cx));
         cx.subscribe(
@@ -306,8 +347,18 @@ impl AppState {
             |this: &mut Self, _entity, event: &SettingsEvent, cx| match event {
                 SettingsEvent::ReloadApp => {
                     if let Ok(db) = this.db.lock() {
-                        this.hide_tax_profiles = db.get_setting("hide_tax_profiles").ok().flatten().as_deref() == Some("true");
-                        this.enable_profile_pins = db.get_setting("enable_profile_pins").ok().flatten().as_deref() == Some("true");
+                        this.hide_tax_profiles = db
+                            .get_setting("hide_tax_profiles")
+                            .ok()
+                            .flatten()
+                            .as_deref()
+                            == Some("true");
+                        this.enable_profile_pins = db
+                            .get_setting("enable_profile_pins")
+                            .ok()
+                            .flatten()
+                            .as_deref()
+                            == Some("true");
                     }
                     // Sync dashboard
                     let htp = this.hide_tax_profiles;
@@ -320,8 +371,9 @@ impl AppState {
                     }
                     cx.notify();
                 }
-            }
-        ).detach();
+            },
+        )
+        .detach();
 
         let hide_profiles_placeholder = if hide_tax_profiles {
             "Enter full TIN to access profile..."
@@ -341,9 +393,12 @@ impl AppState {
                     InputEvent::PressEnter { .. } => {
                         let query = this.profile_filter.read(cx).value().trim().to_string();
                         // Match both raw digits (e.g. 261708015000) and formatted (e.g. 261-708-015-000)
-                        if let Some(profile) = this.profiles.iter().find(|p| {
-                            p.tin.full() == query || p.tin.formatted() == query
-                        }).cloned() {
+                        if let Some(profile) = this
+                            .profiles
+                            .iter()
+                            .find(|p| p.tin.full() == query || p.tin.formatted() == query)
+                            .cloned()
+                        {
                             if this.hide_tax_profiles {
                                 // End current session and start new one
                                 this.active_session_tin = Some(profile.tin.full());
@@ -351,7 +406,31 @@ impl AppState {
                             this.profile_filter.update(cx, |input, cx| {
                                 input.set_value("", window, cx);
                             });
-                            this.select_profile(profile, ProfileTargetAction::ViewDashboard, window, cx);
+                            this.select_profile(
+                                profile,
+                                ProfileTargetAction::ViewDashboard,
+                                window,
+                                cx,
+                            );
+                        } else {
+                            let is_tin_like = !query.is_empty()
+                                && query.chars().all(|c| c.is_ascii_digit() || c == '-');
+                            let query_digits: String =
+                                query.chars().filter(|c| c.is_ascii_digit()).collect();
+
+                            if is_tin_like && query_digits.len() >= 9 {
+                                this.active_session_tin = None;
+                                this.active_view = ActiveView::ProfileManager;
+                                this.active_profile_tin = None;
+                                this.profile_manager.update(cx, |view, cx| {
+                                    view.reset_for_new(window, cx);
+                                    view.prefill_tin(&query, window, cx);
+                                });
+                                this.profile_filter.update(cx, |input, cx| {
+                                    input.set_value("", window, cx);
+                                });
+                                cx.notify();
+                            }
                         }
                     }
                     _ => {}
@@ -365,7 +444,7 @@ impl AppState {
                 let saved_tin = match event {
                     crate::views::profile_manager::ProfileEvent::Saved(tin) => Some(tin.clone()),
                 };
-                
+
                 if let Some(tin) = &saved_tin {
                     if this.hide_tax_profiles {
                         this.active_session_tin = Some(tin.clone());
@@ -423,13 +502,19 @@ impl AppState {
                     year,
                     quarter,
                 } => {
-                    let profile_clone = this.profiles.iter().find(|p| p.tin.full() == *tin).cloned();
+                    let profile_clone =
+                        this.profiles.iter().find(|p| p.tin.full() == *tin).cloned();
                     if let Some(profile) = profile_clone {
-                        this.select_profile(profile, ProfileTargetAction::ViewDashboard, window, cx);
+                        this.select_profile(
+                            profile,
+                            ProfileTargetAction::ViewDashboard,
+                            window,
+                            cx,
+                        );
                     } else {
                         this.active_profile_tin = Some(tin.clone());
                     }
-                    
+
                     let event = DashboardEvent::FileForm {
                         form_code: form_code.clone(),
                         year: *year,
@@ -516,8 +601,14 @@ impl AppState {
             active_session_tin: None,
         }
     }
-    
-    fn select_profile(&mut self, profile: TaxpayerProfile, action: ProfileTargetAction, window: &mut Window, cx: &mut Context<Self>) {
+
+    fn select_profile(
+        &mut self,
+        profile: TaxpayerProfile,
+        action: ProfileTargetAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let tin = profile.tin.full();
 
         // If this profile is already the active session, skip PIN entirely
@@ -545,8 +636,14 @@ impl AppState {
         }
         cx.notify();
     }
-    
-    fn apply_profile_action(&mut self, profile: TaxpayerProfile, action: ProfileTargetAction, window: &mut Window, cx: &mut Context<Self>) {
+
+    fn apply_profile_action(
+        &mut self,
+        profile: TaxpayerProfile,
+        action: ProfileTargetAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.active_profile_tin = Some(profile.tin.full());
 
         // Keep dashboard in sync with hide_tax_profiles state
@@ -571,12 +668,19 @@ impl AppState {
             }
         }
     }
-    
-    fn request_admin_access(&mut self, target: ActiveView, window: &mut Window, cx: &mut Context<Self>) {
+
+    fn request_admin_access(
+        &mut self,
+        target: ActiveView,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let is_app_lock_enabled = if let Ok(db) = self.db.lock() {
             db.get_setting("app_lock_enabled").ok().flatten().as_deref() == Some("true")
-        } else { false };
-        
+        } else {
+            false
+        };
+
         if is_app_lock_enabled {
             self.pending_admin_view = Some(target);
             self.admin_auth_error = None;
@@ -588,7 +692,8 @@ impl AppState {
         } else {
             self.active_view = target;
             if target == ActiveView::CronTasks {
-                self.cron_tasks_view.update(cx, |view, cx| view.load_settings(cx));
+                self.cron_tasks_view
+                    .update(cx, |view, cx| view.load_settings(cx));
             }
         }
         cx.notify();
@@ -613,7 +718,8 @@ impl AppState {
                     return false;
                 }
                 if self.hide_tax_profiles {
-                    let is_active_session = self.active_session_tin.as_ref() == Some(&profile.tin.full());
+                    let is_active_session =
+                        self.active_session_tin.as_ref() == Some(&profile.tin.full());
                     // When filter is empty, show only the active session profile
                     if filter.trim().is_empty() {
                         return is_active_session;
@@ -1438,7 +1544,10 @@ impl Render for AppState {
 
         if self.is_locked {
             if let Some(lock_screen) = &self.lock_screen_view {
-                return div().size_full().child(lock_screen.clone()).into_any_element();
+                return div()
+                    .size_full()
+                    .child(lock_screen.clone())
+                    .into_any_element();
             }
         }
 
@@ -1562,9 +1671,16 @@ impl Render for AppState {
                                 this.active_view = ActiveView::ProfileManager;
                                 this.profile_manager.update(cx, |view, cx| {
                                     view.reset_for_new(window, cx);
-                                    view.prefill_name(&query, window, cx);
+                                    
+                                    let is_tin_like = !query.is_empty() && query.chars().all(|c| c.is_ascii_digit() || c == '-');
+                                    let query_digits: String = query.chars().filter(|c| c.is_ascii_digit()).collect();
+                                    
+                                    if is_tin_like && query_digits.len() >= 9 {
+                                        view.prefill_tin(&query, window, cx);
+                                    } else {
+                                        view.prefill_name(&query, window, cx);
+                                    }
                                 });
-                                // Focus is already set to the name input by prefill_name
                                 cx.notify();
                             }
                             crate::components::command_palette::CommandPaletteEvent::EditProfile(tin) => {

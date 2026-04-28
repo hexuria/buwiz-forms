@@ -17,7 +17,7 @@ pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
 
         // Ensure we don't hold the DB lock across async network calls.
         // First, fetch profiles that have background cron enabled.
-        let profiles = {
+        let (profiles, global_cron_enabled) = {
             let db_guard = match db.lock() {
                 Ok(guard) => guard,
                 Err(e) => {
@@ -25,31 +25,34 @@ pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
                     continue;
                 }
             };
-            match db_guard.list_profiles() {
+            let p = match db_guard.list_profiles() {
                 Ok(p) => p,
                 Err(e) => {
                     error!("Failed to fetch profiles in cron: {}", e);
                     continue;
                 }
-            }
+            };
+            let c = db_guard
+                .get_setting("background_cron_enabled")
+                .unwrap_or(Some("true".to_string()))
+                .map(|s| s == "true")
+                .unwrap_or(true);
+            (p, c)
         };
 
         let test_enabled = profiles.iter().any(|p| p.test_notification_enabled);
         if test_enabled {
             crate::notification::send_notification(
                 "BIR Vault Daemon",
-                "Hello! The background cron is active."
+                "Hello! The background cron is active.",
             );
         }
 
-        let cron_profiles = profiles
-            .into_iter()
-            .filter(|p| p.background_cron_enabled)
-            .collect::<Vec<_>>();
-
-        for profile in cron_profiles {
-            // Task A: Form Submission Retries
-            process_submission_queue(&profile, db.clone()).await;
+        if global_cron_enabled {
+            for profile in profiles {
+                // Task A: Form Submission Retries
+                process_submission_queue(&profile, db.clone()).await;
+            }
         }
 
         // Task C: Generic Job Queue (Custom Cron & One-off commands)
@@ -135,7 +138,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                         "Filename: {}\nTimestamp: {}",
                         filename,
                         now.format("%I:%M %p")
-                    )
+                    ),
                 );
 
                 draft.status = FilingStatus::Submitted;
@@ -153,7 +156,8 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                             .imap_email
                             .clone()
                             .unwrap_or_else(|| profile.email.clone());
-                        let job_name = format!("Waiting for 2551Q confirmation email for {}", email);
+                        let job_name =
+                            format!("Waiting for 2551Q confirmation email for {}", email);
                         let legacy_job_name = format!("Poll Receipts: {}", email);
 
                         let jobs = db_guard.list_jobs().unwrap_or_default();
@@ -316,14 +320,14 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
                             job.status = "Archived".to_string(); // Completed processing for this email
                         }
                     } else {
-                        let log = err_msg.unwrap_or_else(|| "Email polling failed (unknown error).".to_string());
+                        let log = err_msg
+                            .unwrap_or_else(|| "Email polling failed (unknown error).".to_string());
                         warn!("Cron: Email polling job '{}' failed: {}", job.name, log);
                         success = false;
                         job.output_log = Some(log);
                     }
                 } else {
-                    match crate::platform::run_shell_command(cmd).await
-                    {
+                    match crate::platform::run_shell_command(cmd).await {
                         Ok(output) => {
                             let stdout_str = String::from_utf8_lossy(&output.stdout);
                             let stderr_str = String::from_utf8_lossy(&output.stderr);

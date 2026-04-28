@@ -120,7 +120,8 @@ pub fn export_database_zip(db: &Database, zip_path: &Path) -> Result<(), DbError
         "ATTACH DATABASE ?1 AS plaintext KEY '';",
         rusqlite::params![temp_db_path.to_str().unwrap()],
     )?;
-    db.conn.execute("SELECT sqlcipher_export('plaintext');", [])?;
+    db.conn
+        .execute("SELECT sqlcipher_export('plaintext');", [])?;
     db.conn.execute("DETACH DATABASE plaintext;", [])?;
 
     // Zip the unencrypted database

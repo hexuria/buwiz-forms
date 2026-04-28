@@ -195,7 +195,7 @@ fn fetch_with_auth(
                                                     &format!(
                                                         "Form: 2551Q\nYear: {}\nQuarter: {}",
                                                         year, quarter
-                                                    )
+                                                    ),
                                                 );
                                             }
                                         }
@@ -298,7 +298,13 @@ pub fn fetch_and_process_emails_for_address(
             }
         }
     } else {
-        (false, false, Some(format!("No profile found matching email: {}", email_address)))
+        (
+            false,
+            false,
+            Some(format!(
+                "No profile found matching email: {}",
+                email_address
+            )),
+        )
     }
 }
-

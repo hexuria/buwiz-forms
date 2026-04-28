@@ -1,4 +1,3 @@
-
 use bir_core::db::Database;
 use gpui::*;
 use gpui_component::*;
@@ -21,9 +20,7 @@ impl ImportExportView {
         _window: &mut Window,
         _cx: &mut Context<'_, Self>,
     ) -> Self {
-        Self { 
-            db,
-        }
+        Self { db }
     }
 
     fn import_database(&mut self, new_db_path: PathBuf) -> Result<(), String> {

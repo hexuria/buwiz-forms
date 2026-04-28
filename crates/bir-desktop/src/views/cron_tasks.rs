@@ -97,7 +97,7 @@ pub struct CronTasksView {
     background_cron_enabled: bool,
     error_telemetry_enabled: bool,
     daemon_running: bool,
-    has_profile: bool,
+
     jobs: Vec<JobViewModel>,
     new_job_name: Entity<InputState>,
     cron_amount: Entity<InputState>,
@@ -161,7 +161,7 @@ impl CronTasksView {
             background_cron_enabled: false,
             error_telemetry_enabled: false,
             daemon_running,
-            has_profile: false,
+
             jobs: Vec::new(),
             new_job_name,
             cron_amount,
@@ -204,15 +204,16 @@ impl CronTasksView {
     pub fn load_settings(&mut self, cx: &mut Context<'_, Self>) {
         let mut view_jobs = Vec::new();
         if let Ok(db) = self.db.lock() {
-            if let Ok(profiles) = db.list_profiles() {
-                if let Some(profile) = profiles.first() {
-                    self.has_profile = true;
-                    self.background_cron_enabled = profile.background_cron_enabled;
-                    self.error_telemetry_enabled = profile.error_telemetry_enabled;
-                } else {
-                    self.has_profile = false;
-                }
-            }
+            self.background_cron_enabled = db
+                .get_setting("background_cron_enabled")
+                .unwrap_or(Some("true".to_string()))
+                .map(|s| s == "true")
+                .unwrap_or(true);
+            self.error_telemetry_enabled = db
+                .get_setting("error_telemetry_enabled")
+                .unwrap_or(Some("false".to_string()))
+                .map(|s| s == "true")
+                .unwrap_or(false);
             if let Ok(jobs) = db.list_jobs() {
                 for job in jobs {
                     let mut display_name = job.name.clone();
@@ -308,13 +309,22 @@ impl CronTasksView {
 
     fn save_to_db(&mut self, cx: &mut Context<'_, Self>) {
         if let Ok(db) = self.db.lock() {
-            if let Ok(profiles) = db.list_profiles() {
-                for mut profile in profiles {
-                    profile.background_cron_enabled = self.background_cron_enabled;
-                    profile.error_telemetry_enabled = self.error_telemetry_enabled;
-                    let _ = db.save_profile(profile);
-                }
-            }
+            let _ = db.set_setting(
+                "background_cron_enabled",
+                if self.background_cron_enabled {
+                    "true"
+                } else {
+                    "false"
+                },
+            );
+            let _ = db.set_setting(
+                "error_telemetry_enabled",
+                if self.error_telemetry_enabled {
+                    "true"
+                } else {
+                    "false"
+                },
+            );
         }
         cx.notify();
     }
@@ -500,51 +510,71 @@ impl CronTasksView {
                 self.load_settings(cx);
 
                 cx.spawn(async move |this, cx| {
-                    let _result = cx.background_executor().spawn(async move {
-                        let (poll_success, still_pending, err_msg) =
-                            bir_core::email::fetch_and_process_emails_for_address(&email, db.clone());
+                    let _result = cx
+                        .background_executor()
+                        .spawn(async move {
+                            let (poll_success, still_pending, err_msg) =
+                                bir_core::email::fetch_and_process_emails_for_address(
+                                    &email,
+                                    db.clone(),
+                                );
 
-                        // Update the job in DB
-                        if let Ok(db_guard) = db.lock() {
-                            if let Ok(jobs) = db_guard.list_jobs() {
-                                if let Some(mut j) = jobs.into_iter().find(|j| j.id == Some(job_id)) {
-                                    j.last_run_at = Some(Utc::now().to_rfc3339());
-                                    if poll_success {
-                                        j.output_log = Some("Email polling completed successfully.".to_string());
-                                        j.retries = 0;
-                                        if !still_pending {
-                                            j.status = "Archived".to_string();
+                            // Update the job in DB
+                            if let Ok(db_guard) = db.lock() {
+                                if let Ok(jobs) = db_guard.list_jobs() {
+                                    if let Some(mut j) =
+                                        jobs.into_iter().find(|j| j.id == Some(job_id))
+                                    {
+                                        j.last_run_at = Some(Utc::now().to_rfc3339());
+                                        if poll_success {
+                                            j.output_log = Some(
+                                                "Email polling completed successfully.".to_string(),
+                                            );
+                                            j.retries = 0;
+                                            if !still_pending {
+                                                j.status = "Archived".to_string();
+                                            } else {
+                                                j.status = "Queued".to_string();
+                                                // Set next run from cron
+                                                if let Some(ref expr) = j.cron_expr {
+                                                    if let Ok(schedule) =
+                                                        std::str::FromStr::from_str(expr)
+                                                    {
+                                                        let schedule: cron::Schedule = schedule;
+                                                        if let Some(next) =
+                                                            schedule.upcoming(chrono::Utc).next()
+                                                        {
+                                                            j.next_run_at = Some(next.to_rfc3339());
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         } else {
+                                            j.output_log = Some(err_msg.unwrap_or_else(|| {
+                                                "Email polling failed (unknown).".to_string()
+                                            }));
+                                            j.retries += 1;
                                             j.status = "Queued".to_string();
-                                            // Set next run from cron
                                             if let Some(ref expr) = j.cron_expr {
-                                                if let Ok(schedule) = std::str::FromStr::from_str(expr) {
+                                                if let Ok(schedule) =
+                                                    std::str::FromStr::from_str(expr)
+                                                {
                                                     let schedule: cron::Schedule = schedule;
-                                                    if let Some(next) = schedule.upcoming(chrono::Utc).next() {
+                                                    if let Some(next) =
+                                                        schedule.upcoming(chrono::Utc).next()
+                                                    {
                                                         j.next_run_at = Some(next.to_rfc3339());
                                                     }
                                                 }
                                             }
                                         }
-                                    } else {
-                                        j.output_log = Some(err_msg.unwrap_or_else(|| "Email polling failed (unknown).".to_string()));
-                                        j.retries += 1;
-                                        j.status = "Queued".to_string();
-                                        if let Some(ref expr) = j.cron_expr {
-                                            if let Ok(schedule) = std::str::FromStr::from_str(expr) {
-                                                let schedule: cron::Schedule = schedule;
-                                                if let Some(next) = schedule.upcoming(chrono::Utc).next() {
-                                                    j.next_run_at = Some(next.to_rfc3339());
-                                                }
-                                            }
-                                        }
+                                        let _ = db_guard.save_job(j);
                                     }
-                                    let _ = db_guard.save_job(j);
                                 }
                             }
-                        }
-                        poll_success
-                    }).await;
+                            poll_success
+                        })
+                        .await;
 
                     let _ = cx.update(|cx| {
                         if let Some(view) = this.upgrade() {
@@ -553,7 +583,8 @@ impl CronTasksView {
                             });
                         }
                     });
-                }).detach();
+                })
+                .detach();
                 return;
             }
         }
@@ -597,16 +628,6 @@ impl CronTasksView {
 
 impl Render for CronTasksView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
-        if !self.has_profile {
-            return div()
-                .flex()
-                .justify_center()
-                .items_center()
-                .h_full()
-                .child("Please create a Taxpayer Profile first.")
-                .into_any_element();
-        }
-
         let bg = cx.theme().background;
         let border = cx.theme().border;
 
