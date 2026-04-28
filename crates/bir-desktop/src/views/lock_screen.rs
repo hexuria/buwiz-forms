@@ -159,7 +159,7 @@ impl Render for LockScreenView {
                     .items_center()
                     .gap_6()
                     .child(
-                        gpui::img(std::path::PathBuf::from("assets/svg/ebirforms.png"))
+                        gpui::img("images/ebirforms.png")
                             .w(px(200.))
                             .h(px(60.))
                             .object_fit(gpui::ObjectFit::Contain),

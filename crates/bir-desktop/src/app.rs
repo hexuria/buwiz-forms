@@ -1784,7 +1784,7 @@ impl Render for AppState {
                                 .items_center()
                                 .gap_6()
                                 .child(
-                                    gpui::img(std::path::PathBuf::from("assets/svg/ebirforms.png"))
+                                    gpui::img("svg/ebirforms.png")
                                         .w(px(200.))
                                         .h(px(60.))
                                         .object_fit(gpui::ObjectFit::Contain)
@@ -1916,7 +1916,7 @@ impl Render for AppState {
                                 .items_center()
                                 .gap_6()
                                 .child(
-                                    gpui::img(std::path::PathBuf::from("assets/svg/ebirforms.png"))
+                                    gpui::img("svg/ebirforms.png")
                                         .w(px(200.))
                                         .h(px(60.))
                                         .object_fit(gpui::ObjectFit::Contain)
