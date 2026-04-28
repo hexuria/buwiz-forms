@@ -96,33 +96,6 @@ pub struct AppState {
 }
 
 impl AppState {
-    /// Ensure the background daemon (tray app) is running.
-    /// If not already running, spawn it from the app bundle.
-    fn ensure_daemon_running() {
-        let already_running = std::process::Command::new("pgrep")
-            .arg("-x")
-            .arg("bir-daemon")
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false);
-
-        if already_running {
-            return;
-        }
-
-        // Find the daemon binary relative to the current executable
-        if let Ok(exe) = std::env::current_exe() {
-            let daemon_path = exe.parent().unwrap().join("bir-daemon");
-            if daemon_path.exists() {
-                let _ = std::process::Command::new(&daemon_path)
-                    .stdin(std::process::Stdio::null())
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
-                    .spawn();
-            }
-        }
-    }
-
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let db_path = bir_core::db::default_database_path();
         if let Some(parent) = db_path.parent() {
@@ -156,9 +129,6 @@ impl AppState {
                 let _ = std::fs::remove_dir_all(&temp_pdf_dir);
             }
         }).detach();
-
-        // Auto-launch the background daemon (tray app) if not already running
-        Self::ensure_daemon_running();
 
         let theme_preference = if let Ok(Some(val)) = db.get_setting("theme_preference") {
             serde_json::from_str(&val).unwrap_or(AppThemeMode::System)

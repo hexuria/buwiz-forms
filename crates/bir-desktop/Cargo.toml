@@ -33,9 +33,6 @@ zip = "2"
 uuid = { version = "1.23.1", features = ["v4"] }
 robius-authentication = { version = "0.1.1", features = ["async"] }
 cron = "0.16.0"
-tray-icon = "0.22"
-tao = "0.34"
-image = "0.25"
 
 [package.metadata.deb]
 name = "ebirforms"
