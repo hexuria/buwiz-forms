@@ -148,70 +148,68 @@ fn fetch_with_auth(
         let messages = session.fetch(seq.to_string(), "RFC822")?;
         for msg in messages.iter() {
             if let Some(body) = msg.body()
-                && let Some(parsed_mail) = mail_parser::MessageParser::default().parse(body) {
-                    let mut text_content = parsed_mail
-                        .body_text(0)
-                        .map(|s| s.into_owned())
-                        .unwrap_or_default();
-                    let html_content = parsed_mail.body_html(0).map(|s| s.into_owned());
+                && let Some(parsed_mail) = mail_parser::MessageParser::default().parse(body)
+            {
+                let mut text_content = parsed_mail
+                    .body_text(0)
+                    .map(|s| s.into_owned())
+                    .unwrap_or_default();
+                let html_content = parsed_mail.body_html(0).map(|s| s.into_owned());
 
-                    // Sanitize HTML
-                    let safe_html = html_content
-                        .map(|html| ammonia::Builder::default().clean(&html).to_string());
+                // Sanitize HTML
+                let safe_html =
+                    html_content.map(|html| ammonia::Builder::default().clean(&html).to_string());
 
-                    // If text_content is empty but we have HTML, use html2text to render it
-                    if text_content.is_empty()
-                        && let Some(html) = &safe_html {
-                            text_content =
-                                html2text::from_read(html.as_bytes(), 80).unwrap_or_default();
-                        }
+                // If text_content is empty but we have HTML, use html2text to render it
+                if text_content.is_empty()
+                    && let Some(html) = &safe_html
+                {
+                    text_content = html2text::from_read(html.as_bytes(), 80).unwrap_or_default();
+                }
 
-                    match parse_bir_receipt_email(&text_content, safe_html) {
-                        Ok(receipt) => {
-                            if let Ok(db_guard) = db.lock()
-                                && let Ok((submission_receipt, is_new)) =
-                                    db_guard.save_submission_receipt(&receipt)
+                match parse_bir_receipt_email(&text_content, safe_html) {
+                    Ok(receipt) => {
+                        if let Ok(db_guard) = db.lock()
+                            && let Ok((submission_receipt, is_new)) =
+                                db_guard.save_submission_receipt(&receipt)
+                        {
+                            // Confirm the draft if we recognise the form type and it's a new receipt
+                            if is_new
+                                && (submission_receipt.form_type == "2551Qv2018"
+                                    || submission_receipt.form_type == "2551Q")
+                            {
+                                let _ = db_guard.confirm_2551q_from_receipt(&submission_receipt);
+
+                                // Send OS notification
+                                if let Some((_, _, period)) =
+                                    crate::receipt::split_bir_filename(&submission_receipt.filename)
+                                    && let Some((year, quarter)) =
+                                        crate::db::parse_2551q_period(&period)
                                 {
-                                    // Confirm the draft if we recognise the form type and it's a new receipt
-                                    if is_new
-                                        && (submission_receipt.form_type == "2551Qv2018"
-                                            || submission_receipt.form_type == "2551Q")
-                                    {
-                                        let _ = db_guard
-                                            .confirm_2551q_from_receipt(&submission_receipt);
-
-                                        // Send OS notification
-                                        if let Some((_, _, period)) =
-                                            crate::receipt::split_bir_filename(
-                                                &submission_receipt.filename,
-                                            )
-                                            && let Some((year, quarter)) =
-                                                crate::db::parse_2551q_period(&period)
-                                            {
-                                                crate::notification::send_notification(
-                                                    "BIR Confirmation Received",
-                                                    &format!(
-                                                        "Form: 2551Q\nYear: {}\nQuarter: {}",
-                                                        year, quarter
-                                                    ),
-                                                );
-                                            }
-                                    }
-                                    processed.push(submission_receipt);
+                                    crate::notification::send_notification(
+                                        "BIR Confirmation Received",
+                                        &format!(
+                                            "Form: 2551Q\nYear: {}\nQuarter: {}",
+                                            year, quarter
+                                        ),
+                                    );
                                 }
-                        }
-                        Err(e) => {
-                            // If it's truly an email from BIR but we failed to parse it, log it.
-                            if text_content.contains("This confirms receipt of your submission") {
-                                tracing::error!(
-                                    "Failed to parse BIR receipt email. Error: {:?}\nRaw Body snippet: {:.200}",
-                                    e,
-                                    text_content
-                                );
                             }
+                            processed.push(submission_receipt);
+                        }
+                    }
+                    Err(e) => {
+                        // If it's truly an email from BIR but we failed to parse it, log it.
+                        if text_content.contains("This confirms receipt of your submission") {
+                            tracing::error!(
+                                "Failed to parse BIR receipt email. Error: {:?}\nRaw Body snippet: {:.200}",
+                                e,
+                                text_content
+                            );
                         }
                     }
                 }
+            }
         }
     }
 
@@ -246,9 +244,9 @@ pub fn fetch_and_process_emails_for_address(
                     && summaries
                         .iter()
                         .any(|s| s.status == crate::forms::form_2551q::FilingStatus::Submitted)
-                    {
-                        still_pending = true;
-                    }
+                {
+                    still_pending = true;
+                }
             }
         }
 
@@ -274,11 +272,12 @@ pub fn fetch_and_process_emails_for_address(
                     if p_email == email_address
                         && let Ok(summaries) =
                             db_guard.list_draft_summaries(&p.tin.full(), current_year)
-                            && summaries.iter().any(|s| {
-                                s.status == crate::forms::form_2551q::FilingStatus::Submitted
-                            }) {
-                                remaining_pending = true;
-                            }
+                        && summaries
+                            .iter()
+                            .any(|s| s.status == crate::forms::form_2551q::FilingStatus::Submitted)
+                    {
+                        remaining_pending = true;
+                    }
                 }
                 (true, remaining_pending, None)
             }

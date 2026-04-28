@@ -145,4 +145,3 @@ impl Drop for TaxpayerProfile {
         }
     }
 }
-

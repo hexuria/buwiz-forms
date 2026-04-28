@@ -120,9 +120,9 @@ impl Render for ImportExportView {
                                                 .pick_file()
                                                 .await
                                             else { return; };
-                                            
+
                                             let path = path_handle.path().to_path_buf();
-                                            
+
                                             let is_db = if let Ok(file) = std::fs::File::open(&path) {
                                                 if let Ok(mut archive) = zip::ZipArchive::new(file) {
                                                     archive.by_name("bir_data.db").is_ok()
@@ -134,7 +134,7 @@ impl Render for ImportExportView {
                                                     archive.by_name("profile.json").is_ok()
                                                 } else { false }
                                             } else { false };
-                                            
+
                                             if !is_db && !is_profile {
                                                 rfd::AsyncMessageDialog::new()
                                                     .set_title("Invalid Selection")
@@ -143,7 +143,7 @@ impl Render for ImportExportView {
                                                     .await;
                                                 return;
                                             }
-                                            
+
                                             let res = this.update(cx, |this, cx| {
                                                 if is_db {
                                                     let res = this.import_database(path);
@@ -155,7 +155,7 @@ impl Render for ImportExportView {
                                                     res
                                                 }
                                             });
-                                            
+
                                             match res {
                                                 Ok(Ok(())) => {
                                                     rfd::AsyncMessageDialog::new()

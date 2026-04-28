@@ -1,8 +1,8 @@
 //! Named action handlers for global application events.
 
-use gpui::*;
 use crate::app::{ActiveView, AppState, ProfileTargetAction};
 use crate::global_actions::*;
+use gpui::*;
 
 impl AppState {
     pub(crate) fn handle_toggle_sidebar(
@@ -122,14 +122,25 @@ impl AppState {
         cx.subscribe_in(
             &palette,
             window,
-            |this: &mut Self, _, event: &crate::components::command_palette::CommandPaletteEvent, window, cx| {
+            |this: &mut Self,
+             _,
+             event: &crate::components::command_palette::CommandPaletteEvent,
+             window,
+             cx| {
                 match event {
                     crate::components::command_palette::CommandPaletteEvent::SelectProfile(tin) => {
-                        if let Some(profile) = this.profiles.iter().find(|p| p.tin.full() == *tin).cloned() {
+                        if let Some(profile) =
+                            this.profiles.iter().find(|p| p.tin.full() == *tin).cloned()
+                        {
                             if this.hide_tax_profiles {
                                 this.active_session_tin = Some(tin.clone());
                             }
-                            this.select_profile(profile, ProfileTargetAction::ViewDashboard, window, cx);
+                            this.select_profile(
+                                profile,
+                                ProfileTargetAction::ViewDashboard,
+                                window,
+                                cx,
+                            );
                         }
                         this.is_command_palette_open = false;
                         if this.pending_profile.is_none() {
@@ -137,14 +148,18 @@ impl AppState {
                         }
                         cx.notify();
                     }
-                    crate::components::command_palette::CommandPaletteEvent::CreateProfile(query) => {
+                    crate::components::command_palette::CommandPaletteEvent::CreateProfile(
+                        query,
+                    ) => {
                         this.is_command_palette_open = false;
                         this.active_view = ActiveView::ProfileManager;
                         this.profile_manager.update(cx, |view, cx| {
                             view.reset_for_new(window, cx);
 
-                            let is_tin_like = !query.is_empty() && query.chars().all(|c| c.is_ascii_digit() || c == '-');
-                            let query_digits: String = query.chars().filter(|c| c.is_ascii_digit()).collect();
+                            let is_tin_like = !query.is_empty()
+                                && query.chars().all(|c| c.is_ascii_digit() || c == '-');
+                            let query_digits: String =
+                                query.chars().filter(|c| c.is_ascii_digit()).collect();
 
                             if is_tin_like && query_digits.len() >= 9 {
                                 view.prefill_tin(query, window, cx);
@@ -155,11 +170,18 @@ impl AppState {
                         cx.notify();
                     }
                     crate::components::command_palette::CommandPaletteEvent::EditProfile(tin) => {
-                        if let Some(profile) = this.profiles.iter().find(|p| p.tin.full() == *tin).cloned() {
+                        if let Some(profile) =
+                            this.profiles.iter().find(|p| p.tin.full() == *tin).cloned()
+                        {
                             if this.hide_tax_profiles {
                                 this.active_session_tin = Some(tin.clone());
                             }
-                            this.select_profile(profile, ProfileTargetAction::EditProfile, window, cx);
+                            this.select_profile(
+                                profile,
+                                ProfileTargetAction::EditProfile,
+                                window,
+                                cx,
+                            );
                         }
                         this.is_command_palette_open = false;
                         if this.pending_profile.is_none() {

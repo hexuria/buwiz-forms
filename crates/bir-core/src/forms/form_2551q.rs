@@ -337,7 +337,12 @@ impl Form2551QDraft {
     }
 
     /// Transition: Submitted → Confirmed (called when BIR confirmation email is matched).
-    pub fn transition_to_confirmed(&mut self, confirmed_at: String, receipt_id: Option<i64>, filename: Option<String>) {
+    pub fn transition_to_confirmed(
+        &mut self,
+        confirmed_at: String,
+        receipt_id: Option<i64>,
+        filename: Option<String>,
+    ) {
         assert!(
             matches!(self.status, FilingStatus::Submitted),
             "Cannot confirm form in {:?} status — must be Submitted",
@@ -608,13 +613,12 @@ impl FormValidator for Form2551QDraft {
             ));
         }
 
-        if self.is_amended
-            && self.tax_paid_previous < 0.0 {
-                errors.push((
-                    "tax_paid_previous".to_string(),
-                    "Tax paid in return previously filed must be non-negative".to_string(),
-                ));
-            }
+        if self.is_amended && self.tax_paid_previous < 0.0 {
+            errors.push((
+                "tax_paid_previous".to_string(),
+                "Tax paid in return previously filed must be non-negative".to_string(),
+            ));
+        }
 
         errors
     }

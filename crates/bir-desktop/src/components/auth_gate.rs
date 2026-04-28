@@ -56,8 +56,7 @@ impl AuthGateView {
                             this.otp_state
                                 .update(cx, |input, cx| input.set_value("", window, cx));
                         } else {
-                            this.error_msg =
-                                Some("Incorrect PIN. Please try again.".to_string());
+                            this.error_msg = Some("Incorrect PIN. Please try again.".to_string());
                             this.otp_state.update(cx, |input, cx| {
                                 input.set_value("", window, cx);
                                 input.focus(window, cx);

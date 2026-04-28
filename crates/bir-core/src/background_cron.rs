@@ -101,9 +101,10 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
         // Check if we should retry now
         if let Some(next_retry) = &draft.next_retry_at
             && let Ok(next_time) = chrono::DateTime::parse_from_rfc3339(next_retry)
-                && Utc::now() < next_time.with_timezone(&Utc) {
-                    continue; // not time yet
-                }
+            && Utc::now() < next_time.with_timezone(&Utc)
+        {
+            continue; // not time yet
+        }
 
         info!(
             "Cron: Attempting to submit queued form {} for {}",
@@ -114,14 +115,16 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
         let form_type = "2551Qv2018"; // hardcoded for 2551Q for now
         let filename = draft.default_submission_filename();
         let xml_payload = draft.to_bir_xml_payload();
-        let encrypted =
-            match crate::crypto::compress_and_encrypt(xml_payload.as_bytes(), crate::crypto::BIR_IAF_PASSPHRASE) {
-                Ok(enc) => enc,
-                Err(e) => {
-                    fail_draft(&mut draft, db.clone(), e.to_string());
-                    continue;
-                }
-            };
+        let encrypted = match crate::crypto::compress_and_encrypt(
+            xml_payload.as_bytes(),
+            crate::crypto::BIR_IAF_PASSPHRASE,
+        ) {
+            Ok(enc) => enc,
+            Err(e) => {
+                fail_draft(&mut draft, db.clone(), e.to_string());
+                continue;
+            }
+        };
 
         match crate::transport::submit_iaf(form_type, &filename, &encrypted).await {
             Ok(_) => {
@@ -236,15 +239,16 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
 
         // Self-heal legacy bad cron strings
         if let Some(ref mut expr) = job.cron_expr
-            && expr.trim() == "* * * * *" {
-                *expr = "0 * * * * *".to_string();
-                if job.status == "Failed" {
-                    job.status = "Queued".to_string();
-                }
-                if let Ok(db_guard) = db.lock() {
-                    let _ = db_guard.save_job(job.clone());
-                }
+            && expr.trim() == "* * * * *"
+        {
+            *expr = "0 * * * * *".to_string();
+            if job.status == "Failed" {
+                job.status = "Queued".to_string();
             }
+            if let Ok(db_guard) = db.lock() {
+                let _ = db_guard.save_job(job.clone());
+            }
+        }
 
         let should_run = if let Some(ref next_run_str) = job.next_run_at {
             if let Ok(next_time) = chrono::DateTime::parse_from_rfc3339(next_run_str) {
@@ -259,12 +263,13 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
                     if !expr.trim().is_empty() {
                         // Initialize next run time
                         if let Ok(schedule) = cron::Schedule::from_str(expr)
-                            && let Some(next_run) = schedule.upcoming(Utc).next() {
-                                job.next_run_at = Some(next_run.to_rfc3339());
-                                if let Ok(db_guard) = db.lock() {
-                                    let _ = db_guard.save_job(job.clone());
-                                }
+                            && let Some(next_run) = schedule.upcoming(Utc).next()
+                        {
+                            job.next_run_at = Some(next_run.to_rfc3339());
+                            if let Ok(db_guard) = db.lock() {
+                                let _ = db_guard.save_job(job.clone());
                             }
+                        }
                         false // Wait for scheduled time
                     } else {
                         true // One-off job, run now
@@ -291,55 +296,56 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
         let mut success = true;
 
         if let Some(ref cmd) = job.command
-            && !cmd.trim().is_empty() {
-                if cmd.starts_with("bir_poll_email ") {
-                    let email = cmd.trim_start_matches("bir_poll_email ").trim();
-                    let (poll_success, still_pending, err_msg) =
-                        crate::email::fetch_and_process_emails_for_address(email, db.clone());
-                    if poll_success {
-                        let log = "Email polling completed successfully.".to_string();
-                        info!(
-                            "Cron: Email polling job '{}' completed successfully.",
-                            job.name
-                        );
-                        success = true;
-                        job.output_log = Some(log);
-                        if !still_pending {
-                            job.status = "Archived".to_string(); // Completed processing for this email
-                        }
-                    } else {
-                        let log = err_msg
-                            .unwrap_or_else(|| "Email polling failed (unknown error).".to_string());
-                        warn!("Cron: Email polling job '{}' failed: {}", job.name, log);
-                        success = false;
-                        job.output_log = Some(log);
+            && !cmd.trim().is_empty()
+        {
+            if cmd.starts_with("bir_poll_email ") {
+                let email = cmd.trim_start_matches("bir_poll_email ").trim();
+                let (poll_success, still_pending, err_msg) =
+                    crate::email::fetch_and_process_emails_for_address(email, db.clone());
+                if poll_success {
+                    let log = "Email polling completed successfully.".to_string();
+                    info!(
+                        "Cron: Email polling job '{}' completed successfully.",
+                        job.name
+                    );
+                    success = true;
+                    job.output_log = Some(log);
+                    if !still_pending {
+                        job.status = "Archived".to_string(); // Completed processing for this email
                     }
                 } else {
-                    match crate::platform::run_shell_command(cmd).await {
-                        Ok(output) => {
-                            let stdout_str = String::from_utf8_lossy(&output.stdout);
-                            let stderr_str = String::from_utf8_lossy(&output.stderr);
-                            let log = format!("STDOUT:\n{}\n\nSTDERR:\n{}", stdout_str, stderr_str);
-                            job.output_log = Some(log);
-                            if output.status.success() {
-                                info!("Cron: Job '{}' completed successfully.", job.name);
-                            } else {
-                                warn!(
-                                    "Cron: Job '{}' failed with code: {:?} stderr: {}",
-                                    job.name, output.status, stderr_str
-                                );
-                                success = false;
-                            }
-                        }
-                        Err(e) => {
-                            let err_msg = format!("Failed to start job: {}", e);
-                            warn!("Cron: Job '{}' failed to start: {}", job.name, e);
-                            job.output_log = Some(err_msg);
+                    let log = err_msg
+                        .unwrap_or_else(|| "Email polling failed (unknown error).".to_string());
+                    warn!("Cron: Email polling job '{}' failed: {}", job.name, log);
+                    success = false;
+                    job.output_log = Some(log);
+                }
+            } else {
+                match crate::platform::run_shell_command(cmd).await {
+                    Ok(output) => {
+                        let stdout_str = String::from_utf8_lossy(&output.stdout);
+                        let stderr_str = String::from_utf8_lossy(&output.stderr);
+                        let log = format!("STDOUT:\n{}\n\nSTDERR:\n{}", stdout_str, stderr_str);
+                        job.output_log = Some(log);
+                        if output.status.success() {
+                            info!("Cron: Job '{}' completed successfully.", job.name);
+                        } else {
+                            warn!(
+                                "Cron: Job '{}' failed with code: {:?} stderr: {}",
+                                job.name, output.status, stderr_str
+                            );
                             success = false;
                         }
                     }
+                    Err(e) => {
+                        let err_msg = format!("Failed to start job: {}", e);
+                        warn!("Cron: Job '{}' failed to start: {}", job.name, e);
+                        job.output_log = Some(err_msg);
+                        success = false;
+                    }
                 }
             }
+        }
 
         job.last_run_at = Some(now.to_rfc3339());
 

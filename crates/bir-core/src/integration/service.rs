@@ -15,10 +15,10 @@
 
 use crate::db::Database;
 use crate::forms::FormValidator;
-use crate::integration::mapper::{resolve_mappers, FormDraftOutput, MapperError};
+use crate::integration::mapper::{FormDraftOutput, MapperError, resolve_mappers};
 use crate::integration::models::UniversalTaxPayload;
 use crate::integration::validation::{
-    validate_form_applicability, validate_payload, PayloadValidationError,
+    PayloadValidationError, validate_form_applicability, validate_payload,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -108,9 +108,10 @@ pub fn process_sync(
 
     // ── Step 3: Check form applicability ─────────────────────────────
     if let Some(ref target_form) = payload.target_form
-        && let Some(err) = validate_form_applicability(target_form, &profile) {
-            return Err(SyncError::FormNotApplicable(err.message));
-        }
+        && let Some(err) = validate_form_applicability(target_form, &profile)
+    {
+        return Err(SyncError::FormNotApplicable(err.message));
+    }
 
     // ── Step 4: Resolve mappers ──────────────────────────────────────
     let mappers = resolve_mappers(payload);
@@ -189,7 +190,9 @@ pub fn import_payload_directory(
         Err(e) => {
             results.push((
                 dir_path.display().to_string(),
-                Err(SyncError::DatabaseError(format!("Failed to read directory: {e}"))),
+                Err(SyncError::DatabaseError(format!(
+                    "Failed to read directory: {e}"
+                ))),
             ));
             return results;
         }
@@ -198,7 +201,11 @@ pub fn import_payload_directory(
     for entry in entries.flatten() {
         let path = entry.path();
         if path.extension().is_some_and(|ext| ext == "json") {
-            let filename = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+            let filename = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
             let result = import_payload_file(db, &path);
             results.push((filename, result));
         }
@@ -285,7 +292,9 @@ mod tests {
 
     #[test]
     fn test_end_to_end_sync() {
-        let Some(db) = setup_db_with_profile() else { return };
+        let Some(db) = setup_db_with_profile() else {
+            return;
+        };
         let json = test_payload_json();
 
         let response = process_sync_json(&db, &json).unwrap();
@@ -311,7 +320,9 @@ mod tests {
 
     #[test]
     fn test_sync_unknown_tin() {
-        let Some(db) = setup_db_with_profile() else { return };
+        let Some(db) = setup_db_with_profile() else {
+            return;
+        };
         let json = r#"{
             "tin": "999999999000",
             "period_start": "2026-01-01",
@@ -326,7 +337,9 @@ mod tests {
 
     #[test]
     fn test_sync_invalid_payload() {
-        let Some(db) = setup_db_with_profile() else { return };
+        let Some(db) = setup_db_with_profile() else {
+            return;
+        };
         let json = r#"{
             "tin": "bad",
             "period_start": "2026-01-01",
@@ -341,7 +354,9 @@ mod tests {
 
     #[test]
     fn test_sync_bad_json() {
-        let Some(db) = setup_db_with_profile() else { return };
+        let Some(db) = setup_db_with_profile() else {
+            return;
+        };
         let result = process_sync_json(&db, "not valid json");
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), SyncError::JsonError(_)));
@@ -349,7 +364,9 @@ mod tests {
 
     #[test]
     fn test_sync_idempotent_upsert() {
-        let Some(db) = setup_db_with_profile() else { return };
+        let Some(db) = setup_db_with_profile() else {
+            return;
+        };
         let json = test_payload_json();
 
         // First sync
@@ -367,7 +384,9 @@ mod tests {
 
     #[test]
     fn test_file_import() {
-        let Some(db) = setup_db_with_profile() else { return };
+        let Some(db) = setup_db_with_profile() else {
+            return;
+        };
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("payload.json");
         std::fs::write(&file_path, test_payload_json()).unwrap();
@@ -379,7 +398,9 @@ mod tests {
 
     #[test]
     fn test_directory_import() {
-        let Some(db) = setup_db_with_profile() else { return };
+        let Some(db) = setup_db_with_profile() else {
+            return;
+        };
         let dir = tempdir().unwrap();
 
         // Write two payloads for different quarters

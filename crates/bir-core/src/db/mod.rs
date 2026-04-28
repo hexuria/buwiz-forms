@@ -311,34 +311,36 @@ impl Database {
         #[cfg(not(test))]
         {
             if std::env::var("EBIR_TEST_ENV").is_ok() {
-                return Ok("0000000000000000000000000000000000000000000000000000000000000000".to_string());
+                return Ok(
+                    "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                );
             }
 
             use keyring::Entry;
             use tracing::{info, warn};
 
-        // By using `keyring` on macOS with the `apple-native` feature, this calls `SecItemAdd` and `SecItemCopyMatching` natively.
-        // In a sandboxed App Store environment, this will automatically use the app's Keychain Access Group entitlement.
-        let entry = Entry::new("com.ebir.rust", "sqlcipher_master_key")?;
+            // By using `keyring` on macOS with the `apple-native` feature, this calls `SecItemAdd` and `SecItemCopyMatching` natively.
+            // In a sandboxed App Store environment, this will automatically use the app's Keychain Access Group entitlement.
+            let entry = Entry::new("com.ebir.rust", "sqlcipher_master_key")?;
 
-        // Verify we have a real credential store, not the in-memory mock
-        #[cfg(debug_assertions)]
-        {
-            let test_entry = Entry::new("com.ebir.rust", "__keyring_test__")?;
-            let _ = test_entry.set_password("test");
-            match test_entry.get_password() {
-                Ok(v) if v == "test" => {
-                    let _ = test_entry.delete_credential();
-                    info!("Keyring backend: native credential store confirmed");
-                }
-                _ => {
-                    warn!(
-                        "Keyring backend appears to be a mock store! \
+            // Verify we have a real credential store, not the in-memory mock
+            #[cfg(debug_assertions)]
+            {
+                let test_entry = Entry::new("com.ebir.rust", "__keyring_test__")?;
+                let _ = test_entry.set_password("test");
+                match test_entry.get_password() {
+                    Ok(v) if v == "test" => {
+                        let _ = test_entry.delete_credential();
+                        info!("Keyring backend: native credential store confirmed");
+                    }
+                    _ => {
+                        warn!(
+                            "Keyring backend appears to be a mock store! \
                          Encryption keys will NOT persist across restarts."
-                    );
+                        );
+                    }
                 }
             }
-        }
 
             match entry.get_password() {
                 Ok(hex_key) => {

@@ -23,11 +23,8 @@ pub fn inject_acroform(
     fields: &BTreeMap<String, String>,
     output_path: &Path,
 ) -> Result<(), PrintError> {
-    let mut doc = Document::load(base_pdf_path).map_err(|e| {
-        PrintError::Io(std::io::Error::other(
-            format!("lopdf load failed: {e}"),
-        ))
-    })?;
+    let mut doc = Document::load(base_pdf_path)
+        .map_err(|e| PrintError::Io(std::io::Error::other(format!("lopdf load failed: {e}"))))?;
 
     // Collect page object IDs in page order.
     let page_ids = doc.get_pages();
@@ -102,11 +99,8 @@ pub fn inject_acroform(
         }
     }
 
-    doc.save(output_path).map_err(|e| {
-        PrintError::Io(std::io::Error::other(
-            format!("lopdf save failed: {e}"),
-        ))
-    })?;
+    doc.save(output_path)
+        .map_err(|e| PrintError::Io(std::io::Error::other(format!("lopdf save failed: {e}"))))?;
 
     Ok(())
 }

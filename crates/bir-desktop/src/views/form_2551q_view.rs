@@ -188,13 +188,14 @@ impl Form2551QView {
                     let quarter = this.draft.quarter;
                     if let Ok(db_guard) = this.db.lock()
                         && let Ok(Some(updated)) = db_guard.get_2551q_draft(&tin, year, quarter)
-                            && this.draft.status != updated.status {
-                                this.draft = updated;
-                                if this.draft.status == FilingStatus::Confirmed {
-                                    cx.emit(Form2551QEvent::Confirmed);
-                                }
-                                cx.notify();
-                            }
+                        && this.draft.status != updated.status
+                    {
+                        this.draft = updated;
+                        if this.draft.status == FilingStatus::Confirmed {
+                            cx.emit(Form2551QEvent::Confirmed);
+                        }
+                        cx.notify();
+                    }
                 }
             },
         );
@@ -408,7 +409,7 @@ impl Form2551QView {
                 if !profile.is_email_tracking_active() {
                     return Err(anyhow::anyhow!("Email tracking is not enabled. Go to Email Settings in your profile to set up App Password or Google OAuth2."));
                 }
-                
+
                 drop(db_guard);
 
                 // Use existing email fetcher infrastructure
@@ -580,9 +581,10 @@ impl Form2551QView {
                 let mut raw_html = None;
                 if let Some(receipt_id) = draft.receipt_id
                     && let Ok(db) = self.db.lock()
-                        && let Ok(Some(receipt)) = db.get_submission_receipt_by_id(receipt_id) {
-                            raw_html = receipt.raw_html;
-                        }
+                    && let Ok(Some(receipt)) = db.get_submission_receipt_by_id(receipt_id)
+                {
+                    raw_html = receipt.raw_html;
+                }
 
                 if let Err(err) = cx.open_window(options, move |_window, cx| {
                     cx.new(|_cx| PdfViewerView::new(draft, result, output_dir, raw_html))
@@ -880,18 +882,42 @@ impl Form2551QView {
 }
 
 impl FormViewTrait for Form2551QView {
-    fn form_title(&self) -> &'static str { "BIR Form No. 2551Q" }
-    fn form_subtitle(&self) -> &'static str { "Quarterly Percentage Tax Return" }
-    fn form_version(&self) -> &'static str { "January 2018 (ENCS)" }
-    fn current_status(&self) -> FilingStatus { self.draft.status.clone() }
-    fn submitted_at(&self) -> Option<&str> { self.draft.submitted_at.as_deref() }
-    fn confirmed_at(&self) -> Option<&str> { self.draft.confirmed_at.as_deref() }
-    fn save_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) { self.save(window, cx); }
-    fn mark_submitted(&mut self, _window: &mut Window, cx: &mut Context<Self>) { self.mark_submitted(cx); }
-    fn mark_paid(&mut self, _window: &mut Window, cx: &mut Context<Self>) { self.mark_as_paid(cx); }
-    fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) { self.revert_to_draft(window, cx); }
-    fn preview_pdf(&mut self, window: &mut Window, cx: &mut Context<Self>) { self.preview_pdf(window, cx); }
-    fn print_confirmation(&mut self, window: &mut Window, cx: &mut Context<Self>) { self.print_confirmation(window, cx); }
+    fn form_title(&self) -> &'static str {
+        "BIR Form No. 2551Q"
+    }
+    fn form_subtitle(&self) -> &'static str {
+        "Quarterly Percentage Tax Return"
+    }
+    fn form_version(&self) -> &'static str {
+        "January 2018 (ENCS)"
+    }
+    fn current_status(&self) -> FilingStatus {
+        self.draft.status.clone()
+    }
+    fn submitted_at(&self) -> Option<&str> {
+        self.draft.submitted_at.as_deref()
+    }
+    fn confirmed_at(&self) -> Option<&str> {
+        self.draft.confirmed_at.as_deref()
+    }
+    fn save_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.save(window, cx);
+    }
+    fn mark_submitted(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.mark_submitted(cx);
+    }
+    fn mark_paid(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.mark_as_paid(cx);
+    }
+    fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.revert_to_draft(window, cx);
+    }
+    fn preview_pdf(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.preview_pdf(window, cx);
+    }
+    fn print_confirmation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.print_confirmation(window, cx);
+    }
 }
 
 impl Render for Form2551QView {
@@ -1080,32 +1106,46 @@ impl Render for Form2551QView {
         );
 
         // schedule_one content
-        let schedule_rows = self.draft.schedule_1.iter().enumerate().map(|(i, row)| {
-            let err_id = format!("schedule_1_row_{}", i + 1);
-            let has_err = self.get_error(&err_id).is_some();
-            let input_component = if let Some(row_in) = self.row_inputs.get(i) {
-                div()
-                    .bg(cx.theme().background)
-                    .border_1()
-                    .rounded_md()
-                    .border_color(if has_err { cx.theme().danger } else { cx.theme().border })
-                    .px_2()
-                    .py_1()
-                    .child(Input::new(&row_in.taxable_amount).disabled(!is_editable).appearance(false))
-                    .into_any_element()
-            } else {
-                div().child("—").into_any_element()
-            };
-            crate::components::form_parts::ScheduleRowProps {
-                atc: row.atc.clone(),
-                description: row.atc_description.clone(),
-                amount_label: "TAXABLE AMOUNT (₱)".to_string(),
-                rate: format!("{:.1}%", row.tax_rate * 100.0),
-                tax_due: row.tax_due,
-                error_message: self.get_error(&err_id),
-                input_component,
-            }
-        }).collect::<Vec<_>>();
+        let schedule_rows = self
+            .draft
+            .schedule_1
+            .iter()
+            .enumerate()
+            .map(|(i, row)| {
+                let err_id = format!("schedule_1_row_{}", i + 1);
+                let has_err = self.get_error(&err_id).is_some();
+                let input_component = if let Some(row_in) = self.row_inputs.get(i) {
+                    div()
+                        .bg(cx.theme().background)
+                        .border_1()
+                        .rounded_md()
+                        .border_color(if has_err {
+                            cx.theme().danger
+                        } else {
+                            cx.theme().border
+                        })
+                        .px_2()
+                        .py_1()
+                        .child(
+                            Input::new(&row_in.taxable_amount)
+                                .disabled(!is_editable)
+                                .appearance(false),
+                        )
+                        .into_any_element()
+                } else {
+                    div().child("—").into_any_element()
+                };
+                crate::components::form_parts::ScheduleRowProps {
+                    atc: row.atc.clone(),
+                    description: row.atc_description.clone(),
+                    amount_label: "TAXABLE AMOUNT (₱)".to_string(),
+                    rate: format!("{:.1}%", row.tax_rate * 100.0),
+                    tax_due: row.tax_due,
+                    error_message: self.get_error(&err_id),
+                    input_component,
+                }
+            })
+            .collect::<Vec<_>>();
 
         let schedule_one_content = crate::components::form_parts::atc_schedule_table(
             crate::components::form_parts::AtcScheduleTableProps {
@@ -1135,10 +1175,18 @@ impl Render for Form2551QView {
                         .bg(cx.theme().background)
                         .border_1()
                         .rounded_md()
-                        .border_color(if self.get_error("creditable_withheld").is_some() { cx.theme().danger } else { cx.theme().border })
+                        .border_color(if self.get_error("creditable_withheld").is_some() {
+                            cx.theme().danger
+                        } else {
+                            cx.theme().border
+                        })
                         .px_2()
                         .py_1()
-                        .child(Input::new(&self.creditable_withheld_input).disabled(!is_editable).appearance(false))
+                        .child(
+                            Input::new(&self.creditable_withheld_input)
+                                .disabled(!is_editable)
+                                .appearance(false),
+                        )
                         .into_any_element(),
                     error_message: self.get_error("creditable_withheld"),
                     locked_message: None,
@@ -1153,13 +1201,25 @@ impl Render for Form2551QView {
                         .bg(cx.theme().background)
                         .border_1()
                         .rounded_md()
-                        .border_color(if self.get_error("tax_paid_previous").is_some() { cx.theme().danger } else { cx.theme().border })
+                        .border_color(if self.get_error("tax_paid_previous").is_some() {
+                            cx.theme().danger
+                        } else {
+                            cx.theme().border
+                        })
                         .px_2()
                         .py_1()
-                        .child(Input::new(&self.tax_paid_previous_input).disabled(!is_editable).appearance(false))
+                        .child(
+                            Input::new(&self.tax_paid_previous_input)
+                                .disabled(!is_editable)
+                                .appearance(false),
+                        )
                         .into_any_element(),
                     error_message: self.get_error("tax_paid_previous"),
-                    locked_message: if is_amended { None } else { Some("Check Amended Return to unlock") },
+                    locked_message: if is_amended {
+                        None
+                    } else {
+                        Some("Check Amended Return to unlock")
+                    },
                     is_mobile,
                 },
                 cx,
@@ -1174,21 +1234,19 @@ impl Render for Form2551QView {
                         tax_payable,
                         true,
                         cx,
-                    ))
+                    )),
             )
             .child(
                 div()
                     .pt_4()
-                    .child(
-                        crate::components::form_parts::penalty_summary_section(
-                            self.draft.surcharge,
-                            self.draft.interest,
-                            self.draft.compromise,
-                            self.draft.total_penalties,
-                            self.draft.total_amount_payable,
-                            cx,
-                        )
-                    )
+                    .child(crate::components::form_parts::penalty_summary_section(
+                        self.draft.surcharge,
+                        self.draft.interest,
+                        self.draft.compromise,
+                        self.draft.total_penalties,
+                        self.draft.total_amount_payable,
+                        cx,
+                    )),
             );
 
         // Actions moved to toolbar

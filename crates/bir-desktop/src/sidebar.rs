@@ -12,7 +12,11 @@ use crate::app::{ActiveView, AppState, AppThemeMode, ProfileTargetAction};
 use bir_core::profile::TaxpayerProfile;
 
 impl AppState {
-    pub(crate) fn render_sidebar(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(crate) fn render_sidebar(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let is_mini = self.is_mini_sidebar || window.viewport_size().width < px(768.);
         let filter = self.profile_filter.read(cx).value().to_lowercase();
         let mut archived_count = 0;
@@ -278,7 +282,7 @@ impl AppState {
                                                     .take(2)
                                                     .collect::<String>()
                                                     .to_uppercase();
-                                                
+
                                                 this.child(
                                                     div()
                                                         .size(px(48.))
@@ -434,7 +438,7 @@ impl AppState {
                                                                                         return;
                                                                                     };
                                                                                     let export_dir = export_handle.path().to_path_buf();
-                                                                                    
+
                                                                                     let success = this.update(cx, |this, cx| {
                                                                                         if let Ok(db) = this.db.lock() {
                                                                                             if let Err(e) = bir_core::export_profile_data(&db, &tin, &export_dir) {
@@ -442,11 +446,11 @@ impl AppState {
                                                                                             } else {
                                                                                                 let _ = db.delete_profile(&tin);
                                                                                                 this.profiles.retain(|p| p.tin.full() != tin);
-                                                                                                
+
                                                                                                 if !this.profiles.iter().any(|p| p.is_archived) {
                                                                                                     this.show_archived = false;
                                                                                                 }
-                                                                                                
+
                                                                                                 if this.active_profile_tin.as_ref() == Some(&tin) {
                                                                                                     this.active_profile_tin = None;
                                                                                                     this.active_view = ActiveView::ProfileManager;
@@ -460,7 +464,7 @@ impl AppState {
                                                                                         }
                                                                                         false
                                                                                     });
-                                                                                    
+
                                                                                     if let Ok(true) = success {
                                                                                         rfd::AsyncMessageDialog::new()
                                                                                             .set_title("Profile Exported & Deleted")

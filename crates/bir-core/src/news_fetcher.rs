@@ -42,9 +42,10 @@ impl NoticeFetcher {
 
         if let Ok(contents) = std::fs::read_to_string(&config_path) {
             if let Ok(feeds) = serde_json::from_str::<Vec<String>>(&contents)
-                && !feeds.is_empty() {
-                    return feeds;
-                }
+                && !feeds.is_empty()
+            {
+                return feeds;
+            }
         } else {
             // Write default config if missing
             if let Ok(()) = std::fs::create_dir_all(proj_dirs.config_dir()) {
@@ -191,9 +192,7 @@ pub struct RssProvider {
 
 impl RssProvider {
     pub fn new(feed_urls: Vec<String>) -> Self {
-        Self {
-            feed_urls,
-        }
+        Self { feed_urls }
     }
 }
 

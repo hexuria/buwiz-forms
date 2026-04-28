@@ -44,36 +44,38 @@ impl LockScreenView {
         cx.subscribe_in(
             &otp_state,
             window,
-            |this: &mut Self, _entity, event: &InputEvent, window, cx| if let InputEvent::Change = event {
-                let pin = this.otp_state.read(cx).value().to_string();
-                if pin.len() == 4 {
-                    let hashed_pin = bir_core::crypto::hash_pin(&pin);
-                    let mut is_valid = false;
-                    if let Ok(db_guard) = this.db.lock() {
-                        if let Ok(Some(saved_hash)) = db_guard.get_setting("app_lock_pin_hash")
-                        {
-                            is_valid = saved_hash == hashed_pin;
-                        } else {
-                            // If somehow app lock is enabled but no pin is set, default to unlocking
-                            is_valid = true;
+            |this: &mut Self, _entity, event: &InputEvent, window, cx| {
+                if let InputEvent::Change = event {
+                    let pin = this.otp_state.read(cx).value().to_string();
+                    if pin.len() == 4 {
+                        let hashed_pin = bir_core::crypto::hash_pin(&pin);
+                        let mut is_valid = false;
+                        if let Ok(db_guard) = this.db.lock() {
+                            if let Ok(Some(saved_hash)) = db_guard.get_setting("app_lock_pin_hash")
+                            {
+                                is_valid = saved_hash == hashed_pin;
+                            } else {
+                                // If somehow app lock is enabled but no pin is set, default to unlocking
+                                is_valid = true;
+                            }
                         }
-                    }
 
-                    if is_valid {
-                        this.has_error = false;
-                        this.failed_attempts = 0;
-                        this.otp_state.update(cx, |state, cx| {
-                            state.set_value("", window, cx);
-                        });
-                        cx.emit(LockScreenEvent::Unlocked);
-                    } else {
-                        this.has_error = true;
-                        this.failed_attempts += 1;
-                        this.otp_state.update(cx, |state, cx| {
-                            state.set_value("", window, cx);
-                            state.focus(window, cx);
-                        });
-                        cx.notify();
+                        if is_valid {
+                            this.has_error = false;
+                            this.failed_attempts = 0;
+                            this.otp_state.update(cx, |state, cx| {
+                                state.set_value("", window, cx);
+                            });
+                            cx.emit(LockScreenEvent::Unlocked);
+                        } else {
+                            this.has_error = true;
+                            this.failed_attempts += 1;
+                            this.otp_state.update(cx, |state, cx| {
+                                state.set_value("", window, cx);
+                                state.focus(window, cx);
+                            });
+                            cx.notify();
+                        }
                     }
                 }
             },
@@ -143,7 +145,8 @@ impl LockScreenView {
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     fn trigger_os_auth(&mut self, cx: &mut Context<Self>) {
         self.os_auth_triggered = false;
-        self.os_auth_error = Some("Operating System Authentication is not supported on this platform.".to_string());
+        self.os_auth_error =
+            Some("Operating System Authentication is not supported on this platform.".to_string());
         cx.notify();
     }
 }

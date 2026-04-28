@@ -81,7 +81,10 @@ pub struct TaxpayerInfoProps<'a> {
 }
 
 /// A standard Taxpayer Information section layout
-pub fn taxpayer_info_section<V: 'static>(props: TaxpayerInfoProps<'_>, cx: &Context<V>) -> gpui::Div {
+pub fn taxpayer_info_section<V: 'static>(
+    props: TaxpayerInfoProps<'_>,
+    cx: &Context<V>,
+) -> gpui::Div {
     div()
         .flex()
         .flex_col()
@@ -110,7 +113,10 @@ pub fn taxpayer_info_section<V: 'static>(props: TaxpayerInfoProps<'_>, cx: &Cont
                 .flex()
                 .gap_8()
                 .child(readonly_field("5. Zip Code", props.zip, props.zip_err, cx).flex_1())
-                .child(readonly_field("6. Contact Number", props.contact, props.contact_err, cx).flex_1()),
+                .child(
+                    readonly_field("6. Contact Number", props.contact, props.contact_err, cx)
+                        .flex_1(),
+                ),
         )
         .child(readonly_field(
             "7. Email Address",
@@ -350,18 +356,27 @@ where
                 .child(content),
         );
     }
-    
+
     card
 }
 
-pub fn computation_row_readonly<V: 'static>(label: &str, amount: f64, is_total: bool, cx: &Context<V>) -> gpui::Div {
+pub fn computation_row_readonly<V: 'static>(
+    label: &str,
+    amount: f64,
+    is_total: bool,
+    cx: &Context<V>,
+) -> gpui::Div {
     let mut amount_div = div()
         .font_weight(FontWeight::BOLD)
         .text_sm()
         .child(format!("\u{20b1} {:.2}", amount));
-        
+
     amount_div = if is_total {
-        amount_div.text_color(if amount > 0.0 { cx.theme().primary } else { cx.theme().muted_foreground })
+        amount_div.text_color(if amount > 0.0 {
+            cx.theme().primary
+        } else {
+            cx.theme().muted_foreground
+        })
     } else {
         amount_div.text_color(cx.theme().primary)
     };
@@ -390,9 +405,16 @@ pub struct ComputationRowInputProps<'a> {
     pub is_mobile: bool,
 }
 
-pub fn computation_row_input<V: 'static>(props: ComputationRowInputProps<'_>, cx: &Context<V>) -> gpui::Div {
+pub fn computation_row_input<V: 'static>(
+    props: ComputationRowInputProps<'_>,
+    cx: &Context<V>,
+) -> gpui::Div {
     let is_locked = props.locked_message.is_some();
-    let text_color = if is_locked { cx.theme().muted_foreground } else { cx.theme().foreground };
+    let text_color = if is_locked {
+        cx.theme().muted_foreground
+    } else {
+        cx.theme().foreground
+    };
     let opacity_val = if is_locked { 0.4 } else { 1.0 };
 
     let row = if props.is_mobile {
@@ -487,11 +509,11 @@ pub struct AtcScheduleTableProps<'a> {
 }
 
 /// A generic table for ATC schedules (e.g. Schedule 1 of 2551Q, 2550M, etc.)
-pub fn atc_schedule_table<V: 'static>(props: AtcScheduleTableProps<'_>, cx: &Context<V>) -> gpui::Div {
-    let mut container = div()
-        .flex()
-        .flex_col()
-        .gap_4();
+pub fn atc_schedule_table<V: 'static>(
+    props: AtcScheduleTableProps<'_>,
+    cx: &Context<V>,
+) -> gpui::Div {
+    let mut container = div().flex().flex_col().gap_4();
 
     if !props.title.is_empty() {
         container = container.child(

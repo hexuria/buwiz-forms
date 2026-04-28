@@ -66,18 +66,20 @@ impl SettingsView {
         cx.subscribe_in(
             &setup_otp,
             window,
-            |this: &mut Self, _entity, event: &InputEvent, _window, cx| if let InputEvent::Change = event {
-                let pin = this.setup_otp.read(cx).value().to_string();
-                if pin.len() == 4 {
-                    let hashed = bir_core::crypto::hash_pin(&pin);
+            |this: &mut Self, _entity, event: &InputEvent, _window, cx| {
+                if let InputEvent::Change = event {
+                    let pin = this.setup_otp.read(cx).value().to_string();
+                    if pin.len() == 4 {
+                        let hashed = bir_core::crypto::hash_pin(&pin);
 
-                    if let Ok(db_guard) = this.db.lock() {
-                        let _ = db_guard.set_setting("app_lock_pin_hash", &hashed);
-                        let _ = db_guard.set_setting("app_lock_enabled", "true");
+                        if let Ok(db_guard) = this.db.lock() {
+                            let _ = db_guard.set_setting("app_lock_pin_hash", &hashed);
+                            let _ = db_guard.set_setting("app_lock_enabled", "true");
+                        }
+                        this.is_app_lock_enabled = true;
+                        this.show_pin_setup = false;
+                        cx.notify();
                     }
-                    this.is_app_lock_enabled = true;
-                    this.show_pin_setup = false;
-                    cx.notify();
                 }
             },
         )
@@ -325,19 +327,19 @@ impl Render for SettingsView {
                                                         .pick_folder()
                                                         .await
                                                     else { return; };
-                                                    
+
                                                     let target_dir = target_dir_handle.path().to_path_buf();
-                                                    
+
                                                     let res = this.update(cx, |this, _cx| {
                                                         let db_path = bir_core::db::default_database_path();
                                                         if !db_path.exists() { return Err("Database file not found".to_string()); }
-                                                        
+
                                                         let timestamp = std::time::SystemTime::now()
                                                             .duration_since(std::time::UNIX_EPOCH)
                                                             .unwrap()
                                                             .as_secs();
                                                         let backup_path = target_dir.join(format!("BIR_Database_Backup_{}.db.zip", timestamp));
-                                                        
+
                                                         if let Ok(db) = this.db.lock() {
                                                             let _ = db.checkpoint();
                                                             match bir_core::export::export_database_zip(&db, &backup_path) {
@@ -348,7 +350,7 @@ impl Render for SettingsView {
                                                             Err("Failed to acquire database lock".to_string())
                                                         }
                                                     });
-                                                    
+
                                                     match res {
                                                         Ok(Ok(path)) => {
                                                             rfd::AsyncMessageDialog::new()
@@ -379,16 +381,16 @@ impl Render for SettingsView {
                                                         .pick_folder()
                                                         .await
                                                     else { return; };
-                                                    
+
                                                     let target_dir = target_dir_handle.path().to_path_buf();
-                                                    
+
                                                     let res = this.update(cx, |this, _cx| {
                                                         let timestamp = std::time::SystemTime::now()
                                                             .duration_since(std::time::UNIX_EPOCH)
                                                             .unwrap()
                                                             .as_secs();
                                                         let backup_path = target_dir.join(format!("BIR_Profiles_Backup_{}.zip", timestamp));
-                                                        
+
                                                         if let Ok(db) = this.db.lock() {
                                                             match bir_core::export::export_all_profiles_data(&db, &backup_path) {
                                                                 Ok(_) => Ok(backup_path),
@@ -398,7 +400,7 @@ impl Render for SettingsView {
                                                             Err("Failed to acquire database lock".to_string())
                                                         }
                                                     });
-                                                    
+
                                                     match res {
                                                         Ok(Ok(path)) => {
                                                             rfd::AsyncMessageDialog::new()
@@ -454,7 +456,7 @@ impl Render for SettingsView {
                                                 .set_buttons(rfd::MessageButtons::YesNoCancel)
                                                 .show()
                                                 .await;
-                                                
+
                                             let proceed = match confirm {
                                                 rfd::MessageDialogResult::Cancel => return,
                                                 rfd::MessageDialogResult::Yes => {
@@ -463,7 +465,7 @@ impl Render for SettingsView {
                                                         .pick_folder()
                                                         .await
                                                     else { return; };
-                                                    
+
                                                     let target_dir = target_dir_handle.path().to_path_buf();
                                                     let res = this.update(cx, |this, _cx| {
                                                         let timestamp = std::time::SystemTime::now()
@@ -481,7 +483,7 @@ impl Render for SettingsView {
                                                             Err("Failed to acquire database lock".to_string())
                                                         }
                                                     });
-                                                    
+
                                                     match res {
                                                         Ok(Ok(path)) => {
                                                             let continue_reset = rfd::AsyncMessageDialog::new()
@@ -514,7 +516,7 @@ impl Render for SettingsView {
                                                 }
                                                 _ => false
                                             };
-                                            
+
                                             if proceed {
                                                 let res = this.update(cx, |this, cx| {
                                                     if let Ok(db) = this.db.lock() {
@@ -528,7 +530,7 @@ impl Render for SettingsView {
                                                         Err("Failed to acquire database lock".to_string())
                                                     }
                                                 });
-                                                
+
                                                 if let Ok(Ok(())) = res {
                                                     rfd::AsyncMessageDialog::new()
                                                         .set_title("Factory Reset Complete")

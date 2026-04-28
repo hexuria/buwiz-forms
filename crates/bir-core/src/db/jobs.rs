@@ -23,9 +23,10 @@ impl Database {
                 .conn
                 .prepare("SELECT created_at FROM job_queue WHERE id = ?1")?;
             if let Ok(mut rows) = stmt.query(params![job.id])
-                && let Ok(Some(row)) = rows.next() {
-                    job.created_at = row.get(0).unwrap_or_default();
-                }
+                && let Ok(Some(row)) = rows.next()
+            {
+                job.created_at = row.get(0).unwrap_or_default();
+            }
         }
         Ok(job)
     }

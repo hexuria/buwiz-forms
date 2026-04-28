@@ -33,10 +33,7 @@ impl ListDelegate for ProfileListDelegate {
         match section {
             0 => self.active_items.len(),
             1 => self.archived_items.len(),
-            2
-                if self.create_query.is_some() => {
-                    1
-                }
+            2 if self.create_query.is_some() => 1,
             _ => 0,
         }
     }
@@ -88,37 +85,38 @@ impl ListDelegate for ProfileListDelegate {
         };
 
         if ix.section == 2
-            && let Some(query) = &self.create_query {
-                return Some(
-                    ListItem::new(ix)
-                        .bg(bg_color)
-                        .rounded_lg()
-                        .child(
-                            h_flex()
-                                .items_center()
-                                .gap_4()
-                                .px_4()
-                                .py_3()
-                                .child(
-                                    Icon::new(IconName::Plus)
-                                        .text_color(if selected {
-                                            cx.theme().foreground
-                                        } else {
-                                            cx.theme().muted_foreground
-                                        })
-                                        .size(px(24.)),
-                                )
-                                .child(
-                                    div()
-                                        .text_lg()
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(cx.theme().foreground)
-                                        .child(format!("Create new profile for \"{}\"", query)),
-                                ),
-                        )
-                        .selected(selected),
-                );
-            }
+            && let Some(query) = &self.create_query
+        {
+            return Some(
+                ListItem::new(ix)
+                    .bg(bg_color)
+                    .rounded_lg()
+                    .child(
+                        h_flex()
+                            .items_center()
+                            .gap_4()
+                            .px_4()
+                            .py_3()
+                            .child(
+                                Icon::new(IconName::Plus)
+                                    .text_color(if selected {
+                                        cx.theme().foreground
+                                    } else {
+                                        cx.theme().muted_foreground
+                                    })
+                                    .size(px(24.)),
+                            )
+                            .child(
+                                div()
+                                    .text_lg()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(cx.theme().foreground)
+                                    .child(format!("Create new profile for \"{}\"", query)),
+                            ),
+                    )
+                    .selected(selected),
+            );
+        }
 
         let profile = if ix.section == 0 {
             self.active_items.get(ix.row)
@@ -220,9 +218,10 @@ impl ListDelegate for ProfileListDelegate {
             .collect();
         self.archived_items = filtered.iter().filter(|p| p.is_archived).cloned().collect();
 
-        let exact_tin_match = self.all_items.iter().any(|p| {
-            p.tin.full() == q.trim() || p.tin.formatted().to_lowercase() == q.trim()
-        });
+        let exact_tin_match = self
+            .all_items
+            .iter()
+            .any(|p| p.tin.full() == q.trim() || p.tin.formatted().to_lowercase() == q.trim());
 
         if !query.trim().is_empty()
             && !exact_tin_match

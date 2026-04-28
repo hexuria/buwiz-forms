@@ -12,11 +12,11 @@ pub struct Form1701QDraft {
     pub zip_code: String,
     pub contact_number: String,
     pub email: String,
-    
+
     // Taxable Year and Quarter
     pub taxable_year: String,
     pub quarter: String,
-    
+
     // Part II Computations
     pub total_tax_due: f64,
     pub total_amount_payable: f64,
@@ -28,7 +28,11 @@ pub struct Form1701QDraft {
 }
 
 impl Form1701QDraft {
-    pub fn new_from_profile(profile: &crate::profile::TaxpayerProfile, year: u16, quarter: u8) -> Self {
+    pub fn new_from_profile(
+        profile: &crate::profile::TaxpayerProfile,
+        year: u16,
+        quarter: u8,
+    ) -> Self {
         Self {
             tin: profile.tin.full(),
             rdo_code: profile.rdo_code.clone(),
@@ -54,9 +58,9 @@ impl FormValidator for Form1701QDraft {
         if self.rdo_code.trim().is_empty() {
             errors.push(("rdo_code".to_string(), "RDO Code is required".to_string()));
         }
-        
+
         // Add additional 1701Q validation rules here
-        
+
         errors
     }
 }

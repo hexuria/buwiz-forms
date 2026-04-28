@@ -13,7 +13,6 @@ use crate::components::smart_date_filter::{
     SmartDateFilter, SmartDateFilterEvent, SmartDateFilterState,
 };
 
-
 pub enum DashboardEvent {
     FileForm {
         form_code: String,

@@ -186,7 +186,7 @@ pub fn extract_database_zip(zip_path: &Path, out_db_path: &Path) -> Result<(), D
 
     // Explicitly close the connection to ensure all data is flushed
     drop(conn);
-    
+
     // Small delay to ensure file system operations complete
     std::thread::sleep(std::time::Duration::from_millis(100));
 

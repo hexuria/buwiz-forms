@@ -168,7 +168,10 @@ mod tests {
         assert_eq!(payload.taxable_year(), 2026);
         assert_eq!(payload.quarter(), Some(1));
         assert_eq!(payload.total_gross_income(), 500000.0);
-        assert_eq!(payload.income_sources[0].category, IncomeCategory::BusinessNonVat);
+        assert_eq!(
+            payload.income_sources[0].category,
+            IncomeCategory::BusinessNonVat
+        );
         assert!(payload.metadata.is_empty());
     }
 
@@ -196,7 +199,10 @@ mod tests {
         }"#;
 
         let source: IncomeSource = serde_json::from_str(json).unwrap();
-        assert_eq!(source.category, IncomeCategory::Other("CustomCategory".to_string()));
+        assert_eq!(
+            source.category,
+            IncomeCategory::Other("CustomCategory".to_string())
+        );
         assert_eq!(source.atc_code_override, None);
     }
 }

@@ -2,7 +2,6 @@ use gpui::prelude::*;
 use gpui::*;
 use gpui_component::ActiveTheme;
 
-
 pub fn render_footer<T>(cx: &mut Context<T>) -> impl IntoElement {
     div()
         .w_full()

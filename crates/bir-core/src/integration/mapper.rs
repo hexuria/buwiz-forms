@@ -74,35 +74,36 @@ impl Mapper2551Q {
     fn resolve_atc_code(source: &IncomeSource) -> &'static str {
         // If the source has an explicit override, validate and use it
         if let Some(ref override_code) = source.atc_code_override
-            && find_atc(override_code).is_some() {
-                // We can't return a reference to a String field, so we match
-                // against known codes. For unknown overrides, fall through.
-                return match override_code.as_str() {
-                    "PT010" => "PT010",
-                    "PT040" => "PT040",
-                    "PT050" => "PT050",
-                    "PT060" => "PT060",
-                    "PT070" => "PT070",
-                    "PT080" => "PT080",
-                    "PT090" => "PT090",
-                    "PT100" => "PT100",
-                    "PT110" => "PT110",
-                    "PT120" => "PT120",
-                    "PT130" => "PT130",
-                    "PT140" => "PT140",
-                    "PT150" => "PT150",
-                    "PT160" => "PT160",
-                    _ => "PT010", // Unknown override — fall back to default
-                };
-            }
+            && find_atc(override_code).is_some()
+        {
+            // We can't return a reference to a String field, so we match
+            // against known codes. For unknown overrides, fall through.
+            return match override_code.as_str() {
+                "PT010" => "PT010",
+                "PT040" => "PT040",
+                "PT050" => "PT050",
+                "PT060" => "PT060",
+                "PT070" => "PT070",
+                "PT080" => "PT080",
+                "PT090" => "PT090",
+                "PT100" => "PT100",
+                "PT110" => "PT110",
+                "PT120" => "PT120",
+                "PT130" => "PT130",
+                "PT140" => "PT140",
+                "PT150" => "PT150",
+                "PT160" => "PT160",
+                _ => "PT010", // Unknown override — fall back to default
+            };
+        }
 
         // Auto-detect based on income category
         match source.category {
             IncomeCategory::BusinessNonVat => "PT010",
             IncomeCategory::ProfessionalServices => "PT010",
-            IncomeCategory::PassiveIncome => "PT080",    // Bank/financial intermediary rate
-            IncomeCategory::CapitalGains => "PT140",     // Stock transactions
-            IncomeCategory::Other(_) => "PT010",         // Default to Sec. 116
+            IncomeCategory::PassiveIncome => "PT080", // Bank/financial intermediary rate
+            IncomeCategory::CapitalGains => "PT140",  // Stock transactions
+            IncomeCategory::Other(_) => "PT010",      // Default to Sec. 116
             // These categories don't typically map to percentage tax forms,
             // but we provide a sensible default rather than failing.
             IncomeCategory::Compensation => "PT010",
@@ -111,9 +112,7 @@ impl Mapper2551Q {
     }
 
     /// Creates Schedule 1 rows from the payload's income sources.
-    fn build_schedule_rows(
-        sources: &[IncomeSource],
-    ) -> Result<Vec<Schedule1Row>, MapperError> {
+    fn build_schedule_rows(sources: &[IncomeSource]) -> Result<Vec<Schedule1Row>, MapperError> {
         if sources.is_empty() {
             // Default to an empty PT010 row so the draft is valid
             return Ok(vec![Schedule1Row::default_pt010()]);
@@ -166,9 +165,7 @@ impl FormMapper for Mapper2551Q {
 
         // Derive period
         let year = payload.taxable_year();
-        let quarter = payload
-            .quarter()
-            .ok_or(MapperError::InvalidPeriod)?;
+        let quarter = payload.quarter().ok_or(MapperError::InvalidPeriod)?;
 
         // Create draft from profile (pre-fills RDO, name, address, etc.)
         let mut draft = Form2551QDraft::new_from_profile(profile, year, quarter);
@@ -353,7 +350,10 @@ mod tests {
 
         let result = mapper.map(&payload, &profile);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), MapperError::TinMismatch { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            MapperError::TinMismatch { .. }
+        ));
     }
 
     #[test]

@@ -1,9 +1,9 @@
-use bir_core::forms::Form1701QDraft;
+use crate::components::form_engine::FormViewTrait;
+use crate::components::form_parts::{TaxpayerInfoProps, taxpayer_info_section};
 use bir_core::forms::FilingStatus;
+use bir_core::forms::Form1701QDraft;
 use gpui::*;
 use gpui_component::*;
-use crate::components::form_engine::FormViewTrait;
-use crate::components::form_parts::{taxpayer_info_section, TaxpayerInfoProps};
 
 pub enum Form1701QEvent {
     BackToDashboard,
@@ -66,7 +66,7 @@ impl Render for Form1701QView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let title_block = <Self as FormViewTrait>::render_header(self, cx);
         let status_pipeline = <Self as FormViewTrait>::render_status_pipeline(self, cx);
-        
+
         let background_info_content = taxpayer_info_section(
             TaxpayerInfoProps {
                 tin: &self.draft.tin,
@@ -90,22 +90,18 @@ impl Render for Form1701QView {
         let filing_period_content = div()
             .flex()
             .gap_4()
-            .child(
-                crate::components::form_parts::readonly_field(
-                    "Taxable Year",
-                    &self.draft.taxable_year,
-                    None,
-                    cx,
-                )
-            )
-            .child(
-                crate::components::form_parts::readonly_field(
-                    "Quarter",
-                    &self.draft.quarter,
-                    None,
-                    cx,
-                )
-            );
+            .child(crate::components::form_parts::readonly_field(
+                "Taxable Year",
+                &self.draft.taxable_year,
+                None,
+                cx,
+            ))
+            .child(crate::components::form_parts::readonly_field(
+                "Quarter",
+                &self.draft.quarter,
+                None,
+                cx,
+            ));
 
         let tax_computation_content = div()
             .flex()
@@ -127,7 +123,7 @@ impl Render for Form1701QView {
                         self.draft.total_amount_payable,
                         true,
                         cx,
-                    ))
+                    )),
             );
 
         div()
@@ -146,7 +142,7 @@ impl Render for Form1701QView {
                     .bg(cx.theme().secondary)
                     .border_b_1()
                     .border_color(cx.theme().border)
-                    .child(status_pipeline)
+                    .child(status_pipeline),
             )
             .child(
                 div()
@@ -200,8 +196,8 @@ impl Render for Form1701QView {
                                 }),
                                 tax_computation_content.into_any_element(),
                                 cx,
-                            ))
-                    )
+                            )),
+                    ),
             )
             .child(
                 div()
@@ -218,8 +214,8 @@ impl Render for Form1701QView {
                             .label("← Back")
                             .on_click(cx.listener(|_, _, _, cx| {
                                 cx.emit(Form1701QEvent::BackToDashboard);
-                            }))
-                    )
+                            })),
+                    ),
             )
     }
 }

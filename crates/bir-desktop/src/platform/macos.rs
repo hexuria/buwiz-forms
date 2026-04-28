@@ -61,17 +61,17 @@ import PDFKit
 func printPDF(path: String) {
     let url = URL(fileURLWithPath: path)
     guard let pdfDoc = PDFDocument(url: url) else { exit(1) }
-    
+
     let printInfo = NSPrintInfo.shared
     printInfo.isHorizontallyCentered = true
     printInfo.isVerticallyCentered = true
-    
+
     let printOp = pdfDoc.printOperation(for: printInfo, scalingMode: .pageScaleDownToFit, autoRotate: true)
-    
+
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)
     app.activate(ignoringOtherApps: true)
-    
+
     printOp?.showsPrintPanel = true
     printOp?.showsProgressPanel = true
     printOp?.run()

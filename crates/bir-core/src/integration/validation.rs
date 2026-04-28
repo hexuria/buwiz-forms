@@ -53,7 +53,8 @@ pub fn validate_payload(payload: &UniversalTaxPayload) -> Vec<PayloadValidationE
 
     // Period must not span more than 1 year
     let year_diff = payload.period_end.year() - payload.period_start.year();
-    if year_diff > 1 || (year_diff == 1 && payload.period_end.month() > payload.period_start.month())
+    if year_diff > 1
+        || (year_diff == 1 && payload.period_end.month() > payload.period_start.month())
     {
         errors.push(PayloadValidationError::new(
             "period_end",
@@ -78,12 +79,13 @@ pub fn validate_payload(payload: &UniversalTaxPayload) -> Vec<PayloadValidationE
             ));
         }
         if let Some(rate) = source.tax_rate_override
-            && (!(0.0..=1.0).contains(&rate)) {
-                errors.push(PayloadValidationError::new(
-                    format!("income_sources[{i}].tax_rate_override"),
-                    "Tax rate override must be between 0.0 and 1.0",
-                ));
-            }
+            && (!(0.0..=1.0).contains(&rate))
+        {
+            errors.push(PayloadValidationError::new(
+                format!("income_sources[{i}].tax_rate_override"),
+                "Tax rate override must be between 0.0 and 1.0",
+            ));
+        }
     }
 
     if payload.creditable_withholdings < 0.0 {
@@ -111,7 +113,7 @@ pub fn validate_form_applicability(
             return Some(PayloadValidationError::new(
                 "target_form",
                 format!("Unknown form code: {form_code}"),
-            ))
+            ));
         }
     };
 
@@ -242,7 +244,11 @@ mod tests {
         let mut payload = valid_payload();
         payload.tin = "01055805400A".to_string();
         let errors = validate_payload(&payload);
-        assert!(errors.iter().any(|e| e.field == "tin" && e.message.contains("digits")));
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.field == "tin" && e.message.contains("digits"))
+        );
     }
 
     #[test]
@@ -287,7 +293,12 @@ mod tests {
         let profile = TaxpayerProfile {
             id: Some(1),
             full_name: "Test".into(),
-            tin: Tin { segment1: "010".into(), segment2: "558".into(), segment3: "054".into(), branch: "000".into() },
+            tin: Tin {
+                segment1: "010".into(),
+                segment2: "558".into(),
+                segment3: "054".into(),
+                branch: "000".into(),
+            },
             rdo_code: "039".into(),
             line_of_business: "Employment".into(),
             registered_address: "QC".into(),
@@ -330,7 +341,12 @@ mod tests {
         let profile = TaxpayerProfile {
             id: Some(1),
             full_name: "Test".into(),
-            tin: Tin { segment1: "010".into(), segment2: "558".into(), segment3: "054".into(), branch: "000".into() },
+            tin: Tin {
+                segment1: "010".into(),
+                segment2: "558".into(),
+                segment3: "054".into(),
+                branch: "000".into(),
+            },
             rdo_code: "039".into(),
             line_of_business: "Consulting".into(),
             registered_address: "QC".into(),

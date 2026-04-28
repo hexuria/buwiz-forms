@@ -2,7 +2,7 @@
 
 use rusqlite::params;
 
-use super::{parse_2551q_period, Database, DbError, SubmissionReceipt};
+use super::{Database, DbError, SubmissionReceipt, parse_2551q_period};
 use crate::forms::form_2551q::FilingStatus;
 use crate::receipt::{BirReceiptConfirmation, split_bir_filename};
 
@@ -19,11 +19,11 @@ impl Database {
 
         if let Some(existing) = self.get_submission_receipt_by_filename(&receipt.filename)?
             && existing.received_date == received_date_str
-                && existing.received_time == received_time_str
-            {
-                // It's the exact same receipt we already processed. Return false for is_new.
-                return Ok((existing, false));
-            }
+            && existing.received_time == received_time_str
+        {
+            // It's the exact same receipt we already processed. Return false for is_new.
+            return Ok((existing, false));
+        }
 
         self.conn.execute(
             "INSERT INTO submission_receipts
@@ -135,24 +135,27 @@ impl Database {
         }
 
         if let Some(submitted_at) = &draft.submitted_at
-            && let Ok(submitted_dt) = chrono::DateTime::parse_from_rfc3339(submitted_at) {
-                let date_str = format!("{}T{}", receipt.received_date, receipt.received_time);
-                if let Ok(receipt_naive) =
-                    chrono::NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%dT%H:%M:%S")
-                    && let Some(offset) = chrono::FixedOffset::east_opt(8 * 3600) {
-                        use chrono::TimeZone;
-                        if let chrono::LocalResult::Single(receipt_dt) =
-                            offset.from_local_datetime(&receipt_naive)
-                            && receipt_dt + chrono::Duration::minutes(5) < submitted_dt {
-                                tracing::info!(
-                                    "Ignoring old receipt {} for draft submitted at {}",
-                                    receipt.filename,
-                                    submitted_dt
-                                );
-                                return Ok(());
-                            }
-                    }
+            && let Ok(submitted_dt) = chrono::DateTime::parse_from_rfc3339(submitted_at)
+        {
+            let date_str = format!("{}T{}", receipt.received_date, receipt.received_time);
+            if let Ok(receipt_naive) =
+                chrono::NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%dT%H:%M:%S")
+                && let Some(offset) = chrono::FixedOffset::east_opt(8 * 3600)
+            {
+                use chrono::TimeZone;
+                if let chrono::LocalResult::Single(receipt_dt) =
+                    offset.from_local_datetime(&receipt_naive)
+                    && receipt_dt + chrono::Duration::minutes(5) < submitted_dt
+                {
+                    tracing::info!(
+                        "Ignoring old receipt {} for draft submitted at {}",
+                        receipt.filename,
+                        submitted_dt
+                    );
+                    return Ok(());
+                }
             }
+        }
 
         draft.transition_to_confirmed(
             format!("{}T{}", receipt.received_date, receipt.received_time),

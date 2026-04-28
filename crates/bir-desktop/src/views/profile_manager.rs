@@ -520,16 +520,17 @@ impl ProfileManagerView {
         if self.editing_id.is_none() {
             let tin_str = profile.tin.full();
             if let Ok(db) = self.db.lock()
-                && let Ok(Some(_)) = db.get_profile(&tin_str) {
-                    self.tin_duplicate_error = Some(format!(
-                        "A profile with TIN {} already exists.",
-                        profile.tin.formatted()
-                    ));
-                    self.errors.push(ValidationError::new(
-                        "tin",
-                        "This TIN is already registered to another profile.",
-                    ));
-                }
+                && let Ok(Some(_)) = db.get_profile(&tin_str)
+            {
+                self.tin_duplicate_error = Some(format!(
+                    "A profile with TIN {} already exists.",
+                    profile.tin.formatted()
+                ));
+                self.errors.push(ValidationError::new(
+                    "tin",
+                    "This TIN is already registered to another profile.",
+                ));
+            }
         }
 
         if !self
@@ -624,8 +625,6 @@ impl ProfileManagerView {
                 .background_executor()
                 .spawn(async move {
                     if let Ok(db) = db_arc.lock() {
-                        
-
                         db.save_profile(profile).map_err(|e| e.to_string())
                     } else {
                         Err("Database lock is poisoned".to_string())
@@ -1280,7 +1279,7 @@ impl Render for ProfileManagerView {
                                                                                             let _ = tx.send(res);
                                                                                         });
                                                                                         let result = rx.await.unwrap_or_else(|_| Err(anyhow::anyhow!("OAuth thread failed")));
-                                                                                        
+
                                                                                         let _ = this.update(cx, |this, cx| {
                                                                                             match result {
                                                                                                 Ok((email, access_token, refresh_token)) => {
@@ -1289,7 +1288,7 @@ impl Render for ProfileManagerView {
                                                                                                     this.stored_oauth_access_token = Some(access_token.clone());
                                                                                                     this.stored_oauth_refresh_token = Some(refresh_token.clone());
                                                                                                     this.connection_test_message = Some((true, format!("Google account connected successfully for {}.", email)));
-                                                                                                    
+
                                                                                                     // If profile is already saved, persist tokens to DB immediately
                                                                                                     if let Some(id) = editing_id
                                                                                                         && let Ok(db) = this.db.lock()
@@ -1342,24 +1341,24 @@ impl Render for ProfileManagerView {
                                                                     .outline()
                                                                     .on_click(cx.listener(|this, _, _, cx| {
                                                                         let profile = this.current_profile(cx);
-                                                                        
+
                                                                         if profile.id.is_none() {
                                                                             this.connection_test_message = Some((false, "Please save the profile first.".to_string()));
                                                                             cx.notify();
                                                                             return;
                                                                         }
-                                                                        
+
                                                                         let typed_password = this.imap_password_input.read(cx).value().to_string().replace(' ', "");
-                                                                        
+
                                                                         // Test with typed password or stored password
                                                                         let mut test_profile = profile.clone();
                                                                         if !typed_password.is_empty() {
                                                                             test_profile.imap_app_password = Some(typed_password.clone());
                                                                         }
-                                                                        
+
                                                                         this.connection_test_message = Some((true, "Testing connection...".to_string()));
                                                                         cx.notify();
-                                                                        
+
                                                                         cx.spawn(async move |this, cx| {
                                                                             let (tx, rx) = tokio::sync::oneshot::channel();
                                                                             std::thread::spawn(move || {
@@ -1367,7 +1366,7 @@ impl Render for ProfileManagerView {
                                                                                 let _ = tx.send(res);
                                                                             });
                                                                             let result = rx.await.unwrap_or_else(|_| Err(anyhow::anyhow!("Test connection thread failed")));
-                                                                            
+
                                                                             let _ = this.update(cx, |this, cx| {
                                                                                 match result {
                                                                                     Ok(new_access_token) => {
@@ -1378,7 +1377,7 @@ impl Render for ProfileManagerView {
                                                                                         if matches!(this.email_auth_method, EmailAuthMethod::AppPassword) {
                                                                                             this.oauth_connected = false;
                                                                                         }
-                                                                                        
+
                                                                                         // If token refreshed, save it
                                                                                         if let Some(token) = new_access_token {
                                                                                             this.stored_oauth_access_token = Some(token.clone());
@@ -1551,16 +1550,16 @@ impl Render for ProfileManagerView {
                                                         .pick_folder()
                                                         .await
                                                     else { return; };
-                                                    
+
                                                     let target_dir = target_dir_handle.path().to_path_buf();
-                                                    
+
                                                     let res = this.update(cx, |this, _cx| {
                                                         let timestamp = std::time::SystemTime::now()
                                                             .duration_since(std::time::UNIX_EPOCH)
                                                             .unwrap()
                                                             .as_secs();
                                                         let backup_path = target_dir.join(format!("BIR_Profile_{}_{}.zip", tin, timestamp));
-                                                        
+
                                                         if let Ok(db) = this.db.lock() {
                                                             match bir_core::export::export_profile_data(&db, &tin, &backup_path) {
                                                                 Ok(_) => Ok(backup_path),
@@ -1570,7 +1569,7 @@ impl Render for ProfileManagerView {
                                                             Err("Failed to acquire database lock".to_string())
                                                         }
                                                     });
-                                                    
+
                                                     match res {
                                                         Ok(Ok(path)) => {
                                                             rfd::AsyncMessageDialog::new()

@@ -31,42 +31,47 @@ fn humanize_cron(expr: &str) -> String {
         return "Every minute".to_string();
     }
     if let Some(stripped) = expr.strip_prefix("*/")
-        && stripped.ends_with(" * * * * *") {
-            let num = stripped.trim_end_matches(" * * * * *");
-            return format!("Every {} seconds", num);
-        }
+        && stripped.ends_with(" * * * * *")
+    {
+        let num = stripped.trim_end_matches(" * * * * *");
+        return format!("Every {} seconds", num);
+    }
     if let Some(stripped) = expr.strip_prefix("0 */")
-        && stripped.ends_with(" * * * *") {
-            let num = stripped.trim_end_matches(" * * * *");
-            if num == "1" {
-                return "Every minute".to_string();
-            }
-            return format!("Every {} minutes", num);
+        && stripped.ends_with(" * * * *")
+    {
+        let num = stripped.trim_end_matches(" * * * *");
+        if num == "1" {
+            return "Every minute".to_string();
         }
+        return format!("Every {} minutes", num);
+    }
     if let Some(stripped) = expr.strip_prefix("0 0 */")
-        && stripped.ends_with(" * * *") {
-            let num = stripped.trim_end_matches(" * * *");
-            if num == "1" {
-                return "Every hour".to_string();
-            }
-            return format!("Every {} hours", num);
+        && stripped.ends_with(" * * *")
+    {
+        let num = stripped.trim_end_matches(" * * *");
+        if num == "1" {
+            return "Every hour".to_string();
         }
+        return format!("Every {} hours", num);
+    }
     if let Some(stripped) = expr.strip_prefix("0 0 0 */")
-        && stripped.ends_with(" * *") {
-            let num = stripped.trim_end_matches(" * *");
-            if num == "1" {
-                return "Everyday".to_string();
-            }
-            return format!("Every {} days", num);
+        && stripped.ends_with(" * *")
+    {
+        let num = stripped.trim_end_matches(" * *");
+        if num == "1" {
+            return "Everyday".to_string();
         }
+        return format!("Every {} days", num);
+    }
     if let Some(stripped) = expr.strip_prefix("0 0 0 1 */")
-        && stripped.ends_with(" *") {
-            let num = stripped.trim_end_matches(" *");
-            if num == "1" {
-                return "Every month".to_string();
-            }
-            return format!("Every {} months", num);
+        && stripped.ends_with(" *")
+    {
+        let num = stripped.trim_end_matches(" *");
+        if num == "1" {
+            return "Every month".to_string();
         }
+        return format!("Every {} months", num);
+    }
     // Fallback
     format!("Frequency: {}", expr)
 }
@@ -456,10 +461,11 @@ impl CronTasksView {
     fn archive_job(&mut self, id: i64, cx: &mut Context<'_, Self>) {
         if let Ok(db) = self.db.lock()
             && let Ok(jobs) = db.list_jobs()
-                && let Some(mut job) = jobs.into_iter().find(|j| j.id == Some(id)) {
-                    job.status = "Archived".to_string();
-                    let _ = db.save_job(job);
-                }
+            && let Some(mut job) = jobs.into_iter().find(|j| j.id == Some(id))
+        {
+            job.status = "Archived".to_string();
+            let _ = db.save_job(job);
+        }
         self.load_settings(cx);
     }
 
@@ -486,104 +492,99 @@ impl CronTasksView {
 
         // For email polling jobs, execute inline instead of waiting for daemon
         if let Some(ref cmd) = job.command
-            && cmd.starts_with("bir_poll_email ") {
-                let email = cmd.trim_start_matches("bir_poll_email ").trim().to_string();
-                let db = self.db.clone();
-                let job_id = db_id;
+            && cmd.starts_with("bir_poll_email ")
+        {
+            let email = cmd.trim_start_matches("bir_poll_email ").trim().to_string();
+            let db = self.db.clone();
+            let job_id = db_id;
 
-                // Mark as Running
-                if let Ok(db_guard) = db.lock()
-                    && let Ok(jobs) = db_guard.list_jobs()
-                        && let Some(mut j) = jobs.into_iter().find(|j| j.id == Some(job_id)) {
-                            j.status = "Running".to_string();
+            // Mark as Running
+            if let Ok(db_guard) = db.lock()
+                && let Ok(jobs) = db_guard.list_jobs()
+                && let Some(mut j) = jobs.into_iter().find(|j| j.id == Some(job_id))
+            {
+                j.status = "Running".to_string();
+                let _ = db_guard.save_job(j);
+            }
+            self.load_settings(cx);
+
+            cx.spawn(async move |this, cx| {
+                let _result = cx
+                    .background_executor()
+                    .spawn(async move {
+                        let (poll_success, still_pending, err_msg) =
+                            bir_core::email::fetch_and_process_emails_for_address(
+                                &email,
+                                db.clone(),
+                            );
+
+                        // Update the job in DB
+                        if let Ok(db_guard) = db.lock()
+                            && let Ok(jobs) = db_guard.list_jobs()
+                            && let Some(mut j) = jobs.into_iter().find(|j| j.id == Some(job_id))
+                        {
+                            j.last_run_at = Some(Utc::now().to_rfc3339());
+                            if poll_success {
+                                j.output_log =
+                                    Some("Email polling completed successfully.".to_string());
+                                j.retries = 0;
+                                if !still_pending {
+                                    j.status = "Archived".to_string();
+                                } else {
+                                    j.status = "Queued".to_string();
+                                    // Set next run from cron
+                                    if let Some(ref expr) = j.cron_expr
+                                        && let Ok(schedule) = std::str::FromStr::from_str(expr)
+                                    {
+                                        let schedule: cron::Schedule = schedule;
+                                        if let Some(next) = schedule.upcoming(chrono::Utc).next() {
+                                            j.next_run_at = Some(next.to_rfc3339());
+                                        }
+                                    }
+                                }
+                            } else {
+                                j.output_log = Some(err_msg.unwrap_or_else(|| {
+                                    "Email polling failed (unknown).".to_string()
+                                }));
+                                j.retries += 1;
+                                j.status = "Queued".to_string();
+                                if let Some(ref expr) = j.cron_expr
+                                    && let Ok(schedule) = std::str::FromStr::from_str(expr)
+                                {
+                                    let schedule: cron::Schedule = schedule;
+                                    if let Some(next) = schedule.upcoming(chrono::Utc).next() {
+                                        j.next_run_at = Some(next.to_rfc3339());
+                                    }
+                                }
+                            }
                             let _ = db_guard.save_job(j);
                         }
-                self.load_settings(cx);
+                        poll_success
+                    })
+                    .await;
 
-                cx.spawn(async move |this, cx| {
-                    let _result = cx
-                        .background_executor()
-                        .spawn(async move {
-                            let (poll_success, still_pending, err_msg) =
-                                bir_core::email::fetch_and_process_emails_for_address(
-                                    &email,
-                                    db.clone(),
-                                );
-
-                            // Update the job in DB
-                            if let Ok(db_guard) = db.lock()
-                                && let Ok(jobs) = db_guard.list_jobs()
-                                    && let Some(mut j) =
-                                        jobs.into_iter().find(|j| j.id == Some(job_id))
-                                    {
-                                        j.last_run_at = Some(Utc::now().to_rfc3339());
-                                        if poll_success {
-                                            j.output_log = Some(
-                                                "Email polling completed successfully.".to_string(),
-                                            );
-                                            j.retries = 0;
-                                            if !still_pending {
-                                                j.status = "Archived".to_string();
-                                            } else {
-                                                j.status = "Queued".to_string();
-                                                // Set next run from cron
-                                                if let Some(ref expr) = j.cron_expr
-                                                    && let Ok(schedule) =
-                                                        std::str::FromStr::from_str(expr)
-                                                    {
-                                                        let schedule: cron::Schedule = schedule;
-                                                        if let Some(next) =
-                                                            schedule.upcoming(chrono::Utc).next()
-                                                        {
-                                                            j.next_run_at = Some(next.to_rfc3339());
-                                                        }
-                                                    }
-                                            }
-                                        } else {
-                                            j.output_log = Some(err_msg.unwrap_or_else(|| {
-                                                "Email polling failed (unknown).".to_string()
-                                            }));
-                                            j.retries += 1;
-                                            j.status = "Queued".to_string();
-                                            if let Some(ref expr) = j.cron_expr
-                                                && let Ok(schedule) =
-                                                    std::str::FromStr::from_str(expr)
-                                                {
-                                                    let schedule: cron::Schedule = schedule;
-                                                    if let Some(next) =
-                                                        schedule.upcoming(chrono::Utc).next()
-                                                    {
-                                                        j.next_run_at = Some(next.to_rfc3339());
-                                                    }
-                                                }
-                                        }
-                                        let _ = db_guard.save_job(j);
-                                    }
-                            poll_success
-                        })
-                        .await;
-
-                    cx.update(|cx| {
-                        if let Some(view) = this.upgrade() {
-                            view.update(cx, |this, cx| {
-                                this.load_settings(cx);
-                            });
-                        }
-                    });
-                })
-                .detach();
-                return;
-            }
+                cx.update(|cx| {
+                    if let Some(view) = this.upgrade() {
+                        view.update(cx, |this, cx| {
+                            this.load_settings(cx);
+                        });
+                    }
+                });
+            })
+            .detach();
+            return;
+        }
 
         // Fallback: for non-email jobs, just mark for daemon pickup
         if let Ok(db) = self.db.lock()
             && let Ok(jobs) = db.list_jobs()
-                && let Some(mut job) = jobs.into_iter().find(|j| j.id == Some(db_id)) {
-                    job.next_run_at = Some(Utc::now().to_rfc3339());
-                    job.status = "Queued".to_string();
-                    job.retries = 0;
-                    let _ = db.save_job(job);
-                }
+            && let Some(mut job) = jobs.into_iter().find(|j| j.id == Some(db_id))
+        {
+            job.next_run_at = Some(Utc::now().to_rfc3339());
+            job.status = "Queued".to_string();
+            job.retries = 0;
+            let _ = db.save_job(job);
+        }
         self.load_settings(cx);
     }
 
@@ -594,7 +595,10 @@ impl CronTasksView {
             && sum.form_code == "2551Q"
             && let Ok(Some(mut draft)) =
                 db.get_2551q_draft(&sum.tin, sum.taxable_year, sum.quarter.unwrap_or(0))
-            && !matches!(draft.status, bir_core::forms::form_2551q::FilingStatus::Paid)
+            && !matches!(
+                draft.status,
+                bir_core::forms::form_2551q::FilingStatus::Paid
+            )
         {
             draft.revert_to_draft();
             let _ = db.save_2551q_draft(&draft);
@@ -630,10 +634,7 @@ impl Render for CronTasksView {
             })
             .collect();
 
-        let total_pages = std::cmp::max(
-            1,
-            filtered_jobs.len().div_ceil(self.items_per_page),
-        );
+        let total_pages = std::cmp::max(1, filtered_jobs.len().div_ceil(self.items_per_page));
         let start = (self.current_page - 1) * self.items_per_page;
         let mut end = start + self.items_per_page;
         if end > filtered_jobs.len() {

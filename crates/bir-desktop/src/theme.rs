@@ -30,7 +30,9 @@ pub fn resolve_theme_mode(preference: AppThemeMode, window: &Window) -> ThemeMod
         AppThemeMode::Light => ThemeMode::Light,
         AppThemeMode::Dark => ThemeMode::Dark,
         AppThemeMode::System => match window.appearance() {
-            gpui::WindowAppearance::Light | gpui::WindowAppearance::VibrantLight => ThemeMode::Light,
+            gpui::WindowAppearance::Light | gpui::WindowAppearance::VibrantLight => {
+                ThemeMode::Light
+            }
             gpui::WindowAppearance::Dark | gpui::WindowAppearance::VibrantDark => ThemeMode::Dark,
         },
     }
