@@ -4,6 +4,10 @@
 
 .DEFAULT_GOAL := help
 
+# Load .env file automatically if it exists, exporting all variables
+-include .env
+export
+
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 APP_NAME        := eBIRForms
