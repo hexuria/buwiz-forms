@@ -15,10 +15,10 @@ pub fn cycle_theme(
     cx: &mut App,
 ) {
     *preference = preference.next();
-    if let Ok(db) = db.lock() {
-        if let Ok(val) = serde_json::to_string(preference) {
-            let _ = db.set_setting("theme_preference", &val);
-        }
+    if let Ok(db) = db.lock()
+        && let Ok(val) = serde_json::to_string(preference)
+    {
+        let _ = db.set_setting("theme_preference", &val);
     }
     let target_mode = resolve_theme_mode(*preference, window);
     Theme::change(target_mode, Some(window), cx);

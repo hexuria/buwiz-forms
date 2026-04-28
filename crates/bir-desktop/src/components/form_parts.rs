@@ -246,6 +246,7 @@ pub fn penalty_summary_section<V: 'static>(
         )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn form_accordion<V: 'static, F>(
     id: &str,
     label: &str,

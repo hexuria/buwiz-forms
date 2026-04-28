@@ -590,16 +590,15 @@ impl CronTasksView {
     fn cancel_system_job(&mut self, db_id: i64, cx: &mut Context<'_, Self>) {
         if let Ok(db) = self.db.lock()
             && let Ok(summaries) = db.list_all_queued_submissions()
-                && let Some(sum) = summaries.into_iter().find(|s| s.id == db_id)
-                    && sum.form_code == "2551Q"
-                        && let Ok(Some(mut draft)) =
-                            db.get_2551q_draft(&sum.tin, sum.taxable_year, sum.quarter.unwrap_or(0))
-                        {
-                            if !matches!(draft.status, bir_core::forms::form_2551q::FilingStatus::Paid) {
-                                draft.revert_to_draft();
-                                let _ = db.save_2551q_draft(&draft);
-                            }
-                        }
+            && let Some(sum) = summaries.into_iter().find(|s| s.id == db_id)
+            && sum.form_code == "2551Q"
+            && let Ok(Some(mut draft)) =
+                db.get_2551q_draft(&sum.tin, sum.taxable_year, sum.quarter.unwrap_or(0))
+            && !matches!(draft.status, bir_core::forms::form_2551q::FilingStatus::Paid)
+        {
+            draft.revert_to_draft();
+            let _ = db.save_2551q_draft(&draft);
+        }
         self.load_settings(cx);
     }
 }
