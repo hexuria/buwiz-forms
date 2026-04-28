@@ -151,15 +151,28 @@ package-linux: build-linux ## Create Linux .deb package
 # ── Signing (macOS) ──────────────────────────────────────────────────────────
 
 sign-mac: ## Codesign + notarize (requires APPLE_IDENTITY, APPLE_ID, APPLE_APP_PASSWORD, APPLE_TEAM_ID env vars)
-	@if [ -z "$(APPLE_IDENTITY)" ]; then \
-		echo "❌ Set APPLE_IDENTITY env var (e.g. 'Developer ID Application: Your Name (TEAMID)')"; \
+	@if [ -z "$(APPLE_IDENTITY)" ] || [ -z "$(APPLE_TEAM_ID)" ]; then \
+		echo "❌ Set APPLE_IDENTITY and APPLE_TEAM_ID env vars"; \
 		exit 1; \
 	fi
-	@echo "Signing $(MAC_APP)..."
-	codesign --deep --force --options runtime \
+	@echo "Preparing entitlements..."
+	@sed "s/TEAM_ID_PLACEHOLDER/$(APPLE_TEAM_ID)/g" entitlements.plist > app.entitlements.tmp
+	@sed "s/TEAM_ID_PLACEHOLDER/$(APPLE_TEAM_ID)/g" daemon.entitlements.plist > daemon.entitlements.tmp
+	
+	@echo "Signing daemon (inside-out)..."
+	codesign --force --options runtime \
 		--sign "$(APPLE_IDENTITY)" \
-		--entitlements entitlements.plist \
+		--entitlements daemon.entitlements.tmp \
+		--identifier "$(BUNDLE_ID).daemon" \
+		"$(MAC_APP)/Contents/MacOS/bir-daemon"
+		
+	@echo "Signing $(MAC_APP)..."
+	codesign --force --options runtime \
+		--sign "$(APPLE_IDENTITY)" \
+		--entitlements app.entitlements.tmp \
 		"$(MAC_APP)"
+		
+	@rm -f app.entitlements.tmp daemon.entitlements.tmp
 	@echo "Notarizing..."
 	xcrun notarytool submit "$(RELEASE_DIR)/$(APP_NAME)-macOS-$(VERSION).dmg" \
 		--apple-id "$(APPLE_ID)" \

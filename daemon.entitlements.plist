@@ -10,24 +10,20 @@
     <key>com.apple.security.cs.disable-library-validation</key>
     <false/>
 
-    <!-- Network access (IMAP, FTP, HTTP) -->
+    <!-- Network access (IMAP) -->
     <key>com.apple.security.network.client</key>
     <true/>
 
-    <!-- Keychain access for encrypted database password -->
+    <!-- Keychain access to read the encrypted database password created by main app -->
     <key>com.apple.security.keychain-access-groups</key>
     <array>
         <string>TEAM_ID_PLACEHOLDER.com.goldcoders.bir</string>
     </array>
 
-    <!-- App Groups for shared container with daemon -->
+    <!-- App Groups for shared container with main app -->
     <key>com.apple.security.application-groups</key>
     <array>
         <string>TEAM_ID_PLACEHOLDER.com.goldcoders.bir.group</string>
     </array>
-
-    <!-- File access via user-initiated dialogs (rfd) -->
-    <key>com.apple.security.files.user-selected.read-write</key>
-    <true/>
 </dict>
 </plist>
