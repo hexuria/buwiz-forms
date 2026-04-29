@@ -32,6 +32,8 @@ pub struct GlobalDashboardView {
     actionable_forms: Vec<(String, FormDraftSummary)>,
     is_fetching_news: bool,
     compliance_calendar: Entity<crate::components::compliance_calendar::ComplianceCalendar>,
+    pub hide_tax_profiles: bool,
+    pub active_session_tin: Option<String>,
 }
 
 impl EventEmitter<GlobalDashboardEvent> for GlobalDashboardView {}
@@ -97,6 +99,8 @@ impl GlobalDashboardView {
             actionable_forms,
             is_fetching_news: false,
             compliance_calendar,
+            hide_tax_profiles: false,
+            active_session_tin: None,
         };
 
         let bus = cx.global::<crate::events::GlobalEventBus>().0.clone();
@@ -235,6 +239,9 @@ impl GlobalDashboardView {
             let current_year = chrono::Local::now().date_naive().year() as u16;
             let mut actionable = Vec::new();
             for p in &self.profiles {
+                if self.hide_tax_profiles && self.active_session_tin.as_ref() != Some(&p.tin.full()) {
+                    continue;
+                }
                 if let Ok(summaries) = db_lock.list_draft_summaries(&p.tin.full(), current_year) {
                     for sum in summaries {
                         actionable.push((p.full_name.clone(), sum));

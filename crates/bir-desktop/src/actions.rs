@@ -132,9 +132,6 @@ impl AppState {
                         if let Some(profile) =
                             this.profiles.iter().find(|p| p.tin.full() == *tin).cloned()
                         {
-                            if this.hide_tax_profiles {
-                                this.active_session_tin = Some(tin.clone());
-                            }
                             this.select_profile(
                                 profile,
                                 ProfileTargetAction::ViewDashboard,
@@ -173,9 +170,6 @@ impl AppState {
                         if let Some(profile) =
                             this.profiles.iter().find(|p| p.tin.full() == *tin).cloned()
                         {
-                            if this.hide_tax_profiles {
-                                this.active_session_tin = Some(tin.clone());
-                            }
                             this.select_profile(
                                 profile,
                                 ProfileTargetAction::EditProfile,

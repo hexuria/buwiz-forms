@@ -862,7 +862,17 @@ impl Render for DashboardView {
                                             }
                                         )),
                                 ),
-                        ),
+                            )
+                            .child(
+                                gpui_component::button::Button::new("logout_profile")
+                                    .label("Lock Session")
+                                    .on_click({
+                                        let tin = profile.tin.full();
+                                        cx.listener(move |_this, _ev, _window, cx| {
+                                            cx.emit(DashboardEvent::LogoutProfile(tin.clone()));
+                                        })
+                                    }),
+                            ),
                     )
                     .child(
                         div()
