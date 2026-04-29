@@ -606,3 +606,38 @@ The production `form_2551q_view.rs` (1,473 LOC) demonstrates the full integratio
 - [ ] **bir-core**: Create `forms/form_<code>_xml.rs` for BIR submission
 - [ ] **bir-print**: Add PDF rendering function
 - [ ] **Tests**: Add lifecycle integration test in `bir-core/tests/`
+
+---
+
+## Appendix — PDF Layout Editor
+
+The **PDF Layout Editor** is an internal tool to visually align form fields on top of the SVG backgrounds generated from official BIR PDFs.
+
+### How it works
+- **Single Combobox** — Click the combobox to see the list of available forms. Type to filter. Select one and it auto-loads instantly.
+- **Auto-loads first form** — If `formtypes/2551Qv2018/` exists, it's loaded on startup to avoid a blank canvas.
+- **Pagination** — Only shows when a form is loaded, displays `1 / 2` format, and respects the max page count.
+
+### How to add new form layouts
+
+Each form needs a directory under `formtypes/` with this structure:
+
+```
+formtypes/
+└── <FormID>/            # e.g. "1701Qv2023"
+    ├── formtype.json    # REQUIRED — field positions, coordinates, sizes
+    ├── metadata.json    # Optional — title, source URL, SHA
+    ├── template.typ     # Optional — Typst template for PDF generation
+    └── pages/
+        ├── page1.svg    # SVG background for page 1
+        └── page2.svg    # SVG background for page 2
+```
+
+The minimum requirement is the `formtype.json` file. The editor will auto-discover it.
+
+**To test the layout editor:**
+Run the application with the feature flag:
+```bash
+cargo run --features layout-editor
+```
+The combobox will automatically list your new form.
