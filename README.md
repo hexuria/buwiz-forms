@@ -78,34 +78,36 @@ sudo apt-get install -y \
    cd bir
    ```
 
-2. **Build and Run using Make**
-   The project is completely standardized via a `Makefile`. We rarely use raw `cargo` commands unless doing specific deep-dives.
+2. **Install `just` (Command Runner)**
+   The project is completely standardized via a `justfile` for cross-platform simplicity. You will need `just` to build, run, and package the app.
+   - **macOS:** `brew install just`
+   - **Windows:** `choco install just`
+   - **Linux / Cargo:** `cargo install just`
 
-   To see all available commands, run:
+3. **Build and Run**
+   To see all available commands, simply run:
    ```bash
-   make help
+   just
    ```
 
-   **To run the application (development mode):**
+   **To run the application locally (development mode):**
    ```bash
-   cargo run -p bir-desktop
+   just run
    ```
-   *(Note: The main entry points are `bir-desktop` for the UI and `bir-daemon` for background tasks).*
 
 ---
 
-## 🏗 Available Make Commands
+## 🏗 Available Commands
 
-- `make check`: Run `cargo check` across the entire workspace.
-- `make clippy`: Run strict linting.
-- `make test`: Run all test suites.
-- `make build-mac`: Build a release for your current macOS architecture.
-- `make build-mac-universal`: Build a Universal Binary (ARM64 + x86_64) for macOS.
-- `make build-win`: Build release for Windows.
-- `make build-linux`: Build release for Linux.
-- `make package-mac`: Package the `.app` bundle and generate a `.dmg`.
-- `make sign-mac`: Sign and notarize the macOS application for distribution.
-- `make clean`: Clean release artifacts and cargo cache.
+We follow a "less is better" philosophy. You only need to remember three core commands:
+
+- `just run` — Run the app locally for development.
+- `just install` — Automatically figure out your OS and build the installer package (macOS DMG, Windows Zip, Linux DEB/Tarball).
+- `just publish` — Auto-increment the patch version, tag, and push (triggers the release workflow in GitHub Actions).
+
+**Quality & Testing:**
+- `just check` — Run code formatting (`cargo fmt`), linting (`cargo clippy`), and type checking (`cargo check`) across the workspace.
+- `just test` — Run all unit and integration test suites.
 
 ---
 
