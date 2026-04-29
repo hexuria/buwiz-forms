@@ -10,8 +10,11 @@ RELEASE_DIR := "target/release-artifacts"
 MAC_APP := RELEASE_DIR + "/" + APP_NAME + ".app"
 VERSION := `sh ./scripts/version.sh`
 
+# Default task: format, lint, and type check
+default: check
+
 # Show available commands
-default:
+help:
     @just --list
 
 # Run the app locally for development
