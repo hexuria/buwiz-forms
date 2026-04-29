@@ -136,6 +136,16 @@ See [docs/adding-a-new-form.md](docs/adding-a-new-form.md) for the comprehensive
 
 ---
 
+## 🧠 Agent Skills
+
+This repository uses **Project-Local Skills** to automatically equip AI agents (like Antigravity or Gemini) with project-specific capabilities without requiring manual installation.
+
+- **Location:** All custom tools, scripts, and instructions are stored in the `.agent/skills/` directory within the repository (e.g., `.agent/skills/form-generator`).
+- **How It Works:** When you clone this repository on a new machine, the agent system will automatically discover the `.agent/skills/` folder at the root. Project-local skills take precedence over any global skills installed on your machine.
+- **Portability:** Because the skills are committed to version control, you don't need to run `npx skills add` or install anything globally. The agent will automatically recognize the `form-generator` skill (and any others) as soon as it interacts with this repository.
+
+---
+
 ## 📜 Development Notes
 
 - **Database Location:** 

@@ -138,11 +138,14 @@ mod tests {
         unsafe {
             std::env::set_var("HOME", "/Users/testuser");
         }
-        
+
         let path = data_dir();
         assert!(path.to_string_lossy().contains("group.dev.goldcoders.bir"));
-        assert!(path.to_string_lossy().contains("/Users/testuser/Library/Group Containers"));
-        
+        assert!(
+            path.to_string_lossy()
+                .contains("/Users/testuser/Library/Group Containers")
+        );
+
         // Restore
         unsafe {
             if let Some(h) = old_home {
@@ -155,11 +158,14 @@ mod tests {
 
     #[test]
     fn test_plist_generation() {
-        let dummy_path = std::path::PathBuf::from("/Applications/Test.app/Contents/MacOS/bir-daemon");
+        let dummy_path =
+            std::path::PathBuf::from("/Applications/Test.app/Contents/MacOS/bir-daemon");
         let plist = generate_plist(&dummy_path);
-        
+
         assert!(plist.contains("<string>com.bir.vault.daemon</string>"));
-        assert!(plist.contains("<string>/Applications/Test.app/Contents/MacOS/bir-daemon</string>"));
+        assert!(
+            plist.contains("<string>/Applications/Test.app/Contents/MacOS/bir-daemon</string>")
+        );
         assert!(plist.contains("<key>RunAtLoad</key>"));
         assert!(plist.contains("<key>KeepAlive</key>"));
     }
