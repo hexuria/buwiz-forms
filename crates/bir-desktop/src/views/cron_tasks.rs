@@ -211,7 +211,9 @@ impl CronTasksView {
         let weak_view = cx.entity().downgrade();
         cx.spawn(async move |_, cx| {
             loop {
-                cx.background_executor().timer(std::time::Duration::from_secs(60)).await;
+                cx.background_executor()
+                    .timer(std::time::Duration::from_secs(60))
+                    .await;
                 let result = cx.update(|cx| {
                     if let Some(view) = weak_view.upgrade() {
                         view.update(cx, |this, cx| {
@@ -222,7 +224,7 @@ impl CronTasksView {
                         false
                     }
                 });
-                
+
                 if result {
                     // updated successfully
                 } else {

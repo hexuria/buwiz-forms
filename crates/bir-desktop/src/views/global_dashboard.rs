@@ -239,7 +239,8 @@ impl GlobalDashboardView {
             let current_year = chrono::Local::now().date_naive().year() as u16;
             let mut actionable = Vec::new();
             for p in &self.profiles {
-                if self.hide_tax_profiles && self.active_session_tin.as_ref() != Some(&p.tin.full()) {
+                if self.hide_tax_profiles && self.active_session_tin.as_ref() != Some(&p.tin.full())
+                {
                     continue;
                 }
                 if let Ok(summaries) = db_lock.list_draft_summaries(&p.tin.full(), current_year) {

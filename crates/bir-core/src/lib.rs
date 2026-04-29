@@ -37,9 +37,9 @@ pub mod profile;
 pub mod receipt;
 pub mod reference;
 pub mod schema;
+pub mod time_utils;
 pub mod transport;
 pub mod validation;
-pub mod time_utils;
 
 // Re-export core types
 pub use bir_xml::{generate_bir_xml, parse_bir_xml};
@@ -62,5 +62,5 @@ pub use naming::{Tin, iaf_filename, savefile_name};
 pub use official_import::{OfficialSavefile, import_and_submit_savefile, parse_period_code};
 pub use profile::{EmailAuthMethod, TaxClassification, TaxpayerProfile};
 pub use receipt::{BirReceiptConfirmation, parse_bir_receipt_email, split_bir_filename};
+pub use time_utils::format_next_run;
 pub use validation::{ValidationError, validate_ph_phone, validate_profile, validate_zip};
-pub use time_utils::{format_next_run};

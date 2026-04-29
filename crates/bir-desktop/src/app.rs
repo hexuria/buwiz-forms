@@ -63,7 +63,8 @@ pub struct AppState {
     pub(crate) cron_tasks_view: Entity<CronTasksView>,
     pub(crate) import_export_view: Entity<ImportExportView>,
     pub(crate) settings_view: Entity<SettingsView>,
-    pub(crate) pdf_layout_editor_view: Entity<crate::views::pdf_layout_editor_view::PdfLayoutEditorView>,
+    pub(crate) pdf_layout_editor_view:
+        Entity<crate::views::pdf_layout_editor_view::PdfLayoutEditorView>,
     pub(crate) form_2551q_view: Option<Entity<Form2551QView>>,
     pub(crate) pending_form_draft: Option<Form2551QDraft>,
     pub(crate) form_1701q_view: Option<Entity<Form1701QView>>,
@@ -346,7 +347,8 @@ impl AppState {
         let db_clone_settings = Arc::clone(&db);
         let settings_view = cx.new(|cx| SettingsView::new(db_clone_settings, window, cx));
 
-        let pdf_layout_editor_view = cx.new(|cx| crate::views::pdf_layout_editor_view::PdfLayoutEditorView::new(window, cx));
+        let pdf_layout_editor_view =
+            cx.new(|cx| crate::views::pdf_layout_editor_view::PdfLayoutEditorView::new(window, cx));
         cx.subscribe(
             &settings_view,
             |this: &mut Self, _entity, event: &SettingsEvent, cx| match event {
