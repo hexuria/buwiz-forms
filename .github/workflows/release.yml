@@ -57,24 +57,10 @@ jobs:
           cp -R assets "$APP/Contents/Resources/"
           cp -R formtypes "$APP/Contents/Resources/"
 
-          VERSION="${GITHUB_REF_NAME#v}"
-          cat > "$APP/Contents/Info.plist" <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>CFBundleExecutable</key><string>bir</string>
-            <key>CFBundleIdentifier</key><string>dev.goldcoders.bir</string>
-            <key>CFBundleName</key><string>${{ env.APP_NAME }}</string>
-            <key>CFBundleVersion</key><string>${VERSION}</string>
-            <key>CFBundleShortVersionString</key><string>${VERSION}</string>
-            <key>CFBundlePackageType</key><string>APPL</string>
-            <key>LSMinimumSystemVersion</key><string>13.0</string>
-            <key>NSHighResolutionCapable</key><true/>
-            <key>CFBundleIconFile</key><string>AppIcon</string>
-          </dict>
-          </plist>
-          EOF
+          cp assets/macos/Info.plist "$APP/Contents/Info.plist"
+          sed -i '' "s/VERSION_PLACEHOLDER/${VERSION}/g" "$APP/Contents/Info.plist"
+          sed -i '' "s/BUNDLE_ID_PLACEHOLDER/dev.goldcoders.bir/g" "$APP/Contents/Info.plist"
+          sed -i '' "s/APP_NAME_PLACEHOLDER/${{ env.APP_NAME }}/g" "$APP/Contents/Info.plist"
 
       - name: Codesign
         if: env.APPLE_CERTIFICATE_P12 != ''
@@ -100,7 +86,7 @@ jobs:
           APP="target/release-artifacts/${{ env.APP_NAME }}.app"
           codesign --deep --force --options runtime \
             --sign "Developer ID Application: Goldcoders Corp ($APPLE_TEAM_ID)" \
-            --entitlements scripts/entitlements.plist \
+            --entitlements assets/macos/entitlements.mac.plist \
             "$APP"
 
       - name: Create DMG
