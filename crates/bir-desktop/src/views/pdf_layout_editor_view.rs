@@ -39,8 +39,7 @@ impl PdfLayoutEditorView {
         available_forms.sort();
 
         // Create combobox with available form names
-        let form_select =
-            cx.new(|cx| ComboboxState::new(available_forms.clone(), window, cx));
+        let form_select = cx.new(|cx| ComboboxState::new(available_forms.clone(), window, cx));
 
         // Auto-load first available form
         let (auto_form, auto_path) = if let Some(first) = available_forms.first() {
@@ -126,8 +125,7 @@ impl PdfLayoutEditorView {
                 );
             } else {
                 window.push_notification(
-                    Notification::error("Error".to_string())
-                        .message("Failed to save".to_string()),
+                    Notification::error("Error".to_string()).message("Failed to save".to_string()),
                     cx,
                 );
             }
@@ -191,47 +189,42 @@ impl PdfLayoutEditorView {
         mutator: fn(&mut FormField, f64),
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        div()
-            .flex()
-            .gap_2()
-            .items_center()
-            .child(label)
-            .child(
-                div()
-                    .flex()
-                    .gap_1()
-                    .child(
-                        Button::new(dec_id.to_string())
-                            .label("-1")
-                            .on_click(cx.listener(move |this, _ev, _window, cx| {
-                                if let Some(ft) = &mut this.form_type
-                                    && let Some(f) = ft.fields.get_mut(idx)
-                                {
-                                    mutator(f, -1.0);
-                                    cx.notify();
-                                }
-                            })),
-                    )
-                    .child(
-                        div()
-                            .w(px(40.0))
-                            .flex()
-                            .justify_center()
-                            .child(format!("{:.1}", value)),
-                    )
-                    .child(
-                        Button::new(inc_id.to_string())
-                            .label("+1")
-                            .on_click(cx.listener(move |this, _ev, _window, cx| {
-                                if let Some(ft) = &mut this.form_type
-                                    && let Some(f) = ft.fields.get_mut(idx)
-                                {
-                                    mutator(f, 1.0);
-                                    cx.notify();
-                                }
-                            })),
-                    ),
-            )
+        div().flex().gap_2().items_center().child(label).child(
+            div()
+                .flex()
+                .gap_1()
+                .child(
+                    Button::new(dec_id.to_string())
+                        .label("-1")
+                        .on_click(cx.listener(move |this, _ev, _window, cx| {
+                            if let Some(ft) = &mut this.form_type
+                                && let Some(f) = ft.fields.get_mut(idx)
+                            {
+                                mutator(f, -1.0);
+                                cx.notify();
+                            }
+                        })),
+                )
+                .child(
+                    div()
+                        .w(px(40.0))
+                        .flex()
+                        .justify_center()
+                        .child(format!("{:.1}", value)),
+                )
+                .child(
+                    Button::new(inc_id.to_string())
+                        .label("+1")
+                        .on_click(cx.listener(move |this, _ev, _window, cx| {
+                            if let Some(ft) = &mut this.form_type
+                                && let Some(f) = ft.fields.get_mut(idx)
+                            {
+                                mutator(f, 1.0);
+                                cx.notify();
+                            }
+                        })),
+                ),
+        )
     }
 
     fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -280,24 +273,40 @@ impl PdfLayoutEditorView {
                             .child(format!("Selected: {}", field.key)),
                     )
                     .child(self.render_nudge_row(
-                        "X:", idx, field.x,
-                        &format!("x_dec_{}", idx), &format!("x_inc_{}", idx),
-                        |f, d| f.x += d, cx,
+                        "X:",
+                        idx,
+                        field.x,
+                        &format!("x_dec_{}", idx),
+                        &format!("x_inc_{}", idx),
+                        |f, d| f.x += d,
+                        cx,
                     ))
                     .child(self.render_nudge_row(
-                        "Y:", idx, field.y,
-                        &format!("y_dec_{}", idx), &format!("y_inc_{}", idx),
-                        |f, d| f.y += d, cx,
+                        "Y:",
+                        idx,
+                        field.y,
+                        &format!("y_dec_{}", idx),
+                        &format!("y_inc_{}", idx),
+                        |f, d| f.y += d,
+                        cx,
                     ))
                     .child(self.render_nudge_row(
-                        "W:", idx, field.cell_w.unwrap_or(20.0),
-                        &format!("w_dec_{}", idx), &format!("w_inc_{}", idx),
-                        |f, d| f.cell_w = Some(f.cell_w.unwrap_or(20.0) + d), cx,
+                        "W:",
+                        idx,
+                        field.cell_w.unwrap_or(20.0),
+                        &format!("w_dec_{}", idx),
+                        &format!("w_inc_{}", idx),
+                        |f, d| f.cell_w = Some(f.cell_w.unwrap_or(20.0) + d),
+                        cx,
                     ))
                     .child(self.render_nudge_row(
-                        "H:", idx, field.size.unwrap_or(10.0),
-                        &format!("h_dec_{}", idx), &format!("h_inc_{}", idx),
-                        |f, d| f.size = Some(f.size.unwrap_or(10.0) + d), cx,
+                        "H:",
+                        idx,
+                        field.size.unwrap_or(10.0),
+                        &format!("h_dec_{}", idx),
+                        &format!("h_inc_{}", idx),
+                        |f, d| f.size = Some(f.size.unwrap_or(10.0) + d),
+                        cx,
                     ))
                     .into_any_element()
             } else {
@@ -348,9 +357,7 @@ impl Render for PdfLayoutEditorView {
                     .gap_4()
                     .items_center()
                     // Combobox — same component used for RDO field
-                    .child(
-                        div().w(px(300.0)).child(Combobox::new(&self.form_select)),
-                    )
+                    .child(div().w(px(300.0)).child(Combobox::new(&self.form_select)))
                     // Page navigation (only show when a form is loaded)
                     .when(self.form_type.is_some(), |this| {
                         this.child(
@@ -360,36 +367,29 @@ impl Render for PdfLayoutEditorView {
                                 .items_center()
                                 .ml_4()
                                 .child("Page:")
-                                .child(
-                                    Button::new("prev_page")
-                                        .label("<")
-                                        .on_click(cx.listener(|this, _ev, _window, cx| {
-                                            if this.current_page > 1 {
-                                                this.current_page -= 1;
-                                                cx.notify();
-                                            }
-                                        })),
-                                )
+                                .child(Button::new("prev_page").label("<").on_click(cx.listener(
+                                    |this, _ev, _window, cx| {
+                                        if this.current_page > 1 {
+                                            this.current_page -= 1;
+                                            cx.notify();
+                                        }
+                                    },
+                                )))
                                 .child(
                                     div()
                                         .w(px(40.0))
                                         .flex()
                                         .justify_center()
-                                        .child(format!(
-                                            "{} / {}",
-                                            self.current_page, max_page
-                                        )),
+                                        .child(format!("{} / {}", self.current_page, max_page)),
                                 )
-                                .child(
-                                    Button::new("next_page")
-                                        .label(">")
-                                        .on_click(cx.listener(move |this, _ev, _window, cx| {
-                                            if this.current_page < max_page {
-                                                this.current_page += 1;
-                                                cx.notify();
-                                            }
-                                        })),
-                                ),
+                                .child(Button::new("next_page").label(">").on_click(cx.listener(
+                                    move |this, _ev, _window, cx| {
+                                        if this.current_page < max_page {
+                                            this.current_page += 1;
+                                            cx.notify();
+                                        }
+                                    },
+                                ))),
                         )
                     }),
             )
@@ -413,11 +413,7 @@ impl Render for PdfLayoutEditorView {
             let svg_path = if let Some(p) = &self.file_path {
                 if let Some(parent) = p.parent() {
                     let path = parent.join(format!("pages/page{}.svg", self.current_page));
-                    if path.exists() {
-                        Some(path)
-                    } else {
-                        None
-                    }
+                    if path.exists() { Some(path) } else { None }
                 } else {
                     None
                 }
