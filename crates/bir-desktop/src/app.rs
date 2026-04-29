@@ -46,6 +46,7 @@ pub enum ActiveView {
     CronTasks,
     ImportExport,
     Settings,
+    #[cfg(feature = "layout-editor")]
     PdfLayoutEditor,
 }
 
@@ -63,6 +64,7 @@ pub struct AppState {
     pub(crate) cron_tasks_view: Entity<CronTasksView>,
     pub(crate) import_export_view: Entity<ImportExportView>,
     pub(crate) settings_view: Entity<SettingsView>,
+    #[cfg(feature = "layout-editor")]
     pub(crate) pdf_layout_editor_view:
         Entity<crate::views::pdf_layout_editor_view::PdfLayoutEditorView>,
     pub(crate) form_2551q_view: Option<Entity<Form2551QView>>,
@@ -347,6 +349,7 @@ impl AppState {
         let db_clone_settings = Arc::clone(&db);
         let settings_view = cx.new(|cx| SettingsView::new(db_clone_settings, window, cx));
 
+        #[cfg(feature = "layout-editor")]
         let pdf_layout_editor_view =
             cx.new(|cx| crate::views::pdf_layout_editor_view::PdfLayoutEditorView::new(window, cx));
         cx.subscribe(
@@ -612,6 +615,7 @@ impl AppState {
             admin_auth_error: None,
             admin_os_auth_triggered: false,
             active_session_tin: None,
+            #[cfg(feature = "layout-editor")]
             pdf_layout_editor_view,
         }
     }
@@ -721,6 +725,7 @@ impl AppState {
             ActiveView::CronTasks => self.cron_tasks_view.clone().into_any_element(),
             ActiveView::ImportExport => self.import_export_view.clone().into_any_element(),
             ActiveView::Settings => self.settings_view.clone().into_any_element(),
+            #[cfg(feature = "layout-editor")]
             ActiveView::PdfLayoutEditor => self.pdf_layout_editor_view.clone().into_any_element(),
             ActiveView::Dashboard => self.dashboard_view.clone().into_any_element(),
             ActiveView::Form2551Q => {

@@ -7,6 +7,7 @@ pub mod form_2551q_view;
 pub mod global_dashboard;
 pub mod import_export;
 pub mod lock_screen;
+#[cfg(feature = "layout-editor")]
 pub mod pdf_layout_editor_view;
 pub mod pdf_viewer;
 pub mod profile_manager;
