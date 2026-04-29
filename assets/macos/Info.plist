@@ -24,6 +24,8 @@
     <string>13.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon.icns</string>
     <key>NSMainNibFile</key>
     <string></string>
     <key>NSPrincipalClass</key>
