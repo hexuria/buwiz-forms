@@ -8,7 +8,7 @@ WIN_TARGET := "x86_64-pc-windows-msvc"
 LINUX_TARGET := "x86_64-unknown-linux-gnu"
 RELEASE_DIR := "target/release-artifacts"
 MAC_APP := RELEASE_DIR + "/" + APP_NAME + ".app"
-VERSION := `sh ./.scripts/version.sh`
+VERSION := `grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/'`
 
 # Default task: format, lint, and type check
 default: check
@@ -65,15 +65,28 @@ install:
         just _package-linux; \
     fi
 
-# Publish a new release (auto-increments patch, tags, and pushes to trigger CI)
+# Publish a new release (tags and pushes to trigger CI)
 publish version="":
-    @if [ -n "{{version}}" ]; then \
-        sh ./.scripts/version.sh set {{version}}; \
-    else \
-        sh ./.scripts/version.sh bump; \
+    #!/usr/bin/env bash
+    set -e
+    if [ -n "{{version}}" ]; then
+        echo "Forcing version to {{version}}"
+        sed -i.bak 's/^version = ".*"/version = "{{version}}"/' Cargo.toml
+        rm -f Cargo.toml.bak
+        if [ -f crates/bir-print/Cargo.toml ]; then
+            sed -i.bak 's/^version = ".*"/version = "{{version}}"/' crates/bir-print/Cargo.toml
+            rm -f crates/bir-print/Cargo.toml.bak
+        fi
+        NEW_VER="{{version}}"
+    else
+        NEW_VER=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
     fi
-    sh ./.scripts/version.sh tag
-    @echo "🚀 Release v$(sh ./.scripts/version.sh) triggered"
+    git add -A
+    git commit -m "release: v$NEW_VER" --allow-empty
+    git tag -a "v$NEW_VER" -m "Release v$NEW_VER"
+    git push origin main
+    git push origin "v$NEW_VER"
+    echo "🚀 Release v$NEW_VER triggered"
 
 # Remove build artifacts
 clean:
