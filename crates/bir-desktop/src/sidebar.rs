@@ -227,7 +227,6 @@ impl AppState {
                             .max_h(px(320.))
                             .overflow_y_scroll()
                             .track_scroll(&self.sidebar_scroll)
-                            .pb_2()
                             .pt_2()
                             .gap_2()
                             .children(filtered_profiles.iter().map(|profile| {
@@ -347,51 +346,80 @@ impl AppState {
                                                         .gap_2()
                                                         .mt_2()
                                                         .when(!profile.is_archived, |this| {
-                                                            this.child(
-                                                                gpui_component::button::Button::new(format!("view_{}", profile.tin.full()))
-                                                                    .small()
-                                                                    .label("View")
-                                                                    .on_click(cx.listener({
-                                                                        let profile_clone = profile.clone();
-                                                                        move |this, _ev, window, cx| {
-                                                                            cx.stop_propagation();
-                                                                            this.select_profile(profile_clone.clone(), ProfileTargetAction::ViewDashboard, window, cx);
-                                                                        }
-                                                                    })),
-                                                            )
-                                                            .child(
-                                                                gpui_component::button::Button::new(format!("edit_{}", profile.tin.full()))
-                                                                    .small()
-                                                                    .label("Edit")
-                                                                    .on_click(cx.listener({
-                                                                        let profile_clone = profile.clone();
-                                                                        move |this, _ev, window, cx| {
-                                                                            cx.stop_propagation();
-                                                                            this.select_profile(profile_clone.clone(), ProfileTargetAction::EditProfile, window, cx);
-                                                                        }
-                                                                    })),
-                                                            )
-                                                            .child(
-                                                                gpui_component::button::Button::new(format!("archive_{}", profile.tin.full()))
-                                                                    .small()
-                                                                    .label("Archive")
-                                                                    .on_click(cx.listener({
-                                                                        let profile_clone = profile.clone();
-                                                                        let tin = profile_clone.tin.full();
-                                                                        move |this, _ev, _window, cx| {
-                                                                            cx.stop_propagation();
-                                                                            let mut profile_mut = profile_clone.clone();
-                                                                            profile_mut.is_archived = true;
-                                                                            if let Ok(db) = this.db.lock() {
-                                                                                let _ = db.save_profile(profile_mut);
+                                                            let requires_pin = self.enable_profile_pins && self.active_session_tin.as_ref() != Some(&profile.tin.full());
+                                                            this.when(requires_pin, |this| {
+                                                                this.child(
+                                                                    div()
+                                                                        .id(format!("login_{}", profile.tin.full()))
+                                                                        .flex()
+                                                                        .items_center()
+                                                                        .justify_center()
+                                                                        .gap_2()
+                                                                        .w_full()
+                                                                        .py_1()
+                                                                        .rounded_md()
+                                                                        .bg(cx.theme().primary)
+                                                                        .text_color(cx.theme().primary_foreground)
+                                                                        .cursor_pointer()
+                                                                        .hover(|s| s.opacity(0.8))
+                                                                        .on_click(cx.listener({
+                                                                            let profile_clone = profile.clone();
+                                                                            move |this, _ev, window, cx| {
+                                                                                cx.stop_propagation();
+                                                                                this.select_profile(profile_clone.clone(), ProfileTargetAction::UnlockOnly, window, cx);
                                                                             }
-                                                                            if let Some(p) = this.profiles.iter_mut().find(|p| p.tin.full() == tin) {
-                                                                                p.is_archived = true;
+                                                                        }))
+                                                                        .child(svg().path("svg/lock.svg").size(px(14.)).text_color(cx.theme().primary_foreground))
+                                                                        .child(div().text_sm().font_weight(FontWeight::BOLD).child("Unlock Profile"))
+                                                                )
+                                                            })
+                                                            .when(!requires_pin, |this| {
+                                                                this.child(
+                                                                    gpui_component::button::Button::new(format!("view_{}", profile.tin.full()))
+                                                                        .small()
+                                                                        .label("View")
+                                                                        .on_click(cx.listener({
+                                                                            let profile_clone = profile.clone();
+                                                                            move |this, _ev, window, cx| {
+                                                                                cx.stop_propagation();
+                                                                                this.select_profile(profile_clone.clone(), ProfileTargetAction::ViewDashboard, window, cx);
                                                                             }
-                                                                            cx.notify();
-                                                                        }
-                                                                    })),
-                                                            )
+                                                                        })),
+                                                                )
+                                                                .child(
+                                                                    gpui_component::button::Button::new(format!("edit_{}", profile.tin.full()))
+                                                                        .small()
+                                                                        .label("Edit")
+                                                                        .on_click(cx.listener({
+                                                                            let profile_clone = profile.clone();
+                                                                            move |this, _ev, window, cx| {
+                                                                                cx.stop_propagation();
+                                                                                this.select_profile(profile_clone.clone(), ProfileTargetAction::EditProfile, window, cx);
+                                                                            }
+                                                                        })),
+                                                                )
+                                                                .child(
+                                                                    gpui_component::button::Button::new(format!("archive_{}", profile.tin.full()))
+                                                                        .small()
+                                                                        .label("Archive")
+                                                                        .on_click(cx.listener({
+                                                                            let profile_clone = profile.clone();
+                                                                            let tin = profile_clone.tin.full();
+                                                                            move |this, _ev, _window, cx| {
+                                                                                cx.stop_propagation();
+                                                                                let mut profile_mut = profile_clone.clone();
+                                                                                profile_mut.is_archived = true;
+                                                                                if let Ok(db) = this.db.lock() {
+                                                                                    let _ = db.save_profile(profile_mut);
+                                                                                }
+                                                                                if let Some(p) = this.profiles.iter_mut().find(|p| p.tin.full() == tin) {
+                                                                                    p.is_archived = true;
+                                                                                }
+                                                                                cx.notify();
+                                                                            }
+                                                                        })),
+                                                                )
+                                                            })
                                                         })
                                                         .when(profile.is_archived, |this| {
                                                             this.child(
@@ -480,10 +508,6 @@ impl AppState {
                                                         })
                                                 )
                                         )
-                                        .on_mouse_down_out(cx.listener(|this, _ev, _window, cx| {
-                                            this.expanded_profile_tin = None;
-                                            cx.notify();
-                                        }))
                                     })
                                     .on_click(cx.listener({
                                         let profile_clone = profile.clone();
@@ -544,19 +568,19 @@ impl AppState {
                                 )
                             })
                     )
-                    .when(self.hide_tax_profiles && self.active_session_tin.is_some(), |this| {
+                    .when(self.active_session_tin.is_some(), |this| {
                         this.child(
-                            div()
-                                .w_full()
-                                .py_2()
-                                .when(!is_mini, |this| this.px_6())
-                                .when(is_mini, |this| this.px_3())
-                                .flex()
-                                .justify_center()
-                                .child(
-                                    if is_mini {
+                            if is_mini {
+                                div()
+                                    .id("exit_session_mini_btn")
+                                    .w_full()
+                                    .py_2()
+                                    .px_3()
+                                    .flex()
+                                    .justify_center()
+                                    .child(
                                         div()
-                                            .id("exit_session_mini_btn")
+                                            .id("exit_session_mini_circle")
                                             .flex()
                                             .items_center()
                                             .justify_center()
@@ -572,22 +596,46 @@ impl AppState {
                                                 this.active_view = ActiveView::GlobalDashboard;
                                                 cx.notify();
                                             }))
-                                            .child(Icon::new(IconName::CircleX).size(px(20.)).text_color(Hsla::from(gpui::rgba(0xef4444ff))))
-                                            .into_any_element()
-                                    } else {
-                                        gpui_component::button::Button::new("exit_session")
-                                            .small()
-                                            .label("Exit Session")
-                                            .icon(IconName::CircleX)
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.active_session_tin = None;
-                                                this.active_profile_tin = None;
-                                                this.active_view = ActiveView::GlobalDashboard;
-                                                cx.notify();
-                                            }))
-                                            .into_any_element()
-                                    }
-                                )
+                                            .child(svg().path("svg/power.svg").size(px(20.)).text_color(Hsla::from(gpui::rgba(0xef4444ff))))
+                                    )
+                                    .into_any_element()
+                            } else {
+                                div()
+                                    .id("logout_btn_full")
+                                    .flex()
+                                    .flex_col()
+                                    .items_center()
+                                    .justify_center()
+                                    .gap_2()
+                                    .w_full()
+                                    .py_4()
+                                    .cursor_pointer()
+                                    .hover(|s| s.bg(gpui::rgba(0xef444410)))
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.active_session_tin = None;
+                                        this.active_profile_tin = None;
+                                        this.active_view = ActiveView::GlobalDashboard;
+                                        cx.notify();
+                                    }))
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .size(px(48.))
+                                            .rounded_full()
+                                            .bg(gpui::rgba(0xef444420))
+                                            .child(svg().path("svg/power.svg").size(px(24.)).text_color(Hsla::from(gpui::rgba(0xef4444ff))))
+                                    )
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(Hsla::from(gpui::rgba(0xef4444ff)))
+                                            .child("Logout")
+                                    )
+                                    .into_any_element()
+                            }
                         )
                     })
                     .child(

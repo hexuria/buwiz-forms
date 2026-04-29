@@ -28,20 +28,20 @@ pub fn find_resource_dir(name: &str) -> PathBuf {
         if local.exists() {
             return local;
         }
-        
+
         // 2. macOS .app bundle (Resources is sibling to MacOS)
         let macos_bundle = parent.join("../Resources").join(name);
         if macos_bundle.exists() {
             return macos_bundle.canonicalize().unwrap_or(macos_bundle);
         }
-        
+
         // 3. Cargo workspace root (fallback for `cargo run` where exe is in target/debug/ or target/release/)
         let cargo_workspace = parent.join("../../..").join(name);
         if cargo_workspace.exists() {
             return cargo_workspace.canonicalize().unwrap_or(cargo_workspace);
         }
     }
-    
+
     // Fallback to CWD
     std::env::current_dir().unwrap_or_default().join(name)
 }

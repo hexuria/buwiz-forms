@@ -51,18 +51,20 @@ impl LockScreenView {
                     let pin = this.otp_state.read(cx).value().to_string();
                     if pin.len() == 4 {
                         let db = this.db.clone();
-                        
+
                         cx.spawn(async move |this, cx| {
-                            let hashed_pin = cx.background_executor().spawn(async move {
-                                bir_core::crypto::hash_pin(&pin)
-                            }).await;
-                            
-                            let _ = cx.update(|cx| {
+                            let hashed_pin = cx
+                                .background_executor()
+                                .spawn(async move { bir_core::crypto::hash_pin(&pin) })
+                                .await;
+
+                            cx.update(|cx| {
                                 if let Some(this) = this.upgrade() {
                                     this.update(cx, |this, cx| {
                                         let mut is_valid = false;
                                         if let Ok(db_guard) = db.lock() {
-                                            if let Ok(Some(saved_hash)) = db_guard.get_setting("app_lock_pin_hash")
+                                            if let Ok(Some(saved_hash)) =
+                                                db_guard.get_setting("app_lock_pin_hash")
                                             {
                                                 is_valid = saved_hash == hashed_pin;
                                             } else {
@@ -83,7 +85,8 @@ impl LockScreenView {
                                     });
                                 }
                             });
-                        }).detach();
+                        })
+                        .detach();
                     }
                 }
             },

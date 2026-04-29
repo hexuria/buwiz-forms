@@ -836,46 +836,30 @@ impl Render for DashboardView {
                     .child(
                         div()
                             .flex()
-                            .justify_between()
-                            .items_start()
+                            .flex_col()
+                            .gap_2()
                             .child(
                                 div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_2()
-                                    .child(
-                                        div()
-                                            .text_3xl()
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(cx.theme().foreground)
-                                            .child(profile.full_name.clone()),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_base()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child(format!(
-                                                "TIN: {} • Type: {:?} • {} • {}",
-                                                profile.tin.full(),
-                                                profile.taxpayer_type,
-                                                period_desc,
-                                                if profile.is_vat_registered {
-                                                    "VAT"
-                                                } else {
-                                                    "Non-VAT"
-                                                }
-                                            )),
-                                    ),
+                                    .text_3xl()
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_color(cx.theme().foreground)
+                                    .child(profile.full_name.clone()),
                             )
                             .child(
-                                gpui_component::button::Button::new("logout_profile")
-                                    .label("Lock Session")
-                                    .on_click({
-                                        let tin = profile.tin.full();
-                                        cx.listener(move |_this, _ev, _window, cx| {
-                                            cx.emit(DashboardEvent::LogoutProfile(tin.clone()));
-                                        })
-                                    }),
+                                div()
+                                    .text_base()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(format!(
+                                        "TIN: {} • Type: {:?} • {} • {}",
+                                        profile.tin.full(),
+                                        profile.taxpayer_type,
+                                        period_desc,
+                                        if profile.is_vat_registered {
+                                            "VAT"
+                                        } else {
+                                            "Non-VAT"
+                                        }
+                                    )),
                             ),
                     )
                     .child(

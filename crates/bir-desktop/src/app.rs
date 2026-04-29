@@ -54,6 +54,7 @@ pub enum ActiveView {
 pub enum ProfileTargetAction {
     ViewDashboard,
     EditProfile,
+    UnlockOnly,
 }
 
 pub struct AppState {
@@ -630,7 +631,7 @@ impl AppState {
         let tin = profile.tin.full();
 
         // If this profile is already the active session, skip PIN entirely
-        if self.hide_tax_profiles && self.active_session_tin.as_ref() == Some(&tin) {
+        if self.active_session_tin.as_ref() == Some(&tin) {
             self.apply_profile_action(profile, action, window, cx);
             cx.notify();
             return;
@@ -659,7 +660,9 @@ impl AppState {
     ) {
         let tin = profile.tin.full();
         self.active_profile_tin = Some(tin.clone());
-        if self.hide_tax_profiles {
+        // Set session whenever profile PINs are enabled OR privacy mode is on,
+        // so subsequent access to the same profile skips PIN re-entry.
+        if self.enable_profile_pins || self.hide_tax_profiles {
             self.active_session_tin = Some(tin);
         }
 
@@ -670,6 +673,9 @@ impl AppState {
         });
 
         match action {
+            ProfileTargetAction::UnlockOnly => {
+                // Just unlock the session, no navigation needed
+            }
             ProfileTargetAction::ViewDashboard => {
                 self.active_view = ActiveView::Dashboard;
                 let p = profile.clone();
