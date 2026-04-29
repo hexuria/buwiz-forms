@@ -149,7 +149,7 @@ impl CronTasksView {
                 cx,
             )
         });
-        filter_combobox.update(cx, |s, cx| s.set_selected_value("All Jobs", window, cx));
+        filter_combobox.update(cx, |s, cx| s.set_selected_value("Queued", window, cx));
 
         let search_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Search job name or type..."));
@@ -206,6 +206,30 @@ impl CronTasksView {
                 }
             },
         )
+        .detach();
+
+        let weak_view = cx.entity().downgrade();
+        cx.spawn(async move |_, cx| {
+            loop {
+                cx.background_executor().timer(std::time::Duration::from_secs(60)).await;
+                let result = cx.update(|cx| {
+                    if let Some(view) = weak_view.upgrade() {
+                        view.update(cx, |this, cx| {
+                            this.load_settings(cx);
+                        });
+                        true
+                    } else {
+                        false
+                    }
+                });
+                
+                if result {
+                    // updated successfully
+                } else {
+                    break;
+                }
+            }
+        })
         .detach();
 
         view.load_settings(cx);
@@ -963,7 +987,7 @@ impl Render for CronTasksView {
                                                 div().text_color(cx.theme().muted_foreground).child(format!("| Retries: {}", job.retries))
                                             )
                                             .when_some(job.next_run_at.clone(), |this, time| {
-                                                this.child(div().text_color(cx.theme().muted_foreground).child(format!("| Next Run: {}", time)))
+                                                this.child(div().text_color(cx.theme().muted_foreground).child(format!("| Next run: {}", bir_core::time_utils::format_next_run(&time))))
                                             })
                                     )
                             )
