@@ -84,10 +84,16 @@ sudo apt-get install -y \
    - **Windows:** `choco install just`
    - **Linux / Cargo:** `cargo install just`
 
-3. **Build and Run**
+3. **Install Developer Tools (Optional but Recommended)**
+   We use a few standard Cargo extensions for maintaining code quality, dependencies, and security:
+   ```bash
+   cargo install cargo-audit cargo-outdated cargo-machete
+   ```
+
+4. **Build and Run**
    To see all available commands, simply run:
    ```bash
-   just
+   just help
    ```
 
    **To run the application locally (development mode):**
@@ -99,7 +105,7 @@ sudo apt-get install -y \
 
 ## 🏗 Available Commands
 
-We follow a "less is better" philosophy. You only need to remember three core commands:
+We follow a "less is better" philosophy. You only need to remember a few core commands:
 
 - `just run` — Run the app locally for development.
 - `just install` — Automatically figure out your OS and build the installer package (macOS DMG, Windows Zip, Linux DEB/Tarball).
@@ -108,6 +114,11 @@ We follow a "less is better" philosophy. You only need to remember three core co
 **Quality & Testing:**
 - `just check` — Run code formatting (`cargo fmt`), linting (`cargo clippy`), and type checking (`cargo check`) across the workspace.
 - `just test` — Run all unit and integration test suites.
+
+**Dependency Management:**
+- `just audit` — Check for security vulnerabilities in dependencies using the RustSec database.
+- `just outdated` — Display a list of dependencies that have newer versions available.
+- `just unused` — Scan `Cargo.toml` for dependencies that are no longer being used.
 
 ---
 
