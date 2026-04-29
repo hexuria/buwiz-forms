@@ -72,7 +72,32 @@ _package-mac:
     @cp -R assets "{{MAC_APP}}/Contents/Resources/"
     @cp assets/AppIcon.icns "{{MAC_APP}}/Contents/Resources/"
     @cp -R formtypes "{{MAC_APP}}/Contents/Resources/"
-    @echo '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleExecutable</key><string>bir</string><key>CFBundleIdentifier</key><string>{{BUNDLE_ID}}</string><key>CFBundleName</key><string>{{APP_NAME}}</string><key>CFBundleVersion</key><string>{{VERSION}}</string><key>CFBundleShortVersionString</key><string>{{VERSION}}</string><key>CFBundlePackageType</key><string>APPL</string><key>LSMinimumSystemVersion</key><string>13.0</string><key>NSHighResolutionCapable</key><true/><key>CFBundleIconFile</key><string>AppIcon</string></dict></plist>' > "{{MAC_APP}}/Contents/Info.plist"
+    @cat <<EOF > "{{MAC_APP}}/Contents/Info.plist"
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>bir</string>
+    <key>CFBundleIdentifier</key>
+    <string>{{BUNDLE_ID}}</string>
+    <key>CFBundleName</key>
+    <string>{{APP_NAME}}</string>
+    <key>CFBundleVersion</key>
+    <string>{{VERSION}}</string>
+    <key>CFBundleShortVersionString</key>
+    <string>{{VERSION}}</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+</dict>
+</plist>
+EOF
     @echo "✅ {{MAC_APP}} created"
     @if command -v create-dmg >/dev/null 2>&1; then \
         create-dmg --volname "{{APP_NAME}}" --window-size 600 400 --icon-size 100 --icon "{{APP_NAME}}.app" 150 190 --app-drop-link 450 190 "{{RELEASE_DIR}}/{{APP_NAME}}-macOS-{{VERSION}}.dmg" "{{MAC_APP}}"; \
