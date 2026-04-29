@@ -62,3 +62,16 @@ pub fn post_db_changed() {
 pub fn post_db_changed() {
     // No-op: Linux/Windows rely on PRAGMA data_version polling.
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_post_db_changed() {
+        // Just verify that calling the FFI doesn't cause a segfault or panic.
+        // There's no clean way to intercept distributed notifications synchronously in a unit test
+        // without standing up an entire NSApplication runloop, but ensuring memory safety is key.
+        post_db_changed();
+    }
+}

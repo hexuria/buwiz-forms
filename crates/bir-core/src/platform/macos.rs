@@ -35,26 +35,7 @@ pub fn temp_dir() -> PathBuf {
 pub fn install_daemon() {
     if let Ok(exe_path) = std::env::current_exe() {
         let daemon_path = exe_path.parent().unwrap().join("bir-daemon");
-
-        let plist_content = format!(
-            r#"<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.bir.vault.daemon</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>{}</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-</dict>
-</plist>"#,
-            daemon_path.display()
-        );
+        let plist_content = generate_plist(&daemon_path);
 
         let home_dir = std::env::var("HOME").expect("HOME not set");
         let launch_agents_dir = std::path::Path::new(&home_dir)
@@ -122,4 +103,64 @@ pub async fn run_shell_command(cmd: &str) -> Result<std::process::Output, std::i
         .arg(cmd)
         .output()
         .await
+}
+
+pub(crate) fn generate_plist(daemon_path: &std::path::Path) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.bir.vault.daemon</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{}</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+</dict>
+</plist>"#,
+        daemon_path.display()
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_data_dir_resolution() {
+        // Temporarily set HOME to ensure consistent test output
+        let old_home = std::env::var_os("HOME");
+        unsafe {
+            std::env::set_var("HOME", "/Users/testuser");
+        }
+        
+        let path = data_dir();
+        assert!(path.to_string_lossy().contains("group.dev.goldcoders.bir"));
+        assert!(path.to_string_lossy().contains("/Users/testuser/Library/Group Containers"));
+        
+        // Restore
+        unsafe {
+            if let Some(h) = old_home {
+                std::env::set_var("HOME", h);
+            } else {
+                std::env::remove_var("HOME");
+            }
+        }
+    }
+
+    #[test]
+    fn test_plist_generation() {
+        let dummy_path = std::path::PathBuf::from("/Applications/Test.app/Contents/MacOS/bir-daemon");
+        let plist = generate_plist(&dummy_path);
+        
+        assert!(plist.contains("<string>com.bir.vault.daemon</string>"));
+        assert!(plist.contains("<string>/Applications/Test.app/Contents/MacOS/bir-daemon</string>"));
+        assert!(plist.contains("<key>RunAtLoad</key>"));
+        assert!(plist.contains("<key>KeepAlive</key>"));
+    }
 }

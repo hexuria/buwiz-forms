@@ -12,57 +12,63 @@ pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
     loop {
         // Run every 1 minute
         tokio::time::sleep(std::time::Duration::from_secs(60)).await;
-
-        info!("Running background cron jobs...");
-
-        // Ensure we don't hold the DB lock across async network calls.
-        // First, fetch profiles that have background cron enabled.
-        let (profiles, global_cron_enabled) = {
-            let db_guard = match db.lock() {
-                Ok(guard) => guard,
-                Err(e) => {
-                    error!("Failed to lock database for cron: {}", e);
-                    continue;
-                }
-            };
-            let p = match db_guard.list_profiles() {
-                Ok(p) => p,
-                Err(e) => {
-                    error!("Failed to fetch profiles in cron: {}", e);
-                    continue;
-                }
-            };
-            let c = db_guard
-                .get_setting("background_cron_enabled")
-                .unwrap_or(Some("true".to_string()))
-                .map(|s| s == "true")
-                .unwrap_or(true);
-            (p, c)
-        };
-
-        let test_enabled = profiles.iter().any(|p| p.test_notification_enabled);
-        if test_enabled {
-            crate::notification::send_notification(
-                "BIR Vault Daemon",
-                "Hello! The background cron is active.",
-            );
-        }
-
-        if global_cron_enabled {
-            for profile in profiles {
-                // Task A: Form Submission Retries
-                process_submission_queue(&profile, db.clone()).await;
-            }
-        }
-
-        // Task C: Generic Job Queue (Custom Cron & One-off commands)
-        process_generic_jobs(db.clone()).await;
-
-        // Signal the desktop app that the database was modified.
-        // On macOS: instant via NSDistributedNotificationCenter.
-        // On Linux/Windows: no-op (desktop uses PRAGMA data_version polling).
-        crate::ipc::post_db_changed();
+        run_queue_tick(db.clone()).await;
     }
+}
+
+/// Runs a single iteration of the background job queue.
+/// Extracted from `start_cron_jobs` to allow deterministic unit testing
+/// without being blocked by an infinite loop or thread sleep.
+pub async fn run_queue_tick(db: Arc<Mutex<Database>>) {
+    info!("Running background cron jobs...");
+
+    // Ensure we don't hold the DB lock across async network calls.
+    // First, fetch profiles that have background cron enabled.
+    let (profiles, global_cron_enabled) = {
+        let db_guard = match db.lock() {
+            Ok(guard) => guard,
+            Err(e) => {
+                error!("Failed to lock database for cron: {}", e);
+                return;
+            }
+        };
+        let p = match db_guard.list_profiles() {
+            Ok(p) => p,
+            Err(e) => {
+                error!("Failed to fetch profiles in cron: {}", e);
+                return;
+            }
+        };
+        let c = db_guard
+            .get_setting("background_cron_enabled")
+            .unwrap_or(Some("true".to_string()))
+            .map(|s| s == "true")
+            .unwrap_or(true);
+        (p, c)
+    };
+
+    let test_enabled = profiles.iter().any(|p| p.test_notification_enabled);
+    if test_enabled {
+        crate::notification::send_notification(
+            "BIR Vault Daemon",
+            "Hello! The background cron is active.",
+        );
+    }
+
+    if global_cron_enabled {
+        for profile in profiles {
+            // Task A: Form Submission Retries
+            process_submission_queue(&profile, db.clone()).await;
+        }
+    }
+
+    // Task C: Generic Job Queue (Custom Cron & One-off commands)
+    process_generic_jobs(db.clone()).await;
+
+    // Signal the desktop app that the database was modified.
+    // On macOS: instant via NSDistributedNotificationCenter.
+    // On Linux/Windows: no-op (desktop uses PRAGMA data_version polling).
+    crate::ipc::post_db_changed();
 }
 
 async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Database>>) {
@@ -401,5 +407,25 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
                 }
             }
         }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::Database;
+    use tempfile::NamedTempFile;
+
+    #[tokio::test]
+    async fn test_run_queue_tick_does_not_panic() {
+        let db_file = NamedTempFile::new().unwrap();
+        // Since we are just testing the runner, if keyring fails we can't test.
+        let db = match Database::open(db_file.path()) {
+            Ok(db) => db,
+            Err(_) => return, // Skip test if keychain fails
+        };
+        let db = Arc::new(Mutex::new(db));
+
+        // Just run the tick on an empty database. Should not panic.
+        run_queue_tick(db.clone()).await;
     }
 }
