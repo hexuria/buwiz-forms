@@ -1,9 +1,10 @@
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::button::Button;
-use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::notification::Notification;
 use gpui_component::*;
 
+use crate::components::combobox::{Combobox, ComboboxEvent, ComboboxState};
 use bir_print::formtype::{FormField, FormType};
 use std::path::PathBuf;
 
@@ -12,94 +13,14 @@ pub struct PdfLayoutEditorView {
     pub file_path: Option<PathBuf>,
     pub selected_field_idx: Option<usize>,
     pub current_page: usize,
-    pub combo_input: Entity<InputState>,
-    pub suggestions: Vec<String>,
-    pub suggestion_idx: Option<usize>,
-    pub show_suggestions: bool,
-    pub available_forms: Vec<String>,
+    pub form_select: Entity<ComboboxState>,
     pub scroll_handle: ScrollHandle,
-}
-
-fn expand_tilde(path: &str) -> String {
-    if let Some(rest) = path.strip_prefix("~/")
-        && let Ok(home) = std::env::var("HOME")
-    {
-        return format!("{}/{}", home, rest);
-    }
-    path.to_string()
-}
-
-fn compute_suggestions(query: &str, available_forms: &[String]) -> Vec<String> {
-    if query.starts_with('/') || query.starts_with("~/") {
-        // Path mode: list .json files in the directory
-        let expanded = expand_tilde(query);
-        let path = std::path::Path::new(&expanded);
-        let (dir, prefix) = if path.is_dir() {
-            (path.to_path_buf(), String::new())
-        } else {
-            let dir = path.parent().unwrap_or(std::path::Path::new("/"));
-            let prefix = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("")
-                .to_lowercase();
-            (dir.to_path_buf(), prefix)
-        };
-
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            return vec![];
-        };
-
-        let mut results: Vec<String> = entries
-            .flatten()
-            .filter(|e| {
-                let Ok(ft) = e.file_type() else {
-                    return false;
-                };
-                if ft.is_dir() {
-                    // Show directories so user can navigate deeper
-                    let name = e.file_name().to_string_lossy().to_lowercase();
-                    return prefix.is_empty() || name.starts_with(&prefix);
-                }
-                if !ft.is_file() {
-                    return false;
-                }
-                let name = e.file_name().to_string_lossy().to_lowercase();
-                let is_json = name.ends_with(".json");
-                is_json && (prefix.is_empty() || name.starts_with(&prefix))
-            })
-            .map(|e| {
-                let full = dir.join(e.file_name());
-                let display = full.to_string_lossy().to_string();
-                let Ok(ft) = e.file_type() else {
-                    return display;
-                };
-                if ft.is_dir() {
-                    format!("{}/", display)
-                } else {
-                    display
-                }
-            })
-            .collect();
-        results.sort();
-        results.truncate(20);
-        results
-    } else {
-        // Form mode: filter built-in forms
-        let query_lower = query.to_lowercase();
-        available_forms
-            .iter()
-            .filter(|name| {
-                query_lower.is_empty() || name.to_lowercase().contains(&query_lower)
-            })
-            .cloned()
-            .collect()
-    }
+    _subscriptions: Vec<Subscription>,
 }
 
 impl PdfLayoutEditorView {
     pub fn new(window: &mut Window, cx: &mut Context<'_, Self>) -> Self {
-        // Scan formtypes/ directory
+        // Scan formtypes/ directory for available forms
         let mut available_forms = Vec::new();
         if let Ok(entries) = std::fs::read_dir("formtypes") {
             for entry in entries.flatten() {
@@ -107,7 +28,6 @@ impl PdfLayoutEditorView {
                     && ft.is_dir()
                     && let Ok(name) = entry.file_name().into_string()
                 {
-                    // Only include dirs that actually contain formtype.json
                     let mut check = entry.path();
                     check.push("formtype.json");
                     if check.exists() {
@@ -118,18 +38,24 @@ impl PdfLayoutEditorView {
         }
         available_forms.sort();
 
+        // Create combobox with available form names
+        let form_select =
+            cx.new(|cx| ComboboxState::new(available_forms.clone(), window, cx));
+
         // Auto-load first available form
         let (auto_form, auto_path) = if let Some(first) = available_forms.first() {
             let mut p = std::env::current_dir().unwrap_or_default();
             p.push("formtypes");
             p.push(first);
             p.push("formtype.json");
-            if let Ok(content) = std::fs::read_to_string(&p) {
-                if let Ok(ft) = serde_json::from_str::<FormType>(&content) {
-                    (Some(ft), Some(p))
-                } else {
-                    (None, None)
-                }
+            if let Ok(content) = std::fs::read_to_string(&p)
+                && let Ok(ft) = serde_json::from_str::<FormType>(&content)
+            {
+                // Pre-select the form in the combobox
+                form_select.update(cx, |select, cx| {
+                    select.set_selected_value(first, window, cx);
+                });
+                (Some(ft), Some(p))
             } else {
                 (None, None)
             }
@@ -137,140 +63,44 @@ impl PdfLayoutEditorView {
             (None, None)
         };
 
-        let default_text = available_forms.first().cloned().unwrap_or_default();
-        let combo_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder("Search forms or type path (/...)")
-                .default_value(default_text)
-        });
-
-        // Subscribe to input events for filtering
-        let forms_clone = available_forms.clone();
-        cx.subscribe_in(
-            &combo_input,
-            window,
-            move |this: &mut Self, _entity, event: &InputEvent, _window, cx| match event {
-                InputEvent::Change => {
-                    let query = this.combo_input.read(cx).value().to_string();
-                    this.suggestions = compute_suggestions(&query, &forms_clone);
-                    this.suggestion_idx = None;
-                    this.show_suggestions = !this.suggestions.is_empty();
-                    cx.notify();
-                }
-                InputEvent::PressEnter { .. } => {
-                    if let Some(idx) = this.suggestion_idx
-                        && let Some(s) = this.suggestions.get(idx).cloned()
-                    {
-                        this.apply_suggestion(&s, _window, cx);
-                        return;
-                    }
-                    // Try loading whatever is in the input
-                    this.try_load(_window, cx);
-                }
-                InputEvent::Focus => {
-                    let query = this.combo_input.read(cx).value().to_string();
-                    this.suggestions = compute_suggestions(&query, &this.available_forms);
-                    this.show_suggestions = !this.suggestions.is_empty();
-                    cx.notify();
-                }
-                InputEvent::Blur => {
-                    // Small delay to allow click on suggestion to fire first
-                    // We'll hide via on_mouse_down_out instead
+        // Subscribe to combobox selection — auto-load on select
+        let _subscriptions = vec![cx.subscribe(
+            &form_select,
+            |this: &mut Self, _state, event: &ComboboxEvent, cx| {
+                if let Some(selected) = &event.selected {
+                    // Check if it looks like a path
+                    let path = if selected.starts_with('/') || selected.starts_with("~/") {
+                        PathBuf::from(Self::expand_tilde(selected))
+                    } else {
+                        let mut p = std::env::current_dir().unwrap_or_default();
+                        p.push("formtypes");
+                        p.push(selected);
+                        p.push("formtype.json");
+                        p
+                    };
+                    this.load_file(path, cx);
                 }
             },
-        )
-        .detach();
+        )];
 
         Self {
             form_type: auto_form,
             file_path: auto_path,
             selected_field_idx: None,
             current_page: 1,
-            combo_input,
-            suggestions: available_forms.clone(),
-            suggestion_idx: None,
-            show_suggestions: false,
-            available_forms,
+            form_select,
             scroll_handle: ScrollHandle::new(),
+            _subscriptions,
         }
     }
 
-    fn apply_suggestion(&mut self, suggestion: &str, window: &mut Window, cx: &mut Context<Self>) {
-        // If suggestion ends with /, it's a directory — just update the input text
-        if suggestion.ends_with('/') {
-            self.combo_input.update(cx, |input, cx| {
-                input.set_value(suggestion, window, cx);
-            });
-            self.suggestions = compute_suggestions(suggestion, &self.available_forms);
-            self.suggestion_idx = None;
-            cx.notify();
-            return;
+    fn expand_tilde(path: &str) -> String {
+        if let Some(rest) = path.strip_prefix("~/")
+            && let Ok(home) = std::env::var("HOME")
+        {
+            return format!("{}/{}", home, rest);
         }
-
-        self.combo_input.update(cx, |input, cx| {
-            input.set_value(suggestion, window, cx);
-        });
-        self.show_suggestions = false;
-        self.suggestion_idx = None;
-
-        let path = if suggestion.starts_with('/') || suggestion.starts_with("~/") {
-            PathBuf::from(expand_tilde(suggestion))
-        } else {
-            let mut p = std::env::current_dir().unwrap_or_default();
-            p.push("formtypes");
-            p.push(suggestion);
-            p.push("formtype.json");
-            p
-        };
-        self.load_file(path, cx);
-    }
-
-    fn try_load(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let raw = self.combo_input.read(cx).value().to_string();
-        if raw.trim().is_empty() {
-            return;
-        }
-
-        let path = if raw.starts_with('/') || raw.starts_with("~/") {
-            PathBuf::from(expand_tilde(&raw))
-        } else {
-            let mut p = std::env::current_dir().unwrap_or_default();
-            p.push("formtypes");
-            p.push(&raw);
-            p.push("formtype.json");
-            p
-        };
-
-        if !path.exists() {
-            use gpui_component::WindowExt;
-            window.push_notification(
-                Notification::error("Not Found".to_string())
-                    .message(format!("File does not exist: {}", path.display())),
-                cx,
-            );
-            return;
-        }
-        if path.is_dir() {
-            use gpui_component::WindowExt;
-            window.push_notification(
-                Notification::warning("Invalid".to_string())
-                    .message("Path is a directory, not a file".to_string()),
-                cx,
-            );
-            return;
-        }
-        if path.extension().and_then(|e| e.to_str()) != Some("json") {
-            use gpui_component::WindowExt;
-            window.push_notification(
-                Notification::warning("Wrong Type".to_string())
-                    .message("Only .json layout files are supported".to_string()),
-                cx,
-            );
-            return;
-        }
-
-        self.show_suggestions = false;
-        self.load_file(path, cx);
+        path.to_string()
     }
 
     pub fn load_file(&mut self, path: PathBuf, cx: &mut Context<Self>) {
@@ -286,8 +116,8 @@ impl PdfLayoutEditorView {
     }
 
     pub fn save_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        use gpui_component::WindowExt;
         if let (Some(ft), Some(path)) = (&self.form_type, &self.file_path) {
-            use gpui_component::WindowExt;
             if ft.save_to_file(path).is_ok() {
                 window.push_notification(
                     Notification::success("Saved".to_string())
@@ -450,40 +280,24 @@ impl PdfLayoutEditorView {
                             .child(format!("Selected: {}", field.key)),
                     )
                     .child(self.render_nudge_row(
-                        "X:",
-                        idx,
-                        field.x,
-                        &format!("x_dec_{}", idx),
-                        &format!("x_inc_{}", idx),
-                        |f, d| f.x += d,
-                        cx,
+                        "X:", idx, field.x,
+                        &format!("x_dec_{}", idx), &format!("x_inc_{}", idx),
+                        |f, d| f.x += d, cx,
                     ))
                     .child(self.render_nudge_row(
-                        "Y:",
-                        idx,
-                        field.y,
-                        &format!("y_dec_{}", idx),
-                        &format!("y_inc_{}", idx),
-                        |f, d| f.y += d,
-                        cx,
+                        "Y:", idx, field.y,
+                        &format!("y_dec_{}", idx), &format!("y_inc_{}", idx),
+                        |f, d| f.y += d, cx,
                     ))
                     .child(self.render_nudge_row(
-                        "W:",
-                        idx,
-                        field.cell_w.unwrap_or(20.0),
-                        &format!("w_dec_{}", idx),
-                        &format!("w_inc_{}", idx),
-                        |f, d| f.cell_w = Some(f.cell_w.unwrap_or(20.0) + d),
-                        cx,
+                        "W:", idx, field.cell_w.unwrap_or(20.0),
+                        &format!("w_dec_{}", idx), &format!("w_inc_{}", idx),
+                        |f, d| f.cell_w = Some(f.cell_w.unwrap_or(20.0) + d), cx,
                     ))
                     .child(self.render_nudge_row(
-                        "H:",
-                        idx,
-                        field.size.unwrap_or(10.0),
-                        &format!("h_dec_{}", idx),
-                        &format!("h_inc_{}", idx),
-                        |f, d| f.size = Some(f.size.unwrap_or(10.0) + d),
-                        cx,
+                        "H:", idx, field.size.unwrap_or(10.0),
+                        &format!("h_dec_{}", idx), &format!("h_inc_{}", idx),
+                        |f, d| f.size = Some(f.size.unwrap_or(10.0) + d), cx,
                     ))
                     .into_any_element()
             } else {
@@ -511,66 +325,16 @@ impl PdfLayoutEditorView {
             )
             .into_any_element()
     }
-
-    fn render_combo_suggestions(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        if !self.show_suggestions || self.suggestions.is_empty() {
-            return div().into_any_element();
-        }
-
-        div()
-            .absolute()
-            .top(px(36.0))
-            .left_0()
-            .w(px(400.0))
-            .max_h(px(200.0))
-            .overflow_hidden()
-            .bg(cx.theme().background)
-            .border_1()
-            .border_color(cx.theme().border)
-            .rounded_md()
-            .shadow_md()
-            .children(
-                self.suggestions
-                    .iter()
-                    .enumerate()
-                    .map(|(i, suggestion)| {
-                        let is_highlighted = self.suggestion_idx == Some(i);
-                        let bg = if is_highlighted {
-                            cx.theme().accent
-                        } else {
-                            cx.theme().background
-                        };
-                        let fg = if is_highlighted {
-                            cx.theme().accent_foreground
-                        } else {
-                            cx.theme().foreground
-                        };
-                        let s = suggestion.clone();
-                        div()
-                            .id(format!("suggestion_{}", i))
-                            .px_3()
-                            .py_2()
-                            .bg(bg)
-                            .text_color(fg)
-                            .text_sm()
-                            .cursor_pointer()
-                            .hover(|style| style.bg(cx.theme().muted))
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                cx.listener(move |this, _ev, window, cx| {
-                                    this.apply_suggestion(&s, window, cx);
-                                }),
-                            )
-                            .child(suggestion.clone())
-                    })
-                    .collect::<Vec<_>>(),
-            )
-            .into_any_element()
-    }
 }
 
 impl Render for PdfLayoutEditorView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let max_page = self
+            .form_type
+            .as_ref()
+            .map(|ft| ft.page_count())
+            .unwrap_or(1);
+
         let header = div()
             .flex()
             .items_center()
@@ -583,52 +347,51 @@ impl Render for PdfLayoutEditorView {
                     .flex()
                     .gap_4()
                     .items_center()
+                    // Combobox — same component used for RDO field
                     .child(
-                        // ComboBox: single input + floating suggestions
-                        div()
-                            .id("combobox_container")
-                            .relative()
-                            .child(
-                                Input::new(&self.combo_input)
-                                    .w(px(400.0))
-                                    .prefix(Icon::new(IconName::Search).small())
-                                    .cleanable(true),
-                            )
-                            .child(self.render_combo_suggestions(cx))
-                            .on_mouse_down_out(cx.listener(|this, _ev, _window, cx| {
-                                this.show_suggestions = false;
-                                cx.notify();
-                            })),
+                        div().w(px(300.0)).child(Combobox::new(&self.form_select)),
                     )
-                    .child(
-                        div()
-                            .flex()
-                            .gap_2()
-                            .items_center()
-                            .ml_4()
-                            .child("Page:")
-                            .child(Button::new("prev_page").label("<").on_click(cx.listener(
-                                |this, _ev, _window, cx| {
-                                    if this.current_page > 1 {
-                                        this.current_page -= 1;
-                                        cx.notify();
-                                    }
-                                },
-                            )))
-                            .child(
-                                div()
-                                    .w(px(20.0))
-                                    .flex()
-                                    .justify_center()
-                                    .child(format!("{}", self.current_page)),
-                            )
-                            .child(Button::new("next_page").label(">").on_click(cx.listener(
-                                |this, _ev, _window, cx| {
-                                    this.current_page += 1;
-                                    cx.notify();
-                                },
-                            ))),
-                    ),
+                    // Page navigation (only show when a form is loaded)
+                    .when(self.form_type.is_some(), |this| {
+                        this.child(
+                            div()
+                                .flex()
+                                .gap_2()
+                                .items_center()
+                                .ml_4()
+                                .child("Page:")
+                                .child(
+                                    Button::new("prev_page")
+                                        .label("<")
+                                        .on_click(cx.listener(|this, _ev, _window, cx| {
+                                            if this.current_page > 1 {
+                                                this.current_page -= 1;
+                                                cx.notify();
+                                            }
+                                        })),
+                                )
+                                .child(
+                                    div()
+                                        .w(px(40.0))
+                                        .flex()
+                                        .justify_center()
+                                        .child(format!(
+                                            "{} / {}",
+                                            self.current_page, max_page
+                                        )),
+                                )
+                                .child(
+                                    Button::new("next_page")
+                                        .label(">")
+                                        .on_click(cx.listener(move |this, _ev, _window, cx| {
+                                            if this.current_page < max_page {
+                                                this.current_page += 1;
+                                                cx.notify();
+                                            }
+                                        })),
+                                ),
+                        )
+                    }),
             )
             .child(
                 Button::new("save")
@@ -706,10 +469,23 @@ impl Render for PdfLayoutEditorView {
         } else {
             div()
                 .flex()
+                .flex_col()
                 .items_center()
                 .justify_center()
                 .size_full()
-                .child("No formtype layouts found. Add a formtypes/<FormID>/formtype.json directory.")
+                .gap_4()
+                .child(
+                    div()
+                        .text_lg()
+                        .text_color(cx.theme().muted_foreground)
+                        .child("No layout forms found."),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child("Add a form layout directory under formtypes/<FormID>/ containing a formtype.json file."),
+                )
         };
 
         div()
