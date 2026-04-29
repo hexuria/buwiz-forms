@@ -94,17 +94,7 @@ impl PdfLayoutEditorView {
     }
 
     fn get_formtypes_dir() -> PathBuf {
-        let current_exe = std::env::current_exe().unwrap_or_default();
-        if current_exe.to_string_lossy().contains("Contents/MacOS") {
-            current_exe
-                .parent()
-                .unwrap()
-                .parent()
-                .unwrap()
-                .join("Resources/formtypes")
-        } else {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../formtypes")
-        }
+        crate::platform::find_resource_dir("formtypes")
     }
 
     fn expand_tilde(path: &str) -> String {
