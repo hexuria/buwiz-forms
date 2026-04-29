@@ -46,6 +46,7 @@ pub enum ActiveView {
     CronTasks,
     ImportExport,
     Settings,
+    PdfLayoutEditor,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -62,6 +63,7 @@ pub struct AppState {
     pub(crate) cron_tasks_view: Entity<CronTasksView>,
     pub(crate) import_export_view: Entity<ImportExportView>,
     pub(crate) settings_view: Entity<SettingsView>,
+    pub(crate) pdf_layout_editor_view: Entity<crate::views::pdf_layout_editor_view::PdfLayoutEditorView>,
     pub(crate) form_2551q_view: Option<Entity<Form2551QView>>,
     pub(crate) pending_form_draft: Option<Form2551QDraft>,
     pub(crate) form_1701q_view: Option<Entity<Form1701QView>>,
@@ -308,7 +310,10 @@ impl AppState {
 
                     this.profiles = profiles.clone();
                     this.global_dashboard_view.update(cx, |view, cx| {
+                        view.hide_tax_profiles = this.hide_tax_profiles;
+                        view.active_session_tin = this.active_session_tin.clone();
                         view.set_profiles(profiles.clone(), cx);
+                        view.reload_actionable_forms(cx);
                     });
                     this.cron_tasks_view.update(cx, |view, cx| {
                         view.load_settings(cx);
@@ -340,6 +345,8 @@ impl AppState {
 
         let db_clone_settings = Arc::clone(&db);
         let settings_view = cx.new(|cx| SettingsView::new(db_clone_settings, window, cx));
+
+        let pdf_layout_editor_view = cx.new(|cx| crate::views::pdf_layout_editor_view::PdfLayoutEditorView::new(window, cx));
         cx.subscribe(
             &settings_view,
             |this: &mut Self, _entity, event: &SettingsEvent, cx| match event {
@@ -367,6 +374,12 @@ impl AppState {
                     if !this.hide_tax_profiles {
                         this.active_session_tin = None;
                     }
+                    let active_session = this.active_session_tin.clone();
+                    this.global_dashboard_view.update(cx, |view, cx| {
+                        view.hide_tax_profiles = htp;
+                        view.active_session_tin = active_session;
+                        view.reload_actionable_forms(cx);
+                    });
                     cx.notify();
                 }
             },
@@ -397,10 +410,6 @@ impl AppState {
                             .find(|p| p.tin.full() == query || p.tin.formatted() == query)
                             .cloned()
                         {
-                            if this.hide_tax_profiles {
-                                // End current session and start new one
-                                this.active_session_tin = Some(profile.tin.full());
-                            }
                             this.profile_filter.update(cx, |input, cx| {
                                 input.set_value("", window, cx);
                             });
@@ -467,7 +476,10 @@ impl AppState {
                     let _ = this.update(cx, |this, cx| {
                         this.profiles = profiles.clone();
                         this.global_dashboard_view.update(cx, |view, cx| {
+                            view.hide_tax_profiles = this.hide_tax_profiles;
+                            view.active_session_tin = this.active_session_tin.clone();
                             view.set_profiles(profiles.clone(), cx);
+                            view.reload_actionable_forms(cx);
                         });
 
                         if let Some(tin) = &active_tin
@@ -598,6 +610,7 @@ impl AppState {
             admin_auth_error: None,
             admin_os_auth_triggered: false,
             active_session_tin: None,
+            pdf_layout_editor_view,
         }
     }
 
@@ -615,11 +628,6 @@ impl AppState {
             self.apply_profile_action(profile, action, window, cx);
             cx.notify();
             return;
-        }
-
-        // Switching profiles: set new session (old one is automatically replaced)
-        if self.hide_tax_profiles {
-            self.active_session_tin = Some(tin);
         }
 
         if self.enable_profile_pins && profile.profile_pin_hash.is_some() {
@@ -643,7 +651,11 @@ impl AppState {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.active_profile_tin = Some(profile.tin.full());
+        let tin = profile.tin.full();
+        self.active_profile_tin = Some(tin.clone());
+        if self.hide_tax_profiles {
+            self.active_session_tin = Some(tin);
+        }
 
         // Keep dashboard in sync with hide_tax_profiles state
         let htp = self.hide_tax_profiles;
@@ -707,6 +719,7 @@ impl AppState {
             ActiveView::CronTasks => self.cron_tasks_view.clone().into_any_element(),
             ActiveView::ImportExport => self.import_export_view.clone().into_any_element(),
             ActiveView::Settings => self.settings_view.clone().into_any_element(),
+            ActiveView::PdfLayoutEditor => self.pdf_layout_editor_view.clone().into_any_element(),
             ActiveView::Dashboard => self.dashboard_view.clone().into_any_element(),
             ActiveView::Form2551Q => {
                 if let Some(view) = &self.form_2551q_view {

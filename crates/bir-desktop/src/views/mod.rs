@@ -11,3 +11,4 @@ pub mod pdf_viewer;
 pub mod profile_manager;
 pub mod receipt_viewer;
 pub mod settings;
+pub mod pdf_layout_editor_view;

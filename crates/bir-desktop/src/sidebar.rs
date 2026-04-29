@@ -701,6 +701,29 @@ impl AppState {
                                 this.child(div().text_sm().text_color(cx.theme().foreground).child("Settings"))
                             })
                     )
+                    .child(
+                        div()
+                            .id("pdf_layout_editor_btn")
+                            .flex()
+                            .items_center()
+                            .w_full()
+                            .cursor_pointer()
+                            .hover(|s| s.bg(cx.theme().muted))
+                            .when(is_mini, |this| {
+                                this.justify_center().size(px(48.)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
+                            })
+                            .when(!is_mini, |this| {
+                                this.justify_start().h_10().px_3().gap_3().rounded_md().bg(cx.theme().secondary)
+                            })
+                            .on_click(cx.listener(|this, _ev, _window, cx| {
+                                this.active_view = ActiveView::PdfLayoutEditor;
+                                cx.notify();
+                            }))
+                            .child(Icon::new(IconName::Settings).size(px(20.)).text_color(cx.theme().foreground))
+                            .when(!is_mini, |this| {
+                                this.child(div().text_sm().text_color(cx.theme().foreground).child("PDF Layout Editor"))
+                            })
+                    )
             )
     }
 }
