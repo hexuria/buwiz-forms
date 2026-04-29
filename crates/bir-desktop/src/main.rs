@@ -91,6 +91,11 @@ fn main() {
                 };
 
                 cx.open_window(options, |window, cx| {
+                    window.on_window_should_close(cx, |_, cx| {
+                        cx.quit();
+                        true
+                    });
+
                     let view = cx.new(|cx| app::AppState::new(window, cx));
                     cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
                 })

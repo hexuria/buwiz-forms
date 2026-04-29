@@ -458,11 +458,24 @@ impl PdfLayoutEditorView {
                         .bg(cx.theme().info.opacity(0.1))
                         .border_b_1()
                         .border_color(cx.theme().border)
+                        .flex()
+                        .justify_between()
+                        .items_center()
                         .child(
                             div()
                                 .text_sm()
+                                .w_2_3()
                                 .text_color(cx.theme().info)
-                                .child("Edit Mode Active. You can move, resize, or redraw the selected field box. Click the checkmark to finish.")
+                                .child("Edit Mode Active. Move, resize, or redraw the box.")
+                        )
+                        .child(
+                            Button::new("exit_edit_mode")
+                                .label("Done")
+                                .on_click(cx.listener(|this, _ev, _window, cx| {
+                                    this.drawing_field_idx = None;
+                                    this.interaction_mode = InteractionMode::None;
+                                    cx.notify();
+                                }))
                         )
                 )
             })
@@ -470,6 +483,7 @@ impl PdfLayoutEditorView {
                 div()
                     .id("fields_sidebar_list")
                     .flex_grow()
+                    .min_h_0()
                     .overflow_y_scroll()
                     .track_scroll(&self.scroll_handle)
                     .children(fields_list),
@@ -592,7 +606,9 @@ impl Render for PdfLayoutEditorView {
             div()
                 .flex()
                 .flex_row()
-                .size_full()
+                .flex_grow()
+                .overflow_hidden()
+                .h_full()
                 .child(
                     div()
                         .id("interactive_canvas_viewport")
@@ -804,6 +820,8 @@ impl Render for PdfLayoutEditorView {
 
         div()
             .size_full()
+            .flex_grow()
+            .overflow_hidden()
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)
             .flex()

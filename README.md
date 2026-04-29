@@ -33,6 +33,9 @@ A modern, native, and secure desktop application for managing and filing eBIRFor
 - **Global Dashboard**: A comprehensive overview of all actionable tax deadlines and historical filings across all profiles.
 - **Form Generation**: Robust, schema-driven form generation (e.g., 2551Q) mapping directly to official BIR XML standards.
 
+### 🛠 Form Digitization & Developer Tools
+- **Visual PDF Layout Editor**: Developers can graphically digitize new BIR forms by dragging, dropping, and resizing field boundaries directly on an SVG overlay. This replaces the slow process of manually nudging coordinates in JSON files, drastically speeding up the integration of new forms.
+
 ---
 
 ## 🛠 Prerequisites
