@@ -8,7 +8,7 @@ WIN_TARGET := "x86_64-pc-windows-msvc"
 LINUX_TARGET := "x86_64-unknown-linux-gnu"
 RELEASE_DIR := "target/release-artifacts"
 MAC_APP := RELEASE_DIR + "/" + APP_NAME + ".app"
-VERSION := `sh ./scripts/version.sh`
+VERSION := `sh ./.scripts/version.sh`
 
 # Default task: format, lint, and type check
 default: check
@@ -68,12 +68,12 @@ install:
 # Publish a new release (auto-increments patch, tags, and pushes to trigger CI)
 publish version="":
     @if [ -n "{{version}}" ]; then \
-        sh ./scripts/version.sh set {{version}}; \
+        sh ./.scripts/version.sh set {{version}}; \
     else \
-        sh ./scripts/version.sh bump; \
+        sh ./.scripts/version.sh bump; \
     fi
-    sh ./scripts/version.sh tag
-    @echo "🚀 Release v$(sh ./scripts/version.sh) triggered"
+    sh ./.scripts/version.sh tag
+    @echo "🚀 Release v$(sh ./.scripts/version.sh) triggered"
 
 # Remove build artifacts
 clean:
