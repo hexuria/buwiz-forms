@@ -13,6 +13,9 @@ path = "src/main.rs"
 name = "bir-daemon"
 path = "src/bin/bir_daemon.rs"
 
+[features]
+layout-editor = []
+
 [dependencies]
 dotenvy = { workspace = true }
 bir-core = { path = "../bir-core" }

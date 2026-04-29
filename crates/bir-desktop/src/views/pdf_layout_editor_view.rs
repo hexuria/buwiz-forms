@@ -1,6 +1,7 @@
 use gpui::*;
 use gpui_component::button::Button;
 use gpui_component::input::{Input, InputState};
+use gpui_component::select::{Select, SelectEvent, SelectState, SearchableVec};
 use gpui_component::*;
 
 use bir_print::formtype::{FormField, FormType};
@@ -12,21 +13,68 @@ pub struct PdfLayoutEditorView {
     pub selected_field_idx: Option<usize>,
     pub current_page: usize,
     pub input_path: Entity<InputState>,
+    pub form_select: Entity<SelectState<SearchableVec<&'static str>>>,
     pub scroll_handle: ScrollHandle,
 }
 
 impl PdfLayoutEditorView {
     pub fn new(window: &mut Window, cx: &mut Context<'_, Self>) -> Self {
         let input_path = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder("Path to formtype.json (e.g. formtypes/2551Qv2018/formtype.json)")
+            InputState::new(window, cx).placeholder("Custom path (e.g. formtypes/2551Qv2018/formtype.json)")
         });
+
+        // Read formtypes directory
+        let mut available_forms = Vec::new();
+        if let Ok(entries) = std::fs::read_dir("formtypes") {
+            for entry in entries.flatten() {
+                if let Ok(ft) = entry.file_type()
+                    && ft.is_dir()
+                    && let Ok(name) = entry.file_name().into_string()
+                {
+                    available_forms.push(name);
+                }
+            }
+        }
+        available_forms.sort();
+        // We leak strings for static lifetime to satisfy generic bounds if needed,
+        // or just use SharedString. Let's map to leaked static str or SharedString.
+        let static_forms: Vec<&'static str> = available_forms
+            .into_iter()
+            .map(|s| Box::leak(s.into_boxed_str()) as &'static str)
+            .collect();
+
+        let searchable_forms = SearchableVec::new(static_forms);
+        let form_select = cx.new(|cx| {
+            SelectState::new(searchable_forms, None, window, cx).searchable(true)
+        });
+
+        let input_path_clone = input_path.clone();
+        cx.subscribe_in(
+            &form_select,
+            window,
+            move |this: &mut Self, _entity, event: &SelectEvent<SearchableVec<&'static str>>, window, cx| {
+                if let SelectEvent::Confirm(Some(form_name)) = event {
+                    let mut path = std::env::current_dir().unwrap_or_default();
+                    path.push("formtypes");
+                    path.push(form_name);
+                    path.push("formtype.json");
+                    let path_str = path.to_string_lossy().to_string();
+                    input_path_clone.update(cx, |input, cx| {
+                        input.set_value(path_str, window, cx);
+                    });
+                    this.load_file(path, cx);
+                }
+            },
+        )
+        .detach();
+
         Self {
             form_type: None,
             file_path: None,
             selected_field_idx: None,
             current_page: 1,
             input_path,
+            form_select,
             scroll_handle: ScrollHandle::new(),
         }
     }
@@ -332,7 +380,13 @@ impl Render for PdfLayoutEditorView {
                     .flex()
                     .gap_4()
                     .items_center()
-                    .child(Input::new(&self.input_path).w(px(400.0)))
+                    .child(
+                        Select::new(&self.form_select)
+                            .placeholder("Select Form...")
+                            .w(px(200.0)),
+                    )
+                    .child(div().text_sm().text_color(cx.theme().muted_foreground).child("or"))
+                    .child(Input::new(&self.input_path).w(px(300.0)))
                     .child(Button::new("load").label("Load").on_click(cx.listener(
                         |this, _ev, _window, cx| {
                             let path_str = this.input_path.read(cx).value();
@@ -447,7 +501,7 @@ impl Render for PdfLayoutEditorView {
                 .items_center()
                 .justify_center()
                 .size_full()
-                .child("No form loaded. Enter path and click Load.")
+                .child("Select a form from the dropdown to load the layout editor.")
         };
 
         div()

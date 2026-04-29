@@ -56,13 +56,13 @@ test:
     cargo test --workspace
 
 # Automatically figure out your OS and build the installer package
-install:
+install *args="":
     @if [ "{{os()}}" = "macos" ]; then \
-        just _package-mac; \
+        just _package-mac {{args}}; \
     elif [ "{{os()}}" = "windows" ]; then \
-        just _package-win; \
+        just _package-win {{args}}; \
     else \
-        just _package-linux; \
+        just _package-linux {{args}}; \
     fi
 
 # Publish a new release (tags and pushes to trigger CI)
@@ -95,11 +95,11 @@ clean:
 
 # --- Hidden OS-specific packaging tasks ---
 
-_package-mac:
+_package-mac args="":
     @echo "Building for ARM64..."
-    cargo build --release --target {{MAC_ARM_TARGET}}
+    cargo build --release --target {{MAC_ARM_TARGET}} $([ "{{args}}" = "--layout-editor" ] && echo "--features layout-editor")
     @echo "Building for x86_64..."
-    cargo build --release --target {{MAC_X86_TARGET}}
+    cargo build --release --target {{MAC_X86_TARGET}} $([ "{{args}}" = "--layout-editor" ] && echo "--features layout-editor")
     @mkdir -p {{RELEASE_DIR}}
     @echo "Creating universal binary (lipo)..."
     lipo -create target/{{MAC_ARM_TARGET}}/release/bir target/{{MAC_X86_TARGET}}/release/bir -output {{RELEASE_DIR}}/bir
@@ -126,8 +126,8 @@ _package-mac:
         cd {{RELEASE_DIR}} && zip -r "{{APP_NAME}}-macOS-{{VERSION}}.zip" "{{APP_NAME}}.app"; \
     fi
 
-_package-win:
-    cargo build --release --target {{WIN_TARGET}}
+_package-win args="":
+    cargo build --release --target {{WIN_TARGET}} $([ "{{args}}" = "--layout-editor" ] && echo "--features layout-editor")
     @mkdir -p {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}
     @cp target/{{WIN_TARGET}}/release/bir.exe {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/
     @cp target/{{WIN_TARGET}}/release/bir-daemon.exe {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/
@@ -136,8 +136,8 @@ _package-win:
     @cd {{RELEASE_DIR}} && zip -r "{{APP_NAME}}-Windows-x64-{{VERSION}}.zip" "{{APP_NAME}}-Windows-{{VERSION}}"
     @echo "✅ Windows package: {{RELEASE_DIR}}/{{APP_NAME}}-Windows-x64-{{VERSION}}.zip"
 
-_package-linux:
-    cargo build --release --target {{LINUX_TARGET}}
+_package-linux args="":
+    cargo build --release --target {{LINUX_TARGET}} $([ "{{args}}" = "--layout-editor" ] && echo "--features layout-editor")
     @mkdir -p {{RELEASE_DIR}}
     @if command -v cargo-deb >/dev/null 2>&1; then \
         cargo deb -p bir-desktop --no-build --target {{LINUX_TARGET}} -o {{RELEASE_DIR}}/{{APP_NAME}}-Linux-x64-{{VERSION}}.deb; \
