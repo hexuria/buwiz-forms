@@ -316,25 +316,101 @@ impl Database {
                 );
             }
 
-            use keyring::Entry;
-            use tracing::info;
+            // Platform dispatch: macOS uses the `security` CLI to avoid deadlocking
+            // the GPUI main RunLoop. Linux/Windows use the `keyring` crate directly.
+            #[cfg(target_os = "macos")]
+            return Self::get_or_create_master_key_macos();
 
-            // By using `keyring` on macOS with the `apple-native` feature, this calls `SecItemAdd` and `SecItemCopyMatching` natively.
-            // In a sandboxed App Store environment, this will automatically use the app's Keychain Access Group entitlement.
-            let entry = Entry::new("com.ebir.rust", "sqlcipher_master_key")?;
+            #[cfg(not(target_os = "macos"))]
+            return Self::get_or_create_master_key_keyring();
+        }
+    }
 
-            match entry.get_password() {
-                Ok(hex_key) => {
-                    info!("Loaded existing master key from native keychain");
-                    Ok(hex_key)
-                }
-                Err(_) => {
-                    info!("Generating new master key and storing in native keychain");
-                    let key: [u8; 32] = rand::random();
-                    let hex_key = hex::encode(key);
-                    entry.set_password(&hex_key)?;
-                    Ok(hex_key)
-                }
+    /// macOS: Use the `security` CLI instead of the `keyring` crate's Security.framework FFI.
+    ///
+    /// The `keyring` crate calls `SecKeychainFindGenericPassword` which blocks the calling
+    /// thread waiting for `securityd` to respond. When called from GPUI's main dispatch queue
+    /// (inside `cx.spawn` → `open_window` → `AppState::new`), the Security.framework tries
+    /// to dispatch authorization UI work back onto the same main queue, causing a deadlock.
+    ///
+    /// The `security` CLI runs in a separate process with its own event loop, so it can show
+    /// dialogs and communicate with `securityd` without blocking our RunLoop.
+    ///
+    /// The CLI uses the same Keychain Services storage as the `keyring` crate, so existing
+    /// keys created by either method are fully interchangeable.
+    #[cfg(target_os = "macos")]
+    fn get_or_create_master_key_macos() -> Result<String, DbError> {
+        use tracing::info;
+
+        // Try to read existing key from keychain via CLI
+        let output = std::process::Command::new("security")
+            .args([
+                "find-generic-password",
+                "-s",
+                "com.ebir.rust",
+                "-a",
+                "sqlcipher_master_key",
+                "-w",
+            ])
+            .output()
+            .map_err(|e| DbError::KeychainCli(format!("Failed to run `security` CLI: {e}")))?;
+
+        if output.status.success() {
+            let hex_key = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if hex_key.len() == 64 {
+                info!("Loaded existing master key from native keychain (CLI)");
+                return Ok(hex_key);
+            }
+        }
+
+        // Key doesn't exist yet — generate and store
+        info!("Generating new master key and storing in native keychain (CLI)");
+        let key: [u8; 32] = rand::random();
+        let hex_key = hex::encode(key);
+
+        let add_output = std::process::Command::new("security")
+            .args([
+                "add-generic-password",
+                "-s",
+                "com.ebir.rust",
+                "-a",
+                "sqlcipher_master_key",
+                "-w",
+                &hex_key,
+                "-U", // Update if exists
+            ])
+            .output()
+            .map_err(|e| DbError::KeychainCli(format!("Failed to run `security` CLI: {e}")))?;
+
+        if !add_output.status.success() {
+            let stderr = String::from_utf8_lossy(&add_output.stderr);
+            return Err(DbError::KeychainCli(format!(
+                "Failed to store master key in keychain: {stderr}"
+            )));
+        }
+
+        Ok(hex_key)
+    }
+
+    /// Linux/Windows: Use the `keyring` crate directly (no RunLoop deadlock risk).
+    #[cfg(not(target_os = "macos"))]
+    fn get_or_create_master_key_keyring() -> Result<String, DbError> {
+        use keyring::Entry;
+        use tracing::info;
+
+        let entry = Entry::new("com.ebir.rust", "sqlcipher_master_key")?;
+
+        match entry.get_password() {
+            Ok(hex_key) => {
+                info!("Loaded existing master key from native keychain");
+                Ok(hex_key)
+            }
+            Err(_) => {
+                info!("Generating new master key and storing in native keychain");
+                let key: [u8; 32] = rand::random();
+                let hex_key = hex::encode(key);
+                entry.set_password(&hex_key)?;
+                Ok(hex_key)
             }
         }
     }
