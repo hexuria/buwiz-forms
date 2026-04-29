@@ -152,3 +152,13 @@ _package-linux args="":
         cd {{RELEASE_DIR}} && tar czf "{{APP_NAME}}-Linux-x64-{{VERSION}}.tar.gz" "{{APP_NAME}}-Linux-{{VERSION}}"; \
         echo "✅ Tarball: {{RELEASE_DIR}}/{{APP_NAME}}-Linux-x64-{{VERSION}}.tar.gz"; \
     fi
+
+# Generate a new form layout from an official BIR PDF
+# Usage: just generate-form ~/Downloads/1601C.pdf 1601Cv2018 "Monthly Remittance Return"
+generate-form pdf form_id title="":
+    python3 .scripts/generate_formtype.py \
+        --input "{{pdf}}" \
+        --form-id "{{form_id}}" \
+        --title "{{title}}" \
+        --detect-fields
+
