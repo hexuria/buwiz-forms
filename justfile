@@ -27,6 +27,14 @@ check:
     cargo check --workspace
     cargo clippy --workspace -- -D warnings
 
+# Check for vulnerability advisories (requires: cargo install cargo-audit)
+audit:
+    @if command -v cargo-audit >/dev/null 2>&1; then \
+        cargo audit; \
+    else \
+        echo "⚠️ cargo-audit is not installed. Run 'cargo install cargo-audit' to enable vulnerability scanning."; \
+    fi
+
 # Run all unit and integration tests
 test:
     cargo test --workspace
