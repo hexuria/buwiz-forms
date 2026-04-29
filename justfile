@@ -35,6 +35,22 @@ audit:
         echo "⚠️ cargo-audit is not installed. Run 'cargo install cargo-audit' to enable vulnerability scanning."; \
     fi
 
+# Check for outdated dependencies (requires: cargo install cargo-outdated)
+outdated:
+    @if command -v cargo-outdated >/dev/null 2>&1; then \
+        cargo outdated; \
+    else \
+        echo "⚠️ cargo-outdated is not installed. Run 'cargo install cargo-outdated' to enable."; \
+    fi
+
+# Find unused dependencies in Cargo.toml (requires: cargo install cargo-machete)
+unused:
+    @if command -v cargo-machete >/dev/null 2>&1; then \
+        cargo machete; \
+    else \
+        echo "⚠️ cargo-machete is not installed. Run 'cargo install cargo-machete' to enable."; \
+    fi
+
 # Run all unit and integration tests
 test:
     cargo test --workspace
