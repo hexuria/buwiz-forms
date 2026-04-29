@@ -20,9 +20,11 @@ pub struct PdfLayoutEditorView {
 
 impl PdfLayoutEditorView {
     pub fn new(window: &mut Window, cx: &mut Context<'_, Self>) -> Self {
+        let formtypes_dir = Self::get_formtypes_dir();
+
         // Scan formtypes/ directory for available forms
         let mut available_forms = Vec::new();
-        if let Ok(entries) = std::fs::read_dir("formtypes") {
+        if let Ok(entries) = std::fs::read_dir(&formtypes_dir) {
             for entry in entries.flatten() {
                 if let Ok(ft) = entry.file_type()
                     && ft.is_dir()
@@ -43,8 +45,7 @@ impl PdfLayoutEditorView {
 
         // Auto-load first available form
         let (auto_form, auto_path) = if let Some(first) = available_forms.first() {
-            let mut p = std::env::current_dir().unwrap_or_default();
-            p.push("formtypes");
+            let mut p = formtypes_dir.clone();
             p.push(first);
             p.push("formtype.json");
             if let Ok(content) = std::fs::read_to_string(&p)
@@ -71,8 +72,7 @@ impl PdfLayoutEditorView {
                     let path = if selected.starts_with('/') || selected.starts_with("~/") {
                         PathBuf::from(Self::expand_tilde(selected))
                     } else {
-                        let mut p = std::env::current_dir().unwrap_or_default();
-                        p.push("formtypes");
+                        let mut p = Self::get_formtypes_dir();
                         p.push(selected);
                         p.push("formtype.json");
                         p
@@ -90,6 +90,20 @@ impl PdfLayoutEditorView {
             form_select,
             scroll_handle: ScrollHandle::new(),
             _subscriptions,
+        }
+    }
+
+    fn get_formtypes_dir() -> PathBuf {
+        let current_exe = std::env::current_exe().unwrap_or_default();
+        if current_exe.to_string_lossy().contains("Contents/MacOS") {
+            current_exe
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap()
+                .join("Resources/formtypes")
+        } else {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../formtypes")
         }
     }
 

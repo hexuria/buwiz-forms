@@ -15,6 +15,7 @@ pub struct LockScreenView {
     failed_attempts: u8,
     os_auth_triggered: bool,
     os_auth_error: Option<String>,
+    should_clear_otp: bool,
 }
 
 pub enum LockScreenEvent {
@@ -39,43 +40,50 @@ impl LockScreenView {
             failed_attempts: 0,
             os_auth_triggered: false,
             os_auth_error: None,
+            should_clear_otp: false,
         };
 
         cx.subscribe_in(
             &otp_state,
             window,
-            |this: &mut Self, _entity, event: &InputEvent, window, cx| {
+            |this: &mut Self, _entity, event: &InputEvent, _window, cx| {
                 if let InputEvent::Change = event {
                     let pin = this.otp_state.read(cx).value().to_string();
                     if pin.len() == 4 {
-                        let hashed_pin = bir_core::crypto::hash_pin(&pin);
-                        let mut is_valid = false;
-                        if let Ok(db_guard) = this.db.lock() {
-                            if let Ok(Some(saved_hash)) = db_guard.get_setting("app_lock_pin_hash")
-                            {
-                                is_valid = saved_hash == hashed_pin;
-                            } else {
-                                // If somehow app lock is enabled but no pin is set, default to unlocking
-                                is_valid = true;
-                            }
-                        }
+                        let db = this.db.clone();
+                        
+                        cx.spawn(async move |this, cx| {
+                            let hashed_pin = cx.background_executor().spawn(async move {
+                                bir_core::crypto::hash_pin(&pin)
+                            }).await;
+                            
+                            let _ = cx.update(|cx| {
+                                if let Some(this) = this.upgrade() {
+                                    this.update(cx, |this, cx| {
+                                        let mut is_valid = false;
+                                        if let Ok(db_guard) = db.lock() {
+                                            if let Ok(Some(saved_hash)) = db_guard.get_setting("app_lock_pin_hash")
+                                            {
+                                                is_valid = saved_hash == hashed_pin;
+                                            } else {
+                                                is_valid = true;
+                                            }
+                                        }
 
-                        if is_valid {
-                            this.has_error = false;
-                            this.failed_attempts = 0;
-                            this.otp_state.update(cx, |state, cx| {
-                                state.set_value("", window, cx);
+                                        if is_valid {
+                                            this.has_error = false;
+                                            this.failed_attempts = 0;
+                                            cx.emit(LockScreenEvent::Unlocked);
+                                        } else {
+                                            this.has_error = true;
+                                            this.failed_attempts += 1;
+                                            this.should_clear_otp = true;
+                                            cx.notify();
+                                        }
+                                    });
+                                }
                             });
-                            cx.emit(LockScreenEvent::Unlocked);
-                        } else {
-                            this.has_error = true;
-                            this.failed_attempts += 1;
-                            this.otp_state.update(cx, |state, cx| {
-                                state.set_value("", window, cx);
-                                state.focus(window, cx);
-                            });
-                            cx.notify();
-                        }
+                        }).detach();
                     }
                 }
             },
@@ -152,7 +160,15 @@ impl LockScreenView {
 }
 
 impl Render for LockScreenView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.should_clear_otp {
+            self.should_clear_otp = false;
+            self.otp_state.update(cx, |state, cx| {
+                state.set_value("", window, cx);
+                state.focus(window, cx);
+            });
+        }
+
         div()
             .size_full()
             .flex()
