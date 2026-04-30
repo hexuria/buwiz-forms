@@ -364,7 +364,7 @@
         "width": 12.798828125,
         "height": 12.50390625
       },
-      "direction": "Rtl"
+      "direction": "rtl"
     },
     {
       "key": "frm2551Qv2018:taxRate2",
@@ -379,7 +379,7 @@
         "width": 12.66015625,
         "height": 12
       },
-      "direction": "Rtl"
+      "direction": "rtl"
     },
     {
       "key": "frm2551Qv2018:txt14",
@@ -391,7 +391,7 @@
       "int_cells": 11,
       "dec_x": 553,
       "char_count": 12,
-      "direction": "Ltr",
+      "direction": "ltr",
       "optional": false,
       "widget": {
         "type": "text",
@@ -410,7 +410,7 @@
       "int_cells": 11,
       "dec_x": 553,
       "char_count": 12,
-      "direction": "Ltr",
+      "direction": "ltr",
       "optional": false,
       "widget": {
         "type": "text",
@@ -429,7 +429,7 @@
       "int_cells": 11,
       "dec_x": 553,
       "char_count": 12,
-      "direction": "Ltr",
+      "direction": "ltr",
       "optional": false,
       "widget": {
         "type": "text",
@@ -448,7 +448,7 @@
       "int_cells": 11,
       "dec_x": 553,
       "char_count": 12,
-      "direction": "Ltr",
+      "direction": "ltr",
       "optional": false,
       "widget": {
         "type": "text",
@@ -467,7 +467,7 @@
       "int_cells": 11,
       "dec_x": 553,
       "char_count": 12,
-      "direction": "Ltr",
+      "direction": "ltr",
       "optional": false,
       "widget": {
         "type": "text",
@@ -486,7 +486,7 @@
       "int_cells": 11,
       "dec_x": 553,
       "char_count": 12,
-      "direction": "Ltr",
+      "direction": "ltr",
       "optional": false,
       "widget": {
         "type": "text",
@@ -505,7 +505,7 @@
       "int_cells": 11,
       "dec_x": 553,
       "char_count": 12,
-      "direction": "Ltr",
+      "direction": "ltr",
       "optional": false,
       "widget": {
         "type": "text",
@@ -524,7 +524,7 @@
       "int_cells": 11,
       "dec_x": 553,
       "char_count": 12,
-      "direction": "Ltr",
+      "direction": "ltr",
       "optional": false,
       "widget": {
         "type": "text",
@@ -550,7 +550,7 @@
         "height": 17.748046875,
         "font_size": 8.5
       },
-      "direction": "Ltr"
+      "direction": "ltr"
     },
     {
       "key": "frm2551Qv2018:txt23",
@@ -569,7 +569,7 @@
         "height": 18.181640625,
         "font_size": 8.5
       },
-      "direction": "Ltr"
+      "direction": "ltr"
     },
     {
       "key": "frm2551Qv2018:txt24",
@@ -588,7 +588,7 @@
         "height": 17.869140625,
         "font_size": 8.5
       },
-      "direction": "Ltr"
+      "direction": "ltr"
     },
     {
       "key": "frm2551Qv2018:txtPg2TIN1",
@@ -711,7 +711,7 @@
         "height": 17.619384765625,
         "font_size": 8.5
       },
-      "direction": "Ltr"
+      "direction": "ltr"
     },
     {
       "key": "txtATCRate1",
@@ -721,7 +721,7 @@
       "y": 162.80078125,
       "size": 8.5,
       "char_count": 2,
-      "direction": "Rtl",
+      "direction": "rtl",
       "optional": false,
       "widget": {
         "type": "text",
@@ -747,7 +747,7 @@
         "height": 17.330078125,
         "font_size": 8.5
       },
-      "direction": "Ltr"
+      "direction": "ltr"
     },
     {
       "key": "txtTotalSched1",
@@ -800,7 +800,7 @@
         "height": 16.724609375,
         "font_size": 8.5
       },
-      "direction": "Ltr"
+      "direction": "ltr"
     },
     {
       "key": "frm2551Qv2018:txt15",
@@ -819,7 +819,7 @@
         "height": 18.322265625,
         "font_size": 8.5
       },
-      "direction": "Ltr"
+      "direction": "ltr"
     },
     {
       "key": "frm2551Qv2018:txt16",
@@ -838,7 +838,7 @@
         "height": 17.998046875,
         "font_size": 8.5
       },
-      "direction": "Ltr"
+      "direction": "ltr"
     },
     {
       "key": "frm2551Qv2018:txt17",
@@ -857,7 +857,7 @@
         "height": 17.072265625,
         "font_size": 8.5
       },
-      "direction": "Ltr"
+      "direction": "ltr"
     },
     {
       "key": "frm2551Qv2018:txt18",
@@ -876,7 +876,7 @@
         "height": 16.73046875,
         "font_size": 8.5
       },
-      "direction": "Ltr"
+      "direction": "ltr"
     },
     {
       "key": "frm2551Qv2018:txt19",
@@ -895,7 +895,7 @@
         "height": 18.162109375,
         "font_size": 8.5
       },
-      "direction": "Ltr"
+      "direction": "ltr"
     },
     {
       "key": "frm2551Qv2018:txt20",
@@ -914,7 +914,7 @@
         "height": 18.275390625,
         "font_size": 8.5
       },
-      "direction": "Ltr"
+      "direction": "ltr"
     },
     {
       "key": "frm2551Qv2018:txt21",
@@ -933,7 +933,7 @@
         "height": 17.384765625,
         "font_size": 8.5
       },
-      "direction": "Ltr"
+      "direction": "ltr"
     },
     {
       "key": "frm2551Qv2018:txt22",
@@ -952,7 +952,7 @@
         "height": 17.2265625,
         "font_size": 8.5
       },
-      "direction": "Ltr"
+      "direction": "ltr"
     },
     {
       "key": "frm2551Qv2018:txt23",
@@ -971,7 +971,7 @@
         "height": 17.453125,
         "font_size": 8.5
       },
-      "direction": "Ltr"
+      "direction": "ltr"
     },
     {
       "key": "frm2551Qv2018:txt24",
@@ -990,7 +990,7 @@
         "height": 17.791015625,
         "font_size": 8.5
       },
-      "direction": "Ltr"
+      "direction": "ltr"
     },
     {
       "key": "txtATCAmt1",
@@ -1009,7 +1009,7 @@
         "height": 17.377365112304688,
         "font_size": 8.5
       },
-      "direction": "Ltr"
+      "direction": "ltr"
     },
     {
       "key": "txtATCDue1",
@@ -1028,7 +1028,7 @@
         "height": 16.9296875,
         "font_size": 8.5
       },
-      "direction": "Ltr"
+      "direction": "ltr"
     },
     {
       "key": "txtTotalSched1",
