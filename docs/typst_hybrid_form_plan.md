@@ -304,6 +304,16 @@ This means every form continues to work exactly as before. Typst-native forms ar
 
 > **Note:** AcroForm (editable PDF) is not needed. The PDF is a read-only output with all fields pre-filled by the application. Users view it; they don't edit it.
 
+### Visual Calibration (Onion Skinning)
+
+To achieve the "pixel-perfect" clone required, we will build a dedicated **Typst Calibration Tool** (`TypstCalibrationView`). This is separate from the `PdfLayoutEditorView` to avoid muddying the original Layout Engine coordinate mapping logic.
+
+**Features of the Calibration View:**
+- **Stacked View (Onion Skinning)**: The official PDF snapshot (`pages/page1.svg`) and the Typst PNG output (`preview.png`) are stacked on top of each other.
+- **Opacity Toggle**: Developers can toggle opacity or invert colors to visually diff the two layers. Perfect overlaps will blend; 1px mistakes will vividly stand out.
+- **Independent Controls**: The Typst layer and PDF layer can be moved independently to perfectly align them if the background SVGs aren't intrinsically mapped to exactly `0,0`.
+- **Hot-Reloading**: Modifying `form.typ` in your text editor (VSCode/Zed) will instantly trigger a `typst compile --format png` background job and hot-reload the overlay PNG in the GPUI window, providing instant visual feedback without recompiling the Rust desktop app.
+
 ### Per-Form Migration Checklist
 
 - [ ] Run `extract_form_structure.py` on the official PDF
@@ -335,11 +345,11 @@ This means every form continues to work exactly as before. Typst-native forms ar
 | 3 | Generate first `form.typ` for 2551Q (AI-assisted) | Medium | ✅ Done — compiles to 642KB PDF |
 | 4 | Add `form.typ` detection to `bir-print` render pipeline | Small | ✅ Done |
 | 5 | Add data.json generation to `render_flat_pdf` | Small | ✅ Done |
-| 6 | Add side-by-side split view to Layout Editor | Large | Queued |
-| 7 | Add `typst compile --format png` preview in editor | Medium | Queued |
+| 6 | Create dedicated `TypstCalibrationView` (Stacked View) | Large | Queued |
+| 7 | Implement hot-reload Typst PNG overlays & independent panning | Medium | Queued |
 | 8 | Update `form-generator` skill with Phase 2/3 | Medium | Queued |
 | 9 | Migrate 2551Q to Typst-native (first form) | Medium | ✅ Done (form.typ in place, bir-print detects it) |
-| 10 | Validate output against official eBIRForms printout | Small | 🔜 Next |
+| 10 | Validate output using the Calibration View (Onion Skinning) | Small | 🔜 Next |
 
 ---
 
