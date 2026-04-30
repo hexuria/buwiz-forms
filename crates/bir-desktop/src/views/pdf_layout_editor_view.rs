@@ -502,6 +502,7 @@ impl PdfLayoutEditorView {
                         if this.is_edit_mode {
                             this.drawing_field_idx = Some(idx);
                         }
+                        this.scroll_sidebar_to_selected(cx);
                         cx.notify();
                     }
                 }),
@@ -530,7 +531,8 @@ impl PdfLayoutEditorView {
 
         let fields_list = groups
             .into_iter()
-            .map(|(key, fields_in_group)| {
+            .enumerate()
+            .map(|(group_idx, (key, fields_in_group))| {
                 let group_count = fields_in_group.len();
                 let parent_key = key.clone();
 
@@ -816,7 +818,7 @@ impl PdfLayoutEditorView {
                                 )
                         });
 
-                div().flex_col().child(header).children(children)
+                div().id(group_idx).flex_col().child(header).children(children)
             })
             .collect::<Vec<_>>();
 
