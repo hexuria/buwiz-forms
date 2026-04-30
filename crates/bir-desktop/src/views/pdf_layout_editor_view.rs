@@ -375,9 +375,9 @@ impl PdfLayoutEditorView {
 
         let type_color = match field.kind {
             FieldKind::Char => cx.theme().warning,         // Yellowish
-            FieldKind::Int => gpui::rgb(0xadb2d4).into(),  // rgb(173, 178, 212)
+            FieldKind::Int => gpui::rgb(0xf49bab).into(),  // Pinkish
             FieldKind::Dec => hsla(0.38, 0.55, 0.45, 1.0), // Green
-            FieldKind::Bool => gpui::rgb(0x170c79).into(), // rgb(23, 12, 121)
+            FieldKind::Bool => gpui::rgb(0x7f55b1).into(), // Purple
         };
 
         let (border_color, bg_color) = if is_drawing {
@@ -696,15 +696,15 @@ impl PdfLayoutEditorView {
                                                         }))
                                                         .bg(match field.kind {
                                                             FieldKind::Char => cx.theme().warning.opacity(0.2),
-                                                            FieldKind::Int => gpui::rgba(0xadb2d433).into(),
+                                                            FieldKind::Int => gpui::rgba(0xf49bab33).into(),
                                                             FieldKind::Dec => hsla(0.38, 0.55, 0.45, 0.2),
-                                                            FieldKind::Bool => gpui::rgba(0x170c7933).into(),
+                                                            FieldKind::Bool => gpui::rgba(0x7f55b133).into(),
                                                         })
                                                         .text_color(match field.kind {
                                                             FieldKind::Char => cx.theme().warning,
-                                                            FieldKind::Int => gpui::rgb(0xadb2d4).into(),
+                                                            FieldKind::Int => gpui::rgb(0xf49bab).into(),
                                                             FieldKind::Dec => hsla(0.38, 0.55, 0.45, 1.0),
-                                                            FieldKind::Bool => gpui::rgb(0x170c79).into(),
+                                                            FieldKind::Bool => gpui::rgb(0x7f55b1).into(),
                                                         })
                                                         .text_xs()
                                                         .font_weight(FontWeight::BOLD)
