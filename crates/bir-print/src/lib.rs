@@ -860,8 +860,6 @@ fn boolish(value: &str) -> bool {
     )
 }
 
-
-
 fn render_2551q_fallback_pdf(draft: &Form2551QDraft) -> Vec<u8> {
     let mut rows = vec![
         "BIR Form No. 2551Q".to_string(),

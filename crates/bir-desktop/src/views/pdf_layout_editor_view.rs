@@ -307,6 +307,7 @@ impl PdfLayoutEditorView {
                 let mut new_field = first.clone();
                 new_field.key = key.clone();
                 new_field.page = self.current_page;
+                new_field.kind = FieldKind::Char;
                 // Place roughly in the center of the viewport with a default 100x100 size
                 new_field.x = ((-self.pan_offset.x + 300.0) / self.scale) as f64;
                 new_field.y = ((-self.pan_offset.y + 300.0) / self.scale) as f64;
@@ -374,9 +375,9 @@ impl PdfLayoutEditorView {
 
         let type_color = match field.kind {
             FieldKind::Char => cx.theme().warning,         // Yellowish
-            FieldKind::Int => hsla(0.38, 0.55, 0.45, 1.0), // Green
-            FieldKind::Dec => hsla(0.88, 0.55, 0.55, 1.0), // Pink
-            FieldKind::Bool => cx.theme().foreground,      // Black/Dark
+            FieldKind::Int => gpui::rgb(0xadb2d4).into(),  // rgb(173, 178, 212)
+            FieldKind::Dec => hsla(0.38, 0.55, 0.45, 1.0), // Green
+            FieldKind::Bool => gpui::rgb(0x170c79).into(), // rgb(23, 12, 121)
         };
 
         let (border_color, bg_color) = if is_drawing {
@@ -655,108 +656,164 @@ impl PdfLayoutEditorView {
                                 .child(
                                     div()
                                         .flex()
+                                        .w_full()
+                                        .justify_between()
                                         .items_center()
-                                        .gap_2()
                                         .child(
                                             div()
-                                                .text_color(label_color)
-                                                .text_sm()
-                                                .child(format!("Box {}", sub_idx + 1)),
+                                                .flex()
+                                                .items_center()
+                                                .gap_3()
+                                                .child(
+                                                    div()
+                                                        .text_color(label_color)
+                                                        .text_sm()
+                                                        .child(format!("{}", sub_idx + 1)),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .px_1()
+                                                        .py_0p5()
+                                                        .rounded_sm()
+                                                        .cursor_pointer()
+                                                        .on_mouse_down(MouseButton::Left, cx.listener(move |this, _, _, cx| {
+                                                            cx.stop_propagation();
+                                                            this.selected_field_idx = Some(idx);
+                                                            if let Some(ft) = &mut this.form_type {
+                                                                let field = &mut ft.fields[idx];
+                                                                field.kind = match field.kind {
+                                                                    FieldKind::Char => FieldKind::Int,
+                                                                    FieldKind::Int => FieldKind::Dec,
+                                                                    FieldKind::Dec => FieldKind::Bool,
+                                                                    FieldKind::Bool => FieldKind::Char,
+                                                                };
+                                                                field.direction = match field.kind {
+                                                                    FieldKind::Int => Direction::Rtl,
+                                                                    _ => Direction::Ltr,
+                                                                };
+                                                            }
+                                                            cx.notify();
+                                                        }))
+                                                        .bg(match field.kind {
+                                                            FieldKind::Char => cx.theme().warning.opacity(0.2),
+                                                            FieldKind::Int => gpui::rgba(0xadb2d433).into(),
+                                                            FieldKind::Dec => hsla(0.38, 0.55, 0.45, 0.2),
+                                                            FieldKind::Bool => gpui::rgba(0x170c7933).into(),
+                                                        })
+                                                        .text_color(match field.kind {
+                                                            FieldKind::Char => cx.theme().warning,
+                                                            FieldKind::Int => gpui::rgb(0xadb2d4).into(),
+                                                            FieldKind::Dec => hsla(0.38, 0.55, 0.45, 1.0),
+                                                            FieldKind::Bool => gpui::rgb(0x170c79).into(),
+                                                        })
+                                                        .text_xs()
+                                                        .font_weight(FontWeight::BOLD)
+                                                        .child(match field.kind {
+                                                            FieldKind::Char => "CHR",
+                                                            FieldKind::Int => "INT",
+                                                            FieldKind::Dec => "DEC",
+                                                            FieldKind::Bool => "BOL",
+                                                        })
+                                                )
+                                                .child(
+                                                    div()
+                                                        .cursor_pointer()
+                                                        .on_mouse_down(MouseButton::Left, cx.listener(move |this, _, _, cx| {
+                                                            cx.stop_propagation();
+                                                            this.selected_field_idx = Some(idx);
+                                                            if let Some(ft) = &mut this.form_type {
+                                                                let field = &mut ft.fields[idx];
+                                                                field.direction = match field.direction {
+                                                                    Direction::Ltr => Direction::Rtl,
+                                                                    Direction::Rtl => Direction::Ltr,
+                                                                };
+                                                            }
+                                                            cx.notify();
+                                                        }))
+                                                        .text_color(cx.theme().muted_foreground)
+                                                        .text_xs()
+                                                        .child(match field.direction {
+                                                            Direction::Ltr => "→",
+                                                            Direction::Rtl => "←",
+                                                        })
+                                                )
+                                                .child(
+                                                    div()
+                                                        .cursor_pointer()
+                                                        .on_mouse_down(MouseButton::Left, cx.listener(move |this, _, window, cx| {
+                                                            cx.stop_propagation();
+                                                            this.selected_field_idx = Some(idx);
+                                                            if let Some(ft) = &this.form_type {
+                                                                this.char_count_modal_open = true;
+                                                                let initial = ft.fields[idx]
+                                                                    .char_count
+                                                                    .map(|c| c.to_string())
+                                                                    .unwrap_or_default();
+                                                                this.char_count_input.update(cx, |input, cx| {
+                                                                    input.set_value(initial, window, cx);
+                                                                    input.focus(window, cx);
+                                                                });
+                                                            }
+                                                            cx.notify();
+                                                        }))
+                                                        .text_color(cx.theme().muted_foreground)
+                                                        .text_xs()
+                                                        .child(if let Some(cc) = field.char_count {
+                                                            format!("Cc: {}", cc)
+                                                        } else {
+                                                            "Cc: 0".to_string()
+                                                        })
+                                                )
                                         )
                                         .child(
                                             div()
-                                                .px_1()
-                                                .py_0p5()
-                                                .rounded_sm()
-                                                .bg(match field.kind {
-                                                    FieldKind::Char => cx.theme().warning.opacity(0.2),
-                                                    FieldKind::Int => hsla(0.38, 0.55, 0.45, 0.2),
-                                                    FieldKind::Dec => hsla(0.88, 0.55, 0.55, 0.2),
-                                                    FieldKind::Bool => cx.theme().foreground.opacity(0.2),
-                                                })
-                                                .text_color(match field.kind {
-                                                    FieldKind::Char => cx.theme().warning,
-                                                    FieldKind::Int => hsla(0.38, 0.55, 0.45, 1.0),
-                                                    FieldKind::Dec => hsla(0.88, 0.55, 0.55, 1.0),
-                                                    FieldKind::Bool => cx.theme().foreground,
-                                                })
-                                                .text_xs()
-                                                .font_weight(FontWeight::BOLD)
-                                                .child(match field.kind {
-                                                    FieldKind::Char => "CHR",
-                                                    FieldKind::Int => "INT",
-                                                    FieldKind::Dec => "DEC",
-                                                    FieldKind::Bool => "BOL",
-                                                })
-                                        )
-                                        .child(
-                                            div()
-                                                .text_color(cx.theme().muted_foreground)
-                                                .text_xs()
-                                                .child(match field.direction {
-                                                    Direction::Ltr => "→",
-                                                    Direction::Rtl => "←",
-                                                })
-                                        )
-                                )
-                                .child(
-                                    div().flex().gap_2().items_center().child(
-                                        div()
-                                            .cursor_pointer()
-                                            .on_mouse_down(
-                                                MouseButton::Left,
-                                                cx.listener(move |this, _, window, cx| {
+                                                .cursor_pointer()
+                                                .on_mouse_down(MouseButton::Left, cx.listener(move |this, _, window, cx| {
                                                     cx.stop_propagation();
-                                                    if group_count > 1 {
-                                                        if let Some(ft) = &this.form_type {
-                                                            let key = ft.fields.get(idx).map(|f| f.key.clone()).unwrap_or_default();
-                                                            let prompt = window.prompt(
-                                                                gpui::PromptLevel::Warning,
-                                                                &format!("Delete Box {} from {}?", sub_idx + 1, key),
-                                                                None,
-                                                                &["Delete", "Cancel"],
-                                                                cx,
-                                                            );
-                                                            cx.spawn(async move |this, cx| {
-                                                                if let Ok(0) = prompt.await {
-                                                                    let _ = this.update(cx, |this, cx| {
-                                                                        if let Some(ft) = &mut this.form_type {
-                                                                            if idx < ft.fields.len() {
-                                                                                ft.fields.remove(idx);
-                                                                                if this.selected_field_idx == Some(idx) {
-                                                                                    this.selected_field_idx = None;
-                                                                                } else if let Some(s) = this.selected_field_idx {
-                                                                                    if s > idx {
-                                                                                        this.selected_field_idx = Some(s - 1);
-                                                                                    }
+                                                    if let Some(ft) = &this.form_type {
+                                                        let key = ft.fields.get(idx).map(|f| f.key.clone()).unwrap_or_default();
+                                                        let prompt = window.prompt(
+                                                            gpui::PromptLevel::Warning,
+                                                            &format!("Delete element {} from {}?", sub_idx + 1, key),
+                                                            None,
+                                                            &["Delete", "Cancel"],
+                                                            cx,
+                                                        );
+                                                        cx.spawn(async move |this, cx| {
+                                                            if let Ok(0) = prompt.await {
+                                                                let _ = this.update(cx, |this, cx| {
+                                                                    if let Some(ft) = &mut this.form_type {
+                                                                        if idx < ft.fields.len() {
+                                                                            ft.fields.remove(idx);
+                                                                            if this.selected_field_idx == Some(idx) {
+                                                                                this.selected_field_idx = None;
+                                                                            } else if let Some(s) = this.selected_field_idx {
+                                                                                if s > idx {
+                                                                                    this.selected_field_idx = Some(s - 1);
                                                                                 }
-                                                                                if this.drawing_field_idx == Some(idx) {
-                                                                                    this.drawing_field_idx = None;
-                                                                                } else if let Some(d) = this.drawing_field_idx {
-                                                                                    if d > idx {
-                                                                                        this.drawing_field_idx = Some(d - 1);
-                                                                                    }
-                                                                                }
-                                                                                cx.notify();
                                                                             }
+                                                                            if this.drawing_field_idx == Some(idx) {
+                                                                                this.drawing_field_idx = None;
+                                                                            } else if let Some(d) = this.drawing_field_idx {
+                                                                                if d > idx {
+                                                                                    this.drawing_field_idx = Some(d - 1);
+                                                                                }
+                                                                            }
+                                                                            cx.notify();
                                                                         }
-                                                                    });
-                                                                }
-                                                            }).detach();
-                                                        }
+                                                                    }
+                                                                });
+                                                            }
+                                                        }).detach();
                                                     }
-                                                }),
-                                            )
-                                            .child(if group_count > 1 {
-                                                Icon::empty()
-                                                    .path("svg/trash.svg")
-                                                    .small()
-                                                    .text_color(cx.theme().danger)
-                                                    .into_any_element()
-                                            } else {
-                                                div().into_any_element()
-                                            }),
-                                    ),
+                                                }))
+                                                .child(
+                                                    Icon::empty()
+                                                        .path("svg/minus.svg")
+                                                        .small()
+                                                        .text_color(cx.theme().danger)
+                                                )
+                                        )
                                 )
                         });
 

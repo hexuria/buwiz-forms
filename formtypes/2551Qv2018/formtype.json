@@ -353,12 +353,11 @@
     },
     {
       "key": "frm2551Qv2018:taxRate1",
-      "kind": "char",
+      "kind": "bool",
       "page": 1,
       "x": 181.27734375,
       "y": 326.990234375,
       "char_count": 1,
-      "direction": "rtl",
       "optional": true,
       "widget": {
         "type": "checkbox",
@@ -368,12 +367,11 @@
     },
     {
       "key": "frm2551Qv2018:taxRate2",
-      "kind": "char",
+      "kind": "bool",
       "page": 1,
       "x": 348.140625,
       "y": 327.693359375,
       "char_count": 1,
-      "direction": "rtl",
       "optional": true,
       "widget": {
         "type": "checkbox",
