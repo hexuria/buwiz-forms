@@ -1,7 +1,7 @@
 {
   "form_id": "2551Qv2018",
-  "page_width": 612,
-  "page_height": 936,
+  "page_width": 612.0,
+  "page_height": 936.0,
   "fields": [
     {
       "key": "frm2551Qv2018:forThe_1",
@@ -37,7 +37,7 @@
       "page": 1,
       "x": 136.06640625,
       "y": 126.224609375,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "char_count": 6,
       "optional": false,
       "widget": {
@@ -116,7 +116,7 @@
       "widget": {
         "type": "checkbox",
         "width": 13.052734375,
-        "height": 12
+        "height": 12.0
       }
     },
     {
@@ -139,7 +139,7 @@
       "page": 1,
       "x": 560.619140625,
       "y": 126.037109375,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "char_count": 2,
       "optional": false,
       "widget": {
@@ -334,7 +334,7 @@
       "widget": {
         "type": "checkbox",
         "width": 13.970703125,
-        "height": 12
+        "height": 12.0
       }
     },
     {
@@ -358,13 +358,13 @@
       "x": 181.27734375,
       "y": 326.990234375,
       "char_count": 1,
+      "direction": "rtl",
       "optional": true,
       "widget": {
         "type": "checkbox",
         "width": 12.798828125,
         "height": 12.50390625
-      },
-      "direction": "rtl"
+      }
     },
     {
       "key": "frm2551Qv2018:taxRate2",
@@ -373,13 +373,13 @@
       "x": 348.140625,
       "y": 327.693359375,
       "char_count": 1,
+      "direction": "rtl",
       "optional": true,
       "widget": {
         "type": "checkbox",
         "width": 12.66015625,
-        "height": 12
-      },
-      "direction": "rtl"
+        "height": 12.0
+      }
     },
     {
       "key": "frm2551Qv2018:txt14",
@@ -387,11 +387,10 @@
       "page": 1,
       "x": 376.72265625,
       "y": 362.142578125,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 12,
-      "direction": "ltr",
       "optional": false,
       "widget": {
         "type": "text",
@@ -406,11 +405,10 @@
       "page": 1,
       "x": 376.53125,
       "y": 391.833984375,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 12,
-      "direction": "ltr",
       "optional": false,
       "widget": {
         "type": "text",
@@ -425,11 +423,10 @@
       "page": 1,
       "x": 376.818359375,
       "y": 409.517578125,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 12,
-      "direction": "ltr",
       "optional": false,
       "widget": {
         "type": "text",
@@ -444,11 +441,10 @@
       "page": 1,
       "x": 376.65625,
       "y": 428.341796875,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 12,
-      "direction": "ltr",
       "optional": false,
       "widget": {
         "type": "text",
@@ -463,11 +459,10 @@
       "page": 1,
       "x": 376.982421875,
       "y": 446.572265625,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 12,
-      "direction": "ltr",
       "optional": false,
       "widget": {
         "type": "text",
@@ -482,11 +477,10 @@
       "page": 1,
       "x": 376.80859375,
       "y": 464.6875,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 12,
-      "direction": "ltr",
       "optional": false,
       "widget": {
         "type": "text",
@@ -501,11 +495,10 @@
       "page": 1,
       "x": 376.763671875,
       "y": 493.6015625,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 12,
-      "direction": "ltr",
       "optional": false,
       "widget": {
         "type": "text",
@@ -520,11 +513,10 @@
       "page": 1,
       "x": 376.859375,
       "y": 512.345703125,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 12,
-      "direction": "ltr",
       "optional": false,
       "widget": {
         "type": "text",
@@ -539,9 +531,9 @@
       "page": 1,
       "x": 376.744140625,
       "y": 530.3125,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 12,
       "optional": false,
       "widget": {
@@ -549,8 +541,7 @@
         "width": 169.298828125,
         "height": 17.748046875,
         "font_size": 8.5
-      },
-      "direction": "ltr"
+      }
     },
     {
       "key": "frm2551Qv2018:txt23",
@@ -558,9 +549,9 @@
       "page": 1,
       "x": 377.095703125,
       "y": 548.13671875,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 12,
       "optional": false,
       "widget": {
@@ -568,18 +559,17 @@
         "width": 168.97265625,
         "height": 18.181640625,
         "font_size": 8.5
-      },
-      "direction": "ltr"
+      }
     },
     {
       "key": "frm2551Qv2018:txt24",
       "kind": "dec",
       "page": 1,
       "x": 376.435546875,
-      "y": 567,
-      "cell_w": 14,
+      "y": 567.0,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 12,
       "optional": false,
       "widget": {
@@ -587,8 +577,7 @@
         "width": 169.734375,
         "height": 17.869140625,
         "font_size": 8.5
-      },
-      "direction": "ltr"
+      }
     },
     {
       "key": "frm2551Qv2018:txtPg2TIN1",
@@ -700,9 +689,9 @@
       "page": 2,
       "x": 108.478515625,
       "y": 162.716796875,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 437,
+      "dec_x": 437.0,
       "char_count": 12,
       "optional": false,
       "widget": {
@@ -710,12 +699,11 @@
         "width": 169.5362548828125,
         "height": 17.619384765625,
         "font_size": 8.5
-      },
-      "direction": "ltr"
+      }
     },
     {
       "key": "txtATCRate1",
-      "kind": "char",
+      "kind": "int",
       "page": 2,
       "x": 320.65625,
       "y": 162.80078125,
@@ -738,7 +726,7 @@
       "y": 162.72265625,
       "cell_w": 10.5,
       "int_cells": 7,
-      "dec_x": 586,
+      "dec_x": 586.0,
       "char_count": 12,
       "optional": false,
       "widget": {
@@ -746,8 +734,7 @@
         "width": 169.455078125,
         "height": 17.330078125,
         "font_size": 8.5
-      },
-      "direction": "ltr"
+      }
     },
     {
       "key": "txtTotalSched1",
@@ -757,7 +744,7 @@
       "y": 271.662109375,
       "cell_w": 10.5,
       "int_cells": 7,
-      "dec_x": 586,
+      "dec_x": 586.0,
       "char_count": 12,
       "optional": false,
       "widget": {
@@ -789,9 +776,9 @@
       "page": 1,
       "x": 560.5859375,
       "y": 362.158203125,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 2,
       "optional": false,
       "widget": {
@@ -799,8 +786,7 @@
         "width": 28.50390625,
         "height": 16.724609375,
         "font_size": 8.5
-      },
-      "direction": "ltr"
+      }
     },
     {
       "key": "frm2551Qv2018:txt15",
@@ -808,18 +794,17 @@
       "page": 1,
       "x": 560.974609375,
       "y": 390.900390625,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 2,
       "optional": false,
       "widget": {
         "type": "text",
-        "width": 27,
+        "width": 27.0,
         "height": 18.322265625,
         "font_size": 8.5
-      },
-      "direction": "ltr"
+      }
     },
     {
       "key": "frm2551Qv2018:txt16",
@@ -827,9 +812,9 @@
       "page": 1,
       "x": 561.00390625,
       "y": 409.478515625,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 2,
       "optional": false,
       "widget": {
@@ -837,8 +822,7 @@
         "width": 27.3984375,
         "height": 17.998046875,
         "font_size": 8.5
-      },
-      "direction": "ltr"
+      }
     },
     {
       "key": "frm2551Qv2018:txt17",
@@ -846,9 +830,9 @@
       "page": 1,
       "x": 561.271484375,
       "y": 428.556640625,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 2,
       "optional": false,
       "widget": {
@@ -856,8 +840,7 @@
         "width": 27.552734375,
         "height": 17.072265625,
         "font_size": 8.5
-      },
-      "direction": "ltr"
+      }
     },
     {
       "key": "frm2551Qv2018:txt18",
@@ -865,9 +848,9 @@
       "page": 1,
       "x": 561.37109375,
       "y": 446.3984375,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 2,
       "optional": false,
       "widget": {
@@ -875,8 +858,7 @@
         "width": 27.384765625,
         "height": 16.73046875,
         "font_size": 8.5
-      },
-      "direction": "ltr"
+      }
     },
     {
       "key": "frm2551Qv2018:txt19",
@@ -884,9 +866,9 @@
       "page": 1,
       "x": 561.203125,
       "y": 463.916015625,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 2,
       "optional": false,
       "widget": {
@@ -894,8 +876,7 @@
         "width": 26.705078125,
         "height": 18.162109375,
         "font_size": 8.5
-      },
-      "direction": "ltr"
+      }
     },
     {
       "key": "frm2551Qv2018:txt20",
@@ -903,9 +884,9 @@
       "page": 1,
       "x": 561.31640625,
       "y": 493.5703125,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 2,
       "optional": false,
       "widget": {
@@ -913,8 +894,7 @@
         "width": 26.998046875,
         "height": 18.275390625,
         "font_size": 8.5
-      },
-      "direction": "ltr"
+      }
     },
     {
       "key": "frm2551Qv2018:txt21",
@@ -922,9 +902,9 @@
       "page": 1,
       "x": 561.060546875,
       "y": 512.1171875,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 2,
       "optional": false,
       "widget": {
@@ -932,8 +912,7 @@
         "width": 27.10546875,
         "height": 17.384765625,
         "font_size": 8.5
-      },
-      "direction": "ltr"
+      }
     },
     {
       "key": "frm2551Qv2018:txt22",
@@ -941,9 +920,9 @@
       "page": 1,
       "x": 560.869140625,
       "y": 530.78125,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 2,
       "optional": false,
       "widget": {
@@ -951,8 +930,7 @@
         "width": 27.69921875,
         "height": 17.2265625,
         "font_size": 8.5
-      },
-      "direction": "ltr"
+      }
     },
     {
       "key": "frm2551Qv2018:txt23",
@@ -960,9 +938,9 @@
       "page": 1,
       "x": 560.82421875,
       "y": 548.884765625,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 2,
       "optional": false,
       "widget": {
@@ -970,8 +948,7 @@
         "width": 27.578125,
         "height": 17.453125,
         "font_size": 8.5
-      },
-      "direction": "ltr"
+      }
     },
     {
       "key": "frm2551Qv2018:txt24",
@@ -979,9 +956,9 @@
       "page": 1,
       "x": 561.1015625,
       "y": 567.005859375,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 553,
+      "dec_x": 553.0,
       "char_count": 2,
       "optional": false,
       "widget": {
@@ -989,8 +966,7 @@
         "width": 27.716796875,
         "height": 17.791015625,
         "font_size": 8.5
-      },
-      "direction": "ltr"
+      }
     },
     {
       "key": "txtATCAmt1",
@@ -998,9 +974,9 @@
       "page": 2,
       "x": 292.0339660644531,
       "y": 162.18698120117188,
-      "cell_w": 14,
+      "cell_w": 14.0,
       "int_cells": 11,
-      "dec_x": 437,
+      "dec_x": 437.0,
       "char_count": 2,
       "optional": false,
       "widget": {
@@ -1008,8 +984,7 @@
         "width": 28.05499267578125,
         "height": 17.377365112304688,
         "font_size": 8.5
-      },
-      "direction": "ltr"
+      }
     },
     {
       "key": "txtATCDue1",
@@ -1019,7 +994,7 @@
       "y": 162.822265625,
       "cell_w": 10.5,
       "int_cells": 7,
-      "dec_x": 586,
+      "dec_x": 586.0,
       "char_count": 2,
       "optional": false,
       "widget": {
@@ -1027,8 +1002,7 @@
         "width": 28.55078125,
         "height": 16.9296875,
         "font_size": 8.5
-      },
-      "direction": "ltr"
+      }
     },
     {
       "key": "txtTotalSched1",
@@ -1038,7 +1012,7 @@
       "y": 271.79296875,
       "cell_w": 10.5,
       "int_cells": 7,
-      "dec_x": 586,
+      "dec_x": 586.0,
       "char_count": 2,
       "optional": false,
       "widget": {
@@ -1046,6 +1020,20 @@
         "width": 27.564453125,
         "height": 17.462890625,
         "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm2551Qv2018:17_2",
+      "kind": "char",
+      "page": 1,
+      "x": 223.69921875,
+      "y": 430.341796875,
+      "char_count": 1,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 151.236328125,
+        "height": 10.892578125
       }
     }
   ]
