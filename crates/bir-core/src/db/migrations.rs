@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::db::DbError;
 
-const CURRENT_MIGRATION_VERSION: i32 = 1;
+const CURRENT_MIGRATION_VERSION: i32 = 2;
 
 pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
     let mut version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
@@ -150,6 +150,18 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
+        );
+        ",
+        // v2: Data Providers for integrations
+        "
+        CREATE TABLE IF NOT EXISTS data_providers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            profile_tin TEXT NOT NULL,
+            provider_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            credentials_json TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (profile_tin) REFERENCES profiles(tin)
         );
         ",
     ];

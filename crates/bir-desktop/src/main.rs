@@ -32,7 +32,29 @@ pub mod global_actions {
             HideOthers,
             CloseWindow,
             MinimizeWindow,
-            ToggleFullScreen
+            ToggleFullScreen,
+            ZoomIn,
+            ZoomOut,
+            ResetZoom,
+            ToggleEditMode,
+            SaveLayout,
+            EditorNewBox,
+            EditorDuplicateBox,
+            EditorDeleteBox,
+            EditorFocusSearch,
+            EditorEscape,
+            EditorNextField,
+            EditorPrevField,
+            EditorSelectBox1,
+            EditorSelectBox2,
+            EditorSelectBox3,
+            EditorSelectBox4,
+            EditorSelectBox5,
+            EditorSelectBox6,
+            EditorSelectBox7,
+            EditorSelectBox8,
+            EditorSelectBox9,
+            EditorSelectLastBox
         ]
     );
 }

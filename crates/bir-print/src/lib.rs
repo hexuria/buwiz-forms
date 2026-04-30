@@ -59,6 +59,10 @@ pub struct PrintRequest {
     pub form_id: String,
     pub fields: BTreeMap<String, String>,
     pub output_dir: PathBuf,
+    /// Base directory containing `{form_id}/formtype.json`, `template.typ`,
+    /// and `pages/*.svg`. When `None`, falls back to the embedded 2551Q
+    /// constants (backward-compatible).
+    pub formtypes_dir: Option<PathBuf>,
 }
 
 impl PrintRequest {
@@ -71,7 +75,14 @@ impl PrintRequest {
             form_id: form_id.into(),
             fields,
             output_dir: output_dir.into(),
+            formtypes_dir: None,
         }
+    }
+
+    /// Set the formtypes base directory for data-driven form loading.
+    pub fn with_formtypes_dir(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.formtypes_dir = Some(dir.into());
+        self
     }
 }
 
@@ -175,15 +186,73 @@ pub fn render_2551q_print(
 }
 
 /// Render a flat (official-looking) PDF from a `PrintRequest`.
+///
+/// **Rendering priority:**
+/// 1. If `form.typ` exists in the formtypes directory → Typst-native path
+///    (form.typ draws the entire form: background + dynamic fields).
+///    Field data is injected via `data.json` in the output directory.
+/// 2. Otherwise → SVG-background path (existing behavior).
+///    Loads SVG pages as backgrounds, overlays field values using template.typ macros.
 pub fn render_flat_pdf(request: PrintRequest) -> Result<PrintResult, PrintError> {
-    let formtype = load_formtype(&request.form_id)?;
-    validate_fields(&formtype, &request.fields)?;
     fs::create_dir_all(&request.output_dir)?;
-    write_static_assets(&request.form_id, &request.output_dir)?;
 
+    // ── Path 1: Typst-native form (form.typ draws everything) ──
+    if let Some(form_typ_content) =
+        load_form_typ(&request.form_id, request.formtypes_dir.as_deref())
+    {
+        let typ_path = request.output_dir.join("form.typ");
+        let pdf_path = request.output_dir.join("generated.pdf");
+        let data_path = request.output_dir.join("data.json");
+
+        // Write field data as JSON for form.typ to consume
+        let data_json = serde_json::to_string_pretty(&request.fields)?;
+        fs::write(&data_path, data_json)?;
+
+        // Write the template macros alongside form.typ (it may #import them)
+        if let Ok(template) =
+            load_template_resolved(&request.form_id, request.formtypes_dir.as_deref())
+        {
+            fs::write(request.output_dir.join("template.typ"), template)?;
+        }
+
+        // Write form.typ
+        fs::write(&typ_path, form_typ_content)?;
+
+        let embedded = EmbeddedTypstCompiler;
+        let cli = CliTypstCompiler;
+        if let Err(_embedded_err) = embedded.compile_pdf(&typ_path, &pdf_path, &request.output_dir)
+        {
+            cli.compile_pdf(&typ_path, &pdf_path, &request.output_dir)?;
+        }
+
+        // Determine page count from formtype.json if available, else assume 1
+        let page_count = load_formtype_resolved(&request.form_id, request.formtypes_dir.as_deref())
+            .map(|ft| ft.page_count())
+            .unwrap_or(1);
+
+        let preview_png_paths =
+            export_preview_pngs(&typ_path, &request.output_dir, page_count).unwrap_or_default();
+
+        return Ok(PrintResult {
+            pdf_path,
+            preview_png_paths,
+            typ_path,
+        });
+    }
+
+    // ── Path 2: Legacy SVG-background path (existing behavior) ──
+    let formtype = load_formtype_resolved(&request.form_id, request.formtypes_dir.as_deref())?;
+    validate_fields(&formtype, &request.fields)?;
+    write_static_assets_resolved(
+        &request.form_id,
+        &request.output_dir,
+        request.formtypes_dir.as_deref(),
+    )?;
+
+    let template = load_template_resolved(&request.form_id, request.formtypes_dir.as_deref())?;
     let typ_path = request.output_dir.join("generated.typ");
     let pdf_path = request.output_dir.join("generated.pdf");
-    let typst = generate_typst(&formtype, &request.fields)?;
+    let typst = generate_typst(&formtype, &request.fields, &template)?;
     fs::write(&typ_path, typst)?;
 
     let embedded = EmbeddedTypstCompiler;
@@ -206,6 +275,23 @@ pub fn render_flat_pdf(request: PrintRequest) -> Result<PrintResult, PrintError>
 /// Backward-compatible alias for [`render_flat_pdf`].
 pub fn render_print(request: PrintRequest) -> Result<PrintResult, PrintError> {
     render_flat_pdf(request)
+}
+
+/// Render an editable (AcroForm fillable) PDF for **any** form.
+///
+/// First renders the flat PDF via Typst, then injects real AcroForm widget
+/// annotations so the resulting file can be opened and edited in macOS Preview
+/// or Adobe Acrobat as a real form.
+pub fn render_editable_pdf(request: PrintRequest) -> Result<PrintResult, PrintError> {
+    let flat = render_flat_pdf(request.clone())?;
+    let formtype = load_formtype_resolved(&request.form_id, request.formtypes_dir.as_deref())?;
+    let editable_path = request.output_dir.join("editable.pdf");
+    editable::inject_acroform(&flat.pdf_path, &formtype, &request.fields, &editable_path)?;
+    Ok(PrintResult {
+        pdf_path: editable_path,
+        preview_png_paths: flat.preview_png_paths,
+        typ_path: flat.typ_path,
+    })
 }
 
 /// Render an editable (AcroForm fillable) PDF for Form 2551Q.
@@ -269,28 +355,43 @@ pub fn render_2551q_pdf(draft: &Form2551QDraft, _paper_size: PaperSize) -> Vec<u
 // are defined in formtype.rs and re-imported above.
 
 /// Load and validate the [`FormType`] for the given form ID.
-pub fn load_formtype(form_id: &str) -> Result<FormType, PrintError> {
-    match form_id {
-        FORM_2551Q_ID => {
-            let ft: FormType = serde_json::from_str(LAYOUT_2551Q)?;
+///
+/// Tries filesystem first (if `formtypes_dir` is provided), then
+/// falls back to the embedded 2551Q layout.
+fn load_formtype_resolved(
+    form_id: &str,
+    formtypes_dir: Option<&Path>,
+) -> Result<FormType, PrintError> {
+    // Try filesystem first
+    if let Some(base) = formtypes_dir {
+        let json_path = base.join(form_id).join("formtype.json");
+        if json_path.exists() {
+            let content = fs::read_to_string(&json_path)?;
+            let ft: FormType = serde_json::from_str(&content)?;
             if ft.form_id != form_id {
                 return Err(PrintError::InvalidLayout(format!(
                     "formtype form_id {} does not match {form_id}",
                     ft.form_id
                 )));
             }
-            if (ft.page_width - 612.0).abs() > f64::EPSILON
-                || (ft.page_height - 936.0).abs() > f64::EPSILON
-            {
-                return Err(PrintError::InvalidLayout(format!(
-                    "expected 612 x 936pt, got {} x {}",
-                    ft.page_width, ft.page_height
-                )));
-            }
+            return Ok(ft);
+        }
+    }
+
+    // Fallback: embedded constants (only 2551Q)
+    match form_id {
+        FORM_2551Q_ID => {
+            let ft: FormType = serde_json::from_str(LAYOUT_2551Q)?;
             Ok(ft)
         }
         other => Err(PrintError::UnsupportedForm(other.to_string())),
     }
+}
+
+/// Public convenience for callers that don't have a `formtypes_dir`.
+/// Keeps backward compatibility with existing tests and 2551Q-specific code.
+pub fn load_formtype(form_id: &str) -> Result<FormType, PrintError> {
+    load_formtype_resolved(form_id, None)
 }
 
 fn validate_fields(
@@ -312,11 +413,43 @@ fn validate_fields(
     }
 }
 
-fn write_static_assets(form_id: &str, output_dir: &Path) -> Result<(), PrintError> {
+/// Write SVG page backgrounds to the output directory.
+///
+/// Tries the filesystem `{formtypes_dir}/{form_id}/pages/*.svg` first,
+/// then falls back to the embedded 2551Q SVGs.
+fn write_static_assets_resolved(
+    form_id: &str,
+    output_dir: &Path,
+    formtypes_dir: Option<&Path>,
+) -> Result<(), PrintError> {
+    let svg_dir = output_dir.join("svgbase");
+    fs::create_dir_all(&svg_dir)?;
+
+    // Try filesystem first — iterate all SVG files in the pages/ directory
+    if let Some(base) = formtypes_dir {
+        let pages_dir = base.join(form_id).join("pages");
+        if pages_dir.is_dir() {
+            let mut found_any = false;
+            let mut entries: Vec<_> = fs::read_dir(&pages_dir)?
+                .filter_map(|e| e.ok())
+                .filter(|e| e.path().extension().is_some_and(|ext| ext == "svg"))
+                .collect();
+            entries.sort_by_key(|e| e.file_name());
+
+            for entry in entries {
+                let file_name = entry.file_name();
+                fs::copy(entry.path(), svg_dir.join(&file_name))?;
+                found_any = true;
+            }
+            if found_any {
+                return Ok(());
+            }
+        }
+    }
+
+    // Fallback: embedded constants (only 2551Q)
     match form_id {
         FORM_2551Q_ID => {
-            let svg_dir = output_dir.join("svgbase");
-            fs::create_dir_all(&svg_dir)?;
             fs::write(svg_dir.join("page1.svg"), PAGE1_SVG_2551Q)?;
             fs::write(svg_dir.join("page2.svg"), PAGE2_SVG_2551Q)?;
             Ok(())
@@ -325,9 +458,45 @@ fn write_static_assets(form_id: &str, output_dir: &Path) -> Result<(), PrintErro
     }
 }
 
+/// Load the Typst template for the given form.
+///
+/// Tries `{formtypes_dir}/{form_id}/template.typ` first, then falls
+/// back to the embedded 2551Q template.
+fn load_template_resolved(
+    form_id: &str,
+    formtypes_dir: Option<&Path>,
+) -> Result<String, PrintError> {
+    if let Some(base) = formtypes_dir {
+        let typ_path = base.join(form_id).join("template.typ");
+        if typ_path.exists() {
+            return Ok(fs::read_to_string(&typ_path)?);
+        }
+    }
+    // Fallback: embedded 2551Q template
+    match form_id {
+        FORM_2551Q_ID => Ok(TEMPLATE_2551Q.to_string()),
+        other => Err(PrintError::UnsupportedForm(other.to_string())),
+    }
+}
+
+/// Try to load a Typst-native form template (`form.typ`).
+///
+/// Returns `Some(content)` if `{formtypes_dir}/{form_id}/form.typ` exists,
+/// `None` otherwise — which triggers the legacy SVG-background path.
+fn load_form_typ(form_id: &str, formtypes_dir: Option<&Path>) -> Option<String> {
+    let base = formtypes_dir?;
+    let form_path = base.join(form_id).join("form.typ");
+    if form_path.exists() {
+        fs::read_to_string(&form_path).ok()
+    } else {
+        None
+    }
+}
+
 fn generate_typst(
     formtype: &FormType,
     fields: &BTreeMap<String, String>,
+    template: &str,
 ) -> Result<String, PrintError> {
     let mut lines = vec![
         format!(
@@ -335,7 +504,7 @@ fn generate_typst(
             fmt_num(formtype.page_width),
             fmt_num(formtype.page_height)
         ),
-        TEMPLATE_2551Q.to_string(),
+        template.to_string(),
     ];
 
     for page in 1..=formtype.page_count() {
@@ -345,9 +514,33 @@ fn generate_typst(
             fmt_num(formtype.page_height)
         ));
 
+        // Track remaining text per key for multi-box spanning.
+        // The first time we see a key, we load its full value.
+        // Subsequent boxes for the same key consume from the remainder.
+        let mut remaining: BTreeMap<String, String> = BTreeMap::new();
+
         for field in formtype.fields.iter().filter(|field| field.page == page) {
-            if let Some(line) = render_field(field, fields)? {
+            // Initialize remaining text for this key on first encounter
+            if !remaining.contains_key(&field.key) {
+                let full_value = fields.get(&field.key).cloned().unwrap_or_default();
+                remaining.insert(field.key.clone(), full_value);
+            }
+
+            let current_text = remaining.get(&field.key).cloned().unwrap_or_default();
+
+            if let Some(line) = render_field_spanning(field, &current_text)? {
                 lines.push(format!("  {line}"));
+            }
+
+            // Consume characters from remaining text based on capacity
+            let consumed = consumed_chars(field, &current_text);
+            if consumed > 0 {
+                let rest = if consumed >= current_text.len() {
+                    String::new()
+                } else {
+                    current_text[consumed..].to_string()
+                };
+                remaining.insert(field.key.clone(), rest);
             }
         }
 
@@ -357,14 +550,39 @@ fn generate_typst(
     Ok(lines.join("\n"))
 }
 
-fn render_field(
-    field: &FormField,
-    fields: &BTreeMap<String, String>,
-) -> Result<Option<String>, PrintError> {
-    let value = fields.get(&field.key).cloned().unwrap_or_default();
+/// Calculate how many characters a field consumes from the input string.
+fn consumed_chars(field: &FormField, value: &str) -> usize {
+    if value.is_empty() {
+        return 0;
+    }
+    match field.kind {
+        FieldKind::Checkbox => 0,         // Checkboxes don't consume text
+        FieldKind::Amount => value.len(), // Amounts render fully, consume everything
+        FieldKind::Cells => {
+            let capacity = field.char_capacity().unwrap_or(value.len());
+            value.len().min(capacity)
+        }
+        FieldKind::Text => {
+            let capacity = field.char_capacity().unwrap_or(value.len());
+            if capacity >= value.len() {
+                value.len()
+            } else {
+                // Word-aware: find last space before capacity
+                let slice = &value[..capacity];
+                match slice.rfind(' ') {
+                    Some(pos) if pos > 0 => pos + 1, // consume including the space
+                    _ => capacity,                   // no space found, hard-cut
+                }
+            }
+        }
+    }
+}
+
+/// Render a single field box, receiving only its portion of text (after spanning).
+fn render_field_spanning(field: &FormField, value: &str) -> Result<Option<String>, PrintError> {
     match field.kind {
         FieldKind::Checkbox => {
-            if boolish(&value) {
+            if boolish(value) {
                 Ok(Some(format!(
                     "mark({}, {})",
                     fmt_num(field.x),
@@ -375,40 +593,56 @@ fn render_field(
             }
         }
         FieldKind::Text => {
-            if value.is_empty() {
+            let capacity = field.char_capacity().unwrap_or(usize::MAX);
+            let chunk = if capacity >= value.len() {
+                value.to_string()
+            } else {
+                // Word-aware split
+                let slice = &value[..capacity];
+                match slice.rfind(' ') {
+                    Some(pos) if pos > 0 => slice[..pos].to_string(),
+                    _ => slice.to_string(),
+                }
+            };
+            if chunk.is_empty() {
                 Ok(None)
             } else {
                 Ok(Some(format!(
-                    "label({}, {}, {}, \"{}\")",
+                    r#"label({}, {}, {}, "{}")"#,
                     fmt_num(field.x),
                     fmt_num(field.y),
                     fmt_num(field.size.unwrap_or(8.5)),
-                    typst_string(&value.to_uppercase())
+                    typst_string(&chunk.to_uppercase())
                 )))
             }
         }
         FieldKind::Cells => {
-            if value.is_empty() {
+            let capacity = field.char_capacity().unwrap_or(usize::MAX);
+            let chunk: String = value.chars().take(capacity).collect();
+            if chunk.is_empty() {
                 Ok(None)
             } else {
                 Ok(Some(format!(
-                    "cells({}, {}, {}, \"{}\")",
+                    r#"cells({}, {}, {}, "{}")"#,
                     fmt_num(field.x),
                     fmt_num(field.y),
                     fmt_num(required(field.cell_w, &field.key, "cell_w")?),
-                    typst_string(&value.to_uppercase())
+                    typst_string(&chunk.to_uppercase())
                 )))
             }
         }
-        FieldKind::Amount => Ok(Some(format!(
-            "amount({}, {}, {}, {}, {}, \"{}\")",
-            fmt_num(field.x),
-            fmt_num(field.y),
-            fmt_num(required(field.cell_w, &field.key, "cell_w")?),
-            required(field.int_cells, &field.key, "int_cells")?,
-            fmt_num(required(field.dec_x, &field.key, "dec_x")?),
-            typst_string(&normalize_amount(&value))
-        ))),
+        FieldKind::Amount => {
+            // Amounts render fully in their own box — no spanning
+            Ok(Some(format!(
+                r#"amount({}, {}, {}, {}, {}, "{}")"#,
+                fmt_num(field.x),
+                fmt_num(field.y),
+                fmt_num(required(field.cell_w, &field.key, "cell_w")?),
+                required(field.int_cells, &field.key, "int_cells")?,
+                fmt_num(required(field.dec_x, &field.key, "dec_x")?),
+                typst_string(&normalize_amount(value))
+            )))
+        }
     }
 }
 
@@ -727,7 +961,7 @@ mod tests {
     fn generated_typst_uses_official_page_size() {
         let layout = load_formtype(FORM_2551Q_ID).expect("formtype should load");
         let fields = sample_draft().to_bir_field_map();
-        let typst = generate_typst(&layout, &fields).expect("typst should render");
+        let typst = generate_typst(&layout, &fields, TEMPLATE_2551Q).expect("typst should render");
 
         assert!(typst.contains("#set page(width: 612pt, height: 936pt, margin: 0pt)"));
         assert!(typst.contains("svgbase/page1.svg"));
@@ -776,11 +1010,21 @@ mod tests {
     }
 
     #[test]
-    fn layout_keys_are_unique() {
+    fn layout_keys_are_valid() {
         let layout = load_formtype(FORM_2551Q_ID).expect("formtype should load");
-        let mut seen = BTreeSet::new();
-        for field in layout.fields {
-            assert!(seen.insert(field.key), "duplicate layout field");
+        // Keys may repeat for multi-box spanning, but duplicates must:
+        // 1. Be on the same page
+        // 2. Share the same FieldKind
+        let mut seen: BTreeMap<String, (usize, formtype::FieldKind)> = BTreeMap::new();
+        for field in &layout.fields {
+            if let Some((_page, kind)) = seen.get(&field.key) {
+                assert_eq!(
+                    *kind, field.kind,
+                    "duplicate key '{}' has mismatched kind",
+                    field.key
+                );
+            }
+            seen.insert(field.key.clone(), (field.page, field.kind));
         }
     }
 

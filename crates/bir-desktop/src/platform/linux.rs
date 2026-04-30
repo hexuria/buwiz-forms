@@ -23,6 +23,11 @@ pub fn bind_global_keys(cx: &mut App) {
         KeyBinding::new("alt-f4", CloseWindow, None),
         KeyBinding::new("ctrl-w", CloseWindow, None),
         KeyBinding::new("f11", ToggleFullScreen, None),
+        KeyBinding::new("ctrl-=", ZoomIn, None),
+        KeyBinding::new("ctrl--", ZoomOut, None),
+        KeyBinding::new("ctrl-0", ResetZoom, None),
+        KeyBinding::new("ctrl-e", ToggleEditMode, None),
+        KeyBinding::new("ctrl-s", SaveLayout, None),
     ]);
 }
 

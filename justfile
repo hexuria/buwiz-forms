@@ -162,3 +162,9 @@ generate-form pdf form_id title="":
         --title "{{title}}" \
         --detect-fields
 
+# Extract form structure from a BIR PDF for Typst-native form generation
+# Usage: just extract-form ~/Downloads/2551Q.pdf 2551Qv2018
+extract-form pdf form_id:
+    python3 .scripts/extract_form_structure.py \
+        --input "{{pdf}}" \
+        --form-id "{{form_id}}"

@@ -26,10 +26,12 @@ pub struct PdfLayoutEditorView {
     pub form_select: Entity<ComboboxState>,
     pub search_filter: Entity<InputState>,
     pub scroll_handle: ScrollHandle,
+    pub focus_handle: FocusHandle,
     _subscriptions: Vec<Subscription>,
     // Interactive Canvas State
     pub scale: f32,
     pub pan_offset: gpui::Point<f32>,
+    pub is_edit_mode: bool,
     pub drawing_field_idx: Option<usize>,
     pub drawing_start: Option<gpui::Point<f32>>,
     pub drawing_current: Option<gpui::Point<f32>>,
@@ -99,6 +101,9 @@ impl PdfLayoutEditorView {
             },
         )];
 
+        let focus_handle = cx.focus_handle();
+        window.focus(&focus_handle, cx);
+
         Self {
             form_type: auto_form,
             file_path: auto_path,
@@ -107,9 +112,11 @@ impl PdfLayoutEditorView {
             form_select,
             search_filter,
             scroll_handle: ScrollHandle::new(),
+            focus_handle,
             _subscriptions,
             scale: 1.0,
             pan_offset: gpui::Point { x: 0.0, y: 0.0 },
+            is_edit_mode: false,
             drawing_field_idx: None,
             drawing_start: None,
             drawing_current: None,
@@ -143,6 +150,7 @@ impl PdfLayoutEditorView {
             self.current_page = 1;
             self.scale = 1.0;
             self.pan_offset = gpui::Point { x: 0.0, y: 0.0 };
+            self.is_edit_mode = false;
             self.drawing_field_idx = None;
             self.interaction_mode = InteractionMode::None;
             cx.notify();
@@ -167,11 +175,69 @@ impl PdfLayoutEditorView {
         }
     }
 
+    fn focus_box(&mut self, local_box_idx: usize, cx: &mut Context<Self>) {
+        if let Some(ft) = &self.form_type {
+            if let Some(idx) = self.selected_field_idx.or(self.drawing_field_idx) {
+                let current_key = &ft.fields[idx].key;
+                let mut current_local = 0;
+                let mut target_global = None;
+                for (i, field) in ft.fields.iter().enumerate() {
+                    if field.key == *current_key {
+                        if current_local == local_box_idx {
+                            target_global = Some(i);
+                            break;
+                        }
+                        current_local += 1;
+                    }
+                }
+                if let Some(target_idx) = target_global {
+                    self.selected_field_idx = Some(target_idx);
+                    if self.is_edit_mode {
+                        self.drawing_field_idx = Some(target_idx);
+                    }
+                    self.scroll_sidebar_to_selected(cx);
+                    cx.notify();
+                }
+            }
+        }
+    }
+
+    /// Build the ordered list of distinct field keys visible on the current page/filter.
+    fn ordered_distinct_keys(&self, cx: &Context<Self>) -> Vec<String> {
+        let Some(ft) = &self.form_type else {
+            return Vec::new();
+        };
+        let filter = self.search_filter.read(cx).value().to_lowercase();
+        let mut keys: Vec<String> = Vec::new();
+        for field in &ft.fields {
+            if field.page == self.current_page
+                && (filter.is_empty() || field.key.to_lowercase().contains(&filter))
+                && !keys.contains(&field.key)
+            {
+                keys.push(field.key.clone());
+            }
+        }
+        keys
+    }
+
+    /// Scroll the sidebar to make the group containing `selected_field_idx` visible.
+    fn scroll_sidebar_to_selected(&self, cx: &Context<Self>) {
+        if let Some(ft) = &self.form_type {
+            if let Some(idx) = self.selected_field_idx {
+                let target_key = &ft.fields[idx].key;
+                let keys = self.ordered_distinct_keys(cx);
+                if let Some(group_idx) = keys.iter().position(|k| k == target_key) {
+                    self.scroll_handle.scroll_to_item(group_idx);
+                }
+            }
+        }
+    }
+
     fn check_collision(&self, idx: usize, field: &FormField, ft: &FormType) -> bool {
         let fx = field.x;
         let fy = field.y;
-        let fw = field.cell_w.unwrap_or(20.0);
-        let fh = field.size.unwrap_or(10.0) + 4.0;
+        let fw = field.display_width();
+        let fh = field.display_height();
 
         for (i, other) in ft.fields.iter().enumerate() {
             if i == idx || other.page != self.current_page {
@@ -179,8 +245,8 @@ impl PdfLayoutEditorView {
             }
             let ox = other.x;
             let oy = other.y;
-            let ow = other.cell_w.unwrap_or(20.0);
-            let oh = other.size.unwrap_or(10.0) + 4.0;
+            let ow = other.display_width();
+            let oh = other.display_height();
 
             if fx < ox + ow && fx + fw > ox && fy < oy + oh && fy + fh > oy {
                 return true;
@@ -199,14 +265,22 @@ impl PdfLayoutEditorView {
     ) -> impl IntoElement {
         let is_selected = self.selected_field_idx == Some(idx);
         let is_drawing = self.drawing_field_idx == Some(idx);
+        let no_focus = self.selected_field_idx.is_none() && self.drawing_field_idx.is_none();
 
         let (border_color, bg_color) = if is_drawing {
+            // Actively editing this box — blue
             (cx.theme().info, cx.theme().info.opacity(0.4))
         } else if has_collision {
+            // Overlapping another box — red
             (cx.theme().danger, cx.theme().danger.opacity(0.4))
         } else if is_selected {
+            // Focused but not editing — yellow
             (cx.theme().warning, cx.theme().warning.opacity(0.4))
+        } else if self.is_edit_mode && no_focus {
+            // Edit mode on, no box focused — all boxes show in yellow (immutable)
+            (cx.theme().warning, cx.theme().warning.opacity(0.15))
         } else {
+            // Default — translucent
             (cx.theme().border, cx.theme().secondary.opacity(0.2))
         };
 
@@ -222,8 +296,8 @@ impl PdfLayoutEditorView {
             let max_y = start.y.max(current.y);
             (min_x, min_y, max_x - min_x, max_y - min_y)
         } else {
-            let width = field.cell_w.unwrap_or(20.0);
-            let height = field.size.unwrap_or(10.0) + 4.0;
+            let width = field.display_width();
+            let height = field.display_height();
             (field.x as f32, field.y as f32, width as f32, height as f32)
         };
 
@@ -270,8 +344,8 @@ impl PdfLayoutEditorView {
                                                 y: f.y as f32,
                                             },
                                             size: gpui::Size {
-                                                width: f.cell_w.unwrap_or(20.0) as f32,
-                                                height: (f.size.unwrap_or(10.0) + 4.0) as f32,
+                                                width: f.display_width() as f32,
+                                                height: f.display_height() as f32,
                                             },
                                         });
                                     }
@@ -286,7 +360,7 @@ impl PdfLayoutEditorView {
                 cx.listener(move |this, ev: &MouseDownEvent, _window, cx| {
                     cx.stop_propagation();
                     if this.drawing_field_idx == Some(idx) {
-                        // Start Moving
+                        // Already editing this box — start moving
                         this.interaction_mode = InteractionMode::Moving;
                         let scaled_x = (f32::from(ev.position.x) - this.pan_offset.x) / this.scale;
                         let scaled_y = (f32::from(ev.position.y) - this.pan_offset.y) / this.scale;
@@ -302,14 +376,19 @@ impl PdfLayoutEditorView {
                                         y: f.y as f32,
                                     },
                                     size: gpui::Size {
-                                        width: f.cell_w.unwrap_or(20.0) as f32,
-                                        height: (f.size.unwrap_or(10.0) + 4.0) as f32,
+                                        width: f.display_width() as f32,
+                                        height: f.display_height() as f32,
                                     },
                                 });
                             }
                         }
                     } else {
+                        // Select this box
                         this.selected_field_idx = Some(idx);
+                        // In edit mode, also activate editing
+                        if this.is_edit_mode {
+                            this.drawing_field_idx = Some(idx);
+                        }
                         cx.notify();
                     }
                 }),
@@ -323,117 +402,191 @@ impl PdfLayoutEditorView {
 
         let filter = self.search_filter.read(cx).value().to_lowercase();
 
-        let fields_list = ft
-            .fields
-            .iter()
-            .enumerate()
-            .filter(|(_, f)| f.page == self.current_page)
-            .filter(|(_, f)| filter.is_empty() || f.key.to_lowercase().contains(&filter))
-            .map(|(idx, field)| {
-                let is_selected = self.selected_field_idx == Some(idx);
-                let is_drawing = self.drawing_field_idx == Some(idx);
-                let has_collision = self.check_collision(idx, field, ft);
+        let mut groups: Vec<(String, Vec<(usize, &FormField)>)> = Vec::new();
+        for (idx, field) in ft.fields.iter().enumerate() {
+            if field.page == self.current_page {
+                if filter.is_empty() || field.key.to_lowercase().contains(&filter) {
+                    if let Some(group) = groups.iter_mut().find(|(k, _)| k == &field.key) {
+                        group.1.push((idx, field));
+                    } else {
+                        groups.push((field.key.clone(), vec![(idx, field)]));
+                    }
+                }
+            }
+        }
 
-                let bg = if is_selected {
-                    cx.theme().muted
-                } else if has_collision {
-                    cx.theme().danger.opacity(0.1)
-                } else {
-                    cx.theme().background
-                };
+        let fields_list = groups
+            .into_iter()
+            .map(|(key, fields_in_group)| {
+                let group_count = fields_in_group.len();
+                let parent_key = key.clone();
 
-                let label_color = if has_collision {
-                    cx.theme().danger
-                } else {
-                    cx.theme().foreground
-                };
-
-                div()
-                    .id(format!("sidebar_field_{}", idx))
+                let header = div()
                     .p_2()
-                    .bg(bg)
+                    .bg(cx.theme().secondary.opacity(0.3))
+                    .border_b_1()
+                    .border_color(cx.theme().border)
                     .flex()
                     .justify_between()
                     .items_center()
-                    .cursor_pointer()
-                    .hover(|s| s.bg(cx.theme().muted))
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(move |this, ev: &MouseDownEvent, _window, cx| {
-                            cx.stop_propagation();
-                            this.selected_field_idx = Some(idx);
-
-                            // If we are currently drawing, keep drawing mode but switch the field
-                            if this.drawing_field_idx.is_some() {
-                                this.drawing_field_idx = Some(idx);
-                            }
-
-                            if let Some(ft) = &this.form_type {
-                                if let Some(f) = ft.fields.get(idx) {
-                                    this.scale = 2.0;
-                                    let fx = f.x as f32;
-                                    let fy = f.y as f32;
-                                    this.pan_offset = gpui::Point {
-                                        x: -fx * 2.0 + 300.0,
-                                        y: -fy * 2.0 + 300.0,
-                                    };
-                                }
-                            }
-                            cx.notify();
-                        }),
+                    .child(
+                        div()
+                            .font_weight(gpui::FontWeight::BOLD)
+                            .text_color(cx.theme().foreground)
+                            .child(key.clone()),
                     )
-                    .child(div().text_color(label_color).child(field.key.clone()))
                     .child(
                         div()
                             .cursor_pointer()
                             .on_mouse_down(
                                 MouseButton::Left,
-                                cx.listener(move |this, ev: &MouseDownEvent, _window, cx| {
+                                cx.listener(move |this, _, window, cx| {
                                     cx.stop_propagation();
-                                    if this.drawing_field_idx == Some(idx) {
-                                        // Toggle off if already drawing this field
-                                        this.drawing_field_idx = None;
-                                        this.interaction_mode = InteractionMode::None;
-                                    } else {
-                                        this.selected_field_idx = Some(idx);
-                                        this.drawing_field_idx = Some(idx);
-                                        this.interaction_mode = InteractionMode::None;
-                                        this.drawing_start = None;
-                                        this.drawing_current = None;
-
-                                        // Auto-zoom to it if it has valid bounds
-                                        if let Some(ft) = &this.form_type {
-                                            if let Some(f) = ft.fields.get(idx) {
-                                                if f.x > 0.0 && f.y > 0.0 {
-                                                    this.scale = 2.0;
-                                                    let fx = f.x as f32;
-                                                    let fy = f.y as f32;
-                                                    this.pan_offset = gpui::Point {
-                                                        x: -fx * 2.0 + 300.0,
-                                                        y: -fy * 2.0 + 300.0,
-                                                    };
-                                                }
-                                            }
+                                    if let Some(ft) = &mut this.form_type {
+                                        if let Some(last_field) = ft
+                                            .fields
+                                            .iter()
+                                            .rev()
+                                            .find(|f| f.key == parent_key)
+                                            .cloned()
+                                        {
+                                            let mut new_field = last_field;
+                                            new_field.y += new_field.size.unwrap_or(10.0) + 10.0;
+                                            ft.fields.push(new_field);
+                                            this.selected_field_idx = Some(ft.fields.len() - 1);
+                                            this.drawing_field_idx = None;
+                                            this.interaction_mode = InteractionMode::None;
+                                            window.focus(&this.focus_handle, cx);
+                                            cx.notify();
                                         }
                                     }
-                                    cx.notify();
                                 }),
                             )
                             .child(
-                                svg()
-                                    .path(if is_drawing {
-                                        "svg/check.svg"
-                                    } else {
-                                        "svg/target.svg"
-                                    })
-                                    .size(px(16.))
-                                    .text_color(if is_drawing {
-                                        cx.theme().success
-                                    } else {
-                                        cx.theme().muted_foreground
-                                    }),
+                                Icon::new(IconName::Plus)
+                                    .small()
+                                    .text_color(cx.theme().foreground),
                             ),
-                    )
+                    );
+
+                let children =
+                    fields_in_group
+                        .into_iter()
+                        .enumerate()
+                        .map(|(sub_idx, (idx, field))| {
+                            let is_selected = self.selected_field_idx == Some(idx);
+                            let has_collision = self.check_collision(idx, field, ft);
+
+                            let (bg, border_style) = if is_selected {
+                                (cx.theme().muted, cx.theme().primary)
+                            } else if has_collision {
+                                (cx.theme().danger.opacity(0.1), cx.theme().border)
+                            } else {
+                                (cx.theme().background, cx.theme().border)
+                            };
+
+                            let label_color = if has_collision {
+                                cx.theme().danger
+                            } else {
+                                cx.theme().foreground
+                            };
+
+                            div()
+                                .id(format!("sidebar_field_{}", idx))
+                                .pl_4()
+                                .pr_2()
+                                .py_2()
+                                .bg(bg)
+                                .when(is_selected, |this| {
+                                    this.border_l_4().border_color(border_style)
+                                })
+                                .when(!is_selected, |this| {
+                                    this.border_b_1().border_color(border_style)
+                                })
+                                .flex()
+                                .justify_between()
+                                .items_center()
+                                .cursor_pointer()
+                                .hover(|s| s.bg(cx.theme().muted))
+                                .on_mouse_down(
+                                    MouseButton::Left,
+                                    cx.listener(move |this, _ev: &MouseDownEvent, window, cx| {
+                                        cx.stop_propagation();
+                                        this.selected_field_idx = Some(idx);
+                                        if this.is_edit_mode {
+                                            this.drawing_field_idx = Some(idx);
+                                        }
+                                        if let Some(ft) = &this.form_type {
+                                            if let Some(f) = ft.fields.get(idx) {
+                                                this.scale = 2.0;
+                                                this.pan_offset = gpui::Point {
+                                                    x: -(f.x as f32) * 2.0 + 300.0,
+                                                    y: -(f.y as f32) * 2.0 + 300.0,
+                                                };
+                                            }
+                                        }
+                                        window.focus(&this.focus_handle, cx);
+                                        cx.notify();
+                                    }),
+                                )
+                                .child(
+                                    div()
+                                        .text_color(label_color)
+                                        .text_sm()
+                                        .child(format!("Box {}", sub_idx + 1)),
+                                )
+                                .child(
+                                    div().flex().gap_2().items_center().child(
+                                        div()
+                                            .cursor_pointer()
+                                            .on_mouse_down(
+                                                MouseButton::Left,
+                                                cx.listener(move |this, _, window, cx| {
+                                                    cx.stop_propagation();
+                                                    if group_count > 1 {
+                                                        if let Some(ft) = &mut this.form_type {
+                                                            ft.fields.remove(idx);
+                                                            if this.selected_field_idx == Some(idx)
+                                                            {
+                                                                this.selected_field_idx = None;
+                                                            } else if let Some(s) =
+                                                                this.selected_field_idx
+                                                            {
+                                                                if s > idx {
+                                                                    this.selected_field_idx =
+                                                                        Some(s - 1);
+                                                                }
+                                                            }
+                                                            if this.drawing_field_idx == Some(idx) {
+                                                                this.drawing_field_idx = None;
+                                                            } else if let Some(d) =
+                                                                this.drawing_field_idx
+                                                            {
+                                                                if d > idx {
+                                                                    this.drawing_field_idx =
+                                                                        Some(d - 1);
+                                                                }
+                                                            }
+                                                            window.focus(&this.focus_handle, cx);
+                                                            cx.notify();
+                                                        }
+                                                    }
+                                                }),
+                                            )
+                                            .child(if group_count > 1 {
+                                                Icon::empty()
+                                                    .path("svg/trash.svg")
+                                                    .small()
+                                                    .text_color(cx.theme().danger)
+                                                    .into_any_element()
+                                            } else {
+                                                div().into_any_element()
+                                            }),
+                                    ),
+                                )
+                        });
+
+                div().flex_col().child(header).children(children)
             })
             .collect::<Vec<_>>();
 
@@ -449,9 +602,9 @@ impl PdfLayoutEditorView {
                     .p_4()
                     .border_b_1()
                     .border_color(cx.theme().border)
-                    .child(Input::new(&self.search_filter))
+                    .child(Input::new(&self.search_filter)),
             )
-            .when(self.drawing_field_idx.is_some(), |this| {
+            .when(self.is_edit_mode, |this| {
                 this.child(
                     div()
                         .p_4()
@@ -461,22 +614,29 @@ impl PdfLayoutEditorView {
                         .flex()
                         .justify_between()
                         .items_center()
-                        .child(
+                        .child({
+                            let msg = if self.drawing_field_idx.is_some() {
+                                "Edit Mode Active. Move, resize, or redraw the box."
+                            } else {
+                                "Edit Mode Active. Click a box to start editing."
+                            };
                             div()
                                 .text_sm()
                                 .w_2_3()
                                 .text_color(cx.theme().info)
-                                .child("Edit Mode Active. Move, resize, or redraw the box.")
-                        )
+                                .child(msg)
+                        })
                         .child(
                             Button::new("exit_edit_mode")
                                 .label("Done")
-                                .on_click(cx.listener(|this, _ev, _window, cx| {
+                                .on_click(cx.listener(|this, _ev, window, cx| {
+                                    this.is_edit_mode = false;
                                     this.drawing_field_idx = None;
                                     this.interaction_mode = InteractionMode::None;
+                                    window.focus(&this.focus_handle, cx);
                                     cx.notify();
-                                }))
-                        )
+                                })),
+                        ),
                 )
             })
             .child(
@@ -493,7 +653,7 @@ impl PdfLayoutEditorView {
 }
 
 impl Render for PdfLayoutEditorView {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let max_page = self
             .form_type
             .as_ref()
@@ -544,13 +704,71 @@ impl Render for PdfLayoutEditorView {
                                         }
                                     },
                                 )))
-                                .child(Button::new("reset_view").label("Reset View").on_click(
-                                    cx.listener(|this, _ev, _window, cx| {
-                                        this.scale = 1.0;
-                                        this.pan_offset = gpui::Point { x: 0.0, y: 0.0 };
-                                        cx.notify();
-                                    }),
-                                )),
+                                .child(
+                                    div()
+                                        .flex()
+                                        .gap_1()
+                                        .p_1()
+                                        .bg(cx.theme().muted)
+                                        .rounded_full()
+                                        .child(
+                                            div()
+                                                .px_3()
+                                                .py_1()
+                                                .rounded_full()
+                                                .when(!self.is_edit_mode, |this| {
+                                                    this.bg(cx.theme().background)
+                                                        .text_color(cx.theme().foreground)
+                                                })
+                                                .when(self.is_edit_mode, |this| {
+                                                    this.text_color(cx.theme().muted_foreground)
+                                                })
+                                                .cursor_pointer()
+                                                .child("View")
+                                                .on_mouse_down(
+                                                    MouseButton::Left,
+                                                    cx.listener(|this, _, _window, cx| {
+                                                        this.is_edit_mode = false;
+                                                        this.drawing_field_idx = None;
+                                                        this.interaction_mode =
+                                                            InteractionMode::None;
+                                                        cx.notify();
+                                                    }),
+                                                ),
+                                        )
+                                        .child(
+                                            div()
+                                                .px_3()
+                                                .py_1()
+                                                .rounded_full()
+                                                .when(self.is_edit_mode, |this| {
+                                                    this.bg(cx.theme().background)
+                                                        .text_color(cx.theme().foreground)
+                                                })
+                                                .when(!self.is_edit_mode, |this| {
+                                                    this.text_color(cx.theme().muted_foreground)
+                                                })
+                                                .cursor_pointer()
+                                                .child("Edit")
+                                                .on_mouse_down(
+                                                    MouseButton::Left,
+                                                    cx.listener(|this, _, _window, cx| {
+                                                        if !this.is_edit_mode {
+                                                            this.is_edit_mode = true;
+                                                            // If a field is selected, start editing it
+                                                            if let Some(idx) =
+                                                                this.selected_field_idx
+                                                            {
+                                                                this.drawing_field_idx = Some(idx);
+                                                            }
+                                                            this.interaction_mode =
+                                                                InteractionMode::None;
+                                                            cx.notify();
+                                                        }
+                                                    }),
+                                                ),
+                                        ),
+                                ),
                         )
                     }),
             )
@@ -565,16 +783,27 @@ impl Render for PdfLayoutEditorView {
         let body = if let Some(ft) = &self.form_type {
             let scale = self.scale;
             let pan = self.pan_offset;
-            let is_editing = self.drawing_field_idx.is_some();
+
+            // Determine which field key is focused (if any).
+            // When a specific box is focused, only show boxes with that key.
+            // When nothing is focused, show ALL boxes on the page.
+            let focused_key = self
+                .drawing_field_idx
+                .or(self.selected_field_idx)
+                .and_then(|idx| ft.fields.get(idx).map(|f| f.key.clone()));
 
             let fields_canvas = ft
                 .fields
                 .iter()
                 .enumerate()
                 .filter(|(_, f)| f.page == self.current_page)
-                .filter(|(idx, _)| {
-                    // Hide other boxes if we are actively editing a specific one
-                    !is_editing || self.drawing_field_idx == Some(*idx)
+                .filter(|(_, field)| {
+                    // If a field is focused, only show boxes with that key
+                    if let Some(key) = &focused_key {
+                        field.key == *key
+                    } else {
+                        true
+                    }
                 })
                 .map(|(idx, field)| {
                     let has_collision = self.check_collision(idx, field, ft);
@@ -616,7 +845,9 @@ impl Render for PdfLayoutEditorView {
                         .h_full()
                         .overflow_hidden()
                         .bg(cx.theme().muted)
-                        .when(is_editing, |this| this.cursor(CursorStyle::Crosshair))
+                        .when(self.drawing_field_idx.is_some(), |this| {
+                            this.cursor(CursorStyle::Crosshair)
+                        })
                         .on_scroll_wheel(cx.listener(
                             move |this, ev: &ScrollWheelEvent, _window, cx| {
                                 // Only allow zooming/panning if not dragging
@@ -700,6 +931,11 @@ impl Render for PdfLayoutEditorView {
                                                     if let Some(f) = ft.fields.get_mut(idx) {
                                                         f.x = min_x as f64;
                                                         f.y = min_y as f64;
+                                                        // Write to widget dimensions (authoritative) and keep legacy fields in sync
+                                                        if let Some(ref mut ws) = f.widget {
+                                                            ws.width = w as f64;
+                                                            ws.height = h as f64;
+                                                        }
                                                         f.cell_w = Some(w as f64);
                                                         f.size = Some((h as f64 - 4.0).max(1.0));
                                                     }
@@ -763,6 +999,11 @@ impl Render for PdfLayoutEditorView {
                                                             (start_rect.size.width + dx).max(5.0);
                                                         let new_h =
                                                             (start_rect.size.height + dy).max(5.0);
+                                                        // Write to widget dimensions (authoritative) and keep legacy fields in sync
+                                                        if let Some(ref mut ws) = f.widget {
+                                                            ws.width = new_w as f64;
+                                                            ws.height = new_h as f64;
+                                                        }
                                                         f.cell_w = Some(new_w as f64);
                                                         f.size = Some((new_h as f64) - 4.0);
                                                     }
@@ -819,6 +1060,258 @@ impl Render for PdfLayoutEditorView {
         };
 
         div()
+            .key_context("PdfLayoutEditorView")
+            .track_focus(&self.focus_handle)
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::ZoomIn, _, cx| {
+                    this.scale *= 1.2;
+                    cx.notify();
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::ZoomOut, _, cx| {
+                    this.scale /= 1.2;
+                    cx.notify();
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::ResetZoom, _, cx| {
+                    this.scale = 1.0;
+                    this.pan_offset = gpui::Point::default();
+                    cx.notify();
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::ToggleEditMode, _, cx| {
+                    if this.is_edit_mode {
+                        // Exit edit mode
+                        this.is_edit_mode = false;
+                        this.drawing_field_idx = None;
+                        this.interaction_mode = InteractionMode::None;
+                    } else {
+                        // Enter edit mode
+                        this.is_edit_mode = true;
+                        // If a field is already selected, start editing it
+                        if let Some(idx) = this.selected_field_idx {
+                            this.drawing_field_idx = Some(idx);
+                        }
+                        this.interaction_mode = InteractionMode::None;
+                    }
+                    cx.notify();
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::SaveLayout, window, cx| {
+                    this.save_file(window, cx);
+                }),
+            )
+            .on_action(cx.listener(
+                |this, _: &crate::global_actions::EditorEscape, window, cx| {
+                    if this.selected_field_idx.is_some() || this.drawing_field_idx.is_some() {
+                        // First Escape: clear focus, show all boxes
+                        this.drawing_field_idx = None;
+                        this.selected_field_idx = None;
+                        this.interaction_mode = InteractionMode::None;
+                    } else {
+                        // Second Escape: exit edit mode entirely
+                        this.is_edit_mode = false;
+                    }
+                    window.focus(&this.focus_handle, cx);
+                    cx.notify();
+                },
+            ))
+            .on_action(cx.listener(
+                |this, _: &crate::global_actions::EditorFocusSearch, window, cx| {
+                    this.search_filter
+                        .update(cx, |input, cx| input.focus(window, cx));
+                },
+            ))
+            .on_action(cx.listener(
+                |this, _: &crate::global_actions::EditorNewBox, window, cx| {
+                    if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
+                        if let Some(ft) = &mut this.form_type {
+                            if let Some(field) = ft.fields.get(idx) {
+                                let mut new_field = field.clone();
+                                new_field.x = 0.0;
+                                new_field.y = 0.0;
+                                if let Some(ref mut w) = new_field.widget {
+                                    w.width = 0.0;
+                                    w.height = 0.0;
+                                }
+                                new_field.cell_w = None;
+                                ft.fields.push(new_field);
+                                let new_idx = ft.fields.len() - 1;
+                                this.selected_field_idx = Some(new_idx);
+                                this.drawing_field_idx = Some(new_idx);
+                                this.interaction_mode = InteractionMode::DrawingNew;
+                                this.scroll_sidebar_to_selected(cx);
+                                window.focus(&this.focus_handle, cx);
+                                cx.notify();
+                            }
+                        }
+                    }
+                },
+            ))
+            .on_action(cx.listener(
+                |this, _: &crate::global_actions::EditorDuplicateBox, window, cx| {
+                    if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
+                        if let Some(ft) = &mut this.form_type {
+                            if let Some(field) = ft.fields.get(idx) {
+                                let new_field = field.clone();
+                                ft.fields.push(new_field);
+                                let new_idx = ft.fields.len() - 1;
+                                this.selected_field_idx = Some(new_idx);
+                                this.drawing_field_idx = Some(new_idx);
+                                this.interaction_mode = InteractionMode::None;
+                                this.scroll_sidebar_to_selected(cx);
+                                window.focus(&this.focus_handle, cx);
+                                cx.notify();
+                            }
+                        }
+                    }
+                },
+            ))
+            .on_action(cx.listener(
+                |this, _: &crate::global_actions::EditorDeleteBox, window, cx| {
+                    if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
+                        if let Some(ft) = &this.form_type {
+                            let key = ft.fields[idx].key.clone();
+                            let count = ft.fields.iter().filter(|f| f.key == key).count();
+                            if count <= 1 {
+                                return;
+                            }
+                            let prompt = window.prompt(
+                                gpui::PromptLevel::Warning,
+                                &format!("Delete Box from {}?", key),
+                                None,
+                                &["Delete", "Cancel"],
+                                cx,
+                            );
+                            cx.spawn(async move |this, cx| {
+                                if let Ok(0) = prompt.await {
+                                    let _ = this.update(cx, |this, cx| {
+                                        if let Some(ft) = &mut this.form_type {
+                                            ft.fields.remove(idx);
+                                            this.selected_field_idx = None;
+                                            this.drawing_field_idx = None;
+                                            cx.notify();
+                                        }
+                                    });
+                                }
+                            })
+                            .detach();
+                        }
+                    }
+                },
+            ))
+            .on_action(cx.listener(
+                |this, _: &crate::global_actions::EditorNextField, _window, cx| {
+                    if let Some(ft) = &this.form_type {
+                        if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
+                            let current_key = ft.fields[idx].key.clone();
+                            let keys = this.ordered_distinct_keys(cx);
+                            if let Some(key_pos) = keys.iter().position(|k| k == &current_key) {
+                                if key_pos + 1 < keys.len() {
+                                    let next_key = &keys[key_pos + 1];
+                                    if let Some(first_idx) =
+                                        ft.fields.iter().position(|f| f.key == *next_key)
+                                    {
+                                        this.selected_field_idx = Some(first_idx);
+                                        if this.is_edit_mode {
+                                            this.drawing_field_idx = Some(first_idx);
+                                        }
+                                        this.scroll_sidebar_to_selected(cx);
+                                        cx.notify();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+            ))
+            .on_action(cx.listener(
+                |this, _: &crate::global_actions::EditorPrevField, _window, cx| {
+                    if let Some(ft) = &this.form_type {
+                        if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
+                            let current_key = ft.fields[idx].key.clone();
+                            let keys = this.ordered_distinct_keys(cx);
+                            if let Some(key_pos) = keys.iter().position(|k| k == &current_key) {
+                                if key_pos > 0 {
+                                    let prev_key = &keys[key_pos - 1];
+                                    if let Some(first_idx) =
+                                        ft.fields.iter().position(|f| f.key == *prev_key)
+                                    {
+                                        this.selected_field_idx = Some(first_idx);
+                                        if this.is_edit_mode {
+                                            this.drawing_field_idx = Some(first_idx);
+                                        }
+                                        this.scroll_sidebar_to_selected(cx);
+                                        cx.notify();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+            ))
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::EditorSelectBox1, _, cx| {
+                    this.focus_box(0, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::EditorSelectBox2, _, cx| {
+                    this.focus_box(1, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::EditorSelectBox3, _, cx| {
+                    this.focus_box(2, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::EditorSelectBox4, _, cx| {
+                    this.focus_box(3, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::EditorSelectBox5, _, cx| {
+                    this.focus_box(4, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::EditorSelectBox6, _, cx| {
+                    this.focus_box(5, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::EditorSelectBox7, _, cx| {
+                    this.focus_box(6, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::EditorSelectBox8, _, cx| {
+                    this.focus_box(7, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::EditorSelectBox9, _, cx| {
+                    this.focus_box(8, cx)
+                }),
+            )
+            .on_action(cx.listener(
+                |this, _: &crate::global_actions::EditorSelectLastBox, _, cx| {
+                    if let Some(ft) = &this.form_type {
+                        if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
+                            let current_key = &ft.fields[idx].key;
+                            let count = ft.fields.iter().filter(|f| f.key == *current_key).count();
+                            if count > 0 {
+                                this.focus_box(count - 1, cx);
+                            }
+                        }
+                    }
+                },
+            ))
             .size_full()
             .flex_grow()
             .overflow_hidden()

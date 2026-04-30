@@ -17,6 +17,7 @@ mod jobs;
 mod migrations;
 mod notices;
 mod profiles;
+mod providers;
 mod receipts;
 mod submissions;
 
@@ -482,6 +483,7 @@ impl Database {
              DELETE FROM profiles;
              DELETE FROM submissions;
              DELETE FROM form_drafts;
+             DELETE FROM data_providers;
              DELETE FROM submission_receipts;
              DELETE FROM job_queue;
              DELETE FROM settings;",

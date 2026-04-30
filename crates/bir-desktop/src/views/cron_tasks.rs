@@ -525,7 +525,9 @@ impl CronTasksView {
             None
         };
 
-        let Some(job) = job else { return };
+        let Some(job) = job else {
+            return;
+        };
 
         // For email polling jobs, execute inline instead of waiting for daemon
         if let Some(ref cmd) = job.command

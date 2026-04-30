@@ -28,11 +28,13 @@
 
 pub mod mapper;
 pub mod models;
+pub mod providers;
 pub mod service;
 pub mod validation;
 
 pub use mapper::{FormDraftOutput, FormMapper, Mapper2551Q, MapperError};
 pub use models::{IncomeCategory, IncomeSource, UniversalTaxPayload};
+pub use providers::{DataProvider, ProviderConfig, ProviderError, generic::GenericProvider};
 pub use service::{
     SyncError, SyncResponse, SyncResult, import_payload_directory, import_payload_file,
     process_sync, process_sync_json,

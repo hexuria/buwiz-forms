@@ -37,21 +37,80 @@ pub fn inject_acroform(
     let mut all_field_refs: Vec<Object> = Vec::new();
     let mut page_annots: BTreeMap<u32, Vec<Object>> = BTreeMap::new();
 
+    // Track key occurrences for suffix generation and remaining text for spanning.
+    let mut key_count: BTreeMap<String, usize> = BTreeMap::new();
+    let mut remaining_text: BTreeMap<String, String> = BTreeMap::new();
+
     for field_def in &formtype.fields {
         let Some(widget_spec) = &field_def.widget else {
             continue;
         };
-        let value = fields.get(&field_def.key).cloned().unwrap_or_default();
+
+        // Initialize remaining text for this key on first encounter
+        if !remaining_text.contains_key(&field_def.key) {
+            let full_value = fields.get(&field_def.key).cloned().unwrap_or_default();
+            remaining_text.insert(field_def.key.clone(), full_value);
+        }
+
+        let current_value = remaining_text
+            .get(&field_def.key)
+            .cloned()
+            .unwrap_or_default();
 
         // Skip empty optional fields
-        if value.is_empty() && field_def.optional {
+        if current_value.is_empty() && field_def.optional {
+            // Still increment the count so suffix numbering stays consistent
+            *key_count.entry(field_def.key.clone()).or_insert(0) += 1;
             continue;
         }
 
+        // Determine the chunk of text for this box
+        let chunk = if let Some(capacity) = field_def.char_capacity() {
+            if capacity >= current_value.len() {
+                current_value.clone()
+            } else {
+                current_value.chars().take(capacity).collect::<String>()
+            }
+        } else {
+            current_value.clone()
+        };
+
+        // Generate a unique AcroForm name: append suffix if key is reused
+        let occurrence = key_count.entry(field_def.key.clone()).or_insert(0);
+        let acroform_name = if *occurrence == 0 {
+            // Check if this key appears again later — if so, suffix even the first
+            let total = formtype
+                .fields
+                .iter()
+                .filter(|f| f.key == field_def.key)
+                .count();
+            if total > 1 {
+                format!("{}_{}", field_def.key, *occurrence)
+            } else {
+                field_def.key.clone()
+            }
+        } else {
+            format!("{}_{}", field_def.key, *occurrence)
+        };
+        *occurrence += 1;
+
+        // Consume text for spanning
+        let consumed = chunk.len();
+        if consumed > 0 {
+            let rest = if consumed >= current_value.len() {
+                String::new()
+            } else {
+                current_value[consumed..].to_string()
+            };
+            remaining_text.insert(field_def.key.clone(), rest);
+        }
+
         let widget_dict = match widget_spec.widget_type {
-            WidgetType::Text => build_text_widget(field_def, widget_spec, &value, page_height),
+            WidgetType::Text => {
+                build_text_widget_named(field_def, widget_spec, &chunk, page_height, &acroform_name)
+            }
             WidgetType::Checkbox => {
-                build_checkbox_widget(field_def, widget_spec, &value, page_height)
+                build_checkbox_widget(field_def, widget_spec, &chunk, page_height)
             }
         };
 
@@ -106,11 +165,27 @@ pub fn inject_acroform(
 }
 
 /// Build a text widget annotation dictionary.
+#[allow(dead_code)]
 fn build_text_widget(
     field: &FormField,
     spec: &WidgetSpec,
     value: &str,
     page_height: f64,
+) -> Dictionary {
+    build_text_widget_named(field, spec, value, page_height, &field.key)
+}
+
+/// Build a text widget annotation dictionary with a custom AcroForm name.
+///
+/// This variant is used when multiple boxes share the same field key.
+/// Each gets a unique `/T` name (e.g., `txtAddress_0`, `txtAddress_1`)
+/// to prevent AcroForm field mirroring in PDF viewers.
+fn build_text_widget_named(
+    field: &FormField,
+    spec: &WidgetSpec,
+    value: &str,
+    page_height: f64,
+    acroform_name: &str,
 ) -> Dictionary {
     // Convert Typst top-left coordinates to PDF bottom-left coordinates.
     let x1 = field.x;
@@ -129,7 +204,6 @@ fn build_text_widget(
     let da = format!("/Helv {font_size} Tf 0 g");
 
     let mut ff: u32 = 0;
-    // Comb bit: bit 25 (1 << 24, zero-indexed from bit 1)
     if spec.comb.unwrap_or(false) {
         ff |= 1 << 24; // Comb
     }
@@ -138,11 +212,11 @@ fn build_text_widget(
         "Type" => Object::Name(b"Annot".to_vec()),
         "Subtype" => Object::Name(b"Widget".to_vec()),
         "FT" => Object::Name(b"Tx".to_vec()),
-        "T" => Object::String(field.key.as_bytes().to_vec(), lopdf::StringFormat::Literal),
+        "T" => Object::String(acroform_name.as_bytes().to_vec(), lopdf::StringFormat::Literal),
         "V" => Object::String(value.as_bytes().to_vec(), lopdf::StringFormat::Literal),
         "DA" => Object::String(da.into_bytes(), lopdf::StringFormat::Literal),
         "Rect" => rect,
-        "F" => Object::Integer(4) // Print flag
+        "F" => Object::Integer(4)
     };
 
     if ff != 0 {

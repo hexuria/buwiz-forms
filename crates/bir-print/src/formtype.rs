@@ -17,9 +17,9 @@ pub struct FormType {
 }
 
 impl FormType {
-    /// Highest page number referenced by any field (at least 2 for 2551Q).
+    /// Highest page number referenced by any field (at least 1).
     pub fn page_count(&self) -> usize {
-        self.fields.iter().map(|f| f.page).max().unwrap_or(0).max(2)
+        self.fields.iter().map(|f| f.page).max().unwrap_or(1).max(1)
     }
 
     /// Save the FormType back to a file.
@@ -52,6 +52,68 @@ pub struct FormField {
     /// Fields without a `widget` appear only in the flat (Typst) PDF.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub widget: Option<WidgetSpec>,
+}
+
+impl FormField {
+    /// The visual bounding-box width for this field.
+    ///
+    /// Priority: `widget.width` → `cell_w × int_cells` → reasonable default.
+    /// This must **not** return `cell_w` directly — `cell_w` is the
+    /// per-character spacing for `Cells`/`Amount` fields, not the total width.
+    pub fn display_width(&self) -> f64 {
+        if let Some(w) = &self.widget {
+            return w.width;
+        }
+        if let Some(cw) = self.cell_w {
+            // Cells / Amount: total width ≈ cell_w × cell count
+            let count = self.int_cells.unwrap_or(1) as f64;
+            return cw * count;
+        }
+        // Text fields with no widget — use a sensible fallback
+        100.0
+    }
+
+    /// The visual bounding-box height for this field.
+    ///
+    /// Priority: `widget.height` → `size + 4` padding → reasonable default.
+    pub fn display_height(&self) -> f64 {
+        if let Some(w) = &self.widget {
+            return w.height;
+        }
+        self.size.unwrap_or(10.0) + 4.0
+    }
+
+    /// Maximum number of characters that fit in this box.
+    ///
+    /// For `Cells` fields, capacity is exact (`max_length` or `width / cell_w`).
+    /// For `Text` fields, we use a conservative estimate based on the font.
+    /// Returns `None` for Checkbox / Amount (spanning is not applicable).
+    pub fn char_capacity(&self) -> Option<usize> {
+        match self.kind {
+            FieldKind::Cells => {
+                // Prefer explicit max_length from widget, else compute from width
+                if let Some(w) = &self.widget {
+                    if let Some(ml) = w.max_length {
+                        return Some(ml);
+                    }
+                }
+                self.cell_w
+                    .map(|cw| (self.display_width() / cw).floor() as usize)
+            }
+            FieldKind::Text => {
+                let font_size = self
+                    .widget
+                    .as_ref()
+                    .and_then(|w| w.font_size)
+                    .unwrap_or(self.size.unwrap_or(8.5));
+                // Arial average glyph width ≈ 0.52 × font_size.
+                // Use 0.7 as a conservative multiplier to prevent overflow.
+                let char_w = font_size * 0.7;
+                Some((self.display_width() / char_w).floor() as usize)
+            }
+            FieldKind::Checkbox | FieldKind::Amount => None,
+        }
+    }
 }
 
 /// How a field is rendered in the flat (Typst) PDF.

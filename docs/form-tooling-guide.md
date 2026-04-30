@@ -200,6 +200,42 @@ Compare our PDF output against a printout from the official eBIRForms.
 
 ---
 
+## Typst-Native Forms (New Approach)
+
+### What It Is
+
+A **Typst-authored form template** (`form.typ`) that draws the **entire form** — static headers, lines, boxes, labels, AND dynamic field values. This replaces the SVG-background approach with a fully version-controlled, programmable, and maintainable text file.
+
+### When to Use
+
+- You want **full control** over the form layout without depending on an official PDF
+- You want to **version-control** form changes with meaningful git diffs
+- You want to **programmatically modify** form structure (loops, conditionals, computed fields)
+
+### How It Works
+
+```
+formtypes/{form_id}/
+├── form.typ              ← Typst draws the ENTIRE form (static + dynamic)
+├── template.typ          ← Shared macros (put, label, cells, mark, amount)
+├── formtype.json         ← Field coordinates (still used for AcroForm + Layout Editor)
+├── form_structure.json   ← AI-readable structure (dev-time only, from extract_form_structure.py)
+└── pages/*.svg           ← SVG backgrounds (kept as reference for side-by-side comparison)
+```
+
+**Rendering priority in `bir-print`:**
+1. If `form.typ` exists → Typst-native path (form.typ draws everything)
+2. Else → SVG-background path (existing behavior, no changes)
+
+### Workflow
+
+1. **Extract**: `just extract-form ~/Downloads/2551Q.pdf 2551Qv2018`
+2. **Generate**: Ask AI to generate `form.typ` from `form_structure.json`
+3. **Compare**: Use Layout Editor side-by-side mode (SVG vs Typst preview)
+4. **Nudge**: Adjust coordinates in `form.typ` until pixel-perfect
+
+---
+
 ## File Reference
 
 | Path | Type | Purpose |
@@ -208,8 +244,11 @@ Compare our PDF output against a printout from the official eBIRForms.
 | `.agent/skills/form-generator/scripts/parse_savefile.py` | Script | Parse savefile XML → field analysis |
 | `.agent/skills/form-generator/scripts/generate_form.rs` | Script | Generate Rust code from analysis |
 | `.scripts/generate_formtype.py` | Script | Generate layout from official PDF |
+| `.scripts/extract_form_structure.py` | Script | Extract PDF structure for Typst-native form generation |
 | `.scripts/pdf_to_typst_form_prototype.py` | Script | Legacy prototype (reference only) |
+| `formtypes/<FormID>/form.typ` | Template | Typst-native form (draws entire form) |
 | `formtypes/<FormID>/formtype.json` | Data | Field positions for PDF rendering |
+| `formtypes/<FormID>/form_structure.json` | Data | AI-readable PDF structure (dev-time) |
 | `formtypes/<FormID>/pages/*.svg` | Asset | SVG page backgrounds |
 | `formtypes/<FormID>/template.typ` | Template | Typst rendering helpers |
 | `docs/adding-a-new-form.md` | Docs | Full developer guide with code samples |
