@@ -261,6 +261,11 @@ impl Form2551QView {
         };
 
         self.draft.recompute();
+        tracing::debug!(
+            total_tax_due = self.draft.total_tax_due,
+            total_payable = self.draft.total_amount_payable,
+            "sync_from_inputs: recomputed draft"
+        );
         self.validation_errors = self.validate_for_submit(cx);
         cx.notify();
     }
@@ -296,6 +301,13 @@ impl Form2551QView {
         self.sync_from_inputs(cx);
         if let Ok(db) = self.db.lock() {
             let _ = db.save_2551q_draft(&self.draft);
+            tracing::info!(
+                tin = %self.draft.tin,
+                name = %self.draft.taxpayer_name,
+                total = self.draft.total_amount_payable,
+                status = ?self.draft.status,
+                "Form saved to database"
+            );
             use gpui_component::WindowExt;
             window.push_notification(
                 gpui_component::notification::Notification::new()
@@ -563,12 +575,32 @@ impl Form2551QView {
     }
 
     fn preview_pdf(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.sync_from_inputs(cx);
+        // Reload from DB to ensure we render the persisted state (data integrity).
+        // If no saved draft exists yet, fall back to in-memory state.
+        let render_draft = if let Ok(db) = self.db.lock() {
+            db.get_2551q_draft(&self.draft.tin, self.draft.taxable_year, self.draft.quarter)
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| {
+                    tracing::warn!("No saved draft found for PDF preview, using in-memory state");
+                    self.draft.clone()
+                })
+        } else {
+            self.draft.clone()
+        };
+
+        tracing::info!(
+            name = %render_draft.taxpayer_name,
+            total = render_draft.total_amount_payable,
+            status = ?render_draft.status,
+            "Rendering PDF from saved draft"
+        );
+
         let dir = PdfViewerView::unique_output_dir();
         let formtypes_dir = crate::platform::find_resource_dir("formtypes");
-        match render_2551q_print(&self.draft, &dir, Some(formtypes_dir)) {
+        match render_2551q_print(&render_draft, &dir, Some(formtypes_dir)) {
             Ok(result) => {
-                let draft = self.draft.clone();
+                let draft = render_draft;
                 let output_dir = dir.clone();
                 let options = WindowOptions {
                     window_bounds: Some(WindowBounds::centered(size(px(1200.), px(900.)), cx)),

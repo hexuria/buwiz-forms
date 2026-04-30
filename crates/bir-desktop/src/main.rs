@@ -103,6 +103,27 @@ impl AssetSource for Assets {
 
 fn main() {
     dotenvy::dotenv().ok();
+
+    // Initialize structured logging for debug builds.
+    // Controlled via RUST_LOG env var, e.g.: RUST_LOG=bir_desktop=debug,bir_print=debug
+    #[cfg(debug_assertions)]
+    {
+        use tracing_subscriber::EnvFilter;
+        tracing_subscriber::fmt()
+            .with_env_filter(
+                EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                    "bir_desktop=debug,bir_print=debug,bir_core=info"
+                        .parse()
+                        .unwrap()
+                }),
+            )
+            .with_target(true)
+            .with_file(true)
+            .with_line_number(true)
+            .init();
+        tracing::info!("🔍 Tracing initialized (debug build)");
+    }
+
     let assets_dir = crate::platform::find_resource_dir("assets");
     gpui_platform::application()
         .with_assets(Assets { base: assets_dir })

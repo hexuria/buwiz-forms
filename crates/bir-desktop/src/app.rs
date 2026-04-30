@@ -788,12 +788,19 @@ impl AppState {
         {
             let draft = if let Ok(db) = self.db.lock() {
                 let existing = db.get_2551q_draft(tin, year, quarter).ok().flatten();
-                if let Some(mut d) = existing {
-                    if matches!(d.status, FilingStatus::Draft) {
-                        d.sync_with_profile(profile);
-                    }
+                if let Some(d) = existing {
+                    // Use the saved draft as-is. Profile fields are captured at save time.
+                    // If user wants to update profile info in the form, they edit the profile,
+                    // reopen the form, and hit Save — which persists the current in-memory state.
+                    tracing::info!(
+                        tin = %d.tin,
+                        status = ?d.status,
+                        name = %d.taxpayer_name,
+                        "Loading existing draft from DB (profile sync skipped — data integrity)"
+                    );
                     d
                 } else {
+                    tracing::info!(tin = %tin, year, quarter, "Creating new draft from profile");
                     let prev = if quarter > 1 {
                         db.get_2551q_draft(tin, year, quarter - 1).ok().flatten()
                     } else {

@@ -225,19 +225,44 @@ pub trait FormViewTrait: 'static + Sized {
             );
         }
 
-        action_buttons = action_buttons.child(
-            gpui_component::button::Button::new("print_btn")
-                .label("PDF Viewer")
-                .icon(
-                    gpui_component::Icon::empty()
-                        .path("svg/printer.svg")
-                        .small(),
-                )
-                .outline()
-                .on_click(cx.listener(|this, _, window, cx| {
-                    this.preview_pdf(window, cx);
-                })),
-        );
+        // Dev-only: Inspect button (saves first, then previews) — stripped from release builds
+        #[cfg(feature = "dev-tools")]
+        {
+            action_buttons = action_buttons.child(
+                gpui_component::button::Button::new("inspect_btn")
+                    .label("Inspect")
+                    .icon(
+                        gpui_component::Icon::empty()
+                            .path("svg/target.svg")
+                            .small(),
+                    )
+                    .outline()
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.save_draft(window, cx);
+                        this.preview_pdf(window, cx);
+                    })),
+            );
+        }
+
+        // Production: PDF Viewer only available after submission
+        if !matches!(
+            self.current_status(),
+            FilingStatus::Draft | FilingStatus::Queued
+        ) {
+            action_buttons = action_buttons.child(
+                gpui_component::button::Button::new("print_btn")
+                    .label("PDF Viewer")
+                    .icon(
+                        gpui_component::Icon::empty()
+                            .path("svg/printer.svg")
+                            .small(),
+                    )
+                    .outline()
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.preview_pdf(window, cx);
+                    })),
+            );
+        }
 
         div()
             .w_full()
