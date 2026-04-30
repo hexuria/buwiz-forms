@@ -808,8 +808,7 @@ impl PdfLayoutEditorView {
                                                     }
                                                 }))
                                                 .child(
-                                                    Icon::empty()
-                                                        .path("svg/minus.svg")
+                                                    Icon::new(IconName::Minus)
                                                         .small()
                                                         .text_color(cx.theme().danger)
                                                 )
