@@ -141,6 +141,18 @@ impl TypstCompiler for EmbeddedTypstCompiler {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct CliTypstCompiler;
 
+fn get_typst_binary() -> std::ffi::OsString {
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(dir) = exe_path.parent() {
+            let bundled_typst = dir.join(if cfg!(windows) { "typst.exe" } else { "typst" });
+            if bundled_typst.exists() {
+                return bundled_typst.into_os_string();
+            }
+        }
+    }
+    std::ffi::OsString::from("typst")
+}
+
 impl TypstCompiler for CliTypstCompiler {
     fn compile_pdf(
         &self,
@@ -148,7 +160,7 @@ impl TypstCompiler for CliTypstCompiler {
         pdf_path: &Path,
         root_dir: &Path,
     ) -> Result<(), PrintError> {
-        let output = Command::new("typst")
+        let output = Command::new(get_typst_binary())
             .arg("compile")
             .arg("--root")
             .arg(root_dir)
@@ -217,6 +229,9 @@ pub fn render_flat_pdf(request: PrintRequest) -> Result<PrintResult, PrintError>
 
         // Write form.typ
         fs::write(&typ_path, form_typ_content)?;
+
+        // Ensure SVGs are copied so Typst can use them as backgrounds
+        write_static_assets_resolved(&request.form_id, &request.output_dir, request.formtypes_dir.as_deref())?;
 
         let embedded = EmbeddedTypstCompiler;
         let cli = CliTypstCompiler;
@@ -656,7 +671,7 @@ fn export_preview_pngs(
     page_count: usize,
 ) -> Result<Vec<PathBuf>, PrintError> {
     let pattern = output_dir.join("preview-{p}.png");
-    let output = Command::new("typst")
+    let output = Command::new(get_typst_binary())
         .arg("compile")
         .arg("--root")
         .arg(output_dir)

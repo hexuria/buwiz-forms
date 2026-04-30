@@ -41,6 +41,7 @@ pub mod global_actions {
             EditorNewBox,
             EditorDuplicateBox,
             EditorDeleteBox,
+            EditorRenameField,
             EditorFocusSearch,
             EditorEscape,
             EditorNextField,

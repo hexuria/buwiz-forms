@@ -6,7 +6,7 @@ use gpui_component::notification::Notification;
 use gpui_component::*;
 
 use crate::components::combobox::{Combobox, ComboboxEvent, ComboboxState};
-use bir_print::formtype::{FormField, FormType};
+use bir_print::formtype::{FormField, FormType, WidgetSpec, WidgetType, FieldKind};
 use std::path::PathBuf;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -25,6 +25,8 @@ pub struct PdfLayoutEditorView {
     pub current_page: usize,
     pub form_select: Entity<ComboboxState>,
     pub search_filter: Entity<InputState>,
+    pub new_field_input: Entity<InputState>,
+    pub new_field_modal_open: bool,
     pub scroll_handle: ScrollHandle,
     pub focus_handle: FocusHandle,
     _subscriptions: Vec<Subscription>,
@@ -65,6 +67,8 @@ impl PdfLayoutEditorView {
         let form_select = cx.new(|cx| ComboboxState::new(available_forms.clone(), window, cx));
         let search_filter =
             cx.new(|cx| InputState::new(window, cx).placeholder("Search fields..."));
+        let new_field_input = 
+            cx.new(|cx| InputState::new(window, cx).placeholder("Enter field name"));
 
         let (auto_form, auto_path) = if let Some(first) = available_forms.first() {
             let mut p = formtypes_dir.clone();
@@ -84,22 +88,41 @@ impl PdfLayoutEditorView {
             (None, None)
         };
 
-        let _subscriptions = vec![cx.subscribe(
-            &form_select,
-            |this: &mut Self, _state, event: &ComboboxEvent, cx| {
-                if let Some(selected) = &event.selected {
-                    let path = if selected.starts_with('/') || selected.starts_with("~/") {
-                        PathBuf::from(Self::expand_tilde(selected))
-                    } else {
-                        let mut p = Self::get_formtypes_dir();
-                        p.push(selected);
-                        p.push("formtype.json");
-                        p
-                    };
-                    this.load_file(path, cx);
+        let _subscriptions = vec![
+            cx.subscribe(
+                &form_select,
+                |this: &mut Self, _state, event: &ComboboxEvent, cx| {
+                    if let Some(selected) = &event.selected {
+                        let path = if selected.starts_with('/') || selected.starts_with("~/") {
+                            PathBuf::from(Self::expand_tilde(selected))
+                        } else {
+                            let mut p = Self::get_formtypes_dir();
+                            p.push(selected);
+                            p.push("formtype.json");
+                            p
+                        };
+                        this.load_file(path, cx);
+                    }
+                },
+            ),
+            cx.subscribe(
+                &new_field_input,
+                |this: &mut Self, _input, event: &gpui_component::input::InputEvent, cx| {
+                    if let gpui_component::input::InputEvent::PressEnter { .. } = event {
+                        let field_name = _input.read(cx).value().to_string();
+                            if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
+                                if let Some(ft) = &mut this.form_type {
+                                    if let Some(f) = ft.fields.get_mut(idx) {
+                                        f.key = field_name.clone();
+                                    }
+                                }
+                            }
+                        this.new_field_modal_open = false;
+                        cx.notify();
+                    }
                 }
-            },
-        )];
+            )
+        ];
 
         let focus_handle = cx.focus_handle();
         window.focus(&focus_handle, cx);
@@ -111,6 +134,8 @@ impl PdfLayoutEditorView {
             current_page: 1,
             form_select,
             search_filter,
+            new_field_input,
+            new_field_modal_open: false,
             scroll_handle: ScrollHandle::new(),
             focus_handle,
             _subscriptions,
@@ -233,6 +258,55 @@ impl PdfLayoutEditorView {
         }
     }
 
+    fn auto_pan_to_field(&mut self, idx: usize) {
+        if let Some(ft) = &self.form_type {
+            if let Some(f) = ft.fields.get(idx) {
+                self.scale = 2.0;
+                self.pan_offset = gpui::Point {
+                    x: -(f.x as f32) * 2.0 + 300.0,
+                    y: -(f.y as f32) * 2.0 + 300.0,
+                };
+            }
+        }
+    }
+
+    fn add_new_field(&mut self, key: String, cx: &mut Context<Self>) {
+        if let Some(ft) = &mut self.form_type {
+            if let Some(first) = ft.fields.first() {
+                let mut new_field = first.clone();
+                new_field.key = key.clone();
+                new_field.page = self.current_page;
+                // Place roughly in the center of the viewport with a default 100x100 size
+                new_field.x = ((-self.pan_offset.x + 300.0) / self.scale) as f64;
+                new_field.y = ((-self.pan_offset.y + 300.0) / self.scale) as f64;
+                if let Some(ref mut w) = new_field.widget {
+                    w.width = 100.0;
+                    w.height = 100.0;
+                } else {
+                    new_field.widget = Some(WidgetSpec {
+                        widget_type: match new_field.kind {
+                            FieldKind::Checkbox => WidgetType::Checkbox,
+                            _ => WidgetType::Text,
+                        },
+                        width: 100.0,
+                        height: 100.0,
+                        max_length: None,
+                        comb: None,
+                        font_size: Some(8.5),
+                    });
+                }
+                new_field.cell_w = None;
+                ft.fields.push(new_field);
+                let new_idx = ft.fields.len() - 1;
+                self.selected_field_idx = Some(new_idx);
+                self.drawing_field_idx = Some(new_idx);
+                self.interaction_mode = InteractionMode::DrawingNew;
+                self.is_edit_mode = true;
+                self.scroll_sidebar_to_selected(cx);
+            }
+        }
+    }
+
     fn check_collision(&self, idx: usize, field: &FormField, ft: &FormType) -> bool {
         let fx = field.x;
         let fy = field.y;
@@ -276,8 +350,8 @@ impl PdfLayoutEditorView {
         } else if is_selected {
             // Focused but not editing — yellow
             (cx.theme().warning, cx.theme().warning.opacity(0.4))
-        } else if self.is_edit_mode && no_focus {
-            // Edit mode on, no box focused — all boxes show in yellow (immutable)
+        } else if no_focus {
+            // No box focused — all boxes show in yellow (immutable)
             (cx.theme().warning, cx.theme().warning.opacity(0.15))
         } else {
             // Default — translucent
@@ -517,12 +591,8 @@ impl PdfLayoutEditorView {
                                             this.drawing_field_idx = Some(idx);
                                         }
                                         if let Some(ft) = &this.form_type {
-                                            if let Some(f) = ft.fields.get(idx) {
-                                                this.scale = 2.0;
-                                                this.pan_offset = gpui::Point {
-                                                    x: -(f.x as f32) * 2.0 + 300.0,
-                                                    y: -(f.y as f32) * 2.0 + 300.0,
-                                                };
+                                            if let Some(_f) = ft.fields.get(idx) {
+                                                this.auto_pan_to_field(idx);
                                             }
                                         }
                                         window.focus(&this.focus_handle, cx);
@@ -544,31 +614,41 @@ impl PdfLayoutEditorView {
                                                 cx.listener(move |this, _, window, cx| {
                                                     cx.stop_propagation();
                                                     if group_count > 1 {
-                                                        if let Some(ft) = &mut this.form_type {
-                                                            ft.fields.remove(idx);
-                                                            if this.selected_field_idx == Some(idx)
-                                                            {
-                                                                this.selected_field_idx = None;
-                                                            } else if let Some(s) =
-                                                                this.selected_field_idx
-                                                            {
-                                                                if s > idx {
-                                                                    this.selected_field_idx =
-                                                                        Some(s - 1);
+                                                        if let Some(ft) = &this.form_type {
+                                                            let key = ft.fields.get(idx).map(|f| f.key.clone()).unwrap_or_default();
+                                                            let prompt = window.prompt(
+                                                                gpui::PromptLevel::Warning,
+                                                                &format!("Delete Box {} from {}?", sub_idx + 1, key),
+                                                                None,
+                                                                &["Delete", "Cancel"],
+                                                                cx,
+                                                            );
+                                                            cx.spawn(async move |this, cx| {
+                                                                if let Ok(0) = prompt.await {
+                                                                    let _ = this.update(cx, |this, cx| {
+                                                                        if let Some(ft) = &mut this.form_type {
+                                                                            if idx < ft.fields.len() {
+                                                                                ft.fields.remove(idx);
+                                                                                if this.selected_field_idx == Some(idx) {
+                                                                                    this.selected_field_idx = None;
+                                                                                } else if let Some(s) = this.selected_field_idx {
+                                                                                    if s > idx {
+                                                                                        this.selected_field_idx = Some(s - 1);
+                                                                                    }
+                                                                                }
+                                                                                if this.drawing_field_idx == Some(idx) {
+                                                                                    this.drawing_field_idx = None;
+                                                                                } else if let Some(d) = this.drawing_field_idx {
+                                                                                    if d > idx {
+                                                                                        this.drawing_field_idx = Some(d - 1);
+                                                                                    }
+                                                                                }
+                                                                                cx.notify();
+                                                                            }
+                                                                        }
+                                                                    });
                                                                 }
-                                                            }
-                                                            if this.drawing_field_idx == Some(idx) {
-                                                                this.drawing_field_idx = None;
-                                                            } else if let Some(d) =
-                                                                this.drawing_field_idx
-                                                            {
-                                                                if d > idx {
-                                                                    this.drawing_field_idx =
-                                                                        Some(d - 1);
-                                                                }
-                                                            }
-                                                            window.focus(&this.focus_handle, cx);
-                                                            cx.notify();
+                                                            }).detach();
                                                         }
                                                     }
                                                 }),
@@ -604,41 +684,6 @@ impl PdfLayoutEditorView {
                     .border_color(cx.theme().border)
                     .child(Input::new(&self.search_filter)),
             )
-            .when(self.is_edit_mode, |this| {
-                this.child(
-                    div()
-                        .p_4()
-                        .bg(cx.theme().info.opacity(0.1))
-                        .border_b_1()
-                        .border_color(cx.theme().border)
-                        .flex()
-                        .justify_between()
-                        .items_center()
-                        .child({
-                            let msg = if self.drawing_field_idx.is_some() {
-                                "Edit Mode Active. Move, resize, or redraw the box."
-                            } else {
-                                "Edit Mode Active. Click a box to start editing."
-                            };
-                            div()
-                                .text_sm()
-                                .w_2_3()
-                                .text_color(cx.theme().info)
-                                .child(msg)
-                        })
-                        .child(
-                            Button::new("exit_edit_mode")
-                                .label("Done")
-                                .on_click(cx.listener(|this, _ev, window, cx| {
-                                    this.is_edit_mode = false;
-                                    this.drawing_field_idx = None;
-                                    this.interaction_mode = InteractionMode::None;
-                                    window.focus(&this.focus_handle, cx);
-                                    cx.notify();
-                                })),
-                        ),
-                )
-            })
             .child(
                 div()
                     .id("fields_sidebar_list")
@@ -826,7 +871,7 @@ impl Render for PdfLayoutEditorView {
             let bg_canvas = if let Some(svg) = svg_path {
                 img(svg)
                     .size_full()
-                    .object_fit(ObjectFit::Contain)
+                    .object_fit(ObjectFit::Fill) // Force fill so SVG bounds exactly match the field container
                     .into_any_element()
             } else {
                 div().bg(cx.theme().background).into_any_element()
@@ -931,13 +976,24 @@ impl Render for PdfLayoutEditorView {
                                                     if let Some(f) = ft.fields.get_mut(idx) {
                                                         f.x = min_x as f64;
                                                         f.y = min_y as f64;
-                                                        // Write to widget dimensions (authoritative) and keep legacy fields in sync
+                                                        // Only update widget dimensions — never touch cell_w or size
+                                                        // (cell_w = per-char spacing for Typst, size = font size)
                                                         if let Some(ref mut ws) = f.widget {
                                                             ws.width = w as f64;
                                                             ws.height = h as f64;
+                                                        } else {
+                                                            f.widget = Some(WidgetSpec {
+                                                                widget_type: match f.kind {
+                                                                    FieldKind::Checkbox => WidgetType::Checkbox,
+                                                                    _ => WidgetType::Text,
+                                                                },
+                                                                width: w as f64,
+                                                                height: h as f64,
+                                                                max_length: None,
+                                                                comb: None,
+                                                                font_size: f.size,
+                                                            });
                                                         }
-                                                        f.cell_w = Some(w as f64);
-                                                        f.size = Some((h as f64 - 4.0).max(1.0));
                                                     }
                                                 }
                                             }
@@ -999,13 +1055,23 @@ impl Render for PdfLayoutEditorView {
                                                             (start_rect.size.width + dx).max(5.0);
                                                         let new_h =
                                                             (start_rect.size.height + dy).max(5.0);
-                                                        // Write to widget dimensions (authoritative) and keep legacy fields in sync
+                                                        // Only update widget dimensions — never touch cell_w or size
                                                         if let Some(ref mut ws) = f.widget {
                                                             ws.width = new_w as f64;
                                                             ws.height = new_h as f64;
+                                                        } else {
+                                                            f.widget = Some(WidgetSpec {
+                                                                widget_type: match f.kind {
+                                                                    FieldKind::Checkbox => WidgetType::Checkbox,
+                                                                    _ => WidgetType::Text,
+                                                                },
+                                                                width: new_w as f64,
+                                                                height: new_h as f64,
+                                                                max_length: None,
+                                                                comb: None,
+                                                                font_size: f.size,
+                                                            });
                                                         }
-                                                        f.cell_w = Some(new_w as f64);
-                                                        f.size = Some((new_h as f64) - 4.0);
                                                     }
                                                     cx.notify();
                                                 }
@@ -1059,7 +1125,7 @@ impl Render for PdfLayoutEditorView {
                 )
         };
 
-        div()
+        let mut main_container = div()
             .key_context("PdfLayoutEditorView")
             .track_focus(&self.focus_handle)
             .on_action(
@@ -1107,8 +1173,18 @@ impl Render for PdfLayoutEditorView {
             )
             .on_action(cx.listener(
                 |this, _: &crate::global_actions::EditorEscape, window, cx| {
-                    if this.selected_field_idx.is_some() || this.drawing_field_idx.is_some() {
-                        // First Escape: clear focus, show all boxes
+                    if this.new_field_modal_open {
+                        this.new_field_modal_open = false;
+                    } else if this.selected_field_idx.is_some() || this.drawing_field_idx.is_some() {
+                        if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
+                            if let Some(ft) = &mut this.form_type {
+                                if let Some(f) = ft.fields.get(idx) {
+                                    if f.key == "__NEW_FIELD__" {
+                                        ft.fields.remove(idx);
+                                    }
+                                }
+                            }
+                        }
                         this.drawing_field_idx = None;
                         this.selected_field_idx = None;
                         this.interaction_mode = InteractionMode::None;
@@ -1127,27 +1203,37 @@ impl Render for PdfLayoutEditorView {
                 },
             ))
             .on_action(cx.listener(
-                |this, _: &crate::global_actions::EditorNewBox, window, cx| {
+                |this, _: &crate::global_actions::EditorNewBox, _window, cx| {
+                    if let Some(_ft) = &this.form_type {
+                        this.add_new_field("__NEW_FIELD__".to_string(), cx);
+                        cx.notify();
+                    }
+                },
+            ))
+            .on_action(cx.listener(
+                |this, _: &crate::global_actions::EditorRenameField, window, cx| {
                     if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
-                        if let Some(ft) = &mut this.form_type {
-                            if let Some(field) = ft.fields.get(idx) {
-                                let mut new_field = field.clone();
-                                new_field.x = 0.0;
-                                new_field.y = 0.0;
-                                if let Some(ref mut w) = new_field.widget {
-                                    w.width = 0.0;
-                                    w.height = 0.0;
+                        if let Some(ft) = &this.form_type {
+                            this.new_field_modal_open = true;
+                            
+                            let key = ft.fields[idx].key.clone();
+                            let initial = if key == "__NEW_FIELD__" {
+                                let mut prefix = String::new();
+                                if let Some(first_field) = ft.fields.first() {
+                                    if let Some(colon_idx) = first_field.key.find(':') {
+                                        prefix = first_field.key[..=colon_idx].to_string();
+                                    }
                                 }
-                                new_field.cell_w = None;
-                                ft.fields.push(new_field);
-                                let new_idx = ft.fields.len() - 1;
-                                this.selected_field_idx = Some(new_idx);
-                                this.drawing_field_idx = Some(new_idx);
-                                this.interaction_mode = InteractionMode::DrawingNew;
-                                this.scroll_sidebar_to_selected(cx);
-                                window.focus(&this.focus_handle, cx);
-                                cx.notify();
-                            }
+                                prefix
+                            } else {
+                                key
+                            };
+
+                            this.new_field_input.update(cx, |input, cx| {
+                                input.set_value(initial, window, cx);
+                                input.focus(window, cx);
+                            });
+                            cx.notify();
                         }
                     }
                 },
@@ -1207,23 +1293,30 @@ impl Render for PdfLayoutEditorView {
             .on_action(cx.listener(
                 |this, _: &crate::global_actions::EditorNextField, _window, cx| {
                     if let Some(ft) = &this.form_type {
+                        let keys = this.ordered_distinct_keys(cx);
+                        if keys.is_empty() { return; }
+                        let mut next_key = None;
+                        
                         if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
                             let current_key = ft.fields[idx].key.clone();
-                            let keys = this.ordered_distinct_keys(cx);
                             if let Some(key_pos) = keys.iter().position(|k| k == &current_key) {
                                 if key_pos + 1 < keys.len() {
-                                    let next_key = &keys[key_pos + 1];
-                                    if let Some(first_idx) =
-                                        ft.fields.iter().position(|f| f.key == *next_key)
-                                    {
-                                        this.selected_field_idx = Some(first_idx);
-                                        if this.is_edit_mode {
-                                            this.drawing_field_idx = Some(first_idx);
-                                        }
-                                        this.scroll_sidebar_to_selected(cx);
-                                        cx.notify();
-                                    }
+                                    next_key = Some(keys[key_pos + 1].clone());
                                 }
+                            }
+                        } else {
+                            next_key = Some(keys[0].clone());
+                        }
+
+                        if let Some(nk) = next_key {
+                            if let Some(first_idx) = ft.fields.iter().position(|f| f.key == nk) {
+                                this.selected_field_idx = Some(first_idx);
+                                if this.is_edit_mode {
+                                    this.drawing_field_idx = Some(first_idx);
+                                }
+                                this.scroll_sidebar_to_selected(cx);
+                                this.auto_pan_to_field(first_idx);
+                                cx.notify();
                             }
                         }
                     }
@@ -1232,23 +1325,30 @@ impl Render for PdfLayoutEditorView {
             .on_action(cx.listener(
                 |this, _: &crate::global_actions::EditorPrevField, _window, cx| {
                     if let Some(ft) = &this.form_type {
+                        let keys = this.ordered_distinct_keys(cx);
+                        if keys.is_empty() { return; }
+                        let mut prev_key = None;
+                        
                         if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
                             let current_key = ft.fields[idx].key.clone();
-                            let keys = this.ordered_distinct_keys(cx);
                             if let Some(key_pos) = keys.iter().position(|k| k == &current_key) {
                                 if key_pos > 0 {
-                                    let prev_key = &keys[key_pos - 1];
-                                    if let Some(first_idx) =
-                                        ft.fields.iter().position(|f| f.key == *prev_key)
-                                    {
-                                        this.selected_field_idx = Some(first_idx);
-                                        if this.is_edit_mode {
-                                            this.drawing_field_idx = Some(first_idx);
-                                        }
-                                        this.scroll_sidebar_to_selected(cx);
-                                        cx.notify();
-                                    }
+                                    prev_key = Some(keys[key_pos - 1].clone());
                                 }
+                            }
+                        } else {
+                            prev_key = Some(keys[keys.len() - 1].clone());
+                        }
+
+                        if let Some(pk) = prev_key {
+                            if let Some(first_idx) = ft.fields.iter().position(|f| f.key == pk) {
+                                this.selected_field_idx = Some(first_idx);
+                                if this.is_edit_mode {
+                                    this.drawing_field_idx = Some(first_idx);
+                                }
+                                this.scroll_sidebar_to_selected(cx);
+                                this.auto_pan_to_field(first_idx);
+                                cx.notify();
                             }
                         }
                     }
@@ -1320,6 +1420,39 @@ impl Render for PdfLayoutEditorView {
             .flex()
             .flex_col()
             .child(header)
-            .child(body)
+            .child(body);
+
+        if self.new_field_modal_open {
+            main_container = main_container.child(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .bg(cx.theme().background.opacity(0.8))
+                    .flex()
+                    .justify_center()
+                    .items_center()
+                    .on_mouse_down(MouseButton::Left, cx.listener(|this, _, window, cx| {
+                        this.new_field_modal_open = false;
+                        window.focus(&this.focus_handle, cx);
+                        cx.notify();
+                    }))
+                    .child(
+                        div()
+                            .w(px(400.))
+                            .p_6()
+                            .bg(cx.theme().background)
+                            .rounded_xl()
+                            .shadow_2xl()
+                            .border_1()
+                            .border_color(cx.theme().border)
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                            .child(div().text_lg().font_weight(FontWeight::BOLD).text_color(cx.theme().foreground).child("Add New Field"))
+                            .child(div().mt_2().text_sm().text_color(cx.theme().muted_foreground).child("Enter the field key name (e.g. frm2551Qv2018:txt1)"))
+                            .child(div().mt_4().child(Input::new(&self.new_field_input)))
+                    )
+            );
+        }
+
+        main_container
     }
 }

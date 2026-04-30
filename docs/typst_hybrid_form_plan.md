@@ -345,8 +345,8 @@ To achieve the "pixel-perfect" clone required, we will build a dedicated **Typst
 | 3 | Generate first `form.typ` for 2551Q (AI-assisted) | Medium | ✅ Done — compiles to 642KB PDF |
 | 4 | Add `form.typ` detection to `bir-print` render pipeline | Small | ✅ Done |
 | 5 | Add data.json generation to `render_flat_pdf` | Small | ✅ Done |
-| 6 | Create dedicated `TypstCalibrationView` (Stacked View) | Large | Queued |
-| 7 | Implement hot-reload Typst PNG overlays & independent panning | Medium | Queued |
+| 6 | Create dedicated `TypstCalibrationView` (Stacked View) | Large | ✅ Done |
+| 7 | Implement hot-reload Typst PNG overlays & independent panning | Medium | ✅ Done |
 | 8 | Update `form-generator` skill with Phase 2/3 | Medium | Queued |
 | 9 | Migrate 2551Q to Typst-native (first form) | Medium | ✅ Done (form.typ in place, bir-print detects it) |
 | 10 | Validate output using the Calibration View (Onion Skinning) | Small | 🔜 Next |

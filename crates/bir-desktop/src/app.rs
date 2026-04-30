@@ -48,6 +48,8 @@ pub enum ActiveView {
     Settings,
     #[cfg(feature = "layout-editor")]
     PdfLayoutEditor,
+    #[cfg(feature = "layout-editor")]
+    TypstCalibration,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -68,6 +70,9 @@ pub struct AppState {
     #[cfg(feature = "layout-editor")]
     pub(crate) pdf_layout_editor_view:
         Entity<crate::views::pdf_layout_editor_view::PdfLayoutEditorView>,
+    #[cfg(feature = "layout-editor")]
+    pub(crate) typst_calibration_view:
+        Entity<crate::views::typst_calibration_view::TypstCalibrationView>,
     pub(crate) form_2551q_view: Option<Entity<Form2551QView>>,
     pub(crate) pending_form_draft: Option<Form2551QDraft>,
     pub(crate) form_1701q_view: Option<Entity<Form1701QView>>,
@@ -353,6 +358,9 @@ impl AppState {
         #[cfg(feature = "layout-editor")]
         let pdf_layout_editor_view =
             cx.new(|cx| crate::views::pdf_layout_editor_view::PdfLayoutEditorView::new(window, cx));
+        #[cfg(feature = "layout-editor")]
+        let typst_calibration_view =
+            cx.new(|cx| crate::views::typst_calibration_view::TypstCalibrationView::new(window, cx));
         cx.subscribe(
             &settings_view,
             |this: &mut Self, _entity, event: &SettingsEvent, cx| match event {
@@ -618,6 +626,8 @@ impl AppState {
             active_session_tin: None,
             #[cfg(feature = "layout-editor")]
             pdf_layout_editor_view,
+            #[cfg(feature = "layout-editor")]
+            typst_calibration_view,
         }
     }
 
@@ -733,6 +743,8 @@ impl AppState {
             ActiveView::Settings => self.settings_view.clone().into_any_element(),
             #[cfg(feature = "layout-editor")]
             ActiveView::PdfLayoutEditor => self.pdf_layout_editor_view.clone().into_any_element(),
+            #[cfg(feature = "layout-editor")]
+            ActiveView::TypstCalibration => self.typst_calibration_view.clone().into_any_element(),
             ActiveView::Dashboard => self.dashboard_view.clone().into_any_element(),
             ActiveView::Form2551Q => {
                 if let Some(view) = &self.form_2551q_view {

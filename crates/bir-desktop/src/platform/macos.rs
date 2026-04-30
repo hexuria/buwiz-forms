@@ -31,6 +31,7 @@ pub fn bind_global_keys(cx: &mut App) {
         KeyBinding::new("cmd-e", ToggleEditMode, None),
         KeyBinding::new("cmd-s", SaveLayout, None),
         KeyBinding::new("cmd-n", EditorNewBox, Some("PdfLayoutEditorView")),
+        KeyBinding::new("cmd-enter", EditorRenameField, Some("PdfLayoutEditorView")),
         KeyBinding::new("cmd-d", EditorDuplicateBox, Some("PdfLayoutEditorView")),
         KeyBinding::new(
             "cmd-backspace",
