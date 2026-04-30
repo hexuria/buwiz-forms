@@ -58,7 +58,11 @@ pub mod global_actions {
             EditorSelectBox9,
             EditorSelectLastBox,
             EditorCycleType,
-            EditorToggleDirection
+            EditorToggleDirection,
+            EditorNudgeUp,
+            EditorNudgeDown,
+            EditorNudgeLeft,
+            EditorNudgeRight
         ]
     );
 }

@@ -312,16 +312,16 @@ impl PdfLayoutEditorView {
                 new_field.x = ((-self.pan_offset.x + 300.0) / self.scale) as f64;
                 new_field.y = ((-self.pan_offset.y + 300.0) / self.scale) as f64;
                 if let Some(ref mut w) = new_field.widget {
-                    w.width = 100.0;
-                    w.height = 100.0;
+                    w.width = 0.0;
+                    w.height = 0.0;
                 } else {
                     new_field.widget = Some(WidgetSpec {
                         widget_type: match new_field.kind {
                             FieldKind::Bool => WidgetType::Checkbox,
                             _ => WidgetType::Text,
                         },
-                        width: 100.0,
-                        height: 100.0,
+                        width: 0.0,
+                        height: 0.0,
                         max_length: None,
                         comb: None,
                         font_size: Some(8.5),
@@ -1215,10 +1215,19 @@ impl Render for PdfLayoutEditorView {
                                                     } else if this.interaction_mode
                                                         == InteractionMode::Resizing
                                                     {
-                                                        let new_w =
+                                                        let mut new_w =
                                                             (start_rect.size.width + dx).max(5.0);
-                                                        let new_h =
+                                                        let mut new_h =
                                                             (start_rect.size.height + dy).max(5.0);
+                                                        
+                                                        if ev.modifiers.shift {
+                                                            if dx.abs() > dy.abs() {
+                                                                new_h = start_rect.size.height;
+                                                            } else {
+                                                                new_w = start_rect.size.width;
+                                                            }
+                                                        }
+
                                                         // Only update widget dimensions — never touch cell_w or size
                                                         if let Some(ref mut ws) = f.widget {
                                                             ws.width = new_w as f64;
@@ -1374,6 +1383,62 @@ impl Render for PdfLayoutEditorView {
                     if let Some(_ft) = &this.form_type {
                         this.add_new_field("__NEW_FIELD__".to_string(), cx);
                         cx.notify();
+                    }
+                },
+            ))
+            .on_action(cx.listener(
+                |this, _: &crate::global_actions::EditorNudgeUp, _window, cx| {
+                    if this.is_edit_mode {
+                        if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
+                            if let Some(ft) = &mut this.form_type {
+                                if let Some(f) = ft.fields.get_mut(idx) {
+                                    f.y -= 1.0;
+                                    cx.notify();
+                                }
+                            }
+                        }
+                    }
+                },
+            ))
+            .on_action(cx.listener(
+                |this, _: &crate::global_actions::EditorNudgeDown, _window, cx| {
+                    if this.is_edit_mode {
+                        if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
+                            if let Some(ft) = &mut this.form_type {
+                                if let Some(f) = ft.fields.get_mut(idx) {
+                                    f.y += 1.0;
+                                    cx.notify();
+                                }
+                            }
+                        }
+                    }
+                },
+            ))
+            .on_action(cx.listener(
+                |this, _: &crate::global_actions::EditorNudgeLeft, _window, cx| {
+                    if this.is_edit_mode {
+                        if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
+                            if let Some(ft) = &mut this.form_type {
+                                if let Some(f) = ft.fields.get_mut(idx) {
+                                    f.x -= 1.0;
+                                    cx.notify();
+                                }
+                            }
+                        }
+                    }
+                },
+            ))
+            .on_action(cx.listener(
+                |this, _: &crate::global_actions::EditorNudgeRight, _window, cx| {
+                    if this.is_edit_mode {
+                        if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
+                            if let Some(ft) = &mut this.form_type {
+                                if let Some(f) = ft.fields.get_mut(idx) {
+                                    f.x += 1.0;
+                                    cx.notify();
+                                }
+                            }
+                        }
                     }
                 },
             ))
