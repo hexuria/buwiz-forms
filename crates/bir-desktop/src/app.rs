@@ -138,14 +138,10 @@ impl AppState {
             );
         }
 
-        // Phase 2: Automated Cleanup of Regenerated PDFs
-        // Safely clear out the temporary directory on application startup so it doesn't grow indefinitely.
+        // Cleanup any leftover ephemeral PDF directories from previous sessions.
         cx.background_executor()
             .spawn(async move {
-                let temp_pdf_dir = bir_core::platform::temp_dir().join("taxman-ebir-pdf");
-                if temp_pdf_dir.exists() {
-                    let _ = std::fs::remove_dir_all(&temp_pdf_dir);
-                }
+                crate::views::pdf_viewer::PdfViewerView::cleanup_all_temp_dirs();
             })
             .detach();
 

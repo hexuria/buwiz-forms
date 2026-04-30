@@ -58,7 +58,7 @@ impl EmailConfirmationView {
 
     fn print_pdf(&mut self, cx: &mut Context<Self>) {
         let pdf_bytes = self.generate_pdf_bytes();
-        let dir = bir_core::platform::temp_dir().join("taxman-ebir-pdf");
+        let dir = crate::views::pdf_viewer::PdfViewerView::unique_output_dir();
         let _ = std::fs::create_dir_all(&dir);
         let path = dir.join("temp-print.pdf");
 
@@ -69,6 +69,12 @@ impl EmailConfirmationView {
         }
 
         crate::platform::print_pdf(&path);
+
+        // Schedule cleanup after a brief delay so the print dialog can read the file
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(30));
+            let _ = std::fs::remove_dir_all(&dir);
+        });
     }
 }
 

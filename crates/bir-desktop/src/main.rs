@@ -62,7 +62,11 @@ pub mod global_actions {
             EditorNudgeUp,
             EditorNudgeDown,
             EditorNudgeLeft,
-            EditorNudgeRight
+            EditorNudgeRight,
+            NextPage,
+            PrevPage,
+            OpacityIncrease,
+            OpacityDecrease
         ]
     );
 }

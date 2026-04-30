@@ -90,7 +90,7 @@ impl TypstCalibrationView {
         if let Ok(entries) = std::fs::read_dir(formtypes_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.is_dir() && path.join("form.typ").exists() {
+                if path.is_dir() && path.join("calibration.typ").exists() {
                     if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
                         forms.push(name.to_string());
                     }
@@ -119,7 +119,7 @@ impl TypstCalibrationView {
         let typ_path = self
             .formtypes_dir
             .join(self.selected_form_id.as_ref().unwrap())
-            .join("form.typ");
+            .join("calibration.typ");
 
         let timer = cx.spawn(async move |this, cx| {
             loop {
@@ -151,7 +151,7 @@ impl TypstCalibrationView {
     fn recompile_typst(&mut self, cx: &mut Context<Self>) {
         if let Some(form_id) = &self.selected_form_id {
             let form_dir = self.formtypes_dir.join(form_id);
-            let typ_path = form_dir.join("form.typ");
+            let typ_path = form_dir.join("calibration.typ");
 
             // Compile to PNG (preview.png, preview-1.png depending on pages)
             let _ = Command::new("typst")
@@ -267,7 +267,7 @@ impl Render for TypstCalibrationView {
                 .justify_center()
                 .size_full()
                 .text_color(cx.theme().muted_foreground)
-                .child("Select a form with a form.typ file to begin calibration.")
+                .child("Select a form with a calibration.typ file to begin calibration.")
                 .into_any_element()
         };
 
@@ -284,6 +284,38 @@ impl Render for TypstCalibrationView {
                 cx.listener(|this, _: &crate::global_actions::EditorPrevField, _, cx| {
                     this.typst_pan_offset.x -= 10.0;
                     cx.notify();
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::OpacityIncrease, _, cx| {
+                    this.opacity = (this.opacity + 0.1).clamp(0.0, 1.0);
+                    cx.notify();
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::OpacityDecrease, _, cx| {
+                    this.opacity = (this.opacity - 0.1).clamp(0.0, 1.0);
+                    cx.notify();
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::NextPage, _, cx| {
+                    if let Some(form_id) = &this.selected_form_id {
+                        let next_page = this.current_page + 1;
+                        let svg_path = this.formtypes_dir.join(form_id).join("pages").join(format!("page{next_page}.svg"));
+                        if svg_path.exists() {
+                            this.current_page = next_page;
+                            cx.notify();
+                        }
+                    }
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::PrevPage, _, cx| {
+                    if this.current_page > 1 {
+                        this.current_page -= 1;
+                        cx.notify();
+                    }
                 }),
             )
             .on_action(
@@ -473,6 +505,18 @@ impl Render for TypstCalibrationView {
                                     .text_sm()
                                     .text_color(cx.theme().muted_foreground)
                                     .child("Hotkeys:"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("• Cmd/Ctrl + Left/Right = Prev/Next Page"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("• Cmd/Ctrl + ,/. = Opacity -/+"),
                             )
                             .child(
                                 div()

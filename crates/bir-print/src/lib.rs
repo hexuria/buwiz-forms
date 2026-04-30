@@ -443,7 +443,7 @@ fn write_static_assets_resolved(
     output_dir: &Path,
     formtypes_dir: Option<&Path>,
 ) -> Result<(), PrintError> {
-    let svg_dir = output_dir.join("svgbase");
+    let svg_dir = output_dir.join("pages");
     fs::create_dir_all(&svg_dir)?;
 
     // Try filesystem first — iterate all SVG files in the pages/ directory
@@ -530,7 +530,7 @@ fn generate_typst(
 
     for page in 1..=formtype.page_count() {
         lines.push(format!(
-            "#page(background: image(\"svgbase/page{page}.svg\", width: {}pt, height: {}pt), foreground: {{",
+            "#page(background: image(\"pages/page{page}.svg\", width: {}pt, height: {}pt), foreground: {{",
             fmt_num(formtype.page_width),
             fmt_num(formtype.page_height)
         ));
@@ -1096,8 +1096,8 @@ mod tests {
         let typst = generate_typst(&layout, &fields, TEMPLATE_2551Q).expect("typst should render");
 
         assert!(typst.contains("#set page(width: 612pt, height: 936pt, margin: 0pt)"));
-        assert!(typst.contains("svgbase/page1.svg"));
-        assert!(typst.contains("svgbase/page2.svg"));
+        assert!(typst.contains("pages/page1.svg"));
+        assert!(typst.contains("pages/page2.svg"));
     }
 
     #[test]
@@ -1108,7 +1108,7 @@ mod tests {
         }
 
         let temp_dir = tempfile::tempdir().expect("temp dir");
-        let result = render_2551q_print(&sample_draft(), temp_dir.path()).expect("render print");
+        let result = render_2551q_print(&sample_draft(), temp_dir.path(), None).expect("render print");
 
         let pdf = fs::read(&result.pdf_path).expect("pdf should exist");
         assert!(pdf.starts_with(b"%PDF-"));

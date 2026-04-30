@@ -7,6 +7,10 @@ use gpui_component::scroll::ScrollableElement as _;
 use gpui_component::*;
 use std::path::PathBuf;
 
+/// Prefix used for all ephemeral PDF output directories.
+/// Shared with startup cleanup in app.rs.
+pub const TEMP_DIR_PREFIX: &str = "taxman-ebir-pdf-";
+
 pub struct PdfViewerView {
     draft: Form2551QDraft,
     result: PrintResult,
@@ -36,7 +40,41 @@ impl PdfViewerView {
         }
     }
 
+    /// Create a unique ephemeral output directory name.
+    pub fn unique_output_dir() -> PathBuf {
+        let unique_id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        bir_core::platform::temp_dir().join(format!("{}{}", TEMP_DIR_PREFIX, unique_id))
+    }
+
+    /// Remove all `taxman-ebir-pdf-*` directories from the system temp folder.
+    /// Called at app startup and can be called on demand.
+    pub fn cleanup_all_temp_dirs() {
+        let temp = bir_core::platform::temp_dir();
+        if let Ok(entries) = std::fs::read_dir(&temp) {
+            for entry in entries.flatten() {
+                if let Some(name) = entry.file_name().to_str() {
+                    if name.starts_with(TEMP_DIR_PREFIX) && entry.path().is_dir() {
+                        let _ = std::fs::remove_dir_all(entry.path());
+                    }
+                }
+            }
+        }
+        // Also clean legacy static directory
+        let legacy = temp.join("taxman-ebir-pdf");
+        if legacy.exists() {
+            let _ = std::fs::remove_dir_all(&legacy);
+        }
+    }
+
     fn regenerate(&mut self, cx: &mut Context<Self>) {
+        // Clean up previous output before regenerating
+        if self.output_dir.exists() {
+            let _ = std::fs::remove_dir_all(&self.output_dir);
+        }
+        self.output_dir = Self::unique_output_dir();
         let formtypes_dir = crate::platform::find_resource_dir("formtypes");
         match render_2551q_print(&self.draft, &self.output_dir, Some(formtypes_dir)) {
             Ok(result) => {
@@ -47,10 +85,6 @@ impl PdfViewerView {
             }
         }
         cx.notify();
-    }
-
-    fn reveal_pdf(&self) {
-        crate::platform::reveal_in_file_manager(&self.result.pdf_path);
     }
 
     fn view_bank_receipt(&mut self, cx: &mut Context<Self>) {
@@ -102,6 +136,16 @@ impl PdfViewerView {
             .shadow_sm();
         page.style().aspect_ratio = Some(612.0 / 936.0);
         page.child(img(path).size_full().object_fit(ObjectFit::Contain))
+    }
+}
+
+/// Cleanup: delete the ephemeral output directory when the viewer is dropped
+/// (i.e. when the window is closed).
+impl Drop for PdfViewerView {
+    fn drop(&mut self) {
+        if self.output_dir.exists() {
+            let _ = std::fs::remove_dir_all(&self.output_dir);
+        }
     }
 }
 
@@ -205,17 +249,6 @@ impl Render for PdfViewerView {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(
-                                gpui_component::button::Button::new("pdf_viewer_reveal_btn")
-                                    .outline()
-                                    .small()
-                                    .tooltip("Reveal in Finder")
-                                    .icon(Icon::empty().path("svg/folder.svg").small())
-                                    .when(!is_mobile, |this| this.label("Reveal"))
-                                    .on_click(cx.listener(|this, _, _, _| {
-                                        this.reveal_pdf();
-                                    })),
-                            )
                             .when(self.raw_html.is_some(), |this| {
                                 this.child(
                                     gpui_component::button::Button::new("pdf_viewer_receipt_btn")

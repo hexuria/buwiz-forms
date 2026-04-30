@@ -1644,6 +1644,29 @@ impl Render for PdfLayoutEditorView {
                 },
             ))
             .on_action(
+                cx.listener(|this, _: &crate::global_actions::NextPage, _, cx| {
+                    if let Some(ft) = &this.form_type {
+                        let next_page = this.current_page + 1;
+                        if next_page <= ft.page_count() {
+                            this.current_page = next_page;
+                            this.selected_field_idx = None;
+                            this.drawing_field_idx = None;
+                            cx.notify();
+                        }
+                    }
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::PrevPage, _, cx| {
+                    if this.current_page > 1 {
+                        this.current_page -= 1;
+                        this.selected_field_idx = None;
+                        this.drawing_field_idx = None;
+                        cx.notify();
+                    }
+                }),
+            )
+            .on_action(
                 cx.listener(|this, _: &crate::global_actions::EditorSelectBox1, _, cx| {
                     this.focus_box(0, cx)
                 }),
