@@ -13,6 +13,11 @@ A modern, native, and secure desktop application for managing and filing eBIRFor
 - **Touch ID / Biometrics & App Lock**: Lock the application securely with a 4-digit PIN. Leverage native OS-level authentication (Touch ID on macOS, Windows Hello) via Robius Authentication for seamless unlocking.
 - **Offline-First & Local Storage**: All profiles, TINs, and drafts are securely encrypted and stored entirely on your local machine using SQLite (`bir_data.db`). 
 
+### 🗄️ Lean & Ephemeral Architecture
+- **On-Demand PDF Generation**: Documents (e.g., BIR forms, email confirmation receipts) are generated instantly on-the-fly only when you need to view or print them, completely eliminating the need to store large PDF files in the database.
+- **Zero-Bloat Ephemeral Storage**: When previewing generated documents, artifacts are written to a unique temporary directory that is automatically garbage-collected the moment the window closes. The app leaves absolutely zero leftover bloat on your hard drive.
+- **Explicit Exporting**: Because files are ephemeral, users maintain total control over persistence by explicitly **Exporting** PDFs to their desired persistent storage locations.
+
 ### ⚡️ Power User Capabilities
 - **Keyboard Shortcuts**: Built for speed with global shortcuts.
   - `Cmd + Enter`: Submit Current Form
