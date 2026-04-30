@@ -40,6 +40,13 @@ A modern, native, and secure desktop application for managing and filing eBIRFor
 
 ### 🛠 Form Digitization & Developer Tools
 - **Visual PDF Layout Editor**: Developers can graphically digitize new BIR forms by dragging, dropping, and resizing field boundaries directly on an SVG overlay. This replaces the slow process of manually nudging coordinates in JSON files, drastically speeding up the integration of new forms.
+- **Dev-Only Inspect Button**: A feature-gated `Inspect` button (enabled via `--features dev-tools`) lets developers preview the PDF output without going through the full submission pipeline. It automatically saves the form before rendering to ensure data integrity.
+- **Structured Tracing**: Debug builds automatically log form save, sync, and PDF rendering events to the terminal via `tracing`. Override log levels at runtime with `RUST_LOG=bir_desktop=trace just run`.
+
+### 🛡️ Data Integrity
+- **Profile Snapshot at Save Time**: When you save a form, it captures your tax profile information at that exact moment. If you later update your profile, the saved form retains the original data — guaranteeing consistency between what was filed and what is stored.
+- **Post-Submission Lock**: Once a form is submitted, all fields become read-only. The only way to update data is to revert to Draft status and re-submit.
+- **PDF Reflects Saved State**: The PDF Viewer always renders from the last-saved database state — never from unsaved, in-progress edits. This ensures the PDF you see is exactly what was (or will be) submitted.
 
 ---
 
@@ -115,7 +122,7 @@ sudo apt-get install -y \
 
 We follow a "less is better" philosophy. You only need to remember a few core commands:
 
-- `just run` — Run the app locally for development.
+- `just run` — Run the app locally for development (automatically enables `dev-tools` and `layout-editor` features).
 - `just install` — Automatically figure out your OS and build the installer package (macOS DMG, Windows Zip, Linux DEB/Tarball).
 - `just publish` — Auto-increment the patch version, tag, and push (triggers the release workflow in GitHub Actions).
 
@@ -173,4 +180,8 @@ This repository uses **Project-Local Skills** to automatically equip AI agents (
 - **Background Daemon:** Background cron tasks (auto-fetch) are decoupled from the active taxpayer profile and can be managed globally in the settings.
 - **Schema Migrations:** Managed via a `schema_version` table with forward-only numbered migrations in `bir-core/src/db/migrations.rs`.
 - **Security:** Sensitive credential fields (`imap_app_password`, `oauth_access_token`, `oauth_refresh_token`, `profile_pin_hash`) are zeroed on `Drop` via the `zeroize` crate.
+- **Feature Flags:**
+  - `dev-tools` — Enables the Inspect button and additional developer diagnostics. Automatically included in `just run`.
+  - `layout-editor` — Enables the PDF Layout Editor view for form digitization. Automatically included in `just run`.
+- **Tracing:** Debug builds initialize `tracing-subscriber` automatically. Control verbosity with `RUST_LOG` (default: `bir_desktop=debug,bir_print=debug,bir_core=info`).
 

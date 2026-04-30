@@ -17,9 +17,9 @@ default: check
 help:
     @just --list
 
-# Run the app locally for development
+# Run the app locally for development (with dev-tools + layout-editor)
 run:
-    cargo run --bin bir
+    cargo run --bin bir --features dev-tools,layout-editor
 
 # Run code formatting, linting, and type checking
 check:
