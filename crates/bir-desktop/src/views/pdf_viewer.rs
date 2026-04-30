@@ -14,6 +14,7 @@ pub struct PdfViewerView {
     scroll_handle: ScrollHandle,
     status_message: Option<String>,
     raw_html: Option<String>,
+    focus_handle: FocusHandle,
 }
 
 impl PdfViewerView {
@@ -22,6 +23,7 @@ impl PdfViewerView {
         result: PrintResult,
         output_dir: PathBuf,
         raw_html: Option<String>,
+        cx: &mut Context<Self>,
     ) -> Self {
         Self {
             draft,
@@ -30,6 +32,7 @@ impl PdfViewerView {
             scroll_handle: ScrollHandle::new(),
             status_message: None,
             raw_html,
+            focus_handle: cx.focus_handle(),
         }
     }
 
@@ -104,6 +107,11 @@ impl PdfViewerView {
 impl Render for PdfViewerView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let is_mobile = window.viewport_size().width < px(600.);
+        
+        // Ensure the view is focused so it can receive key events
+        if !self.focus_handle.is_focused(window) {
+            self.focus_handle.focus(window, cx);
+        }
 
         let mut pages = div()
             .id("pdf-viewer-pages")
@@ -153,6 +161,14 @@ impl Render for PdfViewerView {
             .flex()
             .flex_col()
             .bg(cx.theme().background)
+            .key_context("PdfViewerView")
+            .track_focus(&self.focus_handle)
+            .on_action(cx.listener(|_, _: &crate::global_actions::CloseWindow, window, _| {
+                window.remove_window();
+            }))
+            .on_action(cx.listener(|_, _: &crate::global_actions::QuitApplication, window, _| {
+                window.remove_window();
+            }))
             .child(
                 div()
                     .flex()

@@ -587,7 +587,7 @@ impl Form2551QView {
                 }
 
                 if let Err(err) = cx.open_window(options, move |_window, cx| {
-                    cx.new(|_cx| PdfViewerView::new(draft, result, output_dir, raw_html))
+                    cx.new(|_cx| PdfViewerView::new(draft, result, output_dir, raw_html, _cx))
                 }) {
                     use gpui_component::WindowExt;
                     window.push_notification(
@@ -676,7 +676,7 @@ impl Form2551QView {
         };
 
         if let Err(err) = cx.open_window(options, move |_window, cx| {
-            cx.new(|_cx| EmailConfirmationView::new(receipt, draft))
+            cx.new(|_cx| EmailConfirmationView::new(receipt, draft, _cx))
         }) {
             use gpui_component::WindowExt;
             window.push_notification(

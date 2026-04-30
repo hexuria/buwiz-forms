@@ -10,15 +10,17 @@ pub struct EmailConfirmationView {
     draft: Form2551QDraft,
     scroll_handle: ScrollHandle,
     status_message: Option<String>,
+    focus_handle: FocusHandle,
 }
 
 impl EmailConfirmationView {
-    pub fn new(receipt: SubmissionReceipt, draft: Form2551QDraft) -> Self {
+    pub fn new(receipt: SubmissionReceipt, draft: Form2551QDraft, cx: &mut Context<Self>) -> Self {
         Self {
             receipt,
             draft,
             scroll_handle: ScrollHandle::new(),
             status_message: None,
+            focus_handle: cx.focus_handle(),
         }
     }
 
@@ -74,6 +76,11 @@ impl Render for EmailConfirmationView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let is_mobile = window.viewport_size().width < px(600.);
 
+        // Ensure the view is focused so it can receive key events
+        if !self.focus_handle.is_focused(window) {
+            self.focus_handle.focus(window, cx);
+        }
+
         let status = self
             .status_message
             .as_ref()
@@ -91,6 +98,14 @@ impl Render for EmailConfirmationView {
             .flex()
             .flex_col()
             .bg(cx.theme().background)
+            .key_context("EmailConfirmationView")
+            .track_focus(&self.focus_handle)
+            .on_action(cx.listener(|_, _: &crate::global_actions::CloseWindow, window, _| {
+                window.remove_window();
+            }))
+            .on_action(cx.listener(|_, _: &crate::global_actions::QuitApplication, window, _| {
+                window.remove_window();
+            }))
             .child(
                 div()
                     .flex()
