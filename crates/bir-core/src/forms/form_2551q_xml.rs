@@ -111,8 +111,15 @@ impl Form2551QDraft {
                 .map(|r| format_money(r.taxable_amount))
                 .unwrap_or_else(|| "0.00".to_string());
             let atc_rate = row
-                .map(|r| format!("{:.1}", r.tax_rate * 100.0))
-                .unwrap_or_else(|| "0.00".to_string());
+                .map(|r| {
+                    let pct = r.tax_rate * 100.0;
+                    if (pct - pct.round()).abs() < f64::EPSILON {
+                        format!("{}", pct as u32)
+                    } else {
+                        format!("{}", pct)
+                    }
+                })
+                .unwrap_or_else(|| "0".to_string());
             let atc_due = row
                 .map(|r| format_money(r.tax_due))
                 .unwrap_or_else(|| "0.00".to_string());
@@ -154,11 +161,12 @@ impl Form2551QDraft {
 fn split_tin(tin: &str) -> (String, String, String, String) {
     if tin.contains('-') {
         let parts: Vec<&str> = tin.split('-').collect();
+        let branch = parts.get(3).copied().unwrap_or("00000");
         return (
             parts.first().copied().unwrap_or("").to_string(),
             parts.get(1).copied().unwrap_or("").to_string(),
             parts.get(2).copied().unwrap_or("").to_string(),
-            parts.get(3).copied().unwrap_or("000").to_string(),
+            format!("{:0>5}", branch),
         );
     }
 
@@ -170,15 +178,13 @@ fn split_tin(tin: &str) -> (String, String, String, String) {
             .to_string()
     };
 
+    let branch_raw = digits.get(9..).filter(|s| !s.is_empty()).unwrap_or("00000");
+
     (
         segment(0, 3),
         segment(3, 6),
         segment(6, 9),
-        digits
-            .get(9..)
-            .filter(|s| !s.is_empty())
-            .unwrap_or("000")
-            .to_string(),
+        format!("{:0>5}", branch_raw),
     )
 }
 
@@ -275,7 +281,7 @@ mod tests {
         assert_eq!(fields["frm2551Qv2018:txtTIN1"], "261");
         assert_eq!(fields["frm2551Qv2018:txtTIN2"], "708");
         assert_eq!(fields["frm2551Qv2018:txtTIN3"], "015");
-        assert_eq!(fields["frm2551Qv2018:txtBranchCode"], "000");
+        assert_eq!(fields["frm2551Qv2018:txtBranchCode"], "00000");
     }
 
     #[test]

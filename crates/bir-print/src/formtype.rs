@@ -30,6 +30,21 @@ impl FormType {
     }
 }
 
+/// Text direction for character-boxed rendering.
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone, Copy, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Direction {
+    #[default]
+    Ltr,
+    Rtl,
+}
+
+impl Direction {
+    pub fn is_default(&self) -> bool {
+        *self == Direction::Ltr
+    }
+}
+
 /// A single field in the form layout.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct FormField {
@@ -46,6 +61,10 @@ pub struct FormField {
     pub dec_x: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub char_count: Option<usize>,
+    #[serde(default, skip_serializing_if = "Direction::is_default")]
+    pub direction: Direction,
     #[serde(default)]
     pub optional: bool,
     /// Widget specification for the editable PDF mode.
@@ -87,20 +106,14 @@ impl FormField {
     ///
     /// For `Cells` fields, capacity is exact (`max_length` or `width / cell_w`).
     /// For `Text` fields, we use a conservative estimate based on the font.
-    /// Returns `None` for Checkbox / Amount (spanning is not applicable).
+    /// Returns `None` for Checkbox (spanning is not applicable).
+    /// For `Decimal`/`Amount`, returns `char_count` if set explicitly.
     pub fn char_capacity(&self) -> Option<usize> {
+        if let Some(c) = self.char_count {
+            return Some(c);
+        }
         match self.kind {
-            FieldKind::Cells => {
-                // Prefer explicit max_length from widget, else compute from width
-                if let Some(w) = &self.widget {
-                    if let Some(ml) = w.max_length {
-                        return Some(ml);
-                    }
-                }
-                self.cell_w
-                    .map(|cw| (self.display_width() / cw).floor() as usize)
-            }
-            FieldKind::Text => {
+            FieldKind::Char => {
                 let font_size = self
                     .widget
                     .as_ref()
@@ -109,9 +122,17 @@ impl FormField {
                 // Arial average glyph width ≈ 0.52 × font_size.
                 // Use 0.7 as a conservative multiplier to prevent overflow.
                 let char_w = font_size * 0.7;
-                Some((self.display_width() / char_w).floor() as usize)
+
+                // If it's cell-based (cell_w is present), use cell width
+                if let Some(cw) = self.cell_w {
+                    Some((self.display_width() / cw).floor() as usize)
+                } else {
+                    Some((self.display_width() / char_w).floor() as usize)
+                }
             }
-            FieldKind::Checkbox | FieldKind::Amount => None,
+            FieldKind::Bool => None,
+            FieldKind::Dec => self.char_count,
+            FieldKind::Int => self.char_count,
         }
     }
 }
@@ -120,10 +141,10 @@ impl FormField {
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum FieldKind {
-    Checkbox,
-    Text,
-    Cells,
-    Amount,
+    Bool,
+    Char,
+    Int,
+    Dec,
 }
 
 /// Widget specification for the editable PDF — drives AcroForm injection.

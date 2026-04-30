@@ -196,6 +196,20 @@ impl Form2551QDraft {
         self
     }
 
+    /// Sync the draft's header fields with the current profile.
+    /// This ensures that if the user updates their profile (e.g., phone number),
+    /// the changes reflect in the draft return as long as it hasn't been submitted.
+    pub fn sync_with_profile(&mut self, profile: &TaxpayerProfile) {
+        self.tin = profile.tin.full();
+        self.rdo_code = profile.rdo_code.clone();
+        self.taxpayer_name = profile.full_name.clone();
+        self.registered_address = profile.registered_address.clone();
+        self.zip_code = profile.zip_code.clone();
+        self.contact_number = profile.phone.clone();
+        self.email = profile.email.clone();
+        self.updated_at = chrono::Utc::now().to_rfc3339();
+    }
+
     /// Recompute all derived values (call after any field change).
     pub fn recompute(&mut self) {
         for row in &mut self.schedule_1 {

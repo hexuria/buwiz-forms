@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime};
@@ -115,13 +116,16 @@ impl TypstCalibrationView {
     }
 
     fn start_watcher(&mut self, cx: &mut Context<Self>) {
-        let typ_path = self.formtypes_dir
+        let typ_path = self
+            .formtypes_dir
             .join(self.selected_form_id.as_ref().unwrap())
             .join("form.typ");
 
         let timer = cx.spawn(async move |this, cx| {
             loop {
-                cx.background_executor().timer(Duration::from_millis(500)).await;
+                cx.background_executor()
+                    .timer(Duration::from_millis(500))
+                    .await;
                 if let Ok(metadata) = std::fs::metadata(&typ_path) {
                     if let Ok(modified) = metadata.modified() {
                         let mut should_recompile = false;
@@ -131,7 +135,7 @@ impl TypstCalibrationView {
                                 should_recompile = true;
                             }
                         });
-                        
+
                         if should_recompile {
                             let _ = this.update(cx, |this, cx| {
                                 this.recompile_typst(cx);
@@ -148,7 +152,7 @@ impl TypstCalibrationView {
         if let Some(form_id) = &self.selected_form_id {
             let form_dir = self.formtypes_dir.join(form_id);
             let typ_path = form_dir.join("form.typ");
-            
+
             // Compile to PNG (preview.png, preview-1.png depending on pages)
             let _ = Command::new("typst")
                 .arg("compile")
@@ -174,29 +178,34 @@ impl Render for TypstCalibrationView {
 
         let canvas = if let Some(form_id) = &self.selected_form_id {
             let form_dir = self.formtypes_dir.join(form_id);
-            
+
             // SVG base
-            let svg_path = form_dir.join("pages").join(format!("page{}.svg", self.current_page));
+            let svg_path = form_dir
+                .join("pages")
+                .join(format!("page{}.svg", self.current_page));
             let svg_el = if svg_path.exists() {
-                img(svg_path).size_full().object_fit(ObjectFit::Fill).into_any_element()
+                img(svg_path)
+                    .size_full()
+                    .object_fit(ObjectFit::Fill)
+                    .into_any_element()
             } else {
-                div().bg(cx.theme().background).child("Missing SVG Background").into_any_element()
+                div()
+                    .bg(cx.theme().background)
+                    .child("Missing SVG Background")
+                    .into_any_element()
             };
 
             // Typst PNG overlay
             let png_path = form_dir.join(format!("preview-{}.png", self.current_page));
             let mut overlay_el = div().absolute().top_0().left_0().size_full();
-            
+
             if png_path.exists() {
-                // To bust GPUI image cache on hot-reload, we might need to load it dynamically or rely on it just working. 
-                // Using a unique path string normally forces reload, but `img()` takes a path. 
+                // To bust GPUI image cache on hot-reload, we might need to load it dynamically or rely on it just working.
+                // Using a unique path string normally forces reload, but `img()` takes a path.
                 // We will read it as bytes to force hot reload.
                 if png_path.exists() {
-                    overlay_el = overlay_el.child(
-                        img(png_path)
-                            .size_full()
-                            .object_fit(ObjectFit::Fill)
-                    );
+                    overlay_el =
+                        overlay_el.child(img(png_path).size_full().object_fit(ObjectFit::Fill));
                 }
             }
 
@@ -209,8 +218,8 @@ impl Render for TypstCalibrationView {
                 .h_full()
                 .overflow_hidden()
                 .bg(cx.theme().muted)
-                .on_scroll_wheel(cx.listener(
-                    move |this, ev: &ScrollWheelEvent, _window, cx| {
+                .on_scroll_wheel(
+                    cx.listener(move |this, ev: &ScrollWheelEvent, _window, cx| {
                         if this.interaction_mode != InteractionMode::None {
                             return;
                         }
@@ -227,8 +236,8 @@ impl Render for TypstCalibrationView {
                             this.pan_offset.y += dy;
                             cx.notify();
                         }
-                    },
-                ))
+                    }),
+                )
                 .child(
                     div()
                         .absolute()
@@ -239,14 +248,7 @@ impl Render for TypstCalibrationView {
                         .border_1()
                         .border_color(cx.theme().border)
                         .shadow_sm()
-                        .child(
-                            div()
-                                .absolute()
-                                .top_0()
-                                .left_0()
-                                .size_full()
-                                .child(svg_el),
-                        )
+                        .child(div().absolute().top_0().left_0().size_full().child(svg_el))
                         .child(
                             div()
                                 .absolute()
@@ -272,28 +274,38 @@ impl Render for TypstCalibrationView {
         div()
             .key_context("TypstCalibrationView")
             .track_focus(&self.focus_handle)
-            .on_action(cx.listener(|this, _: &crate::global_actions::EditorNextField, _, cx| {
-                this.typst_pan_offset.x += 10.0;
-                cx.notify();
-            }))
-            .on_action(cx.listener(|this, _: &crate::global_actions::EditorPrevField, _, cx| {
-                this.typst_pan_offset.x -= 10.0;
-                cx.notify();
-            }))
-            .on_action(cx.listener(|this, _: &crate::global_actions::ZoomIn, _, cx| {
-                this.scale = (this.scale * 1.1).clamp(0.1, 10.0);
-                cx.notify();
-            }))
-            .on_action(cx.listener(|this, _: &crate::global_actions::ZoomOut, _, cx| {
-                this.scale = (this.scale * 0.9).clamp(0.1, 10.0);
-                cx.notify();
-            }))
-            .on_action(cx.listener(|this, _: &crate::global_actions::ResetZoom, _, cx| {
-                this.scale = 1.0;
-                this.pan_offset = gpui::Point::default();
-                this.typst_pan_offset = gpui::Point::default();
-                cx.notify();
-            }))
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::EditorNextField, _, cx| {
+                    this.typst_pan_offset.x += 10.0;
+                    cx.notify();
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::EditorPrevField, _, cx| {
+                    this.typst_pan_offset.x -= 10.0;
+                    cx.notify();
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::ZoomIn, _, cx| {
+                    this.scale = (this.scale * 1.1).clamp(0.1, 10.0);
+                    cx.notify();
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::ZoomOut, _, cx| {
+                    this.scale = (this.scale * 0.9).clamp(0.1, 10.0);
+                    cx.notify();
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::global_actions::ResetZoom, _, cx| {
+                    this.scale = 1.0;
+                    this.pan_offset = gpui::Point::default();
+                    this.typst_pan_offset = gpui::Point::default();
+                    cx.notify();
+                }),
+            )
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, ev: &MouseDownEvent, _window, cx| {
@@ -325,7 +337,7 @@ impl Render for TypstCalibrationView {
                     x: f32::from(ev.position.x),
                     y: f32::from(ev.position.y),
                 };
-                
+
                 let delta_x = if let Some(last) = this.last_mouse_pos {
                     current_pos.x - last.x
                 } else {
@@ -378,10 +390,16 @@ impl Render for TypstCalibrationView {
                             .border_b_1()
                             .border_color(cx.theme().border)
                             .child(
-                                div().text_lg().font_weight(FontWeight::BOLD).child("Calibration Tool"),
+                                div()
+                                    .text_lg()
+                                    .font_weight(FontWeight::BOLD)
+                                    .child("Calibration Tool"),
                             )
                             .child(
-                                div().text_sm().text_color(cx.theme().muted_foreground).child("Onion-Skinning Editor"),
+                                div()
+                                    .text_sm()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("Onion-Skinning Editor"),
                             ),
                     )
                     .child(
@@ -401,9 +419,18 @@ impl Render for TypstCalibrationView {
                             .flex_col()
                             .gap_4()
                             .child(
-                                div().flex().justify_between().items_center()
+                                div()
+                                    .flex()
+                                    .justify_between()
+                                    .items_center()
                                     .child(div().text_sm().child("Opacity Layer (Typst)"))
-                                    .child(div().text_sm().font_family("Courier").text_color(cx.theme().primary).child(format!("{:.0}%", self.opacity * 100.0)))
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .font_family("Courier")
+                                            .text_color(cx.theme().primary)
+                                            .child(format!("{:.0}%", self.opacity * 100.0)),
+                                    ),
                             )
                             .child(
                                 div()
@@ -413,10 +440,14 @@ impl Render for TypstCalibrationView {
                                     .cursor_ew_resize()
                                     .flex()
                                     .items_center()
-                                    .on_mouse_down(MouseButton::Left, cx.listener(|this, _ev: &MouseDownEvent, _window, cx| {
-                                        this.interaction_mode = InteractionMode::AdjustingOpacity;
-                                        cx.notify();
-                                    }))
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|this, _ev: &MouseDownEvent, _window, cx| {
+                                            this.interaction_mode =
+                                                InteractionMode::AdjustingOpacity;
+                                            cx.notify();
+                                        }),
+                                    )
                                     .child(
                                         div()
                                             .relative()
@@ -432,19 +463,42 @@ impl Render for TypstCalibrationView {
                                                     .h_full()
                                                     .w(px(268.0 * self.opacity)) // Sidebar is 300px, padding is 16px*2 = 32px. Width = 268px.
                                                     .bg(cx.theme().primary)
-                                                    .rounded_full()
-                                            )
-                                    )
+                                                    .rounded_full(),
+                                            ),
+                                    ),
                             )
                             .child(
-                                div().mt_4().text_sm().text_color(cx.theme().muted_foreground)
-                                    .child("Hotkeys:")
+                                div()
+                                    .mt_4()
+                                    .text_sm()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("Hotkeys:"),
                             )
-                            .child(div().text_xs().text_color(cx.theme().muted_foreground).child("• Cmd/Ctrl + Left Drag = Pan Both"))
-                            .child(div().text_xs().text_color(cx.theme().muted_foreground).child("• Alt + Left Drag = Pan Typst Only"))
-                            .child(div().text_xs().text_color(cx.theme().muted_foreground).child("• Cmd/Ctrl + Scroll = Zoom"))
-                            .child(div().text_xs().text_color(cx.theme().muted_foreground).child("• Cmd + [/] = Gap +/-"))
-                    )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("• Cmd/Ctrl + Left Drag = Pan Both"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("• Alt + Left Drag = Pan Typst Only"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("• Cmd/Ctrl + Scroll = Zoom"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("• Cmd + [/] = Gap +/-"),
+                            ),
+                    ),
             )
     }
 }

@@ -37,7 +37,8 @@ impl PdfViewerView {
     }
 
     fn regenerate(&mut self, cx: &mut Context<Self>) {
-        match render_2551q_print(&self.draft, &self.output_dir) {
+        let formtypes_dir = crate::platform::find_resource_dir("formtypes");
+        match render_2551q_print(&self.draft, &self.output_dir, Some(formtypes_dir)) {
             Ok(result) => {
                 self.result = result;
             }
@@ -107,7 +108,7 @@ impl PdfViewerView {
 impl Render for PdfViewerView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let is_mobile = window.viewport_size().width < px(600.);
-        
+
         // Ensure the view is focused so it can receive key events
         if !self.focus_handle.is_focused(window) {
             self.focus_handle.focus(window, cx);
@@ -163,12 +164,16 @@ impl Render for PdfViewerView {
             .bg(cx.theme().background)
             .key_context("PdfViewerView")
             .track_focus(&self.focus_handle)
-            .on_action(cx.listener(|_, _: &crate::global_actions::CloseWindow, window, _| {
-                window.remove_window();
-            }))
-            .on_action(cx.listener(|_, _: &crate::global_actions::QuitApplication, window, _| {
-                window.remove_window();
-            }))
+            .on_action(
+                cx.listener(|_, _: &crate::global_actions::CloseWindow, window, _| {
+                    window.remove_window();
+                }),
+            )
+            .on_action(
+                cx.listener(|_, _: &crate::global_actions::QuitApplication, window, _| {
+                    window.remove_window();
+                }),
+            )
             .child(
                 div()
                     .flex()

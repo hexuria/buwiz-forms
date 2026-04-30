@@ -2,7 +2,7 @@ pub mod editable;
 pub mod formtype;
 
 use bir_core::forms::form_2551q::Form2551QDraft;
-use formtype::{FieldKind, FormField, FormType};
+use formtype::{Direction, FieldKind, FormField, FormType};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -181,20 +181,22 @@ impl TypstCompiler for CliTypstCompiler {
 pub fn render_2551q_flat(
     draft: &Form2551QDraft,
     output_dir: impl Into<PathBuf>,
+    formtypes_dir: Option<PathBuf>,
 ) -> Result<PrintResult, PrintError> {
-    render_flat_pdf(PrintRequest::new(
-        FORM_2551Q_ID,
-        draft.to_bir_field_map(),
-        output_dir,
-    ))
+    let mut req = PrintRequest::new(FORM_2551Q_ID, draft.to_bir_field_map(), output_dir);
+    if let Some(dir) = formtypes_dir {
+        req = req.with_formtypes_dir(dir);
+    }
+    render_flat_pdf(req)
 }
 
 /// Backward-compatible alias for [`render_2551q_flat`].
 pub fn render_2551q_print(
     draft: &Form2551QDraft,
     output_dir: impl Into<PathBuf>,
+    formtypes_dir: Option<PathBuf>,
 ) -> Result<PrintResult, PrintError> {
-    render_2551q_flat(draft, output_dir)
+    render_2551q_flat(draft, output_dir, formtypes_dir)
 }
 
 /// Render a flat (official-looking) PDF from a `PrintRequest`.
@@ -231,7 +233,11 @@ pub fn render_flat_pdf(request: PrintRequest) -> Result<PrintResult, PrintError>
         fs::write(&typ_path, form_typ_content)?;
 
         // Ensure SVGs are copied so Typst can use them as backgrounds
-        write_static_assets_resolved(&request.form_id, &request.output_dir, request.formtypes_dir.as_deref())?;
+        write_static_assets_resolved(
+            &request.form_id,
+            &request.output_dir,
+            request.formtypes_dir.as_deref(),
+        )?;
 
         let embedded = EmbeddedTypstCompiler;
         let cli = CliTypstCompiler;
@@ -319,7 +325,7 @@ pub fn render_2551q_editable(
     output_dir: impl Into<PathBuf>,
 ) -> Result<PrintResult, PrintError> {
     let output_dir = output_dir.into();
-    let flat = render_2551q_flat(draft, &output_dir)?;
+    let flat = render_2551q_flat(draft, &output_dir, None)?;
     let formtype = load_formtype(FORM_2551Q_ID)?;
     let editable_path = output_dir.join("editable.pdf");
     editable::inject_acroform(
@@ -345,7 +351,7 @@ pub fn write_2551q_pdf(
         .parent()
         .map(Path::to_path_buf)
         .unwrap_or_else(bir_core::platform::temp_dir);
-    let result = render_2551q_print(draft, &output_dir)
+    let result = render_2551q_print(draft, &output_dir, None)
         .map_err(|err| std::io::Error::other(err.to_string()))?;
 
     if result.pdf_path != output_path {
@@ -358,7 +364,7 @@ pub fn write_2551q_pdf(
 pub fn render_2551q_pdf(draft: &Form2551QDraft, _paper_size: PaperSize) -> Vec<u8> {
     match tempfile::tempdir()
         .ok()
-        .and_then(|dir| render_2551q_print(draft, dir.path()).ok())
+        .and_then(|dir| render_2551q_print(draft, dir.path(), None).ok())
         .and_then(|result| fs::read(result.pdf_path).ok())
     {
         Some(pdf) => pdf,
@@ -533,22 +539,36 @@ fn generate_typst(
         // The first time we see a key, we load its full value.
         // Subsequent boxes for the same key consume from the remainder.
         let mut remaining: BTreeMap<String, String> = BTreeMap::new();
+        // Track which box index we're on per key (for Decimal: 0=integer, 1=cents).
+        let mut box_index: BTreeMap<String, usize> = BTreeMap::new();
 
         for field in formtype.fields.iter().filter(|field| field.page == page) {
+            let idx = *box_index.get(&field.key).unwrap_or(&0);
+
             // Initialize remaining text for this key on first encounter
             if !remaining.contains_key(&field.key) {
                 let full_value = fields.get(&field.key).cloned().unwrap_or_default();
-                remaining.insert(field.key.clone(), full_value);
+                if field.kind == FieldKind::Dec {
+                    // For Decimal, normalize and split at '.'
+                    let normalized = normalize_decimal_value(&full_value);
+                    let parts: Vec<&str> = normalized.splitn(2, '.').collect();
+                    let int_part = parts.first().copied().unwrap_or("0").to_string();
+                    let dec_part = parts.get(1).copied().unwrap_or("00").to_string();
+                    // Store as "integer\x00decimal" so we can split later
+                    remaining.insert(field.key.clone(), format!("{}\x00{}", int_part, dec_part));
+                } else {
+                    remaining.insert(field.key.clone(), full_value);
+                }
             }
 
             let current_text = remaining.get(&field.key).cloned().unwrap_or_default();
 
-            if let Some(line) = render_field_spanning(field, &current_text)? {
+            if let Some(line) = render_field_spanning(field, &current_text, idx)? {
                 lines.push(format!("  {line}"));
             }
 
             // Consume characters from remaining text based on capacity
-            let consumed = consumed_chars(field, &current_text);
+            let consumed = consumed_chars(field, &current_text, idx);
             if consumed > 0 {
                 let rest = if consumed >= current_text.len() {
                     String::new()
@@ -557,6 +577,9 @@ fn generate_typst(
                 };
                 remaining.insert(field.key.clone(), rest);
             }
+
+            // Advance box index
+            box_index.insert(field.key.clone(), idx + 1);
         }
 
         lines.push("})[]".to_string());
@@ -565,28 +588,63 @@ fn generate_typst(
     Ok(lines.join("\n"))
 }
 
+/// Normalize a decimal value for rendering.
+/// Ensures format "integer.cents" with exactly 2 decimal places.
+fn normalize_decimal_value(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return "".to_string();
+    }
+    let cleaned = trimmed.replace(',', "");
+    match cleaned.parse::<f64>() {
+        Ok(number) => format!("{number:.2}"),
+        Err(_) => {
+            if cleaned.contains('.') {
+                cleaned
+            } else {
+                format!("{}.00", cleaned)
+            }
+        }
+    }
+}
+
 /// Calculate how many characters a field consumes from the input string.
-fn consumed_chars(field: &FormField, value: &str) -> usize {
+fn consumed_chars(field: &FormField, value: &str, box_idx: usize) -> usize {
     if value.is_empty() {
         return 0;
     }
     match field.kind {
-        FieldKind::Checkbox => 0,         // Checkboxes don't consume text
-        FieldKind::Amount => value.len(), // Amounts render fully, consume everything
-        FieldKind::Cells => {
+        FieldKind::Bool => 0,
+        FieldKind::Dec => {
+            if box_idx == 0 {
+                // Integer box: consume everything up to and including the \x00 separator
+                if let Some(sep) = value.find('\x00') {
+                    sep + 1
+                } else {
+                    value.len()
+                }
+            } else {
+                // Cents box: consume everything remaining
+                value.len()
+            }
+        }
+        FieldKind::Int => {
             let capacity = field.char_capacity().unwrap_or(value.len());
             value.len().min(capacity)
         }
-        FieldKind::Text => {
+        FieldKind::Char => {
             let capacity = field.char_capacity().unwrap_or(value.len());
-            if capacity >= value.len() {
-                value.len()
+            if field.cell_w.is_some() {
+                value.len().min(capacity)
             } else {
-                // Word-aware: find last space before capacity
-                let slice = &value[..capacity];
-                match slice.rfind(' ') {
-                    Some(pos) if pos > 0 => pos + 1, // consume including the space
-                    _ => capacity,                   // no space found, hard-cut
+                if capacity >= value.len() {
+                    value.len()
+                } else {
+                    let slice = &value[..capacity];
+                    match slice.rfind(' ') {
+                        Some(pos) if pos > 0 => pos + 1,
+                        _ => capacity,
+                    }
                 }
             }
         }
@@ -594,75 +652,147 @@ fn consumed_chars(field: &FormField, value: &str) -> usize {
 }
 
 /// Render a single field box, receiving only its portion of text (after spanning).
-fn render_field_spanning(field: &FormField, value: &str) -> Result<Option<String>, PrintError> {
+fn render_field_spanning(
+    field: &FormField,
+    value: &str,
+    box_idx: usize,
+) -> Result<Option<String>, PrintError> {
     match field.kind {
-        FieldKind::Checkbox => {
+        FieldKind::Bool => {
             if boolish(value) {
                 Ok(Some(format!(
-                    "mark({}, {})",
+                    "mark({}, {}, {}, {})",
                     fmt_num(field.x),
-                    fmt_num(field.y)
+                    fmt_num(field.y),
+                    fmt_num(field.display_width()),
+                    fmt_num(field.display_height())
                 )))
             } else {
                 Ok(None)
             }
         }
-        FieldKind::Text => {
+        FieldKind::Char => {
             let capacity = field.char_capacity().unwrap_or(usize::MAX);
-            let chunk = if capacity >= value.len() {
-                value.to_string()
-            } else {
-                // Word-aware split
-                let slice = &value[..capacity];
-                match slice.rfind(' ') {
-                    Some(pos) if pos > 0 => slice[..pos].to_string(),
-                    _ => slice.to_string(),
+
+            if field.cell_w.is_some() {
+                // Render as cells
+                let chunk: String = value.chars().take(capacity).collect();
+                if chunk.is_empty() {
+                    Ok(None)
+                } else {
+                    let macro_name = match field.direction {
+                        Direction::Rtl => "cells_rtl",
+                        Direction::Ltr => "cells",
+                    };
+                    Ok(Some(format!(
+                        r#"{}({}, {}, {}, {}, {}, "{}")"#,
+                        macro_name,
+                        fmt_num(field.x),
+                        fmt_num(field.y),
+                        fmt_num(field.display_width()),
+                        fmt_num(field.display_height()),
+                        field.char_capacity().unwrap_or(chunk.len()),
+                        typst_string(&chunk.to_uppercase())
+                    )))
                 }
-            };
-            if chunk.is_empty() {
-                Ok(None)
             } else {
+                // Render as text
+                let chunk = if capacity >= value.len() {
+                    value.to_string()
+                } else {
+                    let slice = &value[..capacity];
+                    match slice.rfind(' ') {
+                        Some(pos) if pos > 0 => slice[..pos].to_string(),
+                        _ => slice.to_string(),
+                    }
+                };
+                if chunk.is_empty() {
+                    Ok(None)
+                } else if let Some(cc) = field.char_count.filter(|&c| c > 0) {
+                    // Explicit char_count → render as cells (1 char per box)
+                    let macro_name = match field.direction {
+                        Direction::Rtl => "cells_rtl",
+                        Direction::Ltr => "cells",
+                    };
+                    Ok(Some(format!(
+                        r#"{}({}, {}, {}, {}, {}, "{}")"#,
+                        macro_name,
+                        fmt_num(field.x),
+                        fmt_num(field.y),
+                        fmt_num(field.display_width()),
+                        fmt_num(field.display_height()),
+                        cc,
+                        typst_string(&chunk.to_uppercase())
+                    )))
+                } else {
+                    // No char_count → plain text label
+                    Ok(Some(format!(
+                        r#"label({}, {}, {}, {}, {}, "{}")"#,
+                        fmt_num(field.x),
+                        fmt_num(field.y),
+                        fmt_num(field.display_width()),
+                        fmt_num(field.display_height()),
+                        fmt_num(field.size.unwrap_or(8.5)),
+                        typst_string(&chunk.to_uppercase())
+                    )))
+                }
+            }
+        }
+        FieldKind::Dec => {
+            if box_idx == 0 {
+                // Integer box (RTL)
+                let int_part = if let Some(sep) = value.find('\x00') {
+                    &value[..sep]
+                } else {
+                    value
+                };
+                let display = if int_part.is_empty() || int_part == "0" {
+                    "0".to_string()
+                } else {
+                    int_part.to_string()
+                };
+                let char_count = field.char_capacity().unwrap_or(display.len());
                 Ok(Some(format!(
-                    r#"label({}, {}, {}, "{}")"#,
+                    r#"cells_rtl({}, {}, {}, {}, {}, "{}")"#,
                     fmt_num(field.x),
                     fmt_num(field.y),
-                    fmt_num(field.size.unwrap_or(8.5)),
-                    typst_string(&chunk.to_uppercase())
+                    fmt_num(field.display_width()),
+                    fmt_num(field.display_height()),
+                    char_count,
+                    typst_string(&display)
+                )))
+            } else {
+                // Cents box (LTR, auto char_count = 2)
+                let dec_part = if value.is_empty() { "00" } else { value };
+                let display = format!("{:0<2}", &dec_part[..dec_part.len().min(2)]);
+                let char_count = field.char_count.unwrap_or(2);
+                Ok(Some(format!(
+                    r#"cells({}, {}, {}, {}, {}, "{}")"#,
+                    fmt_num(field.x),
+                    fmt_num(field.y),
+                    fmt_num(field.display_width()),
+                    fmt_num(field.display_height()),
+                    char_count,
+                    typst_string(&display)
                 )))
             }
         }
-        FieldKind::Cells => {
-            let capacity = field.char_capacity().unwrap_or(usize::MAX);
-            let chunk: String = value.chars().take(capacity).collect();
-            if chunk.is_empty() {
-                Ok(None)
-            } else {
-                Ok(Some(format!(
-                    r#"cells({}, {}, {}, "{}")"#,
-                    fmt_num(field.x),
-                    fmt_num(field.y),
-                    fmt_num(required(field.cell_w, &field.key, "cell_w")?),
-                    typst_string(&chunk.to_uppercase())
-                )))
-            }
-        }
-        FieldKind::Amount => {
-            // Amounts render fully in their own box — no spanning
+        FieldKind::Int => {
+            let char_count = field.char_capacity().unwrap_or(1);
+            let cleaned = value.trim().replace(',', "");
+            let num: i64 = cleaned.parse().unwrap_or(0);
+            let display = format!("{:0>width$}", num, width = char_count);
             Ok(Some(format!(
-                r#"amount({}, {}, {}, {}, {}, "{}")"#,
+                r#"cells_rtl({}, {}, {}, {}, {}, "{}")"#,
                 fmt_num(field.x),
                 fmt_num(field.y),
-                fmt_num(required(field.cell_w, &field.key, "cell_w")?),
-                required(field.int_cells, &field.key, "int_cells")?,
-                fmt_num(required(field.dec_x, &field.key, "dec_x")?),
-                typst_string(&normalize_amount(value))
+                fmt_num(field.display_width()),
+                fmt_num(field.display_height()),
+                char_count,
+                typst_string(&display)
             )))
         }
     }
-}
-
-fn required<T: Copy>(value: Option<T>, key: &str, field: &str) -> Result<T, PrintError> {
-    value.ok_or_else(|| PrintError::InvalidLayout(format!("{key} missing {field}")))
 }
 
 fn export_preview_pngs(
@@ -730,18 +860,7 @@ fn boolish(value: &str) -> bool {
     )
 }
 
-fn normalize_amount(value: &str) -> String {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return "0.00".to_string();
-    }
 
-    let cleaned = trimmed.replace(',', "");
-    match cleaned.parse::<f64>() {
-        Ok(number) => format!("{number:.2}"),
-        Err(_) => cleaned,
-    }
-}
 
 fn render_2551q_fallback_pdf(draft: &Form2551QDraft) -> Vec<u8> {
     let mut rows = vec![

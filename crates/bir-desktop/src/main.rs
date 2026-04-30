@@ -42,6 +42,7 @@ pub mod global_actions {
             EditorDuplicateBox,
             EditorDeleteBox,
             EditorRenameField,
+            EditorSetCharCount,
             EditorFocusSearch,
             EditorEscape,
             EditorNextField,
@@ -55,7 +56,9 @@ pub mod global_actions {
             EditorSelectBox7,
             EditorSelectBox8,
             EditorSelectBox9,
-            EditorSelectLastBox
+            EditorSelectLastBox,
+            EditorCycleType,
+            EditorToggleDirection
         ]
     );
 }

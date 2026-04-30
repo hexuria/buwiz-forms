@@ -14,7 +14,7 @@ pub fn bind_global_keys(cx: &mut App) {
         KeyBinding::new("cmd-shift-b", ToggleSidebarMini, None),
         KeyBinding::new("cmd-f", FocusSearch, None),
         KeyBinding::new("cmd-n", CreateProfile, None),
-        KeyBinding::new("cmd-t", ToggleTheme, None),
+        KeyBinding::new("cmd-shift-t", ToggleTheme, None),
         KeyBinding::new("cmd-shift-x", OpenCronTasks, None),
         KeyBinding::new("cmd-,", OpenSettings, None),
         KeyBinding::new("cmd-k", OpenCommandPalette, None),
@@ -32,6 +32,7 @@ pub fn bind_global_keys(cx: &mut App) {
         KeyBinding::new("cmd-s", SaveLayout, None),
         KeyBinding::new("cmd-n", EditorNewBox, Some("PdfLayoutEditorView")),
         KeyBinding::new("cmd-enter", EditorRenameField, Some("PdfLayoutEditorView")),
+        KeyBinding::new("cmd-c", EditorSetCharCount, Some("PdfLayoutEditorView")),
         KeyBinding::new("cmd-d", EditorDuplicateBox, Some("PdfLayoutEditorView")),
         KeyBinding::new(
             "cmd-backspace",
@@ -54,6 +55,12 @@ pub fn bind_global_keys(cx: &mut App) {
         KeyBinding::new(
             "cmd-shift-0",
             EditorSelectLastBox,
+            Some("PdfLayoutEditorView"),
+        ),
+        KeyBinding::new("cmd-t", EditorCycleType, Some("PdfLayoutEditorView")),
+        KeyBinding::new(
+            "cmd-shift-d",
+            EditorToggleDirection,
             Some("PdfLayoutEditorView"),
         ),
     ]);

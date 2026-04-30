@@ -6,7 +6,7 @@ use gpui_component::notification::Notification;
 use gpui_component::*;
 
 use crate::components::combobox::{Combobox, ComboboxEvent, ComboboxState};
-use bir_print::formtype::{FormField, FormType, WidgetSpec, WidgetType, FieldKind};
+use bir_print::formtype::{Direction, FieldKind, FormField, FormType, WidgetSpec, WidgetType};
 use std::path::PathBuf;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -27,6 +27,8 @@ pub struct PdfLayoutEditorView {
     pub search_filter: Entity<InputState>,
     pub new_field_input: Entity<InputState>,
     pub new_field_modal_open: bool,
+    pub char_count_input: Entity<InputState>,
+    pub char_count_modal_open: bool,
     pub scroll_handle: ScrollHandle,
     pub focus_handle: FocusHandle,
     _subscriptions: Vec<Subscription>,
@@ -67,8 +69,10 @@ impl PdfLayoutEditorView {
         let form_select = cx.new(|cx| ComboboxState::new(available_forms.clone(), window, cx));
         let search_filter =
             cx.new(|cx| InputState::new(window, cx).placeholder("Search fields..."));
-        let new_field_input = 
+        let new_field_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Enter field name"));
+        let char_count_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Enter char count (0 to clear)"));
 
         let (auto_form, auto_path) = if let Some(first) = available_forms.first() {
             let mut p = formtypes_dir.clone();
@@ -110,18 +114,43 @@ impl PdfLayoutEditorView {
                 |this: &mut Self, _input, event: &gpui_component::input::InputEvent, cx| {
                     if let gpui_component::input::InputEvent::PressEnter { .. } = event {
                         let field_name = _input.read(cx).value().to_string();
-                            if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
-                                if let Some(ft) = &mut this.form_type {
-                                    if let Some(f) = ft.fields.get_mut(idx) {
-                                        f.key = field_name.clone();
-                                    }
+                        if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
+                            if let Some(ft) = &mut this.form_type {
+                                if let Some(f) = ft.fields.get_mut(idx) {
+                                    f.key = field_name.clone();
                                 }
                             }
+                        }
                         this.new_field_modal_open = false;
                         cx.notify();
                     }
-                }
-            )
+                },
+            ),
+            cx.subscribe(
+                &char_count_input,
+                |this: &mut Self, _input, event: &gpui_component::input::InputEvent, cx| {
+                    if let gpui_component::input::InputEvent::PressEnter { .. } = event {
+                        let val = _input.read(cx).value().to_string();
+                        if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
+                            if let Some(ft) = &mut this.form_type {
+                                if let Some(f) = ft.fields.get_mut(idx) {
+                                    if let Ok(count) = val.parse::<usize>() {
+                                        if count == 0 {
+                                            f.char_count = None;
+                                        } else {
+                                            f.char_count = Some(count);
+                                        }
+                                    } else if val.trim().is_empty() {
+                                        f.char_count = None;
+                                    }
+                                }
+                            }
+                        }
+                        this.char_count_modal_open = false;
+                        cx.notify();
+                    }
+                },
+            ),
         ];
 
         let focus_handle = cx.focus_handle();
@@ -136,6 +165,8 @@ impl PdfLayoutEditorView {
             search_filter,
             new_field_input,
             new_field_modal_open: false,
+            char_count_input,
+            char_count_modal_open: false,
             scroll_handle: ScrollHandle::new(),
             focus_handle,
             _subscriptions,
@@ -285,7 +316,7 @@ impl PdfLayoutEditorView {
                 } else {
                     new_field.widget = Some(WidgetSpec {
                         widget_type: match new_field.kind {
-                            FieldKind::Checkbox => WidgetType::Checkbox,
+                            FieldKind::Bool => WidgetType::Checkbox,
                             _ => WidgetType::Text,
                         },
                         width: 100.0,
@@ -341,6 +372,13 @@ impl PdfLayoutEditorView {
         let is_drawing = self.drawing_field_idx == Some(idx);
         let no_focus = self.selected_field_idx.is_none() && self.drawing_field_idx.is_none();
 
+        let type_color = match field.kind {
+            FieldKind::Char => cx.theme().warning,         // Yellowish
+            FieldKind::Int => hsla(0.38, 0.55, 0.45, 1.0), // Green
+            FieldKind::Dec => hsla(0.88, 0.55, 0.55, 1.0), // Pink
+            FieldKind::Bool => cx.theme().foreground,      // Black/Dark
+        };
+
         let (border_color, bg_color) = if is_drawing {
             // Actively editing this box — blue
             (cx.theme().info, cx.theme().info.opacity(0.4))
@@ -348,11 +386,11 @@ impl PdfLayoutEditorView {
             // Overlapping another box — red
             (cx.theme().danger, cx.theme().danger.opacity(0.4))
         } else if is_selected {
-            // Focused but not editing — yellow
-            (cx.theme().warning, cx.theme().warning.opacity(0.4))
+            // Focused but not editing — type color
+            (type_color, type_color.opacity(0.4))
         } else if no_focus {
-            // No box focused — all boxes show in yellow (immutable)
-            (cx.theme().warning, cx.theme().warning.opacity(0.15))
+            // No box focused — type color light
+            (type_color, type_color.opacity(0.15))
         } else {
             // Default — translucent
             (cx.theme().border, cx.theme().secondary.opacity(0.2))
@@ -595,15 +633,71 @@ impl PdfLayoutEditorView {
                                                 this.auto_pan_to_field(idx);
                                             }
                                         }
+
+                                        if _ev.click_count == 2 {
+                                            if let Some(ft) = &this.form_type {
+                                                this.char_count_modal_open = true;
+                                                let initial = ft.fields[idx]
+                                                    .char_count
+                                                    .map(|c| c.to_string())
+                                                    .unwrap_or_default();
+                                                this.char_count_input.update(cx, |input, cx| {
+                                                    input.set_value(initial, window, cx);
+                                                    input.focus(window, cx);
+                                                });
+                                            }
+                                        }
+
                                         window.focus(&this.focus_handle, cx);
                                         cx.notify();
                                     }),
                                 )
                                 .child(
                                     div()
-                                        .text_color(label_color)
-                                        .text_sm()
-                                        .child(format!("Box {}", sub_idx + 1)),
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .child(
+                                            div()
+                                                .text_color(label_color)
+                                                .text_sm()
+                                                .child(format!("Box {}", sub_idx + 1)),
+                                        )
+                                        .child(
+                                            div()
+                                                .px_1()
+                                                .py_0p5()
+                                                .rounded_sm()
+                                                .bg(match field.kind {
+                                                    FieldKind::Char => cx.theme().warning.opacity(0.2),
+                                                    FieldKind::Int => hsla(0.38, 0.55, 0.45, 0.2),
+                                                    FieldKind::Dec => hsla(0.88, 0.55, 0.55, 0.2),
+                                                    FieldKind::Bool => cx.theme().foreground.opacity(0.2),
+                                                })
+                                                .text_color(match field.kind {
+                                                    FieldKind::Char => cx.theme().warning,
+                                                    FieldKind::Int => hsla(0.38, 0.55, 0.45, 1.0),
+                                                    FieldKind::Dec => hsla(0.88, 0.55, 0.55, 1.0),
+                                                    FieldKind::Bool => cx.theme().foreground,
+                                                })
+                                                .text_xs()
+                                                .font_weight(FontWeight::BOLD)
+                                                .child(match field.kind {
+                                                    FieldKind::Char => "CHR",
+                                                    FieldKind::Int => "INT",
+                                                    FieldKind::Dec => "DEC",
+                                                    FieldKind::Bool => "BOL",
+                                                })
+                                        )
+                                        .child(
+                                            div()
+                                                .text_color(cx.theme().muted_foreground)
+                                                .text_xs()
+                                                .child(match field.direction {
+                                                    Direction::Ltr => "→",
+                                                    Direction::Rtl => "←",
+                                                })
+                                        )
                                 )
                                 .child(
                                     div().flex().gap_2().items_center().child(
@@ -851,7 +945,17 @@ impl Render for PdfLayoutEditorView {
                     }
                 })
                 .map(|(idx, field)| {
-                    let has_collision = self.check_collision(idx, field, ft);
+                    let mut has_collision = self.check_collision(idx, field, ft);
+
+                    // Enforce rule: Decimal fields MUST have at least 2 boxes (integer and cents)
+                    if field.kind == FieldKind::Dec {
+                        let total_boxes_for_key =
+                            ft.fields.iter().filter(|f| f.key == field.key).count();
+                        if total_boxes_for_key < 2 {
+                            has_collision = true; // Mark as error (red border)
+                        }
+                    }
+
                     self.render_field_box(idx, field, has_collision, scale, cx)
                         .into_any_element()
                 })
@@ -984,7 +1088,9 @@ impl Render for PdfLayoutEditorView {
                                                         } else {
                                                             f.widget = Some(WidgetSpec {
                                                                 widget_type: match f.kind {
-                                                                    FieldKind::Checkbox => WidgetType::Checkbox,
+                                                                    FieldKind::Bool => {
+                                                                        WidgetType::Checkbox
+                                                                    }
                                                                     _ => WidgetType::Text,
                                                                 },
                                                                 width: w as f64,
@@ -1062,7 +1168,9 @@ impl Render for PdfLayoutEditorView {
                                                         } else {
                                                             f.widget = Some(WidgetSpec {
                                                                 widget_type: match f.kind {
-                                                                    FieldKind::Checkbox => WidgetType::Checkbox,
+                                                                    FieldKind::Bool => {
+                                                                        WidgetType::Checkbox
+                                                                    }
                                                                     _ => WidgetType::Text,
                                                                 },
                                                                 width: new_w as f64,
@@ -1175,7 +1283,8 @@ impl Render for PdfLayoutEditorView {
                 |this, _: &crate::global_actions::EditorEscape, window, cx| {
                     if this.new_field_modal_open {
                         this.new_field_modal_open = false;
-                    } else if this.selected_field_idx.is_some() || this.drawing_field_idx.is_some() {
+                    } else if this.selected_field_idx.is_some() || this.drawing_field_idx.is_some()
+                    {
                         if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
                             if let Some(ft) = &mut this.form_type {
                                 if let Some(f) = ft.fields.get(idx) {
@@ -1215,7 +1324,7 @@ impl Render for PdfLayoutEditorView {
                     if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
                         if let Some(ft) = &this.form_type {
                             this.new_field_modal_open = true;
-                            
+
                             let key = ft.fields[idx].key.clone();
                             let initial = if key == "__NEW_FIELD__" {
                                 let mut prefix = String::new();
@@ -1233,6 +1342,59 @@ impl Render for PdfLayoutEditorView {
                                 input.set_value(initial, window, cx);
                                 input.focus(window, cx);
                             });
+                            cx.notify();
+                        }
+                    }
+                },
+            ))
+            .on_action(cx.listener(
+                |this, _: &crate::global_actions::EditorSetCharCount, window, cx| {
+                    if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
+                        if let Some(ft) = &this.form_type {
+                            this.char_count_modal_open = true;
+                            let initial = ft.fields[idx]
+                                .char_count
+                                .map(|c| c.to_string())
+                                .unwrap_or_default();
+
+                            this.char_count_input.update(cx, |input, cx| {
+                                input.set_value(initial, window, cx);
+                                input.focus(window, cx);
+                            });
+                            cx.notify();
+                        }
+                    }
+                },
+            ))
+            .on_action(cx.listener(
+                |this, _: &crate::global_actions::EditorCycleType, _window, cx| {
+                    if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
+                        if let Some(ft) = &mut this.form_type {
+                            let field = &mut ft.fields[idx];
+                            field.kind = match field.kind {
+                                FieldKind::Char => FieldKind::Int,
+                                FieldKind::Int => FieldKind::Dec,
+                                FieldKind::Dec => FieldKind::Bool,
+                                FieldKind::Bool => FieldKind::Char,
+                            };
+                            field.direction = match field.kind {
+                                FieldKind::Int => Direction::Rtl,
+                                _ => Direction::Ltr,
+                            };
+                            cx.notify();
+                        }
+                    }
+                },
+            ))
+            .on_action(cx.listener(
+                |this, _: &crate::global_actions::EditorToggleDirection, _window, cx| {
+                    if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
+                        if let Some(ft) = &mut this.form_type {
+                            let field = &mut ft.fields[idx];
+                            field.direction = match field.direction {
+                                Direction::Ltr => Direction::Rtl,
+                                Direction::Rtl => Direction::Ltr,
+                            };
                             cx.notify();
                         }
                     }
@@ -1294,9 +1456,11 @@ impl Render for PdfLayoutEditorView {
                 |this, _: &crate::global_actions::EditorNextField, _window, cx| {
                     if let Some(ft) = &this.form_type {
                         let keys = this.ordered_distinct_keys(cx);
-                        if keys.is_empty() { return; }
+                        if keys.is_empty() {
+                            return;
+                        }
                         let mut next_key = None;
-                        
+
                         if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
                             let current_key = ft.fields[idx].key.clone();
                             if let Some(key_pos) = keys.iter().position(|k| k == &current_key) {
@@ -1326,9 +1490,11 @@ impl Render for PdfLayoutEditorView {
                 |this, _: &crate::global_actions::EditorPrevField, _window, cx| {
                     if let Some(ft) = &this.form_type {
                         let keys = this.ordered_distinct_keys(cx);
-                        if keys.is_empty() { return; }
+                        if keys.is_empty() {
+                            return;
+                        }
                         let mut prev_key = None;
-                        
+
                         if let Some(idx) = this.selected_field_idx.or(this.drawing_field_idx) {
                             let current_key = ft.fields[idx].key.clone();
                             if let Some(key_pos) = keys.iter().position(|k| k == &current_key) {
@@ -1431,8 +1597,54 @@ impl Render for PdfLayoutEditorView {
                     .flex()
                     .justify_center()
                     .items_center()
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|this, _, window, cx| {
+                            this.new_field_modal_open = false;
+                            window.focus(&this.focus_handle, cx);
+                            cx.notify();
+                        }),
+                    )
+                    .child(
+                        div()
+                            .w(px(400.))
+                            .p_6()
+                            .bg(cx.theme().background)
+                            .rounded_xl()
+                            .shadow_2xl()
+                            .border_1()
+                            .border_color(cx.theme().border)
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                            .child(
+                                div()
+                                    .text_lg()
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_color(cx.theme().foreground)
+                                    .child("Add New Field"),
+                            )
+                            .child(
+                                div()
+                                    .mt_2()
+                                    .text_sm()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("Enter the field key name (e.g. frm2551Qv2018:txt1)"),
+                            )
+                            .child(div().mt_4().child(Input::new(&self.new_field_input))),
+                    ),
+            );
+        }
+
+        if self.char_count_modal_open {
+            main_container = main_container.child(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .bg(cx.theme().background.opacity(0.8))
+                    .flex()
+                    .justify_center()
+                    .items_center()
                     .on_mouse_down(MouseButton::Left, cx.listener(|this, _, window, cx| {
-                        this.new_field_modal_open = false;
+                        this.char_count_modal_open = false;
                         window.focus(&this.focus_handle, cx);
                         cx.notify();
                     }))
@@ -1446,9 +1658,9 @@ impl Render for PdfLayoutEditorView {
                             .border_1()
                             .border_color(cx.theme().border)
                             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                            .child(div().text_lg().font_weight(FontWeight::BOLD).text_color(cx.theme().foreground).child("Add New Field"))
-                            .child(div().mt_2().text_sm().text_color(cx.theme().muted_foreground).child("Enter the field key name (e.g. frm2551Qv2018:txt1)"))
-                            .child(div().mt_4().child(Input::new(&self.new_field_input)))
+                            .child(div().text_lg().font_weight(FontWeight::BOLD).text_color(cx.theme().foreground).child("Set Char Count"))
+                            .child(div().mt_2().text_sm().text_color(cx.theme().muted_foreground).child("Enter the number of characters this box can hold. Enter 0 or empty to clear."))
+                            .child(div().mt_4().child(Input::new(&self.char_count_input)))
                     )
             );
         }

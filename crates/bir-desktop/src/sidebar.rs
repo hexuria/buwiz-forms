@@ -366,7 +366,7 @@ impl AppState {
                                                                             let profile_clone = profile.clone();
                                                                             move |this, _ev, window, cx| {
                                                                                 cx.stop_propagation();
-                                                                                this.select_profile(profile_clone.clone(), ProfileTargetAction::UnlockOnly, window, cx);
+                                                                                this.select_profile(profile_clone.clone(), ProfileTargetAction::ViewDashboard, window, cx);
                                                                             }
                                                                         }))
                                                                         .child(svg().path("svg/lock.svg").size(px(14.)).text_color(cx.theme().primary_foreground))
@@ -591,10 +591,7 @@ impl AppState {
                                             .cursor_pointer()
                                             .hover(|s| s.bg(gpui::rgba(0xef444440)))
                                             .on_click(cx.listener(|this, _, _, cx| {
-                                                this.active_session_tin = None;
-                                                this.active_profile_tin = None;
-                                                this.active_view = ActiveView::GlobalDashboard;
-                                                cx.notify();
+                                                this.logout(cx);
                                             }))
                                             .child(svg().path("svg/power.svg").size(px(20.)).text_color(Hsla::from(gpui::rgba(0xef4444ff))))
                                     )
@@ -612,10 +609,7 @@ impl AppState {
                                     .cursor_pointer()
                                     .hover(|s| s.bg(gpui::rgba(0xef444410)))
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        this.active_session_tin = None;
-                                        this.active_profile_tin = None;
-                                        this.active_view = ActiveView::GlobalDashboard;
-                                        cx.notify();
+                                        this.logout(cx);
                                     }))
                                     .child(
                                         div()

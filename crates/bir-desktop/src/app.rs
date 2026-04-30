@@ -14,7 +14,7 @@ use gpui_component::*;
 
 use bir_core::db::Database;
 use bir_core::forms::Form1701QDraft;
-use bir_core::forms::form_2551q::Form2551QDraft;
+use bir_core::forms::form_2551q::{FilingStatus, Form2551QDraft};
 use bir_core::profile::TaxpayerProfile;
 use std::sync::{Arc, Mutex};
 
@@ -56,6 +56,7 @@ pub enum ActiveView {
 pub enum ProfileTargetAction {
     ViewDashboard,
     EditProfile,
+    #[allow(dead_code)]
     UnlockOnly,
 }
 
@@ -359,8 +360,8 @@ impl AppState {
         let pdf_layout_editor_view =
             cx.new(|cx| crate::views::pdf_layout_editor_view::PdfLayoutEditorView::new(window, cx));
         #[cfg(feature = "layout-editor")]
-        let typst_calibration_view =
-            cx.new(|cx| crate::views::typst_calibration_view::TypstCalibrationView::new(window, cx));
+        let typst_calibration_view = cx
+            .new(|cx| crate::views::typst_calibration_view::TypstCalibrationView::new(window, cx));
         cx.subscribe(
             &settings_view,
             |this: &mut Self, _entity, event: &SettingsEvent, cx| match event {
@@ -574,10 +575,7 @@ impl AppState {
                     cx.notify();
                 }
                 DashboardEvent::LogoutProfile(_tin) => {
-                    this.active_session_tin = None;
-                    this.active_profile_tin = None;
-                    this.active_view = ActiveView::GlobalDashboard;
-                    cx.notify();
+                    this.logout(cx);
                 }
             },
         )
@@ -732,6 +730,19 @@ impl AppState {
         cx.notify();
     }
 
+    pub(crate) fn logout(&mut self, cx: &mut Context<Self>) {
+        self.active_session_tin = None;
+        self.active_profile_tin = None;
+        self.active_view = ActiveView::GlobalDashboard;
+
+        self.global_dashboard_view.update(cx, |view, cx| {
+            view.active_session_tin = None;
+            view.reload_actionable_forms(cx);
+        });
+
+        cx.notify();
+    }
+
     // NOTE: render_sidebar() is implemented in sidebar.rs
 
     fn render_active_view(&self, _cx: &mut Context<Self>) -> impl IntoElement {
@@ -781,7 +792,10 @@ impl AppState {
         {
             let draft = if let Ok(db) = self.db.lock() {
                 let existing = db.get_2551q_draft(tin, year, quarter).ok().flatten();
-                if let Some(d) = existing {
+                if let Some(mut d) = existing {
+                    if matches!(d.status, FilingStatus::Draft) {
+                        d.sync_with_profile(profile);
+                    }
                     d
                 } else {
                     let prev = if quarter > 1 {

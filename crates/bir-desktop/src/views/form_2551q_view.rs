@@ -565,7 +565,8 @@ impl Form2551QView {
     fn preview_pdf(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.sync_from_inputs(cx);
         let dir = bir_core::platform::temp_dir().join("taxman-ebir-pdf");
-        match render_2551q_print(&self.draft, &dir) {
+        let formtypes_dir = crate::platform::find_resource_dir("formtypes");
+        match render_2551q_print(&self.draft, &dir, Some(formtypes_dir)) {
             Ok(result) => {
                 let draft = self.draft.clone();
                 let output_dir = dir.clone();
