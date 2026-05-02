@@ -85,6 +85,10 @@ pub struct TaxpayerProfile {
     #[serde(default)]
     pub profile_pin_hash: Option<String>,
 
+    /// Profile specific TOTP secret for Authenticator apps
+    #[serde(default)]
+    pub totp_secret: Option<String>,
+
     // Email Tracking Settings
     /// Master toggle — whether automatic BIR receipt checking is enabled.
     #[serde(default)]

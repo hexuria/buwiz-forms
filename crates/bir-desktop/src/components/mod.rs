@@ -12,4 +12,6 @@ pub mod form_engine;
 pub mod form_parts;
 pub mod rdo_selector;
 pub mod status_badge;
+pub mod otp_paste;
+pub mod rate_limiter;
 pub mod tin_input;

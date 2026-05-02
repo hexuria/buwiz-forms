@@ -16,6 +16,7 @@ use bir_core::db::Database;
 use bir_core::forms::Form1701QDraft;
 use bir_core::forms::form_2551q::{FilingStatus, Form2551QDraft};
 use bir_core::profile::TaxpayerProfile;
+use crate::components::rate_limiter::RateLimiter;
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
@@ -99,6 +100,8 @@ pub struct AppState {
     pub(crate) lock_screen_view: Option<Entity<LockScreenView>>,
     pub(crate) pending_profile: Option<(TaxpayerProfile, ProfileTargetAction)>,
     pub(crate) profile_otp_state: Entity<OtpState>,
+    pub(crate) profile_totp_state: Entity<OtpState>,
+    pub(crate) profile_rate_limiter: RateLimiter,
     pub(crate) profile_auth_error: Option<String>,
     pub(crate) os_auth_triggered: bool,
     pub(crate) unlocked_profile: Option<(TaxpayerProfile, ProfileTargetAction)>,
@@ -106,6 +109,9 @@ pub struct AppState {
     pub(crate) enable_profile_pins: bool,
     pub(crate) pending_admin_view: Option<ActiveView>,
     pub(crate) admin_otp_state: Entity<OtpState>,
+    pub(crate) admin_totp_state: Entity<OtpState>,
+    pub(crate) admin_rate_limiter: RateLimiter,
+    pub(crate) has_admin_totp: bool,
     pub(crate) admin_auth_error: Option<String>,
     pub(crate) admin_os_auth_triggered: bool,
     /// The TIN of the currently active/unlocked profile session (only meaningful when hide_tax_profiles is enabled)
@@ -192,25 +198,38 @@ impl AppState {
         let global_dashboard_view =
             cx.new(|cx| GlobalDashboardView::new(db_clone_global, window, cx));
 
-        let is_locked = db
-            .lock()
-            .unwrap()
-            .get_setting("app_lock_enabled")
-            .ok()
-            .flatten()
-            .as_deref()
-            == Some("true");
+        let is_locked = {
+            let db_guard = db.lock().unwrap();
+            let pin_enabled = db_guard.get_setting("app_lock_enabled").ok().flatten().as_deref() == Some("true");
+            let totp_enabled = db_guard.get_setting("app_totp_secret").ok().flatten().is_some();
+            pin_enabled || totp_enabled
+        };
         let db_clone_lock = Arc::clone(&db);
         let lock_screen_view = Some(cx.new(|cx| LockScreenView::new(db_clone_lock, window, cx)));
 
         let profile_otp_state = cx.new(|cx| OtpState::new(4, window, cx).masked(true));
+        let profile_totp_state = cx.new(|cx| OtpState::new(6, window, cx).masked(false));
         let admin_otp_state = cx.new(|cx| OtpState::new(4, window, cx).masked(true));
+        let admin_totp_state = cx.new(|cx| OtpState::new(6, window, cx).masked(false));
+        
+        let has_admin_totp = db
+            .lock()
+            .unwrap()
+            .get_setting("app_totp_secret")
+            .ok()
+            .flatten()
+            .is_some();
+
 
         cx.subscribe_in(
             &profile_otp_state,
             window,
             |this: &mut Self, _entity, event: &InputEvent, window, cx| {
                 if let InputEvent::Change = event {
+                    if this.profile_rate_limiter.is_locked() {
+                        this.profile_otp_state.update(cx, |input, cx| input.set_value("", window, cx));
+                        return;
+                    }
                     let entered_pin = this.profile_otp_state.read(cx).value().to_string();
                     if entered_pin.len() == 4 {
                         let hashed = bir_core::crypto::hash_pin(&entered_pin);
@@ -219,10 +238,12 @@ impl AppState {
                                 this.unlocked_profile = Some((p, a));
                                 this.pending_profile = None;
                                 this.profile_auth_error = None;
+                                this.profile_rate_limiter.reset();
                                 this.profile_otp_state
                                     .update(cx, |input, cx| input.set_value("", window, cx));
                                 this.focus_handle.focus(window, cx);
                             } else {
+                                this.profile_rate_limiter.record_failure();
                                 this.profile_auth_error =
                                     Some("Incorrect PIN. Please try again.".to_string());
                                 this.profile_otp_state.update(cx, |input, cx| {
@@ -243,6 +264,10 @@ impl AppState {
             window,
             |this: &mut Self, _entity, event: &InputEvent, window, cx| {
                 if let InputEvent::Change = event {
+                    if this.admin_rate_limiter.is_locked() {
+                        this.admin_otp_state.update(cx, |input, cx| input.set_value("", window, cx));
+                        return;
+                    }
                     let entered_pin = this.admin_otp_state.read(cx).value().to_string();
                     if entered_pin.len() == 4 {
                         let hashed = bir_core::crypto::hash_pin(&entered_pin);
@@ -254,6 +279,7 @@ impl AppState {
                         };
 
                         if valid {
+                            this.admin_rate_limiter.reset();
                             if let Some(target) = this.pending_admin_view.take() {
                                 this.active_view = target;
                                 if target == ActiveView::CronTasks {
@@ -266,6 +292,7 @@ impl AppState {
                                 .update(cx, |input, cx| input.set_value("", window, cx));
                             this.focus_handle.focus(window, cx);
                         } else {
+                            this.admin_rate_limiter.record_failure();
                             this.admin_auth_error = Some("Incorrect Admin PIN.".to_string());
                             this.admin_otp_state.update(cx, |input, cx| {
                                 input.set_value("", window, cx);
@@ -274,6 +301,85 @@ impl AppState {
                         }
                     }
                     cx.notify();
+                }
+            },
+        )
+        .detach();
+
+        cx.subscribe_in(
+            &profile_totp_state,
+            window,
+            |this: &mut Self, _entity, event: &InputEvent, window, cx| {
+                if let InputEvent::Change = event {
+                    let entered_token = this.profile_totp_state.read(cx).value().to_string();
+                    if entered_token.len() == 6 {
+                        if let Some((p, a)) = this.pending_profile.clone() {
+                            if let Some(ref secret) = p.totp_secret {
+                                if bir_core::crypto::validate_totp(secret, &entered_token) {
+                                    this.unlocked_profile = Some((p, a));
+                                    this.pending_profile = None;
+                                    this.profile_auth_error = None;
+                                    this.profile_totp_state
+                                        .update(cx, |input, cx| input.set_value("", window, cx));
+                                    this.focus_handle.focus(window, cx);
+                                } else {
+                                    this.profile_auth_error =
+                                        Some("Incorrect Authenticator code.".to_string());
+                                    this.profile_totp_state.update(cx, |input, cx| {
+                                        input.set_value("", window, cx);
+                                        input.focus(window, cx);
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    cx.notify();
+                }
+            },
+        )
+        .detach();
+
+        cx.subscribe_in(
+            &admin_totp_state,
+            window,
+            |this: &mut Self, _entity, event: &InputEvent, window, cx| {
+                if let InputEvent::Change = event {
+                    if this.admin_rate_limiter.is_locked() {
+                        this.admin_totp_state.update(cx, |input, cx| input.set_value("", window, cx));
+                        return;
+                    }
+                    let entered_token = this.admin_totp_state.read(cx).value().to_string();
+                    if entered_token.len() == 6 {
+                        let mut is_valid = false;
+                        if let Ok(db_guard) = this.db.lock() {
+                            if let Ok(Some(secret)) = db_guard.get_setting("app_totp_secret") {
+                                is_valid = bir_core::crypto::validate_totp(&secret, &entered_token);
+                            }
+                        }
+
+                        if is_valid {
+                            this.admin_rate_limiter.reset();
+                            this.admin_auth_error = None;
+                            if let Some(target) = this.pending_admin_view.take() {
+                                this.active_view = target;
+                                if target == ActiveView::CronTasks {
+                                    this.cron_tasks_view.update(cx, |view, cx| view.load_settings(cx));
+                                }
+                            }
+                            this.admin_totp_state
+                                .update(cx, |input, cx| input.set_value("", window, cx));
+                            this.focus_handle.focus(window, cx);
+                        } else {
+                            this.admin_rate_limiter.record_failure();
+                            this.admin_auth_error =
+                                Some("Incorrect Authenticator code.".to_string());
+                            this.admin_totp_state.update(cx, |input, cx| {
+                                input.set_value("", window, cx);
+                                input.focus(window, cx);
+                            });
+                        }
+                        cx.notify();
+                    }
                 }
             },
         )
@@ -607,6 +713,8 @@ impl AppState {
             lock_screen_view,
             pending_profile: None,
             profile_otp_state,
+            profile_totp_state,
+            profile_rate_limiter: RateLimiter::new(),
             profile_auth_error: None,
             os_auth_triggered: false,
             unlocked_profile: None,
@@ -615,6 +723,9 @@ impl AppState {
             enable_profile_pins,
             pending_admin_view: None,
             admin_otp_state,
+            admin_totp_state,
+            admin_rate_limiter: RateLimiter::new(),
+            has_admin_totp,
             admin_auth_error: None,
             admin_os_auth_triggered: false,
             active_session_tin: None,
@@ -641,14 +752,27 @@ impl AppState {
             return;
         }
 
-        if self.enable_profile_pins && profile.profile_pin_hash.is_some() {
+        // Profile needs auth if it has EITHER a PIN or TOTP configured (mutually exclusive)
+        let needs_auth = self.enable_profile_pins
+            && (profile.profile_pin_hash.is_some() || profile.totp_secret.is_some());
+
+        if needs_auth {
+            let use_totp = profile.totp_secret.is_some();
             self.pending_profile = Some((profile, action));
             self.profile_auth_error = None;
             self.os_auth_triggered = false;
-            self.profile_otp_state.update(cx, |input, cx| {
-                input.set_value("", window, cx);
-                input.focus(window, cx);
-            });
+            self.profile_rate_limiter.reset();
+            if use_totp {
+                self.profile_totp_state.update(cx, |input, cx| {
+                    input.set_value("", window, cx);
+                    input.focus(window, cx);
+                });
+            } else {
+                self.profile_otp_state.update(cx, |input, cx| {
+                    input.set_value("", window, cx);
+                    input.focus(window, cx);
+                });
+            }
         } else {
             self.apply_profile_action(profile, action, window, cx);
         }
@@ -702,20 +826,30 @@ impl AppState {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let is_app_lock_enabled = if let Ok(db) = self.db.lock() {
-            db.get_setting("app_lock_enabled").ok().flatten().as_deref() == Some("true")
+        let (is_app_lock_enabled, has_app_totp) = if let Ok(db) = self.db.lock() {
+            let pin = db.get_setting("app_lock_enabled").ok().flatten().as_deref() == Some("true");
+            let totp = db.get_setting("app_totp_secret").ok().flatten().is_some();
+            (pin, totp)
         } else {
-            false
+            (false, false)
         };
 
-        if is_app_lock_enabled {
+        if is_app_lock_enabled || has_app_totp {
             self.pending_admin_view = Some(target);
             self.admin_auth_error = None;
             self.admin_os_auth_triggered = false;
-            self.admin_otp_state.update(cx, |input, cx| {
-                input.set_value("", window, cx);
-                input.focus(window, cx);
-            });
+            self.admin_rate_limiter.reset();
+            if has_app_totp {
+                self.admin_totp_state.update(cx, |input, cx| {
+                    input.set_value("", window, cx);
+                    input.focus(window, cx);
+                });
+            } else {
+                self.admin_otp_state.update(cx, |input, cx| {
+                    input.set_value("", window, cx);
+                    input.focus(window, cx);
+                });
+            }
         } else {
             self.active_view = target;
             if target == ActiveView::CronTasks {

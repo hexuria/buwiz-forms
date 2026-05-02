@@ -522,6 +522,12 @@ impl Database {
         )?;
         Ok(())
     }
+
+    /// Delete a global setting value.
+    pub fn delete_setting(&self, key: &str) -> Result<(), DbError> {
+        self.conn.execute("DELETE FROM settings WHERE key = ?1", params![key])?;
+        Ok(())
+    }
 }
 
 // =========================================================================

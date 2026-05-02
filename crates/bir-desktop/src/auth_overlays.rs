@@ -2,6 +2,9 @@
 //!
 //! Contains the profile PIN gate and admin PIN gate overlay methods,
 //! including OS biometric override support.
+//!
+//! Auth method is auto-detected from the profile/DB config.
+//! PIN and TOTP are mutually exclusive — no switch button.
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;
@@ -10,6 +13,7 @@ use gpui_component::input::OtpInput;
 use gpui_component::*;
 
 use crate::app::{ActiveView, AppState};
+use crate::components::otp_paste::paste_otp_value;
 
 impl AppState {
     /// Render the profile PIN authentication overlay (if a profile is pending authentication).
@@ -22,6 +26,19 @@ impl AppState {
         let error_msg = self.profile_auth_error.clone();
         let os_triggered = self.os_auth_triggered;
 
+        // Auto-detect: TOTP takes precedence if configured
+        let use_totp = profile.totp_secret.is_some();
+        let is_locked_out = if use_totp {
+            false // No rate limiting on profile TOTP
+        } else {
+            self.profile_rate_limiter.is_locked()
+        };
+        let lockout_msg = if !use_totp {
+            self.profile_rate_limiter.lockout_message()
+        } else {
+            None
+        };
+
         Some(
             div()
                 .absolute()
@@ -31,6 +48,21 @@ impl AppState {
                 .flex_col()
                 .items_center()
                 .justify_center()
+                // Intercept Cmd+V / Ctrl+V for OTP paste support
+                .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
+                    let mods = &event.keystroke.modifiers;
+                    let is_paste = event.keystroke.key.as_str() == "v"
+                        && (mods.platform || mods.control);
+                    if !is_paste { return; }
+                    if let Some((ref profile, _)) = this.pending_profile {
+                        let use_totp = profile.totp_secret.is_some();
+                        if use_totp {
+                            paste_otp_value(&this.profile_totp_state, 6, window, cx);
+                        } else {
+                            paste_otp_value(&this.profile_otp_state, 4, window, cx);
+                        }
+                    }
+                }))
                 .child(
                     div()
                         .flex()
@@ -54,7 +86,11 @@ impl AppState {
                                         .text_xl()
                                         .font_weight(FontWeight::BOLD)
                                         .text_color(cx.theme().foreground)
-                                        .child("Enter PIN to unlock Tax Profile"),
+                                        .child(if use_totp {
+                                            "Enter Authenticator Code"
+                                        } else {
+                                            "Enter PIN to unlock Tax Profile"
+                                        }),
                                 )
                                 .child(
                                     div()
@@ -63,13 +99,47 @@ impl AppState {
                                         .child(format!("Profile: {}", profile.tin.full())),
                                 ),
                         )
+                        // TOTP time-remaining indicator
+                        .when(use_totp, |this| {
+                            let secs = totp_seconds_remaining();
+                            this.child(
+                                div()
+                                    .text_sm()
+                                    .text_color(if secs <= 5 {
+                                        cx.theme().danger
+                                    } else {
+                                        cx.theme().muted_foreground
+                                    })
+                                    .child(format!("Code expires in {}s", secs)),
+                            )
+                        })
                         .child(
-                            OtpInput::new(&self.profile_otp_state)
-                                .groups(1)
-                                .large()
-                                .disabled(os_triggered),
+                            if use_totp {
+                                OtpInput::new(&self.profile_totp_state)
+                                    .groups(1)
+                                    .large()
+                                    .disabled(os_triggered)
+                                    .into_any_element()
+                            } else {
+                                OtpInput::new(&self.profile_otp_state)
+                                    .groups(1)
+                                    .large()
+                                    .disabled(is_locked_out || os_triggered)
+                                    .into_any_element()
+                            }
                         )
-                        .when_some(error_msg, |this, msg| {
+                        .when_some(error_msg.clone(), |this, msg| {
+                            this.when(!is_locked_out, |this| {
+                                this.child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(cx.theme().danger)
+                                        .child(msg),
+                                )
+                            })
+                        })
+                        // Lockout message (PIN only)
+                        .when_some(lockout_msg, |this, msg| {
                             this.child(
                                 div()
                                     .text_sm()
@@ -180,6 +250,10 @@ impl AppState {
                                             this.profile_otp_state.update(cx, |input, cx| {
                                                 input.set_value("", window, cx)
                                             });
+                                            this.profile_totp_state.update(cx, |input, cx| {
+                                                input.set_value("", window, cx)
+                                            });
+                                            this.profile_rate_limiter.reset();
                                             this.focus_handle.focus(window, cx);
                                             cx.notify();
                                         })),
@@ -200,6 +274,11 @@ impl AppState {
         let error_msg = self.admin_auth_error.clone();
         let os_triggered = self.admin_os_auth_triggered;
 
+        // Auto-detect: TOTP takes precedence if configured
+        let use_totp = self.has_admin_totp;
+        let is_locked_out = self.admin_rate_limiter.is_locked();
+        let lockout_msg = self.admin_rate_limiter.lockout_message();
+
         Some(
             div()
                 .absolute()
@@ -209,6 +288,18 @@ impl AppState {
                 .flex_col()
                 .items_center()
                 .justify_center()
+                // Intercept Cmd+V / Ctrl+V for OTP paste support
+                .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
+                    let mods = &event.keystroke.modifiers;
+                    let is_paste = event.keystroke.key.as_str() == "v"
+                        && (mods.platform || mods.control);
+                    if !is_paste { return; }
+                    if use_totp {
+                        paste_otp_value(&this.admin_totp_state, 6, window, cx);
+                    } else {
+                        paste_otp_value(&this.admin_otp_state, 4, window, cx);
+                    }
+                }))
                 .child(
                     div()
                         .flex()
@@ -240,22 +331,70 @@ impl AppState {
                                         .text_color(cx.theme().muted_foreground)
                                         .child(match target {
                                             ActiveView::Settings => {
-                                                "Enter App Lock PIN to access Settings"
+                                                if use_totp {
+                                                    "Enter Authenticator Code to access Settings"
+                                                } else {
+                                                    "Enter App Lock PIN to access Settings"
+                                                }
                                             }
                                             ActiveView::CronTasks => {
-                                                "Enter App Lock PIN to access Background Tasks"
+                                                if use_totp {
+                                                    "Enter Authenticator Code to access Background Tasks"
+                                                } else {
+                                                    "Enter App Lock PIN to access Background Tasks"
+                                                }
                                             }
-                                            _ => "Enter App Lock PIN to continue",
+                                            _ => {
+                                                if use_totp {
+                                                    "Enter Authenticator Code to continue"
+                                                } else {
+                                                    "Enter App Lock PIN to continue"
+                                                }
+                                            },
                                         }),
                                 ),
                         )
+                        // TOTP time-remaining indicator
+                        .when(use_totp && !is_locked_out, |this| {
+                            let secs = totp_seconds_remaining();
+                            this.child(
+                                div()
+                                    .text_sm()
+                                    .text_color(if secs <= 5 {
+                                        cx.theme().danger
+                                    } else {
+                                        cx.theme().muted_foreground
+                                    })
+                                    .child(format!("Code expires in {}s", secs)),
+                            )
+                        })
                         .child(
-                            OtpInput::new(&self.admin_otp_state)
-                                .groups(1)
-                                .large()
-                                .disabled(os_triggered),
+                            if use_totp {
+                                OtpInput::new(&self.admin_totp_state)
+                                    .groups(1)
+                                    .large()
+                                    .disabled(is_locked_out || os_triggered)
+                                    .into_any_element()
+                            } else {
+                                OtpInput::new(&self.admin_otp_state)
+                                    .groups(1)
+                                    .large()
+                                    .disabled(is_locked_out || os_triggered)
+                                    .into_any_element()
+                            }
                         )
-                        .when_some(error_msg, |this, msg| {
+                        .when_some(error_msg.clone(), |this, msg| {
+                            this.when(!is_locked_out, |this| {
+                                this.child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(cx.theme().danger)
+                                        .child(msg),
+                                )
+                            })
+                        })
+                        // Lockout message
+                        .when_some(lockout_msg, |this, msg| {
                             this.child(
                                 div()
                                     .text_sm()
@@ -273,6 +412,8 @@ impl AppState {
                                     gpui_component::button::Button::new("admin_os_override")
                                         .label(if os_triggered {
                                             "Waiting for OS..."
+                                        } else if is_locked_out {
+                                            "Unlock with Computer Password"
                                         } else {
                                             "OS Auth Override"
                                         })
@@ -375,6 +516,10 @@ impl AppState {
                                             this.admin_otp_state.update(cx, |input, cx| {
                                                 input.set_value("", window, cx)
                                             });
+                                            this.admin_totp_state.update(cx, |input, cx| {
+                                                input.set_value("", window, cx)
+                                            });
+                                            this.admin_rate_limiter.reset();
                                             this.focus_handle.focus(window, cx);
                                             cx.notify();
                                         })),
@@ -384,4 +529,13 @@ impl AppState {
                 .into_any_element(),
         )
     }
+}
+
+/// Seconds remaining in the current TOTP 30-second window.
+fn totp_seconds_remaining() -> u64 {
+    let epoch_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    30 - (epoch_secs % 30)
 }

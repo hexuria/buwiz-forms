@@ -2,6 +2,7 @@ use bir_core::db::Database;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::input::{InputEvent, OtpInput, OtpState};
+use crate::components::otp_paste::paste_otp_value;
 use gpui_component::switch::Switch;
 use gpui_component::*;
 use std::sync::{Arc, Mutex};
@@ -17,13 +18,19 @@ pub struct SettingsView {
     is_app_lock_enabled: bool,
     show_pin_setup: bool,
     setup_otp: Entity<OtpState>,
+    is_app_totp_enabled: bool,
+    show_totp_setup: bool,
+    setup_totp_state: Entity<OtpState>,
+    totp_secret_temp: Option<String>,
+    totp_qr_path: Option<std::path::PathBuf>,
+    show_totp_secret_text: bool,
     hide_tax_profiles: bool,
     enable_profile_pins: bool,
 }
 
 impl SettingsView {
     pub fn new(db: Arc<Mutex<Database>>, window: &mut Window, cx: &mut Context<'_, Self>) -> Self {
-        let (is_app_lock_enabled, hide_tax_profiles, enable_profile_pins) =
+        let (is_app_lock_enabled, is_app_totp_enabled, hide_tax_profiles, enable_profile_pins) =
             if let Ok(guard) = db.lock() {
                 let lock = guard
                     .get_setting("app_lock_enabled")
@@ -31,6 +38,11 @@ impl SettingsView {
                     .flatten()
                     .as_deref()
                     == Some("true");
+                let totp = guard
+                    .get_setting("app_totp_secret")
+                    .ok()
+                    .flatten()
+                    .is_some();
                 let hide = guard
                     .get_setting("hide_tax_profiles")
                     .ok()
@@ -43,9 +55,9 @@ impl SettingsView {
                     .flatten()
                     .as_deref()
                     == Some("true");
-                (lock, hide, pins)
+                (lock, totp, hide, pins)
             } else {
-                (false, false, false)
+                (false, false, false, false)
             };
 
         let setup_otp = cx.new(|cx| {
@@ -54,11 +66,23 @@ impl SettingsView {
             state
         });
 
+        let setup_totp_state = cx.new(|cx| {
+            let mut state = OtpState::new(6, window, cx);
+            state = state.masked(false);
+            state
+        });
+
         let view = Self {
             db: db.clone(),
             is_app_lock_enabled,
             show_pin_setup: false,
             setup_otp: setup_otp.clone(),
+            is_app_totp_enabled,
+            show_totp_setup: false,
+            setup_totp_state: setup_totp_state.clone(),
+            totp_secret_temp: None,
+            totp_qr_path: None,
+            show_totp_secret_text: false,
             hide_tax_profiles,
             enable_profile_pins,
         };
@@ -85,6 +109,38 @@ impl SettingsView {
         )
         .detach();
 
+        cx.subscribe_in(
+            &setup_totp_state,
+            window,
+            |this: &mut Self, _entity, event: &InputEvent, window, cx| {
+                if let InputEvent::Change = event {
+                    let token = this.setup_totp_state.read(cx).value().to_string();
+                    if token.len() == 6 {
+                        if let Some(ref secret) = this.totp_secret_temp {
+                            if bir_core::crypto::validate_totp(secret, &token) {
+                                if let Ok(db_guard) = this.db.lock() {
+                                    let _ = db_guard.set_setting("app_totp_secret", secret);
+                                }
+                                this.is_app_totp_enabled = true;
+                                this.show_totp_setup = false;
+                                this.show_totp_secret_text = false;
+                                this.totp_secret_temp = None;
+                                this.totp_qr_path = None;
+                                cx.emit(SettingsEvent::ReloadApp);
+                                cx.notify();
+                            } else {
+                                this.setup_totp_state.update(cx, |input, cx| {
+                                    input.set_value("", window, cx);
+                                    input.focus(window, cx);
+                                });
+                            }
+                        }
+                    }
+                }
+            },
+        )
+        .detach();
+
         view
     }
 }
@@ -95,16 +151,34 @@ impl Render for SettingsView {
         let border = cx.theme().border;
 
         div()
-            .id("settings_scroll")
-            .flex()
-            .flex_col()
-            .p_8()
-            .gap_6()
-            .overflow_y_scroll()
+            .size_full()
+            .relative()
+            // Intercept Cmd+V / Ctrl+V for OTP paste support
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                let mods = &event.keystroke.modifiers;
+                let is_paste = event.keystroke.key.as_str() == "v"
+                    && (mods.platform || mods.control);
+                if !is_paste { return; }
+                // Paste into whichever OTP input is currently in a setup flow
+                if this.show_totp_setup {
+                    paste_otp_value(&this.setup_totp_state, 6, window, cx);
+                } else if this.show_pin_setup {
+                    paste_otp_value(&this.setup_otp, 4, window, cx);
+                }
+            }))
             .child(
                 div()
+                    .id("settings_scroll")
+                    .size_full()
                     .flex()
                     .flex_col()
+                    .p_8()
+                    .gap_6()
+                    .overflow_y_scroll()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
                     .gap_1()
                     .child(div().text_2xl().font_weight(FontWeight::BOLD).child("Settings"))
                     .child(
@@ -154,22 +228,30 @@ impl Render for SettingsView {
                                     .child(
                                         Switch::new("app_lock_switch")
                                             .checked(self.is_app_lock_enabled)
+                                            .disabled(self.is_app_totp_enabled)
                                             .on_click(cx.listener(|this, checked, _window, cx| {
+                                                if this.is_app_totp_enabled { return; }
                                                 if !checked {
-                                                    // Disable
                                                     if let Ok(db) = this.db.lock() {
                                                         let _ = db.set_setting("app_lock_enabled", "false");
                                                     }
                                                     this.is_app_lock_enabled = false;
                                                     this.show_pin_setup = false;
                                                 } else {
-                                                    // Enable
                                                     this.show_pin_setup = true;
                                                 }
                                                 cx.notify();
                                             }))
                                     )
                             )
+                            .when(self.is_app_totp_enabled, |this| {
+                                this.child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child("Disable Authenticator App first to use 4-digit PIN.")
+                                )
+                            })
                             .when(self.show_pin_setup, |this| {
                                 this.child(
                                     div()
@@ -199,6 +281,72 @@ impl Render for SettingsView {
                                 )
                             })
                     )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .items_start()
+                            .p_6()
+                            .gap_4()
+                            .border_b_1()
+                            .border_color(border)
+                            .child(
+                                div()
+                                    .flex()
+                                    .w_full()
+                                    .justify_between()
+                                    .items_center()
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .gap_1()
+                                            .child(div().font_weight(FontWeight::SEMIBOLD).child("Master Authenticator App"))
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .child("Use a 6-digit TOTP code from an authenticator app (e.g. Google Authenticator) for enhanced security."),
+                                            ),
+                                    )
+                                    .child(
+                                        Switch::new("app_totp_switch")
+                                            .checked(self.is_app_totp_enabled)
+                                            .disabled(self.is_app_lock_enabled)
+                                            .on_click(cx.listener(|this, checked, window, cx| {
+                                                if this.is_app_lock_enabled { return; }
+                                                if !checked {
+                                                    if let Ok(db) = this.db.lock() {
+                                                        let _ = db.delete_setting("app_totp_secret");
+                                                    }
+                                                    this.is_app_totp_enabled = false;
+                                                    this.show_totp_setup = false;
+                                                    this.show_totp_secret_text = false;
+                                                    this.totp_secret_temp = None;
+                                                    this.totp_qr_path = None;
+                                                    cx.emit(SettingsEvent::ReloadApp);
+                                                } else {
+                                                    let (secret, qr_path) = bir_core::crypto::generate_totp_secret("e-BIRForms (Master)");
+                                                    this.totp_secret_temp = Some(secret);
+                                                    this.totp_qr_path = Some(qr_path);
+                                                    this.show_totp_setup = true;
+                                                    this.setup_totp_state.update(cx, |s, cx| s.focus(window, cx));
+                                                }
+                                                cx.notify();
+                                            }))
+                                    )
+                            )
+                            .when(self.is_app_lock_enabled, |this| {
+                                this.child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child("Disable 4-digit PIN first to use Authenticator App.")
+                                )
+                            })
+
+                    )
+
                     .child(
                         div()
                             .flex()
@@ -544,6 +692,149 @@ impl Render for SettingsView {
                             )
                     )
             )
+            )
+            .when(self.show_totp_setup, |this| {
+                this.child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .bg(gpui::rgba(0x000000b2))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(
+                            div()
+                                .w(px(400.))
+                                .bg(bg)
+                                .border_1()
+                                .border_color(border)
+                                .rounded_xl()
+                                .p_6()
+                                .flex()
+                                .flex_col()
+                                .gap_4()
+                                .shadow_lg()
+                                .child(div().text_lg().font_weight(FontWeight::BOLD).child("Connect your authenticator app"))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_2()
+                                        .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(
+                                            if self.show_totp_secret_text {
+                                                "Step 1: Enter the secret code below in your authenticator app:"
+                                            } else {
+                                                "Step 1: Scan the QR code using your authenticator app:"
+                                            }
+                                        ))
+                                        .when(!self.show_totp_secret_text, |this| {
+                                            this.when_some(self.totp_qr_path.clone(), |this, path| {
+                                                this.child(
+                                                    div()
+                                                        .w_full()
+                                                        .flex()
+                                                        .justify_center()
+                                                        .child(
+                                                            gpui::img(path)
+                                                                .w(px(200.))
+                                                                .h(px(200.))
+                                                                .object_fit(gpui::ObjectFit::Contain)
+                                                        )
+                                                )
+                                            })
+                                            .child(
+                                                div()
+                                                    .w_full()
+                                                    .flex()
+                                                    .justify_center()
+                                                    .mt_2()
+                                                    .child(
+                                                        div()
+                                                            .id("trouble_scanning_btn")
+                                                            .text_sm()
+                                                            .text_color(cx.theme().primary)
+                                                            .cursor_pointer()
+                                                            .on_click(cx.listener(|this, _ev, _window, cx| {
+                                                                this.show_totp_secret_text = true;
+                                                                cx.notify();
+                                                            }))
+                                                            .child("Trouble scanning?")
+                                                    )
+                                            )
+                                        })
+                                        .when(self.show_totp_secret_text, |this| {
+                                            this.when_some(self.totp_secret_temp.clone(), |this, secret| {
+                                                this.child(
+                                                    div()
+                                                        .flex()
+                                                        .flex_col()
+                                                        .items_center()
+                                                        .gap_4()
+                                                        .mt_2()
+                                                        .child(
+                                                            div()
+                                                                .flex()
+                                                                .items_center()
+                                                                .gap_2()
+                                                                .p_3()
+                                                                .rounded_md()
+                                                                .bg(cx.theme().secondary)
+                                                                .border_1()
+                                                                .border_color(border)
+                                                                .child(div().text_sm().font_family(".SF NS Mono").child(secret.clone()))
+                                                                .child(
+                                                                    gpui_component::clipboard::Clipboard::new("totp-secret-clipboard")
+                                                                        .value(secret)
+                                                                )
+                                                        )
+                                                        .child(
+                                                            div()
+                                                                .id("show_qr_btn")
+                                                                .text_sm()
+                                                                .text_color(cx.theme().primary)
+                                                                .cursor_pointer()
+                                                                .on_click(cx.listener(|this, _ev, _window, cx| {
+                                                                    this.show_totp_secret_text = false;
+                                                                    cx.notify();
+                                                                }))
+                                                                .child("Show QR code instead")
+                                                        )
+                                                )
+                                            })
+                                        })
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_1()
+                                        .mt_2()
+                                        .child(div().text_sm().font_weight(FontWeight::MEDIUM).child("Step 2: Enter the 6-digit code to verify"))
+                                        .child(OtpInput::new(&self.setup_totp_state).groups(1).large())
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .justify_end()
+                                        .mt_4()
+                                        .child(
+                                            gpui_component::button::Button::new("cancel_totp_btn")
+                                                .label("Cancel")
+                                                .small()
+                                                .on_click(cx.listener(|this, _ev, window, cx| {
+                                                    this.show_totp_setup = false;
+                                                    this.show_totp_secret_text = false;
+                                                    this.totp_secret_temp = None;
+                                                    this.totp_qr_path = None;
+                                                    this.setup_totp_state.update(cx, |s, cx| s.set_value("", window, cx));
+                                                    this.is_app_totp_enabled = false;
+                                                    cx.notify();
+                                                }))
+                                        )
+                                )
+                        )
+                )
+            })
             .into_any_element()
     }
 }
