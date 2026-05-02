@@ -12,11 +12,11 @@ use gpui::*;
 use gpui_component::input::{InputEvent, InputState, OtpState};
 use gpui_component::*;
 
+use crate::components::rate_limiter::RateLimiter;
 use bir_core::db::Database;
 use bir_core::forms::Form1701QDraft;
 use bir_core::forms::form_2551q::{FilingStatus, Form2551QDraft};
 use bir_core::profile::TaxpayerProfile;
-use crate::components::rate_limiter::RateLimiter;
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
@@ -119,31 +119,12 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let db_path = bir_core::db::default_database_path();
-        if let Some(parent) = db_path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        let legacy_db_path = std::env::current_dir()
-            .unwrap_or_default()
-            .join("bir_data.db");
-        if !db_path.exists()
-            && legacy_db_path.exists()
-            && legacy_db_path.metadata().map(|m| m.len()).unwrap_or(0) > 0
-            && legacy_db_path != db_path
-        {
-            let _ = std::fs::copy(&legacy_db_path, &db_path);
-        }
-        let (db, recovered_backup) =
-            Database::open_or_recreate(&db_path).expect("Failed to open database");
-        if let Some(backup_path) = recovered_backup {
-            eprintln!(
-                "Recovered unreadable database at {} by moving it to {}",
-                db_path.display(),
-                backup_path.display()
-            );
-        }
-
+    pub fn new(
+        db: Arc<Mutex<Database>>,
+        profiles: Vec<TaxpayerProfile>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         // Cleanup any leftover ephemeral PDF directories from previous sessions.
         cx.background_executor()
             .spawn(async move {
@@ -151,29 +132,41 @@ impl AppState {
             })
             .detach();
 
-        let theme_preference = if let Ok(Some(val)) = db.get_setting("theme_preference") {
-            serde_json::from_str(&val).unwrap_or(AppThemeMode::System)
-        } else {
-            AppThemeMode::System
+        let (theme_preference, hide_tax_profiles, enable_profile_pins, is_locked, has_admin_totp) = {
+            let db_guard = db.lock().unwrap();
+            let tp = if let Ok(Some(val)) = db_guard.get_setting("theme_preference") {
+                serde_json::from_str(&val).unwrap_or(AppThemeMode::System)
+            } else {
+                AppThemeMode::System
+            };
+            let htp = db_guard
+                .get_setting("hide_tax_profiles")
+                .ok()
+                .flatten()
+                .as_deref()
+                == Some("true");
+            let epp = db_guard
+                .get_setting("enable_profile_pins")
+                .ok()
+                .flatten()
+                .as_deref()
+                == Some("true");
+            let pin_enabled = db_guard
+                .get_setting("app_lock_enabled")
+                .ok()
+                .flatten()
+                .as_deref()
+                == Some("true");
+            let totp_enabled = db_guard
+                .get_setting("app_totp_secret")
+                .ok()
+                .flatten()
+                .is_some();
+            (tp, htp, epp, pin_enabled || totp_enabled, totp_enabled)
         };
-        let hide_tax_profiles = db
-            .get_setting("hide_tax_profiles")
-            .ok()
-            .flatten()
-            .as_deref()
-            == Some("true");
-        let enable_profile_pins = db
-            .get_setting("enable_profile_pins")
-            .ok()
-            .flatten()
-            .as_deref()
-            == Some("true");
 
         let target_mode = crate::theme::resolve_theme_mode(theme_preference, window);
         Theme::change(target_mode, Some(window), cx);
-
-        let profiles = db.list_profiles().unwrap_or_default();
-        let db = Arc::new(Mutex::new(db));
 
         let active_view = if profiles.is_empty() {
             ActiveView::ProfileManager
@@ -198,12 +191,6 @@ impl AppState {
         let global_dashboard_view =
             cx.new(|cx| GlobalDashboardView::new(db_clone_global, window, cx));
 
-        let is_locked = {
-            let db_guard = db.lock().unwrap();
-            let pin_enabled = db_guard.get_setting("app_lock_enabled").ok().flatten().as_deref() == Some("true");
-            let totp_enabled = db_guard.get_setting("app_totp_secret").ok().flatten().is_some();
-            pin_enabled || totp_enabled
-        };
         let db_clone_lock = Arc::clone(&db);
         let lock_screen_view = Some(cx.new(|cx| LockScreenView::new(db_clone_lock, window, cx)));
 
@@ -211,15 +198,6 @@ impl AppState {
         let profile_totp_state = cx.new(|cx| OtpState::new(6, window, cx).masked(false));
         let admin_otp_state = cx.new(|cx| OtpState::new(4, window, cx).masked(true));
         let admin_totp_state = cx.new(|cx| OtpState::new(6, window, cx).masked(false));
-        
-        let has_admin_totp = db
-            .lock()
-            .unwrap()
-            .get_setting("app_totp_secret")
-            .ok()
-            .flatten()
-            .is_some();
-
 
         cx.subscribe_in(
             &profile_otp_state,
@@ -227,7 +205,8 @@ impl AppState {
             |this: &mut Self, _entity, event: &InputEvent, window, cx| {
                 if let InputEvent::Change = event {
                     if this.profile_rate_limiter.is_locked() {
-                        this.profile_otp_state.update(cx, |input, cx| input.set_value("", window, cx));
+                        this.profile_otp_state
+                            .update(cx, |input, cx| input.set_value("", window, cx));
                         return;
                     }
                     let entered_pin = this.profile_otp_state.read(cx).value().to_string();
@@ -265,7 +244,8 @@ impl AppState {
             |this: &mut Self, _entity, event: &InputEvent, window, cx| {
                 if let InputEvent::Change = event {
                     if this.admin_rate_limiter.is_locked() {
-                        this.admin_otp_state.update(cx, |input, cx| input.set_value("", window, cx));
+                        this.admin_otp_state
+                            .update(cx, |input, cx| input.set_value("", window, cx));
                         return;
                     }
                     let entered_pin = this.admin_otp_state.read(cx).value().to_string();
@@ -312,9 +292,9 @@ impl AppState {
             |this: &mut Self, _entity, event: &InputEvent, window, cx| {
                 if let InputEvent::Change = event {
                     let entered_token = this.profile_totp_state.read(cx).value().to_string();
-                    if entered_token.len() == 6 {
-                        if let Some((p, a)) = this.pending_profile.clone() {
-                            if let Some(ref secret) = p.totp_secret {
+                    if entered_token.len() == 6
+                        && let Some((p, a)) = this.pending_profile.clone()
+                            && let Some(ref secret) = p.totp_secret {
                                 if bir_core::crypto::validate_totp(secret, &entered_token) {
                                     this.unlocked_profile = Some((p, a));
                                     this.pending_profile = None;
@@ -331,8 +311,6 @@ impl AppState {
                                     });
                                 }
                             }
-                        }
-                    }
                     cx.notify();
                 }
             },
@@ -345,17 +323,17 @@ impl AppState {
             |this: &mut Self, _entity, event: &InputEvent, window, cx| {
                 if let InputEvent::Change = event {
                     if this.admin_rate_limiter.is_locked() {
-                        this.admin_totp_state.update(cx, |input, cx| input.set_value("", window, cx));
+                        this.admin_totp_state
+                            .update(cx, |input, cx| input.set_value("", window, cx));
                         return;
                     }
                     let entered_token = this.admin_totp_state.read(cx).value().to_string();
                     if entered_token.len() == 6 {
                         let mut is_valid = false;
-                        if let Ok(db_guard) = this.db.lock() {
-                            if let Ok(Some(secret)) = db_guard.get_setting("app_totp_secret") {
+                        if let Ok(db_guard) = this.db.lock()
+                            && let Ok(Some(secret)) = db_guard.get_setting("app_totp_secret") {
                                 is_valid = bir_core::crypto::validate_totp(&secret, &entered_token);
                             }
-                        }
 
                         if is_valid {
                             this.admin_rate_limiter.reset();
@@ -363,7 +341,8 @@ impl AppState {
                             if let Some(target) = this.pending_admin_view.take() {
                                 this.active_view = target;
                                 if target == ActiveView::CronTasks {
-                                    this.cron_tasks_view.update(cx, |view, cx| view.load_settings(cx));
+                                    this.cron_tasks_view
+                                        .update(cx, |view, cx| view.load_settings(cx));
                                 }
                             }
                             this.admin_totp_state

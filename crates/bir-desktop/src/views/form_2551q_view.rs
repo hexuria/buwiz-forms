@@ -655,7 +655,8 @@ impl Form2551QView {
                     raw_html = receipt.raw_html;
                     confirmation = Some(super::pdf_viewer::ConfirmationInfo {
                         subject: "Tax Return Receipt Confirmation".to_string(),
-                        from: receipt.source_from
+                        from: receipt
+                            .source_from
                             .unwrap_or_else(|| "ebirforms-noreply@bir.gov.ph".to_string()),
                         to: draft.email.clone(),
                         received_date: receipt.received_date.clone(),
@@ -665,7 +666,9 @@ impl Form2551QView {
                 }
 
                 if let Err(err) = cx.open_window(options, move |_window, cx| {
-                    cx.new(|_cx| PdfViewerView::new(draft, result, output_dir, raw_html, confirmation, _cx))
+                    cx.new(|_cx| {
+                        PdfViewerView::new(draft, result, output_dir, raw_html, confirmation, _cx)
+                    })
                 }) {
                     use gpui_component::WindowExt;
                     window.push_notification(
@@ -791,10 +794,7 @@ impl Form2551QView {
                 .join("receipts");
             let _ = std::fs::create_dir_all(&data_dir);
             let ext = file.extension().and_then(|s| s.to_str()).unwrap_or("bin");
-            let new_filename = format!(
-                "receipt-{}-{}-{}.{}",
-                tin, year, quarter, ext
-            );
+            let new_filename = format!("receipt-{}-{}-{}.{}", tin, year, quarter, ext);
             let new_path = data_dir.join(new_filename);
 
             match std::fs::copy(&file, &new_path) {
@@ -812,7 +812,8 @@ impl Form2551QView {
                     tracing::warn!("Failed to copy receipt: {e}");
                 }
             }
-        }).detach();
+        })
+        .detach();
     }
 
     fn view_receipt(&self) {
@@ -1539,8 +1540,8 @@ impl Render for Form2551QView {
 
                         // View Receipt — opens receipt file in system viewer (Preview.app).
                         // Shown whenever a payment receipt file has been uploaded.
-                        if matches!(self.draft.status, FilingStatus::Confirmed | FilingStatus::Paid) {
-                            if self.draft.payment_receipt_path.is_some() {
+                        if matches!(self.draft.status, FilingStatus::Confirmed | FilingStatus::Paid)
+                            && self.draft.payment_receipt_path.is_some() {
                                 toolbar = toolbar.child(
                                     gpui_component::button::Button::new("view_receipt_btn")
                                         .label("View Receipt")
@@ -1550,7 +1551,6 @@ impl Render for Form2551QView {
                                         })),
                                 );
                             }
-                        }
 
                         // Upload / Re-upload Receipt — gated on email tracking being active
                         // so only profiles with cloud integration can upload receipts.

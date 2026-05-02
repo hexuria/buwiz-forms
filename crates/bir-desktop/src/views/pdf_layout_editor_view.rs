@@ -1219,7 +1219,7 @@ impl Render for PdfLayoutEditorView {
                                                             (start_rect.size.width + dx).max(5.0);
                                                         let mut new_h =
                                                             (start_rect.size.height + dy).max(5.0);
-                                                        
+
                                                         if ev.modifiers.shift {
                                                             if dx.abs() > dy.abs() {
                                                                 new_h = start_rect.size.height;

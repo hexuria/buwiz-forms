@@ -1,8 +1,8 @@
+use crate::components::otp_paste::paste_otp_value;
 use bir_core::db::Database;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::input::{InputEvent, OtpInput, OtpState};
-use crate::components::otp_paste::paste_otp_value;
 use gpui_component::switch::Switch;
 use gpui_component::*;
 use std::sync::{Arc, Mutex};
@@ -115,8 +115,8 @@ impl SettingsView {
             |this: &mut Self, _entity, event: &InputEvent, window, cx| {
                 if let InputEvent::Change = event {
                     let token = this.setup_totp_state.read(cx).value().to_string();
-                    if token.len() == 6 {
-                        if let Some(ref secret) = this.totp_secret_temp {
+                    if token.len() == 6
+                        && let Some(ref secret) = this.totp_secret_temp {
                             if bir_core::crypto::validate_totp(secret, &token) {
                                 if let Ok(db_guard) = this.db.lock() {
                                     let _ = db_guard.set_setting("app_totp_secret", secret);
@@ -135,7 +135,6 @@ impl SettingsView {
                                 });
                             }
                         }
-                    }
                 }
             },
         )

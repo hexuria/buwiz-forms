@@ -60,7 +60,8 @@ impl EmailConfirmationView {
                     cx.notify();
                 });
             }
-        }).detach();
+        })
+        .detach();
     }
 
     fn print_pdf(&mut self, cx: &mut Context<Self>) {

@@ -7,13 +7,13 @@ use std::time::{Duration, Instant};
 
 /// Cooldown durations for each 6-attempt window.
 const LOCKOUT_TIERS: &[Duration] = &[
-    Duration::from_secs(0),        // attempts 1–6: no lockout
-    Duration::from_secs(60),       // attempts 7–12: 1 minute
-    Duration::from_secs(300),      // attempts 13–18: 5 minutes
-    Duration::from_secs(900),      // attempts 19–24: 15 minutes
-    Duration::from_secs(1800),     // attempts 25–30: 30 minutes
-    Duration::from_secs(3600),     // attempts 31–36: 1 hour
-    Duration::from_secs(86400),    // attempts 37+: 24 hours
+    Duration::from_secs(0),     // attempts 1–6: no lockout
+    Duration::from_secs(60),    // attempts 7–12: 1 minute
+    Duration::from_secs(300),   // attempts 13–18: 5 minutes
+    Duration::from_secs(900),   // attempts 19–24: 15 minutes
+    Duration::from_secs(1800),  // attempts 25–30: 30 minutes
+    Duration::from_secs(3600),  // attempts 31–36: 1 hour
+    Duration::from_secs(86400), // attempts 37+: 24 hours
 ];
 
 const ATTEMPTS_PER_TIER: u32 = 6;
@@ -38,9 +38,12 @@ impl RateLimiter {
 
         // Which tier are we in? (0-indexed)
         let tier = (self.failed_attempts.saturating_sub(1) / ATTEMPTS_PER_TIER) as usize;
-        let cooldown = LOCKOUT_TIERS.get(tier).copied().unwrap_or(*LOCKOUT_TIERS.last().unwrap());
+        let cooldown = LOCKOUT_TIERS
+            .get(tier)
+            .copied()
+            .unwrap_or(*LOCKOUT_TIERS.last().unwrap());
 
-        if !cooldown.is_zero() && self.failed_attempts % ATTEMPTS_PER_TIER == 0 {
+        if !cooldown.is_zero() && self.failed_attempts.is_multiple_of(ATTEMPTS_PER_TIER) {
             self.locked_until = Some(Instant::now() + cooldown);
         }
     }
@@ -71,6 +74,7 @@ impl RateLimiter {
     }
 
     /// Total failed attempts since last reset.
+    #[allow(dead_code)]
     pub fn failed_attempts(&self) -> u32 {
         self.failed_attempts
     }

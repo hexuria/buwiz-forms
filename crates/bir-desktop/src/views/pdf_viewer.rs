@@ -52,7 +52,10 @@ impl PdfViewerView {
             lines.push(String::new());
             lines.push(format!("From: {}", info.from));
             lines.push(format!("To: {}", info.to));
-            lines.push(format!("Date: {} {}", info.received_date, info.received_time));
+            lines.push(format!(
+                "Date: {} {}",
+                info.received_date, info.received_time
+            ));
             lines.push(String::new());
             lines.push("---".to_string());
             lines.push(String::new());
@@ -61,22 +64,20 @@ impl PdfViewerView {
             }
 
             match std::fs::read(&result.pdf_path) {
-                Ok(form_bytes) => {
-                    match bir_print::append_text_pages_to_pdf(&form_bytes, &lines) {
-                        Ok(combined_bytes) => {
-                            let combined_path = output_dir.join("print-preview-combined.pdf");
-                            if std::fs::write(&combined_path, combined_bytes).is_ok() {
-                                combined_path
-                            } else {
-                                result.pdf_path.clone()
-                            }
-                        }
-                        Err(e) => {
-                            tracing::warn!("Failed to append confirmation pages: {e}");
+                Ok(form_bytes) => match bir_print::append_text_pages_to_pdf(&form_bytes, &lines) {
+                    Ok(combined_bytes) => {
+                        let combined_path = output_dir.join("print-preview-combined.pdf");
+                        if std::fs::write(&combined_path, combined_bytes).is_ok() {
+                            combined_path
+                        } else {
                             result.pdf_path.clone()
                         }
                     }
-                }
+                    Err(e) => {
+                        tracing::warn!("Failed to append confirmation pages: {e}");
+                        result.pdf_path.clone()
+                    }
+                },
                 Err(_) => result.pdf_path.clone(),
             }
         } else {
@@ -111,11 +112,10 @@ impl PdfViewerView {
         let temp = bir_core::platform::temp_dir();
         if let Ok(entries) = std::fs::read_dir(&temp) {
             for entry in entries.flatten() {
-                if let Some(name) = entry.file_name().to_str() {
-                    if name.starts_with(TEMP_DIR_PREFIX) && entry.path().is_dir() {
+                if let Some(name) = entry.file_name().to_str()
+                    && name.starts_with(TEMP_DIR_PREFIX) && entry.path().is_dir() {
                         let _ = std::fs::remove_dir_all(entry.path());
                     }
-                }
             }
         }
         // Also clean legacy static directory
@@ -143,8 +143,6 @@ impl PdfViewerView {
         cx.notify();
     }
 
-
-
     fn export_pdf(&mut self, cx: &mut Context<Self>) {
         let default_name = self
             .draft
@@ -171,7 +169,8 @@ impl PdfViewerView {
                     cx.notify();
                 });
             }
-        }).detach();
+        })
+        .detach();
     }
 
     fn print_pdf(&mut self, _cx: &mut Context<Self>) {
@@ -279,16 +278,13 @@ impl Render for PdfViewerView {
                             .text_sm()
                             .text_color(cx.theme().muted_foreground)
                             .pb_3()
-                            .child(format!("Date: {} {}", info.received_date, info.received_time)),
+                            .child(format!(
+                                "Date: {} {}",
+                                info.received_date, info.received_time
+                            )),
                     )
                     // Separator
-                    .child(
-                        div()
-                            .h(px(1.))
-                            .w_full()
-                            .bg(cx.theme().border)
-                            .mb_3(),
-                    )
+                    .child(div().h(px(1.)).w_full().bg(cx.theme().border).mb_3())
                     // Body text — plain, not monospaced
                     .child(
                         div()
@@ -370,7 +366,9 @@ impl Render for PdfViewerView {
                                         .when(!is_mobile, |this| this.label("Receipt"))
                                         .on_click(cx.listener(|this, _, _, _cx| {
                                             if let Some(path) = &this.draft.payment_receipt_path {
-                                                crate::platform::open_in_system(std::path::Path::new(path));
+                                                crate::platform::open_in_system(
+                                                    std::path::Path::new(path),
+                                                );
                                             }
                                         })),
                                 )

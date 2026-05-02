@@ -43,13 +43,13 @@ impl TinInput {
     fn on_change(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.inputs[index].read(cx).value().to_string();
         let digits: String = text.chars().filter(|c| c.is_ascii_digit()).collect();
-        let max_len = if index == 3 { 4 } else { 3 };
+        let max_len = if index == 3 { 5 } else { 3 };
 
         // Handle paste across all boxes
         if index == 0 && digits.len() > 3 {
             let mut remaining = digits.clone();
             for i in 0..4 {
-                let chunk_size = if i == 3 { 4 } else { 3 };
+                let chunk_size = if i == 3 { 5 } else { 3 };
                 let take = remaining.chars().take(chunk_size).collect::<String>();
                 self.inputs[i].update(cx, |input, cx| {
                     input.set_value(take.clone(), window, cx);
@@ -138,7 +138,7 @@ impl TinInput {
 
     pub fn is_valid(&self, cx: &gpui::App) -> bool {
         let val = self.value(cx);
-        val.len() == 12 || val.len() == 13
+        val.len() >= 12 && val.len() <= 14
     }
 
     pub fn set_from_tin(
@@ -189,6 +189,7 @@ impl Render for TinInput {
             .child(
                 div()
                     .flex()
+                    .flex_col()
                     .justify_between()
                     .child(
                         div()
@@ -205,7 +206,7 @@ impl Render for TinInput {
                             } else {
                                 cx.theme().transparent
                             })
-                            .child("Invalid TIN format (Must be 12-13 digits)"),
+                            .child("Invalid TIN format (Must be 12-14 digits)"),
                     ),
             )
             .child(

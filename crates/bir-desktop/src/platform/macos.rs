@@ -79,6 +79,7 @@ pub fn bind_global_keys(cx: &mut App) {
 // ── File Operations ──────────────────────────────────────────────────────────
 
 /// Reveal a file in Finder using `open -R`.
+#[allow(dead_code)]
 pub fn reveal_in_file_manager(path: &std::path::Path) {
     let _ = std::process::Command::new("open")
         .arg("-R")

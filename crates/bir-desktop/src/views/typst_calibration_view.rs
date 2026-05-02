@@ -90,11 +90,10 @@ impl TypstCalibrationView {
         if let Ok(entries) = std::fs::read_dir(formtypes_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.is_dir() && path.join("calibration.typ").exists() {
-                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if path.is_dir() && path.join("calibration.typ").exists()
+                    && let Some(name) = path.file_name().and_then(|n| n.to_str()) {
                         forms.push(name.to_string());
                     }
-                }
             }
         }
         forms.sort();
@@ -126,8 +125,8 @@ impl TypstCalibrationView {
                 cx.background_executor()
                     .timer(Duration::from_millis(500))
                     .await;
-                if let Ok(metadata) = std::fs::metadata(&typ_path) {
-                    if let Ok(modified) = metadata.modified() {
+                if let Ok(metadata) = std::fs::metadata(&typ_path)
+                    && let Ok(modified) = metadata.modified() {
                         let mut should_recompile = false;
                         let _ = this.update(cx, |this: &mut TypstCalibrationView, _cx| {
                             if this.last_modified != Some(modified) {
@@ -142,7 +141,6 @@ impl TypstCalibrationView {
                             });
                         }
                     }
-                }
             }
         });
         self._timer = Some(timer);
@@ -302,7 +300,11 @@ impl Render for TypstCalibrationView {
                 cx.listener(|this, _: &crate::global_actions::NextPage, _, cx| {
                     if let Some(form_id) = &this.selected_form_id {
                         let next_page = this.current_page + 1;
-                        let svg_path = this.formtypes_dir.join(form_id).join("pages").join(format!("page{next_page}.svg"));
+                        let svg_path = this
+                            .formtypes_dir
+                            .join(form_id)
+                            .join("pages")
+                            .join(format!("page{next_page}.svg"));
                         if svg_path.exists() {
                             this.current_page = next_page;
                             cx.notify();

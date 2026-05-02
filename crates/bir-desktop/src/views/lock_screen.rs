@@ -53,7 +53,12 @@ impl LockScreenView {
     pub fn new(db: Arc<Mutex<Database>>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         // Determine which method is configured. Mutual exclusion is enforced in Settings.
         let auth_method = if let Ok(db_guard) = db.lock() {
-            if db_guard.get_setting("app_totp_secret").ok().flatten().is_some() {
+            if db_guard
+                .get_setting("app_totp_secret")
+                .ok()
+                .flatten()
+                .is_some()
+            {
                 ActiveAuthMethod::Totp
             } else {
                 ActiveAuthMethod::Pin
@@ -94,7 +99,8 @@ impl LockScreenView {
             move |this: &mut Self, _entity, event: &InputEvent, window, cx| {
                 if let InputEvent::Change = event {
                     if this.rate_limiter.is_locked() {
-                        this.otp_state.update(cx, |s, cx| s.set_value("", window, cx));
+                        this.otp_state
+                            .update(cx, |s, cx| s.set_value("", window, cx));
                         return;
                     }
 
@@ -150,11 +156,12 @@ impl LockScreenView {
                             }
                             ActiveAuthMethod::Totp => {
                                 let mut is_valid = false;
-                                if let Ok(db_guard) = this.db.lock() {
-                                    if let Ok(Some(secret)) = db_guard.get_setting("app_totp_secret") {
+                                if let Ok(db_guard) = this.db.lock()
+                                    && let Ok(Some(secret)) =
+                                        db_guard.get_setting("app_totp_secret")
+                                    {
                                         is_valid = bir_core::crypto::validate_totp(&secret, &value);
                                     }
-                                }
 
                                 if is_valid {
                                     this.has_error = false;
@@ -339,145 +346,137 @@ impl Render for LockScreenView {
                             .h(px(60.))
                             .object_fit(gpui::ObjectFit::Contain),
                     )
-
                     // ── Phase: Biometric ──
                     .when(self.phase == AuthPhase::Biometric, |this| {
-                        this
-                            .child(
-                                div()
-                                    .text_xl()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(cx.theme().foreground)
-                                    .child("Unlock e-BIRForms"),
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(if self.os_auth_triggered {
-                                        "Waiting for biometric authentication..."
-                                    } else {
-                                        "Use Touch ID, Windows Hello, or your computer password."
-                                    }),
-                            )
-                            .child(
-                                gpui_component::button::Button::new("biometric_retry_btn")
-                                    .label(if self.os_auth_triggered { "Waiting..." } else { "Retry Biometric" })
-                                    .disabled(self.os_auth_triggered)
-                                    .on_click(cx.listener(|this, _ev, _window, cx| {
-                                        this.trigger_os_auth(cx);
-                                    })),
-                            )
-                            .child(
-                                gpui_component::button::Button::new("skip_biometric_btn")
-                                    .label(match self.auth_method {
-                                        ActiveAuthMethod::Totp => "Use Authenticator Code Instead",
-                                        ActiveAuthMethod::Pin => "Use PIN Instead",
-                                    })
-                                    .ghost()
-                                    .small()
-                                    .disabled(self.os_auth_triggered)
-                                    .on_click(cx.listener(|this, _ev, window, cx| {
-                                        this.phase = AuthPhase::CodeEntry;
-                                        this.otp_state.update(cx, |s, cx| s.focus(window, cx));
-                                        cx.notify();
-                                    })),
-                            )
+                        this.child(
+                            div()
+                                .text_xl()
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(cx.theme().foreground)
+                                .child("Unlock e-BIRForms"),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(if self.os_auth_triggered {
+                                    "Waiting for biometric authentication..."
+                                } else {
+                                    "Use Touch ID, Windows Hello, or your computer password."
+                                }),
+                        )
+                        .child(
+                            gpui_component::button::Button::new("biometric_retry_btn")
+                                .label(if self.os_auth_triggered {
+                                    "Waiting..."
+                                } else {
+                                    "Retry Biometric"
+                                })
+                                .disabled(self.os_auth_triggered)
+                                .on_click(cx.listener(|this, _ev, _window, cx| {
+                                    this.trigger_os_auth(cx);
+                                })),
+                        )
+                        .child(
+                            gpui_component::button::Button::new("skip_biometric_btn")
+                                .label(match self.auth_method {
+                                    ActiveAuthMethod::Totp => "Use Authenticator Code Instead",
+                                    ActiveAuthMethod::Pin => "Use PIN Instead",
+                                })
+                                .ghost()
+                                .small()
+                                .disabled(self.os_auth_triggered)
+                                .on_click(cx.listener(|this, _ev, window, cx| {
+                                    this.phase = AuthPhase::CodeEntry;
+                                    this.otp_state.update(cx, |s, cx| s.focus(window, cx));
+                                    cx.notify();
+                                })),
+                        )
                     })
-
                     // ── Phase: Code Entry (TOTP or PIN) ──
                     .when(self.phase == AuthPhase::CodeEntry, |this| {
                         let title = match self.auth_method {
                             ActiveAuthMethod::Totp => "Enter Authenticator Code",
                             ActiveAuthMethod::Pin => "Enter PIN to unlock e-BIRForms",
                         };
-                        this
-                            .child(
+                        this.child(
+                            div()
+                                .text_xl()
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(cx.theme().foreground)
+                                .child(title),
+                        )
+                        // TOTP time-remaining indicator
+                        .when(self.auth_method == ActiveAuthMethod::Totp, |this| {
+                            let secs = Self::totp_seconds_remaining();
+                            this.child(
                                 div()
-                                    .text_xl()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(cx.theme().foreground)
-                                    .child(title),
+                                    .text_sm()
+                                    .text_color(if secs <= 5 {
+                                        cx.theme().danger
+                                    } else {
+                                        cx.theme().muted_foreground
+                                    })
+                                    .child(format!("Code expires in {}s", secs)),
                             )
-                            // TOTP time-remaining indicator
-                            .when(self.auth_method == ActiveAuthMethod::Totp, |this| {
-                                let secs = Self::totp_seconds_remaining();
-                                this.child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(if secs <= 5 {
-                                            cx.theme().danger
-                                        } else {
-                                            cx.theme().muted_foreground
-                                        })
-                                        .child(format!("Code expires in {}s", secs)),
-                                )
-                            })
-                            .child(
-                                OtpInput::new(&self.otp_state)
-                                    .groups(1)
-                                    .large()
-                                    .disabled(self.os_auth_triggered),
-                            )
-                            .when(self.has_error, |this| {
-                                this.child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(cx.theme().danger)
-                                        .child(match self.auth_method {
-                                            ActiveAuthMethod::Totp => "Incorrect code. Please try again.",
-                                            ActiveAuthMethod::Pin => "Incorrect PIN. Please try again.",
-                                        }),
-                                )
-                            })
-                            .child(
-                                gpui_component::button::Button::new("forgot_pin_btn")
-                                    .label("Use Biometric / Password Instead")
-                                    .ghost()
-                                    .small()
-                                    .on_click(cx.listener(|this, _ev, _window, cx| {
-                                        this.trigger_os_auth(cx);
-                                    })),
-                            )
+                        })
+                        .child(
+                            OtpInput::new(&self.otp_state)
+                                .groups(1)
+                                .large()
+                                .disabled(self.os_auth_triggered),
+                        )
+                        .when(self.has_error, |this| {
+                            this.child(div().text_sm().text_color(cx.theme().danger).child(
+                                match self.auth_method {
+                                    ActiveAuthMethod::Totp => "Incorrect code. Please try again.",
+                                    ActiveAuthMethod::Pin => "Incorrect PIN. Please try again.",
+                                },
+                            ))
+                        })
+                        .child(
+                            gpui_component::button::Button::new("forgot_pin_btn")
+                                .label("Use Biometric / Password Instead")
+                                .ghost()
+                                .small()
+                                .on_click(cx.listener(|this, _ev, _window, cx| {
+                                    this.trigger_os_auth(cx);
+                                })),
+                        )
                     })
-
                     // ── Phase: Locked Out ──
                     .when(self.phase == AuthPhase::LockedOut, |this| {
-                        this
-                            .child(
-                                div()
-                                    .text_xl()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(cx.theme().danger)
-                                    .child("Account Locked"),
-                            )
-                            .when_some(lockout_msg, |this, msg| {
-                                this.child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(cx.theme().danger)
-                                        .child(msg),
-                                )
-                            })
-                            .child(
-                                OtpInput::new(&self.otp_state)
-                                    .groups(1)
-                                    .large()
-                                    .disabled(true),
-                            )
-                            .child(
-                                gpui_component::button::Button::new("os_auth_lockout_btn")
-                                    .label(if self.os_auth_triggered {
-                                        "Waiting for OS..."
-                                    } else {
-                                        "Unlock with Biometric / Password"
-                                    })
-                                    .disabled(self.os_auth_triggered)
-                                    .on_click(cx.listener(|this, _ev, _window, cx| {
-                                        this.trigger_os_auth(cx);
-                                    })),
-                            )
-                            .when_some(self.os_auth_error.clone(), |this, err| {
+                        this.child(
+                            div()
+                                .text_xl()
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(cx.theme().danger)
+                                .child("Account Locked"),
+                        )
+                        .when_some(lockout_msg, |this, msg| {
+                            this.child(div().text_sm().text_color(cx.theme().danger).child(msg))
+                        })
+                        .child(
+                            OtpInput::new(&self.otp_state)
+                                .groups(1)
+                                .large()
+                                .disabled(true),
+                        )
+                        .child(
+                            gpui_component::button::Button::new("os_auth_lockout_btn")
+                                .label(if self.os_auth_triggered {
+                                    "Waiting for OS..."
+                                } else {
+                                    "Unlock with Biometric / Password"
+                                })
+                                .disabled(self.os_auth_triggered)
+                                .on_click(cx.listener(|this, _ev, _window, cx| {
+                                    this.trigger_os_auth(cx);
+                                })),
+                        )
+                        .when_some(
+                            self.os_auth_error.clone(),
+                            |this, err| {
                                 this.child(
                                     div()
                                         .text_sm()
@@ -485,7 +484,8 @@ impl Render for LockScreenView {
                                         .text_color(cx.theme().danger)
                                         .child(err),
                                 )
-                            })
+                            },
+                        )
                     }),
             )
             .into_any_element()

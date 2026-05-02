@@ -65,7 +65,7 @@ pub struct ProfileManagerView {
 
     enable_profile_pin: bool,
     profile_pin_input: Entity<OtpState>,
-    
+
     is_totp_enabled: bool,
     show_totp_setup: bool,
     setup_totp_state: Entity<OtpState>,
@@ -143,6 +143,9 @@ impl ProfileManagerView {
         let subscriptions = vec![
             cx.subscribe(&tin_input, Self::on_tin_event),
             cx.subscribe_in(&name_input, window, Self::on_input_event),
+            cx.subscribe_in(&line_of_business, window, Self::on_input_event),
+            cx.subscribe_in(&address_input, window, Self::on_input_event),
+            cx.subscribe_in(&email_input, window, Self::on_input_event),
             cx.subscribe(&rdo_select, Self::on_combobox_event),
             cx.subscribe(&zip_select, Self::on_combobox_event),
             cx.subscribe_in(&tel_input, window, Self::on_tel_event),
@@ -154,8 +157,8 @@ impl ProfileManagerView {
                 |this: &mut Self, _entity, event: &InputEvent, window, cx| {
                     if let InputEvent::Change = event {
                         let token = this.setup_totp_state.read(cx).value().to_string();
-                        if token.len() == 6 {
-                            if let Some(ref secret) = this.totp_secret_temp {
+                        if token.len() == 6
+                            && let Some(ref secret) = this.totp_secret_temp {
                                 if bir_core::crypto::validate_totp(secret, &token) {
                                     this.stored_totp_secret = Some(secret.clone());
                                     this.is_totp_enabled = true;
@@ -171,7 +174,6 @@ impl ProfileManagerView {
                                     });
                                 }
                             }
-                        }
                     }
                 },
             ),
@@ -251,7 +253,8 @@ impl ProfileManagerView {
         self.totp_secret_temp = None;
         self.totp_qr_path = None;
         self.stored_totp_secret = None;
-        self.setup_totp_state.update(cx, |input, cx| input.set_value("", window, cx));
+        self.setup_totp_state
+            .update(cx, |input, cx| input.set_value("", window, cx));
 
         // Auto-check PIN if global "Enable Profile PINs" is on
         let global_pins_enabled = if let Ok(db) = self.db.lock() {
@@ -360,7 +363,8 @@ impl ProfileManagerView {
         self.show_totp_setup = false;
         self.totp_secret_temp = None;
         self.totp_qr_path = None;
-        self.setup_totp_state.update(cx, |input, cx| input.set_value("", window, cx));
+        self.setup_totp_state
+            .update(cx, |input, cx| input.set_value("", window, cx));
 
         if profile.email_auth_method == EmailAuthMethod::GoogleOAuth
             && profile.oauth_refresh_token.is_some()
@@ -473,38 +477,72 @@ impl ProfileManagerView {
 
     fn on_input_event(
         &mut self,
-        _state: &Entity<InputState>,
-        _event: &InputEvent,
+        state: &Entity<InputState>,
+        event: &InputEvent,
         _window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) {
-        // No-op since sync_card is removed
+        if matches!(event, InputEvent::Change) {
+            let mut field_to_validate = None;
+            let mut value = String::new();
+
+            if state == &self.line_of_business {
+                field_to_validate = Some("line_of_business");
+                value = self.line_of_business.read(cx).value().to_string();
+            } else if state == &self.name_input {
+                field_to_validate = Some("full_name");
+                value = self.name_input.read(cx).value().to_string();
+            } else if state == &self.address_input {
+                field_to_validate = Some("registered_address");
+                value = self.address_input.read(cx).value().to_string();
+            } else if state == &self.email_input {
+                field_to_validate = Some("email");
+                value = self.email_input.read(cx).value().to_string();
+            }
+
+            if let Some(field) = field_to_validate {
+                self.validate_field(field, &value);
+                cx.notify();
+            }
+        }
     }
 
     fn on_tel_event(
         &mut self,
         _state: &Entity<InputState>,
-        _event: &InputEvent,
+        event: &InputEvent,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let phone = self.tel_input.read(cx).value();
-        self.errors.retain(|e| e.field != "phone");
-        if phone.trim().is_empty() {
-             self.errors.push(ValidationError::new("phone", "Phone number is required"));
-        } else if !bir_core::validation::validate_ph_phone(&phone) {
-             self.errors.push(ValidationError::new("phone", "Phone must be a valid Philippine mobile or landline number"));
+        if matches!(event, InputEvent::Change) {
+            let phone = self.tel_input.read(cx).value();
+            self.validate_field("phone", &phone);
+            cx.notify();
         }
-        cx.notify();
     }
 
     fn on_combobox_event(
         &mut self,
-        _state: Entity<ComboboxState>,
-        _event: &ComboboxEvent,
-        _cx: &mut Context<Self>,
+        state: Entity<ComboboxState>,
+        event: &ComboboxEvent,
+        cx: &mut Context<Self>,
     ) {
-        // No-op since sync_card is removed
+        if let Some(val) = event.selected.as_ref() {
+            let mut field_to_validate = None;
+            let mut value = val.clone();
+
+            if state == self.rdo_select {
+                field_to_validate = Some("rdo_code");
+            } else if state == self.zip_select {
+                field_to_validate = Some("zip_code");
+                value = val.split(" - ").next().unwrap_or("").trim().to_string();
+            }
+
+            if let Some(field) = field_to_validate {
+                self.validate_field(field, &value);
+                cx.notify();
+            }
+        }
     }
 
     fn on_date_event(
@@ -782,10 +820,41 @@ impl ProfileManagerView {
             .map(|err| err.message.clone())
             .unwrap_or_default();
         div()
-            .h_5()
+            .min_h_5()
             .text_xs()
             .text_color(gpui::rgba(0xff6b6bff))
             .child(text)
+    }
+
+    fn validate_field(&mut self, field: &'static str, value: &str) {
+        self.errors.retain(|e| e.field != field);
+        if value.trim().is_empty() {
+            let label = match field {
+                "line_of_business" => "Line of business",
+                "full_name" => "Taxpayer name",
+                "registered_address" => "Registered address",
+                "email" => "Email",
+                "zip_code" => "ZIP code",
+                "rdo_code" => "RDO",
+                "phone" => "Phone number",
+                _ => "This field",
+            };
+            self.errors
+                .push(ValidationError::new(field, format!("{label} is required")));
+        } else {
+            if field == "email" && !bir_core::validation::validate_email(value) {
+                self.errors
+                    .push(ValidationError::new(field, "Email address is invalid"));
+            } else if field == "zip_code" && !bir_core::validation::validate_zip(value.trim()) {
+                self.errors
+                    .push(ValidationError::new(field, "ZIP code must be 4 digits"));
+            } else if field == "phone" && !bir_core::validation::validate_ph_phone(value) {
+                self.errors.push(ValidationError::new(
+                    field,
+                    "Phone must be a valid Philippine mobile or landline number",
+                ));
+            }
+        }
     }
 }
 
