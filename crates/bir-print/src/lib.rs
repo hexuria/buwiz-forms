@@ -908,7 +908,20 @@ fn render_2551q_fallback_pdf(draft: &Form2551QDraft) -> Vec<u8> {
             "Tax Paid in Previously Filed Return: {:.2}",
             draft.tax_paid_previous
         ),
-        format!("Total Amount Payable: {:.2}", draft.tax_payable),
+        format!(
+            "Other Tax Credit/Payment: {:.2}",
+            draft.other_tax_credit
+        ),
+        format!(
+            "Total Tax Credits/Payments: {:.2}",
+            draft.total_tax_credits
+        ),
+        format!("Tax Still Payable/(Overpayment): {:.2}", draft.tax_payable),
+        format!("Surcharge: {:.2}", draft.surcharge),
+        format!("Interest: {:.2}", draft.interest),
+        format!("Compromise: {:.2}", draft.compromise),
+        format!("Total Penalties: {:.2}", draft.total_penalties),
+        format!("Total Amount Payable/(Overpayment): {:.2}", draft.total_amount_payable),
         format!("Status: {:?}", draft.status),
     ]);
 
@@ -1019,6 +1032,178 @@ fn escape_pdf_text(text: &str) -> String {
 pub fn build_simple_confirmation_pdf(lines: &[String]) -> Vec<u8> {
     let (width, height) = PaperSize::A4.points();
     build_simple_pdf(width, height, lines)
+}
+
+/// Append text pages to an existing PDF document.
+///
+/// Reads the PDF from `pdf_bytes`, adds new pages containing `lines` of text,
+/// and returns the combined PDF bytes. This avoids the fragility of merging two
+/// separate PDF documents by building new page objects directly.
+pub fn append_text_pages_to_pdf(pdf_bytes: &[u8], lines: &[String]) -> Result<Vec<u8>, PrintError> {
+    use lopdf::{Document, Object, Stream, dictionary};
+
+    let mut doc = Document::load_mem(pdf_bytes)
+        .map_err(|e| PrintError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("failed to load PDF: {e}"),
+        )))?;
+
+    if lines.is_empty() {
+        let mut buf = Vec::new();
+        doc.save_to(&mut buf)
+            .map_err(|e| PrintError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("save PDF: {e}"),
+            )))?;
+        return Ok(buf);
+    }
+
+    // Read page dimensions from the first existing page's MediaBox so the
+    // appended confirmation pages match the form's page size exactly.
+    let (width, height) = {
+        let pages = doc.get_pages();
+        let mut first_page_id = None;
+        if let Some(min_key) = pages.keys().min() {
+            first_page_id = pages.get(min_key).copied();
+        }
+        if let Some(page_id) = first_page_id {
+            if let Ok(page_obj) = doc.get_object(page_id) {
+                if let lopdf::Object::Dictionary(ref dict) = page_obj {
+                    if let Ok(lopdf::Object::Array(ref mb)) = dict.get(b"MediaBox") {
+                        if mb.len() == 4 {
+                            let w = match &mb[2] {
+                                lopdf::Object::Integer(v) => *v as u32,
+                                lopdf::Object::Real(v) => *v as u32,
+                                _ => 612,
+                            };
+                            let h = match &mb[3] {
+                                lopdf::Object::Integer(v) => *v as u32,
+                                lopdf::Object::Real(v) => *v as u32,
+                                _ => 936,
+                            };
+                            (w, h)
+                        } else {
+                            (612, 936)
+                        }
+                    } else {
+                        (612, 936)
+                    }
+                } else {
+                    (612, 936)
+                }
+            } else {
+                (612, 936)
+            }
+        } else {
+            (612, 936)
+        }
+    };
+    let lines_per_page: usize = 55;
+
+    // Find the Pages dictionary reference from the catalog
+    let catalog = doc.catalog().map_err(|e|
+        PrintError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("no catalog: {e}"),
+        )))?;
+    let pages_ref = catalog.get(b"Pages")
+        .and_then(|o| o.as_reference())
+        .map_err(|e|
+            PrintError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("no Pages ref: {e}"),
+            )))?;
+
+    // Create a font dictionary object for the new pages
+    let font_obj = dictionary! {
+        "Type" => "Font",
+        "Subtype" => "Type1",
+        "BaseFont" => "Helvetica",
+    };
+    let font_id = doc.add_object(font_obj);
+
+    let font_bold_obj = dictionary! {
+        "Type" => "Font",
+        "Subtype" => "Type1",
+        "BaseFont" => "Helvetica-Bold",
+    };
+    let font_bold_id = doc.add_object(font_bold_obj);
+
+    // Split lines into page-sized chunks
+    let page_chunks: Vec<&[String]> = lines.chunks(lines_per_page).collect();
+    let total_new_pages = page_chunks.len();
+
+    let mut new_page_ids = Vec::new();
+
+    for (i, chunk) in page_chunks.iter().enumerate() {
+        // Build content stream
+        let mut stream_content = String::from("BT\n");
+        stream_content.push_str("/F1 10 Tf\n12 TL\n");
+        stream_content.push_str(&format!("40 {} Td\n", height.saturating_sub(50)));
+
+        for (j, line) in chunk.iter().enumerate() {
+            if j > 0 {
+                stream_content.push_str("T*\n");
+            }
+            stream_content.push_str(&format!("({}) Tj\n", escape_pdf_text(line)));
+        }
+
+        // Page footer
+        stream_content.push_str("T*\n");
+        stream_content.push_str(&format!(
+            "(Confirmation - Page {} of {}) Tj\n",
+            i + 1,
+            total_new_pages
+        ));
+        stream_content.push_str("ET");
+
+        let content_stream = Stream::new(dictionary! {}, stream_content.into_bytes());
+        let content_id = doc.add_object(content_stream);
+
+        let page_dict = dictionary! {
+            "Type" => "Page",
+            "Parent" => Object::Reference(pages_ref),
+            "MediaBox" => vec![
+                Object::Integer(0),
+                Object::Integer(0),
+                Object::Integer(width as i64),
+                Object::Integer(height as i64),
+            ],
+            "Resources" => dictionary! {
+                "Font" => dictionary! {
+                    "F1" => Object::Reference(font_id),
+                    "F2" => Object::Reference(font_bold_id),
+                },
+            },
+            "Contents" => Object::Reference(content_id),
+        };
+        let page_id = doc.add_object(page_dict);
+        new_page_ids.push(page_id);
+    }
+
+    // Update the Pages dictionary: append our new pages to Kids and bump Count
+    if let Ok(pages_obj) = doc.get_object_mut(pages_ref) {
+        if let Object::Dictionary(ref mut dict) = pages_obj {
+            // Get existing Kids array
+            if let Ok(Object::Array(ref mut kids)) = dict.get_mut(b"Kids") {
+                for pid in &new_page_ids {
+                    kids.push(Object::Reference(*pid));
+                }
+            }
+            // Update Count
+            if let Ok(Object::Integer(ref mut count)) = dict.get_mut(b"Count") {
+                *count += new_page_ids.len() as i64;
+            }
+        }
+    }
+
+    let mut buf = Vec::new();
+    doc.save_to(&mut buf)
+        .map_err(|e| PrintError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("save PDF with appended pages: {e}"),
+        )))?;
+    Ok(buf)
 }
 
 #[cfg(test)]

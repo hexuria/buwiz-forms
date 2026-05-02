@@ -22,7 +22,6 @@ use bir_print::render_2551q_print;
 
 use super::email_confirmation_view::EmailConfirmationView;
 use super::pdf_viewer::PdfViewerView;
-use super::receipt_viewer::{ReceiptViewerEvent, ReceiptViewerView};
 use crate::components::form_engine::FormViewTrait;
 
 pub enum Form2551QEvent {
@@ -57,6 +56,7 @@ pub struct Form2551QView {
     // Part II inputs
     creditable_withheld_input: Entity<InputState>,
     tax_paid_previous_input: Entity<InputState>,
+    other_tax_credit_input: Entity<InputState>,
     receipt_input: Entity<InputState>,
 
     validation_errors: Vec<(String, String)>,
@@ -97,6 +97,16 @@ impl Form2551QView {
         let tax_paid_previous_input = cx.new(|cx| InputState::new(window, cx).placeholder("0.00"));
         tax_paid_previous_input.update(cx, |input, cx| {
             input.set_value(prev_str, window, cx);
+        });
+
+        let other_credit_str = if draft.other_tax_credit >= 0.0 {
+            format!("{:.2}", draft.other_tax_credit)
+        } else {
+            String::new()
+        };
+        let other_tax_credit_input = cx.new(|cx| InputState::new(window, cx).placeholder("0.00"));
+        other_tax_credit_input.update(cx, |input, cx| {
+            input.set_value(other_credit_str, window, cx);
         });
 
         let receipt_input = cx.new(|cx| {
@@ -174,9 +184,25 @@ impl Form2551QView {
                 _ => {}
             },
         );
+        let sub3 = cx.subscribe_in(
+            &other_tax_credit_input,
+            window,
+            |this: &mut Self, _, event: &InputEvent, _, cx| match event {
+                InputEvent::Change => {
+                    this.is_validated = false;
+                    this.sync_from_inputs(cx);
+                }
+                InputEvent::Focus => {
+                    this.suppressed_sections.insert("tax_computation");
+                    cx.notify();
+                }
+                _ => {}
+            },
+        );
 
         subscriptions.push(sub1);
         subscriptions.push(sub2);
+        subscriptions.push(sub3);
 
         let bus = cx.global::<crate::events::GlobalEventBus>().0.clone();
         let sub_bus = cx.subscribe(
@@ -212,6 +238,7 @@ impl Form2551QView {
             row_inputs,
             creditable_withheld_input,
             tax_paid_previous_input,
+            other_tax_credit_input,
             receipt_input,
             validation_errors: Vec::new(),
             suppressed_sections: HashSet::new(),
@@ -259,6 +286,12 @@ impl Form2551QView {
         } else {
             0.0
         };
+        self.draft.other_tax_credit = self
+            .other_tax_credit_input
+            .read(cx)
+            .value()
+            .parse::<f64>()
+            .unwrap_or(0.0);
 
         self.draft.recompute();
         tracing::debug!(
@@ -575,9 +608,11 @@ impl Form2551QView {
     }
 
     fn preview_pdf(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // Reload from DB to ensure we render the persisted state (data integrity).
-        // If no saved draft exists yet, fall back to in-memory state.
-        let render_draft = if let Ok(db) = self.db.lock() {
+        // Draft mode: use current in-memory state so latest edits + profile sync are reflected.
+        // Non-draft mode: reload from DB to render the persisted/submitted state (data integrity).
+        let render_draft = if matches!(self.draft.status, FilingStatus::Draft) {
+            self.draft.clone()
+        } else if let Ok(db) = self.db.lock() {
             db.get_2551q_draft(&self.draft.tin, self.draft.taxable_year, self.draft.quarter)
                 .ok()
                 .flatten()
@@ -605,22 +640,32 @@ impl Form2551QView {
                 let options = WindowOptions {
                     window_bounds: Some(WindowBounds::centered(size(px(1200.), px(900.)), cx)),
                     titlebar: Some(TitlebarOptions {
-                        title: Some("PDF Viewer".into()),
+                        title: Some("Print Preview".into()),
                         ..Default::default()
                     }),
                     ..Default::default()
                 };
 
                 let mut raw_html = None;
+                let mut confirmation = None;
                 if let Some(receipt_id) = draft.receipt_id
                     && let Ok(db) = self.db.lock()
                     && let Ok(Some(receipt)) = db.get_submission_receipt_by_id(receipt_id)
                 {
                     raw_html = receipt.raw_html;
+                    confirmation = Some(super::pdf_viewer::ConfirmationInfo {
+                        subject: "Tax Return Receipt Confirmation".to_string(),
+                        from: receipt.source_from
+                            .unwrap_or_else(|| "ebirforms-noreply@bir.gov.ph".to_string()),
+                        to: draft.email.clone(),
+                        received_date: receipt.received_date.clone(),
+                        received_time: receipt.received_time.clone(),
+                        body: receipt.raw_text,
+                    });
                 }
 
                 if let Err(err) = cx.open_window(options, move |_window, cx| {
-                    cx.new(|_cx| PdfViewerView::new(draft, result, output_dir, raw_html, _cx))
+                    cx.new(|_cx| PdfViewerView::new(draft, result, output_dir, raw_html, confirmation, _cx))
                 }) {
                     use gpui_component::WindowExt;
                     window.push_notification(
@@ -725,96 +770,54 @@ impl Form2551QView {
         cx.notify();
     }
 
-    fn upload_receipt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(file) = rfd::FileDialog::new()
-            .add_filter("Images/PDF", &["png", "jpg", "jpeg", "pdf"])
-            .pick_file()
-        else {
-            return;
-        };
+    fn upload_receipt(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        let tin = self.draft.tin.clone();
+        let year = self.draft.taxable_year;
+        let quarter = self.draft.quarter;
 
-        let data_dir = bir_core::db::default_database_path()
-            .parent()
-            .unwrap()
-            .join("receipts");
-        let _ = std::fs::create_dir_all(&data_dir);
-        let ext = file.extension().and_then(|s| s.to_str()).unwrap_or("bin");
-        let new_filename = format!(
-            "receipt-{}-{}-{}.{}",
-            self.draft.tin, self.draft.taxable_year, self.draft.quarter, ext
-        );
-        let new_path = data_dir.join(new_filename);
-
-        match std::fs::copy(&file, &new_path) {
-            Ok(_) => {
-                self.draft.payment_receipt_path = Some(new_path.to_string_lossy().to_string());
-                if let Ok(db) = self.db.lock() {
-                    let _ = db.save_2551q_draft(&self.draft);
-                }
-
-                use gpui_component::WindowExt;
-                window.push_notification(
-                    gpui_component::notification::Notification::new()
-                        .message("Receipt uploaded successfully.".to_string())
-                        .with_type(gpui_component::notification::NotificationType::Success)
-                        .autohide(true),
-                    cx,
-                );
-                cx.notify();
-            }
-            Err(e) => {
-                use gpui_component::WindowExt;
-                window.push_notification(
-                    gpui_component::notification::Notification::new()
-                        .message(format!("Failed to copy receipt: {}", e))
-                        .with_type(gpui_component::notification::NotificationType::Error)
-                        .autohide(true),
-                    cx,
-                );
-            }
-        }
-    }
-
-    fn view_receipt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(path) = &self.draft.payment_receipt_path {
-            let draft = self.draft.clone();
-            let path_clone = path.clone();
-
-            let options = WindowOptions {
-                window_bounds: Some(WindowBounds::centered(size(px(800.), px(800.)), cx)),
-                titlebar: Some(TitlebarOptions {
-                    title: Some("Payment Receipt Viewer".into()),
-                    ..Default::default()
-                }),
-                ..Default::default()
+        cx.spawn(async move |this, cx| {
+            let Some(file_handle) = rfd::AsyncFileDialog::new()
+                .add_filter("Images/PDF", &["png", "jpg", "jpeg", "pdf"])
+                .pick_file()
+                .await
+            else {
+                return;
             };
+            let file = file_handle.path().to_path_buf();
 
-            let view = cx.new(|_cx| ReceiptViewerView::new(draft, path_clone));
+            let data_dir = bir_core::db::default_database_path()
+                .parent()
+                .unwrap()
+                .join("receipts");
+            let _ = std::fs::create_dir_all(&data_dir);
+            let ext = file.extension().and_then(|s| s.to_str()).unwrap_or("bin");
+            let new_filename = format!(
+                "receipt-{}-{}-{}.{}",
+                tin, year, quarter, ext
+            );
+            let new_path = data_dir.join(new_filename);
 
-            cx.subscribe(
-                &view,
-                |this: &mut Self, _, event: &ReceiptViewerEvent, cx| match event {
-                    ReceiptViewerEvent::ReUploaded(new_path) => {
-                        this.draft.payment_receipt_path = Some(new_path.clone());
+            match std::fs::copy(&file, &new_path) {
+                Ok(_) => {
+                    let path_str = new_path.to_string_lossy().to_string();
+                    let _ = this.update(cx, |this, cx| {
+                        this.draft.payment_receipt_path = Some(path_str);
                         if let Ok(db) = this.db.lock() {
                             let _ = db.save_2551q_draft(&this.draft);
                         }
                         cx.notify();
-                    }
-                },
-            )
-            .detach();
-
-            if let Err(err) = cx.open_window(options, move |_window, _cx| view.clone()) {
-                use gpui_component::WindowExt;
-                window.push_notification(
-                    gpui_component::notification::Notification::new()
-                        .message(format!("Failed to open receipt viewer: {}", err))
-                        .with_type(gpui_component::notification::NotificationType::Error)
-                        .autohide(true),
-                    cx,
-                );
+                    });
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to copy receipt: {e}");
+                }
             }
+        }).detach();
+    }
+
+    fn view_receipt(&self) {
+        if let Some(path) = &self.draft.payment_receipt_path {
+            crate::platform::open_in_system(std::path::Path::new(path));
         }
     }
 
@@ -947,9 +950,6 @@ impl FormViewTrait for Form2551QView {
     }
     fn preview_pdf(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.preview_pdf(window, cx);
-    }
-    fn print_confirmation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.print_confirmation(window, cx);
     }
 }
 
@@ -1229,7 +1229,7 @@ impl Render for Form2551QView {
             ))
             .child(crate::components::form_parts::computation_row_input(
                 crate::components::form_parts::ComputationRowInputProps {
-                    label: "16. Less: Tax Paid in Return Previously Filed",
+                    label: "16. Tax Paid in Return Previously Filed, if this is an Amended Return",
                     input_component: div()
                         .bg(cx.theme().background)
                         .border_1()
@@ -1257,13 +1257,41 @@ impl Render for Form2551QView {
                 },
                 cx,
             ))
+            .child(crate::components::form_parts::computation_row_input(
+                crate::components::form_parts::ComputationRowInputProps {
+                    label: "17. Other Tax Credit/Payment (specify)",
+                    input_component: div()
+                        .bg(cx.theme().background)
+                        .border_1()
+                        .rounded_md()
+                        .border_color(cx.theme().border)
+                        .px_2()
+                        .py_1()
+                        .child(
+                            Input::new(&self.other_tax_credit_input)
+                                .disabled(!is_editable)
+                                .appearance(false),
+                        )
+                        .into_any_element(),
+                    error_message: None,
+                    locked_message: None,
+                    is_mobile,
+                },
+                cx,
+            ))
+            .child(crate::components::form_parts::computation_row_readonly(
+                "18. Total Tax Credits/Payments (Sum of Items 15 to 17)",
+                self.draft.total_tax_credits,
+                false,
+                cx,
+            ))
             .child(
                 div()
                     .pt_4()
                     .border_t_1()
                     .border_color(cx.theme().border)
                     .child(crate::components::form_parts::computation_row_readonly(
-                        "17. Tax Still Payable / (Overpayment)",
+                        "19. Tax Still Payable / (Overpayment)",
                         tax_payable,
                         true,
                         cx,
@@ -1509,20 +1537,40 @@ impl Render for Form2551QView {
                             FilingStatus::Paid => {}
                         }
 
+                        // View Receipt — opens receipt file in system viewer (Preview.app).
+                        // Shown whenever a payment receipt file has been uploaded.
                         if matches!(self.draft.status, FilingStatus::Confirmed | FilingStatus::Paid) {
                             if self.draft.payment_receipt_path.is_some() {
                                 toolbar = toolbar.child(
                                     gpui_component::button::Button::new("view_receipt_btn")
                                         .label("View Receipt")
                                         .outline()
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.view_receipt(window, cx);
+                                        .on_click(cx.listener(|this, _, _, _cx| {
+                                            this.view_receipt();
                                         })),
                                 );
-                            } else {
+                            }
+                        }
+
+                        // Upload / Re-upload Receipt — gated on email tracking being active
+                        // so only profiles with cloud integration can upload receipts.
+                        if matches!(self.draft.status, FilingStatus::Confirmed | FilingStatus::Paid) {
+                            let email_tracking_active = self.db.lock()
+                                .ok()
+                                .and_then(|db| db.get_profile_by_tin(&self.draft.tin).ok().flatten())
+                                .map(|p| p.is_email_tracking_active())
+                                .unwrap_or(false);
+
+                            if email_tracking_active {
+                                let label = if self.draft.payment_receipt_path.is_some() {
+                                    "Re-upload Receipt"
+                                } else {
+                                    "Upload Receipt"
+                                };
                                 toolbar = toolbar.child(
                                     gpui_component::button::Button::new("upload_receipt_btn")
-                                        .label("Upload Receipt")
+                                        .label(label)
+                                        .ghost()
                                         .on_click(cx.listener(|this, _, window, cx| {
                                             this.upload_receipt(window, cx);
                                         })),

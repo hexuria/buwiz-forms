@@ -41,19 +41,26 @@ impl EmailConfirmationView {
                 .default_submission_filename()
                 .trim_end_matches(".xml")
         );
-        let Some(target) = rfd::FileDialog::new()
-            .set_file_name(&default_name)
-            .add_filter("PDF", &["pdf"])
-            .save_file()
-        else {
-            return;
-        };
-
         let pdf_bytes = self.generate_pdf_bytes();
-        if let Err(err) = std::fs::write(&target, pdf_bytes) {
-            self.status_message = Some(format!("Export failed: {}", err));
-            cx.notify();
-        }
+
+        cx.spawn(async move |this, cx| {
+            let Some(target_handle) = rfd::AsyncFileDialog::new()
+                .set_file_name(&default_name)
+                .add_filter("PDF", &["pdf"])
+                .save_file()
+                .await
+            else {
+                return;
+            };
+            let target = target_handle.path().to_path_buf();
+
+            if let Err(err) = std::fs::write(&target, pdf_bytes) {
+                let _ = this.update(cx, |this, cx| {
+                    this.status_message = Some(format!("Export failed: {}", err));
+                    cx.notify();
+                });
+            }
+        }).detach();
     }
 
     fn print_pdf(&mut self, cx: &mut Context<Self>) {

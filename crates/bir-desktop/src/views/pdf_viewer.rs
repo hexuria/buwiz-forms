@@ -7,6 +7,17 @@ use gpui_component::scroll::ScrollableElement as _;
 use gpui_component::*;
 use std::path::PathBuf;
 
+/// Email metadata for the confirmation email, displayed in the preview.
+#[derive(Clone)]
+pub struct ConfirmationInfo {
+    pub subject: String,
+    pub from: String,
+    pub to: String,
+    pub received_date: String,
+    pub received_time: String,
+    pub body: String,
+}
+
 /// Prefix used for all ephemeral PDF output directories.
 /// Shared with startup cleanup in app.rs.
 pub const TEMP_DIR_PREFIX: &str = "taxman-ebir-pdf-";
@@ -18,6 +29,9 @@ pub struct PdfViewerView {
     scroll_handle: ScrollHandle,
     status_message: Option<String>,
     raw_html: Option<String>,
+    confirmation: Option<ConfirmationInfo>,
+    /// Path to the combined PDF (form + confirmation text pages).
+    effective_pdf_path: PathBuf,
     focus_handle: FocusHandle,
 }
 
@@ -27,8 +41,48 @@ impl PdfViewerView {
         result: PrintResult,
         output_dir: PathBuf,
         raw_html: Option<String>,
+        confirmation: Option<ConfirmationInfo>,
         cx: &mut Context<Self>,
     ) -> Self {
+        // If we have confirmation info, append text pages directly into the form PDF
+        let effective_pdf_path = if let Some(ref info) = confirmation {
+            // Build the full text including email header
+            let mut lines = Vec::new();
+            lines.push(format!("Subject: {}", info.subject));
+            lines.push(String::new());
+            lines.push(format!("From: {}", info.from));
+            lines.push(format!("To: {}", info.to));
+            lines.push(format!("Date: {} {}", info.received_date, info.received_time));
+            lines.push(String::new());
+            lines.push("---".to_string());
+            lines.push(String::new());
+            for line in info.body.lines() {
+                lines.push(line.to_string());
+            }
+
+            match std::fs::read(&result.pdf_path) {
+                Ok(form_bytes) => {
+                    match bir_print::append_text_pages_to_pdf(&form_bytes, &lines) {
+                        Ok(combined_bytes) => {
+                            let combined_path = output_dir.join("print-preview-combined.pdf");
+                            if std::fs::write(&combined_path, combined_bytes).is_ok() {
+                                combined_path
+                            } else {
+                                result.pdf_path.clone()
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to append confirmation pages: {e}");
+                            result.pdf_path.clone()
+                        }
+                    }
+                }
+                Err(_) => result.pdf_path.clone(),
+            }
+        } else {
+            result.pdf_path.clone()
+        };
+
         Self {
             draft,
             result,
@@ -36,6 +90,8 @@ impl PdfViewerView {
             scroll_handle: ScrollHandle::new(),
             status_message: None,
             raw_html,
+            confirmation,
+            effective_pdf_path,
             focus_handle: cx.focus_handle(),
         }
     }
@@ -87,20 +143,7 @@ impl PdfViewerView {
         cx.notify();
     }
 
-    fn view_bank_receipt(&mut self, cx: &mut Context<Self>) {
-        if let Some(html) = &self.raw_html {
-            let receipt_path = self.output_dir.join("bank_presentation_receipt.html");
-            if let Err(e) = std::fs::write(&receipt_path, html) {
-                self.status_message = Some(format!("Failed to save receipt: {e}"));
-                cx.notify();
-                return;
-            }
-            if let Err(e) = open::that(&receipt_path) {
-                self.status_message = Some(format!("Failed to open receipt: {e}"));
-                cx.notify();
-            }
-        }
-    }
+
 
     fn export_pdf(&mut self, cx: &mut Context<Self>) {
         let default_name = self
@@ -109,22 +152,30 @@ impl PdfViewerView {
             .trim_end_matches(".xml")
             .to_string()
             + ".pdf";
-        let Some(target) = rfd::FileDialog::new()
-            .set_file_name(&default_name)
-            .add_filter("PDF", &["pdf"])
-            .save_file()
-        else {
-            return;
-        };
+        let source_path = self.effective_pdf_path.clone();
 
-        if let Err(err) = std::fs::copy(&self.result.pdf_path, &target) {
-            self.status_message = Some(format!("Export failed: {err}"));
-            cx.notify();
-        }
+        cx.spawn(async move |this, cx| {
+            let Some(target_handle) = rfd::AsyncFileDialog::new()
+                .set_file_name(&default_name)
+                .add_filter("PDF", &["pdf"])
+                .save_file()
+                .await
+            else {
+                return;
+            };
+            let target = target_handle.path().to_path_buf();
+
+            if let Err(err) = std::fs::copy(&source_path, &target) {
+                let _ = this.update(cx, |this, cx| {
+                    this.status_message = Some(format!("Export failed: {err}"));
+                    cx.notify();
+                });
+            }
+        }).detach();
     }
 
     fn print_pdf(&mut self, _cx: &mut Context<Self>) {
-        crate::platform::print_pdf(&self.result.pdf_path);
+        crate::platform::print_pdf(&self.effective_pdf_path);
     }
 
     fn render_page(&self, path: PathBuf) -> impl IntoElement {
@@ -189,6 +240,66 @@ impl Render for PdfViewerView {
             }
         }
 
+        // Append confirmation email section if available
+        if let Some(info) = &self.confirmation {
+            pages = pages.child(
+                div()
+                    .w_full()
+                    .max_w(px(900.))
+                    .mx_auto()
+                    .mt_4()
+                    .p_6()
+                    .bg(gpui::rgb(0xffffff))
+                    .shadow_sm()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    // Email header
+                    .child(
+                        div()
+                            .text_base()
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(cx.theme().foreground)
+                            .child(info.subject.clone()),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(format!("From: {}", info.from)),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(format!("To: {}", info.to)),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .pb_3()
+                            .child(format!("Date: {} {}", info.received_date, info.received_time)),
+                    )
+                    // Separator
+                    .child(
+                        div()
+                            .h(px(1.))
+                            .w_full()
+                            .bg(cx.theme().border)
+                            .mb_3(),
+                    )
+                    // Body text — plain, not monospaced
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().foreground)
+                            .whitespace_nowrap()
+                            .child(info.body.clone()),
+                    ),
+            );
+        }
+
         let status = self
             .status_message
             .as_ref()
@@ -240,7 +351,7 @@ impl Render for PdfViewerView {
                                     .text_lg()
                                     .font_weight(FontWeight::BOLD)
                                     .text_color(cx.theme().foreground)
-                                    .child("PDF Viewer"),
+                                    .child("Print Preview"),
                             )
                             .child(status),
                     )
@@ -249,16 +360,18 @@ impl Render for PdfViewerView {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .when(self.raw_html.is_some(), |this| {
+                            .when(self.draft.payment_receipt_path.is_some(), |this| {
                                 this.child(
                                     gpui_component::button::Button::new("pdf_viewer_receipt_btn")
                                         .outline()
                                         .small()
-                                        .tooltip("View Bank Presentation Receipt")
+                                        .tooltip("View Payment Receipt")
                                         .icon(Icon::empty().path("svg/receipt.svg").small())
                                         .when(!is_mobile, |this| this.label("Receipt"))
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.view_bank_receipt(cx);
+                                        .on_click(cx.listener(|this, _, _, _cx| {
+                                            if let Some(path) = &this.draft.payment_receipt_path {
+                                                crate::platform::open_in_system(std::path::Path::new(path));
+                                            }
                                         })),
                                 )
                             })
