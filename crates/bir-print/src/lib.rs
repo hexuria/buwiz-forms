@@ -908,20 +908,17 @@ fn render_2551q_fallback_pdf(draft: &Form2551QDraft) -> Vec<u8> {
             "Tax Paid in Previously Filed Return: {:.2}",
             draft.tax_paid_previous
         ),
-        format!(
-            "Other Tax Credit/Payment: {:.2}",
-            draft.other_tax_credit
-        ),
-        format!(
-            "Total Tax Credits/Payments: {:.2}",
-            draft.total_tax_credits
-        ),
+        format!("Other Tax Credit/Payment: {:.2}", draft.other_tax_credit),
+        format!("Total Tax Credits/Payments: {:.2}", draft.total_tax_credits),
         format!("Tax Still Payable/(Overpayment): {:.2}", draft.tax_payable),
         format!("Surcharge: {:.2}", draft.surcharge),
         format!("Interest: {:.2}", draft.interest),
         format!("Compromise: {:.2}", draft.compromise),
         format!("Total Penalties: {:.2}", draft.total_penalties),
-        format!("Total Amount Payable/(Overpayment): {:.2}", draft.total_amount_payable),
+        format!(
+            "Total Amount Payable/(Overpayment): {:.2}",
+            draft.total_amount_payable
+        ),
         format!("Status: {:?}", draft.status),
     ]);
 
@@ -1040,21 +1037,22 @@ pub fn build_simple_confirmation_pdf(lines: &[String]) -> Vec<u8> {
 /// and returns the combined PDF bytes. This avoids the fragility of merging two
 /// separate PDF documents by building new page objects directly.
 pub fn append_text_pages_to_pdf(pdf_bytes: &[u8], lines: &[String]) -> Result<Vec<u8>, PrintError> {
-    use lopdf::{Document, Object, Stream, dictionary};
+    use lopdf::{dictionary, Document, Object, Stream};
 
-    let mut doc = Document::load_mem(pdf_bytes)
-        .map_err(|e| PrintError::Io(std::io::Error::new(
+    let mut doc = Document::load_mem(pdf_bytes).map_err(|e| {
+        PrintError::Io(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             format!("failed to load PDF: {e}"),
-        )))?;
+        ))
+    })?;
 
     if lines.is_empty() {
         let mut buf = Vec::new();
-        doc.save_to(&mut buf)
-            .map_err(|e| PrintError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
+        doc.save_to(&mut buf).map_err(|e| {
+            PrintError::Io(std::io::Error::other(
                 format!("save PDF: {e}"),
-            )))?;
+            ))
+        })?;
         return Ok(buf);
     }
 
@@ -1067,24 +1065,20 @@ pub fn append_text_pages_to_pdf(pdf_bytes: &[u8], lines: &[String]) -> Result<Ve
             first_page_id = pages.get(min_key).copied();
         }
         if let Some(page_id) = first_page_id {
-            if let Ok(page_obj) = doc.get_object(page_id) {
-                if let lopdf::Object::Dictionary(ref dict) = page_obj {
-                    if let Ok(lopdf::Object::Array(ref mb)) = dict.get(b"MediaBox") {
-                        if mb.len() == 4 {
-                            let w = match &mb[2] {
-                                lopdf::Object::Integer(v) => *v as u32,
-                                lopdf::Object::Real(v) => *v as u32,
-                                _ => 612,
-                            };
-                            let h = match &mb[3] {
-                                lopdf::Object::Integer(v) => *v as u32,
-                                lopdf::Object::Real(v) => *v as u32,
-                                _ => 936,
-                            };
-                            (w, h)
-                        } else {
-                            (612, 936)
-                        }
+            if let Ok(lopdf::Object::Dictionary(ref dict)) = doc.get_object(page_id) {
+                if let Ok(lopdf::Object::Array(ref mb)) = dict.get(b"MediaBox") {
+                    if mb.len() == 4 {
+                        let w = match &mb[2] {
+                            lopdf::Object::Integer(v) => *v as u32,
+                            lopdf::Object::Real(v) => *v as u32,
+                            _ => 612,
+                        };
+                        let h = match &mb[3] {
+                            lopdf::Object::Integer(v) => *v as u32,
+                            lopdf::Object::Real(v) => *v as u32,
+                            _ => 936,
+                        };
+                        (w, h)
                     } else {
                         (612, 936)
                     }
@@ -1101,18 +1095,21 @@ pub fn append_text_pages_to_pdf(pdf_bytes: &[u8], lines: &[String]) -> Result<Ve
     let lines_per_page: usize = 55;
 
     // Find the Pages dictionary reference from the catalog
-    let catalog = doc.catalog().map_err(|e|
+    let catalog = doc.catalog().map_err(|e| {
         PrintError::Io(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             format!("no catalog: {e}"),
-        )))?;
-    let pages_ref = catalog.get(b"Pages")
+        ))
+    })?;
+    let pages_ref = catalog
+        .get(b"Pages")
         .and_then(|o| o.as_reference())
-        .map_err(|e|
+        .map_err(|e| {
             PrintError::Io(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!("no Pages ref: {e}"),
-            )))?;
+            ))
+        })?;
 
     // Create a font dictionary object for the new pages
     let font_obj = dictionary! {
@@ -1182,27 +1179,25 @@ pub fn append_text_pages_to_pdf(pdf_bytes: &[u8], lines: &[String]) -> Result<Ve
     }
 
     // Update the Pages dictionary: append our new pages to Kids and bump Count
-    if let Ok(pages_obj) = doc.get_object_mut(pages_ref) {
-        if let Object::Dictionary(ref mut dict) = pages_obj {
-            // Get existing Kids array
-            if let Ok(Object::Array(ref mut kids)) = dict.get_mut(b"Kids") {
-                for pid in &new_page_ids {
-                    kids.push(Object::Reference(*pid));
-                }
+    if let Ok(Object::Dictionary(ref mut dict)) = doc.get_object_mut(pages_ref) {
+        // Get existing Kids array
+        if let Ok(Object::Array(ref mut kids)) = dict.get_mut(b"Kids") {
+            for pid in &new_page_ids {
+                kids.push(Object::Reference(*pid));
             }
-            // Update Count
-            if let Ok(Object::Integer(ref mut count)) = dict.get_mut(b"Count") {
-                *count += new_page_ids.len() as i64;
-            }
+        }
+        // Update Count
+        if let Ok(Object::Integer(ref mut count)) = dict.get_mut(b"Count") {
+            *count += new_page_ids.len() as i64;
         }
     }
 
     let mut buf = Vec::new();
-    doc.save_to(&mut buf)
-        .map_err(|e| PrintError::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
+    doc.save_to(&mut buf).map_err(|e| {
+        PrintError::Io(std::io::Error::other(
             format!("save PDF with appended pages: {e}"),
-        )))?;
+        ))
+    })?;
     Ok(buf)
 }
 
@@ -1247,6 +1242,7 @@ mod tests {
             opted_for_8_percent_flat_rate: false,
             is_archived: false,
             profile_pin_hash: None,
+            totp_secret: None,
         };
         let mut draft = Form2551QDraft::new_from_profile(&profile, 2026, 1);
         draft.schedule_1[0].taxable_amount = 10_000.0;
@@ -1293,7 +1289,8 @@ mod tests {
         }
 
         let temp_dir = tempfile::tempdir().expect("temp dir");
-        let result = render_2551q_print(&sample_draft(), temp_dir.path(), None).expect("render print");
+        let result =
+            render_2551q_print(&sample_draft(), temp_dir.path(), None).expect("render print");
 
         let pdf = fs::read(&result.pdf_path).expect("pdf should exist");
         assert!(pdf.starts_with(b"%PDF-"));
