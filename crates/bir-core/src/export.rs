@@ -40,6 +40,14 @@ fn write_profile_to_zip<W: Write + std::io::Seek>(
     base_dir: &str,
     options: SimpleFileOptions,
 ) -> Result<(), DbError> {
+    // 0. Manifest — version tracks Cargo.toml package version
+    let manifest = serde_json::json!({
+        "export_version": env!("CARGO_PKG_VERSION"),
+        "exported_at": chrono::Utc::now().to_rfc3339(),
+    });
+    zip.start_file(format!("{}manifest.json", base_dir), options)?;
+    zip.write_all(serde_json::to_string_pretty(&manifest)?.as_bytes())?;
+
     // 1. Profile JSON
     if let Some(profile) = db.get_profile_by_tin(tin)? {
         let profile_json = serde_json::to_string_pretty(&profile)?;
@@ -101,6 +109,14 @@ fn write_profile_to_zip<W: Write + std::io::Seek>(
     let metadata_json = serde_json::to_string_pretty(&receipts_metadata)?;
     zip.start_file(format!("{}receipts_manifest.json", base_dir), options)?;
     zip.write_all(metadata_json.as_bytes())?;
+
+    // 5. Data Providers JSON
+    let providers = db.get_data_providers(tin)?;
+    if !providers.is_empty() {
+        let providers_json = serde_json::to_string_pretty(&providers)?;
+        zip.start_file(format!("{}data_providers.json", base_dir), options)?;
+        zip.write_all(providers_json.as_bytes())?;
+    }
 
     Ok(())
 }

@@ -54,6 +54,7 @@ const REGION_JSON: &str = include_str!("../data/geo/regions.json");
 const PROVINCE_JSON: &str = include_str!("../data/geo/provinces.json");
 const CITY_JSON: &str = include_str!("../data/geo/cities.json");
 const TAX_TYPE_JSON: &str = include_str!("../data/tax_type_codes.json");
+const ZIPCODES_JSON: &str = include_str!("../data/geo/zipcodes.json");
 
 static RDOS_BY_CODE: OnceLock<HashMap<String, Rdo>> = OnceLock::new();
 static ATCS_BY_CODE: OnceLock<HashMap<String, Atc>> = OnceLock::new();
@@ -61,6 +62,7 @@ static REGIONS_BY_CODE: OnceLock<HashMap<String, Region>> = OnceLock::new();
 static PROVINCES_BY_CODE: OnceLock<HashMap<String, Province>> = OnceLock::new();
 static CITIES_BY_CODE: OnceLock<HashMap<String, City>> = OnceLock::new();
 static TAX_TYPES_BY_CODE: OnceLock<HashMap<String, TaxTypeCode>> = OnceLock::new();
+static ZIPCODES: OnceLock<Vec<String>> = OnceLock::new();
 
 /// Initialize and parse the JSON lists
 fn init_rdos() -> HashMap<String, Rdo> {
@@ -92,6 +94,10 @@ fn init_tax_types() -> HashMap<String, TaxTypeCode> {
     let list: Vec<TaxTypeCode> =
         serde_json::from_str(TAX_TYPE_JSON).expect("Invalid tax_type_codes.json");
     list.into_iter().map(|t| (t.code.clone(), t)).collect()
+}
+
+fn init_zipcodes() -> Vec<String> {
+    serde_json::from_str(ZIPCODES_JSON).expect("Invalid zipcodes.json")
 }
 
 /// Get an RDO by its code
@@ -148,6 +154,10 @@ pub fn get_all_tax_types() -> Vec<TaxTypeCode> {
     let mut list: Vec<TaxTypeCode> = map.values().cloned().collect();
     list.sort_by(|a, b| a.code.cmp(&b.code));
     list
+}
+
+pub fn get_all_zipcodes() -> Vec<String> {
+    ZIPCODES.get_or_init(init_zipcodes).clone()
 }
 
 #[cfg(test)]

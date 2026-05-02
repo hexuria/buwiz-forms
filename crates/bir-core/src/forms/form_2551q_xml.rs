@@ -6,12 +6,6 @@ impl Form2551QDraft {
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
         let (tin1, tin2, tin3, branch) = split_tin(&self.tin);
-        let total_credits = self.creditable_tax_withheld
-            + if self.is_amended {
-                self.tax_paid_previous
-            } else {
-                0.0
-            };
 
         // Legacy / UI Fields from original eBIRForms
         insert(&mut fields, "driveSelectTPExport", "0");
@@ -88,8 +82,8 @@ impl Form2551QDraft {
         );
         insert_money(&mut fields, "frm2551Qv2018:txt16", self.tax_paid_previous);
         insert(&mut fields, "frm2551Qv2018:txt17Specify", "");
-        insert_money(&mut fields, "frm2551Qv2018:txt17", 0.0);
-        insert_money(&mut fields, "frm2551Qv2018:txt18", total_credits);
+        insert_money(&mut fields, "frm2551Qv2018:txt17", self.other_tax_credit);
+        insert_money(&mut fields, "frm2551Qv2018:txt18", self.total_tax_credits);
         insert_money(&mut fields, "frm2551Qv2018:txt19", self.tax_payable);
         insert_money(&mut fields, "frm2551Qv2018:txt20", self.surcharge);
         insert_money(&mut fields, "frm2551Qv2018:txt21", self.interest);

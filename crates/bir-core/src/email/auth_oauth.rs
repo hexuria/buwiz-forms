@@ -12,12 +12,18 @@ use super::fetcher::ImapAuthenticator;
 use sha2::{Digest, Sha256};
 use tracing::{info, warn};
 
-fn get_google_client_id() -> String {
-    std::env::var("GOOGLE_CLIENT_ID").unwrap_or_default()
+fn get_google_client_id() -> Result<String, anyhow::Error> {
+    std::env::var("GOOGLE_CLIENT_ID")
+        .ok()
+        .or_else(|| option_env!("GOOGLE_CLIENT_ID").map(String::from))
+        .ok_or_else(|| anyhow::anyhow!("GOOGLE_CLIENT_ID must be set in .env"))
 }
 
-fn get_google_client_secret() -> String {
-    std::env::var("GOOGLE_CLIENT_SECRET").unwrap_or_default()
+fn get_google_client_secret() -> Result<String, anyhow::Error> {
+    std::env::var("GOOGLE_CLIENT_SECRET")
+        .ok()
+        .or_else(|| option_env!("GOOGLE_CLIENT_SECRET").map(String::from))
+        .ok_or_else(|| anyhow::anyhow!("GOOGLE_CLIENT_SECRET must be set in .env"))
 }
 
 /// Google's OAuth2 endpoints.
@@ -154,7 +160,7 @@ pub fn start_oauth_flow() -> Result<(String, String, String), anyhow::Error> {
     let (port, rx) = oauth_server::start_callback_server()?;
     let redirect_uri = format!("http://127.0.0.1:{}", port);
 
-    let client_id = get_google_client_id();
+    let client_id = get_google_client_id()?;
 
     // 3. Build the authorization URL
     let auth_url = format!(
@@ -248,8 +254,8 @@ fn refresh_access_token(refresh_token: &str) -> Result<String, anyhow::Error> {
 
     let refresh_token = refresh_token.to_string();
     std::thread::spawn(move || {
-        let client_id = get_google_client_id();
-        let client_secret = get_google_client_secret();
+        let client_id = get_google_client_id()?;
+        let client_secret = get_google_client_secret()?;
         let client = reqwest::blocking::Client::new();
         let resp = client
             .post(TOKEN_URL)
@@ -287,8 +293,8 @@ fn exchange_code_for_tokens(
     let redirect_uri = redirect_uri.to_string();
 
     std::thread::spawn(move || -> Result<(String, String), anyhow::Error> {
-        let client_id = get_google_client_id();
-        let client_secret = get_google_client_secret();
+        let client_id = get_google_client_id()?;
+        let client_secret = get_google_client_secret()?;
         let client = reqwest::blocking::Client::new();
         let resp = client
             .post(TOKEN_URL)

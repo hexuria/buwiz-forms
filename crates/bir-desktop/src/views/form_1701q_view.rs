@@ -59,7 +59,6 @@ impl FormViewTrait for Form1701QView {
     fn mark_paid(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {}
     fn revert_to_draft(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {}
     fn preview_pdf(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {}
-    fn print_confirmation(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {}
 }
 
 impl Render for Form1701QView {

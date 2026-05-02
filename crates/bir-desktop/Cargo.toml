@@ -16,6 +16,7 @@ path = "src/bin/bir_daemon.rs"
 [features]
 layout-editor = []
 dev-tools = []
+inspector = []
 
 [dependencies]
 dotenvy = { workspace = true }

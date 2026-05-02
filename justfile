@@ -58,11 +58,11 @@ test:
 # Automatically figure out your OS and build the installer package
 install *args="":
     @if [ "{{os()}}" = "macos" ]; then \
-        just _package-mac {{args}}; \
+        just _package-mac "{{args}}"; \
     elif [ "{{os()}}" = "windows" ]; then \
-        just _package-win {{args}}; \
+        just _package-win "{{args}}"; \
     else \
-        just _package-linux {{args}}; \
+        just _package-linux "{{args}}"; \
     fi
 
 # Publish a new release (tags and pushes to trigger CI)
@@ -96,30 +96,42 @@ clean:
 # --- Hidden OS-specific packaging tasks ---
 
 _package-mac args="":
-    @echo "Building for ARM64..."
-    cargo build --release --target {{MAC_ARM_TARGET}} $([ "{{args}}" = "--layout-editor" ] && echo "--features layout-editor")
-    @echo "Building for x86_64..."
-    cargo build --release --target {{MAC_X86_TARGET}} $([ "{{args}}" = "--layout-editor" ] && echo "--features layout-editor")
-    @mkdir -p {{RELEASE_DIR}}
-    @echo "Creating universal binary (lipo)..."
+    #!/usr/bin/env bash
+    set -e
+    FEATURES=""
+    for arg in {{args}}; do
+        case "$arg" in
+            --layout-editor) FEATURES="${FEATURES:+$FEATURES,}layout-editor" ;;
+            --inspector)     FEATURES="${FEATURES:+$FEATURES,}inspector" ;;
+        esac
+    done
+    FEATURES_FLAG=""
+    if [ -n "$FEATURES" ]; then FEATURES_FLAG="--features $FEATURES"; fi
+    echo "Building for ARM64..."
+    cargo build --release --target {{MAC_ARM_TARGET}} $FEATURES_FLAG
+    echo "Building for x86_64..."
+    cargo build --release --target {{MAC_X86_TARGET}} $FEATURES_FLAG
+    mkdir -p {{RELEASE_DIR}}
+    echo "Creating universal binary (lipo)..."
     lipo -create target/{{MAC_ARM_TARGET}}/release/bir target/{{MAC_X86_TARGET}}/release/bir -output {{RELEASE_DIR}}/bir
     lipo -create target/{{MAC_ARM_TARGET}}/release/bir-daemon target/{{MAC_X86_TARGET}}/release/bir-daemon -output {{RELEASE_DIR}}/bir-daemon
-    @echo "Creating .app bundle..."
-    @rm -rf "{{MAC_APP}}"
-    @mkdir -p "{{MAC_APP}}/Contents/MacOS" "{{MAC_APP}}/Contents/Resources"
-    @cp {{RELEASE_DIR}}/bir "{{MAC_APP}}/Contents/MacOS/"
-    @cp {{RELEASE_DIR}}/bir-daemon "{{MAC_APP}}/Contents/MacOS/"
-    @if command -v typst >/dev/null 2>&1; then cp $(which typst) "{{MAC_APP}}/Contents/MacOS/"; fi
-    @cp -R assets "{{MAC_APP}}/Contents/Resources/"
-    @cp assets/AppIcon.icns "{{MAC_APP}}/Contents/Resources/"
-    @cp -R formtypes "{{MAC_APP}}/Contents/Resources/"
-    @cp assets/macos/Info.plist "{{MAC_APP}}/Contents/Info.plist"
-    @sed -i '' "s/VERSION_PLACEHOLDER/{{VERSION}}/g" "{{MAC_APP}}/Contents/Info.plist"
-    @sed -i '' "s/BUNDLE_ID_PLACEHOLDER/{{BUNDLE_ID}}/g" "{{MAC_APP}}/Contents/Info.plist"
-    @sed -i '' "s/APP_NAME_PLACEHOLDER/{{APP_NAME}}/g" "{{MAC_APP}}/Contents/Info.plist"
-    @touch "{{MAC_APP}}"
-    @echo "✅ {{MAC_APP}} created"
-    @if command -v create-dmg >/dev/null 2>&1; then \
+    echo "Creating .app bundle..."
+    rm -rf "{{MAC_APP}}"
+    mkdir -p "{{MAC_APP}}/Contents/MacOS" "{{MAC_APP}}/Contents/Resources"
+    cp {{RELEASE_DIR}}/bir "{{MAC_APP}}/Contents/MacOS/"
+    cp {{RELEASE_DIR}}/bir-daemon "{{MAC_APP}}/Contents/MacOS/"
+    if command -v typst >/dev/null 2>&1; then cp $(which typst) "{{MAC_APP}}/Contents/MacOS/"; fi
+    cp -R assets "{{MAC_APP}}/Contents/Resources/"
+    cp assets/AppIcon.icns "{{MAC_APP}}/Contents/Resources/"
+    cp -R formtypes "{{MAC_APP}}/Contents/Resources/"
+    cp assets/macos/Info.plist "{{MAC_APP}}/Contents/Info.plist"
+    sed -i '' "s/VERSION_PLACEHOLDER/{{VERSION}}/g" "{{MAC_APP}}/Contents/Info.plist"
+    sed -i '' "s/BUNDLE_ID_PLACEHOLDER/{{BUNDLE_ID}}/g" "{{MAC_APP}}/Contents/Info.plist"
+    sed -i '' "s/APP_NAME_PLACEHOLDER/{{APP_NAME}}/g" "{{MAC_APP}}/Contents/Info.plist"
+    touch "{{MAC_APP}}"
+    echo "✅ {{MAC_APP}} created"
+    if command -v create-dmg >/dev/null 2>&1; then \
+        rm -f "{{RELEASE_DIR}}/{{APP_NAME}}-macOS-{{VERSION}}.dmg"; \
         create-dmg --volname "{{APP_NAME}}" --window-size 600 400 --icon-size 100 --icon "{{APP_NAME}}.app" 150 190 --app-drop-link 450 190 "{{RELEASE_DIR}}/{{APP_NAME}}-macOS-{{VERSION}}.dmg" "{{MAC_APP}}"; \
         echo "✅ DMG created"; \
     else \
@@ -128,20 +140,42 @@ _package-mac args="":
     fi
 
 _package-win args="":
-    cargo build --release --target {{WIN_TARGET}} $([ "{{args}}" = "--layout-editor" ] && echo "--features layout-editor")
-    @mkdir -p {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}
-    @cp target/{{WIN_TARGET}}/release/bir.exe {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/
-    @cp target/{{WIN_TARGET}}/release/bir-daemon.exe {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/
-    @if command -v typst >/dev/null 2>&1; then cp $(which typst) {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/; fi
-    @cp -R assets {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/
-    @cp -R formtypes {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/
-    @cd {{RELEASE_DIR}} && zip -r "{{APP_NAME}}-Windows-x64-{{VERSION}}.zip" "{{APP_NAME}}-Windows-{{VERSION}}"
-    @echo "✅ Windows package: {{RELEASE_DIR}}/{{APP_NAME}}-Windows-x64-{{VERSION}}.zip"
+    #!/usr/bin/env bash
+    set -e
+    FEATURES=""
+    for arg in {{args}}; do
+        case "$arg" in
+            --layout-editor) FEATURES="${FEATURES:+$FEATURES,}layout-editor" ;;
+            --inspector)     FEATURES="${FEATURES:+$FEATURES,}inspector" ;;
+        esac
+    done
+    FEATURES_FLAG=""
+    if [ -n "$FEATURES" ]; then FEATURES_FLAG="--features $FEATURES"; fi
+    cargo build --release --target {{WIN_TARGET}} $FEATURES_FLAG
+    mkdir -p {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}
+    cp target/{{WIN_TARGET}}/release/bir.exe {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/
+    cp target/{{WIN_TARGET}}/release/bir-daemon.exe {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/
+    if command -v typst >/dev/null 2>&1; then cp $(which typst) {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/; fi
+    cp -R assets {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/
+    cp -R formtypes {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/
+    cd {{RELEASE_DIR}} && zip -r "{{APP_NAME}}-Windows-x64-{{VERSION}}.zip" "{{APP_NAME}}-Windows-{{VERSION}}"
+    echo "✅ Windows package: {{RELEASE_DIR}}/{{APP_NAME}}-Windows-x64-{{VERSION}}.zip"
 
 _package-linux args="":
-    cargo build --release --target {{LINUX_TARGET}} $([ "{{args}}" = "--layout-editor" ] && echo "--features layout-editor")
-    @mkdir -p {{RELEASE_DIR}}
-    @if command -v cargo-deb >/dev/null 2>&1; then \
+    #!/usr/bin/env bash
+    set -e
+    FEATURES=""
+    for arg in {{args}}; do
+        case "$arg" in
+            --layout-editor) FEATURES="${FEATURES:+$FEATURES,}layout-editor" ;;
+            --inspector)     FEATURES="${FEATURES:+$FEATURES,}inspector" ;;
+        esac
+    done
+    FEATURES_FLAG=""
+    if [ -n "$FEATURES" ]; then FEATURES_FLAG="--features $FEATURES"; fi
+    cargo build --release --target {{LINUX_TARGET}} $FEATURES_FLAG
+    mkdir -p {{RELEASE_DIR}}
+    if command -v cargo-deb >/dev/null 2>&1; then \
         cargo deb -p bir-desktop --no-build --target {{LINUX_TARGET}} -o {{RELEASE_DIR}}/{{APP_NAME}}-Linux-x64-{{VERSION}}.deb; \
         echo "✅ .deb: {{RELEASE_DIR}}/{{APP_NAME}}-Linux-x64-{{VERSION}}.deb"; \
     else \

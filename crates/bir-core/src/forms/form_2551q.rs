@@ -97,7 +97,14 @@ pub struct Form2551QDraft {
     pub creditable_tax_withheld: f64,
     /// Only applicable when is_amended = true — LOCKED otherwise
     pub tax_paid_previous: f64,
-    /// = total_tax_due - creditable_tax_withheld - (tax_paid_previous if amended)
+    /// Line 17: Other Tax Credit/Payment — user-entered
+    #[serde(default)]
+    pub other_tax_credit: f64,
+    /// Line 18: Total Tax Credits/Payments = sum of Lines 15, 16, 17
+    #[serde(default)]
+    pub total_tax_credits: f64,
+    /// Line 19: Tax Still Payable/(Overpayment) = Line 14 Less Line 18
+    /// Can be negative (overpayment)
     pub tax_payable: f64,
 
     // === Penalties ===
@@ -166,6 +173,8 @@ impl Form2551QDraft {
             total_tax_due: 0.0,
             creditable_tax_withheld: 0.0,
             tax_paid_previous: 0.0,
+            other_tax_credit: 0.0,
+            total_tax_credits: 0.0,
             tax_payable: 0.0,
             auto_compute_penalties: true,
             surcharge: 0.0,
@@ -215,19 +224,37 @@ impl Form2551QDraft {
         for row in &mut self.schedule_1 {
             row.recompute();
         }
+        // Line 14: Total Tax Due = sum of Schedule 1 rows
         self.total_tax_due =
             (self.schedule_1.iter().map(|r| r.tax_due).sum::<f64>() * 100.0).round() / 100.0;
 
+        // Line 18: Total Tax Credits = Line 15 + Line 16 (if amended) + Line 17
         let previous_credit = if self.is_amended {
             self.tax_paid_previous
         } else {
             0.0
         };
-        let total_credits = self.creditable_tax_withheld + previous_credit;
-        self.tax_payable = ((self.total_tax_due - total_credits) * 100.0).round() / 100.0;
-        self.tax_payable = self.tax_payable.max(0.0);
+        self.total_tax_credits = ((self.creditable_tax_withheld
+            + previous_credit
+            + self.other_tax_credit)
+            * 100.0)
+            .round()
+            / 100.0;
 
-        // Compute deadline and penalties
+        // Line 19: Tax Still Payable/(Overpayment) = Line 14 - Line 18
+        // NOTE: Can be negative (overpayment). Do NOT clamp to zero.
+        self.tax_payable =
+            ((self.total_tax_due - self.total_tax_credits) * 100.0).round() / 100.0;
+
+        // Compute deadline and penalties.
+        // The penalty engine handles all three cases:
+        //   1. Filed on time → all penalties = 0 (engine's own on-time check)
+        //   2. Filed late, tax due → surcharge + interest + compromise
+        //   3. Filed late, no tax due (overpayment) → surcharge=0, interest=0,
+        //      compromise from gross_sales table (engine's unpaid_tax<=0 branch)
+        //
+        // We pass max(tax_payable, 0) as basic_tax_due so surcharge/interest
+        // are computed on the positive amount only. Line 19 itself stays unclamped.
         if self.auto_compute_penalties && matches!(self.status, FilingStatus::Draft) {
             let deadline_month = match self.quarter {
                 1 => 4,
@@ -246,7 +273,7 @@ impl Form2551QDraft {
             {
                 let today = chrono::Local::now().date_naive();
 
-                let config = PenaltyConfig::default_rules(); // Dynamic loading point in the future
+                let config = PenaltyConfig::default_rules();
 
                 let gross_sales = self
                     .schedule_1
@@ -254,16 +281,20 @@ impl Form2551QDraft {
                     .map(|r| r.taxable_amount)
                     .sum::<f64>();
 
+                // Penalty base: clamp to 0 for surcharge/interest calc only.
+                // Line 19 (self.tax_payable) is NOT clamped — it preserves overpayment.
+                let penalty_tax_base = self.tax_payable.max(0.0);
+
                 let ctx = PenaltyContext {
                     form_code: "2551Qv2018".to_string(),
                     tax_type: PenaltyProfile::StandardFiling,
-                    taxpayer_class: TaxpayerClass::Regular, // Default until Profile supports classification
+                    taxpayer_class: TaxpayerClass::Regular,
                     taxable_period: format!("Q{} {}", self.quarter, self.taxable_year),
                     is_amended_return: self.is_amended,
-                    original_was_on_time: true, // Optimistic default for amended returns
+                    original_was_on_time: true,
                     is_fraud_or_willful_neglect: false,
-                    basic_tax_due: self.tax_payable,
-                    amount_paid_before_deadline: 0.0, // Form UI does not capture this directly yet
+                    basic_tax_due: penalty_tax_base,
+                    amount_paid_before_deadline: 0.0,
                     gross_sales_or_receipts: gross_sales,
                     due_date: deadline,
                     filing_date: today,
@@ -277,8 +308,10 @@ impl Form2551QDraft {
             }
         }
 
+        // Line 23: Total Penalties
         self.total_penalties =
             ((self.surcharge + self.interest + self.compromise) * 100.0).round() / 100.0;
+        // Line 24: Total Amount Payable/(Overpayment) = Line 19 + Line 23
         self.total_amount_payable =
             ((self.tax_payable + self.total_penalties) * 100.0).round() / 100.0;
 
@@ -635,5 +668,200 @@ impl FormValidator for Form2551QDraft {
         }
 
         errors
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::naming::Tin;
+    use crate::profile::{TaxpayerProfile, TaxpayerType};
+
+    fn test_profile() -> TaxpayerProfile {
+        TaxpayerProfile {
+            id: None,
+            full_name: "Test Taxpayer".into(),
+            tin: Tin {
+                segment1: "123".into(),
+                segment2: "456".into(),
+                segment3: "789".into(),
+                branch: "000".into(),
+            },
+            rdo_code: "018".into(),
+            line_of_business: "Retail".into(),
+            registered_address: "Manila".into(),
+            zip_code: "1000".into(),
+            phone: "09123456789".into(),
+            email: "test@example.com".into(),
+            default_form_type: "2551Qv2018".into(),
+            taxpayer_type: TaxpayerType::Individual,
+            is_vat_registered: false,
+            business_start_date: None,
+            is_archived: false,
+            email_tracking_enabled: false,
+            email_auth_method: Default::default(),
+            imap_email: None,
+            imap_host: None,
+            _imap_enabled_compat: None,
+            test_notification_enabled: false,
+            imap_app_password: None,
+            oauth_access_token: None,
+            oauth_refresh_token: None,
+            tax_classification: None,
+            opted_for_8_percent_flat_rate: false,
+            profile_pin_hash: None,
+        }
+    }
+
+    /// Helper: create a draft with given taxable_amount, creditable_tax_withheld,
+    /// and quarter/year that determines if it's filed on time or late.
+    fn make_draft(
+        taxable_amount: f64,
+        creditable_withheld: f64,
+        year: u16,
+        quarter: u8,
+    ) -> Form2551QDraft {
+        let mut draft = Form2551QDraft::new_from_profile(&test_profile(), year, quarter);
+        draft.schedule_1[0].taxable_amount = taxable_amount;
+        draft.creditable_tax_withheld = creditable_withheld;
+        draft.recompute();
+        draft
+    }
+
+    #[test]
+    fn scenario_1_filed_on_time_with_overpayment() {
+        // Q1 2026 deadline = 2026-04-25. If today < deadline, filed on time.
+        // We use a future year to guarantee on-time filing.
+        let mut draft = make_draft(50_000.0, 4_000.0, 2099, 1);
+        draft.recompute();
+
+        // Line 14: 50000 * 3% = 1500
+        assert_eq!(draft.total_tax_due, 1500.0);
+        // Line 18: 4000 (creditable) + 0 (previous) + 0 (other)
+        assert_eq!(draft.total_tax_credits, 4000.0);
+        // Line 19: 1500 - 4000 = -2500 (overpayment, NOT clamped)
+        assert_eq!(draft.tax_payable, -2500.0);
+        // Filed on time → all penalties = 0
+        assert_eq!(draft.surcharge, 0.0);
+        assert_eq!(draft.interest, 0.0);
+        assert_eq!(draft.compromise, 0.0);
+        assert_eq!(draft.total_penalties, 0.0);
+        // Line 24: -2500 + 0 = -2500
+        assert_eq!(draft.total_amount_payable, -2500.0);
+    }
+
+    #[test]
+    fn scenario_2_filed_late_with_overpayment() {
+        // Use a past quarter to guarantee late filing
+        let mut draft = make_draft(50_000.0, 4_000.0, 2020, 1);
+        draft.recompute();
+
+        // Line 14: 1500
+        assert_eq!(draft.total_tax_due, 1500.0);
+        // Line 19: -2500 (overpayment)
+        assert_eq!(draft.tax_payable, -2500.0);
+        // Filed late but no unpaid tax → surcharge=0, interest=0
+        assert_eq!(draft.surcharge, 0.0);
+        assert_eq!(draft.interest, 0.0);
+        // Compromise from "no amount due" tier: gross_sales=50000 ≤ 100000 → 1000
+        assert_eq!(draft.compromise, 1000.0);
+        assert_eq!(draft.total_penalties, 1000.0);
+        // Line 24: -2500 + 1000 = -1500 (net overpayment)
+        assert_eq!(draft.total_amount_payable, -1500.0);
+    }
+
+    #[test]
+    fn scenario_3_filed_late_with_tax_due() {
+        // Credits < tax due, past quarter
+        let mut draft = make_draft(50_000.0, 400.0, 2020, 1);
+        draft.recompute();
+
+        // Line 14: 1500
+        assert_eq!(draft.total_tax_due, 1500.0);
+        // Line 18: 400
+        assert_eq!(draft.total_tax_credits, 400.0);
+        // Line 19: 1500 - 400 = 1100
+        assert_eq!(draft.tax_payable, 1100.0);
+        // Filed late with unpaid tax → surcharge, interest, and compromise apply
+        assert!(draft.surcharge > 0.0, "surcharge should be positive for late filing with tax due");
+        assert!(draft.interest > 0.0, "interest should be positive for late filing with tax due");
+        assert!(draft.compromise > 0.0, "compromise should be positive for late filing with tax due");
+        // Line 24 = Line 19 + Line 23
+        let expected_24 = ((draft.tax_payable + draft.total_penalties) * 100.0).round() / 100.0;
+        assert_eq!(draft.total_amount_payable, expected_24);
+        assert!(draft.total_amount_payable > draft.tax_payable);
+    }
+
+    #[test]
+    fn zero_tax_filed_on_time_no_penalties() {
+        let mut draft = make_draft(0.0, 0.0, 2099, 1);
+        draft.recompute();
+
+        assert_eq!(draft.total_tax_due, 0.0);
+        assert_eq!(draft.tax_payable, 0.0);
+        assert_eq!(draft.surcharge, 0.0);
+        assert_eq!(draft.interest, 0.0);
+        assert_eq!(draft.compromise, 0.0);
+        assert_eq!(draft.total_amount_payable, 0.0);
+    }
+
+    #[test]
+    fn multiple_atc_rows_sum_correctly() {
+        let mut draft = Form2551QDraft::new_from_profile(&test_profile(), 2099, 1);
+        // Row 1: PT010 at 3%
+        draft.schedule_1[0].taxable_amount = 100_000.0;
+        // Row 2: PT080 at 5%
+        if let Some(row) = Schedule1Row::new("PT080") {
+            draft.schedule_1.push(row);
+        }
+        draft.schedule_1[1].taxable_amount = 200_000.0;
+        draft.recompute();
+
+        // PT010: 100000 * 3% = 3000
+        assert_eq!(draft.schedule_1[0].tax_due, 3000.0);
+        // PT080: 200000 * 5% = 10000
+        assert_eq!(draft.schedule_1[1].tax_due, 10000.0);
+        // Line 14: 3000 + 10000 = 13000
+        assert_eq!(draft.total_tax_due, 13000.0);
+    }
+
+    #[test]
+    fn other_tax_credit_reduces_payable() {
+        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+        draft.other_tax_credit = 500.0;
+        draft.recompute();
+
+        // Line 14: 1500
+        assert_eq!(draft.total_tax_due, 1500.0);
+        // Line 18: 0 + 0 + 500 = 500
+        assert_eq!(draft.total_tax_credits, 500.0);
+        // Line 19: 1500 - 500 = 1000
+        assert_eq!(draft.tax_payable, 1000.0);
+    }
+
+    #[test]
+    fn total_tax_credits_includes_all_three_sources() {
+        let mut draft = make_draft(50_000.0, 1000.0, 2099, 1);
+        draft.is_amended = true;
+        draft.tax_paid_previous = 200.0;
+        draft.other_tax_credit = 300.0;
+        draft.recompute();
+
+        // Line 18: 1000 + 200 + 300 = 1500
+        assert_eq!(draft.total_tax_credits, 1500.0);
+        // Line 19: 1500 - 1500 = 0
+        assert_eq!(draft.tax_payable, 0.0);
+    }
+
+    #[test]
+    fn tax_paid_previous_only_counted_when_amended() {
+        let mut draft = make_draft(50_000.0, 1000.0, 2099, 1);
+        draft.is_amended = false;
+        draft.tax_paid_previous = 500.0; // should be ignored
+        draft.recompute();
+
+        // Line 18 should NOT include tax_paid_previous
+        assert_eq!(draft.total_tax_credits, 1000.0);
+        assert_eq!(draft.tax_payable, 500.0); // 1500 - 1000
     }
 }

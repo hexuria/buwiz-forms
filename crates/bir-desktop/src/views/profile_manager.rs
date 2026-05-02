@@ -29,7 +29,7 @@ pub struct ProfileManagerView {
     line_of_business: Entity<InputState>,
     name_input: Entity<InputState>,
     address_input: Entity<InputState>,
-    zip_input: Entity<InputState>,
+    zip_select: Entity<ComboboxState>,
     tel_input: Entity<InputState>,
     email_input: Entity<InputState>,
     business_start_input: Entity<DateInputState>,
@@ -40,6 +40,7 @@ pub struct ProfileManagerView {
     save_message: Option<String>,
     pending_notification: Option<(gpui_component::notification::NotificationType, String)>,
     rdo_options: Vec<String>,
+    zip_options: Vec<String>,
 
     // Email Tracking Settings
     email_tracking_enabled: bool,
@@ -98,7 +99,8 @@ impl ProfileManagerView {
         });
         let address_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Registered Address"));
-        let zip_input = cx.new(|cx| InputState::new(window, cx).placeholder("Zip Code"));
+        let zip_options = bir_core::reference::get_all_zipcodes();
+        let zip_select = cx.new(|cx| ComboboxState::new(zip_options.clone(), window, cx));
         let tel_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Mobile or Telephone No."));
         let email_input = cx.new(|cx| InputState::new(window, cx).placeholder("Email Address"));
@@ -127,6 +129,8 @@ impl ProfileManagerView {
             cx.subscribe(&tin_input, Self::on_tin_event),
             cx.subscribe_in(&name_input, window, Self::on_input_event),
             cx.subscribe(&rdo_select, Self::on_combobox_event),
+            cx.subscribe(&zip_select, Self::on_combobox_event),
+            cx.subscribe_in(&tel_input, window, Self::on_tel_event),
             cx.subscribe(&type_select, Self::on_combobox_event),
             cx.subscribe(&business_start_input, Self::on_date_event),
         ];
@@ -139,7 +143,7 @@ impl ProfileManagerView {
             line_of_business,
             name_input,
             address_input,
-            zip_input,
+            zip_select,
             tel_input,
             email_input,
             business_start_input,
@@ -149,6 +153,7 @@ impl ProfileManagerView {
             errors: Vec::new(),
             save_message: None,
             rdo_options,
+            zip_options,
             email_tracking_enabled: false,
 
             email_auth_method: EmailAuthMethod::GoogleOAuth,
@@ -218,12 +223,14 @@ impl ProfileManagerView {
             &self.line_of_business,
             &self.name_input,
             &self.address_input,
-            &self.zip_input,
             &self.tel_input,
             &self.email_input,
         ] {
             input.update(cx, |input, cx| input.set_value(String::new(), window, cx));
         }
+        self.zip_select.update(cx, |select, cx| {
+            select.set_selected_value("", window, cx);
+        });
         self.business_start_input
             .update(cx, |input, cx| input.set_date(None, window, cx));
         self.rdo_select.update(cx, |select, cx| {
@@ -323,9 +330,18 @@ impl ProfileManagerView {
         self.address_input.update(cx, |input, cx| {
             input.set_value(profile.registered_address.clone(), window, cx)
         });
-        self.zip_input.update(cx, |input, cx| {
-            input.set_value(profile.zip_code.clone(), window, cx)
+
+        let zip_val = self
+            .zip_options
+            .iter()
+            .find(|option| option.starts_with(&profile.zip_code))
+            .cloned()
+            .unwrap_or(profile.zip_code.clone());
+
+        self.zip_select.update(cx, |select, cx| {
+            select.set_selected_value(&zip_val, window, cx);
         });
+
         self.tel_input.update(cx, |input, cx| {
             input.set_value(profile.phone.clone(), window, cx)
         });
@@ -402,6 +418,23 @@ impl ProfileManagerView {
         // No-op since sync_card is removed
     }
 
+    fn on_tel_event(
+        &mut self,
+        _state: &Entity<InputState>,
+        _event: &InputEvent,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let phone = self.tel_input.read(cx).value();
+        self.errors.retain(|e| e.field != "phone");
+        if phone.trim().is_empty() {
+             self.errors.push(ValidationError::new("phone", "Phone number is required"));
+        } else if !bir_core::validation::validate_ph_phone(&phone) {
+             self.errors.push(ValidationError::new("phone", "Phone must be a valid Philippine mobile or landline number"));
+        }
+        cx.notify();
+    }
+
     fn on_combobox_event(
         &mut self,
         _state: Entity<ComboboxState>,
@@ -466,7 +499,15 @@ impl ProfileManagerView {
             rdo_code,
             line_of_business: self.line_of_business.read(cx).value().trim().to_string(),
             registered_address: self.address_input.read(cx).value().trim().to_string(),
-            zip_code: self.zip_input.read(cx).value().trim().to_string(),
+            zip_code: self
+                .zip_select
+                .read(cx)
+                .selected_value(cx)
+                .split(" - ")
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string(),
             phone: self.tel_input.read(cx).value().trim().to_string(),
             email: self.email_input.read(cx).value().trim().to_string(),
             default_form_type: "2551Qv2018".into(),
@@ -970,7 +1011,7 @@ impl Render for ProfileManagerView {
                                                         div()
                                                             .flex_1()
                                                             .child(Self::field_label("Zip Code", cx))
-                                                            .child(Input::new(&self.zip_input))
+                                                            .child(Combobox::new(&self.zip_select))
                                                             .child(self.field_error("zip_code", cx)),
                                                     )
                                                     .child(

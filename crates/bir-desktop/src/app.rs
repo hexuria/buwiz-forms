@@ -789,16 +789,30 @@ impl AppState {
             let draft = if let Ok(db) = self.db.lock() {
                 let existing = db.get_2551q_draft(tin, year, quarter).ok().flatten();
                 if let Some(d) = existing {
-                    // Use the saved draft as-is. Profile fields are captured at save time.
-                    // If user wants to update profile info in the form, they edit the profile,
-                    // reopen the form, and hit Save — which persists the current in-memory state.
-                    tracing::info!(
-                        tin = %d.tin,
-                        status = ?d.status,
-                        name = %d.taxpayer_name,
-                        "Loading existing draft from DB (profile sync skipped — data integrity)"
-                    );
-                    d
+                    if matches!(d.status, FilingStatus::Draft) {
+                        // Draft mode: sync profile fields so edits to the profile
+                        // are reflected in the form before submission.
+                        let mut d = d;
+                        d.sync_with_profile(profile);
+                        tracing::info!(
+                            tin = %d.tin,
+                            status = ?d.status,
+                            name = %d.taxpayer_name,
+                            "Loading existing draft from DB (profile synced)"
+                        );
+                        d
+                    } else {
+                        // Non-draft: preserve profile state from submission time
+                        // for data integrity — changes to the profile should NOT
+                        // alter a submitted/confirmed/paid form.
+                        tracing::info!(
+                            tin = %d.tin,
+                            status = ?d.status,
+                            name = %d.taxpayer_name,
+                            "Loading existing draft from DB (profile frozen — data integrity)"
+                        );
+                        d
+                    }
                 } else {
                     tracing::info!(tin = %tin, year, quarter, "Creating new draft from profile");
                     let prev = if quarter > 1 {

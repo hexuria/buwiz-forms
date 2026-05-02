@@ -24,7 +24,6 @@ pub trait FormViewTrait: 'static + Sized {
     fn mark_paid(&mut self, window: &mut Window, cx: &mut Context<Self>);
     fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>);
     fn preview_pdf(&mut self, window: &mut Window, cx: &mut Context<Self>);
-    fn print_confirmation(&mut self, window: &mut Window, cx: &mut Context<Self>);
 
     /// Render the standardized status pipeline (Draft -> Queued -> Submitted -> Confirmed -> Paid)
     fn render_status_pipeline(&self, cx: &Context<Self>) -> gpui::Div {
@@ -209,60 +208,24 @@ pub trait FormViewTrait: 'static + Sized {
 
     /// Render the standardized header with title and actions
     fn render_header(&self, cx: &Context<Self>) -> gpui::Div {
-        let mut action_buttons = div().flex().justify_end().gap_2().w_full();
+        let is_draft = matches!(self.current_status(), FilingStatus::Draft);
 
-        if matches!(
-            self.current_status(),
-            FilingStatus::Confirmed | FilingStatus::Paid
-        ) {
-            action_buttons = action_buttons.child(
-                gpui_component::button::Button::new("print_confirmation_btn")
-                    .label("View Confirmation")
-                    .outline()
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.print_confirmation(window, cx);
-                    })),
-            );
-        }
-
-        // Dev-only: Inspect button (saves first, then previews) — stripped from release builds
-        #[cfg(feature = "dev-tools")]
-        {
-            action_buttons = action_buttons.child(
-                gpui_component::button::Button::new("inspect_btn")
-                    .label("Inspect")
-                    .icon(
-                        gpui_component::Icon::empty()
-                            .path("svg/target.svg")
-                            .small(),
-                    )
-                    .outline()
-                    .on_click(cx.listener(|this, _, window, cx| {
+        let action_buttons = div().flex().justify_end().gap_2().w_full().child(
+            gpui_component::button::Button::new("print_preview_btn")
+                .label("Print Preview")
+                .icon(
+                    gpui_component::Icon::empty()
+                        .path("svg/printer.svg")
+                        .small(),
+                )
+                .outline()
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    if is_draft {
                         this.save_draft(window, cx);
-                        this.preview_pdf(window, cx);
-                    })),
-            );
-        }
-
-        // Production: PDF Viewer only available after submission
-        if !matches!(
-            self.current_status(),
-            FilingStatus::Draft | FilingStatus::Queued
-        ) {
-            action_buttons = action_buttons.child(
-                gpui_component::button::Button::new("print_btn")
-                    .label("PDF Viewer")
-                    .icon(
-                        gpui_component::Icon::empty()
-                            .path("svg/printer.svg")
-                            .small(),
-                    )
-                    .outline()
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.preview_pdf(window, cx);
-                    })),
-            );
-        }
+                    }
+                    this.preview_pdf(window, cx);
+                })),
+        );
 
         div()
             .w_full()
