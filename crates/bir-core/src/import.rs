@@ -117,8 +117,7 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
 
         // 2. Read submissions.json — deduplicate via (tin, form_type, period, submitted_at)
         if let Ok(submissions_json) = read_from_zip("submissions.json") {
-            let mut submissions: Vec<serde_json::Value> =
-                serde_json::from_str(&submissions_json)?;
+            let mut submissions: Vec<serde_json::Value> = serde_json::from_str(&submissions_json)?;
             for sub_value in &mut submissions {
                 migrate_submission_json(sub_value, export_version)?;
             }
@@ -132,13 +131,16 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
                 let submitted_at_key = sub.submitted_at.clone().unwrap_or_default();
 
                 // Check if a matching submission already exists (using COALESCE to match the index)
-                let exists: bool = db.conn.query_row(
-                    "SELECT 1 FROM submissions
+                let exists: bool = db
+                    .conn
+                    .query_row(
+                        "SELECT 1 FROM submissions
                      WHERE tin = ?1 AND form_type = ?2 AND period = ?3
                        AND COALESCE(submitted_at, '') = ?4",
-                    rusqlite::params![tin, sub.form_type, sub.period, submitted_at_key],
-                    |_| Ok(true),
-                ).unwrap_or(false);
+                        rusqlite::params![tin, sub.form_type, sub.period, submitted_at_key],
+                        |_| Ok(true),
+                    )
+                    .unwrap_or(false);
 
                 if exists {
                     db.conn.execute(
@@ -147,8 +149,13 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
                          WHERE tin = ?4 AND form_type = ?5 AND period = ?6
                            AND COALESCE(submitted_at, '') = ?7",
                         rusqlite::params![
-                            sub.status, json_data, sub.filename,
-                            tin, sub.form_type, sub.period, submitted_at_key
+                            sub.status,
+                            json_data,
+                            sub.filename,
+                            tin,
+                            sub.form_type,
+                            sub.period,
+                            submitted_at_key
                         ],
                     )?;
                 } else {
@@ -369,6 +376,7 @@ mod tests {
             oauth_access_token: None,
             oauth_refresh_token: None,
             profile_pin_hash: None,
+            totp_secret: None,
             tax_classification: None,
             opted_for_8_percent_flat_rate: false,
         };
@@ -444,6 +452,7 @@ mod tests {
             oauth_access_token: None,
             oauth_refresh_token: None,
             profile_pin_hash: None,
+            totp_secret: None,
             tax_classification: None,
             opted_for_8_percent_flat_rate: false,
         };
@@ -526,6 +535,7 @@ mod tests {
             oauth_access_token: None,
             oauth_refresh_token: None,
             profile_pin_hash: None,
+            totp_secret: None,
             tax_classification: None,
             opted_for_8_percent_flat_rate: false,
         };
@@ -619,6 +629,7 @@ mod tests {
             oauth_access_token: None,
             oauth_refresh_token: None,
             profile_pin_hash: None,
+            totp_secret: None,
             tax_classification: None,
             opted_for_8_percent_flat_rate: false,
         };

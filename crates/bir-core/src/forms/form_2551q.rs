@@ -234,17 +234,14 @@ impl Form2551QDraft {
         } else {
             0.0
         };
-        self.total_tax_credits = ((self.creditable_tax_withheld
-            + previous_credit
-            + self.other_tax_credit)
-            * 100.0)
-            .round()
-            / 100.0;
+        self.total_tax_credits =
+            ((self.creditable_tax_withheld + previous_credit + self.other_tax_credit) * 100.0)
+                .round()
+                / 100.0;
 
         // Line 19: Tax Still Payable/(Overpayment) = Line 14 - Line 18
         // NOTE: Can be negative (overpayment). Do NOT clamp to zero.
-        self.tax_payable =
-            ((self.total_tax_due - self.total_tax_credits) * 100.0).round() / 100.0;
+        self.tax_payable = ((self.total_tax_due - self.total_tax_credits) * 100.0).round() / 100.0;
 
         // Compute deadline and penalties.
         // The penalty engine handles all three cases:
@@ -710,6 +707,7 @@ mod tests {
             tax_classification: None,
             opted_for_8_percent_flat_rate: false,
             profile_pin_hash: None,
+            totp_secret: None,
         }
     }
 
@@ -783,9 +781,18 @@ mod tests {
         // Line 19: 1500 - 400 = 1100
         assert_eq!(draft.tax_payable, 1100.0);
         // Filed late with unpaid tax → surcharge, interest, and compromise apply
-        assert!(draft.surcharge > 0.0, "surcharge should be positive for late filing with tax due");
-        assert!(draft.interest > 0.0, "interest should be positive for late filing with tax due");
-        assert!(draft.compromise > 0.0, "compromise should be positive for late filing with tax due");
+        assert!(
+            draft.surcharge > 0.0,
+            "surcharge should be positive for late filing with tax due"
+        );
+        assert!(
+            draft.interest > 0.0,
+            "interest should be positive for late filing with tax due"
+        );
+        assert!(
+            draft.compromise > 0.0,
+            "compromise should be positive for late filing with tax due"
+        );
         // Line 24 = Line 19 + Line 23
         let expected_24 = ((draft.tax_payable + draft.total_penalties) * 100.0).round() / 100.0;
         assert_eq!(draft.total_amount_payable, expected_24);

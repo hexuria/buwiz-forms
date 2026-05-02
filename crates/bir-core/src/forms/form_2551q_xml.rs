@@ -237,6 +237,7 @@ mod tests {
             tax_classification: None,
             opted_for_8_percent_flat_rate: false,
             profile_pin_hash: None,
+            totp_secret: None,
         };
         let mut draft = Form2551QDraft::new_from_profile(&profile, 2026, 1);
         draft.tin = "261708015000".to_string();

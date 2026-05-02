@@ -60,7 +60,8 @@ pub fn validate_ph_phone(phone: &str) -> bool {
 
 pub fn validate_tin(tin: &Tin) -> bool {
     let full = tin.full();
-    (full.len() == 12 || full.len() == 13) && full.chars().all(|c| c.is_ascii_digit())
+    (full.len() == 12 || full.len() == 13 || full.len() == 14)
+        && full.chars().all(|c| c.is_ascii_digit())
 }
 
 pub fn validate_profile(profile: &TaxpayerProfile) -> Vec<ValidationError> {
@@ -69,7 +70,7 @@ pub fn validate_profile(profile: &TaxpayerProfile) -> Vec<ValidationError> {
     if !validate_tin(&profile.tin) {
         errors.push(ValidationError::new(
             "tin",
-            "TIN must have 12 or 13 digits including branch code",
+            "TIN must have 12 to 14 digits including branch code",
         ));
     }
 

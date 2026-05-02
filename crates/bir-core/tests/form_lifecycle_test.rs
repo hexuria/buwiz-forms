@@ -37,6 +37,7 @@ fn test_full_form_lifecycle() {
         opted_for_8_percent_flat_rate: false,
         is_archived: false,
         profile_pin_hash: None,
+            totp_secret: None,
         email_tracking_enabled: false,
         email_auth_method: bir_core::profile::EmailAuthMethod::AppPassword,
         imap_email: None,

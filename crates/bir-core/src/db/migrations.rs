@@ -21,9 +21,7 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
             .unwrap_or(false);
 
         if has_profiles {
-            info!(
-                "Legacy database detected. Setting version to 1 to run incremental migrations."
-            );
+            info!("Legacy database detected. Setting version to 1 to run incremental migrations.");
             // Set to v1 (not CURRENT) so v2+ migrations still execute sequentially.
             // v1 uses CREATE TABLE IF NOT EXISTS, so re-running it is safe.
             version = 1;
@@ -287,7 +285,10 @@ mod tests {
                 |_| Ok(true),
             )
             .unwrap_or(false);
-        assert!(has_dp, "data_providers table should exist after v2 migration");
+        assert!(
+            has_dp,
+            "data_providers table should exist after v2 migration"
+        );
 
         // Verify dedup index from v3
         let has_idx: bool = conn
@@ -297,7 +298,10 @@ mod tests {
                 |_| Ok(true),
             )
             .unwrap_or(false);
-        assert!(has_idx, "submissions dedup index should exist after v3 migration");
+        assert!(
+            has_idx,
+            "submissions dedup index should exist after v3 migration"
+        );
     }
 
     #[test]
@@ -342,7 +346,10 @@ mod tests {
                 |_| Ok(true),
             )
             .unwrap_or(false);
-        assert!(has_dp, "Legacy DB should get data_providers after incremental migration");
+        assert!(
+            has_dp,
+            "Legacy DB should get data_providers after incremental migration"
+        );
     }
 
     #[test]

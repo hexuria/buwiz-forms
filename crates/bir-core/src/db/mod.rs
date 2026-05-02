@@ -525,7 +525,8 @@ impl Database {
 
     /// Delete a global setting value.
     pub fn delete_setting(&self, key: &str) -> Result<(), DbError> {
-        self.conn.execute("DELETE FROM settings WHERE key = ?1", params![key])?;
+        self.conn
+            .execute("DELETE FROM settings WHERE key = ?1", params![key])?;
         Ok(())
     }
 }
@@ -601,6 +602,7 @@ mod tests {
             tax_classification: None,
             opted_for_8_percent_flat_rate: false,
             profile_pin_hash: None,
+            totp_secret: None,
             _imap_enabled_compat: None,
         };
 

@@ -234,9 +234,12 @@ pub fn generate_totp_secret(account_name: &str) -> (String, std::path::PathBuf) 
         secret,
         Some("e-BIRForms".to_string()),
         account_name.to_string(),
-    ).unwrap();
+    )
+    .unwrap();
     let qr_base64 = totp.get_qr_base64().unwrap();
-    let bytes = data_encoding::BASE64.decode(qr_base64.as_bytes()).unwrap_or_default();
+    let bytes = data_encoding::BASE64
+        .decode(qr_base64.as_bytes())
+        .unwrap_or_default();
     let path = std::env::temp_dir().join(format!("totp_qr_{}.png", uuid::Uuid::new_v4()));
     let _ = std::fs::write(&path, bytes);
     (totp.get_secret_base32(), path)
@@ -244,8 +247,8 @@ pub fn generate_totp_secret(account_name: &str) -> (String, std::path::PathBuf) 
 
 pub fn validate_totp(secret: &str, token: &str) -> bool {
     use totp_rs::{Algorithm, Secret, TOTP};
-    if let Ok(decoded_secret) = Secret::Encoded(secret.to_string()).to_bytes() {
-        if let Ok(totp) = TOTP::new(
+    if let Ok(decoded_secret) = Secret::Encoded(secret.to_string()).to_bytes()
+        && let Ok(totp) = TOTP::new(
             Algorithm::SHA1,
             6,
             1,
@@ -253,9 +256,9 @@ pub fn validate_totp(secret: &str, token: &str) -> bool {
             decoded_secret,
             None,
             "".to_string(),
-        ) {
-            return totp.check_current(token).unwrap_or(false);
-        }
+        )
+    {
+        return totp.check_current(token).unwrap_or(false);
     }
     false
 }

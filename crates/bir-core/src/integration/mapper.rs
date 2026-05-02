@@ -254,6 +254,7 @@ mod tests {
             business_start_date: None,
             is_archived: false,
             profile_pin_hash: None,
+            totp_secret: None,
             email_tracking_enabled: false,
             email_auth_method: crate::profile::EmailAuthMethod::AppPassword,
             imap_email: None,
