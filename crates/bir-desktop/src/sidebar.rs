@@ -765,7 +765,7 @@ impl AppState {
                                         _cx.notify();
                                     }
                                 }))
-                                .child(Icon::new(IconName::SquarePen).size(px(20.)).text_color(cx.theme().foreground))
+                                .child(Icon::new(IconName::Frame).size(px(20.)).text_color(cx.theme().foreground))
                                 .when(!is_mini, |this| {
                                     this.child(div().text_sm().text_color(cx.theme().foreground).child("Form Editor"))
                                 })
