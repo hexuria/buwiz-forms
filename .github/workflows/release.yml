@@ -219,6 +219,31 @@ jobs:
           candle.exe installer.wxs harvest.wxs -dSourceDir="$PKG" -dVersion="$VERSION" -ext WixUIExtension
           light.exe installer.wixobj harvest.wixobj -out "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}.msi" -ext WixUIExtension -sval
 
+      - name: Create MSIX Package
+        shell: pwsh
+        run: |
+          $VERSION = "${{ github.ref_name }}".TrimStart('v')
+          $PKG = "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}"
+          $MSIX_DIR = "target/release-artifacts/msix-staging"
+          
+          # Stage MSIX layout
+          New-Item -ItemType Directory -Force -Path $MSIX_DIR
+          Copy-Item "$PKG\*" "$MSIX_DIR\" -Recurse
+          
+          # Copy and stamp manifest
+          Copy-Item "assets\windows\AppxManifest.xml" "$MSIX_DIR\AppxManifest.xml"
+          (Get-Content "$MSIX_DIR\AppxManifest.xml") -replace 'VERSION_PLACEHOLDER', $VERSION | Set-Content "$MSIX_DIR\AppxManifest.xml"
+          
+          # Build MSIX (unsigned — Microsoft Store will sign on submission)
+          $SDK_DIR = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\10.*" | Sort-Object Name -Descending | Select-Object -First 1
+          $MAKEAPPX = "$($SDK_DIR.FullName)\x64\MakeAppx.exe"
+          if (Test-Path $MAKEAPPX) {
+            & $MAKEAPPX pack /d "$MSIX_DIR" /p "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}.msix" /o
+            Write-Host "✅ MSIX package created"
+          } else {
+            Write-Warning "⚠️ MakeAppx.exe not found — skipping MSIX"
+          }
+
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -227,6 +252,7 @@ jobs:
             target/release-artifacts/*.zip
             target/release-artifacts/*-Setup.exe
             target/release-artifacts/*.msi
+            target/release-artifacts/*.msix
 
   # ── Linux ────────────────────────────────────────────────────────────────
   build-linux:
@@ -319,3 +345,6 @@ jobs:
             artifacts/**/*.zip
             artifacts/**/*.deb
             artifacts/**/*.tar.gz
+            artifacts/**/*-Setup.exe
+            artifacts/**/*.msi
+            artifacts/**/*.msix
