@@ -243,7 +243,7 @@ pub fn fetch_and_process_emails_for_address(
                 if let Ok(summaries) = db_guard.list_draft_summaries(&p.tin.full(), current_year)
                     && summaries
                         .iter()
-                        .any(|s| s.status == crate::forms::form_2551q::FilingStatus::Submitted)
+                        .any(|s| s.status == crate::forms::FilingStatus::Submitted)
                 {
                     still_pending = true;
                 }
@@ -274,7 +274,7 @@ pub fn fetch_and_process_emails_for_address(
                             db_guard.list_draft_summaries(&p.tin.full(), current_year)
                         && summaries
                             .iter()
-                            .any(|s| s.status == crate::forms::form_2551q::FilingStatus::Submitted)
+                            .any(|s| s.status == crate::forms::FilingStatus::Submitted)
                     {
                         remaining_pending = true;
                     }

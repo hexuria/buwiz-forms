@@ -636,7 +636,7 @@ impl CronTasksView {
                 db.get_2551q_draft(&sum.tin, sum.taxable_year, sum.quarter.unwrap_or(0))
             && !matches!(
                 draft.status,
-                bir_core::forms::form_2551q::FilingStatus::Paid
+                bir_core::forms::FilingStatus::Paid
             )
         {
             draft.revert_to_draft();

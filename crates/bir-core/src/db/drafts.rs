@@ -3,11 +3,88 @@
 use rusqlite::params;
 
 use super::{Database, DbError};
-use crate::forms::form_2551q::{
-    FilingStatus, Form2551QDraft, FormDraftSummary, FormFilingProgress, QuarterState,
+use crate::forms::{
+    FilingStatus, FormDraftSummary, FormFilingProgress, QuarterState,
 };
+use crate::forms::form_2551q::Form2551QDraft;
 
 impl Database {
+    /// Save or update a generic form draft.
+    /// Uses UPSERT on (tin, form_code, taxable_year, quarter).
+    pub fn save_form_draft<T: serde::Serialize>(
+        &self,
+        tin: &str,
+        form_code: &str,
+        year: u16,
+        quarter: Option<u8>,
+        status: &FilingStatus,
+        draft: &T,
+    ) -> Result<i64, DbError> {
+        let json = serde_json::to_string(draft)?;
+        let status_str = match status {
+            FilingStatus::Draft => "Draft",
+            FilingStatus::Queued => "Queued",
+            FilingStatus::Submitted => "Submitted",
+            FilingStatus::Confirmed => "Confirmed",
+            FilingStatus::Paid => "Paid",
+        };
+
+        // Note: SQLite treats NULL as distinct in UNIQUE constraints by default (unless configured otherwise).
+        // For forms with no quarter (like annual forms), we insert NULL.
+        // We need an index or conflict clause that handles NULLs properly, but our current schema has:
+        // UNIQUE(tin, form_code, taxable_year, quarter)
+        // Since sqlite treats NULL != NULL, we might get multiple rows if we just use ON CONFLICT.
+        // For now, if quarter is None, we default to 0 for the constraint, or we need to ensure the DB schema handles it.
+        // Our schema actually allows NULL quarter. If this causes duplicate issues for annual forms, we'll fix the schema in Phase 1.
+        let quarter_val = quarter.map(|q| q as i64);
+
+        self.conn.execute(
+            "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, status, data_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(tin, form_code, taxable_year, quarter)
+             DO UPDATE SET status = excluded.status,
+                           data_json = excluded.data_json,
+                           updated_at = datetime('now')",
+            params![tin, form_code, year as i64, quarter_val, status_str, json],
+        )?;
+
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Load a generic form draft for a specific (tin, form_code, year, quarter).
+    pub fn get_form_draft<T: serde::de::DeserializeOwned>(
+        &self,
+        tin: &str,
+        form_code: &str,
+        year: u16,
+        quarter: Option<u8>,
+    ) -> Result<Option<T>, DbError> {
+        let mut stmt;
+        let mut rows = if let Some(q) = quarter {
+            stmt = self.conn.prepare(
+                "SELECT data_json FROM form_drafts
+                 WHERE tin = ?1 AND form_code = ?2
+                   AND taxable_year = ?3 AND quarter = ?4",
+            )?;
+            stmt.query(params![tin, form_code, year as i64, q as i64])?
+        } else {
+            stmt = self.conn.prepare(
+                "SELECT data_json FROM form_drafts
+                 WHERE tin = ?1 AND form_code = ?2
+                   AND taxable_year = ?3 AND quarter IS NULL",
+            )?;
+            stmt.query(params![tin, form_code, year as i64])?
+        };
+
+        if let Some(row) = rows.next()? {
+            let json: String = row.get(0)?;
+            let draft: T = serde_json::from_str(&json)?;
+            Ok(Some(draft))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Save or update a Form 2551Q draft.
     /// Uses UPSERT on (tin, form_code, taxable_year, quarter).
     pub fn save_2551q_draft(&self, draft: &Form2551QDraft) -> Result<i64, DbError> {

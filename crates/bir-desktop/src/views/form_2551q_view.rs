@@ -15,7 +15,8 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 use bir_core::db::Database;
-use bir_core::forms::form_2551q::{FilingStatus, Form2551QDraft, Schedule1Row};
+use bir_core::forms::form_2551q::{Form2551QDraft, Schedule1Row};
+use bir_core::forms::FilingStatus;
 use bir_core::parse_bir_receipt_email;
 use bir_core::validation::{validate_email, validate_ph_phone, validate_zip};
 use bir_print::render_2551q_print;

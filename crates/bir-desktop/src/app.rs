@@ -1,5 +1,6 @@
 use crate::views::cron_tasks::CronTasksView;
 use crate::views::dashboard::{DashboardEvent, DashboardView};
+use crate::views::form_1601c_view::{Form1601CEvent, Form1601CView};
 use crate::views::form_1701q_view::{Form1701QEvent, Form1701QView};
 use crate::views::form_2551q_view::{Form2551QEvent, Form2551QView};
 use crate::views::global_dashboard::{GlobalDashboardEvent, GlobalDashboardView};
@@ -15,7 +16,8 @@ use gpui_component::*;
 use crate::components::rate_limiter::RateLimiter;
 use bir_core::db::Database;
 use bir_core::forms::Form1701QDraft;
-use bir_core::forms::form_2551q::{FilingStatus, Form2551QDraft};
+use bir_core::forms::form_2551q::Form2551QDraft;
+use bir_core::forms::FilingStatus;
 use bir_core::profile::TaxpayerProfile;
 use std::sync::{Arc, Mutex};
 
@@ -43,6 +45,7 @@ pub enum ActiveView {
     Dashboard,
     Form2551Q,
     Form1701Q,
+    Form1601C,
     ProfileManager,
     CronTasks,
     ImportExport,
@@ -78,7 +81,9 @@ pub struct AppState {
     pub(crate) form_2551q_view: Option<Entity<Form2551QView>>,
     pub(crate) pending_form_draft: Option<Form2551QDraft>,
     pub(crate) form_1701q_view: Option<Entity<Form1701QView>>,
-    pub(crate) pending_form_1701q_draft: Option<Form1701QDraft>,
+    pub(crate) pending_form_1701q_draft: Option<bir_core::forms::form_1701q::Form1701QDraft>,
+    pub(crate) form_1601c_view: Option<Entity<Form1601CView>>,
+    pub(crate) pending_form_1601c_draft: Option<bir_core::forms::form_1601c::Form1601CDraft>,
     pub(crate) db: Arc<Mutex<Database>>,
     pub(crate) profiles: Vec<TaxpayerProfile>,
     pub(crate) active_profile_tin: Option<String>,
@@ -673,6 +678,8 @@ impl AppState {
             pending_form_draft: None,
             form_1701q_view: None,
             pending_form_1701q_draft: None,
+            form_1601c_view: None,
+            pending_form_1601c_draft: None,
             db,
             profiles,
             active_profile_tin: None,
@@ -880,6 +887,13 @@ impl AppState {
                     div().child("No form loaded").into_any_element()
                 }
             }
+            ActiveView::Form1601C => {
+                if let Some(view) = &self.form_1601c_view {
+                    view.clone().into_any_element()
+                } else {
+                    div().child("No form loaded").into_any_element()
+                }
+            }
         }
     }
 
@@ -951,9 +965,17 @@ impl AppState {
             && let Some(tin) = &self.active_profile_tin
             && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
         {
-            let draft = Form1701QDraft::new_from_profile(profile, year, quarter);
+            let draft = bir_core::forms::form_1701q::Form1701QDraft::new_from_profile(profile, year, quarter);
             self.pending_form_1701q_draft = Some(draft);
             self.active_view = ActiveView::Form1701Q;
+            cx.notify();
+        } else if form_code == "1601C"
+            && let Some(tin) = &self.active_profile_tin
+            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
+        {
+            let draft = bir_core::forms::form_1601c::Form1601CDraft::new_from_profile(profile, year, quarter);
+            self.pending_form_1601c_draft = Some(draft);
+            self.active_view = ActiveView::Form1601C;
             cx.notify();
         }
     }
@@ -1039,6 +1061,33 @@ impl Render for AppState {
             )
             .detach();
             self.form_1701q_view = Some(form_view);
+        }
+
+        if let Some(draft) = self.pending_form_1601c_draft.take() {
+            let db_for_view = Arc::clone(&self.db);
+            let form_view = cx.new(|cx| Form1601CView::new(draft, db_for_view, window, cx));
+
+            cx.subscribe_in(
+                &form_view,
+                window,
+                |this: &mut Self, _entity, event: &Form1601CEvent, window, cx| match event {
+                    Form1601CEvent::BackToDashboard => {
+                        this.active_view = ActiveView::Dashboard;
+                        cx.notify();
+                    }
+                    Form1601CEvent::PushNotification(level, title, message) => {
+                        push_notification(level, title, message, window, cx);
+                    }
+                    Form1601CEvent::Saved
+                    | Form1601CEvent::Submitted
+                    | Form1601CEvent::Confirmed => {
+                        cx.notify();
+                    }
+                },
+            )
+            .detach();
+
+            self.form_1601c_view = Some(form_view);
         }
 
         if let Some((profile, action)) = self.unlocked_profile.take() {

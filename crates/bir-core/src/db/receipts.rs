@@ -3,7 +3,7 @@
 use rusqlite::params;
 
 use super::{Database, DbError, SubmissionReceipt, parse_2551q_period};
-use crate::forms::form_2551q::FilingStatus;
+use crate::forms::FilingStatus;
 use crate::receipt::{BirReceiptConfirmation, split_bir_filename};
 
 impl Database {
