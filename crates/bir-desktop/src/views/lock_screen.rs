@@ -38,6 +38,7 @@ pub struct LockScreenView {
     os_auth_error: Option<String>,
     should_clear_otp: bool,
     auth_method: ActiveAuthMethod,
+    has_pin_configured: bool,
     phase: AuthPhase,
     /// Subscription for a 1-second tick to update lockout countdown + TOTP timer.
     _tick_sub: Option<gpui::Task<()>>,
@@ -79,6 +80,16 @@ impl LockScreenView {
             state
         });
 
+        let has_pin_configured = if let Ok(db_guard) = db.lock() {
+            db_guard
+                .get_setting("app_lock_pin_hash")
+                .ok()
+                .flatten()
+                .is_some()
+        } else {
+            false
+        };
+
         let mut view = Self {
             otp_state: otp_state.clone(),
             db: db.clone(),
@@ -88,6 +99,7 @@ impl LockScreenView {
             os_auth_error: None,
             should_clear_otp: false,
             auth_method,
+            has_pin_configured,
             phase: AuthPhase::Biometric,
             _tick_sub: None,
         };
@@ -131,7 +143,7 @@ impl LockScreenView {
                                                     {
                                                         is_valid = saved_hash == hashed_pin;
                                                     } else {
-                                                        is_valid = true;
+                                                        is_valid = false;
                                                     }
                                                 }
 
@@ -183,11 +195,12 @@ impl LockScreenView {
             },
         )
         .detach();
-
-        // Auto-trigger biometrics immediately
-        view.trigger_os_auth(cx);
-
         view
+    }
+
+    /// Publicly expose triggering OS authentication, to be called conditionally.
+    pub fn trigger_auth(&mut self, cx: &mut Context<Self>) {
+        self.trigger_os_auth(cx);
     }
 
     /// Start a 1-second tick for lockout countdown and TOTP time display.
@@ -238,7 +251,18 @@ impl LockScreenView {
                 .build()
             {
                 Some(p) => p,
-                None => return,
+                None => {
+                    tracing::warn!("OS auth policy build returned None — biometrics may not be configured");
+                    let _ = this.update(cx, |this, cx| {
+                        this.os_auth_triggered = false;
+                        if this.phase == AuthPhase::Biometric {
+                            this.phase = AuthPhase::CodeEntry;
+                        }
+                        this.should_clear_otp = true;
+                        cx.notify();
+                    });
+                    return;
+                }
             };
 
             let text = Text {
@@ -255,6 +279,11 @@ impl LockScreenView {
             };
 
             let success = Context::new(()).authenticate(text, &policy).await.is_ok();
+
+            // Fix: robius-authentication can leave the Alt key stuck on Windows,
+            // causing ^H for backspace and Escape cycling windows. Release it.
+            #[cfg(target_os = "windows")]
+            crate::platform::reclaim_keyboard_focus();
 
             let _ = this.update(cx, |this, cx| {
                 this.os_auth_triggered = false;
@@ -399,12 +428,15 @@ impl Render for LockScreenView {
                             ActiveAuthMethod::Totp => "Enter Authenticator Code",
                             ActiveAuthMethod::Pin => "Enter PIN to unlock e-BIRForms",
                         };
+                        
+                        let disable_pin_input = self.auth_method == ActiveAuthMethod::Pin && !self.has_pin_configured;
+
                         this.child(
                             div()
                                 .text_xl()
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(cx.theme().foreground)
-                                .child(title),
+                                .child(if disable_pin_input { "No Master PIN Configured" } else { title }),
                         )
                         // TOTP time-remaining indicator
                         .when(self.auth_method == ActiveAuthMethod::Totp, |this| {
@@ -420,13 +452,25 @@ impl Render for LockScreenView {
                                     .child(format!("Code expires in {}s", secs)),
                             )
                         })
-                        .child(
-                            OtpInput::new(&self.otp_state)
-                                .groups(1)
-                                .large()
-                                .disabled(self.os_auth_triggered),
-                        )
-                        .when(self.has_error, |this| {
+                        .when(!disable_pin_input, |this| {
+                            this.child(
+                                OtpInput::new(&self.otp_state)
+                                    .groups(1)
+                                    .large()
+                                    .disabled(self.os_auth_triggered),
+                            )
+                        })
+                        .when(disable_pin_input, |this| {
+                            this.child(
+                                div()
+                                    .text_sm()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .mt_4()
+                                    .mb_2()
+                                    .child("Please authenticate using Windows Hello or your device password."),
+                            )
+                        })
+                        .when(self.has_error && !disable_pin_input, |this| {
                             this.child(div().text_sm().text_color(cx.theme().danger).child(
                                 match self.auth_method {
                                     ActiveAuthMethod::Totp => "Incorrect code. Please try again.",

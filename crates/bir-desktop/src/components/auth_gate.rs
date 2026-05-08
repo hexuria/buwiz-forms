@@ -183,7 +183,18 @@ impl Render for AuthGateView {
                                                 .build()
                                             {
                                                 Some(p) => p,
-                                                None => return,
+                                                None => {
+                                                    tracing::warn!("OS auth policy build returned None — biometrics may not be configured");
+                                                    let _ = this.update(cx, |this, cx| {
+                                                        this.os_auth_triggered = false;
+                                                        this.error_msg = Some(
+                                                            "Windows Hello is not configured. Use PIN instead."
+                                                                .to_string(),
+                                                        );
+                                                        cx.notify();
+                                                    });
+                                                    return;
+                                                }
                                             };
 
                                             let text = Text {
