@@ -58,10 +58,24 @@ pub fn validate_ph_phone(phone: &str) -> bool {
     mobile.is_match(&compact) || landline.is_match(&compact)
 }
 
+/// Validate TIN allowing both legacy 12-digit and new 14-digit formats.
+/// Use this for loading/importing existing data.
 pub fn validate_tin(tin: &Tin) -> bool {
     let full = tin.full();
     (full.len() == 12 || full.len() == 13 || full.len() == 14)
         && full.chars().all(|c| c.is_ascii_digit())
+}
+
+/// Validate TIN strictly as the new 14-digit format (3-3-3-5).
+/// Use this for new filings on the latest eBIRForms.
+pub fn validate_tin_14(tin: &Tin) -> bool {
+    let full = tin.full();
+    full.len() == 14
+        && full.chars().all(|c| c.is_ascii_digit())
+        && tin.segment1.len() == 3
+        && tin.segment2.len() == 3
+        && tin.segment3.len() == 3
+        && tin.branch.len() == 5
 }
 
 pub fn validate_profile(profile: &TaxpayerProfile) -> Vec<ValidationError> {

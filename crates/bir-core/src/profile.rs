@@ -123,12 +123,76 @@ pub struct TaxpayerProfile {
     /// Securely stored OAuth Refresh Token (encrypted inside DB)
     #[serde(default)]
     pub oauth_refresh_token: Option<String>,
+
+    /// Whether the taxpayer has employees (determines withholding form applicability:
+    /// 1601C, 1601E, 1601F, 1602, 1603, 1604CF, 1604E).
+    #[serde(default)]
+    pub has_employees: bool,
 }
 
 impl TaxpayerProfile {
     /// Returns true if email tracking is active (handles legacy `imap_enabled` field).
     pub fn is_email_tracking_active(&self) -> bool {
         self.email_tracking_enabled || self._imap_enabled_compat.unwrap_or(false)
+    }
+
+    /// Returns BIR form codes applicable to this taxpayer based on their
+    /// classification, VAT status, and employee status.
+    pub fn applicable_forms(&self) -> Vec<&'static str> {
+        let mut forms = Vec::new();
+
+        // Payment form — universal
+        forms.push("0605");
+
+        // Employer withholding forms
+        if self.has_employees {
+            forms.extend_from_slice(&[
+                "1601C", "1601E", "1601F", "1602", "1603", "1604CF", "1604E",
+            ]);
+        }
+
+        match self.tax_classification.as_ref() {
+            Some(TaxClassification::PurelyCompensation) => {
+                forms.push("1700");
+            }
+            Some(TaxClassification::ProfessionalOrFreelancer)
+            | Some(TaxClassification::SoleProprietorNonVat) => {
+                forms.push("1701Q");
+                forms.push("1701");
+                forms.push("2551Q");
+            }
+            Some(TaxClassification::SoleProprietorVat) => {
+                forms.push("1701Q");
+                forms.push("1701");
+                forms.push("2550M");
+                forms.push("2550Q");
+            }
+            Some(TaxClassification::MixedIncome) => {
+                forms.push("1701Q");
+                forms.push("1701");
+                if self.is_vat_registered {
+                    forms.push("2550M");
+                    forms.push("2550Q");
+                } else {
+                    forms.push("2551Q");
+                }
+            }
+            Some(TaxClassification::Corporation) => {
+                forms.push("1702Q");
+                forms.push("1702");
+                if self.is_vat_registered {
+                    forms.push("2550M");
+                    forms.push("2550Q");
+                }
+            }
+            None => {
+                // No classification set — show common forms
+                forms.push("1701Q");
+                forms.push("2551Q");
+            }
+        }
+
+        forms
     }
 }
 

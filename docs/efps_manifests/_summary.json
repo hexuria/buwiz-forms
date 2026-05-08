@@ -1,0 +1,254 @@
+[
+  {
+    "code": "1600",
+    "title": "Monthly Remittance Return of VAT and Other Percentage Taxes Withheld",
+    "total_fields": 126,
+    "auto_fill": 5,
+    "user_input": 121,
+    "currency": 29,
+    "fdf_keys": 35
+  },
+  {
+    "code": "1602",
+    "title": "Monthly Remittance Return of Final Income Taxes Withheld",
+    "total_fields": 218,
+    "auto_fill": 5,
+    "user_input": 213,
+    "currency": 49,
+    "fdf_keys": 15
+  },
+  {
+    "code": "1603",
+    "title": "Quarterly Remittance Return of Final Income Taxes Withheld",
+    "total_fields": 63,
+    "auto_fill": 3,
+    "user_input": 60,
+    "currency": 18,
+    "fdf_keys": 16
+  },
+  {
+    "code": "1700",
+    "title": "Annual Income Tax Return",
+    "total_fields": 112,
+    "auto_fill": 5,
+    "user_input": 107,
+    "currency": 44,
+    "fdf_keys": 115
+  },
+  {
+    "code": "1701",
+    "title": "Annual Income Tax Return for Individuals",
+    "total_fields": 479,
+    "auto_fill": 0,
+    "user_input": 479,
+    "currency": 41,
+    "fdf_keys": 267
+  },
+  {
+    "code": "1702",
+    "title": "Annual Income Tax Return for Corporation and Partnerships",
+    "total_fields": 765,
+    "auto_fill": 5,
+    "user_input": 760,
+    "currency": 3,
+    "fdf_keys": 21
+  },
+  {
+    "code": "1704",
+    "title": "Improperly Accumulated Earnings Tax Return",
+    "total_fields": 122,
+    "auto_fill": 1,
+    "user_input": 121,
+    "currency": 49,
+    "fdf_keys": 12
+  },
+  {
+    "code": "2000",
+    "title": "Documentary Stamp Tax Declaration/Return",
+    "total_fields": 88,
+    "auto_fill": 5,
+    "user_input": 83,
+    "currency": 19,
+    "fdf_keys": 27
+  },
+  {
+    "code": "2551",
+    "title": "Quarterly Percentage Tax Return",
+    "total_fields": 72,
+    "auto_fill": 10,
+    "user_input": 62,
+    "currency": 25,
+    "fdf_keys": 49
+  },
+  {
+    "code": "2552",
+    "title": "Percentage Tax Return on Stocks",
+    "total_fields": 92,
+    "auto_fill": 5,
+    "user_input": 87,
+    "currency": 24,
+    "fdf_keys": 30
+  },
+  {
+    "code": "2553",
+    "title": "Percentage Tax Payable Under Special Laws",
+    "total_fields": 73,
+    "auto_fill": 5,
+    "user_input": 68,
+    "currency": 25,
+    "fdf_keys": 49
+  },
+  {
+    "code": "0605",
+    "title": "Payment Form",
+    "total_fields": 58,
+    "auto_fill": 5,
+    "user_input": 53,
+    "currency": 6,
+    "fdf_keys": 31
+  },
+  {
+    "code": "1600WP",
+    "title": "Remittance Return of Percentage Tax on Winnings and Prizes",
+    "total_fields": 126,
+    "auto_fill": 5,
+    "user_input": 121,
+    "currency": 28,
+    "fdf_keys": 16
+  },
+  {
+    "code": "1601C",
+    "title": "Monthly Remittance Return of Income Taxes Withheld on Compensation",
+    "total_fields": 110,
+    "auto_fill": 5,
+    "user_input": 105,
+    "currency": 30,
+    "fdf_keys": 58
+  },
+  {
+    "code": "1601E",
+    "title": "Monthly Remittance Return of Creditable Income Taxes Withheld (Expanded)",
+    "total_fields": 45,
+    "auto_fill": 5,
+    "user_input": 40,
+    "currency": 10,
+    "fdf_keys": 29
+  },
+  {
+    "code": "1601F",
+    "title": "Monthly Remittance Return of Final Income Tax Withheld",
+    "total_fields": 66,
+    "auto_fill": 5,
+    "user_input": 61,
+    "currency": 12,
+    "fdf_keys": 24
+  },
+  {
+    "code": "1604CF",
+    "title": "Annual Information Return of Income Taxes Withheld on Compensation",
+    "total_fields": 251,
+    "auto_fill": 3,
+    "user_input": 248,
+    "currency": 25,
+    "fdf_keys": 15
+  },
+  {
+    "code": "1604E",
+    "title": "Annual Information Return of Creditable Income Taxes Withheld",
+    "total_fields": 145,
+    "auto_fill": 5,
+    "user_input": 140,
+    "currency": 0,
+    "fdf_keys": 9
+  },
+  {
+    "code": "1701Q",
+    "title": "Quarterly Income Tax Return For Self-Employed Individuals, Estates and Trusts",
+    "total_fields": 106,
+    "auto_fill": 0,
+    "user_input": 106,
+    "currency": 1,
+    "fdf_keys": 28
+  },
+  {
+    "code": "1702Q",
+    "title": "Quarterly Income Tax Return",
+    "total_fields": 90,
+    "auto_fill": 1,
+    "user_input": 89,
+    "currency": 50,
+    "fdf_keys": 22
+  },
+  {
+    "code": "2200A",
+    "title": "Excise Tax Return for Alcohol Products",
+    "total_fields": 113,
+    "auto_fill": 5,
+    "user_input": 108,
+    "currency": 16,
+    "fdf_keys": 60
+  },
+  {
+    "code": "2200AN",
+    "title": "Excise Tax Return for Automobiles and Non-Essential Goods",
+    "total_fields": 84,
+    "auto_fill": 5,
+    "user_input": 79,
+    "currency": 16,
+    "fdf_keys": 55
+  },
+  {
+    "code": "2200M",
+    "title": "Excise Tax Return for Mineral Products",
+    "total_fields": 156,
+    "auto_fill": 5,
+    "user_input": 151,
+    "currency": 16,
+    "fdf_keys": 81
+  },
+  {
+    "code": "2200P",
+    "title": "Excise Tax Return for Petroleum Products",
+    "total_fields": 114,
+    "auto_fill": 5,
+    "user_input": 109,
+    "currency": 16,
+    "fdf_keys": 163
+  },
+  {
+    "code": "2200T",
+    "title": "Excise Tax Return for Tobacco Products",
+    "total_fields": 96,
+    "auto_fill": 5,
+    "user_input": 91,
+    "currency": 16,
+    "fdf_keys": 102
+  },
+  {
+    "code": "2550M",
+    "title": "Monthly Value-Added Tax Declaration",
+    "total_fields": 239,
+    "auto_fill": 5,
+    "user_input": 234,
+    "currency": 0,
+    "fdf_keys": 81
+  },
+  {
+    "code": "2550Q",
+    "title": "Quarterly Value-Added Tax Return",
+    "total_fields": 255,
+    "auto_fill": 5,
+    "user_input": 250,
+    "currency": 53,
+    "fdf_keys": 113
+  },
+  {
+    "code": "2551M",
+    "title": "Monthly Percentage Tax Return",
+    "total_fields": 51,
+    "auto_fill": 5,
+    "user_input": 46,
+    "currency": 11,
+    "fdf_keys": 20
+  }
+]

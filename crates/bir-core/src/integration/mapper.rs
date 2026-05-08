@@ -266,6 +266,7 @@ mod tests {
             oauth_refresh_token: None,
             tax_classification: None,
             opted_for_8_percent_flat_rate: false,
+            has_employees: false,
         }
     }
 

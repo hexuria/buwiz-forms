@@ -15,7 +15,7 @@ impl TinInput {
             cx.new(|cx| InputState::new(window, cx).placeholder("000")),
             cx.new(|cx| InputState::new(window, cx).placeholder("000")),
             cx.new(|cx| InputState::new(window, cx).placeholder("000")),
-            cx.new(|cx| InputState::new(window, cx).placeholder("000")),
+            cx.new(|cx| InputState::new(window, cx).placeholder("00000")),
         ];
 
         let mut _self = Self {
@@ -206,7 +206,7 @@ impl Render for TinInput {
                             } else {
                                 cx.theme().transparent
                             })
-                            .child("Invalid TIN format (Must be 12-14 digits)"),
+                            .child("Invalid TIN format (14 digits: 3-3-3-5)"),
                     ),
             )
             .child(

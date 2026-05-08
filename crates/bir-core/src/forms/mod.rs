@@ -10,7 +10,7 @@ pub use form_1701q::Form1701QDraft;
 pub use form_2551q::{
     FilingStatus, Form2551QDraft, FormDraftSummary, FormFilingProgress, QuarterState, Schedule1Row,
 };
-pub use registry::{FORM_REGISTRY, FilingFrequency, FormDefinition, find_form, forms_for_taxpayer};
+pub use registry::{FORM_REGISTRY, FilingFrequency, FormDefinition, find_form, forms_for_profile, forms_for_taxpayer};
 
 pub mod form_2551q_xml;
 

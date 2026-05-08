@@ -21,33 +21,163 @@ pub struct FormDefinition {
     pub category: &'static str,
     pub frequency: FilingFrequency,
     pub taxpayer_types: &'static [TaxpayerType],
+    /// None = applies regardless of VAT status.
+    /// Some(true) = only for VAT-registered taxpayers.
+    /// Some(false) = only for non-VAT taxpayers.
+    pub requires_vat: Option<bool>,
+    /// If true, this form only applies to taxpayers with employees
+    /// (withholding agent forms).
+    pub requires_employees: bool,
 }
 
 pub const FORM_REGISTRY: &[FormDefinition] = &[
+    // ═══════════════════════════════════════════
+    // Payment
+    // ═══════════════════════════════════════════
     FormDefinition {
-        code: "2551Q",
-        title: "Quarterly Percentage Tax Return",
-        category: "Percentage Tax",
+        code: "0605",
+        title: "Payment Form",
+        category: "Payment",
+        frequency: FilingFrequency::OpenEnded,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: false,
+    },
+    // ═══════════════════════════════════════════
+    // Withholding Tax (employer / withholding agent forms)
+    // ═══════════════════════════════════════════
+    FormDefinition {
+        code: "1600",
+        title: "Monthly Remittance Return of VAT and Other Percentage Taxes Withheld",
+        category: "Withholding Tax",
+        frequency: FilingFrequency::Monthly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: true,
+    },
+    FormDefinition {
+        code: "1600WP",
+        title: "Remittance Return of Percentage Tax on Winnings and Prizes",
+        category: "Withholding Tax",
+        frequency: FilingFrequency::Monthly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: true,
+    },
+    FormDefinition {
+        code: "1601C",
+        title: "Monthly Remittance Return of Income Taxes Withheld on Compensation",
+        category: "Withholding Tax",
+        frequency: FilingFrequency::Monthly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: true,
+    },
+    FormDefinition {
+        code: "1601E",
+        title: "Monthly Remittance Return of Creditable Income Taxes Withheld (Expanded)",
+        category: "Withholding Tax",
+        frequency: FilingFrequency::Monthly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: true,
+    },
+    FormDefinition {
+        code: "1601F",
+        title: "Monthly Remittance Return of Final Income Tax Withheld",
+        category: "Withholding Tax",
+        frequency: FilingFrequency::Monthly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: true,
+    },
+    FormDefinition {
+        code: "1602",
+        title: "Monthly Remittance Return of Final Income Taxes Withheld",
+        category: "Withholding Tax",
+        frequency: FilingFrequency::Monthly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: true,
+    },
+    FormDefinition {
+        code: "1603",
+        title: "Quarterly Remittance Return of Final Income Taxes Withheld",
+        category: "Withholding Tax",
         frequency: FilingFrequency::Quarterly,
         taxpayer_types: &[
             TaxpayerType::Individual,
             TaxpayerType::Corporation,
             TaxpayerType::Partnership,
         ],
+        requires_vat: None,
+        requires_employees: true,
     },
     FormDefinition {
-        code: "1702Q",
-        title: "Quarterly Income Tax Return for Corporations, Partnerships",
-        category: "Income Tax",
-        frequency: FilingFrequency::Quarterly,
-        taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
+        code: "1604CF",
+        title: "Annual Information Return of Income Taxes Withheld on Compensation",
+        category: "Withholding Tax",
+        frequency: FilingFrequency::Annual,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: true,
     },
     FormDefinition {
-        code: "1702RT",
-        title: "Annual Income Tax Return for Corporations, Partnerships",
+        code: "1604E",
+        title: "Annual Information Return of Creditable Income Taxes Withheld",
+        category: "Withholding Tax",
+        frequency: FilingFrequency::Annual,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: true,
+    },
+    // ═══════════════════════════════════════════
+    // Income Tax — Individual
+    // ═══════════════════════════════════════════
+    FormDefinition {
+        code: "1700",
+        title: "Annual Income Tax Return (Purely Compensation)",
         category: "Income Tax",
         frequency: FilingFrequency::Annual,
-        taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
+        taxpayer_types: &[TaxpayerType::Individual],
+        requires_vat: None,
+        requires_employees: false,
     },
     FormDefinition {
         code: "1701Q",
@@ -55,6 +185,8 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         category: "Income Tax",
         frequency: FilingFrequency::Quarterly,
         taxpayer_types: &[TaxpayerType::Individual],
+        requires_vat: None,
+        requires_employees: false,
     },
     FormDefinition {
         code: "1701",
@@ -62,7 +194,42 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         category: "Income Tax",
         frequency: FilingFrequency::Annual,
         taxpayer_types: &[TaxpayerType::Individual],
+        requires_vat: None,
+        requires_employees: false,
     },
+    // ═══════════════════════════════════════════
+    // Income Tax — Corporation / Partnership
+    // ═══════════════════════════════════════════
+    FormDefinition {
+        code: "1702Q",
+        title: "Quarterly Income Tax Return for Corporations, Partnerships",
+        category: "Income Tax",
+        frequency: FilingFrequency::Quarterly,
+        taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
+        requires_vat: None,
+        requires_employees: false,
+    },
+    FormDefinition {
+        code: "1702",
+        title: "Annual Income Tax Return for Corporation and Partnerships",
+        category: "Income Tax",
+        frequency: FilingFrequency::Annual,
+        taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
+        requires_vat: None,
+        requires_employees: false,
+    },
+    FormDefinition {
+        code: "1704",
+        title: "Improperly Accumulated Earnings Tax Return",
+        category: "Income Tax",
+        frequency: FilingFrequency::Annual,
+        taxpayer_types: &[TaxpayerType::Corporation],
+        requires_vat: None,
+        requires_employees: false,
+    },
+    // ═══════════════════════════════════════════
+    // Value-Added Tax
+    // ═══════════════════════════════════════════
     FormDefinition {
         code: "2550M",
         title: "Monthly Value-Added Tax Declaration",
@@ -73,6 +240,140 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
             TaxpayerType::Corporation,
             TaxpayerType::Partnership,
         ],
+        requires_vat: Some(true),
+        requires_employees: false,
+    },
+    FormDefinition {
+        code: "2550Q",
+        title: "Quarterly Value-Added Tax Return",
+        category: "Value-Added Tax",
+        frequency: FilingFrequency::Quarterly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: Some(true),
+        requires_employees: false,
+    },
+    // ═══════════════════════════════════════════
+    // Percentage Tax
+    // ═══════════════════════════════════════════
+    FormDefinition {
+        code: "2551Q",
+        title: "Quarterly Percentage Tax Return",
+        category: "Percentage Tax",
+        frequency: FilingFrequency::Quarterly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: Some(false),
+        requires_employees: false,
+    },
+    FormDefinition {
+        code: "2551M",
+        title: "Monthly Percentage Tax Return",
+        category: "Percentage Tax",
+        frequency: FilingFrequency::Monthly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: Some(false),
+        requires_employees: false,
+    },
+    FormDefinition {
+        code: "2552",
+        title: "Percentage Tax Return on Transactions Involving Shares of Stock",
+        category: "Percentage Tax",
+        frequency: FilingFrequency::Quarterly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: false,
+    },
+    FormDefinition {
+        code: "2553",
+        title: "Percentage Tax Payable Under Special Laws",
+        category: "Percentage Tax",
+        frequency: FilingFrequency::Quarterly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: false,
+    },
+    // ═══════════════════════════════════════════
+    // Documentary Stamp Tax
+    // ═══════════════════════════════════════════
+    FormDefinition {
+        code: "2000",
+        title: "Documentary Stamp Tax Declaration/Return",
+        category: "Documentary Stamp Tax",
+        frequency: FilingFrequency::OpenEnded,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: false,
+    },
+    // ═══════════════════════════════════════════
+    // Excise Tax
+    // ═══════════════════════════════════════════
+    FormDefinition {
+        code: "2200A",
+        title: "Excise Tax Return for Alcohol Products",
+        category: "Excise Tax",
+        frequency: FilingFrequency::Monthly,
+        taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
+        requires_vat: None,
+        requires_employees: false,
+    },
+    FormDefinition {
+        code: "2200AN",
+        title: "Excise Tax Return for Automobiles and Non-Essential Goods",
+        category: "Excise Tax",
+        frequency: FilingFrequency::Monthly,
+        taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
+        requires_vat: None,
+        requires_employees: false,
+    },
+    FormDefinition {
+        code: "2200M",
+        title: "Excise Tax Return for Mineral Products",
+        category: "Excise Tax",
+        frequency: FilingFrequency::Monthly,
+        taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
+        requires_vat: None,
+        requires_employees: false,
+    },
+    FormDefinition {
+        code: "2200P",
+        title: "Excise Tax Return for Petroleum Products",
+        category: "Excise Tax",
+        frequency: FilingFrequency::Monthly,
+        taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
+        requires_vat: None,
+        requires_employees: false,
+    },
+    FormDefinition {
+        code: "2200T",
+        title: "Excise Tax Return for Tobacco Products",
+        category: "Excise Tax",
+        frequency: FilingFrequency::Monthly,
+        taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
+        requires_vat: None,
+        requires_employees: false,
     },
 ];
 
@@ -87,4 +388,23 @@ pub fn forms_for_taxpayer(taxpayer_type: &TaxpayerType) -> Vec<&'static FormDefi
 /// Find a single form definition by code.
 pub fn find_form(code: &str) -> Option<&'static FormDefinition> {
     FORM_REGISTRY.iter().find(|f| f.code == code)
+}
+
+/// Returns forms filtered by taxpayer type, VAT status, and employee status.
+pub fn forms_for_profile(
+    taxpayer_type: &TaxpayerType,
+    is_vat_registered: bool,
+    has_employees: bool,
+) -> Vec<&'static FormDefinition> {
+    FORM_REGISTRY
+        .iter()
+        .filter(|f| {
+            f.taxpayer_types.contains(taxpayer_type)
+                && match f.requires_vat {
+                    None => true,
+                    Some(v) => v == is_vat_registered,
+                }
+                && (!f.requires_employees || has_employees)
+        })
+        .collect()
 }

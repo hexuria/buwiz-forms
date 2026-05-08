@@ -253,6 +253,7 @@ mod tests {
             business_start_date: None,
             tax_classification: None,
             opted_for_8_percent_flat_rate: false,
+            has_employees: false,
             is_archived: false,
             profile_pin_hash: None,
             totp_secret: None,

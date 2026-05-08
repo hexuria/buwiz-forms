@@ -652,6 +652,7 @@ impl ProfileManagerView {
             totp_secret: self.stored_totp_secret.clone(),
             tax_classification: None,
             opted_for_8_percent_flat_rate: false,
+            has_employees: false,
         }
     }
 

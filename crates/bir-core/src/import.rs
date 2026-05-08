@@ -379,6 +379,7 @@ mod tests {
             totp_secret: None,
             tax_classification: None,
             opted_for_8_percent_flat_rate: false,
+            has_employees: false,
         };
         db.save_profile(profile.clone()).unwrap();
 
@@ -455,6 +456,7 @@ mod tests {
             totp_secret: None,
             tax_classification: None,
             opted_for_8_percent_flat_rate: false,
+            has_employees: false,
         };
         db.save_profile(profile).unwrap();
         db.checkpoint().unwrap();
@@ -538,6 +540,7 @@ mod tests {
             totp_secret: None,
             tax_classification: None,
             opted_for_8_percent_flat_rate: false,
+            has_employees: false,
         };
         db.save_profile(profile).unwrap();
 
@@ -632,6 +635,7 @@ mod tests {
             totp_secret: None,
             tax_classification: None,
             opted_for_8_percent_flat_rate: false,
+            has_employees: false,
         };
         db.save_profile(profile).unwrap();
 
