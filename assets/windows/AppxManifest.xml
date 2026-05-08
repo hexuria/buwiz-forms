@@ -3,7 +3,8 @@
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap rescap">
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  IgnorableNamespaces="uap rescap desktop">
 
   <Identity
     Name="GoldCoders.eBIRForms"
@@ -39,6 +40,15 @@
         Square44x44Logo="assets\icon.png">
         <uap:DefaultTile Wide310x150Logo="assets\icon.png" />
       </uap:VisualElements>
+      <Extensions>
+        <desktop:Extension Category="windows.startupTask"
+                           Executable="bir-daemon.exe"
+                           EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask TaskId="BIRVaultDaemon"
+                               Enabled="true"
+                               DisplayName="eBIRForms Background Sync" />
+        </desktop:Extension>
+      </Extensions>
     </Application>
   </Applications>
 
