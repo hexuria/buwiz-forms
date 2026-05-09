@@ -159,9 +159,9 @@ impl LockScreenView {
                                 if let Ok(db_guard) = this.db.lock()
                                     && let Ok(Some(secret)) =
                                         db_guard.get_setting("app_totp_secret")
-                                    {
-                                        is_valid = bir_core::crypto::validate_totp(&secret, &value);
-                                    }
+                                {
+                                    is_valid = bir_core::crypto::validate_totp(&secret, &value);
+                                }
 
                                 if is_valid {
                                     this.has_error = false;

@@ -1,0 +1,94 @@
+   Compiling bir-print v0.1.0 (/Volumes/goldcoders/reverse-engineer-ebir-forms/bir/crates/bir-print)
+   Compiling bir-core v0.0.1 (/Volumes/goldcoders/reverse-engineer-ebir-forms/bir/crates/bir-core)
+warning: unused import: `std::collections::BTreeSet`
+    --> crates/bir-print/src/lib.rs:1209:9
+     |
+1209 |     use std::collections::BTreeSet;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0063]: missing field `totp_secret` in initializer of `TaxpayerProfile`
+  --> crates/bir-core/tests/form_lifecycle_test.rs:17:19
+   |
+17 |     let profile = TaxpayerProfile {
+   |                   ^^^^^^^^^^^^^^^ missing `totp_secret`
+
+For more information about this error, try `rustc --explain E0063`.
+error: could not compile `bir-core` (test "form_lifecycle_test") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error[E0063]: missing field `totp_secret` in initializer of `TaxpayerProfile`
+    --> crates/bir-print/src/lib.rs:1212:23
+     |
+1212 |         let profile = TaxpayerProfile {
+     |                       ^^^^^^^^^^^^^^^ missing `totp_secret`
+
+warning: `bir-print` (lib test) generated 1 warning
+error: could not compile `bir-print` (lib test) due to 1 previous error; 1 warning emitted
+error[E0063]: missing field `totp_secret` in initializer of `profile::TaxpayerProfile`
+   --> crates/bir-core/src/db/mod.rs:574:23
+    |
+574 |         let profile = TaxpayerProfile {
+    |                       ^^^^^^^^^^^^^^^ missing `totp_secret`
+
+error[E0063]: missing field `totp_secret` in initializer of `profile::TaxpayerProfile`
+   --> crates/bir-core/src/forms/form_2551q.rs:678:9
+    |
+678 |         TaxpayerProfile {
+    |         ^^^^^^^^^^^^^^^ missing `totp_secret`
+
+error[E0063]: missing field `totp_secret` in initializer of `profile::TaxpayerProfile`
+   --> crates/bir-core/src/forms/form_2551q_xml.rs:208:23
+    |
+208 |         let profile = TaxpayerProfile {
+    |                       ^^^^^^^^^^^^^^^ missing `totp_secret`
+
+error[E0063]: missing field `totp_secret` in initializer of `profile::TaxpayerProfile`
+   --> crates/bir-core/src/import.rs:349:23
+    |
+349 |         let profile = TaxpayerProfile {
+    |                       ^^^^^^^^^^^^^^^ missing `totp_secret`
+
+error[E0063]: missing field `totp_secret` in initializer of `profile::TaxpayerProfile`
+   --> crates/bir-core/src/import.rs:424:23
+    |
+424 |         let profile = TaxpayerProfile {
+    |                       ^^^^^^^^^^^^^^^ missing `totp_secret`
+
+error[E0063]: missing field `totp_secret` in initializer of `profile::TaxpayerProfile`
+   --> crates/bir-core/src/import.rs:506:23
+    |
+506 |         let profile = TaxpayerProfile {
+    |                       ^^^^^^^^^^^^^^^ missing `totp_secret`
+
+error[E0063]: missing field `totp_secret` in initializer of `profile::TaxpayerProfile`
+   --> crates/bir-core/src/import.rs:599:23
+    |
+599 |         let profile = TaxpayerProfile {
+    |                       ^^^^^^^^^^^^^^^ missing `totp_secret`
+
+error[E0063]: missing field `totp_secret` in initializer of `profile::TaxpayerProfile`
+   --> crates/bir-core/src/integration/mapper.rs:236:9
+    |
+236 |         TaxpayerProfile {
+    |         ^^^^^^^^^^^^^^^ missing `totp_secret`
+
+error[E0063]: missing field `totp_secret` in initializer of `profile::TaxpayerProfile`
+   --> crates/bir-core/src/integration/service.rs:235:23
+    |
+235 |         let profile = TaxpayerProfile {
+    |                       ^^^^^^^^^^^^^^^ missing `totp_secret`
+
+error[E0063]: missing field `totp_secret` in initializer of `profile::TaxpayerProfile`
+   --> crates/bir-core/src/integration/validation.rs:293:23
+    |
+293 |         let profile = TaxpayerProfile {
+    |                       ^^^^^^^^^^^^^^^ missing `totp_secret`
+
+error[E0063]: missing field `totp_secret` in initializer of `profile::TaxpayerProfile`
+   --> crates/bir-core/src/integration/validation.rs:341:23
+    |
+341 |         let profile = TaxpayerProfile {
+    |                       ^^^^^^^^^^^^^^^ missing `totp_secret`
+
+error: could not compile `bir-core` (lib test) due to 11 previous errors

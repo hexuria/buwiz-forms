@@ -133,40 +133,43 @@ fn main() {
                 gpui::Bounds::centered(None, gpui::size(gpui::px(1024.0), gpui::px(768.0)), cx);
 
             cx.spawn(async move |cx| {
-                let (db, profiles) = cx.background_executor().spawn(async move {
-                    let db_path = bir_core::db::default_database_path();
-                    if let Some(parent) = db_path.parent() {
-                        let _ = std::fs::create_dir_all(parent);
-                    }
-                    let legacy_db_path = std::env::current_dir()
-                        .unwrap_or_default()
-                        .join("bir_data.db");
-                    if !db_path.exists()
-                        && legacy_db_path.exists()
-                        && legacy_db_path.metadata().map(|m| m.len()).unwrap_or(0) > 0
-                        && legacy_db_path != db_path
-                    {
-                        let _ = std::fs::copy(&legacy_db_path, &db_path);
-                    }
-                    let (db, recovered_backup) =
-                        bir_core::db::Database::open_or_recreate(&db_path)
-                            .expect("Failed to open database");
-                    if let Some(backup_path) = recovered_backup {
-                        eprintln!(
-                            "Recovered unreadable database at {} by moving it to {}",
-                            db_path.display(),
-                            backup_path.display()
-                        );
-                    }
+                let (db, profiles) = cx
+                    .background_executor()
+                    .spawn(async move {
+                        let db_path = bir_core::db::default_database_path();
+                        if let Some(parent) = db_path.parent() {
+                            let _ = std::fs::create_dir_all(parent);
+                        }
+                        let legacy_db_path = std::env::current_dir()
+                            .unwrap_or_default()
+                            .join("bir_data.db");
+                        if !db_path.exists()
+                            && legacy_db_path.exists()
+                            && legacy_db_path.metadata().map(|m| m.len()).unwrap_or(0) > 0
+                            && legacy_db_path != db_path
+                        {
+                            let _ = std::fs::copy(&legacy_db_path, &db_path);
+                        }
+                        let (db, recovered_backup) =
+                            bir_core::db::Database::open_or_recreate(&db_path)
+                                .expect("Failed to open database");
+                        if let Some(backup_path) = recovered_backup {
+                            eprintln!(
+                                "Recovered unreadable database at {} by moving it to {}",
+                                db_path.display(),
+                                backup_path.display()
+                            );
+                        }
 
-                    bir_core::reference::get_all_rdos();
-                    bir_core::reference::get_all_zipcodes();
-                    bir_core::reference::get_all_tax_types();
-                    bir_core::reference::get_all_regions();
+                        bir_core::reference::get_all_rdos();
+                        bir_core::reference::get_all_zipcodes();
+                        bir_core::reference::get_all_tax_types();
+                        bir_core::reference::get_all_regions();
 
-                    let profiles = db.list_profiles().unwrap_or_default();
-                    (std::sync::Arc::new(std::sync::Mutex::new(db)), profiles)
-                }).await;
+                        let profiles = db.list_profiles().unwrap_or_default();
+                        (std::sync::Arc::new(std::sync::Mutex::new(db)), profiles)
+                    })
+                    .await;
 
                 let options = WindowOptions {
                     titlebar: Some(TitlebarOptions {

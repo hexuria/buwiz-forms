@@ -116,25 +116,26 @@ impl SettingsView {
                 if let InputEvent::Change = event {
                     let token = this.setup_totp_state.read(cx).value().to_string();
                     if token.len() == 6
-                        && let Some(ref secret) = this.totp_secret_temp {
-                            if bir_core::crypto::validate_totp(secret, &token) {
-                                if let Ok(db_guard) = this.db.lock() {
-                                    let _ = db_guard.set_setting("app_totp_secret", secret);
-                                }
-                                this.is_app_totp_enabled = true;
-                                this.show_totp_setup = false;
-                                this.show_totp_secret_text = false;
-                                this.totp_secret_temp = None;
-                                this.totp_qr_path = None;
-                                cx.emit(SettingsEvent::ReloadApp);
-                                cx.notify();
-                            } else {
-                                this.setup_totp_state.update(cx, |input, cx| {
-                                    input.set_value("", window, cx);
-                                    input.focus(window, cx);
-                                });
+                        && let Some(ref secret) = this.totp_secret_temp
+                    {
+                        if bir_core::crypto::validate_totp(secret, &token) {
+                            if let Ok(db_guard) = this.db.lock() {
+                                let _ = db_guard.set_setting("app_totp_secret", secret);
                             }
+                            this.is_app_totp_enabled = true;
+                            this.show_totp_setup = false;
+                            this.show_totp_secret_text = false;
+                            this.totp_secret_temp = None;
+                            this.totp_qr_path = None;
+                            cx.emit(SettingsEvent::ReloadApp);
+                            cx.notify();
+                        } else {
+                            this.setup_totp_state.update(cx, |input, cx| {
+                                input.set_value("", window, cx);
+                                input.focus(window, cx);
+                            });
                         }
+                    }
                 }
             },
         )

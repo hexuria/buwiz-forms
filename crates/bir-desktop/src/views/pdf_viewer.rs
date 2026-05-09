@@ -113,9 +113,11 @@ impl PdfViewerView {
         if let Ok(entries) = std::fs::read_dir(&temp) {
             for entry in entries.flatten() {
                 if let Some(name) = entry.file_name().to_str()
-                    && name.starts_with(TEMP_DIR_PREFIX) && entry.path().is_dir() {
-                        let _ = std::fs::remove_dir_all(entry.path());
-                    }
+                    && name.starts_with(TEMP_DIR_PREFIX)
+                    && entry.path().is_dir()
+                {
+                    let _ = std::fs::remove_dir_all(entry.path());
+                }
             }
         }
         // Also clean legacy static directory

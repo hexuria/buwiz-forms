@@ -146,9 +146,8 @@ impl TaxpayerProfile {
 
         // Employer withholding forms
         if self.has_employees {
-            forms.extend_from_slice(&[
-                "1601C", "1601E", "1601F", "1602", "1603", "1604CF", "1604E",
-            ]);
+            forms
+                .extend_from_slice(&["1601C", "1601E", "1601F", "1602", "1603", "1604CF", "1604E"]);
         }
 
         match self.tax_classification.as_ref() {

@@ -2,10 +2,10 @@
 //!
 //! Data model and auto-computation logic based on 1601Cv2018 ENCS offline forms.
 
-use crate::profile::TaxpayerProfile;
-use serde::{Deserialize, Serialize};
 use super::{FilingStatus, FormValidator};
-use crate::validation::{validate_zip, validate_ph_phone};
+use crate::profile::TaxpayerProfile;
+use crate::validation::{validate_ph_phone, validate_zip};
+use serde::{Deserialize, Serialize};
 
 fn default_true() -> bool {
     true
@@ -39,10 +39,9 @@ pub struct Form1601CDraft {
     pub email_address: String,
 
     // === Part II — Computation of Tax ===
-    
     #[serde(default)]
     pub tax_14_total_compensation: f64,
-    
+
     // Less: Non-Taxable/Exempt Compensation
     #[serde(default)]
     pub tax_15_statutory_minimum_wage: f64,
@@ -54,52 +53,52 @@ pub struct Form1601CDraft {
     pub tax_18_de_minimis: f64,
     #[serde(default)]
     pub tax_19_sss_gsis: f64,
-    
+
     #[serde(default)]
     pub tax_20_other_name: String,
     #[serde(default)]
     pub tax_20_other_amount: f64,
-    
+
     // Computed Total Non-Taxable Compensation
     #[serde(default)]
     pub tax_21_total_non_taxable: f64,
-    
+
     // Computed Total Taxable Compensation
     #[serde(default)]
     pub tax_22_total_taxable: f64,
-    
+
     #[serde(default)]
     pub tax_23_not_subject: f64,
-    
+
     // Computed Net Taxable Compensation
     #[serde(default)]
     pub tax_24_net_taxable: f64,
-    
+
     // Total Taxes Withheld
     #[serde(default)]
     pub tax_25_total_taxes_withheld: f64,
-    
+
     // Add/Less: Adjustment of Taxes Withheld from Previous Months
     #[serde(default)]
     pub tax_26_adjustment: f64,
-    
+
     // Taxes Withheld for Remittance
     #[serde(default)]
     pub tax_27_taxes_withheld_for_remittance: f64,
-    
+
     // Less: Tax Remitted in Return Previously Filed
     #[serde(default)]
     pub tax_28_tax_remitted_previously: f64,
-    
+
     #[serde(default)]
     pub tax_29_other_remittances_name: String,
     #[serde(default)]
     pub tax_29_other_remittances_amount: f64,
-    
+
     // Total Tax Remittances Made
     #[serde(default)]
     pub tax_30_total_tax_remittances: f64,
-    
+
     // Tax Still Due/(Overremittance)
     #[serde(default)]
     pub tax_31_tax_still_due: f64,
@@ -113,11 +112,11 @@ pub struct Form1601CDraft {
     pub tax_33_interest: f64,
     #[serde(default)]
     pub tax_34_compromise: f64,
-    
+
     // Computed Total Penalties
     #[serde(default)]
     pub tax_35_total_penalties: f64,
-    
+
     // Computed Total Amount Payable
     #[serde(default)]
     pub tax_36_total_amount_payable: f64,
@@ -177,14 +176,14 @@ impl Form1601CDraft {
             tax_29_other_remittances_amount: 0.0,
             tax_30_total_tax_remittances: 0.0,
             tax_31_tax_still_due: 0.0,
-            
+
             auto_compute_penalties: true,
             tax_32_surcharge: 0.0,
             tax_33_interest: 0.0,
             tax_34_compromise: 0.0,
             tax_35_total_penalties: 0.0,
             tax_36_total_amount_payable: 0.0,
-            
+
             status: FilingStatus::Draft,
             created_at: now.clone(),
             updated_at: now,
@@ -230,34 +229,52 @@ impl Form1601CDraft {
     /// Recalculate computed fields based on user inputs.
     pub fn compute(&mut self) {
         // Line 21 = 15 + 16 + 17 + 18 + 19 + 20
-        self.tax_21_total_non_taxable = ((self.tax_15_statutory_minimum_wage 
+        self.tax_21_total_non_taxable = ((self.tax_15_statutory_minimum_wage
             + self.tax_16_holiday_pay
             + self.tax_17_13th_month_pay
             + self.tax_18_de_minimis
             + self.tax_19_sss_gsis
-            + self.tax_20_other_amount) * 100.0).round() / 100.0;
+            + self.tax_20_other_amount)
+            * 100.0)
+            .round()
+            / 100.0;
 
         // Line 22 = 14 - 21
-        self.tax_22_total_taxable = ((self.tax_14_total_compensation - self.tax_21_total_non_taxable) * 100.0).round() / 100.0;
+        self.tax_22_total_taxable =
+            ((self.tax_14_total_compensation - self.tax_21_total_non_taxable) * 100.0).round()
+                / 100.0;
 
         // Line 24 = 22 - 23
-        self.tax_24_net_taxable = ((self.tax_22_total_taxable - self.tax_23_not_subject) * 100.0).round() / 100.0;
+        self.tax_24_net_taxable =
+            ((self.tax_22_total_taxable - self.tax_23_not_subject) * 100.0).round() / 100.0;
 
         // Line 27 = 25 + 26
-        self.tax_27_taxes_withheld_for_remittance = ((self.tax_25_total_taxes_withheld + self.tax_26_adjustment) * 100.0).round() / 100.0;
+        self.tax_27_taxes_withheld_for_remittance =
+            ((self.tax_25_total_taxes_withheld + self.tax_26_adjustment) * 100.0).round() / 100.0;
 
         // Line 30 = 28 + 29
-        self.tax_30_total_tax_remittances = ((self.tax_28_tax_remitted_previously + self.tax_29_other_remittances_amount) * 100.0).round() / 100.0;
+        self.tax_30_total_tax_remittances =
+            ((self.tax_28_tax_remitted_previously + self.tax_29_other_remittances_amount) * 100.0)
+                .round()
+                / 100.0;
 
         // Line 31 = 27 - 30
-        self.tax_31_tax_still_due = ((self.tax_27_taxes_withheld_for_remittance - self.tax_30_total_tax_remittances) * 100.0).round() / 100.0;
+        self.tax_31_tax_still_due = ((self.tax_27_taxes_withheld_for_remittance
+            - self.tax_30_total_tax_remittances)
+            * 100.0)
+            .round()
+            / 100.0;
 
         // Line 35 = 32 + 33 + 34
-        self.tax_35_total_penalties = ((self.tax_32_surcharge + self.tax_33_interest + self.tax_34_compromise) * 100.0).round() / 100.0;
+        self.tax_35_total_penalties =
+            ((self.tax_32_surcharge + self.tax_33_interest + self.tax_34_compromise) * 100.0)
+                .round()
+                / 100.0;
 
         // Line 36 = 31 + 35
-        self.tax_36_total_amount_payable = ((self.tax_31_tax_still_due + self.tax_35_total_penalties) * 100.0).round() / 100.0;
-        
+        self.tax_36_total_amount_payable =
+            ((self.tax_31_tax_still_due + self.tax_35_total_penalties) * 100.0).round() / 100.0;
+
         self.updated_at = chrono::Utc::now().to_rfc3339();
     }
 }
@@ -300,7 +317,10 @@ impl FormValidator for Form1601CDraft {
         }
 
         if !validate_zip(&self.zip_code) {
-            errors.push(("zip_code".to_string(), "Valid ZIP Code required".to_string()));
+            errors.push((
+                "zip_code".to_string(),
+                "Valid ZIP Code required".to_string(),
+            ));
         }
 
         if !validate_ph_phone(&self.contact_number) {

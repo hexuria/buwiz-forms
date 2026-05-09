@@ -10,10 +10,13 @@ pub use atc::{ATC_TABLE_2551Q, AtcEntry, find_atc};
 pub use form_1601c::Form1601CDraft;
 pub use form_1701q::Form1701QDraft;
 pub use form_2551q::{Form2551QDraft, Schedule1Row};
-pub use registry::{FORM_REGISTRY, FilingFrequency, FormDefinition, find_form, forms_for_profile, forms_for_taxpayer};
+pub use registry::{
+    FORM_REGISTRY, FilingFrequency, FormDefinition, find_form, forms_for_profile,
+    forms_for_taxpayer,
+};
 
-pub mod form_2551q_xml;
 pub mod form_1601c_xml;
+pub mod form_2551q_xml;
 
 pub trait FormValidator {
     /// Returns a list of (field_id, error_message)

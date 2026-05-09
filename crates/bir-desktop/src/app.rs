@@ -15,9 +15,8 @@ use gpui_component::*;
 
 use crate::components::rate_limiter::RateLimiter;
 use bir_core::db::Database;
-use bir_core::forms::Form1701QDraft;
-use bir_core::forms::form_2551q::Form2551QDraft;
 use bir_core::forms::FilingStatus;
+use bir_core::forms::form_2551q::Form2551QDraft;
 use bir_core::profile::TaxpayerProfile;
 use std::sync::{Arc, Mutex};
 
@@ -303,23 +302,24 @@ impl AppState {
                     let entered_token = this.profile_totp_state.read(cx).value().to_string();
                     if entered_token.len() == 6
                         && let Some((p, a)) = this.pending_profile.clone()
-                            && let Some(ref secret) = p.totp_secret {
-                                if bir_core::crypto::validate_totp(secret, &entered_token) {
-                                    this.unlocked_profile = Some((p, a));
-                                    this.pending_profile = None;
-                                    this.profile_auth_error = None;
-                                    this.profile_totp_state
-                                        .update(cx, |input, cx| input.set_value("", window, cx));
-                                    this.focus_handle.focus(window, cx);
-                                } else {
-                                    this.profile_auth_error =
-                                        Some("Incorrect Authenticator code.".to_string());
-                                    this.profile_totp_state.update(cx, |input, cx| {
-                                        input.set_value("", window, cx);
-                                        input.focus(window, cx);
-                                    });
-                                }
-                            }
+                        && let Some(ref secret) = p.totp_secret
+                    {
+                        if bir_core::crypto::validate_totp(secret, &entered_token) {
+                            this.unlocked_profile = Some((p, a));
+                            this.pending_profile = None;
+                            this.profile_auth_error = None;
+                            this.profile_totp_state
+                                .update(cx, |input, cx| input.set_value("", window, cx));
+                            this.focus_handle.focus(window, cx);
+                        } else {
+                            this.profile_auth_error =
+                                Some("Incorrect Authenticator code.".to_string());
+                            this.profile_totp_state.update(cx, |input, cx| {
+                                input.set_value("", window, cx);
+                                input.focus(window, cx);
+                            });
+                        }
+                    }
                     cx.notify();
                 }
             },
@@ -340,9 +340,10 @@ impl AppState {
                     if entered_token.len() == 6 {
                         let mut is_valid = false;
                         if let Ok(db_guard) = this.db.lock()
-                            && let Ok(Some(secret)) = db_guard.get_setting("app_totp_secret") {
-                                is_valid = bir_core::crypto::validate_totp(&secret, &entered_token);
-                            }
+                            && let Ok(Some(secret)) = db_guard.get_setting("app_totp_secret")
+                        {
+                            is_valid = bir_core::crypto::validate_totp(&secret, &entered_token);
+                        }
 
                         if is_valid {
                             this.admin_rate_limiter.reset();
@@ -969,7 +970,9 @@ impl AppState {
             && let Some(tin) = &self.active_profile_tin
             && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
         {
-            let draft = bir_core::forms::form_1701q::Form1701QDraft::new_from_profile(profile, year, quarter);
+            let draft = bir_core::forms::form_1701q::Form1701QDraft::new_from_profile(
+                profile, year, quarter,
+            );
             self.pending_form_1701q_draft = Some(draft);
             self.active_view = ActiveView::Form1701Q;
             cx.notify();
@@ -977,7 +980,9 @@ impl AppState {
             && let Some(tin) = &self.active_profile_tin
             && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
         {
-            let draft = bir_core::forms::form_1601c::Form1601CDraft::new_from_profile(profile, year, quarter);
+            let draft = bir_core::forms::form_1601c::Form1601CDraft::new_from_profile(
+                profile, year, quarter,
+            );
             self.pending_form_1601c_draft = Some(draft);
             self.active_view = ActiveView::Form1601C;
             cx.notify();

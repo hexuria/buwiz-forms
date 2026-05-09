@@ -139,7 +139,11 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                     let now = Utc::now();
                     crate::notification::send_notification(
                         "BIR Form Submitted",
-                        &format!("Filename: {}\nTimestamp: {}", filename, now.format("%I:%M %p")),
+                        &format!(
+                            "Filename: {}\nTimestamp: {}",
+                            filename,
+                            now.format("%I:%M %p")
+                        ),
                     );
                     draft.transition_to_submitted(filename.clone());
                     if let Ok(db_guard) = db.lock() {
@@ -198,7 +202,11 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                     let now = Utc::now();
                     crate::notification::send_notification(
                         "BIR Form Submitted",
-                        &format!("Filename: {}\nTimestamp: {}", filename, now.format("%I:%M %p")),
+                        &format!(
+                            "Filename: {}\nTimestamp: {}",
+                            filename,
+                            now.format("%I:%M %p")
+                        ),
                     );
                     draft.transition_to_submitted(filename.clone());
                     if let Ok(db_guard) = db.lock() {
@@ -208,7 +216,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                             draft.taxable_year,
                             Some(draft.month),
                             &draft.status,
-                            &draft
+                            &draft,
                         );
                         schedule_email_poll(profile, "1601C", &db_guard);
                     }
@@ -219,9 +227,16 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
     }
 }
 
-fn schedule_email_poll(profile: &TaxpayerProfile, form_code: &str, db_guard: &std::sync::MutexGuard<Database>) {
+fn schedule_email_poll(
+    profile: &TaxpayerProfile,
+    form_code: &str,
+    db_guard: &std::sync::MutexGuard<Database>,
+) {
     if profile.is_email_tracking_active() {
-        let email = profile.imap_email.clone().unwrap_or_else(|| profile.email.clone());
+        let email = profile
+            .imap_email
+            .clone()
+            .unwrap_or_else(|| profile.email.clone());
         let job_name = format!("Waiting for {} confirmation email for {}", form_code, email);
         let legacy_job_name = format!("Poll Receipts: {}", email);
 
@@ -261,12 +276,19 @@ fn fail_draft_2551q(
     db: Arc<Mutex<Database>>,
     error_msg: String,
 ) {
-    warn!("Cron: Submission failed for {}: {}", draft.period_code(), error_msg);
+    warn!(
+        "Cron: Submission failed for {}: {}",
+        draft.period_code(),
+        error_msg
+    );
     let attempts_before = draft.submission_attempts;
     draft.record_submission_failure(error_msg);
 
     if draft.submission_attempts >= 5 || attempts_before >= 4 {
-        warn!("Cron: Max attempts reached for {}. Giving up.", draft.period_code());
+        warn!(
+            "Cron: Max attempts reached for {}. Giving up.",
+            draft.period_code()
+        );
     } else {
         let delay_mins = 2i64.pow(draft.submission_attempts - 1);
         info!("Cron: Next retry scheduled in {} mins", delay_mins);
@@ -282,12 +304,19 @@ fn fail_draft_1601c(
     db: Arc<Mutex<Database>>,
     error_msg: String,
 ) {
-    warn!("Cron: Submission failed for {}: {}", draft.period_code(), error_msg);
+    warn!(
+        "Cron: Submission failed for {}: {}",
+        draft.period_code(),
+        error_msg
+    );
     let attempts_before = draft.submission_attempts;
     draft.record_submission_failure(error_msg);
 
     if draft.submission_attempts >= 5 || attempts_before >= 4 {
-        warn!("Cron: Max attempts reached for {}. Giving up.", draft.period_code());
+        warn!(
+            "Cron: Max attempts reached for {}. Giving up.",
+            draft.period_code()
+        );
     } else {
         let delay_mins = 2i64.pow(draft.submission_attempts - 1);
         info!("Cron: Next retry scheduled in {} mins", delay_mins);
@@ -300,7 +329,7 @@ fn fail_draft_1601c(
             draft.taxable_year,
             Some(draft.month),
             &draft.status,
-            draft
+            draft,
         );
     }
 }

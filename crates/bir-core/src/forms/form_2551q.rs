@@ -2,19 +2,17 @@
 //!
 //! Data model, carry-forward logic, and auto-computation.
 
+use super::FilingStatus;
 use crate::forms::atc::find_atc;
 use crate::penalties::{
     PenaltyConfig, PenaltyContext, PenaltyEngine, PenaltyProfile, TaxpayerClass,
 };
 use crate::profile::TaxpayerProfile;
 use serde::{Deserialize, Serialize};
-use super::FilingStatus;
 
 fn default_true() -> bool {
     true
 }
-
-
 
 /// One row in Schedule 1 — a single ATC category with its taxable amount.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -442,8 +440,6 @@ impl Form2551QDraft {
         self.updated_at = chrono::Utc::now().to_rfc3339();
     }
 }
-
-
 
 use super::FormValidator;
 use crate::validation::{validate_email, validate_ph_phone, validate_zip};

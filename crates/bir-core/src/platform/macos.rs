@@ -1,4 +1,5 @@
 //! macOS-specific implementations for bir-core platform services.
+#![allow(unexpected_cfgs)]
 
 use std::path::PathBuf;
 use tracing::{info, warn};
@@ -42,8 +43,8 @@ unsafe extern "C" {}
 pub fn install_daemon() {
     #[cfg(target_os = "macos")]
     {
-        use objc::{class, msg_send, sel, sel_impl};
         use objc::runtime::Object;
+        use objc::{class, msg_send, sel, sel_impl};
 
         let cls = objc::runtime::Class::get("SMAppService");
         let Some(cls) = cls else {
@@ -52,12 +53,12 @@ pub fn install_daemon() {
         };
 
         unsafe {
-            let plist_name: *mut Object = msg_send![class!(NSString), stringWithUTF8String: b"com.bir.vault.daemon.plist\0".as_ptr()];
+            let plist_name: *mut Object = msg_send![class!(NSString), stringWithUTF8String: c"com.bir.vault.daemon.plist".as_ptr()];
             let service: *mut Object = msg_send![cls, agentServiceWithPlistName: plist_name];
-            
+
             let mut error: *mut Object = std::ptr::null_mut();
             let success: bool = msg_send![service, registerAndReturnError: &mut error];
-            
+
             if success {
                 info!("macOS SMAppService LaunchAgent registered successfully");
             } else {
@@ -79,8 +80,8 @@ pub fn install_daemon() {
 pub fn uninstall_daemon() {
     #[cfg(target_os = "macos")]
     {
-        use objc::{class, msg_send, sel, sel_impl};
         use objc::runtime::Object;
+        use objc::{class, msg_send, sel, sel_impl};
 
         let cls = objc::runtime::Class::get("SMAppService");
         let Some(cls) = cls else {
@@ -88,12 +89,12 @@ pub fn uninstall_daemon() {
         };
 
         unsafe {
-            let plist_name: *mut Object = msg_send![class!(NSString), stringWithUTF8String: b"com.bir.vault.daemon.plist\0".as_ptr()];
+            let plist_name: *mut Object = msg_send![class!(NSString), stringWithUTF8String: c"com.bir.vault.daemon.plist".as_ptr()];
             let service: *mut Object = msg_send![cls, agentServiceWithPlistName: plist_name];
-            
+
             let mut error: *mut Object = std::ptr::null_mut();
             let success: bool = msg_send![service, unregisterAndReturnError: &mut error];
-            
+
             if success {
                 info!("macOS SMAppService LaunchAgent unregistered successfully");
             } else {

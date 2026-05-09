@@ -3,10 +3,8 @@
 use rusqlite::params;
 
 use super::{Database, DbError};
-use crate::forms::{
-    FilingStatus, FormDraftSummary, FormFilingProgress, QuarterState,
-};
 use crate::forms::form_2551q::Form2551QDraft;
+use crate::forms::{FilingStatus, FormDraftSummary, FormFilingProgress, QuarterState};
 
 impl Database {
     /// Save or update a generic form draft.
@@ -155,7 +153,10 @@ impl Database {
 
     /// Save or update a Form 1601C draft.
     /// Uses UPSERT on (tin, form_code, taxable_year, quarter) where quarter = month.
-    pub fn save_1601c_draft(&self, draft: &crate::forms::form_1601c::Form1601CDraft) -> Result<i64, DbError> {
+    pub fn save_1601c_draft(
+        &self,
+        draft: &crate::forms::form_1601c::Form1601CDraft,
+    ) -> Result<i64, DbError> {
         let json = serde_json::to_string(draft)?;
         let status = match draft.status {
             FilingStatus::Draft => "Draft",
@@ -291,7 +292,7 @@ impl Database {
             let form_code: String = row.get(2)?;
             let is_1601c = form_code == "1601C";
             let period_val = row.get::<_, Option<i64>>(4)?.map(|q| q as u8);
-            
+
             Ok(FormDraftSummary {
                 id: row.get(0)?,
                 tin: row.get(1)?,
@@ -326,7 +327,7 @@ impl Database {
             let form_code: String = row.get(2)?;
             let is_1601c = form_code == "1601C";
             let period_val = row.get::<_, Option<i64>>(4)?.map(|q| q as u8);
-            
+
             Ok(FormDraftSummary {
                 id: row.get(0)?,
                 tin: row.get(1)?,

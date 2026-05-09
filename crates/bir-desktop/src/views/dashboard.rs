@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 use bir_core::db::Database;
-use bir_core::forms::form_2551q::Form2551QDraft;
-use bir_core::forms::{FormFilingProgress, QuarterState};
 use bir_core::forms::registry::FilingFrequency;
+use bir_core::forms::{FormFilingProgress, QuarterState};
 use bir_core::profile::TaxpayerProfile;
 use chrono::{Datelike, Local};
 use gpui::*;
@@ -137,7 +136,9 @@ impl DashboardView {
     fn reload_filing_progress(&mut self, profile: &TaxpayerProfile) {
         self.filing_progress.clear();
         if let Ok(db) = self.db.lock() {
-            let form_codes = ["1601C", "2551Q", "1702Q", "1702RT", "1701Q", "1701", "2550M"];
+            let form_codes = [
+                "1601C", "2551Q", "1702Q", "1702RT", "1701Q", "1701", "2550M",
+            ];
             let year = self.selected_year as u16;
 
             for code in form_codes {

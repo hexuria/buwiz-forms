@@ -90,10 +90,12 @@ impl TypstCalibrationView {
         if let Ok(entries) = std::fs::read_dir(formtypes_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.is_dir() && path.join("calibration.typ").exists()
-                    && let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                        forms.push(name.to_string());
-                    }
+                if path.is_dir()
+                    && path.join("calibration.typ").exists()
+                    && let Some(name) = path.file_name().and_then(|n| n.to_str())
+                {
+                    forms.push(name.to_string());
+                }
             }
         }
         forms.sort();
@@ -126,21 +128,22 @@ impl TypstCalibrationView {
                     .timer(Duration::from_millis(500))
                     .await;
                 if let Ok(metadata) = std::fs::metadata(&typ_path)
-                    && let Ok(modified) = metadata.modified() {
-                        let mut should_recompile = false;
-                        let _ = this.update(cx, |this: &mut TypstCalibrationView, _cx| {
-                            if this.last_modified != Some(modified) {
-                                this.last_modified = Some(modified);
-                                should_recompile = true;
-                            }
-                        });
-
-                        if should_recompile {
-                            let _ = this.update(cx, |this, cx| {
-                                this.recompile_typst(cx);
-                            });
+                    && let Ok(modified) = metadata.modified()
+                {
+                    let mut should_recompile = false;
+                    let _ = this.update(cx, |this: &mut TypstCalibrationView, _cx| {
+                        if this.last_modified != Some(modified) {
+                            this.last_modified = Some(modified);
+                            should_recompile = true;
                         }
+                    });
+
+                    if should_recompile {
+                        let _ = this.update(cx, |this, cx| {
+                            this.recompile_typst(cx);
+                        });
                     }
+                }
             }
         });
         self._timer = Some(timer);

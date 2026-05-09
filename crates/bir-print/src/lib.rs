@@ -1048,11 +1048,8 @@ pub fn append_text_pages_to_pdf(pdf_bytes: &[u8], lines: &[String]) -> Result<Ve
 
     if lines.is_empty() {
         let mut buf = Vec::new();
-        doc.save_to(&mut buf).map_err(|e| {
-            PrintError::Io(std::io::Error::other(
-                format!("save PDF: {e}"),
-            ))
-        })?;
+        doc.save_to(&mut buf)
+            .map_err(|e| PrintError::Io(std::io::Error::other(format!("save PDF: {e}"))))?;
         return Ok(buf);
     }
 
@@ -1194,9 +1191,9 @@ pub fn append_text_pages_to_pdf(pdf_bytes: &[u8], lines: &[String]) -> Result<Ve
 
     let mut buf = Vec::new();
     doc.save_to(&mut buf).map_err(|e| {
-        PrintError::Io(std::io::Error::other(
-            format!("save PDF with appended pages: {e}"),
-        ))
+        PrintError::Io(std::io::Error::other(format!(
+            "save PDF with appended pages: {e}"
+        )))
     })?;
     Ok(buf)
 }
