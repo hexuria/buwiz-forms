@@ -34,6 +34,7 @@ pub fn bind_global_keys(cx: &mut App) {
 // ── File Operations ──────────────────────────────────────────────────────────
 
 /// Reveal a file in Windows Explorer using `explorer /select,`.
+#[allow(dead_code)]
 pub fn reveal_in_file_manager(path: &std::path::Path) {
     let _ = std::process::Command::new("explorer")
         .arg("/select,")

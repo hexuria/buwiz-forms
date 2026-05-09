@@ -37,6 +37,7 @@ pub fn bind_global_keys(cx: &mut App) {
 ///
 /// Attempts to open the parent directory, as there is no universal
 /// "select file in manager" command on Linux.
+#[allow(dead_code)]
 pub fn reveal_in_file_manager(path: &std::path::Path) {
     if let Some(parent) = path.parent() {
         let _ = open::that(parent);
