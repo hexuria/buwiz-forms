@@ -197,7 +197,11 @@ impl AppState {
             cx.new(|cx| GlobalDashboardView::new(db_clone_global, window, cx));
 
         let db_clone_lock = Arc::clone(&db);
-        let lock_screen_view = Some(cx.new(|cx| LockScreenView::new(db_clone_lock, window, cx)));
+        let lock_screen_view = if is_locked {
+            Some(cx.new(|cx| LockScreenView::new(db_clone_lock, window, cx)))
+        } else {
+            None
+        };
 
         let profile_otp_state = cx.new(|cx| OtpState::new(4, window, cx).masked(true));
         let profile_totp_state = cx.new(|cx| OtpState::new(6, window, cx).masked(false));
