@@ -631,16 +631,33 @@ impl CronTasksView {
         if let Ok(db) = self.db.lock()
             && let Ok(summaries) = db.list_all_queued_submissions()
             && let Some(sum) = summaries.into_iter().find(|s| s.id == db_id)
-            && sum.form_code == "2551Q"
-            && let Ok(Some(mut draft)) =
-                db.get_2551q_draft(&sum.tin, sum.taxable_year, sum.quarter.unwrap_or(0))
-            && !matches!(
-                draft.status,
-                bir_core::forms::FilingStatus::Paid
-            )
         {
-            draft.revert_to_draft();
-            let _ = db.save_2551q_draft(&draft);
+            if sum.form_code == "2551Q" {
+                if let Ok(Some(mut draft)) =
+                    db.get_2551q_draft(&sum.tin, sum.taxable_year, sum.quarter.unwrap_or(0))
+                {
+                    if !matches!(draft.status, bir_core::forms::FilingStatus::Paid) {
+                        draft.revert_to_draft();
+                        let _ = db.save_2551q_draft(&draft);
+                    }
+                }
+            } else if sum.form_code == "1601C" {
+                if let Ok(Some(mut draft)) =
+                    db.get_1601c_draft(&sum.tin, sum.taxable_year, sum.month.unwrap_or(0))
+                {
+                    if !matches!(draft.status, bir_core::forms::FilingStatus::Paid) {
+                        draft.revert_to_draft();
+                        let _ = db.save_form_draft(
+                            &draft.tin,
+                            "1601C",
+                            draft.taxable_year,
+                            Some(draft.month),
+                            &draft.status,
+                            &draft
+                        );
+                    }
+                }
+            }
         }
         self.load_settings(cx);
     }

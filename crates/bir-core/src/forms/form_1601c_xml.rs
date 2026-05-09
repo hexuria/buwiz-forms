@@ -22,75 +22,105 @@ impl Form1601CDraft {
         insert(&mut fields, "txtFileName", filename);
 
         // Header
-        insert(&mut fields, "previousMonth", format!("{:02}", self.month));
-        insert(&mut fields, "currentYear", self.taxable_year.to_string());
-        insert_bool(&mut fields, "opt2AmendedYN", self.is_amended);
-        insert(&mut fields, "sheets", self.number_of_sheets.to_string());
-        insert_bool_yn(&mut fields, "taxWithheldFlag", self.any_taxes_withheld);
+        insert(&mut fields, "frm1601c:txtMonth", format!("{:02}", self.month));
+        insert(&mut fields, "frm1601c:txtYear", self.taxable_year.to_string());
+        
+        insert_bool_1_2(&mut fields, "frm1601c:AmendedRtn", self.is_amended);
+        insert_bool_1_2(&mut fields, "frm1601c:TaxWithheld", self.any_taxes_withheld);
+        
+        insert(&mut fields, "frm1601c:txtSheets", self.number_of_sheets.to_string());
+        insert(&mut fields, "frm1601c:txtATC", self.atc.clone());
         
         // Identity
-        insert(&mut fields, "txtTin1", tin1);
-        insert(&mut fields, "txtTin2", tin2);
-        insert(&mut fields, "txtTin3", tin3);
-        insert(&mut fields, "txtBranchCode", branch);
-        insert(&mut fields, "categoryFlag", self.category_of_agent.clone());
+        insert(&mut fields, "frm1601c:txtTIN1", tin1.clone());
+        insert(&mut fields, "frm1601c:txtTIN2", tin2.clone());
+        insert(&mut fields, "frm1601c:txtTIN3", tin3.clone());
+        insert(&mut fields, "frm1601c:txtBranchCode", branch.clone());
+        insert(&mut fields, "frm1601c:txtRDOCode", self.rdo_code.clone());
+        
+        // Use encoded spaces if requested by original XML format, but text should be fine
+        insert(&mut fields, "frm1601c:txtTaxpayerName", self.taxpayer_name.clone());
+        insert(&mut fields, "frm1601c:txtAddress", self.registered_address.clone());
+        insert(&mut fields, "frm1601c:txtZipCode", self.zip_code.clone());
+        insert(&mut fields, "frm1601c:txtTelNum", self.contact_number.clone());
+        
+        insert_bool(&mut fields, "frm1601c:CatAgent_P", self.category_of_agent == "P");
+        insert_bool(&mut fields, "frm1601c:CatAgent_G", self.category_of_agent == "G");
+        
+        insert(&mut fields, "txtEmail", self.email_address.clone());
+        
+        // Tax Relief / Treaty
+        insert_bool_1_2(&mut fields, "frm1601c:SpecialTax", false);
+        insert(&mut fields, "frm1601c:selTreaty", "0");
 
         // Part II - Computation
-        insert_money(&mut fields, "field15Compensation", self.tax_15_total_compensation);
-        insert_money(&mut fields, "field16NonTaxableCompensation", self.tax_16a_nontaxable);
-        insert_money(&mut fields, "field16StatutoryMinimumWage", self.tax_16b_not_subject);
-        insert_money(&mut fields, "field16MinimumWageEarner", self.tax_16c_exempt);
+        insert_money(&mut fields, "frm1601c:txtTax14", self.tax_14_total_compensation);
+        insert_money(&mut fields, "frm1601c:txtTax15", self.tax_15_statutory_minimum_wage);
+        insert_money(&mut fields, "frm1601c:txtTax16", self.tax_16_holiday_pay);
+        insert_money(&mut fields, "frm1601c:txtTax17", self.tax_17_13th_month_pay);
+        insert_money(&mut fields, "frm1601c:txtTax18", self.tax_18_de_minimis);
+        insert_money(&mut fields, "frm1601c:txtTax19", self.tax_19_sss_gsis);
         
-        insert_money(&mut fields, "field17TaxableCompensation", self.tax_17_regular);
-        insert_money(&mut fields, "field18TaxRequired", self.tax_18_supplementary);
-        insert_money(&mut fields, "field19Adjustment", self.tax_19_total_taxable);
-        insert_money(&mut fields, "field20TaxRequiredRemittance", self.tax_20_required_withheld);
+        insert(&mut fields, "frm1601c:txt20Other", self.tax_20_other_name.clone());
+        insert_money(&mut fields, "frm1601c:txtTax20", self.tax_20_other_amount);
         
-        // Adjustments
-        insert_money(&mut fields, "field21TaxRemitted", self.tax_21a_previous_withheld);
-        insert_money(&mut fields, "field21OtherPaymentsMade", self.tax_21b_other_payments);
-        insert_money(&mut fields, "field22TaxStillDue", self.tax_22_still_due);
+        insert_money(&mut fields, "frm1601c:txtTax21", self.tax_21_total_non_taxable);
+        insert_money(&mut fields, "frm1601c:txtTax22", self.tax_22_total_taxable);
+        insert_money(&mut fields, "frm1601c:txtTax23", self.tax_23_not_subject);
+        insert_money(&mut fields, "frm1601c:txtTax24", self.tax_24_net_taxable);
+        insert_money(&mut fields, "frm1601c:txtTax25", self.tax_25_total_taxes_withheld);
+        insert_money(&mut fields, "frm1601c:txtTax26", self.tax_26_adjustment);
+        insert_money(&mut fields, "frm1601c:txtTax27", self.tax_27_taxes_withheld_for_remittance);
+        insert_money(&mut fields, "frm1601c:txtTax28", self.tax_28_tax_remitted_previously);
         
-        // Penalties
-        insert_money(&mut fields, "field23ASurcharge", self.tax_24a_surcharge);
-        insert_money(&mut fields, "field23BInterest", self.tax_24b_interest);
-        insert_money(&mut fields, "field23CCompromise", self.tax_24c_compromise);
-        insert_money(&mut fields, "field23DPenalties", self.tax_24d_total_penalties);
+        insert(&mut fields, "frm1601c:txt29Other", self.tax_29_other_remittances_name.clone());
+        insert_money(&mut fields, "frm1601c:txtTax29", self.tax_29_other_remittances_amount);
         
-        // Totals
-        insert_money(&mut fields, "field24TaxAmount", self.tax_25_total_payable);
-        insert_money(&mut fields, "field25Total", self.tax_25_total_payable);
+        insert_money(&mut fields, "frm1601c:txtTax30", self.tax_30_total_tax_remittances);
+        insert_money(&mut fields, "frm1601c:txtTax31", self.tax_31_tax_still_due);
+        insert_money(&mut fields, "frm1601c:txtTax32", self.tax_32_surcharge);
+        insert_money(&mut fields, "frm1601c:txtTax33", self.tax_33_interest);
+        insert_money(&mut fields, "frm1601c:txtTax34", self.tax_34_compromise);
+        insert_money(&mut fields, "frm1601c:txtTax35", self.tax_35_total_penalties);
+        insert_money(&mut fields, "frm1601c:txtTax36", self.tax_36_total_amount_payable);
 
-        // Blank out the Section A schedule lines by default, per FDF keys
-        insert(&mut fields, "monthlyYearlyTag", "");
-        insert(&mut fields, "datePaidStr", "");
-        insert(&mut fields, "monthPreviousStr", "");
-        insert(&mut fields, "bankRorNo", "");
-        insert(&mut fields, "bankCode", "");
-        insert(&mut fields, "taxPaidMonth", "");
-        insert(&mut fields, "taxDueMonth", "");
-        insert(&mut fields, "monthlyadjustmentA", "");
-        insert(&mut fields, "monthlyadjustmentB", "");
+        // Part III - Details of Payment
+        insert(&mut fields, "txtTaxAgentNo", "");
+        insert(&mut fields, "txtDateIssue", "");
+        insert(&mut fields, "txtDateExpiry", "");
         
-        insert(&mut fields, "monthlyYearlyTag1", "");
-        insert(&mut fields, "datePaidStr1", "");
-        insert(&mut fields, "monthPreviousStr1", "");
-        insert(&mut fields, "bankRorNo1", "");
-        insert(&mut fields, "bankCode1", "");
-        insert(&mut fields, "taxPaidMonth1", "");
-        insert(&mut fields, "taxDueMonth1", "");
-        insert(&mut fields, "monthlyadjustmentA1", "");
-        insert(&mut fields, "monthlyadjustmentB1", "");
+        for i in 37..=40 {
+            insert(&mut fields, &format!("frm1601c:txtAgency{}", i), "");
+            insert(&mut fields, &format!("frm1601c:txtNumber{}", i), "");
+            insert(&mut fields, &format!("frm1601c:txtDate{}", i), "");
+            insert(&mut fields, &format!("frm1601c:txtAmount{}", i), "");
+        }
+        insert(&mut fields, "frm1601c:txtParticular40", "");
 
-        insert(&mut fields, "monthlyYearlyTag2", "");
-        insert(&mut fields, "datePaidStr2", "");
-        insert(&mut fields, "monthPreviousStr2", "");
-        insert(&mut fields, "bankRorNo2", "");
-        insert(&mut fields, "bankCode2", "");
-        insert(&mut fields, "taxPaidMonth2", "");
-        insert(&mut fields, "taxDueMonth2", "");
-        insert(&mut fields, "monthlyadjustmentA2", "");
-        insert(&mut fields, "monthlyadjustmentB2", "");
+        // Page 2 Header
+        insert(&mut fields, "frm1601c:txtPg2TIN1", tin1);
+        insert(&mut fields, "frm1601c:txtPg2TIN2", tin2);
+        insert(&mut fields, "frm1601c:txtPg2TIN3", tin3);
+        insert(&mut fields, "frm1601c:txtPg2BranchCode", branch);
+        insert(&mut fields, "frm1601c:txtPg2TaxpayerName", self.taxpayer_name.clone());
+
+        // Schedule 1
+        for i in 0..3 {
+            insert(&mut fields, &format!("chkScheduleDelete{}", i), "false");
+            insert(&mut fields, &format!("frm1601c:sched1:txtMonthYear{}", i), "");
+            insert(&mut fields, &format!("frm1601c:sched1:txtDatePaid{}", i), "");
+            insert(&mut fields, &format!("frm1601c:sched1:txtBankCode{}", i), "");
+            insert(&mut fields, &format!("frm1601c:sched1:txtNumber{}", i), "");
+            insert(&mut fields, &format!("frm1601c:sched1:txtTaxPaid{}", i), "0.00");
+            insert(&mut fields, &format!("frm1601c:sched1:txtShouldTaxDue{}", i), "0.00");
+            insert(&mut fields, &format!("frm1601c:sched1:txtAdjustments{}", i), "0.00");
+        }
+        insert(&mut fields, "frm1601c:sched1:txtTotal1", "0.00");
+
+        // Pagination
+        insert(&mut fields, "frm1601c:txtCurrentPage", "1");
+        insert(&mut fields, "frm1601c:txtMaxPage", "2");
+        insert(&mut fields, "frm1601c:txtLineBus", self.line_of_business.clone());
 
         fields
     }
@@ -135,11 +165,12 @@ fn insert(map: &mut BTreeMap<String, String>, key: &str, value: impl Into<String
 }
 
 fn insert_bool(map: &mut BTreeMap<String, String>, key: &str, value: bool) {
-    insert(map, key, if value { "Y" } else { "N" });
+    insert(map, key, if value { "true" } else { "false" });
 }
 
-fn insert_bool_yn(map: &mut BTreeMap<String, String>, key: &str, value: bool) {
-    insert(map, key, if value { "Y" } else { "N" });
+fn insert_bool_1_2(map: &mut BTreeMap<String, String>, key: &str, value: bool) {
+    insert(map, &format!("{}_1", key), if value { "true" } else { "false" });
+    insert(map, &format!("{}_2", key), if !value { "true" } else { "false" });
 }
 
 fn insert_money(map: &mut BTreeMap<String, String>, key: &str, value: f64) {
@@ -191,20 +222,21 @@ mod tests {
         };
 
         let mut draft = Form1601CDraft::new_from_profile(&profile, 2026, 5);
-        draft.tax_17_regular = 100_000.0;
-        draft.tax_18_supplementary = 20_000.0;
-        draft.tax_20_required_withheld = 15_000.0;
+        draft.tax_14_total_compensation = 100_000.0;
+        draft.tax_17_13th_month_pay = 20_000.0;
+        draft.tax_25_total_taxes_withheld = 15_000.0;
         draft.compute();
 
         let field_map = draft.to_bir_field_map();
         
-        assert_eq!(field_map["field17TaxableCompensation"], "100000.00");
-        assert_eq!(field_map["field18TaxRequired"], "20000.00");
-        assert_eq!(field_map["field19Adjustment"], "120000.00"); // 19 = 17+18
-        assert_eq!(field_map["field22TaxStillDue"], "15000.00"); // 20 - 21A - 21B
-        assert_eq!(field_map["field24TaxAmount"], "15000.00"); // 22 + 24D
+        assert_eq!(field_map["frm1601c:txtTax14"], "100000.00");
+        assert_eq!(field_map["frm1601c:txtTax17"], "20000.00");
+        assert_eq!(field_map["frm1601c:txtTax21"], "20000.00"); // 15 to 20 = 20k
+        assert_eq!(field_map["frm1601c:txtTax22"], "80000.00"); // 14 - 21 = 80k
+        assert_eq!(field_map["frm1601c:txtTax27"], "15000.00"); // Taxes withheld
+        assert_eq!(field_map["frm1601c:txtTax36"], "15000.00"); // Total payable
 
         let xml = draft.to_bir_xml_payload();
-        assert!(xml.contains("<div>field19Adjustment=120000.00field19Adjustment=</div>"));
+        assert!(xml.contains("<div>frm1601c:txtTax22=80000.00frm1601c:txtTax22=</div>"));
     }
 }

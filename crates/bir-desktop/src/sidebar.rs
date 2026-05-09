@@ -73,6 +73,8 @@ impl AppState {
                     .flex()
                     .flex_col()
                     .gap_4()
+                    .flex_1()
+                    .overflow_hidden()
                     .child(
                         div()
                             .flex()
@@ -224,7 +226,7 @@ impl AppState {
                     .child(
                         v_flex()
                             .id("sidebar-profile-list")
-                            .max_h(px(320.))
+                            .flex_1()
                             .overflow_y_scroll()
                             .track_scroll(&self.sidebar_scroll)
                             .pt_2()

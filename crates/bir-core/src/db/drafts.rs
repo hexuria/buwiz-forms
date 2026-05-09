@@ -153,6 +153,62 @@ impl Database {
         Ok(())
     }
 
+    /// Save or update a Form 1601C draft.
+    /// Uses UPSERT on (tin, form_code, taxable_year, quarter) where quarter = month.
+    pub fn save_1601c_draft(&self, draft: &crate::forms::form_1601c::Form1601CDraft) -> Result<i64, DbError> {
+        let json = serde_json::to_string(draft)?;
+        let status = match draft.status {
+            FilingStatus::Draft => "Draft",
+            FilingStatus::Queued => "Queued",
+            FilingStatus::Submitted => "Submitted",
+            FilingStatus::Confirmed => "Confirmed",
+            FilingStatus::Paid => "Paid",
+        };
+        let quarter = draft.month as i64; // Repurpose quarter column
+
+        self.conn.execute(
+            "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, status, data_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(tin, form_code, taxable_year, quarter)
+             DO UPDATE SET status = excluded.status,
+                           data_json = excluded.data_json,
+                           updated_at = datetime('now')",
+            params![
+                draft.tin,
+                "1601C",
+                draft.taxable_year as i64,
+                quarter,
+                status,
+                json
+            ],
+        )?;
+
+        let id = self.conn.last_insert_rowid();
+        Ok(id)
+    }
+
+    /// Load a 1601C draft for a specific (tin, year, month).
+    pub fn get_1601c_draft(
+        &self,
+        tin: &str,
+        year: u16,
+        month: u8,
+    ) -> Result<Option<crate::forms::form_1601c::Form1601CDraft>, DbError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT data_json FROM form_drafts
+             WHERE tin = ?1 AND form_code = '1601C'
+               AND taxable_year = ?2 AND quarter = ?3",
+        )?;
+        let mut rows = stmt.query(params![tin, year as i64, month as i64])?;
+        if let Some(row) = rows.next()? {
+            let json: String = row.get(0)?;
+            let draft: crate::forms::form_1601c::Form1601CDraft = serde_json::from_str(&json)?;
+            Ok(Some(draft))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Save an imported form directly to the form_drafts table to show up in Dashboard.
     pub fn save_imported_form(
         &self,
@@ -232,12 +288,17 @@ impl Database {
              FROM form_drafts WHERE tin = ?1 AND taxable_year = ?2",
         )?;
         let rows = stmt.query_map(params![tin, year as i64], |row| {
+            let form_code: String = row.get(2)?;
+            let is_1601c = form_code == "1601C";
+            let period_val = row.get::<_, Option<i64>>(4)?.map(|q| q as u8);
+            
             Ok(FormDraftSummary {
                 id: row.get(0)?,
                 tin: row.get(1)?,
-                form_code: row.get(2)?,
+                form_code,
                 taxable_year: row.get::<_, i64>(3)? as u16,
-                quarter: row.get::<_, Option<i64>>(4)?.map(|q| q as u8),
+                quarter: if is_1601c { None } else { period_val },
+                month: if is_1601c { period_val } else { None },
                 status: match row.get::<_, String>(5)?.as_str() {
                     "Confirmed" => FilingStatus::Confirmed,
                     "Submitted" | "Filed" => FilingStatus::Submitted,
@@ -262,12 +323,17 @@ impl Database {
              FROM form_drafts WHERE status = 'Queued' OR status = 'Submitted'",
         )?;
         let rows = stmt.query_map([], |row| {
+            let form_code: String = row.get(2)?;
+            let is_1601c = form_code == "1601C";
+            let period_val = row.get::<_, Option<i64>>(4)?.map(|q| q as u8);
+            
             Ok(FormDraftSummary {
                 id: row.get(0)?,
                 tin: row.get(1)?,
-                form_code: row.get(2)?,
+                form_code,
                 taxable_year: row.get::<_, i64>(3)? as u16,
-                quarter: row.get::<_, Option<i64>>(4)?.map(|q| q as u8),
+                quarter: if is_1601c { None } else { period_val },
+                month: if is_1601c { period_val } else { None },
                 status: match row.get::<_, String>(5)?.as_str() {
                     "Confirmed" => FilingStatus::Confirmed,
                     "Submitted" | "Filed" => FilingStatus::Submitted,

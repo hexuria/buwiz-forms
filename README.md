@@ -124,6 +124,7 @@ We follow a "less is better" philosophy. You only need to remember a few core co
 
 - `just run` — Run the app locally for development (automatically enables `dev-tools` and `layout-editor` features).
 - `just install` — Automatically figure out your OS and build the installer package (macOS DMG, Windows Zip, Linux DEB/Tarball).
+- `DEV_MODE=true just install --layout-editor --inspector` — Compiles a production-ready package with internal developer tools unlocked.
 - `just publish` — Auto-increment the patch version, tag, and push (triggers the release workflow in GitHub Actions).
 
 **Quality & Testing:**
@@ -171,6 +172,8 @@ This repository uses **Project-Local Skills** to automatically equip AI agents (
 - **Portability:** Because the skills are committed to version control, you don't need to run `npx skills add` or install anything globally. The agent will automatically recognize the `form-generator` skill (and any others) as soon as it interacts with this repository.
 
 ---
+
+## [Download Forms](https://www.bir.gov.ph/bir-forms)
 
 ## 📜 Development Notes
 

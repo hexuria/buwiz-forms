@@ -90,12 +90,12 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
         .into_iter()
         .filter(|s| s.status == FilingStatus::Queued)
     {
-        let mut draft = {
-            let db_guard = match db.lock() {
-                Ok(g) => g,
-                Err(_) => return,
-            };
-            if summary.form_code == "2551Q" {
+        if summary.form_code == "2551Q" {
+            let mut draft = {
+                let db_guard = match db.lock() {
+                    Ok(g) => g,
+                    Err(_) => return,
+                };
                 match db_guard.get_2551q_draft(
                     &profile.tin.full(),
                     summary.taxable_year,
@@ -104,124 +104,169 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                     Ok(Some(d)) => d,
                     _ => continue,
                 }
-            } else {
-                continue; // other forms not supported yet
-            }
-        };
+            };
 
-        // Check if we should retry now
-        if let Some(next_retry) = &draft.next_retry_at
-            && let Ok(next_time) = chrono::DateTime::parse_from_rfc3339(next_retry)
-            && Utc::now() < next_time.with_timezone(&Utc)
-        {
-            continue; // not time yet
-        }
-
-        info!(
-            "Cron: Attempting to submit queued form {} for {}",
-            draft.period_code(),
-            profile.tin.full()
-        );
-
-        let form_type = "2551Qv2018"; // hardcoded for 2551Q for now
-        let filename = draft.default_submission_filename();
-        let xml_payload = draft.to_bir_xml_payload();
-        let encrypted = match crate::crypto::compress_and_encrypt(
-            xml_payload.as_bytes(),
-            crate::crypto::BIR_IAF_PASSPHRASE,
-        ) {
-            Ok(enc) => enc,
-            Err(e) => {
-                fail_draft(&mut draft, db.clone(), e.to_string());
+            if let Some(next_retry) = &draft.next_retry_at
+                && let Ok(next_time) = chrono::DateTime::parse_from_rfc3339(next_retry)
+                && Utc::now() < next_time.with_timezone(&Utc)
+            {
                 continue;
             }
-        };
 
-        match crate::transport::submit_iaf(form_type, &filename, &encrypted).await {
-            Ok(_) => {
-                info!("Cron: Successfully submitted queued form {}", filename);
+            info!(
+                "Cron: Attempting to submit queued form {} for {}",
+                draft.period_code(),
+                profile.tin.full()
+            );
 
-                let now = Utc::now();
-                crate::notification::send_notification(
-                    "BIR Form Submitted",
-                    &format!(
-                        "Filename: {}\nTimestamp: {}",
-                        filename,
-                        now.format("%I:%M %p")
-                    ),
-                );
+            let form_type = "2551Qv2018";
+            let filename = draft.default_submission_filename();
+            let xml_payload = draft.to_bir_xml_payload();
+            let encrypted = match crate::crypto::compress_and_encrypt(
+                xml_payload.as_bytes(),
+                crate::crypto::BIR_IAF_PASSPHRASE,
+            ) {
+                Ok(enc) => enc,
+                Err(e) => {
+                    fail_draft_2551q(&mut draft, db.clone(), e.to_string());
+                    continue;
+                }
+            };
 
-                draft.transition_to_submitted(filename.clone());
-
-                if let Ok(db_guard) = db.lock() {
-                    let _ = db_guard.save_2551q_draft(&draft);
-
-                    if profile.is_email_tracking_active() {
-                        let email = profile
-                            .imap_email
-                            .clone()
-                            .unwrap_or_else(|| profile.email.clone());
-                        let job_name =
-                            format!("Waiting for 2551Q confirmation email for {}", email);
-                        let legacy_job_name = format!("Poll Receipts: {}", email);
-
-                        let jobs = db_guard.list_jobs().unwrap_or_default();
-                        let mut exists = false;
-                        for job in jobs.iter() {
-                            if (job.name == job_name || job.name == legacy_job_name)
-                                && job.status != "Archived"
-                                && job.status != "Done"
-                            {
-                                exists = true;
-                                break;
-                            }
-                        }
-
-                        if !exists {
-                            let new_job = crate::db::Job {
-                                id: None,
-                                name: job_name,
-                                job_type: "System".to_string(),
-                                cron_expr: Some("0 * * * * *".to_string()),
-                                command: Some(format!("bir_poll_email {}", email)),
-                                status: "Queued".to_string(),
-                                retries: 0,
-                                last_run_at: None,
-                                next_run_at: None,
-                                created_at: Utc::now().to_rfc3339(),
-                                output_log: None,
-                            };
-                            let _ = db_guard.save_job(new_job);
-                        }
+            match crate::transport::submit_iaf(form_type, &filename, &encrypted).await {
+                Ok(_) => {
+                    info!("Cron: Successfully submitted queued form {}", filename);
+                    let now = Utc::now();
+                    crate::notification::send_notification(
+                        "BIR Form Submitted",
+                        &format!("Filename: {}\nTimestamp: {}", filename, now.format("%I:%M %p")),
+                    );
+                    draft.transition_to_submitted(filename.clone());
+                    if let Ok(db_guard) = db.lock() {
+                        let _ = db_guard.save_2551q_draft(&draft);
+                        schedule_email_poll(profile, "2551Q", &db_guard);
                     }
                 }
+                Err(e) => fail_draft_2551q(&mut draft, db.clone(), e.to_string()),
             }
-            Err(e) => {
-                fail_draft(&mut draft, db.clone(), e.to_string());
+        } else if summary.form_code == "1601C" {
+            let mut draft = {
+                let db_guard = match db.lock() {
+                    Ok(g) => g,
+                    Err(_) => return,
+                };
+                match db_guard.get_1601c_draft(
+                    &profile.tin.full(),
+                    summary.taxable_year,
+                    summary.month.unwrap_or(0),
+                ) {
+                    Ok(Some(d)) => d,
+                    _ => continue,
+                }
+            };
+
+            if let Some(next_retry) = &draft.next_retry_at
+                && let Ok(next_time) = chrono::DateTime::parse_from_rfc3339(next_retry)
+                && Utc::now() < next_time.with_timezone(&Utc)
+            {
+                continue;
+            }
+
+            info!(
+                "Cron: Attempting to submit queued form {} for {}",
+                draft.period_code(),
+                profile.tin.full()
+            );
+
+            let form_type = "1601Cv2018";
+            let filename = draft.default_submission_filename();
+            let xml_payload = draft.to_bir_xml_payload();
+            let encrypted = match crate::crypto::compress_and_encrypt(
+                xml_payload.as_bytes(),
+                crate::crypto::BIR_IAF_PASSPHRASE,
+            ) {
+                Ok(enc) => enc,
+                Err(e) => {
+                    fail_draft_1601c(&mut draft, db.clone(), e.to_string());
+                    continue;
+                }
+            };
+
+            match crate::transport::submit_iaf(form_type, &filename, &encrypted).await {
+                Ok(_) => {
+                    info!("Cron: Successfully submitted queued form {}", filename);
+                    let now = Utc::now();
+                    crate::notification::send_notification(
+                        "BIR Form Submitted",
+                        &format!("Filename: {}\nTimestamp: {}", filename, now.format("%I:%M %p")),
+                    );
+                    draft.transition_to_submitted(filename.clone());
+                    if let Ok(db_guard) = db.lock() {
+                        let _ = db_guard.save_form_draft(
+                            &draft.tin,
+                            "1601C",
+                            draft.taxable_year,
+                            Some(draft.month),
+                            &draft.status,
+                            &draft
+                        );
+                        schedule_email_poll(profile, "1601C", &db_guard);
+                    }
+                }
+                Err(e) => fail_draft_1601c(&mut draft, db.clone(), e.to_string()),
             }
         }
     }
 }
 
-fn fail_draft(
+fn schedule_email_poll(profile: &TaxpayerProfile, form_code: &str, db_guard: &std::sync::MutexGuard<Database>) {
+    if profile.is_email_tracking_active() {
+        let email = profile.imap_email.clone().unwrap_or_else(|| profile.email.clone());
+        let job_name = format!("Waiting for {} confirmation email for {}", form_code, email);
+        let legacy_job_name = format!("Poll Receipts: {}", email);
+
+        let jobs = db_guard.list_jobs().unwrap_or_default();
+        let mut exists = false;
+        for job in jobs.iter() {
+            if (job.name == job_name || job.name == legacy_job_name)
+                && job.status != "Archived"
+                && job.status != "Done"
+            {
+                exists = true;
+                break;
+            }
+        }
+
+        if !exists {
+            let new_job = crate::db::Job {
+                id: None,
+                name: job_name,
+                job_type: "System".to_string(),
+                cron_expr: Some("0 * * * * *".to_string()),
+                command: Some(format!("bir_poll_email {}", email)),
+                status: "Queued".to_string(),
+                retries: 0,
+                last_run_at: None,
+                next_run_at: None,
+                created_at: Utc::now().to_rfc3339(),
+                output_log: None,
+            };
+            let _ = db_guard.save_job(new_job);
+        }
+    }
+}
+
+fn fail_draft_2551q(
     draft: &mut crate::forms::form_2551q::Form2551QDraft,
     db: Arc<Mutex<Database>>,
     error_msg: String,
 ) {
-    warn!(
-        "Cron: Submission failed for {}: {}",
-        draft.period_code(),
-        error_msg
-    );
-
+    warn!("Cron: Submission failed for {}: {}", draft.period_code(), error_msg);
     let attempts_before = draft.submission_attempts;
     draft.record_submission_failure(error_msg);
 
     if draft.submission_attempts >= 5 || attempts_before >= 4 {
-        warn!(
-            "Cron: Max attempts reached for {}. Giving up.",
-            draft.period_code()
-        );
+        warn!("Cron: Max attempts reached for {}. Giving up.", draft.period_code());
     } else {
         let delay_mins = 2i64.pow(draft.submission_attempts - 1);
         info!("Cron: Next retry scheduled in {} mins", delay_mins);
@@ -229,6 +274,34 @@ fn fail_draft(
 
     if let Ok(db_guard) = db.lock() {
         let _ = db_guard.save_2551q_draft(draft);
+    }
+}
+
+fn fail_draft_1601c(
+    draft: &mut crate::forms::form_1601c::Form1601CDraft,
+    db: Arc<Mutex<Database>>,
+    error_msg: String,
+) {
+    warn!("Cron: Submission failed for {}: {}", draft.period_code(), error_msg);
+    let attempts_before = draft.submission_attempts;
+    draft.record_submission_failure(error_msg);
+
+    if draft.submission_attempts >= 5 || attempts_before >= 4 {
+        warn!("Cron: Max attempts reached for {}. Giving up.", draft.period_code());
+    } else {
+        let delay_mins = 2i64.pow(draft.submission_attempts - 1);
+        info!("Cron: Next retry scheduled in {} mins", delay_mins);
+    }
+
+    if let Ok(db_guard) = db.lock() {
+        let _ = db_guard.save_form_draft(
+            &draft.tin,
+            "1601C",
+            draft.taxable_year,
+            Some(draft.month),
+            &draft.status,
+            draft
+        );
     }
 }
 

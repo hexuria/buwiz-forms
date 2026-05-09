@@ -40,6 +40,7 @@ pub struct FormDraftSummary {
     pub form_code: String,
     pub taxable_year: u16,
     pub quarter: Option<u8>,
+    pub month: Option<u8>,
     pub status: FilingStatus,
     pub updated_at: String,
 }

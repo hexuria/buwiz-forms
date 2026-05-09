@@ -65,6 +65,14 @@ install *args="":
         just _package-linux "{{args}}"; \
     fi
 
+# Build and package the app for Mac App Store submission
+app *args="":
+    @if [ "{{os()}}" = "macos" ]; then \
+        just _package-mac-appstore "{{args}}"; \
+    else \
+        echo "⚠️ App Store builds are only supported on macOS."; \
+    fi
+
 # Publish a new release (tags and pushes to trigger CI)
 publish version="":
     #!/usr/bin/env bash
@@ -128,6 +136,11 @@ _package-mac args="":
     sed -i '' "s/VERSION_PLACEHOLDER/{{VERSION}}/g" "{{MAC_APP}}/Contents/Info.plist"
     sed -i '' "s/BUNDLE_ID_PLACEHOLDER/{{BUNDLE_ID}}/g" "{{MAC_APP}}/Contents/Info.plist"
     sed -i '' "s/APP_NAME_PLACEHOLDER/{{APP_NAME}}/g" "{{MAC_APP}}/Contents/Info.plist"
+    if [ "$DEV_MODE" = "true" ] || [ "$DEVELOPER_MODE" = "true" ]; then
+        echo "Injecting DEVELOPER_MODE into Info.plist..."
+        /usr/libexec/PlistBuddy -c "Add :LSEnvironment dict" "{{MAC_APP}}/Contents/Info.plist" || true
+        /usr/libexec/PlistBuddy -c "Add :LSEnvironment:DEVELOPER_MODE string true" "{{MAC_APP}}/Contents/Info.plist" || true
+    fi
     touch "{{MAC_APP}}"
     echo "✅ {{MAC_APP}} created"
     if command -v create-dmg >/dev/null 2>&1; then \
@@ -138,6 +151,58 @@ _package-mac args="":
         echo "⚠️ create-dmg not found. Falling back to zip..."; \
         cd {{RELEASE_DIR}} && zip -r "{{APP_NAME}}-macOS-{{VERSION}}.zip" "{{APP_NAME}}.app"; \
     fi
+
+_package-mac-appstore args="":
+    #!/usr/bin/env bash
+    set -e
+    echo "Building for Mac App Store..."
+    # Always include mas_build feature
+    FEATURES="mas_build"
+    for arg in {{args}}; do
+        case "$arg" in
+            --layout-editor) FEATURES="${FEATURES},layout-editor" ;;
+            --inspector)     FEATURES="${FEATURES},inspector" ;;
+        esac
+    done
+    FEATURES_FLAG="--features $FEATURES"
+    
+    echo "Building for ARM64..."
+    cargo build --release --target {{MAC_ARM_TARGET}} $FEATURES_FLAG
+    echo "Building for x86_64..."
+    cargo build --release --target {{MAC_X86_TARGET}} $FEATURES_FLAG
+    
+    mkdir -p {{RELEASE_DIR}}
+    echo "Creating universal binary (lipo)..."
+    lipo -create target/{{MAC_ARM_TARGET}}/release/bir target/{{MAC_X86_TARGET}}/release/bir -output {{RELEASE_DIR}}/bir
+    
+    # Note: bir-daemon is omitted for mas_build
+    echo "Creating sandboxed .app bundle..."
+    rm -rf "{{MAC_APP}}"
+    mkdir -p "{{MAC_APP}}/Contents/MacOS" "{{MAC_APP}}/Contents/Resources"
+    cp {{RELEASE_DIR}}/bir "{{MAC_APP}}/Contents/MacOS/"
+    
+    if command -v typst >/dev/null 2>&1; then cp $(which typst) "{{MAC_APP}}/Contents/MacOS/"; fi
+    cp -R assets "{{MAC_APP}}/Contents/Resources/"
+    cp assets/AppIcon.icns "{{MAC_APP}}/Contents/Resources/"
+    cp -R formtypes "{{MAC_APP}}/Contents/Resources/"
+    
+    cp assets/macos/Info.plist "{{MAC_APP}}/Contents/Info.plist"
+    sed -i '' "s/VERSION_PLACEHOLDER/{{VERSION}}/g" "{{MAC_APP}}/Contents/Info.plist"
+    sed -i '' "s/BUNDLE_ID_PLACEHOLDER/{{BUNDLE_ID}}/g" "{{MAC_APP}}/Contents/Info.plist"
+    sed -i '' "s/APP_NAME_PLACEHOLDER/{{APP_NAME}}/g" "{{MAC_APP}}/Contents/Info.plist"
+    
+    # Add Sandbox requirement to Info.plist
+    /usr/libexec/PlistBuddy -c "Add :LSApplicationCategoryType string public.app-category.finance" "{{MAC_APP}}/Contents/Info.plist" || true
+    
+    touch "{{MAC_APP}}"
+    echo "✅ {{MAC_APP}} created"
+    
+    echo "Creating unsigned .pkg for App Store submission..."
+    PKG_PATH="{{RELEASE_DIR}}/{{APP_NAME}}-macOS-MAS-{{VERSION}}.pkg"
+    rm -f "$PKG_PATH"
+    productbuild --component "{{MAC_APP}}" /Applications "$PKG_PATH"
+    echo "✅ PKG created: $PKG_PATH"
+    echo "⚠️  Note: You must codesign the .app and the .pkg with an 'Apple Distribution' certificate before submitting."
 
 _package-win args="":
     #!/usr/bin/env bash
@@ -158,6 +223,9 @@ _package-win args="":
     if command -v typst >/dev/null 2>&1; then cp $(which typst) {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/; fi
     cp -R assets {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/
     cp -R formtypes {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/
+    if [ "$DEV_MODE" = "true" ] || [ "$DEVELOPER_MODE" = "true" ]; then
+        echo "DEVELOPER_MODE=true" > "{{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/.env"
+    fi
     cd {{RELEASE_DIR}} && zip -r "{{APP_NAME}}-Windows-x64-{{VERSION}}.zip" "{{APP_NAME}}-Windows-{{VERSION}}"
     echo "✅ Windows package: {{RELEASE_DIR}}/{{APP_NAME}}-Windows-x64-{{VERSION}}.zip"
 
@@ -186,6 +254,9 @@ _package-linux args="":
         if command -v typst >/dev/null 2>&1; then cp $(which typst) {{RELEASE_DIR}}/{{APP_NAME}}-Linux-{{VERSION}}/; fi; \
         cp -R assets {{RELEASE_DIR}}/{{APP_NAME}}-Linux-{{VERSION}}/; \
         cp -R formtypes {{RELEASE_DIR}}/{{APP_NAME}}-Linux-{{VERSION}}/; \
+        if [ "$DEV_MODE" = "true" ] || [ "$DEVELOPER_MODE" = "true" ]; then \
+            echo "DEVELOPER_MODE=true" > "{{RELEASE_DIR}}/{{APP_NAME}}-Linux-{{VERSION}}/.env"; \
+        fi; \
         cd {{RELEASE_DIR}} && tar czf "{{APP_NAME}}-Linux-x64-{{VERSION}}.tar.gz" "{{APP_NAME}}-Linux-{{VERSION}}"; \
         echo "✅ Tarball: {{RELEASE_DIR}}/{{APP_NAME}}-Linux-x64-{{VERSION}}.tar.gz"; \
     fi

@@ -1,0 +1,1511 @@
+{
+  "form_id": "1601Cv2018",
+  "page_width": 612.0,
+  "page_height": 936.0,
+  "fields": [
+    {
+      "key": "frm1601c:txtTax14",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 295.5,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax15",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 321.2,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax16",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 337.2,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax17",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 353.1,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax18",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 369.0,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax19",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 384.9,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax20",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 400.9,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax21",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 416.8,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax22",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 432.8,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax23",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 448.8,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax24",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 464.7,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax25",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 480.7,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax26",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 496.7,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax27",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 512.6,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax28",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 528.6,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax29",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 544.4,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax30",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 561.1,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax31",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 577.1,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax32",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 593.0,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax33",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 608.9,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax34",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 624.9,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax35",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 640.8,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTax36",
+      "kind": "dec",
+      "page": 1,
+      "x": 429.1,
+      "y": 656.8,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 555.1,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtAmount37",
+      "kind": "dec",
+      "page": 1,
+      "x": 456.9,
+      "y": 788.0,
+      "optional": true,
+      "cell_w": 14.0,
+      "int_cells": 7,
+      "dec_x": 554.9,
+      "char_count": 9,
+      "widget": {
+        "type": "text",
+        "width": 126.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtAmount38",
+      "kind": "dec",
+      "page": 1,
+      "x": 456.9,
+      "y": 805.5,
+      "optional": true,
+      "cell_w": 14.0,
+      "int_cells": 7,
+      "dec_x": 554.9,
+      "char_count": 9,
+      "widget": {
+        "type": "text",
+        "width": 126.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtAmount39",
+      "kind": "dec",
+      "page": 1,
+      "x": 456.9,
+      "y": 824.3,
+      "optional": true,
+      "cell_w": 14.0,
+      "int_cells": 7,
+      "dec_x": 554.9,
+      "char_count": 9,
+      "widget": {
+        "type": "text",
+        "width": 126.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtAmount40",
+      "kind": "dec",
+      "page": 1,
+      "x": 456.9,
+      "y": 844.0,
+      "optional": true,
+      "cell_w": 14.0,
+      "int_cells": 7,
+      "dec_x": 554.9,
+      "char_count": 9,
+      "widget": {
+        "type": "text",
+        "width": 126.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtTaxPaid0",
+      "kind": "dec",
+      "page": 2,
+      "x": 428.6,
+      "y": 169.2,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 554.6,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtShouldTaxDue0",
+      "kind": "dec",
+      "page": 2,
+      "x": 128.0,
+      "y": 239.9,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 254.0,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtAdjustments0",
+      "kind": "dec",
+      "page": 2,
+      "x": 371.3,
+      "y": 239.9,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 497.3,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtTaxPaid1",
+      "kind": "dec",
+      "page": 2,
+      "x": 428.6,
+      "y": 185.5,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 554.6,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtShouldTaxDue1",
+      "kind": "dec",
+      "page": 2,
+      "x": 128.0,
+      "y": 256.1,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 254.0,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtAdjustments1",
+      "kind": "dec",
+      "page": 2,
+      "x": 371.3,
+      "y": 256.1,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 497.3,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtTaxPaid2",
+      "kind": "dec",
+      "page": 2,
+      "x": 428.6,
+      "y": 201.8,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 554.6,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtShouldTaxDue2",
+      "kind": "dec",
+      "page": 2,
+      "x": 128.0,
+      "y": 272.3,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 254.0,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtAdjustments2",
+      "kind": "dec",
+      "page": 2,
+      "x": 371.3,
+      "y": 272.3,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 497.3,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtTotal1",
+      "kind": "dec",
+      "page": 2,
+      "x": 371.3,
+      "y": 288.8,
+      "optional": false,
+      "cell_w": 14.0,
+      "int_cells": 9,
+      "dec_x": 497.3,
+      "char_count": 11,
+      "widget": {
+        "type": "text",
+        "width": 154.0,
+        "height": 14.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtMonth",
+      "kind": "int",
+      "page": 1,
+      "x": 18.5,
+      "y": 108.5,
+      "optional": false,
+      "cell_w": 14.0,
+      "char_count": 2,
+      "widget": {
+        "type": "text",
+        "width": 28,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtYear",
+      "kind": "int",
+      "page": 1,
+      "x": 53.5,
+      "y": 108.5,
+      "optional": false,
+      "cell_w": 14.0,
+      "char_count": 4,
+      "widget": {
+        "type": "text",
+        "width": 56,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:AmendedRtn_1",
+      "kind": "bool",
+      "page": 1,
+      "x": 204.0,
+      "y": 113.0,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 13,
+        "height": 13,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:AmendedRtn_2",
+      "kind": "bool",
+      "page": 1,
+      "x": 246.5,
+      "y": 113.0,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 13,
+        "height": 13,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:TaxWithheld_1",
+      "kind": "bool",
+      "page": 1,
+      "x": 318.0,
+      "y": 113.0,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 13,
+        "height": 13,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:TaxWithheld_2",
+      "kind": "bool",
+      "page": 1,
+      "x": 360.5,
+      "y": 113.0,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 13,
+        "height": 13,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtSheets",
+      "kind": "int",
+      "page": 1,
+      "x": 432.0,
+      "y": 108.5,
+      "optional": false,
+      "cell_w": 14.0,
+      "char_count": 3,
+      "widget": {
+        "type": "text",
+        "width": 42,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtATC",
+      "kind": "char",
+      "page": 1,
+      "x": 539.0,
+      "y": 108.5,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 60,
+        "height": 15,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTIN1",
+      "kind": "char",
+      "page": 1,
+      "x": 175.0,
+      "y": 145.0,
+      "optional": false,
+      "cell_w": 14.0,
+      "char_count": 3,
+      "widget": {
+        "type": "text",
+        "width": 42,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTIN2",
+      "kind": "char",
+      "page": 1,
+      "x": 231.0,
+      "y": 145.0,
+      "optional": false,
+      "cell_w": 14.0,
+      "char_count": 3,
+      "widget": {
+        "type": "text",
+        "width": 42,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTIN3",
+      "kind": "char",
+      "page": 1,
+      "x": 287.0,
+      "y": 145.0,
+      "optional": false,
+      "cell_w": 14.0,
+      "char_count": 3,
+      "widget": {
+        "type": "text",
+        "width": 42,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtBranchCode",
+      "kind": "char",
+      "page": 1,
+      "x": 343.0,
+      "y": 145.0,
+      "optional": false,
+      "cell_w": 14.0,
+      "char_count": 5,
+      "widget": {
+        "type": "text",
+        "width": 70,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtRDOCode",
+      "kind": "char",
+      "page": 1,
+      "x": 490.0,
+      "y": 145.0,
+      "optional": false,
+      "cell_w": 14.0,
+      "char_count": 3,
+      "widget": {
+        "type": "text",
+        "width": 42,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtLineBus",
+      "kind": "char",
+      "page": 1,
+      "x": 540.0,
+      "y": 145.0,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 54,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTaxpayerName",
+      "kind": "char",
+      "page": 1,
+      "x": 18.5,
+      "y": 163.0,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 575,
+        "height": 13,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtAddress",
+      "kind": "char",
+      "page": 1,
+      "x": 18.5,
+      "y": 185.0,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 575,
+        "height": 22,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtZipCode",
+      "kind": "int",
+      "page": 1,
+      "x": 469.0,
+      "y": 215.0,
+      "optional": false,
+      "cell_w": 14.0,
+      "char_count": 4,
+      "widget": {
+        "type": "text",
+        "width": 56,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtTelNum",
+      "kind": "char",
+      "page": 1,
+      "x": 85.0,
+      "y": 230.0,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 120,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:CatAgent_P",
+      "kind": "bool",
+      "page": 1,
+      "x": 447.0,
+      "y": 230.0,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 13,
+        "height": 13,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:CatAgent_G",
+      "kind": "bool",
+      "page": 1,
+      "x": 531.0,
+      "y": 230.0,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 13,
+        "height": 13,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtEmail",
+      "kind": "char",
+      "page": 1,
+      "x": 85.0,
+      "y": 247.5,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 395,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:SpecialTax_1",
+      "kind": "bool",
+      "page": 1,
+      "x": 191.0,
+      "y": 265.0,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 13,
+        "height": 13,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:SpecialTax_2",
+      "kind": "bool",
+      "page": 1,
+      "x": 221.0,
+      "y": 265.0,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 13,
+        "height": 13,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:selTreaty",
+      "kind": "char",
+      "page": 1,
+      "x": 278.0,
+      "y": 265.0,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 210,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txt20Other",
+      "kind": "char",
+      "page": 1,
+      "x": 210.0,
+      "y": 392.0,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 190,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txt29Other",
+      "kind": "char",
+      "page": 1,
+      "x": 128.0,
+      "y": 541.0,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 260,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtTaxAgentNo",
+      "kind": "char",
+      "page": 1,
+      "x": 110.0,
+      "y": 745.0,
+      "optional": true,
+      "widget": {
+        "type": "text",
+        "width": 160.0,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtDateIssue",
+      "kind": "char",
+      "page": 1,
+      "x": 350.0,
+      "y": 745.0,
+      "optional": true,
+      "widget": {
+        "type": "text",
+        "width": 100,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtDateExpiry",
+      "kind": "char",
+      "page": 1,
+      "x": 510.0,
+      "y": 745.0,
+      "optional": true,
+      "widget": {
+        "type": "text",
+        "width": 100,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtAgency37",
+      "kind": "char",
+      "page": 1,
+      "x": 115.0,
+      "y": 785.0,
+      "optional": true,
+      "widget": {
+        "type": "text",
+        "width": 90.0,
+        "height": 14,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtNumber37",
+      "kind": "char",
+      "page": 1,
+      "x": 210.0,
+      "y": 785.0,
+      "optional": true,
+      "widget": {
+        "type": "text",
+        "width": 65.0,
+        "height": 14,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtDate37",
+      "kind": "char",
+      "page": 1,
+      "x": 280.0,
+      "y": 785.0,
+      "optional": true,
+      "widget": {
+        "type": "text",
+        "width": 75.0,
+        "height": 14,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtAgency38",
+      "kind": "char",
+      "page": 1,
+      "x": 115.0,
+      "y": 802.0,
+      "optional": true,
+      "widget": {
+        "type": "text",
+        "width": 90.0,
+        "height": 14,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtNumber38",
+      "kind": "char",
+      "page": 1,
+      "x": 210.0,
+      "y": 802.0,
+      "optional": true,
+      "widget": {
+        "type": "text",
+        "width": 65.0,
+        "height": 14,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtDate38",
+      "kind": "char",
+      "page": 1,
+      "x": 280.0,
+      "y": 802.0,
+      "optional": true,
+      "widget": {
+        "type": "text",
+        "width": 75.0,
+        "height": 14,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtNumber39",
+      "kind": "char",
+      "page": 1,
+      "x": 210.0,
+      "y": 820.0,
+      "optional": true,
+      "widget": {
+        "type": "text",
+        "width": 65.0,
+        "height": 14,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtDate39",
+      "kind": "char",
+      "page": 1,
+      "x": 280.0,
+      "y": 820.0,
+      "optional": true,
+      "widget": {
+        "type": "text",
+        "width": 75.0,
+        "height": 14,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtParticular40",
+      "kind": "char",
+      "page": 1,
+      "x": 18.5,
+      "y": 852.0,
+      "optional": true,
+      "widget": {
+        "type": "text",
+        "width": 90.0,
+        "height": 14,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtAgency40",
+      "kind": "char",
+      "page": 1,
+      "x": 115.0,
+      "y": 852.0,
+      "optional": true,
+      "widget": {
+        "type": "text",
+        "width": 90.0,
+        "height": 14,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtNumber40",
+      "kind": "char",
+      "page": 1,
+      "x": 210.0,
+      "y": 852.0,
+      "optional": true,
+      "widget": {
+        "type": "text",
+        "width": 65.0,
+        "height": 14,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtDate40",
+      "kind": "char",
+      "page": 1,
+      "x": 280.0,
+      "y": 852.0,
+      "optional": true,
+      "widget": {
+        "type": "text",
+        "width": 75.0,
+        "height": 14,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtPg2TIN1",
+      "kind": "char",
+      "page": 2,
+      "x": 70.0,
+      "y": 85.0,
+      "optional": false,
+      "cell_w": 14.0,
+      "char_count": 3,
+      "widget": {
+        "type": "text",
+        "width": 42,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtPg2TIN2",
+      "kind": "char",
+      "page": 2,
+      "x": 126.0,
+      "y": 85.0,
+      "optional": false,
+      "cell_w": 14.0,
+      "char_count": 3,
+      "widget": {
+        "type": "text",
+        "width": 42,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtPg2TIN3",
+      "kind": "char",
+      "page": 2,
+      "x": 182.0,
+      "y": 85.0,
+      "optional": false,
+      "cell_w": 14.0,
+      "char_count": 3,
+      "widget": {
+        "type": "text",
+        "width": 42,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtPg2BranchCode",
+      "kind": "char",
+      "page": 2,
+      "x": 238.0,
+      "y": 85.0,
+      "optional": false,
+      "cell_w": 14.0,
+      "char_count": 5,
+      "widget": {
+        "type": "text",
+        "width": 70,
+        "height": 11,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:txtPg2TaxpayerName",
+      "kind": "char",
+      "page": 2,
+      "x": 244.0,
+      "y": 70.0,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 310,
+        "height": 13,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtMonthYear0",
+      "kind": "char",
+      "page": 2,
+      "x": 18.5,
+      "y": 169.0,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 121.5,
+        "height": 15,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtDatePaid0",
+      "kind": "char",
+      "page": 2,
+      "x": 140.0,
+      "y": 169.0,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 90,
+        "height": 15,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtBankCode0",
+      "kind": "char",
+      "page": 2,
+      "x": 230.0,
+      "y": 169.0,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 83,
+        "height": 15,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtNumber0",
+      "kind": "int",
+      "page": 2,
+      "x": 313.0,
+      "y": 169.0,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 77,
+        "height": 15,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtMonthYear1",
+      "kind": "char",
+      "page": 2,
+      "x": 18.5,
+      "y": 185.3,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 121.5,
+        "height": 15,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtDatePaid1",
+      "kind": "char",
+      "page": 2,
+      "x": 140.0,
+      "y": 185.3,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 90,
+        "height": 15,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtBankCode1",
+      "kind": "char",
+      "page": 2,
+      "x": 230.0,
+      "y": 185.3,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 83,
+        "height": 15,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtNumber1",
+      "kind": "int",
+      "page": 2,
+      "x": 313.0,
+      "y": 185.3,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 77,
+        "height": 15,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtMonthYear2",
+      "kind": "char",
+      "page": 2,
+      "x": 18.5,
+      "y": 201.6,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 121.5,
+        "height": 15,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtDatePaid2",
+      "kind": "char",
+      "page": 2,
+      "x": 140.0,
+      "y": 201.6,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 90,
+        "height": 15,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtBankCode2",
+      "kind": "char",
+      "page": 2,
+      "x": 230.0,
+      "y": 201.6,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 83,
+        "height": 15,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "frm1601c:sched1:txtNumber2",
+      "kind": "int",
+      "page": 2,
+      "x": 313.0,
+      "y": 201.6,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 77,
+        "height": 15,
+        "font_size": 8.5
+      }
+    }
+  ]
+}

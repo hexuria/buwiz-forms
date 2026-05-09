@@ -20,7 +20,7 @@ impl Tin {
     /// Full TIN as a single string (e.g., "01055805400000")
     pub fn full(&self) -> String {
         format!(
-            "{}{}{}{}",
+            "{}{}{}{:0>5}",
             self.segment1, self.segment2, self.segment3, self.branch
         )
     }
@@ -28,7 +28,7 @@ impl Tin {
     /// Formatted TIN with dashes (e.g., "010-558-054-00000")
     pub fn formatted(&self) -> String {
         format!(
-            "{}-{}-{}-{}",
+            "{}-{}-{}-{:0>5}",
             self.segment1, self.segment2, self.segment3, self.branch
         )
     }
