@@ -19,7 +19,7 @@
     <key>CFBundleShortVersionString</key>
     <string>VERSION_PLACEHOLDER</string>
     <key>CFBundleVersion</key>
-    <string>VERSION_PLACEHOLDER</string>
+    <string>BUILD_NUMBER_PLACEHOLDER</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>NSHighResolutionCapable</key>
