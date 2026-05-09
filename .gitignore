@@ -67,3 +67,6 @@ node_modules/
 .scripts/
 .impl/
 .formfields/
+
+.keys/
+*.p8
