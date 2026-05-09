@@ -2,6 +2,36 @@
 
 use gpui::*;
 
+// ── Application Lifecycle ────────────────────────────────────────────────────
+
+/// Enforces that only one instance of the application runs at a time.
+pub fn enforce_single_instance() {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn CreateMutexW(
+            lpMutexAttributes: *mut std::ffi::c_void,
+            bInitialOwner: i32,
+            lpName: *const u16,
+        ) -> *mut std::ffi::c_void;
+        fn GetLastError() -> u32;
+    }
+
+    let name: Vec<u16> = OsStr::new("eBIRForms_Desktop_App_Mutex_Lock")
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+
+    unsafe {
+        let handle = CreateMutexW(std::ptr::null_mut(), 0, name.as_ptr());
+        if handle.is_null() || GetLastError() == 183 /* ERROR_ALREADY_EXISTS */ {
+            std::process::exit(0);
+        }
+    }
+}
+
 // ── Keybindings ──────────────────────────────────────────────────────────────
 
 /// Register global keybindings using the Windows `ctrl` modifier.
@@ -14,7 +44,7 @@ pub fn bind_global_keys(cx: &mut App) {
         KeyBinding::new("ctrl-shift-b", ToggleSidebarMini, None),
         KeyBinding::new("ctrl-f", FocusSearch, None),
         KeyBinding::new("ctrl-n", CreateProfile, None),
-        KeyBinding::new("ctrl-t", ToggleTheme, None),
+        KeyBinding::new("ctrl-shift-t", ToggleTheme, None),
         KeyBinding::new("ctrl-shift-x", OpenCronTasks, None),
         KeyBinding::new("ctrl-,", OpenSettings, None),
         KeyBinding::new("ctrl-k", OpenCommandPalette, None),
@@ -36,15 +66,29 @@ pub fn bind_global_keys(cx: &mut App) {
 /// Reveal a file in Windows Explorer using `explorer /select,`.
 #[allow(dead_code)]
 pub fn reveal_in_file_manager(path: &std::path::Path) {
-    let _ = std::process::Command::new("explorer")
-        .arg("/select,")
-        .arg(path)
-        .spawn();
+    let path_str = path.to_string_lossy().replace("/", "\\");
+    let mut cmd = std::process::Command::new("explorer");
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    let _ = cmd.arg("/select,").arg(path_str).spawn();
 }
 
 /// Open a file with the default system application.
 pub fn open_in_system(path: &std::path::Path) {
-    let _ = open::that(path);
+    // Windows ShellExecute treats forward slashes as internet/UNC paths which triggers
+    // a "trusted source" security prompt. Force all slashes to backslashes.
+    let path_str = path.to_string_lossy().replace("/", "\\");
+    
+    // Forcefully remove the Mark of the Web (Zone.Identifier) alternate data stream.
+    // This completely unblocks the file and marks it as trusted, avoiding the Windows security prompt
+    // for existing files that were copied over with the MotW stream intact.
+    let motw_path = format!("{}:Zone.Identifier", path_str);
+    let _ = std::fs::remove_file(&motw_path);
+
+    let _ = open::that(path_str);
 }
 
 // ── Native Print ─────────────────────────────────────────────────────────────
@@ -52,19 +96,59 @@ pub fn open_in_system(path: &std::path::Path) {
 /// Print a PDF using the Windows ShellExecute "print" verb.
 ///
 /// Falls back to `open::that` if print fails.
-pub fn print_pdf(path: &std::path::Path) {
-    let path = path.to_path_buf();
+pub fn print_pdf(path: &std::path::Path) -> Result<(), &'static str> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::ffi::OsStrExt;
 
-    std::thread::spawn(move || {
-        let result = std::process::Command::new("rundll32")
-            .arg("mshtml.dll,PrintHTML")
-            .arg(&path)
-            .spawn();
-
-        if result.is_err() {
-            let _ = open::that(&path);
+        #[link(name = "shell32")]
+        unsafe extern "system" {
+            fn ShellExecuteW(
+                hwnd: isize,
+                lpOperation: *const u16,
+                lpFile: *const u16,
+                lpParameters: *const u16,
+                lpDirectory: *const u16,
+                nShowCmd: i32,
+            ) -> isize;
         }
-    });
+
+        let verb: Vec<u16> = std::ffi::OsStr::new("print")
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        let file_path: Vec<u16> = path
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+
+        // SW_HIDE = 0, SW_SHOWNORMAL = 1
+        let result = unsafe {
+            ShellExecuteW(
+                0,
+                verb.as_ptr(),
+                file_path.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                1, // SW_SHOWNORMAL
+            )
+        };
+
+        // ShellExecute returns a value > 32 if successful.
+        if result <= 32 {
+            let _ = open::that(path);
+            return Err("Your default PDF viewer (Edge) does not support the 'print' command.\nThe file has been opened instead. Please press Ctrl+P to print.");
+        }
+        
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = open::that(path);
+        Err("Print command not supported on this platform.")
+    }
 }
 
 // ── Typography ───────────────────────────────────────────────────────────────

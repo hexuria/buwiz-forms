@@ -1,5 +1,6 @@
 set dotenv-load := true
 
+set windows-shell := ["pwsh", "-NoProfile", "-c"]
 APP_NAME := "eBIRForms"
 BUNDLE_ID := "dev.goldcoders.bir"
 MAC_ARM_TARGET := "aarch64-apple-darwin"
@@ -79,6 +80,104 @@ app *args="": bump-build
     else \
         echo "⚠️ App Store builds are only supported on macOS."; \
     fi
+
+# Build the MSIX package for the Microsoft Store (Windows only)
+msix *args="":
+    #!pwsh -NoProfile
+    $ErrorActionPreference = 'Stop'
+    
+    $features = @()
+    foreach ($arg in '{{args}}'.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)) {
+        if ($arg -eq '--layout-editor') { $features += 'layout-editor' }
+        if ($arg -eq '--inspector') { $features += 'inspector' }
+    }
+    
+    if ($features.Count -gt 0) {
+        $featureList = $features -join ','
+        cargo build --release --target {{WIN_TARGET}} --features $featureList
+    } else {
+        cargo build --release --target {{WIN_TARGET}}
+    }
+    
+    $VERSION = "{{VERSION}}"
+    $MSIX_DIR = "target/release-artifacts/msix-staging"
+    
+    # Stage MSIX layout
+    if (Test-Path $MSIX_DIR) { Remove-Item $MSIX_DIR -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $MSIX_DIR | Out-Null
+    Copy-Item "target/{{WIN_TARGET}}/release/bir.exe" "$MSIX_DIR\"
+    Copy-Item "target/{{WIN_TARGET}}/release/bir-daemon.exe" "$MSIX_DIR\"
+
+    # OpenSSL is statically compiled (vendored), so no need to package DLLs.
+    # We still package the MSVC runtime dependency DLLs just in case, though the AppxManifest PackageDependency handles it for the Store.
+    $vcr = "$env:WINDIR\System32\vcruntime140.dll"
+    if (Test-Path $vcr) { Copy-Item $vcr "$MSIX_DIR\" }
+    $msvcp = "$env:WINDIR\System32\msvcp140.dll"
+    if (Test-Path $msvcp) { Copy-Item $msvcp "$MSIX_DIR\" }
+
+    Copy-Item "assets" "$MSIX_DIR\assets" -Recurse
+    if (Test-Path "formtypes") { Copy-Item "formtypes" "$MSIX_DIR\formtypes" -Recurse }
+
+    # Bundle Typst binary
+    $TYPST_URL = "https://github.com/typst/typst/releases/latest/download/typst-x86_64-pc-windows-msvc.zip"
+    $TYPST_ZIP = "target/typst.zip"
+    Write-Host "Downloading typst for bundling..."
+    Invoke-WebRequest -Uri $TYPST_URL -OutFile $TYPST_ZIP
+    Expand-Archive -Path $TYPST_ZIP -DestinationPath "target/typst-temp" -Force
+    Copy-Item "target/typst-temp/typst-x86_64-pc-windows-msvc/typst.exe" "$MSIX_DIR\"
+    
+    # Copy and stamp manifest
+    (Get-Content "assets\windows\AppxManifest.xml") -replace 'VERSION_PLACEHOLDER', $VERSION | Set-Content "$MSIX_DIR\AppxManifest.xml"
+    
+    # Build MSIX
+    $SDK_DIR = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\10.*" | Sort-Object Name -Descending | Select-Object -First 1
+    $MAKEAPPX = "$($SDK_DIR.FullName)\x64\MakeAppx.exe"
+    
+    if (Test-Path $MAKEAPPX) {
+        & $MAKEAPPX pack /d "$MSIX_DIR" /p "target/release-artifacts/{{APP_NAME}}-Windows-$VERSION.msix" /o
+        Write-Host "✅ MSIX package created: target/release-artifacts/{{APP_NAME}}-Windows-$VERSION.msix"
+    } else {
+        Write-Warning "⚠️ MakeAppx.exe not found. Install Windows SDK to build MSIX."
+    }
+
+# Sign the MSIX package with a local development certificate for local testing
+sign-dev:
+    #!pwsh -NoProfile
+    $ErrorActionPreference = 'Stop'
+    $VERSION = "{{VERSION}}"
+    $MSIX_PATH = "target/release-artifacts/{{APP_NAME}}-Windows-$VERSION.msix"
+    $CERT_PATH = "target/dev_cert.pfx"
+    $CERT_PASSWORD = "devpassword"
+    # This must perfectly match the Publisher in AppxManifest.xml
+    $PUBLISHER = "CN=04F86D81-D5D3-4477-A363-0CAE79356A84"
+
+    if (-not (Test-Path $MSIX_PATH)) {
+        Write-Error "MSIX file not found! Run 'just msix' first."
+        exit 1
+    }
+
+    if (-not (Test-Path $CERT_PATH)) {
+        Write-Host "Generating new local development certificate..."
+        $cert = New-SelfSignedCertificate -Type Custom -Subject $PUBLISHER -KeyUsage DigitalSignature -FriendlyName "eBIRForms Local Dev" -CertStoreLocation "Cert:\CurrentUser\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+        $pwd = ConvertTo-SecureString -String $CERT_PASSWORD -Force -AsPlainText
+        Export-PfxCertificate -cert $cert -FilePath $CERT_PATH -Password $pwd | Out-Null
+        
+        Write-Host "Prompting for Administrator privileges to trust the local development certificate..."
+        $certPathAbs = (Resolve-Path $CERT_PATH).Path
+        $psCommand = "Import-PfxCertificate -FilePath '$certPathAbs' -Password (ConvertTo-SecureString -String '$CERT_PASSWORD' -Force -AsPlainText) -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople'"
+        Start-Process pwsh -ArgumentList "-Command", $psCommand -Verb RunAs -Wait
+    }
+
+    $SDK_DIR = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\10.*" | Sort-Object Name -Descending | Select-Object -First 1
+    $SIGNTOOL = "$($SDK_DIR.FullName)\x64\signtool.exe"
+
+    if (Test-Path $SIGNTOOL) {
+        Write-Host "Signing the MSIX package..."
+        & $SIGNTOOL sign /fd SHA256 /a /f $CERT_PATH /p $CERT_PASSWORD $MSIX_PATH
+        Write-Host "✅ MSIX package signed! You can now double-click the .msix file to install it locally."
+    } else {
+        Write-Warning "⚠️ signtool.exe not found."
+    }
 
 # Publish a new release (tags and pushes to trigger CI)
 publish version="":

@@ -2,6 +2,12 @@
 
 use gpui::*;
 
+// ── Application Lifecycle ────────────────────────────────────────────────────
+
+/// Enforces that only one instance of the application runs at a time.
+/// macOS enforces this natively via the application bundle, so this is a no-op.
+pub fn enforce_single_instance() {}
+
 // ── Keybindings ──────────────────────────────────────────────────────────────
 
 /// Register global keybindings using the macOS `cmd` modifier.
@@ -96,7 +102,7 @@ pub fn open_in_system(path: &std::path::Path) {
 /// Print a PDF using macOS native AppKit/PDFKit via a Swift helper script.
 ///
 /// Falls back to `open::that` if the Swift runtime is unavailable.
-pub fn print_pdf(path: &std::path::Path) {
+pub fn print_pdf(path: &std::path::Path) -> Result<(), &'static str> {
     let path = path.to_path_buf();
 
     std::thread::spawn(move || {
@@ -154,6 +160,8 @@ if args.count > 1 {
             let _ = open::that(&path);
         }
     });
+
+    Ok(())
 }
 
 // ── Typography ───────────────────────────────────────────────────────────────

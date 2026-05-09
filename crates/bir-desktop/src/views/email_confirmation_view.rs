@@ -76,7 +76,13 @@ impl EmailConfirmationView {
             return;
         }
 
-        crate::platform::print_pdf(&path);
+        if let Err(msg) = crate::platform::print_pdf(&path) {
+            self.status_message = Some(msg.to_string());
+            cx.notify();
+        } else {
+            self.status_message = None;
+            cx.notify();
+        }
 
         // Schedule cleanup after a brief delay so the print dialog can read the file
         std::thread::spawn(move || {
@@ -239,7 +245,7 @@ impl Render for EmailConfirmationView {
                                                 .child(
                                                     gpui_component::text::TextView::markdown(
                                                         "email-text",
-                                                        format!("```\n{}\n```", self.receipt.raw_text.clone())
+                                                        self.receipt.raw_text.replace("\n", "\n\n")
                                                     )
                                                     .selectable(true)
                                                     .style(text_style)

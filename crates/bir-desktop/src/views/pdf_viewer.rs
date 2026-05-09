@@ -175,8 +175,14 @@ impl PdfViewerView {
         .detach();
     }
 
-    fn print_pdf(&mut self, _cx: &mut Context<Self>) {
-        crate::platform::print_pdf(&self.effective_pdf_path);
+    fn print_pdf(&mut self, cx: &mut Context<Self>) {
+        if let Err(msg) = crate::platform::print_pdf(&self.effective_pdf_path) {
+            self.status_message = Some(msg.to_string());
+            cx.notify();
+        } else {
+            self.status_message = None;
+            cx.notify();
+        }
     }
 
     fn render_page(&self, path: PathBuf) -> impl IntoElement {
@@ -292,8 +298,16 @@ impl Render for PdfViewerView {
                         div()
                             .text_sm()
                             .text_color(cx.theme().foreground)
-                            .whitespace_nowrap()
-                            .child(info.body.clone()),
+                            .flex()
+                            .flex_col()
+                            .children(info.body.lines().map(|line| {
+                                // Empty lines should still take up space to act as paragraph breaks
+                                if line.trim().is_empty() {
+                                    div().h_4()
+                                } else {
+                                    div().whitespace_normal().child(line.to_string())
+                                }
+                            })),
                     ),
             );
         }

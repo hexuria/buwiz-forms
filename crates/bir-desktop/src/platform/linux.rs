@@ -2,6 +2,13 @@
 
 use gpui::*;
 
+// ── Application Lifecycle ────────────────────────────────────────────────────
+
+/// Enforces that only one instance of the application runs at a time.
+pub fn enforce_single_instance() {
+    // Basic stub for Linux compatibility
+}
+
 // ── Keybindings ──────────────────────────────────────────────────────────────
 
 /// Register global keybindings using the Linux `ctrl` modifier.
@@ -14,7 +21,7 @@ pub fn bind_global_keys(cx: &mut App) {
         KeyBinding::new("ctrl-shift-b", ToggleSidebarMini, None),
         KeyBinding::new("ctrl-f", FocusSearch, None),
         KeyBinding::new("ctrl-n", CreateProfile, None),
-        KeyBinding::new("ctrl-t", ToggleTheme, None),
+        KeyBinding::new("ctrl-shift-t", ToggleTheme, None),
         KeyBinding::new("ctrl-shift-x", OpenCronTasks, None),
         KeyBinding::new("ctrl-,", OpenSettings, None),
         KeyBinding::new("ctrl-k", OpenCommandPalette, None),
@@ -52,7 +59,7 @@ pub fn open_in_system(path: &std::path::Path) {
 // ── Native Print ─────────────────────────────────────────────────────────────
 
 /// Print a PDF using `lp` (CUPS), falling back to `open::that`.
-pub fn print_pdf(path: &std::path::Path) {
+pub fn print_pdf(path: &std::path::Path) -> Result<(), &'static str> {
     let path = path.to_path_buf();
 
     std::thread::spawn(move || {
@@ -62,6 +69,8 @@ pub fn print_pdf(path: &std::path::Path) {
             let _ = open::that(&path);
         }
     });
+
+    Ok(())
 }
 
 // ── Typography ───────────────────────────────────────────────────────────────

@@ -113,6 +113,7 @@ impl AssetSource for Assets {
 
 fn main() {
     dotenvy::dotenv().ok();
+    crate::platform::enforce_single_instance();
 
     let developer_mode = std::env::var("DEVELOPER_MODE")
         .unwrap_or_else(|_| "false".to_string())

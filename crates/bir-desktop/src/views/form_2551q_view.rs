@@ -834,7 +834,8 @@ impl Form2551QView {
             let new_filename = format!("receipt-{}-{}-{}.{}", tin, year, quarter, ext);
             let new_path = data_dir.join(new_filename);
 
-            match std::fs::copy(&file, &new_path) {
+            let copy_result = std::fs::read(&file).and_then(|data| std::fs::write(&new_path, data));
+            match copy_result {
                 Ok(_) => {
                     let path_str = new_path.to_string_lossy().to_string();
                     let _ = this.update(cx, |this, cx| {

@@ -1027,8 +1027,9 @@ fn escape_pdf_text(text: &str) -> String {
 
 /// Build a simple PDF from a list of text lines (used for confirmation receipts).
 pub fn build_simple_confirmation_pdf(lines: &[String]) -> Vec<u8> {
+    let wrapped_lines = wrap_lines(lines, 90);
     let (width, height) = PaperSize::A4.points();
-    build_simple_pdf(width, height, lines)
+    build_simple_pdf(width, height, &wrapped_lines)
 }
 
 /// Append text pages to an existing PDF document.
@@ -1037,6 +1038,7 @@ pub fn build_simple_confirmation_pdf(lines: &[String]) -> Vec<u8> {
 /// and returns the combined PDF bytes. This avoids the fragility of merging two
 /// separate PDF documents by building new page objects directly.
 pub fn append_text_pages_to_pdf(pdf_bytes: &[u8], lines: &[String]) -> Result<Vec<u8>, PrintError> {
+    let wrapped_lines = wrap_lines(lines, 90);
     use lopdf::{dictionary, Document, Object, Stream};
 
     let mut doc = Document::load_mem(pdf_bytes).map_err(|e| {
@@ -1124,7 +1126,7 @@ pub fn append_text_pages_to_pdf(pdf_bytes: &[u8], lines: &[String]) -> Result<Ve
     let font_bold_id = doc.add_object(font_bold_obj);
 
     // Split lines into page-sized chunks
-    let page_chunks: Vec<&[String]> = lines.chunks(lines_per_page).collect();
+    let page_chunks: Vec<&[String]> = wrapped_lines.chunks(lines_per_page).collect();
     let total_new_pages = page_chunks.len();
 
     let mut new_page_ids = Vec::new();
@@ -1196,6 +1198,49 @@ pub fn append_text_pages_to_pdf(pdf_bytes: &[u8], lines: &[String]) -> Result<Ve
         )))
     })?;
     Ok(buf)
+}
+
+fn wrap_lines(lines: &[String], max_chars: usize) -> Vec<String> {
+    let mut wrapped = Vec::new();
+    for line in lines {
+        if line.is_empty() {
+            wrapped.push(String::new());
+            continue;
+        }
+
+        let mut current_line = String::new();
+        for word in line.split_whitespace() {
+            let space = if current_line.is_empty() { "" } else { " " };
+
+            if current_line.len() + space.len() + word.len() <= max_chars {
+                current_line.push_str(space);
+                current_line.push_str(word);
+            } else {
+                if !current_line.is_empty() {
+                    wrapped.push(current_line);
+                    current_line = String::new();
+                }
+
+                if word.len() > max_chars {
+                    let mut chars = word.chars().peekable();
+                    while chars.peek().is_some() {
+                        let chunk: String = chars.by_ref().take(max_chars).collect();
+                        if chars.peek().is_some() {
+                            wrapped.push(chunk);
+                        } else {
+                            current_line = chunk;
+                        }
+                    }
+                } else {
+                    current_line = word.to_string();
+                }
+            }
+        }
+        if !current_line.is_empty() {
+            wrapped.push(current_line);
+        }
+    }
+    wrapped
 }
 
 #[cfg(test)]
