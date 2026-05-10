@@ -7,9 +7,9 @@
   IgnorableNamespaces="uap rescap desktop">
 
   <Identity
-    Name="GoldCoders.eBIRForms"
-    Publisher="CN=GoldCoders"
-    Version="VERSION_PLACEHOLDER.0"
+    Name="GOLDCODERSCORP.ebirforms"
+    Publisher="CN=04F86D81-D5D3-4477-A363-0CAE79356A84"
+    Version="VERSION_PLACEHOLDER.BUILD_PLACEHOLDER"
     ProcessorArchitecture="x64" />
 
   <Properties>

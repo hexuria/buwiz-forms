@@ -126,8 +126,21 @@ msix *args="":
     Expand-Archive -Path $TYPST_ZIP -DestinationPath "target/typst-temp" -Force
     Copy-Item "target/typst-temp/typst-x86_64-pc-windows-msvc/typst.exe" "$MSIX_DIR\"
     
+    # Read, increment, and save local build number from text file
+    $BUILD_FILE = "build_number.txt"
+    $BUILD_NUMBER = 0
+    if (Test-Path $BUILD_FILE) {
+        $BUILD_NUMBER = [int](Get-Content $BUILD_FILE)
+    }
+    $BUILD_NUMBER++
+    Set-Content -Path $BUILD_FILE -Value $BUILD_NUMBER
+    Write-Host "Bumped build number to $BUILD_NUMBER"
+
     # Copy and stamp manifest
-    (Get-Content "assets\windows\AppxManifest.xml") -replace 'VERSION_PLACEHOLDER', $VERSION | Set-Content "$MSIX_DIR\AppxManifest.xml"
+    (Get-Content "assets\windows\AppxManifest.xml") `
+        -replace 'VERSION_PLACEHOLDER', $VERSION `
+        -replace 'BUILD_PLACEHOLDER', $BUILD_NUMBER | `
+        Set-Content "$MSIX_DIR\AppxManifest.xml"
     
     # Build MSIX
     $SDK_DIR = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\10.*" | Sort-Object Name -Descending | Select-Object -First 1

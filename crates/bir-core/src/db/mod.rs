@@ -412,7 +412,13 @@ impl Database {
         use keyring::Entry;
         use tracing::info;
 
-        let entry = Entry::new("com.ebir.rust", "sqlcipher_master_key")?;
+        let entry = match Entry::new("com.ebir.rust", "sqlcipher_master_key") {
+            Ok(e) => e,
+            Err(e) => {
+                tracing::warn!("Failed to access OS keyring: {e}. Falling back to file-based key.");
+                return Self::get_or_create_master_key_file_fallback();
+            }
+        };
 
         match entry.get_password() {
             Ok(hex_key) => {
@@ -423,10 +429,48 @@ impl Database {
                 info!("Generating new master key and storing in native keychain");
                 let key: [u8; 32] = rand::random();
                 let hex_key = hex::encode(key);
-                entry.set_password(&hex_key)?;
+                if let Err(e) = entry.set_password(&hex_key) {
+                    tracing::warn!("Failed to save key to OS keyring: {e}. Falling back to file-based key.");
+                    return Self::get_or_create_master_key_file_fallback();
+                }
                 Ok(hex_key)
             }
         }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn get_or_create_master_key_file_fallback() -> Result<String, DbError> {
+        use tracing::info;
+        let key_path = crate::platform::data_dir().join("bir_key.txt");
+        
+        if key_path.exists() {
+            match std::fs::read_to_string(&key_path) {
+                Ok(hex_key) if hex_key.len() == 64 => {
+                    info!("Loaded master key from fallback file");
+                    return Ok(hex_key);
+                }
+                _ => {
+                    tracing::warn!("Fallback key file invalid or unreadable. Generating new key.");
+                }
+            }
+        }
+
+        info!("Generating new master key and storing in fallback file");
+        let key: [u8; 32] = rand::random();
+        let hex_key = hex::encode(key);
+        std::fs::write(&key_path, &hex_key)?;
+        
+        // Try to secure the file on Linux by restricting permissions
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if let Ok(mut perms) = std::fs::metadata(&key_path).map(|m| m.permissions()) {
+                perms.set_mode(0o600);
+                let _ = std::fs::set_permissions(&key_path, perms);
+            }
+        }
+        
+        Ok(hex_key)
     }
 
     fn quarantine_database_file(path: &Path) -> Result<PathBuf, DbError> {
