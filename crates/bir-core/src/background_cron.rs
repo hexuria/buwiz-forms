@@ -2,17 +2,43 @@ use crate::db::Database;
 use crate::forms::FilingStatus;
 use crate::profile::TaxpayerProfile;
 use chrono::{Datelike, Utc};
+use std::collections::HashSet;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
+use tokio::sync::mpsc;
 use tracing::{error, info, warn};
+
+static WAKE_TX: OnceLock<mpsc::Sender<()>> = OnceLock::new();
+static ACTIVE_JOBS: OnceLock<Arc<Mutex<HashSet<String>>>> = OnceLock::new();
+
+pub fn get_active_jobs() -> Arc<Mutex<HashSet<String>>> {
+    ACTIVE_JOBS
+        .get_or_init(|| Arc::new(Mutex::new(HashSet::new())))
+        .clone()
+}
+
+pub fn wake() {
+    if let Some(tx) = WAKE_TX.get() {
+        let _ = tx.try_send(());
+    }
+}
 
 pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
     info!("Background cron engine started");
 
+    let (tx, mut rx) = mpsc::channel(1);
+    let _ = WAKE_TX.set(tx);
+
     loop {
-        // Run every 1 minute
-        tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+        // We run a tick, then wait for either 60 seconds or a wake signal.
         run_queue_tick(db.clone()).await;
+
+        tokio::select! {
+            _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {}
+            _ = rx.recv() => {
+                info!("Queue explicitly woken up by a wake signal.");
+            }
+        }
     }
 }
 
@@ -90,140 +116,172 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
         .into_iter()
         .filter(|s| s.status == FilingStatus::Queued)
     {
-        if summary.form_code == "2551Q" {
-            let mut draft = {
-                let db_guard = match db.lock() {
-                    Ok(g) => g,
-                    Err(_) => return,
-                };
-                match db_guard.get_2551q_draft(
-                    &profile.tin.full(),
-                    summary.taxable_year,
-                    summary.quarter.unwrap_or(0),
-                ) {
-                    Ok(Some(d)) => d,
-                    _ => continue,
-                }
+        let job_key = format!(
+            "form:{}:{}:{}:{}",
+            summary.form_code,
+            profile.tin.full(),
+            summary.taxable_year,
+            summary.month.unwrap_or(summary.quarter.unwrap_or(0))
+        );
+
+        let active_jobs = get_active_jobs();
+        {
+            let mut jobs = match active_jobs.lock() {
+                Ok(j) => j,
+                Err(_) => continue,
             };
-
-            if let Some(next_retry) = &draft.next_retry_at
-                && let Ok(next_time) = chrono::DateTime::parse_from_rfc3339(next_retry)
-                && Utc::now() < next_time.with_timezone(&Utc)
-            {
-                continue;
-            }
-
-            info!(
-                "Cron: Attempting to submit queued form {} for {}",
-                draft.period_code(),
-                profile.tin.full()
-            );
-
-            let form_type = "2551Qv2018";
-            let filename = draft.default_submission_filename();
-            let xml_payload = draft.to_bir_xml_payload();
-            let encrypted = match crate::crypto::compress_and_encrypt(
-                xml_payload.as_bytes(),
-                crate::crypto::BIR_IAF_PASSPHRASE,
-            ) {
-                Ok(enc) => enc,
-                Err(e) => {
-                    fail_draft_2551q(&mut draft, db.clone(), e.to_string());
-                    continue;
-                }
-            };
-
-            match crate::transport::submit_iaf(form_type, &filename, &encrypted).await {
-                Ok(_) => {
-                    info!("Cron: Successfully submitted queued form {}", filename);
-                    let now = Utc::now();
-                    crate::notification::send_notification(
-                        "BIR Form Submitted",
-                        &format!(
-                            "Filename: {}\nTimestamp: {}",
-                            filename,
-                            now.format("%I:%M %p")
-                        ),
-                    );
-                    draft.transition_to_submitted(filename.clone());
-                    if let Ok(db_guard) = db.lock() {
-                        let _ = db_guard.save_2551q_draft(&draft);
-                        schedule_email_poll(profile, "2551Q", &db_guard);
-                    }
-                }
-                Err(e) => fail_draft_2551q(&mut draft, db.clone(), e.to_string()),
-            }
-        } else if summary.form_code == "1601C" {
-            let mut draft = {
-                let db_guard = match db.lock() {
-                    Ok(g) => g,
-                    Err(_) => return,
-                };
-                match db_guard.get_1601c_draft(
-                    &profile.tin.full(),
-                    summary.taxable_year,
-                    summary.month.unwrap_or(0),
-                ) {
-                    Ok(Some(d)) => d,
-                    _ => continue,
-                }
-            };
-
-            if let Some(next_retry) = &draft.next_retry_at
-                && let Ok(next_time) = chrono::DateTime::parse_from_rfc3339(next_retry)
-                && Utc::now() < next_time.with_timezone(&Utc)
-            {
-                continue;
-            }
-
-            info!(
-                "Cron: Attempting to submit queued form {} for {}",
-                draft.period_code(),
-                profile.tin.full()
-            );
-
-            let form_type = "1601Cv2018";
-            let filename = draft.default_submission_filename();
-            let xml_payload = draft.to_bir_xml_payload();
-            let encrypted = match crate::crypto::compress_and_encrypt(
-                xml_payload.as_bytes(),
-                crate::crypto::BIR_IAF_PASSPHRASE,
-            ) {
-                Ok(enc) => enc,
-                Err(e) => {
-                    fail_draft_1601c(&mut draft, db.clone(), e.to_string());
-                    continue;
-                }
-            };
-
-            match crate::transport::submit_iaf(form_type, &filename, &encrypted).await {
-                Ok(_) => {
-                    info!("Cron: Successfully submitted queued form {}", filename);
-                    let now = Utc::now();
-                    crate::notification::send_notification(
-                        "BIR Form Submitted",
-                        &format!(
-                            "Filename: {}\nTimestamp: {}",
-                            filename,
-                            now.format("%I:%M %p")
-                        ),
-                    );
-                    draft.transition_to_submitted(filename.clone());
-                    if let Ok(db_guard) = db.lock() {
-                        let _ = db_guard.save_form_draft(
-                            &draft.tin,
-                            "1601C",
-                            draft.taxable_year,
-                            Some(draft.month),
-                            &draft.status,
-                            &draft,
-                        );
-                        schedule_email_poll(profile, "1601C", &db_guard);
-                    }
-                }
-                Err(e) => fail_draft_1601c(&mut draft, db.clone(), e.to_string()),
+            if !jobs.insert(job_key.clone()) {
+                continue; // Already running
             }
         }
+
+        let profile_clone = profile.clone();
+        let db_clone = db.clone();
+        let active_jobs_clone = active_jobs.clone();
+
+        tokio::spawn(async move {
+            let _cleanup = JobCleanup {
+                key: job_key,
+                active_jobs: active_jobs_clone,
+            };
+
+            if summary.form_code == "2551Q" {
+                let mut draft = {
+                    let db_guard = match db_clone.lock() {
+                        Ok(g) => g,
+                        Err(_) => return,
+                    };
+                    match db_guard.get_2551q_draft(
+                        &profile_clone.tin.full(),
+                        summary.taxable_year,
+                        summary.quarter.unwrap_or(0),
+                    ) {
+                        Ok(Some(d)) => d,
+                        _ => return,
+                    }
+                };
+
+                if let Some(next_retry) = &draft.next_retry_at
+                    && let Ok(next_time) = chrono::DateTime::parse_from_rfc3339(next_retry)
+                    && Utc::now() < next_time.with_timezone(&Utc)
+                {
+                    return;
+                }
+
+                info!(
+                    "Cron: Attempting to submit queued form {} for {}",
+                    draft.period_code(),
+                    profile_clone.tin.full()
+                );
+
+                let form_type = "2551Qv2018";
+                let filename = draft.default_submission_filename();
+                let xml_payload = draft.to_bir_xml_payload();
+                let encrypted = match crate::crypto::compress_and_encrypt(
+                    xml_payload.as_bytes(),
+                    crate::crypto::BIR_IAF_PASSPHRASE,
+                ) {
+                    Ok(enc) => enc,
+                    Err(e) => {
+                        fail_draft_2551q(&mut draft, db_clone.clone(), e.to_string());
+                        return;
+                    }
+                };
+
+                match crate::transport::submit_iaf(form_type, &filename, &encrypted).await {
+                    Ok(_) => {
+                        info!("Cron: Successfully submitted queued form {}", filename);
+                        let now = Utc::now();
+                        crate::notification::send_notification(
+                            "BIR Form Submitted",
+                            &format!(
+                                "Filename: {}\nTimestamp: {}",
+                                filename,
+                                now.format("%I:%M %p")
+                            ),
+                        );
+                        draft.transition_to_submitted(filename.clone());
+                        if let Ok(db_guard) = db_clone.lock() {
+                            let _ = db_guard.save_2551q_draft(&draft);
+                            schedule_email_poll(&profile_clone, "2551Q", &db_guard);
+                        }
+                    }
+                    Err(e) => fail_draft_2551q(&mut draft, db_clone.clone(), e.to_string()),
+                }
+            } else if summary.form_code == "1601C" {
+                let mut draft = {
+                    let db_guard = match db_clone.lock() {
+                        Ok(g) => g,
+                        Err(_) => return,
+                    };
+                    match db_guard.get_1601c_draft(
+                        &profile_clone.tin.full(),
+                        summary.taxable_year,
+                        summary.month.unwrap_or(0),
+                    ) {
+                        Ok(Some(d)) => d,
+                        _ => return,
+                    }
+                };
+
+                if let Some(next_retry) = &draft.next_retry_at
+                    && let Ok(next_time) = chrono::DateTime::parse_from_rfc3339(next_retry)
+                    && Utc::now() < next_time.with_timezone(&Utc)
+                {
+                    return;
+                }
+
+                info!(
+                    "Cron: Attempting to submit queued form {} for {}",
+                    draft.period_code(),
+                    profile_clone.tin.full()
+                );
+
+                let form_type = "1601Cv2018";
+                let filename = draft.default_submission_filename();
+                let xml_payload = draft.to_bir_xml_payload();
+                let encrypted = match crate::crypto::compress_and_encrypt(
+                    xml_payload.as_bytes(),
+                    crate::crypto::BIR_IAF_PASSPHRASE,
+                ) {
+                    Ok(enc) => enc,
+                    Err(e) => {
+                        fail_draft_1601c(&mut draft, db_clone.clone(), e.to_string());
+                        return;
+                    }
+                };
+
+                match crate::transport::submit_iaf(form_type, &filename, &encrypted).await {
+                    Ok(_) => {
+                        info!("Cron: Successfully submitted queued form {}", filename);
+                        let now = Utc::now();
+                        crate::notification::send_notification(
+                            "BIR Form Submitted",
+                            &format!(
+                                "Filename: {}\nTimestamp: {}",
+                                filename,
+                                now.format("%I:%M %p")
+                            ),
+                        );
+                        draft.transition_to_submitted(filename.clone());
+                        if let Ok(db_guard) = db_clone.lock() {
+                            let _ = db_guard.save_form_draft(
+                                &draft.tin,
+                                "1601C",
+                                draft.taxable_year,
+                                Some(draft.month),
+                                &draft.status,
+                                &draft,
+                            );
+                            schedule_email_poll(&profile_clone, "1601C", &db_guard);
+                        }
+                    }
+                    Err(e) => fail_draft_1601c(&mut draft, db_clone.clone(), e.to_string()),
+                }
+            }
+
+            crate::ipc::post_db_changed();
+        });
     }
 }
 
@@ -405,112 +463,150 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
             let _ = db_guard.save_job(job.clone());
         }
 
-        info!("Cron: Executing job '{}'", job.name);
-        let mut success = true;
-
-        if let Some(ref cmd) = job.command
-            && !cmd.trim().is_empty()
+        let job_key = format!("job:{}", job.id.unwrap_or(0));
+        let active_jobs = get_active_jobs();
         {
-            if cmd.starts_with("bir_poll_email ") {
-                let email = cmd.trim_start_matches("bir_poll_email ").trim();
-                let (poll_success, still_pending, err_msg) =
-                    crate::email::fetch_and_process_emails_for_address(email, db.clone());
-                if poll_success {
-                    let log = "Email polling completed successfully.".to_string();
-                    info!(
-                        "Cron: Email polling job '{}' completed successfully.",
-                        job.name
-                    );
-                    success = true;
-                    job.output_log = Some(log);
-                    if !still_pending {
-                        job.status = "Archived".to_string(); // Completed processing for this email
-                    }
-                } else {
-                    let log = err_msg
-                        .unwrap_or_else(|| "Email polling failed (unknown error).".to_string());
-                    warn!("Cron: Email polling job '{}' failed: {}", job.name, log);
-                    success = false;
-                    job.output_log = Some(log);
-                }
-            } else {
-                match crate::platform::run_shell_command(cmd).await {
-                    Ok(output) => {
-                        let stdout_str = String::from_utf8_lossy(&output.stdout);
-                        let stderr_str = String::from_utf8_lossy(&output.stderr);
-                        let log = format!("STDOUT:\n{}\n\nSTDERR:\n{}", stdout_str, stderr_str);
-                        job.output_log = Some(log);
-                        if output.status.success() {
-                            info!("Cron: Job '{}' completed successfully.", job.name);
-                        } else {
-                            warn!(
-                                "Cron: Job '{}' failed with code: {:?} stderr: {}",
-                                job.name, output.status, stderr_str
-                            );
-                            success = false;
-                        }
-                    }
-                    Err(e) => {
-                        let err_msg = format!("Failed to start job: {}", e);
-                        warn!("Cron: Job '{}' failed to start: {}", job.name, e);
-                        job.output_log = Some(err_msg);
-                        success = false;
-                    }
-                }
+            let mut active = match active_jobs.lock() {
+                Ok(a) => a,
+                Err(_) => continue,
+            };
+            if !active.insert(job_key.clone()) {
+                continue; // Already running
             }
         }
 
-        job.last_run_at = Some(now.to_rfc3339());
+        let db_clone = db.clone();
+        let active_jobs_clone = active_jobs.clone();
 
-        if let Some(ref cron_expr) = job.cron_expr {
-            if !cron_expr.trim().is_empty() {
-                if let Ok(schedule) = cron::Schedule::from_str(cron_expr) {
-                    if let Some(next_run) = schedule.upcoming(Utc).next() {
-                        job.next_run_at = Some(next_run.to_rfc3339());
-                        if job.status != "Archived" && job.status != "Done" {
-                            job.status = "Queued".to_string();
+        tokio::spawn(async move {
+            let _cleanup = JobCleanup {
+                key: job_key,
+                active_jobs: active_jobs_clone,
+            };
+
+            info!("Cron: Executing job '{}'", job.name);
+            let mut success = true;
+
+            if let Some(ref cmd) = job.command
+                && !cmd.trim().is_empty()
+            {
+                if cmd.starts_with("bir_poll_email ") {
+                    let email = cmd.trim_start_matches("bir_poll_email ").trim();
+                    let (poll_success, still_pending, err_msg) =
+                        crate::email::fetch_and_process_emails_for_address(email, db_clone.clone());
+                    if poll_success {
+                        let log = "Email polling completed successfully.".to_string();
+                        info!(
+                            "Cron: Email polling job '{}' completed successfully.",
+                            job.name
+                        );
+                        success = true;
+                        job.output_log = Some(log);
+                        if !still_pending {
+                            job.status = "Archived".to_string(); // Completed processing for this email
                         }
-                        job.retries = if success { 0 } else { job.retries + 1 };
                     } else {
-                        job.status = "Done".to_string(); // cron will never run again
+                        let log = err_msg
+                            .unwrap_or_else(|| "Email polling failed (unknown error).".to_string());
+                        warn!("Cron: Email polling job '{}' failed: {}", job.name, log);
+                        success = false;
+                        job.output_log = Some(log);
                     }
                 } else {
-                    warn!("Cron: Invalid cron expression for job '{}'", job.name);
-                    job.status = "Failed".to_string();
+                    match crate::platform::run_shell_command(cmd).await {
+                        Ok(output) => {
+                            let stdout_str = String::from_utf8_lossy(&output.stdout);
+                            let stderr_str = String::from_utf8_lossy(&output.stderr);
+                            let log = format!("STDOUT:\n{}\n\nSTDERR:\n{}", stdout_str, stderr_str);
+                            job.output_log = Some(log);
+                            if output.status.success() {
+                                info!("Cron: Job '{}' completed successfully.", job.name);
+                            } else {
+                                warn!(
+                                    "Cron: Job '{}' failed with code: {:?} stderr: {}",
+                                    job.name, output.status, stderr_str
+                                );
+                                success = false;
+                            }
+                        }
+                        Err(e) => {
+                            let err_msg = format!("Failed to start job: {}", e);
+                            warn!("Cron: Job '{}' failed to start: {}", job.name, e);
+                            job.output_log = Some(err_msg);
+                            success = false;
+                        }
+                    }
                 }
-                if let Ok(db_guard) = db.lock() {
-                    let _ = db_guard.save_job(job.clone());
+            }
+
+            job.last_run_at = Some(now.to_rfc3339());
+
+            if let Some(ref cron_expr) = job.cron_expr {
+                if !cron_expr.trim().is_empty() {
+                    if let Ok(schedule) = cron::Schedule::from_str(cron_expr) {
+                        if let Some(next_run) = schedule.upcoming(Utc).next() {
+                            job.next_run_at = Some(next_run.to_rfc3339());
+                            if job.status != "Archived" && job.status != "Done" {
+                                job.status = "Queued".to_string();
+                            }
+                            job.retries = if success { 0 } else { job.retries + 1 };
+                        } else {
+                            job.status = "Done".to_string(); // cron will never run again
+                        }
+                    } else {
+                        warn!("Cron: Invalid cron expression for job '{}'", job.name);
+                        job.status = "Failed".to_string();
+                    }
+                    if let Ok(db_guard) = db_clone.lock() {
+                        let _ = db_guard.save_job(job.clone());
+                    }
+                } else {
+                    // Treated as one-off if empty string
+                    if success {
+                        if let Ok(db_guard) = db_clone.lock() {
+                            let _ = db_guard.delete_job(job.id.unwrap());
+                        }
+                    } else {
+                        job.retries += 1;
+                        job.status = "Failed".to_string();
+                        if let Ok(db_guard) = db_clone.lock() {
+                            let _ = db_guard.save_job(job.clone());
+                        }
+                    }
                 }
             } else {
-                // Treated as one-off if empty string
+                // One-off job
                 if success {
-                    if let Ok(db_guard) = db.lock() {
+                    if let Ok(db_guard) = db_clone.lock() {
                         let _ = db_guard.delete_job(job.id.unwrap());
                     }
                 } else {
                     job.retries += 1;
                     job.status = "Failed".to_string();
-                    if let Ok(db_guard) = db.lock() {
+                    if let Ok(db_guard) = db_clone.lock() {
                         let _ = db_guard.save_job(job.clone());
                     }
                 }
             }
-        } else {
-            // One-off job
-            if success {
-                if let Ok(db_guard) = db.lock() {
-                    let _ = db_guard.delete_job(job.id.unwrap());
-                }
-            } else {
-                job.retries += 1;
-                job.status = "Failed".to_string();
-                if let Ok(db_guard) = db.lock() {
-                    let _ = db_guard.save_job(job.clone());
-                }
-            }
+
+            crate::ipc::post_db_changed();
+        });
+    }
+}
+
+struct JobCleanup {
+    key: String,
+    active_jobs: Arc<Mutex<HashSet<String>>>,
+}
+
+impl Drop for JobCleanup {
+    fn drop(&mut self) {
+        if let Ok(mut jobs) = self.active_jobs.lock() {
+            jobs.remove(&self.key);
         }
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -281,6 +281,7 @@ impl FormViewTrait for Form1601CView {
     fn mark_submitted(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.draft.status = FilingStatus::Queued;
         self.save_draft(window, cx);
+        bir_core::background_cron::wake();
         cx.notify();
     }
 

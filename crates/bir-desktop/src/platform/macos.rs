@@ -161,3 +161,45 @@ if args.count > 1 {
 
 /// The platform's preferred monospace font family.
 pub const MONOSPACE_FONT: &str = ".SF NS Mono";
+
+// ── Dock Management ──────────────────────────────────────────────────────────
+
+/// Hides the application from the macOS Dock and explicitly hides all windows from tiling window managers.
+pub fn hide_from_dock() {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        use objc::{class, msg_send, sel, sel_impl};
+        let app: *mut objc::runtime::Object = msg_send![class!(NSApplication), sharedApplication];
+        
+        // Order out all windows explicitly so tiling window managers (like AeroSpace) drop them from the layout
+        let windows: *mut objc::runtime::Object = msg_send![app, windows];
+        let count: u64 = msg_send![windows, count];
+        for i in 0..count {
+            let window: *mut objc::runtime::Object = msg_send![windows, objectAtIndex: i];
+            let _: () = msg_send![window, orderOut: std::ptr::null_mut::<std::ffi::c_void>()];
+        }
+
+        // Set activation policy to Accessory
+        let _: () = msg_send![app, setActivationPolicy: 1isize]; // NSApplicationActivationPolicyAccessory
+    }
+}
+
+/// Restores the application to the macOS Dock and restores the windows.
+pub fn show_in_dock() {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        use objc::{class, msg_send, sel, sel_impl};
+        let app: *mut objc::runtime::Object = msg_send![class!(NSApplication), sharedApplication];
+        
+        // Set activation policy back to Regular
+        let _: () = msg_send![app, setActivationPolicy: 0isize]; // NSApplicationActivationPolicyRegular
+        
+        // Bring windows back from being explicitly ordered out
+        let windows: *mut objc::runtime::Object = msg_send![app, windows];
+        let count: u64 = msg_send![windows, count];
+        for i in 0..count {
+            let window: *mut objc::runtime::Object = msg_send![windows, objectAtIndex: i];
+            let _: () = msg_send![window, makeKeyAndOrderFront: std::ptr::null_mut::<std::ffi::c_void>()];
+        }
+    }
+}

@@ -374,6 +374,8 @@ impl Form2551QView {
             let _ = db.save_2551q_draft(&self.draft);
         }
 
+        bir_core::background_cron::wake();
+
         cx.emit(Form2551QEvent::PushNotification(
             "info".to_string(),
             "Form Queued".to_string(),

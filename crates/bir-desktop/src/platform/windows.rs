@@ -71,3 +71,50 @@ pub fn print_pdf(path: &std::path::Path) {
 
 /// The platform's preferred monospace font family.
 pub const MONOSPACE_FONT: &str = "Cascadia Mono";
+
+// ── Dock Management ──────────────────────────────────────────────────────────
+
+#[cfg(target_os = "windows")]
+use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
+#[cfg(target_os = "windows")]
+use windows::Win32::System::Threading::GetCurrentProcessId;
+#[cfg(target_os = "windows")]
+use windows::Win32::UI::WindowsAndMessaging::{
+    EnumWindows, GetWindowThreadProcessId, ShowWindow, SW_HIDE, SW_SHOW,
+};
+
+#[cfg(target_os = "windows")]
+unsafe extern "system" fn hide_window_callback(hwnd: HWND, _: LPARAM) -> BOOL {
+    let mut pid = 0;
+    GetWindowThreadProcessId(hwnd, Some(&mut pid));
+    if pid == GetCurrentProcessId() {
+        ShowWindow(hwnd, SW_HIDE);
+    }
+    BOOL(1) // TRUE to continue enumerating
+}
+
+#[cfg(target_os = "windows")]
+unsafe extern "system" fn show_window_callback(hwnd: HWND, _: LPARAM) -> BOOL {
+    let mut pid = 0;
+    GetWindowThreadProcessId(hwnd, Some(&mut pid));
+    if pid == GetCurrentProcessId() {
+        ShowWindow(hwnd, SW_SHOW);
+    }
+    BOOL(1)
+}
+
+/// Hides the application from the dock/taskbar and explicit tiling managers.
+pub fn hide_from_dock() {
+    #[cfg(target_os = "windows")]
+    unsafe {
+        let _ = EnumWindows(Some(hide_window_callback), LPARAM(0));
+    }
+}
+
+/// Restores the application to the dock/taskbar.
+pub fn show_in_dock() {
+    #[cfg(target_os = "windows")]
+    unsafe {
+        let _ = EnumWindows(Some(show_window_callback), LPARAM(0));
+    }
+}

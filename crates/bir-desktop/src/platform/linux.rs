@@ -68,3 +68,37 @@ pub fn print_pdf(path: &std::path::Path) {
 
 /// The platform's preferred monospace font family.
 pub const MONOSPACE_FONT: &str = "monospace";
+
+// ── Dock Management ──────────────────────────────────────────────────────────
+
+/// Hides the application from the dock/taskbar and tiling managers.
+/// On Linux, GPUI does not natively support window hiding, so we attempt to use `xdotool` 
+/// as a best-effort fallback to unmap the windows belonging to this process.
+pub fn hide_from_dock() {
+    #[cfg(target_os = "linux")]
+    {
+        let pid = std::process::id();
+        let _ = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(&format!(
+                "xdotool search --pid {} | xargs -I {{}} xdotool windowunmap {{}}",
+                pid
+            ))
+            .spawn();
+    }
+}
+
+/// Restores the application to the dock/taskbar.
+pub fn show_in_dock() {
+    #[cfg(target_os = "linux")]
+    {
+        let pid = std::process::id();
+        let _ = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(&format!(
+                "xdotool search --pid {} | xargs -I {{}} xdotool windowmap {{}}",
+                pid
+            ))
+            .spawn();
+    }
+}

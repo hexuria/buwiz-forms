@@ -9,7 +9,7 @@ LINUX_TARGET := "x86_64-unknown-linux-gnu"
 RELEASE_DIR := "target/release-artifacts"
 MAC_APP := RELEASE_DIR + "/" + APP_NAME + ".app"
 VERSION := `grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/'`
-BUILD_NUMBER := env_var_or_default("BUILD_NUMBER", "7")
+BUILD_NUMBER := env_var_or_default("BUILD_NUMBER", "15")
 
 # Default task: format, lint, and type check
 default: check
@@ -129,18 +129,16 @@ _package-mac args="":
     mkdir -p {{RELEASE_DIR}}
     echo "Creating universal binary (lipo)..."
     lipo -create target/{{MAC_ARM_TARGET}}/release/bir target/{{MAC_X86_TARGET}}/release/bir -output {{RELEASE_DIR}}/bir
-    lipo -create target/{{MAC_ARM_TARGET}}/release/bir-daemon target/{{MAC_X86_TARGET}}/release/bir-daemon -output {{RELEASE_DIR}}/bir-daemon
     echo "Creating .app bundle..."
     rm -rf "{{MAC_APP}}"
-    mkdir -p "{{MAC_APP}}/Contents/MacOS" "{{MAC_APP}}/Contents/Resources" "{{MAC_APP}}/Contents/Library/LaunchAgents"
+    mkdir -p "{{MAC_APP}}/Contents/MacOS" "{{MAC_APP}}/Contents/Resources"
     cp {{RELEASE_DIR}}/bir "{{MAC_APP}}/Contents/MacOS/"
-    cp {{RELEASE_DIR}}/bir-daemon "{{MAC_APP}}/Contents/MacOS/"
     if command -v typst >/dev/null 2>&1; then cp $(which typst) "{{MAC_APP}}/Contents/MacOS/"; fi
     cp -R assets "{{MAC_APP}}/Contents/Resources/"
     rm -rf "{{MAC_APP}}/Contents/Resources/assets/macos"
     cp assets/AppIcon.icns "{{MAC_APP}}/Contents/Resources/"
     cp -R formtypes "{{MAC_APP}}/Contents/Resources/"
-    cp assets/macos/com.bir.vault.daemon.plist "{{MAC_APP}}/Contents/Library/LaunchAgents/"
+
     cp assets/macos/Info.plist "{{MAC_APP}}/Contents/Info.plist"
     sed -i '' "s/VERSION_PLACEHOLDER/{{VERSION}}/g" "{{MAC_APP}}/Contents/Info.plist"
     sed -i '' "s/BUILD_NUMBER_PLACEHOLDER/{{BUILD_NUMBER}}/g" "{{MAC_APP}}/Contents/Info.plist"
@@ -154,7 +152,6 @@ _package-mac args="":
     touch "{{MAC_APP}}"
     
     echo "Ad-hoc codesigning executables..."
-    codesign --force --options runtime --entitlements daemon.entitlements.plist --sign "-" "{{MAC_APP}}/Contents/MacOS/bir-daemon"
     if [ -f "{{MAC_APP}}/Contents/MacOS/typst" ]; then
         codesign --force --options runtime --entitlements assets/macos/typst.entitlements.plist --sign "-" "{{MAC_APP}}/Contents/MacOS/typst"
     fi
@@ -194,20 +191,18 @@ _package-mac-appstore args="":
     mkdir -p {{RELEASE_DIR}}
     echo "Creating universal binary (lipo)..."
     lipo -create target/{{MAC_ARM_TARGET}}/release/bir target/{{MAC_X86_TARGET}}/release/bir -output {{RELEASE_DIR}}/bir
-    lipo -create target/{{MAC_ARM_TARGET}}/release/bir-daemon target/{{MAC_X86_TARGET}}/release/bir-daemon -output {{RELEASE_DIR}}/bir-daemon
     
     echo "Creating sandboxed .app bundle..."
     rm -rf "{{MAC_APP}}"
-    mkdir -p "{{MAC_APP}}/Contents/MacOS" "{{MAC_APP}}/Contents/Resources" "{{MAC_APP}}/Contents/Library/LaunchAgents"
+    mkdir -p "{{MAC_APP}}/Contents/MacOS" "{{MAC_APP}}/Contents/Resources"
     cp {{RELEASE_DIR}}/bir "{{MAC_APP}}/Contents/MacOS/"
-    cp {{RELEASE_DIR}}/bir-daemon "{{MAC_APP}}/Contents/MacOS/"
     
     if command -v typst >/dev/null 2>&1; then cp $(which typst) "{{MAC_APP}}/Contents/MacOS/"; fi
     cp -R assets "{{MAC_APP}}/Contents/Resources/"
     rm -rf "{{MAC_APP}}/Contents/Resources/assets/macos"
     cp assets/AppIcon.icns "{{MAC_APP}}/Contents/Resources/"
     cp -R formtypes "{{MAC_APP}}/Contents/Resources/"
-    cp assets/macos/com.bir.vault.daemon.plist "{{MAC_APP}}/Contents/Library/LaunchAgents/"
+
     
     cp assets/macos/Info.plist "{{MAC_APP}}/Contents/Info.plist"
     sed -i '' "s/VERSION_PLACEHOLDER/{{VERSION}}/g" "{{MAC_APP}}/Contents/Info.plist"
@@ -240,7 +235,6 @@ _package-mac-appstore args="":
     xattr -cr "{{MAC_APP}}"
     
     echo "Codesigning executables with identity: $CERT..."
-    codesign --force --options runtime --entitlements daemon.entitlements.plist --sign "$CERT" "{{MAC_APP}}/Contents/MacOS/bir-daemon"
     if [ -f "{{MAC_APP}}/Contents/MacOS/typst" ]; then
         codesign --force --options runtime --entitlements assets/macos/typst.entitlements.plist --sign "$CERT" "{{MAC_APP}}/Contents/MacOS/typst"
     fi
@@ -278,7 +272,6 @@ _package-win args="":
     cargo build --release --target {{WIN_TARGET}} $FEATURES_FLAG
     mkdir -p {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}
     cp target/{{WIN_TARGET}}/release/bir.exe {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/
-    cp target/{{WIN_TARGET}}/release/bir-daemon.exe {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/
     if command -v typst >/dev/null 2>&1; then cp $(which typst) {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/; fi
     cp -R assets {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/
     cp -R formtypes {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/
@@ -309,7 +302,6 @@ _package-linux args="":
         echo "⚠️ cargo-deb not found. Falling back to tarball..."; \
         mkdir -p {{RELEASE_DIR}}/{{APP_NAME}}-Linux-{{VERSION}}; \
         cp target/{{LINUX_TARGET}}/release/bir {{RELEASE_DIR}}/{{APP_NAME}}-Linux-{{VERSION}}/; \
-        cp target/{{LINUX_TARGET}}/release/bir-daemon {{RELEASE_DIR}}/{{APP_NAME}}-Linux-{{VERSION}}/; \
         if command -v typst >/dev/null 2>&1; then cp $(which typst) {{RELEASE_DIR}}/{{APP_NAME}}-Linux-{{VERSION}}/; fi; \
         cp -R assets {{RELEASE_DIR}}/{{APP_NAME}}-Linux-{{VERSION}}/; \
         cp -R formtypes {{RELEASE_DIR}}/{{APP_NAME}}-Linux-{{VERSION}}/; \

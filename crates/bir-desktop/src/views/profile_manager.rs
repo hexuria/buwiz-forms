@@ -735,24 +735,8 @@ impl ProfileManagerView {
             }
         }
 
-        // Gate: Email auth required when background cron (Automated Form Submission) is globally active
-        let global_cron_active = if let Ok(db) = self.db.lock() {
-            db.get_setting("background_cron_enabled")
-                .unwrap_or(Some("true".to_string()))
-                .map(|s| s == "true")
-                .unwrap_or(true)
-        } else {
-            false
-        };
-        if global_cron_active && !self.email_tracking_enabled {
-            self.pending_notification = Some((
-                gpui_component::notification::NotificationType::Error,
-                "Email authentication is required. Authenticate your email first.".to_string(),
-            ));
-            self.active_tab = 1;
-            cx.notify();
-            return;
-        }
+        // We no longer force users to authenticate an email.
+        // If they opt out, they won't get automated tracking updates but can still submit.
 
         let db_arc = self.db.clone();
 
@@ -1534,11 +1518,7 @@ impl Render for ProfileManagerView {
                                                                     .on_click(cx.listener(|this, _, _, cx| {
                                                                         let profile = this.current_profile(cx);
 
-                                                                        if profile.id.is_none() {
-                                                                            this.connection_test_message = Some((false, "Please save the profile first.".to_string()));
-                                                                            cx.notify();
-                                                                            return;
-                                                                        }
+                                                                        // Allowed testing unsaved profiles by constructing test profile on the fly
 
                                                                         let typed_password = this.imap_password_input.read(cx).value().to_string().replace(' ', "");
 

@@ -210,18 +210,19 @@ impl AppState {
         &mut self,
         _action: &QuitApplication,
         _window: &mut Window,
-        cx: &mut Context<Self>,
+        _cx: &mut Context<Self>,
     ) {
-        cx.quit();
+        // Phase 4: Hijack Global Quit Request -> Hide and Persist
+        crate::platform::hide_from_dock();
     }
 
     pub(crate) fn handle_hide_application(
         &mut self,
         _action: &HideApplication,
         _window: &mut Window,
-        cx: &mut Context<Self>,
+        _cx: &mut Context<Self>,
     ) {
-        cx.hide();
+        crate::platform::hide_from_dock();
     }
 
     pub(crate) fn handle_hide_others(

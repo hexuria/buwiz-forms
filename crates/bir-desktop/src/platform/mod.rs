@@ -45,3 +45,7 @@ pub fn find_resource_dir(name: &str) -> PathBuf {
     // Fallback to CWD
     std::env::current_dir().unwrap_or_default().join(name)
 }
+
+// Re-export common functions
+pub use hide_from_dock;
+pub use show_in_dock;

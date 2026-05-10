@@ -9,10 +9,6 @@ default-run = "bir"
 name = "bir"
 path = "src/main.rs"
 
-[[bin]]
-name = "bir-daemon"
-path = "src/bin/bir_daemon.rs"
-
 [features]
 layout-editor = []
 dev-tools = []
@@ -32,6 +28,7 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+tracing-appender = "0.2.3"
 tokio = { workspace = true }
 chrono = { workspace = true }
 rfd = "0.17.2"
@@ -40,9 +37,18 @@ directories = "6.0.0"
 zip = "2"
 uuid = { version = "1.23.1", features = ["v4"] }
 cron = "0.16.0"
+tray-icon = "0.24.0"
+image = "0.25.10"
+smol = "2.0.2"
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 robius-authentication = { version = "0.1.1", features = ["async"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc = "0.2.7"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 
 [package.metadata.deb]
 name = "ebirforms"
@@ -54,7 +60,6 @@ Supports form preparation, validation, submission via FTP, email confirmation
 tracking, and PDF generation for BIR Form 2551Q and related forms."""
 assets = [
     ["target/release/bir", "usr/bin/ebirforms", "755"],
-    ["target/release/bir-daemon", "usr/bin/ebirforms-daemon", "755"],
     ["../../assets/**/*", "usr/share/ebirforms/assets/", "644"],
     ["../../formtypes/**/*", "usr/share/ebirforms/formtypes/", "644"],
 ]

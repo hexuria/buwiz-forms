@@ -9,10 +9,7 @@ use gpui_component::input::{Input, InputState};
 use gpui_component::*;
 use std::sync::{Arc, Mutex};
 
-/// Check if the bir-daemon process is currently running.
-fn is_daemon_running() -> bool {
-    bir_core::daemon_installer::is_daemon_running()
-}
+// Daemon checking moved out of UI.
 
 pub enum CronTasksEvent {
     Reload,
@@ -87,51 +84,27 @@ pub struct JobViewModel {
     pub output_log: Option<String>,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+pub enum BackgroundTaskTab {
+    Jobs,
+    Logs,
+}
+
 pub struct CronTasksView {
     db: Arc<Mutex<Database>>,
-    background_cron_enabled: bool,
-    error_telemetry_enabled: bool,
-    daemon_running: bool,
-
     jobs: Vec<JobViewModel>,
-    new_job_name: Entity<InputState>,
-    cron_amount: Entity<InputState>,
-    cron_period: Entity<ComboboxState>,
-    new_job_command: Entity<InputState>,
     filter_combobox: Entity<ComboboxState>,
     search_input: Entity<InputState>,
-    test_output: Option<String>,
     _subscriptions: Vec<Subscription>,
     current_page: usize,
     items_per_page: usize,
+    active_tab: BackgroundTaskTab,
+    log_content: String,
+    logs_scroll_handle: ScrollHandle,
 }
 
 impl CronTasksView {
     pub fn new(db: Arc<Mutex<Database>>, window: &mut Window, cx: &mut Context<'_, Self>) -> Self {
-        let new_job_name =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Job Name (e.g. Sync)"));
-        let cron_amount = cx.new(|cx| InputState::new(window, cx).placeholder("Amt (e.g. 5)"));
-        let cron_period = cx.new(|cx| {
-            ComboboxState::new(
-                vec![
-                    "Seconds".into(),
-                    "Minutes".into(),
-                    "Hours".into(),
-                    "Days".into(),
-                    "Months".into(),
-                    "Raw Cron".into(),
-                ],
-                window,
-                cx,
-            )
-        });
-
-        // Default to Minutes
-        cron_period.update(cx, |s, cx| s.set_selected_value("Minutes", window, cx));
-
-        let new_job_command =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Cmd (e.g. osascript -e ...)"));
-
         let filter_combobox = cx.new(|cx| {
             ComboboxState::new(
                 vec![
@@ -149,25 +122,17 @@ impl CronTasksView {
         let search_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Search job name or type..."));
 
-        let daemon_running = is_daemon_running();
-
         let mut view = Self {
             db,
-            background_cron_enabled: false,
-            error_telemetry_enabled: false,
-            daemon_running,
-
             jobs: Vec::new(),
-            new_job_name,
-            cron_amount,
-            cron_period,
-            new_job_command,
             filter_combobox: filter_combobox.clone(),
             search_input: search_input.clone(),
-            test_output: None,
             _subscriptions: Vec::new(),
             current_page: 1,
             items_per_page: 5,
+            active_tab: BackgroundTaskTab::Jobs,
+            log_content: String::new(),
+            logs_scroll_handle: ScrollHandle::new(),
         };
 
         let sub = cx.subscribe_in(
@@ -236,16 +201,7 @@ impl CronTasksView {
     pub fn load_settings(&mut self, cx: &mut Context<'_, Self>) {
         let mut view_jobs = Vec::new();
         if let Ok(db) = self.db.lock() {
-            self.background_cron_enabled = db
-                .get_setting("background_cron_enabled")
-                .unwrap_or(Some("true".to_string()))
-                .map(|s| s == "true")
-                .unwrap_or(true);
-            self.error_telemetry_enabled = db
-                .get_setting("error_telemetry_enabled")
-                .unwrap_or(Some("false".to_string()))
-                .map(|s| s == "true")
-                .unwrap_or(false);
+
             if let Ok(jobs) = db.list_jobs() {
                 for job in jobs {
                     let mut display_name = job.name.clone();
@@ -298,190 +254,7 @@ impl CronTasksView {
         cx.notify();
     }
 
-    fn toggle_cron(&mut self, value: bool, cx: &mut Context<'_, Self>) {
-        self.background_cron_enabled = value;
-        self.save_to_db(cx);
-    }
 
-    fn toggle_telemetry(&mut self, value: bool, cx: &mut Context<'_, Self>) {
-        self.error_telemetry_enabled = value;
-        self.save_to_db(cx);
-    }
-
-    fn toggle_daemon(&mut self, value: bool, cx: &mut Context<'_, Self>) {
-        self.daemon_running = value;
-        if value {
-            // Start the daemon
-            bir_core::daemon_installer::install();
-        } else {
-            // Stop the daemon: unload from launchctl and kill the process
-            bir_core::daemon_installer::uninstall();
-            let _ = std::process::Command::new("killall")
-                .arg("bir-daemon")
-                .output();
-        }
-        // Re-check actual state after a brief delay
-        let view = cx.entity().downgrade();
-        cx.spawn(async move |_, cx| {
-            cx.background_executor()
-                .timer(std::time::Duration::from_millis(500))
-                .await;
-            cx.update(|cx| {
-                if let Some(view) = view.upgrade() {
-                    view.update(cx, |this, cx| {
-                        this.daemon_running = is_daemon_running();
-                        cx.notify();
-                    });
-                }
-            });
-        })
-        .detach();
-        cx.notify();
-    }
-
-    fn save_to_db(&mut self, cx: &mut Context<'_, Self>) {
-        if let Ok(db) = self.db.lock() {
-            let _ = db.set_setting(
-                "background_cron_enabled",
-                if self.background_cron_enabled {
-                    "true"
-                } else {
-                    "false"
-                },
-            );
-            let _ = db.set_setting(
-                "error_telemetry_enabled",
-                if self.error_telemetry_enabled {
-                    "true"
-                } else {
-                    "false"
-                },
-            );
-        }
-        cx.notify();
-    }
-
-    fn build_cron_string(&self, amount: &str, period: &str) -> Result<String, String> {
-        if period == "Raw Cron" {
-            return Ok(amount.trim().to_string());
-        }
-        let amount_num = amount
-            .parse::<u32>()
-            .map_err(|_| "Amount must be a number".to_string())?;
-        if amount_num < 1 {
-            return Err("Amount must be >= 1".to_string());
-        }
-
-        let cron = match period {
-            "Seconds" => format!("*/{} * * * * *", amount_num),
-            "Minutes" => format!("0 */{} * * * *", amount_num),
-            "Hours" => format!("0 0 */{} * * *", amount_num),
-            "Days" => format!("0 0 0 */{} * *", amount_num),
-            "Months" => format!("0 0 0 1 */{} *", amount_num),
-            _ => return Err("Invalid period".to_string()),
-        };
-        Ok(cron)
-    }
-
-    fn test_command(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) {
-        let cmd_str = self.new_job_command.read(cx).value().to_string();
-        if cmd_str.trim().is_empty() {
-            self.test_output = Some("Command is empty".to_string());
-            cx.notify();
-            return;
-        }
-
-        self.test_output = Some("Testing...".to_string());
-        cx.notify();
-
-        let cmd = cmd_str.clone();
-        cx.spawn(async move |this, cx| {
-            let output = match bir_core::platform::run_shell_command(&cmd).await {
-                Ok(out) => {
-                    let mut res = String::from_utf8_lossy(&out.stdout).to_string();
-                    if !out.status.success() {
-                        res.push_str(&format!(
-                            "\nError: {}",
-                            String::from_utf8_lossy(&out.stderr)
-                        ));
-                    }
-                    if res.trim().is_empty() {
-                        "Success (no output)".to_string()
-                    } else {
-                        res
-                    }
-                }
-                Err(e) => format!("Failed to execute: {}", e),
-            };
-            cx.update(|cx| {
-                if let Some(this) = this.upgrade() {
-                    this.update(cx, |this, cx| {
-                        this.test_output = Some(output);
-                        cx.notify();
-                    });
-                }
-            });
-        })
-        .detach();
-    }
-
-    fn add_job(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
-        let name = self.new_job_name.read(cx).value().to_string();
-        let amount = self.cron_amount.read(cx).value().to_string();
-        let period = self.cron_period.read(cx).selected_value(cx);
-        let cmd_str = self.new_job_command.read(cx).value().to_string();
-
-        if name.trim().is_empty() {
-            self.test_output = Some("Name is required".to_string());
-            return;
-        }
-
-        let cron_expr = if amount.trim().is_empty() {
-            None
-        } else {
-            match self.build_cron_string(&amount, &period) {
-                Ok(expr) => Some(expr),
-                Err(e) => {
-                    self.test_output = Some(e);
-                    return;
-                }
-            }
-        };
-
-        let command = if cmd_str.trim().is_empty() {
-            None
-        } else {
-            Some(cmd_str.trim().to_string())
-        };
-
-        let job = Job {
-            id: None,
-            name,
-            job_type: "Custom".to_string(),
-            cron_expr,
-            command,
-            status: "Queued".to_string(),
-            retries: 0,
-            last_run_at: None,
-            next_run_at: None,
-            created_at: "".to_string(),
-            output_log: None,
-        };
-
-        if let Ok(db) = self.db.lock() {
-            let _ = db.save_job(job);
-        }
-
-        self.new_job_name
-            .update(cx, |s, cx| s.set_value("", window, cx));
-        self.cron_amount
-            .update(cx, |s, cx| s.set_value("", window, cx));
-        self.new_job_command
-            .update(cx, |s, cx| s.set_value("", window, cx));
-        self.test_output = None;
-
-        self.load_settings(cx);
-    }
 
     fn delete_job(&mut self, id: i64, cx: &mut Context<'_, Self>) {
         if let Ok(db) = self.db.lock() {
@@ -653,6 +426,30 @@ impl CronTasksView {
         }
         self.load_settings(cx);
     }
+
+    fn refresh_logs(&mut self, cx: &mut Context<'_, Self>) {
+        let logs_path = bir_core::platform::data_dir().join("logs/ebirforms.log");
+        if let Ok(content) = std::fs::read_to_string(&logs_path) {
+            self.log_content = content;
+        } else {
+            self.log_content = "Failed to load logs or logs are empty.".to_string();
+        }
+        cx.notify();
+    }
+
+    fn clear_logs(&mut self, cx: &mut Context<'_, Self>) {
+        let logs_path = bir_core::platform::data_dir().join("logs/ebirforms.log");
+        let _ = std::fs::write(&logs_path, "");
+        self.log_content.clear();
+        cx.notify();
+    }
+
+    fn email_support(&mut self, cx: &mut Context<'_, Self>) {
+        let _ = open::that("mailto:support@goldcoders.dev?subject=eBIRForms%20Bug%20Report&body=Please%20attach%20the%20log%20file.");
+        let logs_dir = bir_core::platform::data_dir().join("logs");
+        let _ = open::that(&logs_dir);
+        cx.notify();
+    }
 }
 
 impl Render for CronTasksView {
@@ -695,193 +492,91 @@ impl Render for CronTasksView {
             Vec::new()
         };
 
+        let is_jobs = self.active_tab == BackgroundTaskTab::Jobs;
+        let is_logs = self.active_tab == BackgroundTaskTab::Logs;
+
+        let active_tab_bg = cx.theme().secondary;
+        let inactive_tab_bg = gpui::rgba(0x00000000).into();
+
         div()
-            .id("cron_tasks_scroll")
             .flex()
             .flex_col()
-            .p_8()
-            .gap_6()
-            .overflow_y_scroll()
+            .w_full()
+            .h_full()
             .child(
                 div()
                     .flex()
                     .flex_col()
-                    .gap_1()
-                    .child(div().text_2xl().font_weight(FontWeight::BOLD).child("Background Tasks & Job Queue"))
-                    .child(
-                        div()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("Manage system daemon jobs, retry queues, and custom OS commands."),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .flex_shrink_0()
-                    .bg(bg)
-                    .border_1()
-                    .border_color(border)
-                    .rounded_xl()
-                    .overflow_hidden()
+                    .p_8()
+                    .gap_6()
                     .child(
                         div()
                             .flex()
                             .flex_col()
-                            .items_start()
-                            .p_6()
-                            .gap_4()
+                            .gap_1()
+                            .child(div().text_2xl().font_weight(FontWeight::BOLD).child("Background Tasks & Job Queue"))
+                            .child(
+                                div()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("Manage system daemon jobs, retry queues, and application logs."),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .w_full()
+                            .gap_2()
                             .border_b_1()
                             .border_color(border)
                             .child(
                                 div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child(div().font_weight(FontWeight::SEMIBOLD).child("Automated Form Submission & Email Tracking"))
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child("Continuously retries queued forms and tracks BIR confirmation receipts."),
-                                    ),
-                            )
-                            .child(
-                                gpui_component::switch::Switch::new("cron_toggle")
-                                    .checked(self.background_cron_enabled)
-                                    .on_click(cx.listener(|this, v, _, cx| {
-                                        this.toggle_cron(*v, cx);
-                                    })),
+                                    .id("jobs_tab")
+                                    .px_4()
+                                    .py_2()
+                                    .cursor_pointer()
+                                    .bg(if is_jobs { active_tab_bg } else { inactive_tab_bg })
+                                    .border_b_2()
+                                    .border_color(if is_jobs { cx.theme().primary } else { gpui::rgba(0x00000000).into() })
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.active_tab = BackgroundTaskTab::Jobs;
+                                        cx.notify();
+                                    }))
+                                    .child(div().font_weight(FontWeight::BOLD).text_color(if is_jobs { cx.theme().foreground } else { cx.theme().muted_foreground }).child("Jobs")),
                             )
                             .child(
                                 div()
-                                    .flex()
-                                    .flex_col()
-                                    .items_start()
-                                    .pt_4()
-                                    .gap_4()
-                                    .border_t_1()
-                                    .border_color(border)
-                                    .w_full()
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .flex_col()
-                                            .gap_1()
-                                            .child(div().font_weight(FontWeight::SEMIBOLD).child("Error Telemetry Reporting"))
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child("Allows sending automated error logs to support for failed jobs."),
-                                            ),
-                                    )
-                                    .child(
-                                        gpui_component::switch::Switch::new("telemetry_toggle")
-                                            .checked(self.error_telemetry_enabled)
-                                            .on_click(cx.listener(|this, v, _, cx| {
-                                                this.toggle_telemetry(*v, cx);
-                                            })),
-                                    ),
+                                    .id("logs_tab")
+                                    .px_4()
+                                    .py_2()
+                                    .cursor_pointer()
+                                    .bg(if is_logs { active_tab_bg } else { inactive_tab_bg })
+                                    .border_b_2()
+                                    .border_color(if is_logs { cx.theme().primary } else { gpui::rgba(0x00000000).into() })
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.active_tab = BackgroundTaskTab::Logs;
+                                        this.refresh_logs(cx);
+                                        cx.notify();
+                                    }))
+                                    .child(div().font_weight(FontWeight::BOLD).text_color(if is_logs { cx.theme().foreground } else { cx.theme().muted_foreground }).child("Logs")),
                             )
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .items_start()
-                                    .pt_4()
-                                    .gap_4()
-                                    .border_t_1()
-                                    .border_color(border)
-                                    .w_full()
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .flex_col()
-                                            .gap_1()
-                                            .child(div().font_weight(FontWeight::SEMIBOLD).child(
-                                                if self.daemon_running { "Job Queue: On" } else { "Job Queue: Off" }
-                                            ))
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child("Controls the background daemon process. Turn off before installing app updates."),
-                                            ),
-                                    )
-                                    .child(
-                                        gpui_component::switch::Switch::new("daemon_toggle")
-                                            .checked(self.daemon_running)
-                                            .on_click(cx.listener(|this, v, _, cx| {
-                                                this.toggle_daemon(*v, cx);
-                                            })),
-                                    ),
-                            )
-
                     )
             )
             .child(
                 div()
+                    .id("cron_tasks_content")
                     .flex()
                     .flex_col()
-                    .flex_shrink_0()
-                    .gap_4()
-                    .mt_4()
-                    .when(std::env::var("DEVELOPER_MODE").unwrap_or_default() == "true", |this| {
-                        this.child(div().text_xl().font_weight(FontWeight::BOLD).child("Custom Job Builder"))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_4()
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_row()
-                                        .flex_wrap()
-                                        .gap_2()
-                                        .items_center()
-                                        .child(div().flex_1().min_w(px(200.)).child(Input::new(&self.new_job_name)))
-                                        .child(div().flex_1().min_w(px(200.)).child(Input::new(&self.cron_amount)))
-                                        .child(div().flex_1().min_w(px(200.)).child(Combobox::new(&self.cron_period)))
-                                        .child(div().flex_1().min_w(px(200.)).child(Input::new(&self.new_job_command)))
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_row()
-                                        .justify_end()
-                                        .gap_2()
-                                        .child(
-                                            gpui_component::button::Button::new("test_cmd_btn")
-                                                .label("Test Cmd")
-                                                .on_click(cx.listener(|this, _ev, window, cx| {
-                                                    this.test_command(window, cx);
-                                                }))
-                                        )
-                                        .child(
-                                            gpui_component::button::Button::new("add_job_btn")
-                                                .label("Add Job")
-                                                .on_click(cx.listener(|this, _ev, window, cx| {
-                                                    this.add_job(window, cx);
-                                                }))
-                                        )
-                                )
-                        )
-                        .when_some(self.test_output.clone(), |this, out| {
-                            this.child(
-                                div()
-                                    .p_2()
-                                    .bg(cx.theme().muted)
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .rounded_md()
-                                    .text_sm()
-                                    .child(out)
-                            )
-                        })
-                    })
-            )
+                    .flex_1()
+                    .px_8()
+                    .pb_8()
+                    .overflow_y_scroll()
+            );
+
+        let jobs_view = div()
+            .flex()
+            .flex_col()
+            .gap_6()
             .child(
                 div()
                     .flex()
@@ -1056,7 +751,7 @@ impl Render for CronTasksView {
                                                 }))
                                         )
                                     })
-                                    .when(job.status == "Failed" && self.error_telemetry_enabled, |this| {
+                                    .when(job.status == "Failed", |this| {
                                         let log = job.output_log.clone().unwrap_or_default();
                                         let jname = job.name.clone();
                                         this.child(
@@ -1119,7 +814,80 @@ impl Render for CronTasksView {
                             }))
                     )
                 })
+            );
+
+        let logs_view = div()
+            .flex()
+            .flex_col()
+            .w_full()
+            .h_full()
+            .gap_4()
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .justify_between()
+                    .items_center()
+                    .w_full()
+                    .mt_6()
+                    .pb_4()
+                    .border_b_1()
+                    .border_color(border)
+                    .child(
+                        div()
+                            .flex()
+                            .gap_4()
+                            .child(
+                                gpui_component::button::Button::new("refresh_logs")
+                                    .label("Refresh Logs")
+                                    .small()
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.refresh_logs(cx);
+                                    }))
+                            )
+                            .child(
+                                gpui_component::button::Button::new("clear_logs")
+                                    .label("Clear Logs")
+                                    .small()
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.clear_logs(cx);
+                                    }))
+                            )
+                    )
+                    .child(
+                        gpui_component::button::Button::new("email_support_global")
+                            .label("Email Support")
+                            .small()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.email_support(cx);
+                            }))
+                    )
             )
-            .into_any_element()
+            .child(
+                div()
+                    .id("logs_view_content")
+                    .flex()
+                    .flex_1()
+                    .p_4()
+                    .bg(cx.theme().background)
+                    .border_1()
+                    .border_color(border)
+                    .rounded_md()
+                    .overflow_y_scroll()
+                    .track_scroll(&self.logs_scroll_handle)
+                    .child(
+                        div()
+                            .font_family(crate::platform::MONOSPACE_FONT)
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(self.log_content.clone())
+                    )
+            );
+
+        if is_jobs {
+            jobs_view.into_any_element()
+        } else {
+            logs_view.into_any_element()
+        }
     }
 }

@@ -1,3 +1,4 @@
+#![allow(unexpected_cfgs)]
 //! BIR Desktop Application — GPUI-powered tax filing interface.
 
 use gpui::*;
@@ -12,6 +13,7 @@ mod platform;
 mod sidebar;
 mod theme;
 mod views;
+mod ipc;
 
 pub mod global_actions {
     gpui::actions!(
@@ -104,28 +106,46 @@ impl AssetSource for Assets {
 fn main() {
     dotenvy::dotenv().ok();
 
-    // Initialize structured logging for debug builds.
-    // Controlled via RUST_LOG env var, e.g.: RUST_LOG=bir_desktop=debug,bir_print=debug
-    #[cfg(debug_assertions)]
-    {
-        use tracing_subscriber::EnvFilter;
-        tracing_subscriber::fmt()
-            .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                "bir_desktop=debug,bir_print=debug,bir_core=info"
-                    .parse()
-                    .unwrap()
-            }))
-            .with_target(true)
-            .with_file(true)
-            .with_line_number(true)
-            .init();
-        tracing::info!("🔍 Tracing initialized (debug build)");
-    }
+    // Initialize structured logging for both stdout and file
+    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+    
+    let logs_dir = bir_core::platform::data_dir().join("logs");
+    let _ = std::fs::create_dir_all(&logs_dir);
+    
+    let file_appender = tracing_appender::rolling::never(&logs_dir, "ebirforms.log");
+    
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        "bir_desktop=debug,bir_print=debug,bir_core=info".parse().unwrap()
+    });
+
+    let stdout_layer = tracing_subscriber::fmt::layer()
+        .with_target(true)
+        .with_file(true)
+        .with_line_number(true);
+
+    let file_layer = tracing_subscriber::fmt::layer()
+        .with_writer(file_appender)
+        .with_ansi(false)
+        .with_target(true)
+        .with_file(true)
+        .with_line_number(true);
+
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(stdout_layer)
+        .with(file_layer)
+        .init();
+
+    tracing::info!("🔍 Tracing initialized");
+
+    crate::ipc::prevent_multiple_instances();
 
     let assets_dir = crate::platform::find_resource_dir("assets");
     gpui_platform::application()
         .with_assets(Assets { base: assets_dir })
         .run(move |cx| {
+            crate::ipc::start_ipc_listener(cx);
+            
             gpui_component::init(cx);
             crate::platform::bind_global_keys(cx);
 
@@ -167,9 +187,52 @@ fn main() {
                         bir_core::reference::get_all_regions();
 
                         let profiles = db.list_profiles().unwrap_or_default();
-                        (std::sync::Arc::new(std::sync::Mutex::new(db)), profiles)
+                        let db_arc = std::sync::Arc::new(std::sync::Mutex::new(db));
+
+                        (db_arc, profiles)
                     })
                     .await;
+
+                // Phase 2: In-App Background Orchestrator
+                let cron_db = db.clone();
+                std::thread::spawn(move || {
+                    if let Ok(rt) = tokio::runtime::Runtime::new() {
+                        rt.block_on(async move {
+                            bir_core::background_cron::start_cron_jobs(cron_db).await;
+                        });
+                    } else {
+                        eprintln!("Failed to initialize Tokio runtime for background tasks");
+                    }
+                });
+
+                // Phase 3: System Tray Integration
+                let tray_menu = tray_icon::menu::Menu::new();
+                let show_i = tray_icon::menu::MenuItem::new("Show eBIRForms", true, None);
+                let hide_tray_i = tray_icon::menu::MenuItem::new("Hide eBIRForms", true, None);
+                let quit_i = tray_icon::menu::MenuItem::new("Quit", true, None);
+                tray_menu
+                    .append_items(&[
+                        &show_i,
+                        &hide_tray_i,
+                        &tray_icon::menu::PredefinedMenuItem::separator(),
+                        &quit_i,
+                    ])
+                    .expect("Failed to append tray menu items");
+
+                let icon_data = include_bytes!("../../../assets/icon.png");
+                let img = image::load_from_memory(icon_data)
+                    .expect("Failed to load tray icon")
+                    .into_rgba8();
+                let (width, height) = img.dimensions();
+                let tray_icon = tray_icon::Icon::from_rgba(img.into_raw(), width, height)
+                    .expect("Failed to create tray icon");
+
+                let tray = tray_icon::TrayIconBuilder::new()
+                    .with_menu(Box::new(tray_menu))
+                    .with_tooltip("eBIRForms")
+                    .with_icon(tray_icon)
+                    .build()
+                    .unwrap();
 
                 let options = WindowOptions {
                     titlebar: Some(TitlebarOptions {
@@ -182,10 +245,47 @@ fn main() {
                 };
 
                 let _ = cx.open_window(options, move |window, cx| {
-                    window.on_window_should_close(cx, |_, cx| {
-                        cx.quit();
-                        true
+                    window.on_window_should_close(cx, |_, _cx| {
+                        // Phase 4: Window Close & macOS Dock Hijacking
+                        crate::platform::hide_from_dock();
+                        false // Prevent window destruction
                     });
+
+                    // Listen to tray events
+                    let menu_channel = tray_icon::menu::MenuEvent::receiver();
+                    let tray_channel = tray_icon::TrayIconEvent::receiver();
+
+                    cx.spawn(async move |cx| {
+                        loop {
+                            if let Ok(event) = menu_channel.try_recv() {
+                                if event.id == show_i.id() {
+                                    cx.update(|cx| {
+                                        crate::platform::show_in_dock();
+                                        cx.activate(true);
+                                    });
+                                } else if event.id == hide_tray_i.id() {
+                                    cx.update(|_cx| {
+                                        crate::platform::hide_from_dock();
+                                    });
+                                } else if event.id == quit_i.id() {
+                                    cx.update(|cx| {
+                                        // Ensure the tray icon is dropped properly before quitting
+                                        drop(tray);
+                                        cx.quit();
+                                    });
+                                    break;
+                                }
+                            }
+
+                            // We no longer bring the app to foreground on tray click. 
+                            // This allows native tray menus to open without side effects.
+                            if let Ok(_event) = tray_channel.try_recv() {}
+                            cx.background_executor()
+                                .timer(std::time::Duration::from_millis(100))
+                                .await;
+                        }
+                    })
+                    .detach();
 
                     let view = cx.new(|cx| app::AppState::new(db, profiles, window, cx));
                     cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
