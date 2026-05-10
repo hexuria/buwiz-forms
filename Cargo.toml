@@ -61,3 +61,7 @@ codegen-units = 1
 panic = "abort"
 strip = true
 opt-level = "z"
+
+[patch."https://github.com/zed-industries/zed"]
+gpui = { path = "../../zed-fork/crates/gpui" }
+gpui_platform = { path = "../../zed-fork/crates/gpui_platform" }
