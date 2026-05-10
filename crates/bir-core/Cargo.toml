@@ -42,7 +42,7 @@ mail-parser = "0.11"
 ammonia = "4.1.2"
 html2text = "0.17"
 html-escape = "0.2"
-zip = "2"
+zip = { version = "2", default-features = false, features = ["deflate", "time"] }
 totp-rs = { version = "5.7.1", features = ["gen_secret", "qr"] }
 uuid = { version = "1.23.1", features = ["v4"] }
 

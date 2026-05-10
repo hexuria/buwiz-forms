@@ -6,14 +6,6 @@
     <key>com.apple.security.app-sandbox</key>
     <true/>
 
-    <!-- Required for notarization: hardened runtime -->
-    <key>com.apple.security.cs.allow-jit</key>
-    <false/>
-    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
-    <false/>
-    <key>com.apple.security.cs.disable-library-validation</key>
-    <false/>
-
     <!-- Network access (IMAP, FTP, HTTP) -->
     <key>com.apple.security.network.client</key>
     <true/>
