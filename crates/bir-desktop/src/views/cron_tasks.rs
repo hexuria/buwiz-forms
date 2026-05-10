@@ -11,12 +11,7 @@ use std::sync::{Arc, Mutex};
 
 /// Check if the bir-daemon process is currently running.
 fn is_daemon_running() -> bool {
-    std::process::Command::new("pgrep")
-        .arg("-x")
-        .arg("bir-daemon")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    bir_core::daemon_installer::is_daemon_running()
 }
 
 pub enum CronTasksEvent {
@@ -1081,7 +1076,7 @@ impl Render for CronTasksView {
                                                 }))
                                         )
                                     })
-                                    .when(std::env::var("DEVELOPER_MODE").unwrap_or_default() == "true" && job.output_log.is_some(), |this| {
+                                    .when(job.output_log.is_some(), |this| {
                                         let log = job.output_log.clone().unwrap_or_default();
                                         let jname = job.name.clone();
                                         this.child(

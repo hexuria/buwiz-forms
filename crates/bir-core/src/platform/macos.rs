@@ -104,6 +104,37 @@ pub fn uninstall_daemon() {
     }
 }
 
+pub fn is_daemon_running() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        use objc::runtime::Object;
+        use objc::{class, msg_send, sel, sel_impl};
+
+        let cls = objc::runtime::Class::get("SMAppService");
+        let Some(cls) = cls else {
+            // Fallback for older macOS
+            return std::process::Command::new("pgrep")
+                .arg("-x")
+                .arg("bir-daemon")
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false);
+        };
+
+        unsafe {
+            let plist_name: *mut Object = msg_send![class!(NSString), stringWithUTF8String: c"com.bir.vault.daemon.plist".as_ptr()];
+            let service: *mut Object = msg_send![cls, agentServiceWithPlistName: plist_name];
+
+            let status: isize = msg_send![service, status];
+            status == 1 // SMAppServiceStatusEnabled
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
+}
+
 // ── Shell Execution ──────────────────────────────────────────────────────────
 
 /// Execute a shell command using the platform's native shell.

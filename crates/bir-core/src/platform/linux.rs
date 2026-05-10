@@ -87,6 +87,14 @@ pub fn uninstall_daemon() {
     info!("Linux systemd service uninstalled");
 }
 
+pub fn is_daemon_running() -> bool {
+    std::process::Command::new("systemctl")
+        .args(["--user", "is-active", "bir-vault-daemon.service"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
 // ── Shell Execution ──────────────────────────────────────────────────────────
 
 /// Execute a shell command using the platform's native shell.

@@ -77,6 +77,15 @@ pub fn uninstall_daemon() {
     info!("Windows Registry Run key removed");
 }
 
+pub fn is_daemon_running() -> bool {
+    std::process::Command::new("tasklist")
+        .arg("/FI")
+        .arg("IMAGENAME eq bir-daemon.exe")
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains("bir-daemon.exe"))
+        .unwrap_or(false)
+}
+
 // ── Shell Execution ──────────────────────────────────────────────────────────
 
 /// Execute a shell command using the platform's native shell.

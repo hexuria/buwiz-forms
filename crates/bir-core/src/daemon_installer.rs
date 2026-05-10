@@ -14,3 +14,8 @@ pub fn install() {
 pub fn uninstall() {
     crate::platform::uninstall_daemon();
 }
+
+/// Check if the background service is running.
+pub fn is_daemon_running() -> bool {
+    crate::platform::is_daemon_running()
+}
