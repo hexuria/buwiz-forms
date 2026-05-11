@@ -46,7 +46,7 @@ pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
 /// Extracted from `start_cron_jobs` to allow deterministic unit testing
 /// without being blocked by an infinite loop or thread sleep.
 pub async fn run_queue_tick(db: Arc<Mutex<Database>>) {
-    info!("Running background cron jobs...");
+    // Heartbeat log removed to prevent log spam. Job specific logs are emitted when jobs run.
 
     // Ensure we don't hold the DB lock across async network calls.
     // First, fetch profiles that have background cron enabled.
@@ -285,7 +285,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
     }
 }
 
-fn schedule_email_poll(
+pub fn schedule_email_poll(
     profile: &TaxpayerProfile,
     form_code: &str,
     db_guard: &std::sync::MutexGuard<Database>,

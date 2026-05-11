@@ -749,7 +749,9 @@ impl ProfileManagerView {
         self.save_message = Some("Saving...".to_string());
         cx.notify();
 
+        let db_arc_clone = db_arc.clone();
         cx.spawn(async move |this, cx| {
+            let is_email_tracking_active = profile.is_email_tracking_active();
             let save_result = cx
                 .background_executor()
                 .spawn(async move {
@@ -773,7 +775,22 @@ impl ProfileManagerView {
                         ));
 
                         let tin_val = this.tin_input.read(cx).value(cx).to_string();
-                        cx.emit(ProfileEvent::Saved(tin_val));
+                        cx.emit(ProfileEvent::Saved(tin_val.clone()));
+
+                        // Retroactively schedule email polling for any pending submissions
+                        if is_email_tracking_active {
+                            if let Ok(db) = db_arc_clone.lock() {
+                                if let Ok(summaries) = db.list_all_queued_submissions() {
+                                    for sum in summaries {
+                                        if sum.tin == tin_val && sum.status == bir_core::forms::FilingStatus::Submitted {
+                                            if let Ok(Some(saved_profile)) = db.get_profile(&tin_val) {
+                                                bir_core::background_cron::schedule_email_poll(&saved_profile, &sum.form_code, &db);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                     Err(err) => {
                         this.save_message = None;
@@ -1486,16 +1503,13 @@ impl Render for ProfileManagerView {
                                                                                     }).detach();
                                                                                 })),
                                                                         )
-                                                                        .child(if self.oauth_connected {
+                                                                        .when(self.oauth_connected, |this| {
+                                                                            this.child(
                                                                                 div()
                                                                                     .text_sm()
                                                                                     .text_color(gpui::Hsla::from(gpui::rgba(0x22c55eff)))
                                                                                     .child("● Connected ✓")
-                                                                        } else {
-                                                                            div()
-                                                                                .text_xs()
-                                                                                .text_color(gpui::Hsla::from(gpui::rgba(0xef4444ff)))
-                                                                                .child("You are required to log in to your Google account.")
+                                                                            )
                                                                         }),
                                                                 )
                                                         }

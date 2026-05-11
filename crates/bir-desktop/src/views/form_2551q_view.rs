@@ -68,6 +68,7 @@ pub struct Form2551QView {
     show_schedule_1: bool,
     show_tax_computation: bool,
     show_receipt: bool,
+    is_email_tracking_active: bool,
 
     _subscriptions: Vec<Subscription>,
 }
@@ -218,6 +219,10 @@ impl Form2551QView {
                         && this.draft.status != updated.status
                     {
                         this.draft = updated;
+                        // Refresh cached email tracking status
+                        this.is_email_tracking_active = db_guard.get_profile(&this.draft.tin)
+                            .ok().flatten()
+                            .map(|p| p.is_email_tracking_active()).unwrap_or(false);
                         if this.draft.status == FilingStatus::Confirmed {
                             cx.emit(Form2551QEvent::Confirmed);
                         }
@@ -227,6 +232,13 @@ impl Form2551QView {
             },
         );
         subscriptions.push(sub_bus);
+
+        let is_email_tracking_active = if let Ok(db_guard) = db.lock() {
+            db_guard.get_profile(&draft.tin).ok().flatten()
+                .map(|p| p.is_email_tracking_active()).unwrap_or(false)
+        } else {
+            false
+        };
 
         let mut view = Self {
             draft,
@@ -249,6 +261,7 @@ impl Form2551QView {
             show_schedule_1: true,
             show_tax_computation: true,
             show_receipt: false,
+            is_email_tracking_active,
             _subscriptions: subscriptions,
         };
         view.validation_errors = view.validate_for_submit(cx);
@@ -668,6 +681,8 @@ impl Form2551QView {
                     });
                 }
 
+                let draft_status = draft.status.clone();
+                let has_confirmation = confirmation.is_some();
                 if let Err(err) = cx.open_window(options, move |_window, cx| {
                     cx.new(|_cx| {
                         PdfViewerView::new(draft, result, output_dir, raw_html, confirmation, _cx)
@@ -685,13 +700,23 @@ impl Form2551QView {
                 }
 
                 use gpui_component::WindowExt;
-                window.push_notification(
-                    gpui_component::notification::Notification::new()
-                        .message("PDF viewer opened".to_string())
-                        .with_type(gpui_component::notification::NotificationType::Success)
-                        .autohide(true),
-                    cx,
-                );
+                if !has_confirmation && matches!(draft_status, FilingStatus::Confirmed | FilingStatus::Paid) {
+                    window.push_notification(
+                        gpui_component::notification::Notification::new()
+                            .message("Notice: PDF will not include BIR email receipt because automatic tracking is disabled.".to_string())
+                            .with_type(gpui_component::notification::NotificationType::Warning)
+                            .autohide(false),
+                        cx,
+                    );
+                } else {
+                    window.push_notification(
+                        gpui_component::notification::Notification::new()
+                            .message("PDF viewer opened".to_string())
+                            .with_type(gpui_component::notification::NotificationType::Success)
+                            .autohide(true),
+                        cx,
+                    );
+                }
             }
             Err(err) => {
                 use gpui_component::WindowExt;
@@ -1505,6 +1530,8 @@ impl Render for Form2551QView {
                                 );
                             }
                             FilingStatus::Submitted => {
+                                let is_email_tracking_active = self.is_email_tracking_active;
+
                                 toolbar = toolbar.child(
                                     gpui_component::button::Button::new("revert_draft_btn")
                                         .label("Revert Draft")
@@ -1513,13 +1540,40 @@ impl Render for Form2551QView {
                                             this.revert_to_draft(window, cx);
                                         }))
                                 );
-                                toolbar = toolbar.child(
-                                    gpui_component::button::Button::new("check_email_btn")
-                                        .label("Check Confirmation")
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.check_confirmation_email(window, cx);
-                                        }))
-                                );
+
+                                if is_email_tracking_active {
+                                    toolbar = toolbar.child(
+                                        gpui_component::button::Button::new("check_email_btn")
+                                            .label("Check Confirmation")
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.check_confirmation_email(window, cx);
+                                            }))
+                                    );
+                                } else {
+                                    toolbar = toolbar.child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap_2()
+                                            .child(
+                                                gpui_component::button::Button::new("mark_confirmed_manually_btn")
+                                                    .label("Mark as Confirmed Manually")
+                                                    .on_click(cx.listener(|this, _, _window, cx| {
+                                                        this.draft.status = FilingStatus::Confirmed;
+                                                        if let Ok(db) = this.db.lock() {
+                                                            let _ = db.save_2551q_draft(&this.draft);
+                                                        }
+                                                        cx.emit(Form2551QEvent::Confirmed);
+                                                        cx.notify();
+                                                    }))
+                                            )
+                                    ).child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().warning)
+                                            .child("⚠️ Auto-tracking disabled")
+                                    );
+                                }
                             }
                             FilingStatus::Confirmed => {
                                 toolbar = toolbar.child(

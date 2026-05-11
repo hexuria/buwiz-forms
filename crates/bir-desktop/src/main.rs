@@ -106,6 +106,11 @@ impl AssetSource for Assets {
 fn main() {
     dotenvy::dotenv().ok();
 
+    let developer_mode = std::env::var("DEVELOPER_MODE")
+        .unwrap_or_else(|_| "false".to_string())
+        .to_lowercase()
+        == "true";
+
     // Initialize structured logging for both stdout and file
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
     
@@ -115,20 +120,24 @@ fn main() {
     let file_appender = tracing_appender::rolling::never(&logs_dir, "ebirforms.log");
     
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        "bir_desktop=debug,bir_print=debug,bir_core=info".parse().unwrap()
+        if developer_mode {
+            "bir_desktop=debug,bir_print=debug,bir_core=info".parse().unwrap()
+        } else {
+            "bir_desktop=error,bir_print=error,bir_core=error".parse().unwrap()
+        }
     });
 
     let stdout_layer = tracing_subscriber::fmt::layer()
         .with_target(true)
-        .with_file(true)
-        .with_line_number(true);
+        .with_file(developer_mode)
+        .with_line_number(developer_mode);
 
     let file_layer = tracing_subscriber::fmt::layer()
         .with_writer(file_appender)
         .with_ansi(false)
         .with_target(true)
-        .with_file(true)
-        .with_line_number(true);
+        .with_file(developer_mode)
+        .with_line_number(developer_mode);
 
     tracing_subscriber::registry()
         .with(env_filter)
@@ -136,7 +145,7 @@ fn main() {
         .with(file_layer)
         .init();
 
-    tracing::info!("🔍 Tracing initialized");
+    tracing::info!("🔍 Tracing initialized (developer_mode: {})", developer_mode);
 
     crate::ipc::prevent_multiple_instances();
 
@@ -219,7 +228,7 @@ fn main() {
                     ])
                     .expect("Failed to append tray menu items");
 
-                let icon_data = include_bytes!("../../../assets/icon.png");
+                let icon_data = include_bytes!("../../../assets/images/e_logo.png");
                 let img = image::load_from_memory(icon_data)
                     .expect("Failed to load tray icon")
                     .into_rgba8();
