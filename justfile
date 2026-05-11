@@ -9,7 +9,7 @@ LINUX_TARGET := "x86_64-unknown-linux-gnu"
 RELEASE_DIR := "target/release-artifacts"
 MAC_APP := RELEASE_DIR + "/" + APP_NAME + ".app"
 VERSION := `grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/'`
-BUILD_NUMBER := env_var_or_default("BUILD_NUMBER", "19")
+BUILD_NUMBER := env_var_or_default("BUILD_NUMBER", "20")
 
 # Default task: format, lint, and type check
 default: check

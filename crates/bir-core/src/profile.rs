@@ -38,6 +38,14 @@ pub enum TaxClassification {
     MixedIncome,
     /// Corporation — files 1702Q, 1702RT.
     Corporation,
+    /// Tax-exempt cooperative — files 1702-EX.
+    CooperativeExempt,
+    /// Taxable cooperative — files 1702-RT.
+    CooperativeTaxable,
+    /// Mixed-income cooperative — files 1702-MX.
+    CooperativeMixed,
+    /// Estate or Trust — files 1701/1701Q (same as Individual).
+    EstateOrTrust,
 }
 
 /// How the app authenticates to the user's mail server.

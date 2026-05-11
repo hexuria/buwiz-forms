@@ -2,7 +2,7 @@
 
 use crate::profile::TaxpayerType;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum FilingFrequency {
     /// Filed 4 times per year — one per quarter. Counter: 0/4.
     Quarterly,
@@ -196,17 +196,17 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         title: "Quarterly Income Tax Return for Individuals, Estates and Trusts",
         category: "Income Tax",
         frequency: FilingFrequency::Quarterly,
-        taxpayer_types: &[TaxpayerType::Individual],
+        taxpayer_types: &[TaxpayerType::Individual, TaxpayerType::Estate, TaxpayerType::Trust],
         requires_vat: None,
         requires_employees: false,
         is_deprecated: false,
     },
     FormDefinition {
         code: "1701",
-        title: "Annual Income Tax Return for Individuals",
+        title: "Annual Income Tax Return for Individuals, Estates and Trusts",
         category: "Income Tax",
         frequency: FilingFrequency::Annual,
-        taxpayer_types: &[TaxpayerType::Individual],
+        taxpayer_types: &[TaxpayerType::Individual, TaxpayerType::Estate, TaxpayerType::Trust],
         requires_vat: None,
         requires_employees: false,
         is_deprecated: false,
@@ -216,20 +216,20 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
     // ═══════════════════════════════════════════
     FormDefinition {
         code: "1702Q",
-        title: "Quarterly Income Tax Return for Corporations, Partnerships",
+        title: "Quarterly Income Tax Return for Corporations, Partnerships and Cooperatives",
         category: "Income Tax",
         frequency: FilingFrequency::Quarterly,
-        taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
+        taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership, TaxpayerType::Cooperative],
         requires_vat: None,
         requires_employees: false,
         is_deprecated: false,
     },
     FormDefinition {
         code: "1702",
-        title: "Annual Income Tax Return for Corporation and Partnerships",
+        title: "Annual Income Tax Return for Corporations, Partnerships and Cooperatives",
         category: "Income Tax",
         frequency: FilingFrequency::Annual,
-        taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
+        taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership, TaxpayerType::Cooperative],
         requires_vat: None,
         requires_employees: false,
         is_deprecated: false,
@@ -304,7 +304,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         ],
         requires_vat: Some(false),
         requires_employees: false,
-        is_deprecated: false,
+        is_deprecated: true, // Abolished by TRAIN Law RA 10963 (2018) — percentage tax is quarterly-only via 2551Q
     },
     FormDefinition {
         code: "2552",
@@ -354,12 +354,13 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
     // ═══════════════════════════════════════════
     // Excise Tax
     // ═══════════════════════════════════════════
+    // Excise Tax — activity-based, applies to any person (individual or non-individual)
     FormDefinition {
         code: "2200A",
         title: "Excise Tax Return for Alcohol Products",
         category: "Excise Tax",
         frequency: FilingFrequency::Monthly,
-        taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
+        taxpayer_types: &[TaxpayerType::Individual, TaxpayerType::Corporation, TaxpayerType::Partnership],
         requires_vat: None,
         requires_employees: false,
         is_deprecated: false,
@@ -369,7 +370,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         title: "Excise Tax Return for Automobiles and Non-Essential Goods",
         category: "Excise Tax",
         frequency: FilingFrequency::Monthly,
-        taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
+        taxpayer_types: &[TaxpayerType::Individual, TaxpayerType::Corporation, TaxpayerType::Partnership],
         requires_vat: None,
         requires_employees: false,
         is_deprecated: false,
@@ -379,7 +380,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         title: "Excise Tax Return for Mineral Products",
         category: "Excise Tax",
         frequency: FilingFrequency::Monthly,
-        taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
+        taxpayer_types: &[TaxpayerType::Individual, TaxpayerType::Corporation, TaxpayerType::Partnership],
         requires_vat: None,
         requires_employees: false,
         is_deprecated: false,
@@ -389,7 +390,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         title: "Excise Tax Return for Petroleum Products",
         category: "Excise Tax",
         frequency: FilingFrequency::Monthly,
-        taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
+        taxpayer_types: &[TaxpayerType::Individual, TaxpayerType::Corporation, TaxpayerType::Partnership],
         requires_vat: None,
         requires_employees: false,
         is_deprecated: false,
@@ -399,7 +400,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         title: "Excise Tax Return for Tobacco Products",
         category: "Excise Tax",
         frequency: FilingFrequency::Monthly,
-        taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
+        taxpayer_types: &[TaxpayerType::Individual, TaxpayerType::Corporation, TaxpayerType::Partnership],
         requires_vat: None,
         requires_employees: false,
         is_deprecated: false,

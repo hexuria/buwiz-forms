@@ -242,26 +242,6 @@ impl Render for DashboardView {
                 .filter(|f| applicable_form_codes.contains(&f.code))
                 .collect();
 
-        // Enforce mutually exclusive Monthly vs Quarterly forms based on past filings for the active year
-        if let Ok(db) = self.db.lock() {
-            if let Ok(summaries) = db.list_draft_summaries(&profile.tin.full(), year) {
-                let has_2550m = summaries.iter().any(|s| s.form_code == "2550M");
-                let has_2550q = summaries.iter().any(|s| s.form_code == "2550Q");
-                if has_2550m {
-                    available_forms.retain(|f| f.code != "2550Q");
-                } else if has_2550q {
-                    available_forms.retain(|f| f.code != "2550M");
-                }
-
-                let has_2551m = summaries.iter().any(|s| s.form_code == "2551M");
-                let has_2551q = summaries.iter().any(|s| s.form_code == "2551Q");
-                if has_2551m {
-                    available_forms.retain(|f| f.code != "2551Q");
-                } else if has_2551q {
-                    available_forms.retain(|f| f.code != "2551M");
-                }
-            }
-        }
 
         let filter_chips = self.filter_state.read(cx).active_chips.clone();
         let query = self

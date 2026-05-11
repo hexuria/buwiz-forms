@@ -40,6 +40,7 @@ fn test_full_form_lifecycle() {
         is_create_msme: false,
         is_expanded_withholding_agent: false,
         atc_codes: vec![],
+        excise_tax_categories: vec![],
         tax_elections: vec![],
         _opted_for_8_percent_flat_rate_compat: None,
         has_employees: false,
@@ -69,7 +70,7 @@ fn test_full_form_lifecycle() {
     draft.schedule_1[0].taxable_amount = 100_000.0;
 
     // 5. Recompute
-    draft.recompute();
+    draft.recompute(None);
 
     // Assuming PT010 rate is 3%
     assert_eq!(draft.total_tax_due, 3_000.0);

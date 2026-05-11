@@ -180,8 +180,8 @@ fn is_form_applicable_for_classification(
             matches!(form_code, "1701" | "1701Q")
         }
         TaxClassification::SoleProprietorNonVat | TaxClassification::ProfessionalOrFreelancer => {
-            // Percentage tax + income tax (no VAT)
-            matches!(form_code, "2551Q" | "1701Q" | "1701")
+            // Percentage tax + income tax; VAT forms included here but filtered by requires_vat check
+            matches!(form_code, "2551Q" | "2550Q" | "1701Q" | "1701")
         }
         TaxClassification::SoleProprietorVat => {
             // VAT + income tax (no percentage tax)
@@ -196,6 +196,7 @@ fn is_form_applicable_for_classification(
             matches!(
                 form_code,
                 "1702Q"
+                    | "1702"
                     | "1702RT"
                     | "1702EX"
                     | "1702MX"
@@ -207,6 +208,15 @@ fn is_form_applicable_for_classification(
                     | "2550M"
                     | "2550Q"
             )
+        }
+        // Cooperative and Estate classifications use the same logic as Corporation
+        TaxClassification::CooperativeExempt
+        | TaxClassification::CooperativeTaxable
+        | TaxClassification::CooperativeMixed => {
+            matches!(form_code, "1702Q" | "1702" | "1702RT" | "1702EX" | "1702MX" | "1704")
+        }
+        TaxClassification::EstateOrTrust => {
+            matches!(form_code, "1701" | "1701Q")
         }
     }
 }
@@ -479,6 +489,7 @@ mod tests {
             is_create_msme: false,
             is_expanded_withholding_agent: false,
             atc_codes: vec![],
+            excise_tax_categories: vec![],
             tax_elections: vec![],
             _opted_for_8_percent_flat_rate_compat: None,
             has_employees: false,
@@ -538,6 +549,7 @@ mod tests {
             is_create_msme: false,
             is_expanded_withholding_agent: false,
             atc_codes: vec![],
+            excise_tax_categories: vec![],
             tax_elections: vec![],
             _opted_for_8_percent_flat_rate_compat: None,
             has_employees: false,

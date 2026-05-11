@@ -37,6 +37,7 @@ pub mod profile;
 pub mod receipt;
 pub mod reference;
 pub mod schema;
+pub mod temporal;
 pub mod time_utils;
 pub mod transport;
 pub mod validation;

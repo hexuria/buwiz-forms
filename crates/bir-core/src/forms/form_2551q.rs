@@ -607,6 +607,7 @@ mod tests {
             is_create_msme: false,
             is_expanded_withholding_agent: false,
             atc_codes: vec![],
+            excise_tax_categories: vec![],
             tax_elections: vec![],
             _opted_for_8_percent_flat_rate_compat: None,
             profile_pin_hash: None,

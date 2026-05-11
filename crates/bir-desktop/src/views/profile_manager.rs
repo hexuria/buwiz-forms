@@ -533,6 +533,10 @@ impl ProfileManagerView {
             }
             Some(bir_core::profile::TaxClassification::MixedIncome) => "Mixed Income",
             Some(bir_core::profile::TaxClassification::Corporation) => "Corporation",
+            Some(bir_core::profile::TaxClassification::CooperativeExempt) => "Cooperative (Exempt)",
+            Some(bir_core::profile::TaxClassification::CooperativeTaxable) => "Cooperative (Taxable)",
+            Some(bir_core::profile::TaxClassification::CooperativeMixed) => "Cooperative (Mixed)",
+            Some(bir_core::profile::TaxClassification::EstateOrTrust) => "Estate/Trust",
             None => "",
         };
         self.tax_classification_select.update(cx, |select, cx| {
@@ -698,6 +702,10 @@ impl ProfileManagerView {
             }
             "Mixed Income" => Some(bir_core::profile::TaxClassification::MixedIncome),
             "Corporation" => Some(bir_core::profile::TaxClassification::Corporation),
+            "Cooperative (Exempt)" => Some(bir_core::profile::TaxClassification::CooperativeExempt),
+            "Cooperative (Taxable)" => Some(bir_core::profile::TaxClassification::CooperativeTaxable),
+            "Cooperative (Mixed)" => Some(bir_core::profile::TaxClassification::CooperativeMixed),
+            "Estate/Trust" => Some(bir_core::profile::TaxClassification::EstateOrTrust),
             _ => None,
         };
 
