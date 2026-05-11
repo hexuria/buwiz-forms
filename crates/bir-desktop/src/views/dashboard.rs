@@ -125,7 +125,7 @@ impl DashboardView {
 
     pub fn set_profile(&mut self, profile: TaxpayerProfile, cx: &mut Context<Self>) {
         self.filter_state.update(cx, |state, cx| {
-            state.update_for_profile(&profile.taxpayer_type, profile.is_vat_registered, cx);
+            state.update_for_profile(&profile, cx);
         });
         self.reload_filing_progress(&profile);
         self.active_profile = Some(profile);
@@ -136,12 +136,10 @@ impl DashboardView {
     fn reload_filing_progress(&mut self, profile: &TaxpayerProfile) {
         self.filing_progress.clear();
         if let Ok(db) = self.db.lock() {
-            let form_codes = [
-                "1601C", "2551Q", "1702Q", "1702RT", "1701Q", "1701", "2550M",
-            ];
+            let applicable_codes = bir_core::integration::applicable_forms_for_profile(profile);
             let year = self.selected_year as u16;
 
-            for code in form_codes {
+            for code in applicable_codes {
                 let mut year_progress = std::collections::HashMap::new();
                 if let Ok(progress) = db.get_form_filing_progress(&profile.tin.full(), code, year) {
                     year_progress.insert(year, progress);
@@ -234,22 +232,36 @@ impl Render for DashboardView {
         };
 
         let year = self.selected_year as u16;
-        let current_type = &profile.taxpayer_type;
-        let is_vat_registered = profile.is_vat_registered;
 
         // Get forms for this taxpayer type using the registry
+        let applicable_form_codes = bir_core::integration::applicable_forms_for_profile(profile);
+
         let mut available_forms: Vec<&bir_core::forms::registry::FormDefinition> =
             bir_core::forms::registry::FORM_REGISTRY
                 .iter()
-                .filter(|f| f.taxpayer_types.contains(current_type))
-                .filter(|f| {
-                    if is_vat_registered {
-                        f.code != "2551Q"
-                    } else {
-                        f.code != "2550M"
-                    }
-                })
+                .filter(|f| applicable_form_codes.contains(&f.code))
                 .collect();
+
+        // Enforce mutually exclusive Monthly vs Quarterly forms based on past filings for the active year
+        if let Ok(db) = self.db.lock() {
+            if let Ok(summaries) = db.list_draft_summaries(&profile.tin.full(), year) {
+                let has_2550m = summaries.iter().any(|s| s.form_code == "2550M");
+                let has_2550q = summaries.iter().any(|s| s.form_code == "2550Q");
+                if has_2550m {
+                    available_forms.retain(|f| f.code != "2550Q");
+                } else if has_2550q {
+                    available_forms.retain(|f| f.code != "2550M");
+                }
+
+                let has_2551m = summaries.iter().any(|s| s.form_code == "2551M");
+                let has_2551q = summaries.iter().any(|s| s.form_code == "2551Q");
+                if has_2551m {
+                    available_forms.retain(|f| f.code != "2551Q");
+                } else if has_2551q {
+                    available_forms.retain(|f| f.code != "2551M");
+                }
+            }
+        }
 
         let filter_chips = self.filter_state.read(cx).active_chips.clone();
         let query = self

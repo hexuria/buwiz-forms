@@ -80,7 +80,7 @@ use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
 use windows::Win32::System::Threading::GetCurrentProcessId;
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetWindowThreadProcessId, ShowWindow, SW_HIDE, SW_SHOW,
+    EnumWindows, GetWindowThreadProcessId, SW_HIDE, SW_SHOW, ShowWindow,
 };
 
 #[cfg(target_os = "windows")]

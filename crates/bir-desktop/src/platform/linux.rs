@@ -72,7 +72,7 @@ pub const MONOSPACE_FONT: &str = "monospace";
 // ── Dock Management ──────────────────────────────────────────────────────────
 
 /// Hides the application from the dock/taskbar and tiling managers.
-/// On Linux, GPUI does not natively support window hiding, so we attempt to use `xdotool` 
+/// On Linux, GPUI does not natively support window hiding, so we attempt to use `xdotool`
 /// as a best-effort fallback to unmap the windows belonging to this process.
 pub fn hide_from_dock() {
     #[cfg(target_os = "linux")]

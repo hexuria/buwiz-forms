@@ -1,8 +1,8 @@
 use directories::ProjectDirs;
 use gpui::App;
+use smol::net::UdpSocket;
 use std::net::UdpSocket as StdUdpSocket;
 use std::time::Duration;
-use smol::net::UdpSocket;
 
 fn get_port_file_path() -> Option<std::path::PathBuf> {
     if let Some(proj_dirs) = ProjectDirs::from("com", "goldcoders", "eBIRForms") {

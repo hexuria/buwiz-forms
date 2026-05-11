@@ -170,7 +170,7 @@ pub fn hide_from_dock() {
     unsafe {
         use objc::{class, msg_send, sel, sel_impl};
         let app: *mut objc::runtime::Object = msg_send![class!(NSApplication), sharedApplication];
-        
+
         // Order out all windows explicitly so tiling window managers (like AeroSpace) drop them from the layout
         let windows: *mut objc::runtime::Object = msg_send![app, windows];
         let count: u64 = msg_send![windows, count];
@@ -190,16 +190,17 @@ pub fn show_in_dock() {
     unsafe {
         use objc::{class, msg_send, sel, sel_impl};
         let app: *mut objc::runtime::Object = msg_send![class!(NSApplication), sharedApplication];
-        
+
         // Set activation policy back to Regular
         let _: () = msg_send![app, setActivationPolicy: 0isize]; // NSApplicationActivationPolicyRegular
-        
+
         // Bring windows back from being explicitly ordered out
         let windows: *mut objc::runtime::Object = msg_send![app, windows];
         let count: u64 = msg_send![windows, count];
         for i in 0..count {
             let window: *mut objc::runtime::Object = msg_send![windows, objectAtIndex: i];
-            let _: () = msg_send![window, makeKeyAndOrderFront: std::ptr::null_mut::<std::ffi::c_void>()];
+            let _: () =
+                msg_send![window, makeKeyAndOrderFront: std::ptr::null_mut::<std::ffi::c_void>()];
         }
     }
 }

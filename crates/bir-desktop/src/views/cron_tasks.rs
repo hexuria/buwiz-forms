@@ -233,7 +233,6 @@ impl CronTasksView {
     pub fn load_settings(&mut self, cx: &mut Context<'_, Self>) {
         let mut view_jobs = Vec::new();
         if let Ok(db) = self.db.lock() {
-
             if let Ok(jobs) = db.list_jobs() {
                 for job in jobs {
                     let mut display_name = job.name.clone();
@@ -285,8 +284,6 @@ impl CronTasksView {
         self.jobs = view_jobs;
         cx.notify();
     }
-
-
 
     fn delete_job(&mut self, id: i64, cx: &mut Context<'_, Self>) {
         if let Ok(db) = self.db.lock() {
@@ -477,7 +474,9 @@ impl CronTasksView {
     }
 
     fn email_support(&mut self, cx: &mut Context<'_, Self>) {
-        let _ = open::that("mailto:support@goldcoders.dev?subject=eBIRForms%20Bug%20Report&body=Please%20attach%20the%20log%20file.");
+        let _ = open::that(
+            "mailto:support@goldcoders.dev?subject=eBIRForms%20Bug%20Report&body=Please%20attach%20the%20log%20file.",
+        );
         let logs_dir = bir_core::platform::data_dir().join("logs");
         let _ = open::that(&logs_dir);
         cx.notify();
@@ -494,7 +493,7 @@ impl CronTasksView {
                 }
             }
         }
-        
+
         if error_logs.is_empty() {
             error_logs = "No error logs found.".to_string();
         }
@@ -515,7 +514,8 @@ impl CronTasksView {
                     .show()
                     .await;
             }
-        }).detach();
+        })
+        .detach();
     }
 }
 
@@ -533,7 +533,12 @@ impl Render for CronTasksView {
             .filter(|j| match selected_filter.as_str() {
                 "All Jobs" => true,
                 "Queued" => j.status == "Queued",
-                "Done" => j.status == "Submitted" || j.status == "Confirmed" || j.status == "Paid" || j.status == "Done",
+                "Done" => {
+                    j.status == "Submitted"
+                        || j.status == "Confirmed"
+                        || j.status == "Paid"
+                        || j.status == "Done"
+                }
                 "Failed" => j.status == "Failed",
                 "Archived" => j.status == "Archived",
                 _ => true,
@@ -565,8 +570,6 @@ impl Render for CronTasksView {
 
         let active_tab_bg = cx.theme().secondary;
         let inactive_tab_bg = gpui::rgba(0x00000000).into();
-
-
 
         let jobs_view = div()
             .flex()
@@ -808,34 +811,38 @@ impl Render for CronTasksView {
 
         let selected_log_filter = self.log_filter_combobox.read(cx).selected_value(cx);
 
-        let parsed_logs = self.log_content.lines().filter(|line| {
-            if selected_log_filter == "All Logs" {
-                true
-            } else if selected_log_filter == "Error" {
-                line.contains(" ERROR ") || line.contains(" FATAL ")
-            } else if selected_log_filter == "Warn" {
-                line.contains(" WARN ")
-            } else if selected_log_filter == "Info" {
-                line.contains(" INFO ")
-            } else {
-                true
-            }
-        }).map(|line| {
-            let color = if line.contains(" ERROR ") || line.contains(" FATAL ") {
-                cx.theme().danger
-            } else if line.contains(" WARN ") {
-                cx.theme().primary // Fallback for warning color
-            } else if line.contains(" INFO ") {
-                cx.theme().info
-            } else {
-                cx.theme().muted_foreground
-            };
-            div()
-                .font_family(crate::platform::MONOSPACE_FONT)
-                .text_sm()
-                .text_color(color)
-                .child(line.to_string())
-        });
+        let parsed_logs = self
+            .log_content
+            .lines()
+            .filter(|line| {
+                if selected_log_filter == "All Logs" {
+                    true
+                } else if selected_log_filter == "Error" {
+                    line.contains(" ERROR ") || line.contains(" FATAL ")
+                } else if selected_log_filter == "Warn" {
+                    line.contains(" WARN ")
+                } else if selected_log_filter == "Info" {
+                    line.contains(" INFO ")
+                } else {
+                    true
+                }
+            })
+            .map(|line| {
+                let color = if line.contains(" ERROR ") || line.contains(" FATAL ") {
+                    cx.theme().danger
+                } else if line.contains(" WARN ") {
+                    cx.theme().primary // Fallback for warning color
+                } else if line.contains(" INFO ") {
+                    cx.theme().info
+                } else {
+                    cx.theme().muted_foreground
+                };
+                div()
+                    .font_family(crate::platform::MONOSPACE_FONT)
+                    .text_sm()
+                    .text_color(color)
+                    .child(line.to_string())
+            });
 
         let logs_view = div()
             .flex()
@@ -865,7 +872,7 @@ impl Render for CronTasksView {
                                     .small()
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.refresh_logs(cx);
-                                    }))
+                                    })),
                             )
                             .child(
                                 gpui_component::button::Button::new("clear_logs")
@@ -873,9 +880,9 @@ impl Render for CronTasksView {
                                     .small()
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.clear_logs(cx);
-                                    }))
+                                    })),
                             )
-                            .child(div().w_48().child(Combobox::new(&self.log_filter_combobox)))
+                            .child(div().w_48().child(Combobox::new(&self.log_filter_combobox))),
                     )
                     .child(
                         div()
@@ -887,7 +894,7 @@ impl Render for CronTasksView {
                                     .small()
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.export_error_logs(cx);
-                                    }))
+                                    })),
                             )
                             .child(
                                 gpui_component::button::Button::new("email_support_global")
@@ -895,9 +902,9 @@ impl Render for CronTasksView {
                                     .small()
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.email_support(cx);
-                                    }))
-                            )
-                    )
+                                    })),
+                            ),
+                    ),
             )
             .child(
                 div()
@@ -912,7 +919,7 @@ impl Render for CronTasksView {
                     .rounded_md()
                     .overflow_y_scroll()
                     .track_scroll(&self.logs_scroll_handle)
-                    .children(parsed_logs)
+                    .children(parsed_logs),
             );
 
         div()
@@ -931,12 +938,15 @@ impl Render for CronTasksView {
                             .flex()
                             .flex_col()
                             .gap_1()
-                            .child(div().text_2xl().font_weight(FontWeight::BOLD).child("Background Tasks & Job Queue"))
                             .child(
                                 div()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("Manage system daemon jobs, retry queues, and application logs."),
-                            ),
+                                    .text_2xl()
+                                    .font_weight(FontWeight::BOLD)
+                                    .child("Background Tasks & Job Queue"),
+                            )
+                            .child(div().text_color(cx.theme().muted_foreground).child(
+                                "Manage system daemon jobs, retry queues, and application logs.",
+                            )),
                     )
                     .child(
                         div()
@@ -952,14 +962,31 @@ impl Render for CronTasksView {
                                     .px_4()
                                     .py_2()
                                     .cursor_pointer()
-                                    .bg(if is_jobs { active_tab_bg } else { inactive_tab_bg })
+                                    .bg(if is_jobs {
+                                        active_tab_bg
+                                    } else {
+                                        inactive_tab_bg
+                                    })
                                     .border_b_2()
-                                    .border_color(if is_jobs { cx.theme().primary } else { gpui::rgba(0x00000000).into() })
+                                    .border_color(if is_jobs {
+                                        cx.theme().primary
+                                    } else {
+                                        gpui::rgba(0x00000000).into()
+                                    })
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.active_tab = BackgroundTaskTab::Jobs;
                                         cx.notify();
                                     }))
-                                    .child(div().font_weight(FontWeight::BOLD).text_color(if is_jobs { cx.theme().foreground } else { cx.theme().muted_foreground }).child("Jobs")),
+                                    .child(
+                                        div()
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(if is_jobs {
+                                                cx.theme().foreground
+                                            } else {
+                                                cx.theme().muted_foreground
+                                            })
+                                            .child("Jobs"),
+                                    ),
                             )
                             .child(
                                 div()
@@ -967,17 +994,34 @@ impl Render for CronTasksView {
                                     .px_4()
                                     .py_2()
                                     .cursor_pointer()
-                                    .bg(if is_logs { active_tab_bg } else { inactive_tab_bg })
+                                    .bg(if is_logs {
+                                        active_tab_bg
+                                    } else {
+                                        inactive_tab_bg
+                                    })
                                     .border_b_2()
-                                    .border_color(if is_logs { cx.theme().primary } else { gpui::rgba(0x00000000).into() })
+                                    .border_color(if is_logs {
+                                        cx.theme().primary
+                                    } else {
+                                        gpui::rgba(0x00000000).into()
+                                    })
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.active_tab = BackgroundTaskTab::Logs;
                                         this.refresh_logs(cx);
                                         cx.notify();
                                     }))
-                                    .child(div().font_weight(FontWeight::BOLD).text_color(if is_logs { cx.theme().foreground } else { cx.theme().muted_foreground }).child("Logs")),
-                            )
-                    )
+                                    .child(
+                                        div()
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(if is_logs {
+                                                cx.theme().foreground
+                                            } else {
+                                                cx.theme().muted_foreground
+                                            })
+                                            .child("Logs"),
+                                    ),
+                            ),
+                    ),
             )
             .child(
                 div()
@@ -992,7 +1036,7 @@ impl Render for CronTasksView {
                         jobs_view.into_any_element()
                     } else {
                         logs_view.into_any_element()
-                    })
+                    }),
             )
     }
 }

@@ -1,3 +1,4 @@
+#![allow(clippy::collapsible_if)]
 //! # bir-core
 //!
 //! Core library for the BIR eBIRForms replacement.

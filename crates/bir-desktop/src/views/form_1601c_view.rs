@@ -314,6 +314,48 @@ impl Render for Form1601CView {
             .bg(cx.theme().background)
             .child(
                 div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .px_8()
+                    .py_4()
+                    .bg(cx.theme().background)
+                    .border_b_1()
+                    .border_color(cx.theme().border)
+                    .child(
+                        gpui_component::button::Button::new("back_btn")
+                            .label("← Back")
+                            .on_click(cx.listener(|_, _, _, cx| {
+                                cx.emit(Form1601CEvent::BackToDashboard);
+                            })),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_3()
+                            .child(
+                                gpui_component::button::Button::new("save_draft_btn")
+                                    .label("Save Draft")
+                                    .outline()
+                                    .disabled(!is_draft)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.save_draft(window, cx);
+                                    })),
+                            )
+                            .child(
+                                gpui_component::button::Button::new("submit_btn")
+                                    .label("Generate XML & Submit")
+                                    .primary()
+                                    .disabled(!is_draft || !self.validation_errors.is_empty())
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.mark_submitted(window, cx);
+                                    })),
+                            )
+                    ),
+            )
+            .child(
+                div()
                     .p_6()
                     .border_b_1()
                     .border_color(cx.theme().border)
@@ -683,34 +725,7 @@ impl Render for Form1601CView {
                             ),
                     ),
             )
-            .child(
-                div()
-                    .p_4()
-                    .border_t_1()
-                    .border_color(cx.theme().border)
-                    .bg(cx.theme().accent)
-                    .flex()
-                    .justify_end()
-                    .gap_4()
-                    .child(
-                        gpui_component::button::Button::new("save_draft_btn")
-                            .label("Save Draft")
-                            .outline()
-                            .disabled(!is_draft)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.save_draft(window, cx);
-                            })),
-                    )
-                    .child(
-                        gpui_component::button::Button::new("submit_btn")
-                            .label("Generate XML & Submit")
-                            .primary()
-                            .disabled(!is_draft || !self.validation_errors.is_empty())
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.mark_submitted(window, cx);
-                            })),
-                    ),
-            )
+
     }
 }
 

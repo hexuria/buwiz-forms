@@ -28,6 +28,7 @@ pub struct FormDefinition {
     /// If true, this form only applies to taxpayers with employees
     /// (withholding agent forms).
     pub requires_employees: bool,
+    pub is_deprecated: bool,
 }
 
 pub const FORM_REGISTRY: &[FormDefinition] = &[
@@ -46,6 +47,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         ],
         requires_vat: None,
         requires_employees: false,
+        is_deprecated: false,
     },
     // ═══════════════════════════════════════════
     // Withholding Tax (employer / withholding agent forms)
@@ -62,6 +64,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         ],
         requires_vat: None,
         requires_employees: true,
+        is_deprecated: false,
     },
     FormDefinition {
         code: "1600WP",
@@ -75,6 +78,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         ],
         requires_vat: None,
         requires_employees: true,
+        is_deprecated: false,
     },
     FormDefinition {
         code: "1601C",
@@ -88,6 +92,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         ],
         requires_vat: None,
         requires_employees: true,
+        is_deprecated: false,
     },
     FormDefinition {
         code: "1601E",
@@ -101,6 +106,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         ],
         requires_vat: None,
         requires_employees: true,
+        is_deprecated: true,
     },
     FormDefinition {
         code: "1601F",
@@ -114,6 +120,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         ],
         requires_vat: None,
         requires_employees: true,
+        is_deprecated: false,
     },
     FormDefinition {
         code: "1602",
@@ -127,6 +134,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         ],
         requires_vat: None,
         requires_employees: true,
+        is_deprecated: false,
     },
     FormDefinition {
         code: "1603",
@@ -140,6 +148,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         ],
         requires_vat: None,
         requires_employees: true,
+        is_deprecated: false,
     },
     FormDefinition {
         code: "1604CF",
@@ -153,6 +162,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         ],
         requires_vat: None,
         requires_employees: true,
+        is_deprecated: false,
     },
     FormDefinition {
         code: "1604E",
@@ -166,6 +176,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         ],
         requires_vat: None,
         requires_employees: true,
+        is_deprecated: false,
     },
     // ═══════════════════════════════════════════
     // Income Tax — Individual
@@ -178,6 +189,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         taxpayer_types: &[TaxpayerType::Individual],
         requires_vat: None,
         requires_employees: false,
+        is_deprecated: false,
     },
     FormDefinition {
         code: "1701Q",
@@ -187,6 +199,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         taxpayer_types: &[TaxpayerType::Individual],
         requires_vat: None,
         requires_employees: false,
+        is_deprecated: false,
     },
     FormDefinition {
         code: "1701",
@@ -196,6 +209,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         taxpayer_types: &[TaxpayerType::Individual],
         requires_vat: None,
         requires_employees: false,
+        is_deprecated: false,
     },
     // ═══════════════════════════════════════════
     // Income Tax — Corporation / Partnership
@@ -208,6 +222,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
         requires_vat: None,
         requires_employees: false,
+        is_deprecated: false,
     },
     FormDefinition {
         code: "1702",
@@ -217,6 +232,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
         requires_vat: None,
         requires_employees: false,
+        is_deprecated: false,
     },
     FormDefinition {
         code: "1704",
@@ -226,6 +242,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         taxpayer_types: &[TaxpayerType::Corporation],
         requires_vat: None,
         requires_employees: false,
+        is_deprecated: false,
     },
     // ═══════════════════════════════════════════
     // Value-Added Tax
@@ -242,6 +259,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         ],
         requires_vat: Some(true),
         requires_employees: false,
+        is_deprecated: true,
     },
     FormDefinition {
         code: "2550Q",
@@ -255,6 +273,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         ],
         requires_vat: Some(true),
         requires_employees: false,
+        is_deprecated: false,
     },
     // ═══════════════════════════════════════════
     // Percentage Tax
@@ -271,6 +290,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         ],
         requires_vat: Some(false),
         requires_employees: false,
+        is_deprecated: false,
     },
     FormDefinition {
         code: "2551M",
@@ -284,6 +304,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         ],
         requires_vat: Some(false),
         requires_employees: false,
+        is_deprecated: false,
     },
     FormDefinition {
         code: "2552",
@@ -297,6 +318,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         ],
         requires_vat: None,
         requires_employees: false,
+        is_deprecated: false,
     },
     FormDefinition {
         code: "2553",
@@ -310,6 +332,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         ],
         requires_vat: None,
         requires_employees: false,
+        is_deprecated: false,
     },
     // ═══════════════════════════════════════════
     // Documentary Stamp Tax
@@ -326,6 +349,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         ],
         requires_vat: None,
         requires_employees: false,
+        is_deprecated: false,
     },
     // ═══════════════════════════════════════════
     // Excise Tax
@@ -338,6 +362,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
         requires_vat: None,
         requires_employees: false,
+        is_deprecated: false,
     },
     FormDefinition {
         code: "2200AN",
@@ -347,6 +372,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
         requires_vat: None,
         requires_employees: false,
+        is_deprecated: false,
     },
     FormDefinition {
         code: "2200M",
@@ -356,6 +382,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
         requires_vat: None,
         requires_employees: false,
+        is_deprecated: false,
     },
     FormDefinition {
         code: "2200P",
@@ -365,6 +392,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
         requires_vat: None,
         requires_employees: false,
+        is_deprecated: false,
     },
     FormDefinition {
         code: "2200T",
@@ -374,6 +402,45 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         taxpayer_types: &[TaxpayerType::Corporation, TaxpayerType::Partnership],
         requires_vat: None,
         requires_employees: false,
+        is_deprecated: false,
+    },
+    FormDefinition {
+        code: "0619E",
+        title: "Monthly Remittance Form for Creditable Income Taxes Withheld (Expanded)",
+        category: "Withholding Tax",
+        frequency: FilingFrequency::Monthly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: true,
+        is_deprecated: false,
+    },
+    FormDefinition {
+        code: "1601EQ",
+        title: "Quarterly Remittance Return of Creditable Income Taxes Withheld (Expanded)",
+        category: "Withholding Tax",
+        frequency: FilingFrequency::Quarterly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: true,
+        is_deprecated: false,
+    },
+    FormDefinition {
+        code: "1701MS",
+        title: "Annual Income Tax Return for Micro and Small Taxpayers",
+        category: "Income Tax",
+        frequency: FilingFrequency::Annual,
+        taxpayer_types: &[TaxpayerType::Individual],
+        requires_vat: None,
+        requires_employees: false,
+        is_deprecated: false,
     },
 ];
 

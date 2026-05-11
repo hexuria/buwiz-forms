@@ -26,11 +26,17 @@
 //!                               SyncResponse { results, warnings }
 //! ```
 
+pub mod computation;
+pub mod erp;
+pub mod fraud;
 pub mod mapper;
 pub mod models;
 pub mod providers;
 pub mod service;
+pub mod simulation;
+pub mod transactions;
 pub mod validation;
+pub mod withholding;
 
 pub use mapper::{FormDraftOutput, FormMapper, Mapper2551Q, MapperError};
 pub use models::{IncomeCategory, IncomeSource, UniversalTaxPayload};

@@ -1,4 +1,8 @@
 #![allow(unexpected_cfgs)]
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::let_unit_value)]
+#![allow(unused)]
+#![allow(clippy::redundant_pattern_matching)]
 //! BIR Desktop Application — GPUI-powered tax filing interface.
 
 use gpui::*;
@@ -9,11 +13,11 @@ mod app;
 mod auth_overlays;
 mod components;
 pub mod events;
+mod ipc;
 mod platform;
 mod sidebar;
 mod theme;
 mod views;
-mod ipc;
 
 pub mod global_actions {
     gpui::actions!(
@@ -112,18 +116,22 @@ fn main() {
         == "true";
 
     // Initialize structured logging for both stdout and file
-    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-    
+    use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
+
     let logs_dir = bir_core::platform::data_dir().join("logs");
     let _ = std::fs::create_dir_all(&logs_dir);
-    
+
     let file_appender = tracing_appender::rolling::never(&logs_dir, "ebirforms.log");
-    
+
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         if developer_mode {
-            "bir_desktop=debug,bir_print=debug,bir_core=info".parse().unwrap()
+            "bir_desktop=debug,bir_print=debug,bir_core=info"
+                .parse()
+                .unwrap()
         } else {
-            "bir_desktop=error,bir_print=error,bir_core=error".parse().unwrap()
+            "bir_desktop=error,bir_print=error,bir_core=error"
+                .parse()
+                .unwrap()
         }
     });
 
@@ -145,7 +153,10 @@ fn main() {
         .with(file_layer)
         .init();
 
-    tracing::info!("🔍 Tracing initialized (developer_mode: {})", developer_mode);
+    tracing::info!(
+        "🔍 Tracing initialized (developer_mode: {})",
+        developer_mode
+    );
 
     crate::ipc::prevent_multiple_instances();
 
@@ -154,7 +165,7 @@ fn main() {
         .with_assets(Assets { base: assets_dir })
         .run(move |cx| {
             crate::ipc::start_ipc_listener(cx);
-            
+
             gpui_component::init(cx);
             crate::platform::bind_global_keys(cx);
 
@@ -286,7 +297,7 @@ fn main() {
                                 }
                             }
 
-                            // We no longer bring the app to foreground on tray click. 
+                            // We no longer bring the app to foreground on tray click.
                             // This allows native tray menus to open without side effects.
                             if let Ok(_event) = tray_channel.try_recv() {}
                             cx.background_executor()

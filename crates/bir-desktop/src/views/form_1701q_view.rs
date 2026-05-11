@@ -129,8 +129,26 @@ impl Render for Form1701QView {
             .size_full()
             .flex()
             .flex_col()
-            .bg(cx.theme().background)
-            .child(title_block)
+            .min_h_0()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .px_8()
+                    .py_4()
+                    .bg(cx.theme().background)
+                    .border_b_1()
+                    .border_color(cx.theme().border)
+                    .child(
+                        gpui_component::button::Button::new("back_btn")
+                            .label("← Back")
+                            .on_click(cx.listener(|_, _, _, cx| {
+                                cx.emit(Form1701QEvent::BackToDashboard);
+                            })),
+                    )
+                    .child(div().flex().items_center().gap_3()), // Placeholder for actions
+            )
             .child(
                 div()
                     .flex()
@@ -144,77 +162,75 @@ impl Render for Form1701QView {
                     .child(status_pipeline),
             )
             .child(
-                div()
-                    .id("form_1701q_scroll")
-                    .flex_1()
-                    .overflow_y_scroll()
-                    .p_8()
-                    .child(
-                        div()
-                            .w_full()
-                            .max_w(px(900.))
-                            .mx_auto()
-                            .flex()
-                            .flex_col()
-                            .gap_8()
-                            .child(crate::components::form_parts::form_accordion(
-                                "acc_filing_period",
-                                "FILING PERIOD",
-                                self.show_filing_period,
-                                true,
-                                false,
-                                cx.listener(|this: &mut Self, _, _, cx| {
-                                    this.show_filing_period = !this.show_filing_period;
-                                    cx.notify();
-                                }),
-                                filing_period_content.into_any_element(),
-                                cx,
-                            ))
-                            .child(crate::components::form_parts::form_accordion(
-                                "acc_background_info",
-                                "PART I — BACKGROUND INFORMATION",
-                                self.show_background_info,
-                                true,
-                                false,
-                                cx.listener(|this: &mut Self, _, _, cx| {
-                                    this.show_background_info = !this.show_background_info;
-                                    cx.notify();
-                                }),
-                                background_info_content.into_any_element(),
-                                cx,
-                            ))
-                            .child(crate::components::form_parts::form_accordion(
-                                "acc_tax_computation",
-                                "PART II — COMPUTATION OF TAX",
-                                self.show_tax_computation,
-                                true,
-                                false,
-                                cx.listener(|this: &mut Self, _, _, cx| {
-                                    this.show_tax_computation = !this.show_tax_computation;
-                                    cx.notify();
-                                }),
-                                tax_computation_content.into_any_element(),
-                                cx,
-                            )),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .px_8()
-                    .py_4()
-                    .bg(cx.theme().background)
-                    .border_t_1()
-                    .border_color(cx.theme().border)
-                    .child(
-                        gpui_component::button::Button::new("back_btn")
-                            .label("← Back")
-                            .on_click(cx.listener(|_, _, _, cx| {
-                                cx.emit(Form1701QEvent::BackToDashboard);
-                            })),
-                    ),
+                div().flex_1().min_h_0().overflow_hidden().child(
+                    div()
+                        .id("form_1701q_scroll")
+                        .relative()
+                        .size_full()
+                        .child(
+                            div()
+                                .id("form_1701q_scroll_area")
+                                .absolute()
+                                .top_0()
+                                .left_0()
+                                .right_0()
+                                .bottom_0()
+                                .flex()
+                                .flex_col()
+                                .overflow_y_scroll()
+                                .child(
+                                    div()
+                                        .w_full()
+                                        .max_w(px(900.))
+                                        .mx_auto()
+                                        .px_8()
+                                        .py_10()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_8()
+                                        .child(title_block)
+                                        .child(crate::components::form_parts::form_accordion(
+                                            "acc_filing_period",
+                                            "FILING PERIOD",
+                                            self.show_filing_period,
+                                            true,
+                                            false,
+                                            cx.listener(|this: &mut Self, _, _, cx| {
+                                                this.show_filing_period = !this.show_filing_period;
+                                                cx.notify();
+                                            }),
+                                            filing_period_content.into_any_element(),
+                                            cx,
+                                        ))
+                                        .child(crate::components::form_parts::form_accordion(
+                                            "acc_background_info",
+                                            "PART I — BACKGROUND INFORMATION",
+                                            self.show_background_info,
+                                            true,
+                                            false,
+                                            cx.listener(|this: &mut Self, _, _, cx| {
+                                                this.show_background_info = !this.show_background_info;
+                                                cx.notify();
+                                            }),
+                                            background_info_content.into_any_element(),
+                                            cx,
+                                        ))
+                                        .child(crate::components::form_parts::form_accordion(
+                                            "acc_tax_computation",
+                                            "PART II — COMPUTATION OF TAX",
+                                            self.show_tax_computation,
+                                            true,
+                                            false,
+                                            cx.listener(|this: &mut Self, _, _, cx| {
+                                                this.show_tax_computation = !this.show_tax_computation;
+                                                cx.notify();
+                                            }),
+                                            tax_computation_content.into_any_element(),
+                                            cx,
+                                        )),
+                                ),
+                        ),
+                ),
             )
     }
 }

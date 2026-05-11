@@ -220,9 +220,12 @@ impl Form2551QView {
                     {
                         this.draft = updated;
                         // Refresh cached email tracking status
-                        this.is_email_tracking_active = db_guard.get_profile(&this.draft.tin)
-                            .ok().flatten()
-                            .map(|p| p.is_email_tracking_active()).unwrap_or(false);
+                        this.is_email_tracking_active = db_guard
+                            .get_profile(&this.draft.tin)
+                            .ok()
+                            .flatten()
+                            .map(|p| p.is_email_tracking_active())
+                            .unwrap_or(false);
                         if this.draft.status == FilingStatus::Confirmed {
                             cx.emit(Form2551QEvent::Confirmed);
                         }
@@ -234,8 +237,12 @@ impl Form2551QView {
         subscriptions.push(sub_bus);
 
         let is_email_tracking_active = if let Ok(db_guard) = db.lock() {
-            db_guard.get_profile(&draft.tin).ok().flatten()
-                .map(|p| p.is_email_tracking_active()).unwrap_or(false)
+            db_guard
+                .get_profile(&draft.tin)
+                .ok()
+                .flatten()
+                .map(|p| p.is_email_tracking_active())
+                .unwrap_or(false)
         } else {
             false
         };
@@ -307,7 +314,7 @@ impl Form2551QView {
             .parse::<f64>()
             .unwrap_or(0.0);
 
-        self.draft.recompute();
+        self.draft.recompute(None);
         tracing::debug!(
             total_tax_due = self.draft.total_tax_due,
             total_payable = self.draft.total_amount_payable,
@@ -700,7 +707,9 @@ impl Form2551QView {
                 }
 
                 use gpui_component::WindowExt;
-                if !has_confirmation && matches!(draft_status, FilingStatus::Confirmed | FilingStatus::Paid) {
+                if !has_confirmation
+                    && matches!(draft_status, FilingStatus::Confirmed | FilingStatus::Paid)
+                {
                     window.push_notification(
                         gpui_component::notification::Notification::new()
                             .message("Notice: PDF will not include BIR email receipt because automatic tracking is disabled.".to_string())

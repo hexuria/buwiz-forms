@@ -182,7 +182,12 @@ impl FormMapper for Mapper2551Q {
         draft.schedule_1 = Self::build_schedule_rows(&payload.income_sources)?;
 
         // Trigger full recomputation (tax due, penalties, totals)
-        draft.recompute();
+        let expected_sales = payload
+            .metadata
+            .get("expected_sales")
+            .and_then(|v| v.parse::<f64>().ok());
+
+        draft.recompute(expected_sales);
 
         Ok(FormDraftOutput::Form2551Q(draft))
     }
@@ -265,8 +270,17 @@ mod tests {
             oauth_access_token: None,
             oauth_refresh_token: None,
             tax_classification: None,
-            opted_for_8_percent_flat_rate: false,
+            eopt_tier: None,
+            is_bmbe: false,
+            is_gpp_partner: false,
+            is_create_msme: false,
+            is_expanded_withholding_agent: false,
+            atc_codes: vec![],
+            tax_elections: vec![],
+            _opted_for_8_percent_flat_rate_compat: None,
             has_employees: false,
+            is_dormant: false,
+            has_single_employer: false,
         }
     }
 

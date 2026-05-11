@@ -105,20 +105,14 @@ impl FilterState {
     /// Update the available form types based on the active profile.
     pub fn update_for_profile(
         &mut self,
-        taxpayer_type: &TaxpayerType,
-        is_vat: bool,
+        profile: &bir_core::profile::TaxpayerProfile,
         cx: &mut Context<Self>,
     ) {
+        let applicable_form_codes = bir_core::integration::applicable_forms_for_profile(profile);
+
         self.available_form_types = FORM_REGISTRY
             .iter()
-            .filter(|f| f.taxpayer_types.contains(taxpayer_type))
-            .filter(|f| {
-                if is_vat {
-                    f.code != "2551Q"
-                } else {
-                    f.code != "2550M"
-                }
-            })
+            .filter(|f| applicable_form_codes.contains(&f.code))
             .map(|f| f.code.to_string())
             .collect();
 

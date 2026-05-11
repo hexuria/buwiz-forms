@@ -5,8 +5,17 @@
 
 use crate::forms::registry::{find_form, forms_for_taxpayer};
 use crate::integration::models::UniversalTaxPayload;
-use crate::profile::{TaxClassification, TaxpayerProfile};
+use crate::profile::{EoptTier, TaxClassification, TaxpayerProfile};
 use chrono::Datelike;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FormSuggestionDecision {
+    pub form_code: String,
+    pub is_suggested: bool,
+    pub reason: String,
+    pub legal_authority_citation: String,
+}
 
 /// A single validation issue found in a payload.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -131,7 +140,7 @@ pub fn validate_form_applicability(
 
     // If the profile has a TaxClassification, apply refined rules
     if let Some(ref classification) = profile.tax_classification {
-        let applicable = is_form_applicable_for_classification(form_code, classification);
+        let applicable = is_form_applicable_for_classification(form_def, classification);
         if !applicable {
             return Some(PayloadValidationError::new(
                 "target_form",
@@ -148,17 +157,23 @@ pub fn validate_form_applicability(
 
 /// Determines if a specific form is applicable given a tax classification.
 ///
-/// This encodes the BIR filing rules:
-/// - `PurelyCompensation` → only income tax (1701/1701Q), no percentage/VAT tax
-/// - `SoleProprietorNonVat` → percentage tax (2551Q), income tax (1701Q/1701)
-/// - `SoleProprietorVat` → VAT (2550M), income tax (1701Q/1701), NOT percentage tax
-/// - `ProfessionalOrFreelancer` → same as SoleProprietorNonVat or Vat (depends on VAT registration)
-/// - `MixedIncome` → all individual forms
-/// - `Corporation` → corporate forms (1702Q/1702RT), percentage tax or VAT
+/// This evaluates rules primarily for Income Tax, Percentage Tax, and Value-Added Tax.
+/// Other categories (like Payment Forms, Withholding Tax, Excise Tax, etc.)
+/// are passed through (`true`) to be evaluated by their respective specific rules later.
 fn is_form_applicable_for_classification(
-    form_code: &str,
+    form: &crate::forms::registry::FormDefinition,
     classification: &TaxClassification,
 ) -> bool {
+    let form_code = form.code;
+    let category = form.category;
+
+    // Only filter the specific business/income tax categories based on Tax Classification.
+    // Allow other categories (like Withholding Tax, Excise Tax, Documentary Stamp Tax, Payment Form)
+    // to pass through and be evaluated by their own specific rules.
+    if category != "Income Tax" && category != "Value-Added Tax" && category != "Percentage Tax" {
+        return true;
+    }
+
     match classification {
         TaxClassification::PurelyCompensation => {
             // Only individual income tax forms
@@ -170,33 +185,181 @@ fn is_form_applicable_for_classification(
         }
         TaxClassification::SoleProprietorVat => {
             // VAT + income tax (no percentage tax)
-            matches!(form_code, "2550M" | "1701Q" | "1701")
+            matches!(form_code, "2550M" | "2550Q" | "1701Q" | "1701")
         }
         TaxClassification::MixedIncome => {
             // All individual forms
-            matches!(form_code, "2551Q" | "2550M" | "1701Q" | "1701")
+            matches!(form_code, "2551Q" | "2550M" | "2550Q" | "1701Q" | "1701")
         }
         TaxClassification::Corporation => {
             // Corporate forms + percentage tax or VAT
-            matches!(form_code, "1702Q" | "1702RT" | "2551Q" | "2550M")
+            matches!(
+                form_code,
+                "1702Q"
+                    | "1702RT"
+                    | "1702EX"
+                    | "1702MX"
+                    | "1704"
+                    | "2551Q"
+                    | "2551M"
+                    | "2552"
+                    | "2553"
+                    | "2550M"
+                    | "2550Q"
+            )
         }
     }
+}
+
+/// Evaluates a taxpayer profile against the form registry using a rule engine.
+/// Returns detailed decisions with reasons and legal authorities for all applicable forms.
+#[allow(clippy::collapsible_if)]
+pub fn evaluate_forms(profile: &TaxpayerProfile) -> Vec<FormSuggestionDecision> {
+    let base_forms = forms_for_taxpayer(&profile.taxpayer_type);
+    let current_year = chrono::Local::now().year() as u16; // Using current year for 8% election check
+    let mut decisions = Vec::new();
+
+    for form in base_forms {
+        let mut is_suggested = true;
+        let mut reason = "Applicable based on taxpayer classification".to_string();
+        let mut legal_authority_citation = "Standard BIR Filing Rules".to_string();
+
+        // 1. Check Deprecation
+        if form.is_deprecated {
+            is_suggested = false;
+            reason = "Form has been abolished and is no longer accepted".to_string();
+            legal_authority_citation = "TRAIN Law / EOPT 2023".to_string();
+        }
+
+        // 2. Check Entity Level Classification Rules
+        if is_suggested {
+            if let Some(classification) = &profile.tax_classification {
+                if !is_form_applicable_for_classification(form, classification) {
+                    is_suggested = false;
+                    reason = format!("Not applicable for {:?}", classification);
+                }
+            }
+        }
+
+        // 3. Withholding Agent Rules
+        if is_suggested && form.category == "Withholding Tax" {
+            if form.requires_employees
+                && !profile.has_employees
+                && !profile.is_expanded_withholding_agent
+            {
+                is_suggested = false;
+                reason = "Taxpayer is not registered as a withholding agent or has no employees"
+                    .to_string();
+            }
+        }
+
+        // 4. EOPT Tiers
+        if is_suggested && form.code == "1701" {
+            if matches!(
+                profile.eopt_tier,
+                Some(EoptTier::Micro) | Some(EoptTier::Small)
+            ) {
+                is_suggested = false;
+                reason = "Micro/Small taxpayers should use the simplified Form 1701-MS".to_string();
+                legal_authority_citation = "EOPT 2023 Simplified Filing".to_string();
+            }
+        }
+        if is_suggested && form.code == "1701MS" {
+            if !matches!(
+                profile.eopt_tier,
+                Some(EoptTier::Micro) | Some(EoptTier::Small)
+            ) {
+                is_suggested = false;
+                reason = "Form 1701-MS is exclusively for Micro/Small taxpayers".to_string();
+            }
+        }
+
+        // 5. Substituted Filing
+        if is_suggested && form.code == "1700" {
+            if matches!(
+                profile.tax_classification,
+                Some(TaxClassification::PurelyCompensation)
+            ) && profile.has_single_employer
+            {
+                is_suggested = false;
+                reason = "Eligible for Substituted Filing".to_string();
+                legal_authority_citation = "Substituted Filing System".to_string();
+            }
+        }
+
+        // 6. 8% Flat Rate Election
+        if is_suggested && profile.has_8_percent_election(current_year) {
+            if matches!(form.code, "2551Q" | "1701") {
+                is_suggested = false;
+                reason = "Taxpayer elected 8% flat rate".to_string();
+                legal_authority_citation = "TRAIN Law RA 10963".to_string();
+            }
+        }
+
+        // 7. Dormant Mode
+        if profile.is_dormant && is_suggested {
+            reason = "Dormant / No Operations - NIL Filing Required".to_string();
+        }
+
+        // 8. VAT Registration Check
+        if is_suggested {
+            if let Some(requires_vat) = form.requires_vat {
+                if requires_vat && !profile.is_vat_registered {
+                    is_suggested = false;
+                    reason = "Taxpayer is not VAT registered".to_string();
+                } else if !requires_vat && profile.is_vat_registered {
+                    is_suggested = false;
+                    reason =
+                        "Taxpayer is VAT registered, thus exempt from Percentage Tax".to_string();
+                }
+            }
+        }
+
+        // 9. Excise Tax Check
+        if is_suggested && form.category == "Excise Tax" {
+            let required_excise_category = match form.code {
+                "2200A" => Some(crate::profile::ExciseTaxCategory::Alcohol),
+                "2200AN" => Some(crate::profile::ExciseTaxCategory::AutomobilesAndNonEssential),
+                "2200M" => Some(crate::profile::ExciseTaxCategory::Mineral),
+                "2200P" => Some(crate::profile::ExciseTaxCategory::Petroleum),
+                "2200T" => Some(crate::profile::ExciseTaxCategory::Tobacco),
+                _ => None, // If there's an unknown excise tax form, we'll keep it visible as a fallback
+            };
+
+            if let Some(req_cat) = required_excise_category {
+                if !profile.excise_tax_categories.contains(&req_cat) {
+                    is_suggested = false;
+                    reason = format!("Taxpayer is not liable for {:?} Excise Tax", req_cat);
+                }
+            }
+        }
+
+        // Filter out forms that naturally don't apply unless they are explicitly not suggested with a reason
+        // Wait, if it wasn't suggested by `is_form_applicable_for_classification`, we still return the decision
+        // so the UI can show "Why is this hidden?" if it wants. But we only care about `is_suggested` being true
+        // for the active forms list.
+
+        decisions.push(FormSuggestionDecision {
+            form_code: form.code.to_string(),
+            is_suggested,
+            reason,
+            legal_authority_citation,
+        });
+    }
+
+    decisions
 }
 
 /// Returns the list of applicable form codes for a profile, considering
 /// both `TaxpayerType` and `TaxClassification`.
 pub fn applicable_forms_for_profile(profile: &TaxpayerProfile) -> Vec<&'static str> {
-    let base_forms = forms_for_taxpayer(&profile.taxpayer_type);
-
-    match &profile.tax_classification {
-        Some(classification) => base_forms
-            .into_iter()
-            .filter(|f| is_form_applicable_for_classification(f.code, classification))
-            .map(|f| f.code)
-            .collect(),
-        // No classification set — return all forms for the entity type
-        None => base_forms.into_iter().map(|f| f.code).collect(),
-    }
+    // Keep it returning static strings for backward compatibility
+    let decisions = evaluate_forms(profile);
+    decisions
+        .into_iter()
+        .filter(|d| d.is_suggested)
+        .filter_map(|d| crate::forms::registry::find_form(&d.form_code).map(|f| f.code))
+        .collect()
 }
 
 #[cfg(test)]
@@ -310,8 +473,17 @@ mod tests {
             is_vat_registered: false,
             business_start_date: None,
             tax_classification: Some(TaxClassification::PurelyCompensation),
-            opted_for_8_percent_flat_rate: false,
+            eopt_tier: None,
+            is_bmbe: false,
+            is_gpp_partner: false,
+            is_create_msme: false,
+            is_expanded_withholding_agent: false,
+            atc_codes: vec![],
+            tax_elections: vec![],
+            _opted_for_8_percent_flat_rate_compat: None,
             has_employees: false,
+            is_dormant: false,
+            has_single_employer: false,
             is_archived: false,
             profile_pin_hash: None,
             totp_secret: None,
@@ -360,8 +532,17 @@ mod tests {
             is_vat_registered: false,
             business_start_date: None,
             tax_classification: Some(TaxClassification::SoleProprietorNonVat),
-            opted_for_8_percent_flat_rate: false,
+            eopt_tier: None,
+            is_bmbe: false,
+            is_gpp_partner: false,
+            is_create_msme: false,
+            is_expanded_withholding_agent: false,
+            atc_codes: vec![],
+            tax_elections: vec![],
+            _opted_for_8_percent_flat_rate_compat: None,
             has_employees: false,
+            is_dormant: false,
+            has_single_employer: false,
             is_archived: false,
             profile_pin_hash: None,
             totp_secret: None,

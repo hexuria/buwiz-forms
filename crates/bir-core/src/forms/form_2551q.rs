@@ -63,6 +63,7 @@ pub struct Form2551QDraft {
     pub tin: String,
     pub taxable_year: u16,
     pub quarter: u8, // 1–4
+    pub eopt_tier: Option<crate::profile::EoptTier>,
 
     // === Header Options ===
     pub is_amended: bool,
@@ -150,6 +151,7 @@ impl Form2551QDraft {
             tin: profile.tin.full(),
             taxable_year: year,
             quarter,
+            eopt_tier: profile.eopt_tier.clone(),
             is_amended: false,
             tax_relief: false,
             rdo_code: profile.rdo_code.clone(),
@@ -209,7 +211,9 @@ impl Form2551QDraft {
     }
 
     /// Recompute all derived values (call after any field change).
-    pub fn recompute(&mut self) {
+    /// `expected_sales` can be optionally provided by the ERP system to detect under-declaration fraud.
+    #[allow(clippy::collapsible_if)]
+    pub fn recompute(&mut self, expected_sales: Option<f64>) {
         for row in &mut self.schedule_1 {
             row.recompute();
         }
@@ -271,14 +275,29 @@ impl Form2551QDraft {
                 // Line 19 (self.tax_payable) is NOT clamped — it preserves overpayment.
                 let penalty_tax_base = self.tax_payable.max(0.0);
 
+                let taxpayer_class = match self.eopt_tier {
+                    Some(crate::profile::EoptTier::Micro) => TaxpayerClass::Micro,
+                    Some(crate::profile::EoptTier::Small) => TaxpayerClass::Small,
+                    Some(crate::profile::EoptTier::Medium) => TaxpayerClass::Medium,
+                    Some(crate::profile::EoptTier::Large) => TaxpayerClass::Large,
+                    None => TaxpayerClass::Regular,
+                };
+
+                let mut is_fraud = false;
+                if let Some(expected) = expected_sales {
+                    if crate::integration::fraud::detect_under_declaration(expected, gross_sales) {
+                        is_fraud = true;
+                    }
+                }
+
                 let ctx = PenaltyContext {
                     form_code: "2551Qv2018".to_string(),
                     tax_type: PenaltyProfile::StandardFiling,
-                    taxpayer_class: TaxpayerClass::Regular,
+                    taxpayer_class,
                     taxable_period: format!("Q{} {}", self.quarter, self.taxable_year),
                     is_amended_return: self.is_amended,
                     original_was_on_time: true,
-                    is_fraud_or_willful_neglect: false,
+                    is_fraud_or_willful_neglect: is_fraud,
                     basic_tax_due: penalty_tax_base,
                     amount_paid_before_deadline: 0.0,
                     gross_sales_or_receipts: gross_sales,
@@ -582,10 +601,19 @@ mod tests {
             oauth_access_token: None,
             oauth_refresh_token: None,
             tax_classification: None,
-            opted_for_8_percent_flat_rate: false,
+            eopt_tier: None,
+            is_bmbe: false,
+            is_gpp_partner: false,
+            is_create_msme: false,
+            is_expanded_withholding_agent: false,
+            atc_codes: vec![],
+            tax_elections: vec![],
+            _opted_for_8_percent_flat_rate_compat: None,
             profile_pin_hash: None,
             totp_secret: None,
             has_employees: false,
+            is_dormant: false,
+            has_single_employer: false,
         }
     }
 
@@ -600,7 +628,7 @@ mod tests {
         let mut draft = Form2551QDraft::new_from_profile(&test_profile(), year, quarter);
         draft.schedule_1[0].taxable_amount = taxable_amount;
         draft.creditable_tax_withheld = creditable_withheld;
-        draft.recompute();
+        draft.recompute(None);
         draft
     }
 
@@ -609,7 +637,7 @@ mod tests {
         // Q1 2026 deadline = 2026-04-25. If today < deadline, filed on time.
         // We use a future year to guarantee on-time filing.
         let mut draft = make_draft(50_000.0, 4_000.0, 2099, 1);
-        draft.recompute();
+        draft.recompute(None);
 
         // Line 14: 50000 * 3% = 1500
         assert_eq!(draft.total_tax_due, 1500.0);
@@ -630,7 +658,7 @@ mod tests {
     fn scenario_2_filed_late_with_overpayment() {
         // Use a past quarter to guarantee late filing
         let mut draft = make_draft(50_000.0, 4_000.0, 2020, 1);
-        draft.recompute();
+        draft.recompute(None);
 
         // Line 14: 1500
         assert_eq!(draft.total_tax_due, 1500.0);
@@ -650,7 +678,7 @@ mod tests {
     fn scenario_3_filed_late_with_tax_due() {
         // Credits < tax due, past quarter
         let mut draft = make_draft(50_000.0, 400.0, 2020, 1);
-        draft.recompute();
+        draft.recompute(None);
 
         // Line 14: 1500
         assert_eq!(draft.total_tax_due, 1500.0);
@@ -680,7 +708,7 @@ mod tests {
     #[test]
     fn zero_tax_filed_on_time_no_penalties() {
         let mut draft = make_draft(0.0, 0.0, 2099, 1);
-        draft.recompute();
+        draft.recompute(None);
 
         assert_eq!(draft.total_tax_due, 0.0);
         assert_eq!(draft.tax_payable, 0.0);
@@ -700,7 +728,7 @@ mod tests {
             draft.schedule_1.push(row);
         }
         draft.schedule_1[1].taxable_amount = 200_000.0;
-        draft.recompute();
+        draft.recompute(None);
 
         // PT010: 100000 * 3% = 3000
         assert_eq!(draft.schedule_1[0].tax_due, 3000.0);
@@ -714,7 +742,7 @@ mod tests {
     fn other_tax_credit_reduces_payable() {
         let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
         draft.other_tax_credit = 500.0;
-        draft.recompute();
+        draft.recompute(None);
 
         // Line 14: 1500
         assert_eq!(draft.total_tax_due, 1500.0);
@@ -730,7 +758,7 @@ mod tests {
         draft.is_amended = true;
         draft.tax_paid_previous = 200.0;
         draft.other_tax_credit = 300.0;
-        draft.recompute();
+        draft.recompute(None);
 
         // Line 18: 1000 + 200 + 300 = 1500
         assert_eq!(draft.total_tax_credits, 1500.0);
@@ -743,7 +771,7 @@ mod tests {
         let mut draft = make_draft(50_000.0, 1000.0, 2099, 1);
         draft.is_amended = false;
         draft.tax_paid_previous = 500.0; // should be ignored
-        draft.recompute();
+        draft.recompute(None);
 
         // Line 18 should NOT include tax_paid_previous
         assert_eq!(draft.total_tax_credits, 1000.0);

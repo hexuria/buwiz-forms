@@ -378,8 +378,17 @@ mod tests {
             profile_pin_hash: None,
             totp_secret: None,
             tax_classification: None,
-            opted_for_8_percent_flat_rate: false,
+            eopt_tier: None,
+            is_bmbe: false,
+            is_gpp_partner: false,
+            is_create_msme: false,
+            is_expanded_withholding_agent: false,
+            atc_codes: vec![],
+            tax_elections: vec![],
+            _opted_for_8_percent_flat_rate_compat: None,
             has_employees: false,
+            is_dormant: false,
+            has_single_employer: false,
         };
         db.save_profile(profile.clone()).unwrap();
 
@@ -455,8 +464,17 @@ mod tests {
             profile_pin_hash: None,
             totp_secret: None,
             tax_classification: None,
-            opted_for_8_percent_flat_rate: false,
+            eopt_tier: None,
+            is_bmbe: false,
+            is_gpp_partner: false,
+            is_create_msme: false,
+            is_expanded_withholding_agent: false,
+            atc_codes: vec![],
+            tax_elections: vec![],
+            _opted_for_8_percent_flat_rate_compat: None,
             has_employees: false,
+            is_dormant: false,
+            has_single_employer: false,
         };
         db.save_profile(profile).unwrap();
         db.checkpoint().unwrap();
@@ -496,7 +514,7 @@ mod tests {
 
         assert_eq!(profile.full_name, "Legacy User");
         assert_eq!(profile.tax_classification, None);
-        assert!(!profile.opted_for_8_percent_flat_rate);
+        assert!(!profile.has_8_percent_election(2026));
         assert!(!profile.is_archived);
         assert!(!profile.email_tracking_enabled);
     }
@@ -539,8 +557,17 @@ mod tests {
             profile_pin_hash: None,
             totp_secret: None,
             tax_classification: None,
-            opted_for_8_percent_flat_rate: false,
+            eopt_tier: None,
+            is_bmbe: false,
+            is_gpp_partner: false,
+            is_create_msme: false,
+            is_expanded_withholding_agent: false,
+            atc_codes: vec![],
+            tax_elections: vec![],
+            _opted_for_8_percent_flat_rate_compat: None,
             has_employees: false,
+            is_dormant: false,
+            has_single_employer: false,
         };
         db.save_profile(profile).unwrap();
 
@@ -634,8 +661,17 @@ mod tests {
             profile_pin_hash: None,
             totp_secret: None,
             tax_classification: None,
-            opted_for_8_percent_flat_rate: false,
+            eopt_tier: None,
+            is_bmbe: false,
+            is_gpp_partner: false,
+            is_create_msme: false,
+            is_expanded_withholding_agent: false,
+            atc_codes: vec![],
+            tax_elections: vec![],
+            _opted_for_8_percent_flat_rate_compat: None,
             has_employees: false,
+            is_dormant: false,
+            has_single_employer: false,
         };
         db.save_profile(profile).unwrap();
 

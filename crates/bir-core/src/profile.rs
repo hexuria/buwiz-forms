@@ -10,6 +10,9 @@ pub enum TaxpayerType {
     Individual,
     Corporation,
     Partnership,
+    Cooperative,
+    Estate,
+    Trust,
 }
 
 /// Refined tax classification that drives filing behavior.
@@ -47,6 +50,42 @@ pub enum EmailAuthMethod {
     GoogleOAuth,
 }
 
+/// Ease of Paying Taxes (EOPT) Act Taxpayer Classification Tiers.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum EoptTier {
+    Micro,
+    Small,
+    Medium,
+    Large,
+}
+
+/// Optional Income Tax Elections made by the taxpayer.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum IncomeTaxElection {
+    GraduatedOsd,
+    GraduatedItemized,
+    EightPercent,
+}
+
+/// Categories of Excise Taxes a taxpayer might be liable for.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ExciseTaxCategory {
+    Alcohol,
+    AutomobilesAndNonEssential,
+    Mineral,
+    Petroleum,
+    Tobacco,
+}
+
+/// A ledger of historical tax regime elections made by the taxpayer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaxElectionHistory {
+    pub taxable_year: u16,
+    pub election: IncomeTaxElection,
+    pub elected_at: chrono::NaiveDateTime,
+    pub source_form: String,
+}
+
 /// Taxpayer profile stored in encrypted SQLite.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaxpayerProfile {
@@ -72,10 +111,36 @@ pub struct TaxpayerProfile {
     #[serde(default)]
     pub tax_classification: Option<TaxClassification>,
 
-    /// Whether the taxpayer opted for the 8% flat income tax rate
-    /// (available for self-employed individuals with gross sales ≤ ₱3M).
+    /// Ease of Paying Taxes (EOPT) Act Tier (Micro, Small, Medium, Large)
     #[serde(default)]
-    pub opted_for_8_percent_flat_rate: bool,
+    pub eopt_tier: Option<EoptTier>,
+
+    /// Special Entity Flags
+    #[serde(default)]
+    pub is_bmbe: bool,
+    #[serde(default)]
+    pub is_gpp_partner: bool,
+    #[serde(default)]
+    pub is_create_msme: bool,
+    #[serde(default)]
+    pub is_expanded_withholding_agent: bool,
+
+    /// Array of Alphanumeric Tax Codes mapping to the taxpayer's business activities.
+    #[serde(default)]
+    pub atc_codes: Vec<String>,
+
+    /// Excise tax categories the taxpayer is liable for.
+    #[serde(default)]
+    pub excise_tax_categories: Vec<ExciseTaxCategory>,
+
+    /// Historical ledger of tax regime elections (OSD vs Itemized vs 8%).
+    #[serde(default)]
+    pub tax_elections: Vec<TaxElectionHistory>,
+
+    /// Legacy compat: preserve old `opted_for_8_percent_flat_rate` values from JSON.
+    #[serde(default, alias = "opted_for_8_percent_flat_rate")]
+    #[doc(hidden)]
+    pub _opted_for_8_percent_flat_rate_compat: Option<bool>,
 
     /// Soft delete flag. If true, the profile is archived and can be exported/hard-deleted.
     #[serde(default)]
@@ -128,9 +193,27 @@ pub struct TaxpayerProfile {
     /// 1601C, 1601E, 1601F, 1602, 1603, 1604CF, 1604E).
     #[serde(default)]
     pub has_employees: bool,
+
+    /// Whether the taxpayer is dormant/no operations (triggers NIL filing for all required forms)
+    #[serde(default)]
+    pub is_dormant: bool,
+
+    /// Whether a PurelyCompensation earner has exactly one employer (triggers Substituted Filing)
+    #[serde(default)]
+    pub has_single_employer: bool,
 }
 
 impl TaxpayerProfile {
+    /// Returns true if the 8% flat rate election is active for the given taxable year.
+    /// It checks the historical ledger first, and falls back to the legacy compat flag.
+    pub fn has_8_percent_election(&self, year: u16) -> bool {
+        if let Some(history) = self.tax_elections.iter().find(|h| h.taxable_year == year) {
+            matches!(history.election, IncomeTaxElection::EightPercent)
+        } else {
+            self._opted_for_8_percent_flat_rate_compat.unwrap_or(false)
+        }
+    }
+
     /// Returns true if email tracking is active (handles legacy `imap_enabled` field).
     pub fn is_email_tracking_active(&self) -> bool {
         self.email_tracking_enabled || self._imap_enabled_compat.unwrap_or(false)
@@ -139,59 +222,7 @@ impl TaxpayerProfile {
     /// Returns BIR form codes applicable to this taxpayer based on their
     /// classification, VAT status, and employee status.
     pub fn applicable_forms(&self) -> Vec<&'static str> {
-        let mut forms = Vec::new();
-
-        // Payment form — universal
-        forms.push("0605");
-
-        // Employer withholding forms
-        if self.has_employees {
-            forms
-                .extend_from_slice(&["1601C", "1601E", "1601F", "1602", "1603", "1604CF", "1604E"]);
-        }
-
-        match self.tax_classification.as_ref() {
-            Some(TaxClassification::PurelyCompensation) => {
-                forms.push("1700");
-            }
-            Some(TaxClassification::ProfessionalOrFreelancer)
-            | Some(TaxClassification::SoleProprietorNonVat) => {
-                forms.push("1701Q");
-                forms.push("1701");
-                forms.push("2551Q");
-            }
-            Some(TaxClassification::SoleProprietorVat) => {
-                forms.push("1701Q");
-                forms.push("1701");
-                forms.push("2550M");
-                forms.push("2550Q");
-            }
-            Some(TaxClassification::MixedIncome) => {
-                forms.push("1701Q");
-                forms.push("1701");
-                if self.is_vat_registered {
-                    forms.push("2550M");
-                    forms.push("2550Q");
-                } else {
-                    forms.push("2551Q");
-                }
-            }
-            Some(TaxClassification::Corporation) => {
-                forms.push("1702Q");
-                forms.push("1702");
-                if self.is_vat_registered {
-                    forms.push("2550M");
-                    forms.push("2550Q");
-                }
-            }
-            None => {
-                // No classification set — show common forms
-                forms.push("1701Q");
-                forms.push("2551Q");
-            }
-        }
-
-        forms
+        crate::integration::applicable_forms_for_profile(self)
     }
 }
 
