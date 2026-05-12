@@ -7,8 +7,7 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
-    ActiveTheme, Icon, IconName, Sizable, StyledExt,
-    h_flex,
+    ActiveTheme, Icon, IconName, Sizable, StyledExt, h_flex,
     input::{Input, InputEvent, InputState},
     tag::Tag,
     v_flex,
@@ -454,7 +453,7 @@ impl Render for MultiSelectState {
             // Empty state
             let empty_state = if option_rows.is_empty() {
                 Some(
-                        div()
+                    div()
                         .px_3()
                         .py_4()
                         .text_sm()

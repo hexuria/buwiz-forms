@@ -88,7 +88,7 @@ impl CompiledRuleSnapshot {
                 && taxable_year >= era.effective_from_year
                 && era
                     .effective_until_year
-                    .map_or(true, |end| taxable_year <= end)
+                    .is_none_or(|end| taxable_year <= end)
         })
     }
 
@@ -101,7 +101,7 @@ impl CompiledRuleSnapshot {
                     && taxable_year >= era.effective_from_year
                     && era
                         .effective_until_year
-                        .map_or(true, |end| taxable_year <= end)
+                        .is_none_or(|end| taxable_year <= end)
             })
             .collect()
     }

@@ -32,9 +32,7 @@ pub trait TaxRule: Send + Sync {
     /// Returns true if this rule is active for the given target year.
     fn is_active_for_year(&self, target_year: u16) -> bool {
         target_year >= self.effective_from()
-            && self
-                .effective_until()
-                .map_or(true, |end| target_year <= end)
+            && self.effective_until().is_none_or(|end| target_year <= end)
     }
 
     /// Evaluate this rule against a form.

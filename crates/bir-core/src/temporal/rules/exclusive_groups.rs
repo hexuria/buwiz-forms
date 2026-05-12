@@ -70,22 +70,18 @@ impl TaxRule for ExclusiveGroupRule {
                 Some(IndividualIncomeKind::MixedIncome) => "1701",
 
                 // Self-employed / Professional
-                Some(IndividualIncomeKind::BusinessOrProfessionOnly) => {
-                    if facts.has_8_percent_election(target_year) {
-                        // 8% elected: prefer simplified form
-                        let is_micro_small = matches!(
-                            facts.eopt_tier,
-                            Some(EoptTier::Micro) | Some(EoptTier::Small)
-                        );
-                        if is_micro_small {
-                            "1701MS" // EOPT simplified
-                        } else {
-                            "1701A" // 8% / OSD simplified
-                        }
+                Some(IndividualIncomeKind::BusinessOrProfessionOnly)
+                    if facts.has_8_percent_election(target_year) =>
+                {
+                    // 8% elected: prefer simplified form
+                    let is_micro_small = matches!(
+                        facts.eopt_tier,
+                        Some(EoptTier::Micro) | Some(EoptTier::Small)
+                    );
+                    if is_micro_small {
+                        "1701MS" // EOPT simplified
                     } else {
-                        // Non-8%: 1701A for OSD, 1701 for itemized.
-                        // Default to 1701 (broadest) — user can switch to 1701A.
-                        "1701"
+                        "1701A" // 8% / OSD simplified
                     }
                 }
 

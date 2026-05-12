@@ -67,18 +67,17 @@ impl TemporalContext {
 /// The existing quarter and month chips map to this type when present.
 /// If no quarter or month is selected, the dashboard uses `Annual` for
 /// annual cards and a form-specific period for card actions.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum FilingPeriod {
+    #[default]
     Annual,
-    Quarterly { quarter: u8 },
-    Monthly { month: u8 },
+    Quarterly {
+        quarter: u8,
+    },
+    Monthly {
+        month: u8,
+    },
     OpenEnded,
-}
-
-impl Default for FilingPeriod {
-    fn default() -> Self {
-        Self::Annual
-    }
 }
 
 /// How the evaluation is being used.
@@ -117,18 +116,13 @@ impl std::fmt::Display for Jurisdiction {
 ///
 /// `Current` always refers to the embedded snapshot compiled at build time.
 /// Named snapshots are for future use (versioned historical snapshots).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum SnapshotId {
     /// Use the current embedded snapshot.
+    #[default]
     Current,
     /// Use a specific named snapshot (future).
     Named(String),
-}
-
-impl Default for SnapshotId {
-    fn default() -> Self {
-        Self::Current
-    }
 }
 
 #[cfg(test)]

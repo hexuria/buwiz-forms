@@ -150,8 +150,7 @@ impl EligibilityFacts {
 
         // Granular withholding: prefer the new flags, but auto-derive from old
         // flags for backward compat (profiles that only have has_employees set).
-        let withholds_compensation =
-            profile.withholds_compensation || profile.has_employees;
+        let withholds_compensation = profile.withholds_compensation || profile.has_employees;
         let withholds_expanded =
             profile.withholds_expanded || profile.is_expanded_withholding_agent;
         let withholds_final = profile.withholds_final;

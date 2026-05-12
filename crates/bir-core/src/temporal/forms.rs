@@ -76,7 +76,7 @@ impl FormArtifact {
         let from_year = self.effective_from_year();
         let until_year = self.effective_until_year();
 
-        year >= from_year && until_year.map_or(true, |end| year <= end)
+        year >= from_year && until_year.is_none_or(|end| year <= end)
     }
 
     /// Extract the year from the `effective_from` date string.

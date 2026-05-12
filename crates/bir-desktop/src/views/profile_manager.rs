@@ -8,7 +8,9 @@ use std::sync::{Arc, Mutex};
 
 use crate::components::combobox::{Combobox, ComboboxEvent, ComboboxState};
 use crate::components::date_input::{DateInput, DateInputEvent, DateInputState};
-use crate::components::multi_select::{MultiSelect, MultiSelectEvent, MultiSelectOption, MultiSelectState};
+use crate::components::multi_select::{
+    MultiSelect, MultiSelectEvent, MultiSelectOption, MultiSelectState,
+};
 use crate::components::otp_paste::paste_otp_value;
 
 use crate::components::tin_input::TinInput;
@@ -439,11 +441,21 @@ impl ProfileManagerView {
         let mut excise_ids = Vec::new();
         for cat in &profile.excise_tax_categories {
             match cat {
-                bir_core::profile::ExciseTaxCategory::Alcohol => excise_ids.push("alcohol".to_string()),
-                bir_core::profile::ExciseTaxCategory::AutomobilesAndNonEssential => excise_ids.push("auto".to_string()),
-                bir_core::profile::ExciseTaxCategory::Mineral => excise_ids.push("mineral".to_string()),
-                bir_core::profile::ExciseTaxCategory::Petroleum => excise_ids.push("petroleum".to_string()),
-                bir_core::profile::ExciseTaxCategory::Tobacco => excise_ids.push("tobacco".to_string()),
+                bir_core::profile::ExciseTaxCategory::Alcohol => {
+                    excise_ids.push("alcohol".to_string())
+                }
+                bir_core::profile::ExciseTaxCategory::AutomobilesAndNonEssential => {
+                    excise_ids.push("auto".to_string())
+                }
+                bir_core::profile::ExciseTaxCategory::Mineral => {
+                    excise_ids.push("mineral".to_string())
+                }
+                bir_core::profile::ExciseTaxCategory::Petroleum => {
+                    excise_ids.push("petroleum".to_string())
+                }
+                bir_core::profile::ExciseTaxCategory::Tobacco => {
+                    excise_ids.push("tobacco".to_string())
+                }
             }
         }
         self.excise_select.update(cx, |state, cx| {
@@ -773,20 +785,27 @@ impl ProfileManagerView {
         let tax_class_val = self.tax_classification_select.read(cx).selected_value(cx);
         let tax_classification = match taxpayer_type {
             TaxpayerType::Individual => match tax_class_val.as_str() {
-                "Purely Compensation" => Some(bir_core::profile::TaxClassification::PurelyCompensation),
-                "Self-Employed / Professional" => Some(bir_core::profile::TaxClassification::SelfEmployed),
+                "Purely Compensation" => {
+                    Some(bir_core::profile::TaxClassification::PurelyCompensation)
+                }
+                "Self-Employed / Professional" => {
+                    Some(bir_core::profile::TaxClassification::SelfEmployed)
+                }
                 "Mixed Income" => Some(bir_core::profile::TaxClassification::MixedIncome),
                 _ => None,
             },
             TaxpayerType::Cooperative => {
-                let coop_val = self.cooperative_treatment_select.read(cx).selected_value(cx);
+                let coop_val = self
+                    .cooperative_treatment_select
+                    .read(cx)
+                    .selected_value(cx);
                 match coop_val.as_str() {
                     "Exempt" => Some(bir_core::profile::TaxClassification::CooperativeExempt),
                     "Taxable" => Some(bir_core::profile::TaxClassification::CooperativeTaxable),
                     "Mixed" => Some(bir_core::profile::TaxClassification::CooperativeMixed),
                     _ => Some(bir_core::profile::TaxClassification::CooperativeTaxable),
                 }
-            },
+            }
             _ => None, // Auto-derived via effective_classification()
         };
 
@@ -891,7 +910,8 @@ impl ProfileManagerView {
                 for id in selected {
                     match id.as_str() {
                         "alcohol" => cats.push(bir_core::profile::ExciseTaxCategory::Alcohol),
-                        "auto" => cats.push(bir_core::profile::ExciseTaxCategory::AutomobilesAndNonEssential),
+                        "auto" => cats
+                            .push(bir_core::profile::ExciseTaxCategory::AutomobilesAndNonEssential),
                         "mineral" => cats.push(bir_core::profile::ExciseTaxCategory::Mineral),
                         "petroleum" => cats.push(bir_core::profile::ExciseTaxCategory::Petroleum),
                         "tobacco" => cats.push(bir_core::profile::ExciseTaxCategory::Tobacco),
@@ -906,7 +926,10 @@ impl ProfileManagerView {
                 // Remove any existing 8% entry for the current year only
                 elections.retain(|e| {
                     !(e.taxable_year == current_year
-                        && matches!(e.election, bir_core::profile::IncomeTaxElection::EightPercent))
+                        && matches!(
+                            e.election,
+                            bir_core::profile::IncomeTaxElection::EightPercent
+                        ))
                 });
                 // Re-add if the checkbox is checked
                 if self.is_8_percent_flat_rate {
@@ -1097,7 +1120,6 @@ impl ProfileManagerView {
             .mb_1()
             .child(text.to_string())
     }
-
 
     fn field_error(&self, field: &'static str, _cx: &Context<Self>) -> gpui::Div {
         let text = self

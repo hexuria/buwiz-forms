@@ -50,7 +50,7 @@ impl TaxRateTable {
             }
         });
 
-        year >= from_year && until_year.map_or(true, |end| year <= end)
+        year >= from_year && until_year.is_none_or(|end| year <= end)
     }
 
     /// Find a rate entry by key.

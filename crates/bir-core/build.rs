@@ -519,26 +519,27 @@ fn validate(
     // Check rule mutation targets
     for rule in rules {
         for mutation in &rule.mutations {
-            if let Some(ref fc) = mutation.target.form_code {
-                if !form_code_set.contains(fc.as_str()) {
-                    errors.push(format!(
-                        "Rule '{}' targets unknown form code '{}'",
-                        rule.rule_id, fc
-                    ));
-                }
+            if let Some(ref fc) = mutation.target.form_code
+                && !form_code_set.contains(fc.as_str())
+            {
+                errors.push(format!(
+                    "Rule '{}' targets unknown form code '{}'",
+                    rule.rule_id, fc
+                ));
             }
         }
     }
 
     // Check formula references on artifacts
     for art in artifacts {
-        if let Some(ref fref) = art.formula_ref {
-            if !fref.is_empty() && !formula_set.contains(fref.as_str()) {
-                errors.push(format!(
-                    "Artifact '{}' references unknown formula '{}'",
-                    art.artifact_id, fref
-                ));
-            }
+        if let Some(ref fref) = art.formula_ref
+            && !fref.is_empty()
+            && !formula_set.contains(fref.as_str())
+        {
+            errors.push(format!(
+                "Artifact '{}' references unknown formula '{}'",
+                art.artifact_id, fref
+            ));
         }
     }
 
