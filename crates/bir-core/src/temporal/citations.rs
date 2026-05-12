@@ -1,9 +1,12 @@
 //! Structured legal citations for tax rules.
+//!
+//! Citations are first-class data with unique IDs, not comments or
+//! hardcoded explanation strings.
 
 use serde::{Deserialize, Serialize};
 
 /// The type of Philippine tax issuance.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum CitationKind {
     /// Republic Act (e.g., RA 10963 — TRAIN Law)
     RepublicAct,
@@ -18,8 +21,13 @@ pub enum CitationKind {
 }
 
 /// A structured legal citation attached to a rule or form definition.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// Every citation has a unique `citation_id` for cross-referencing.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct LegalCitation {
+    /// Unique citation identifier for cross-referencing (e.g., "ra-10963-sec-24-a-2-b").
+    #[serde(default)]
+    pub citation_id: String,
     /// The type of issuance.
     pub kind: CitationKind,
     /// The identifier (e.g., "10963", "52-2023").

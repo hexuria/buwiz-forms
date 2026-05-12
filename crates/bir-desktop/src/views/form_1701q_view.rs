@@ -163,73 +163,69 @@ impl Render for Form1701QView {
             )
             .child(
                 div().flex_1().min_h_0().overflow_hidden().child(
-                    div()
-                        .id("form_1701q_scroll")
-                        .relative()
-                        .size_full()
-                        .child(
-                            div()
-                                .id("form_1701q_scroll_area")
-                                .absolute()
-                                .top_0()
-                                .left_0()
-                                .right_0()
-                                .bottom_0()
-                                .flex()
-                                .flex_col()
-                                .overflow_y_scroll()
-                                .child(
-                                    div()
-                                        .w_full()
-                                        .max_w(px(900.))
-                                        .mx_auto()
-                                        .px_8()
-                                        .py_10()
-                                        .flex()
-                                        .flex_col()
-                                        .gap_8()
-                                        .child(title_block)
-                                        .child(crate::components::form_parts::form_accordion(
-                                            "acc_filing_period",
-                                            "FILING PERIOD",
-                                            self.show_filing_period,
-                                            true,
-                                            false,
-                                            cx.listener(|this: &mut Self, _, _, cx| {
-                                                this.show_filing_period = !this.show_filing_period;
-                                                cx.notify();
-                                            }),
-                                            filing_period_content.into_any_element(),
-                                            cx,
-                                        ))
-                                        .child(crate::components::form_parts::form_accordion(
-                                            "acc_background_info",
-                                            "PART I — BACKGROUND INFORMATION",
-                                            self.show_background_info,
-                                            true,
-                                            false,
-                                            cx.listener(|this: &mut Self, _, _, cx| {
-                                                this.show_background_info = !this.show_background_info;
-                                                cx.notify();
-                                            }),
-                                            background_info_content.into_any_element(),
-                                            cx,
-                                        ))
-                                        .child(crate::components::form_parts::form_accordion(
-                                            "acc_tax_computation",
-                                            "PART II — COMPUTATION OF TAX",
-                                            self.show_tax_computation,
-                                            true,
-                                            false,
-                                            cx.listener(|this: &mut Self, _, _, cx| {
-                                                this.show_tax_computation = !this.show_tax_computation;
-                                                cx.notify();
-                                            }),
-                                            tax_computation_content.into_any_element(),
-                                            cx,
-                                        )),
-                                ),
-                        ),
+                    div().id("form_1701q_scroll").relative().size_full().child(
+                        div()
+                            .id("form_1701q_scroll_area")
+                            .absolute()
+                            .top_0()
+                            .left_0()
+                            .right_0()
+                            .bottom_0()
+                            .flex()
+                            .flex_col()
+                            .overflow_y_scroll()
+                            .child(
+                                div()
+                                    .w_full()
+                                    .max_w(px(900.))
+                                    .mx_auto()
+                                    .px_8()
+                                    .py_10()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_8()
+                                    .child(title_block)
+                                    .child(crate::components::form_parts::form_accordion(
+                                        "acc_filing_period",
+                                        "FILING PERIOD",
+                                        self.show_filing_period,
+                                        true,
+                                        false,
+                                        cx.listener(|this: &mut Self, _, _, cx| {
+                                            this.show_filing_period = !this.show_filing_period;
+                                            cx.notify();
+                                        }),
+                                        filing_period_content.into_any_element(),
+                                        cx,
+                                    ))
+                                    .child(crate::components::form_parts::form_accordion(
+                                        "acc_background_info",
+                                        "PART I — BACKGROUND INFORMATION",
+                                        self.show_background_info,
+                                        true,
+                                        false,
+                                        cx.listener(|this: &mut Self, _, _, cx| {
+                                            this.show_background_info = !this.show_background_info;
+                                            cx.notify();
+                                        }),
+                                        background_info_content.into_any_element(),
+                                        cx,
+                                    ))
+                                    .child(crate::components::form_parts::form_accordion(
+                                        "acc_tax_computation",
+                                        "PART II — COMPUTATION OF TAX",
+                                        self.show_tax_computation,
+                                        true,
+                                        false,
+                                        cx.listener(|this: &mut Self, _, _, cx| {
+                                            this.show_tax_computation = !this.show_tax_computation;
+                                            cx.notify();
+                                        }),
+                                        tax_computation_content.into_any_element(),
+                                        cx,
+                                    )),
+                            ),
+                    ),
                 ),
             )
     }

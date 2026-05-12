@@ -84,6 +84,9 @@ impl DashboardView {
                 this.selected_year = event.year;
                 if let Some(profile) = this.active_profile.clone() {
                     this.reload_filing_progress(&profile);
+                    this.filter_state.update(cx, |state, cx| {
+                        state.update_for_profile(&profile, event.year as u16, cx);
+                    });
                 }
                 cx.notify();
             },
@@ -124,8 +127,9 @@ impl DashboardView {
     }
 
     pub fn set_profile(&mut self, profile: TaxpayerProfile, cx: &mut Context<Self>) {
+        let year = self.selected_year as u16;
         self.filter_state.update(cx, |state, cx| {
-            state.update_for_profile(&profile, cx);
+            state.update_for_profile(&profile, year, cx);
         });
         self.reload_filing_progress(&profile);
         self.active_profile = Some(profile);
@@ -136,15 +140,17 @@ impl DashboardView {
     fn reload_filing_progress(&mut self, profile: &TaxpayerProfile) {
         self.filing_progress.clear();
         if let Ok(db) = self.db.lock() {
-            let applicable_codes = bir_core::integration::applicable_forms_for_profile(profile);
             let year = self.selected_year as u16;
+            let applicable_codes =
+                bir_core::integration::applicable_forms_for_profile_and_year(profile, year);
 
             for code in applicable_codes {
                 let mut year_progress = std::collections::HashMap::new();
-                if let Ok(progress) = db.get_form_filing_progress(&profile.tin.full(), code, year) {
+                if let Ok(progress) = db.get_form_filing_progress(&profile.tin.full(), &code, year)
+                {
                     year_progress.insert(year, progress);
                 }
-                self.filing_progress.insert(code.to_string(), year_progress);
+                self.filing_progress.insert(code, year_progress);
             }
         }
     }
@@ -233,16 +239,52 @@ impl Render for DashboardView {
 
         let year = self.selected_year as u16;
 
-        // Get forms for this taxpayer type using the registry
-        let applicable_form_codes = bir_core::integration::applicable_forms_for_profile(profile);
+        let context = bir_core::temporal::TemporalContext::current_compliance(year);
+        let engine = bir_core::temporal::TemporalEngine::default();
+        let mut available_forms: Vec<_> = engine
+            .evaluate_with_context(profile, &context)
+            .into_iter()
+            .filter(|decision| decision.eligibility.is_visible())
+            .collect();
 
-        let mut available_forms: Vec<&bir_core::forms::registry::FormDefinition> =
-            bir_core::forms::registry::FORM_REGISTRY
+        // ━━━ Monthly/Quarterly filing exclusion ━━━
+        // If the user has already filed ANY quarterly return for a form category,
+        // hide the monthly variant. Monthly forms are opt-in: shown by default,
+        // but suppressed once the user commits to the quarterly cadence.
+        //
+        // Monthly→Quarterly pairs: (monthly_code, quarterly_code)
+        let monthly_quarterly_pairs: &[(&str, &str)] = &[
+            ("2550M", "2550Q"), // VAT: monthly vs quarterly
+            ("2551M", "2551Q"), // Percentage Tax: monthly vs quarterly (pre-2018 only)
+        ];
+
+        let filing_progress = &self.filing_progress;
+        available_forms.retain(|f| {
+            // Check if this form is a monthly variant that has a quarterly counterpart
+            if let Some((_monthly, quarterly)) = monthly_quarterly_pairs
                 .iter()
-                .filter(|f| applicable_form_codes.contains(&f.code))
-                .collect();
-
-
+                .find(|(m, _)| *m == f.form_code.as_str())
+            {
+                // If quarterly counterpart has any filed period, suppress the monthly
+                if let Some(q_progress) = filing_progress.get(*quarterly).and_then(|y| y.get(&year))
+                {
+                    let quarterly_has_filing = q_progress.quarters.iter().any(|q| {
+                        matches!(
+                            q,
+                            QuarterState::Draft
+                                | QuarterState::Queued
+                                | QuarterState::Submitted
+                                | QuarterState::Confirmed
+                                | QuarterState::Paid
+                        )
+                    });
+                    if quarterly_has_filing {
+                        return false; // Suppress monthly — user is filing quarterly
+                    }
+                }
+            }
+            true
+        });
         let filter_chips = self.filter_state.read(cx).active_chips.clone();
         let query = self
             .filter_state
@@ -289,13 +331,13 @@ impl Render for DashboardView {
                 } else {
                     form_type_chips
                         .iter()
-                        .any(|c| f.code.eq_ignore_ascii_case(&c.label))
+                        .any(|c| f.form_code.eq_ignore_ascii_case(&c.label))
                 };
 
                 let matches_query = if query.is_empty() {
                     true
                 } else {
-                    f.code.to_lowercase().contains(&query)
+                    f.form_code.to_lowercase().contains(&query)
                         || f.title.to_lowercase().contains(&query)
                 };
 
@@ -320,7 +362,7 @@ impl Render for DashboardView {
         for chunk in available_forms.chunks(cols) {
             let mut row = div().flex().flex_row().gap(px(GRID_GAP)).w_full();
             for form_def in chunk {
-                let code = form_def.code.to_string();
+                let code = form_def.form_code.clone();
                 let progress = self
                     .filing_progress
                     .get(&code)
@@ -388,7 +430,7 @@ impl Render for DashboardView {
 
                                 quarter_dots = quarter_dots.child(
                                     div()
-                                        .id(format!("q_{}_{}_{}", form_def.code, year, q_num))
+                                        .id(format!("q_{}_{}_{}", form_def.form_code, year, q_num))
                                         .flex()
                                         .flex_1()
                                         .flex_col()
@@ -537,7 +579,10 @@ impl Render for DashboardView {
 
                                     row = row.child(
                                         div()
-                                            .id(format!("m_{}_{}_{}", form_def.code, year, m_num))
+                                            .id(format!(
+                                                "m_{}_{}_{}",
+                                                form_def.form_code, year, m_num
+                                            ))
                                             .flex()
                                             .flex_1()
                                             .flex_col()
@@ -638,7 +683,7 @@ impl Render for DashboardView {
                             )
                             .child(
                                 div()
-                                    .id(format!("annual_{}_{}", form_def.code, year))
+                                    .id(format!("annual_{}_{}", form_def.form_code, year))
                                     .flex()
                                     .items_center()
                                     .justify_center()
@@ -715,7 +760,7 @@ impl Render for DashboardView {
                             )
                             .child(
                                 div()
-                                    .id(format!("monthly_{}_{}", form_def.code, year))
+                                    .id(format!("monthly_{}_{}", form_def.form_code, year))
                                     .flex()
                                     .items_center()
                                     .justify_center()
@@ -887,7 +932,7 @@ impl Render for DashboardView {
 impl DashboardView {
     /// Build the common card shell (header + title). Caller appends progress + action sections.
     fn build_card(
-        form_def: &bir_core::forms::registry::FormDefinition,
+        form_def: &bir_core::temporal::FormDecision,
         _year: u16,
         card_width: f32,
         cx: &Context<Self>,
@@ -915,7 +960,7 @@ impl DashboardView {
                             .text_3xl()
                             .font_weight(FontWeight::BLACK)
                             .text_color(cx.theme().primary)
-                            .child(form_def.code),
+                            .child(form_def.form_code.clone()),
                     )
                     .child(
                         div()
@@ -926,7 +971,7 @@ impl DashboardView {
                             .py_1()
                             .rounded_full()
                             .text_color(cx.theme().secondary_foreground)
-                            .child(form_def.category),
+                            .child(form_def.category.clone()),
                     ),
             )
             .child(
@@ -935,7 +980,7 @@ impl DashboardView {
                     .font_weight(FontWeight::BOLD)
                     .line_height(relative(1.3))
                     .text_color(cx.theme().foreground)
-                    .child(form_def.title),
+                    .child(form_def.title.clone()),
             )
     }
 

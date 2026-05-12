@@ -1,0 +1,11 @@
+# TRAIN Law Era (2018–2023)
+# Tax Reform for Acceleration and Inclusion (RA 10963).
+
+[era]
+era_id = "TRAIN_2018"
+title = "TRAIN Law (RA 10963)"
+jurisdiction = "PhBir"
+effective_from_year = 2018
+effective_until_year = 2023
+is_overlay = false
+citations = ["ra-10963"]

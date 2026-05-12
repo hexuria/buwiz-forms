@@ -1,0 +1,61 @@
+# Percentage Tax Form Artifacts
+
+[[artifacts]]
+artifact_id = "bir.2551m.rev-1997"
+form_code = "2551M"
+title = "Monthly Percentage Tax Return"
+category = "Percentage Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+effective_until = "2017-12-31"
+lifecycle = "Abolished"
+frequency = "Monthly"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = []
+legal_citations = ["ra-8424-sec-116"]
+requires_vat = false
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.2551q.rev-2018"
+form_code = "2551Q"
+title = "Quarterly Percentage Tax Return"
+category = "Percentage Tax"
+revision = "2018"
+effective_from = "2018-01-01"
+lifecycle = "Active"
+frequency = "Quarterly"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = ["SelfEmployed", "MixedIncome", "Corporation"]
+legal_citations = ["ra-10963-sec-116"]
+requires_vat = false
+formula_ref = "formula.2551q.rev-2018"
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.2552.rev-1997"
+form_code = "2552"
+title = "Percentage Tax Return on Shares of Stock Transactions"
+category = "Percentage Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "Quarterly"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = []
+legal_citations = ["ra-8424-sec-116"]
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.2553.rev-1997"
+form_code = "2553"
+title = "Percentage Tax Payable Under Special Laws"
+category = "Percentage Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "Quarterly"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = []
+legal_citations = ["ra-8424-sec-116"]
+exclusive_priority = 0

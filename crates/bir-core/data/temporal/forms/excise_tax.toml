@@ -1,0 +1,92 @@
+# Excise Tax Form Artifacts
+
+[[artifacts]]
+artifact_id = "bir.2200a.rev-1997"
+form_code = "2200A"
+title = "Excise Tax Return for Alcohol Products"
+category = "Excise Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "Monthly"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = []
+legal_citations = ["ra-8424-title-vi"]
+excise_category = "Alcohol"
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.2200an.rev-1997"
+form_code = "2200AN"
+title = "Excise Tax Return for Automobiles and Non-Essential Goods"
+category = "Excise Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "Monthly"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = []
+legal_citations = ["ra-8424-title-vi"]
+excise_category = "AutomobilesAndNonEssential"
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.2200m.rev-1997"
+form_code = "2200M"
+title = "Excise Tax Return for Mineral Products"
+category = "Excise Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "Monthly"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = []
+legal_citations = ["ra-8424-title-vi"]
+excise_category = "Mineral"
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.2200p.rev-1997"
+form_code = "2200P"
+title = "Excise Tax Return for Petroleum Products"
+category = "Excise Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "Monthly"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = []
+legal_citations = ["ra-8424-title-vi"]
+excise_category = "Petroleum"
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.2200t.rev-1997"
+form_code = "2200T"
+title = "Excise Tax Return for Tobacco Products"
+category = "Excise Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "Monthly"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = []
+legal_citations = ["ra-8424-title-vi"]
+excise_category = "Tobacco"
+exclusive_priority = 0
+
+# Documentary Stamp Tax
+
+[[artifacts]]
+artifact_id = "bir.2000.rev-1997"
+form_code = "2000"
+title = "Documentary Stamp Tax Declaration/Return"
+category = "Documentary Stamp Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "OpenEnded"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = []
+legal_citations = ["ra-8424-nirc"]
+exclusive_priority = 0

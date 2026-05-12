@@ -20,6 +20,7 @@ use crate::integration::models::UniversalTaxPayload;
 use crate::integration::validation::{
     PayloadValidationError, validate_form_applicability, validate_payload,
 };
+use chrono::Datelike;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -107,10 +108,11 @@ pub fn process_sync(
     }
 
     // ── Step 3: Check form applicability ─────────────────────────────
-    if let Some(ref target_form) = payload.target_form
-        && let Some(err) = validate_form_applicability(target_form, &profile)
-    {
-        return Err(SyncError::FormNotApplicable(err.message));
+    if let Some(ref target_form) = payload.target_form {
+        let taxable_year = payload.period_start.year() as u16;
+        if let Some(err) = validate_form_applicability(target_form, &profile, taxable_year) {
+            return Err(SyncError::FormNotApplicable(err.message));
+        }
     }
 
     // ── Step 4: Resolve mappers ──────────────────────────────────────
@@ -264,6 +266,12 @@ mod tests {
             has_employees: false,
             is_dormant: false,
             has_single_employer: false,
+            withholds_compensation: false,
+            withholds_expanded: false,
+            withholds_final: false,
+            is_top_withholding_agent: false,
+            is_government_withholding_entity: false,
+            registration_activity_status: Default::default(),
             is_archived: false,
             profile_pin_hash: None,
             totp_secret: None,

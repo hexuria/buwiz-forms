@@ -1,0 +1,28 @@
+# Percentage Tax Rate Tables
+
+# Pre-TRAIN Percentage Tax Rate
+[[rate_tables]]
+table_id = "rate.percentage-tax.pre-train"
+title = "Percentage Tax Rate (Pre-TRAIN)"
+jurisdiction = "PhBir"
+tax_type = "PercentageTax"
+effective_from = "1997-01-01"
+effective_until = "2017-12-31"
+citations = ["ra-8424-sec-116"]
+
+[[rate_tables.rates]]
+key = "default"
+rate = "0.03"
+
+# TRAIN-era Percentage Tax Rate (unchanged at 3%)
+[[rate_tables]]
+table_id = "rate.percentage-tax.train-2018"
+title = "Percentage Tax Rate (TRAIN 2018+)"
+jurisdiction = "PhBir"
+tax_type = "PercentageTax"
+effective_from = "2018-01-01"
+citations = ["ra-10963-sec-116"]
+
+[[rate_tables.rates]]
+key = "default"
+rate = "0.03"

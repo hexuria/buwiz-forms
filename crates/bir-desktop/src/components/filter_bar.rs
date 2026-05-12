@@ -7,9 +7,6 @@ use gpui_component::tag::Tag;
 use gpui_component::{ActiveTheme, Sizable};
 use gpui_component::{Icon, IconName};
 
-use bir_core::forms::registry::FORM_REGISTRY;
-use bir_core::profile::TaxpayerType;
-
 #[derive(Clone, PartialEq, Eq)]
 pub struct FilterChip {
     pub id: String,
@@ -67,7 +64,7 @@ impl FilterState {
             active_chips: Vec::new(),
             input_state,
             popover_open: false,
-            available_form_types: FORM_REGISTRY.iter().map(|f| f.code.to_string()).collect(),
+            available_form_types: bir_core::integration::all_form_codes(),
             available_quarters: vec![
                 "Q1".to_string(),
                 "Q2".to_string(),
@@ -106,15 +103,13 @@ impl FilterState {
     pub fn update_for_profile(
         &mut self,
         profile: &bir_core::profile::TaxpayerProfile,
+        year: u16,
         cx: &mut Context<Self>,
     ) {
-        let applicable_form_codes = bir_core::integration::applicable_forms_for_profile(profile);
+        let applicable_form_codes =
+            bir_core::integration::applicable_forms_for_profile_and_year(profile, year);
 
-        self.available_form_types = FORM_REGISTRY
-            .iter()
-            .filter(|f| applicable_form_codes.contains(&f.code))
-            .map(|f| f.code.to_string())
-            .collect();
+        self.available_form_types = applicable_form_codes;
 
         // Prune chips that reference forms no longer applicable
         let before_len = self.active_chips.len();

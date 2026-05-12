@@ -46,6 +46,7 @@ pub use service::{
     process_sync, process_sync_json,
 };
 pub use validation::{
-    PayloadValidationError, applicable_forms_for_profile, validate_form_applicability,
+    PayloadValidationError, all_form_codes, applicable_forms_for_profile,
+    applicable_forms_for_profile_and_year, evaluate_forms_for_year, validate_form_applicability,
     validate_payload,
 };

@@ -1,0 +1,11 @@
+# Computation Formula: 2551Q — Quarterly Percentage Tax Return
+
+[[formulas]]
+formula_id = "formula.2551q.rev-2018"
+form_code = "2551Q"
+artifact_id = "bir.2551q.rev-2018"
+effective_from = "2018-01-01"
+rate_table_refs = ["rate.percentage-tax.train-2018"]
+input_fields = ["gross_receipts", "gross_sales", "other_taxable_amount"]
+output_fields = ["tax_due", "total_tax_payable", "tax_still_due"]
+citations = ["ra-10963-sec-116"]

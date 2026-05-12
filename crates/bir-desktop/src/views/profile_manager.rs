@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::components::combobox::{Combobox, ComboboxEvent, ComboboxState};
 use crate::components::date_input::{DateInput, DateInputEvent, DateInputState};
+use crate::components::multi_select::{MultiSelect, MultiSelectEvent, MultiSelectOption, MultiSelectState};
 use crate::components::otp_paste::paste_otp_value;
 
 use crate::components::tin_input::TinInput;
@@ -30,14 +31,12 @@ pub struct ProfileManagerView {
     type_select: Entity<ComboboxState>,
     tax_classification_select: Entity<ComboboxState>,
     eopt_tier_select: Entity<ComboboxState>,
+    cooperative_treatment_select: Entity<ComboboxState>,
+    is_gpp_partner: bool,
     has_employees: bool,
     is_expanded_withholding_agent: bool,
     is_8_percent_flat_rate: bool,
-    is_subject_to_excise_alcohol: bool,
-    is_subject_to_excise_auto: bool,
-    is_subject_to_excise_mineral: bool,
-    is_subject_to_excise_petroleum: bool,
-    is_subject_to_excise_tobacco: bool,
+    excise_select: Entity<MultiSelectState>,
     line_of_business: Entity<InputState>,
     name_input: Entity<InputState>,
     address_input: Entity<InputState>,
@@ -73,6 +72,7 @@ pub struct ProfileManagerView {
     stored_test_notification_enabled: bool,
     stored_is_archived: bool,
     stored_profile_pin_hash: Option<String>,
+    stored_tax_elections: Vec<bir_core::profile::TaxElectionHistory>,
 
     enable_profile_pin: bool,
     profile_pin_input: Entity<OtpState>,
@@ -105,6 +105,9 @@ impl ProfileManagerView {
                     "Individual".to_string(),
                     "Corporation".to_string(),
                     "Partnership".to_string(),
+                    "Cooperative".to_string(),
+                    "Estate".to_string(),
+                    "Trust".to_string(),
                 ],
                 window,
                 cx,
@@ -112,14 +115,13 @@ impl ProfileManagerView {
         });
 
         let tax_classification_select = cx.new(|cx| {
+            // For Individual taxpayers only; non-Individual types auto-derive
+            // the classification from TaxpayerType.
             ComboboxState::new(
                 vec![
                     "Purely Compensation".to_string(),
-                    "Professional/Freelancer".to_string(),
-                    "Sole Proprietor (Non-VAT)".to_string(),
-                    "Sole Proprietor (VAT)".to_string(),
+                    "Self-Employed / Professional".to_string(),
                     "Mixed Income".to_string(),
-                    "Corporation".to_string(),
                 ],
                 window,
                 cx,
@@ -137,6 +139,36 @@ impl ProfileManagerView {
                 window,
                 cx,
             )
+        });
+
+        // Cooperative-only: tax treatment dropdown
+        let cooperative_treatment_select = cx.new(|cx| {
+            ComboboxState::new(
+                vec![
+                    "Exempt".to_string(),
+                    "Taxable".to_string(),
+                    "Mixed".to_string(),
+                ],
+                window,
+                cx,
+            )
+        });
+
+        // Excise tax liabilities multi-select
+        let excise_select = cx.new(|cx| {
+            MultiSelectState::new(
+                vec![
+                    MultiSelectOption::new("alcohol", "Alcohol"),
+                    MultiSelectOption::new("auto", "Automobiles & Non-Essential"),
+                    MultiSelectOption::new("mineral", "Mineral Products"),
+                    MultiSelectOption::new("petroleum", "Petroleum Products"),
+                    MultiSelectOption::new("tobacco", "Tobacco Products"),
+                ],
+                window,
+                cx,
+            )
+            .placeholder("Select Excise Tax Liabilities")
+            .max_visible_chips(3)
         });
 
         let line_of_business =
@@ -191,6 +223,8 @@ impl ProfileManagerView {
             cx.subscribe(&type_select, Self::on_combobox_event),
             cx.subscribe(&tax_classification_select, Self::on_combobox_event),
             cx.subscribe(&eopt_tier_select, Self::on_combobox_event),
+            cx.subscribe(&cooperative_treatment_select, Self::on_combobox_event),
+            cx.subscribe(&excise_select, Self::on_multi_select_event),
             cx.subscribe(&business_start_input, Self::on_date_event),
             cx.subscribe_in(
                 &setup_totp_state,
@@ -228,14 +262,12 @@ impl ProfileManagerView {
             type_select,
             tax_classification_select,
             eopt_tier_select,
+            cooperative_treatment_select,
+            is_gpp_partner: false,
             has_employees: false,
             is_expanded_withholding_agent: false,
             is_8_percent_flat_rate: false,
-            is_subject_to_excise_alcohol: false,
-            is_subject_to_excise_auto: false,
-            is_subject_to_excise_mineral: false,
-            is_subject_to_excise_petroleum: false,
-            is_subject_to_excise_tobacco: false,
+            excise_select,
             line_of_business,
             name_input,
             address_input,
@@ -266,6 +298,7 @@ impl ProfileManagerView {
             stored_test_notification_enabled: false,
             stored_is_archived: false,
             stored_profile_pin_hash: None,
+            stored_tax_elections: vec![],
             enable_profile_pin: false,
             profile_pin_input,
             is_totp_enabled: false,
@@ -287,11 +320,10 @@ impl ProfileManagerView {
         self.has_employees = false;
         self.is_expanded_withholding_agent = false;
         self.is_8_percent_flat_rate = false;
-        self.is_subject_to_excise_alcohol = false;
-        self.is_subject_to_excise_auto = false;
-        self.is_subject_to_excise_mineral = false;
-        self.is_subject_to_excise_petroleum = false;
-        self.is_subject_to_excise_tobacco = false;
+        self.is_gpp_partner = false;
+        self.excise_select.update(cx, |state, cx| {
+            state.set_selected_ids(vec![], cx);
+        });
         self.errors.clear();
         self.save_message = None;
 
@@ -307,6 +339,7 @@ impl ProfileManagerView {
         self.pending_notification = None;
         self.is_editing_password = true;
         self.stored_profile_pin_hash = None;
+        self.stored_tax_elections = vec![];
         self.is_totp_enabled = false;
         self.show_totp_setup = false;
         self.show_totp_secret_text = false;
@@ -400,21 +433,22 @@ impl ProfileManagerView {
         self.is_expanded_withholding_agent = profile.is_expanded_withholding_agent;
         self.is_8_percent_flat_rate =
             profile.has_8_percent_election(chrono::Local::now().date_naive().year() as u16);
-        self.is_subject_to_excise_alcohol = profile
-            .excise_tax_categories
-            .contains(&bir_core::profile::ExciseTaxCategory::Alcohol);
-        self.is_subject_to_excise_auto = profile
-            .excise_tax_categories
-            .contains(&bir_core::profile::ExciseTaxCategory::AutomobilesAndNonEssential);
-        self.is_subject_to_excise_mineral = profile
-            .excise_tax_categories
-            .contains(&bir_core::profile::ExciseTaxCategory::Mineral);
-        self.is_subject_to_excise_petroleum = profile
-            .excise_tax_categories
-            .contains(&bir_core::profile::ExciseTaxCategory::Petroleum);
-        self.is_subject_to_excise_tobacco = profile
-            .excise_tax_categories
-            .contains(&bir_core::profile::ExciseTaxCategory::Tobacco);
+        self.is_gpp_partner = profile.is_gpp_partner;
+        self.stored_tax_elections = profile.tax_elections.clone();
+        // Populate excise tax multi-select from profile categories
+        let mut excise_ids = Vec::new();
+        for cat in &profile.excise_tax_categories {
+            match cat {
+                bir_core::profile::ExciseTaxCategory::Alcohol => excise_ids.push("alcohol".to_string()),
+                bir_core::profile::ExciseTaxCategory::AutomobilesAndNonEssential => excise_ids.push("auto".to_string()),
+                bir_core::profile::ExciseTaxCategory::Mineral => excise_ids.push("mineral".to_string()),
+                bir_core::profile::ExciseTaxCategory::Petroleum => excise_ids.push("petroleum".to_string()),
+                bir_core::profile::ExciseTaxCategory::Tobacco => excise_ids.push("tobacco".to_string()),
+            }
+        }
+        self.excise_select.update(cx, |state, cx| {
+            state.set_selected_ids(excise_ids, cx);
+        });
         self.email_tracking_enabled = profile.email_tracking_enabled;
 
         self.email_auth_method = profile.email_auth_method.clone();
@@ -522,21 +556,16 @@ impl ProfileManagerView {
         });
         let tax_class_value = match profile.tax_classification {
             Some(bir_core::profile::TaxClassification::PurelyCompensation) => "Purely Compensation",
-            Some(bir_core::profile::TaxClassification::ProfessionalOrFreelancer) => {
-                "Professional/Freelancer"
-            }
-            Some(bir_core::profile::TaxClassification::SoleProprietorNonVat) => {
-                "Sole Proprietor (Non-VAT)"
-            }
-            Some(bir_core::profile::TaxClassification::SoleProprietorVat) => {
-                "Sole Proprietor (VAT)"
+            Some(bir_core::profile::TaxClassification::SelfEmployed) => {
+                "Self-Employed / Professional"
             }
             Some(bir_core::profile::TaxClassification::MixedIncome) => "Mixed Income",
-            Some(bir_core::profile::TaxClassification::Corporation) => "Corporation",
-            Some(bir_core::profile::TaxClassification::CooperativeExempt) => "Cooperative (Exempt)",
-            Some(bir_core::profile::TaxClassification::CooperativeTaxable) => "Cooperative (Taxable)",
-            Some(bir_core::profile::TaxClassification::CooperativeMixed) => "Cooperative (Mixed)",
-            Some(bir_core::profile::TaxClassification::EstateOrTrust) => "Estate/Trust",
+            // Non-Individual classifications: dropdown is hidden, but keep safe defaults
+            Some(bir_core::profile::TaxClassification::Corporation) => "",
+            Some(bir_core::profile::TaxClassification::CooperativeExempt) => "",
+            Some(bir_core::profile::TaxClassification::CooperativeTaxable) => "",
+            Some(bir_core::profile::TaxClassification::CooperativeMixed) => "",
+            Some(bir_core::profile::TaxClassification::EstateOrTrust) => "",
             None => "",
         };
         self.tax_classification_select.update(cx, |select, cx| {
@@ -551,6 +580,17 @@ impl ProfileManagerView {
         };
         self.eopt_tier_select.update(cx, |select, cx| {
             select.set_selected_value(tier_value, window, cx);
+        });
+
+        // Cooperative tax treatment
+        let coop_value = match profile.tax_classification {
+            Some(bir_core::profile::TaxClassification::CooperativeExempt) => "Exempt",
+            Some(bir_core::profile::TaxClassification::CooperativeTaxable) => "Taxable",
+            Some(bir_core::profile::TaxClassification::CooperativeMixed) => "Mixed",
+            _ => "",
+        };
+        self.cooperative_treatment_select.update(cx, |select, cx| {
+            select.set_selected_value(coop_value, window, cx);
         });
 
         cx.notify();
@@ -660,6 +700,8 @@ impl ProfileManagerView {
                 cx.notify();
             }
         }
+        // Any combobox change might affect 8% eligibility (type, classification, EOPT tier)
+        self.enforce_8_percent_eligibility(cx);
     }
 
     fn on_date_event(
@@ -669,6 +711,40 @@ impl ProfileManagerView {
         _cx: &mut Context<Self>,
     ) {
         // Handle date event if needed
+    }
+
+    fn on_multi_select_event(
+        &mut self,
+        _state: Entity<MultiSelectState>,
+        _event: &MultiSelectEvent,
+        cx: &mut Context<Self>,
+    ) {
+        // Just notify to refresh the UI when multi-select changes
+        cx.notify();
+    }
+
+    /// Auto-uncheck the 8% flat rate if the taxpayer is no longer eligible.
+    /// Called whenever type, classification, EOPT tier, or VAT status changes.
+    fn enforce_8_percent_eligibility(&mut self, cx: &mut Context<Self>) {
+        if !self.is_8_percent_flat_rate {
+            return; // Nothing to enforce
+        }
+        let type_val = self.type_select.read(cx).selected_value(cx);
+        let class_val = self.tax_classification_select.read(cx).selected_value(cx);
+        let eopt_val = self.eopt_tier_select.read(cx).selected_value(cx);
+
+        let eligible = type_val == "Individual"
+            && !self.is_vat_registered
+            && matches!(
+                class_val.as_str(),
+                "Self-Employed / Professional" | "Mixed Income"
+            )
+            && matches!(eopt_val.as_str(), "Micro" | "");
+
+        if !eligible {
+            self.is_8_percent_flat_rate = false;
+            cx.notify();
+        }
     }
 
     fn current_profile(&self, cx: &mut Context<Self>) -> TaxpayerProfile {
@@ -685,28 +761,33 @@ impl ProfileManagerView {
         let taxpayer_type = match type_val.as_str() {
             "Corporation" => TaxpayerType::Corporation,
             "Partnership" => TaxpayerType::Partnership,
+            "Cooperative" => TaxpayerType::Cooperative,
+            "Estate" => TaxpayerType::Estate,
+            "Trust" => TaxpayerType::Trust,
             _ => TaxpayerType::Individual,
         };
 
+        // For Individual: read user selection from dropdown
+        // For Cooperative: read cooperative_treatment_select
+        // For other non-Individual types: auto-derive via effective_classification()
         let tax_class_val = self.tax_classification_select.read(cx).selected_value(cx);
-        let tax_classification = match tax_class_val.as_str() {
-            "Purely Compensation" => Some(bir_core::profile::TaxClassification::PurelyCompensation),
-            "Professional/Freelancer" => {
-                Some(bir_core::profile::TaxClassification::ProfessionalOrFreelancer)
-            }
-            "Sole Proprietor (Non-VAT)" => {
-                Some(bir_core::profile::TaxClassification::SoleProprietorNonVat)
-            }
-            "Sole Proprietor (VAT)" => {
-                Some(bir_core::profile::TaxClassification::SoleProprietorVat)
-            }
-            "Mixed Income" => Some(bir_core::profile::TaxClassification::MixedIncome),
-            "Corporation" => Some(bir_core::profile::TaxClassification::Corporation),
-            "Cooperative (Exempt)" => Some(bir_core::profile::TaxClassification::CooperativeExempt),
-            "Cooperative (Taxable)" => Some(bir_core::profile::TaxClassification::CooperativeTaxable),
-            "Cooperative (Mixed)" => Some(bir_core::profile::TaxClassification::CooperativeMixed),
-            "Estate/Trust" => Some(bir_core::profile::TaxClassification::EstateOrTrust),
-            _ => None,
+        let tax_classification = match taxpayer_type {
+            TaxpayerType::Individual => match tax_class_val.as_str() {
+                "Purely Compensation" => Some(bir_core::profile::TaxClassification::PurelyCompensation),
+                "Self-Employed / Professional" => Some(bir_core::profile::TaxClassification::SelfEmployed),
+                "Mixed Income" => Some(bir_core::profile::TaxClassification::MixedIncome),
+                _ => None,
+            },
+            TaxpayerType::Cooperative => {
+                let coop_val = self.cooperative_treatment_select.read(cx).selected_value(cx);
+                match coop_val.as_str() {
+                    "Exempt" => Some(bir_core::profile::TaxClassification::CooperativeExempt),
+                    "Taxable" => Some(bir_core::profile::TaxClassification::CooperativeTaxable),
+                    "Mixed" => Some(bir_core::profile::TaxClassification::CooperativeMixed),
+                    _ => Some(bir_core::profile::TaxClassification::CooperativeTaxable),
+                }
+            },
+            _ => None, // Auto-derived via effective_classification()
         };
 
         let tier_val = self.eopt_tier_select.read(cx).selected_value(cx);
@@ -800,43 +881,54 @@ impl ProfileManagerView {
             tax_classification,
             eopt_tier,
             is_bmbe: false,
-            is_gpp_partner: false,
+            is_gpp_partner: self.is_gpp_partner,
             is_create_msme: false,
             is_expanded_withholding_agent: self.is_expanded_withholding_agent,
             atc_codes: vec![],
             excise_tax_categories: {
+                let selected = self.excise_select.read(cx).selected_ids();
                 let mut cats = vec![];
-                if self.is_subject_to_excise_alcohol {
-                    cats.push(bir_core::profile::ExciseTaxCategory::Alcohol);
-                }
-                if self.is_subject_to_excise_auto {
-                    cats.push(bir_core::profile::ExciseTaxCategory::AutomobilesAndNonEssential);
-                }
-                if self.is_subject_to_excise_mineral {
-                    cats.push(bir_core::profile::ExciseTaxCategory::Mineral);
-                }
-                if self.is_subject_to_excise_petroleum {
-                    cats.push(bir_core::profile::ExciseTaxCategory::Petroleum);
-                }
-                if self.is_subject_to_excise_tobacco {
-                    cats.push(bir_core::profile::ExciseTaxCategory::Tobacco);
+                for id in selected {
+                    match id.as_str() {
+                        "alcohol" => cats.push(bir_core::profile::ExciseTaxCategory::Alcohol),
+                        "auto" => cats.push(bir_core::profile::ExciseTaxCategory::AutomobilesAndNonEssential),
+                        "mineral" => cats.push(bir_core::profile::ExciseTaxCategory::Mineral),
+                        "petroleum" => cats.push(bir_core::profile::ExciseTaxCategory::Petroleum),
+                        "tobacco" => cats.push(bir_core::profile::ExciseTaxCategory::Tobacco),
+                        _ => {}
+                    }
                 }
                 cats
             },
-            tax_elections: if self.is_8_percent_flat_rate {
-                vec![bir_core::profile::TaxElectionHistory {
-                    taxable_year: chrono::Local::now().date_naive().year() as u16,
-                    election: bir_core::profile::IncomeTaxElection::EightPercent,
-                    elected_at: chrono::Local::now().naive_local(),
-                    source_form: "profile_manager".to_string(),
-                }]
-            } else {
-                vec![]
+            tax_elections: {
+                let current_year = chrono::Local::now().date_naive().year() as u16;
+                let mut elections = self.stored_tax_elections.clone();
+                // Remove any existing 8% entry for the current year only
+                elections.retain(|e| {
+                    !(e.taxable_year == current_year
+                        && matches!(e.election, bir_core::profile::IncomeTaxElection::EightPercent))
+                });
+                // Re-add if the checkbox is checked
+                if self.is_8_percent_flat_rate {
+                    elections.push(bir_core::profile::TaxElectionHistory {
+                        taxable_year: current_year,
+                        election: bir_core::profile::IncomeTaxElection::EightPercent,
+                        elected_at: chrono::Local::now().naive_local(),
+                        source_form: "profile_manager".to_string(),
+                    });
+                }
+                elections
             },
             _opted_for_8_percent_flat_rate_compat: None,
             has_employees: self.has_employees,
             is_dormant: false,
             has_single_employer: false,
+            withholds_compensation: false,
+            withholds_expanded: false,
+            withholds_final: false,
+            is_top_withholding_agent: false,
+            is_government_withholding_entity: false,
+            registration_activity_status: bir_core::profile::RegistrationActivityStatus::Active,
         }
     }
 
@@ -1006,54 +1098,6 @@ impl ProfileManagerView {
             .child(text.to_string())
     }
 
-    fn render_excise_checkbox(
-        label: &str,
-        is_checked: bool,
-        id_prefix: &str,
-        cx: &Context<Self>,
-        toggle_action: impl Fn(&mut Self) + 'static,
-    ) -> Stateful<Div> {
-        div()
-            .id(SharedString::from(format!("excise_{}", id_prefix)))
-            .flex()
-            .items_center()
-            .gap_2()
-            .cursor_pointer()
-            .on_click(cx.listener(move |this, _, _, cx| {
-                toggle_action(this);
-                cx.notify();
-            }))
-            .child(
-                div()
-                    .w_4()
-                    .h_4()
-                    .rounded_sm()
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .bg(if is_checked {
-                        cx.theme().primary
-                    } else {
-                        cx.theme().background
-                    })
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .child(if is_checked {
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().primary_foreground)
-                            .child("✓")
-                    } else {
-                        div()
-                    }),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(cx.theme().foreground)
-                    .child(label.to_string()),
-            )
-    }
 
     fn field_error(&self, field: &'static str, _cx: &Context<Self>) -> gpui::Div {
         let text = self
@@ -1120,6 +1164,18 @@ impl Render for ProfileManagerView {
 
         let type_val = self.type_select.read(cx).selected_value(cx);
         let is_individual = type_val == "Individual";
+        let is_cooperative = type_val == "Cooperative";
+
+        let tax_class_val = self.tax_classification_select.read(cx).selected_value(cx);
+        let eopt_val = self.eopt_tier_select.read(cx).selected_value(cx);
+        let is_eligible_for_8_percent = is_individual
+            && !self.is_vat_registered
+            && matches!(
+                tax_class_val.as_str(),
+                "Self-Employed / Professional" | "Mixed Income"
+            )
+            && matches!(eopt_val.as_str(), "Micro" | "");
+
         let date_label = if is_individual {
             "Birth Date"
         } else {
@@ -1357,12 +1413,15 @@ impl Render for ProfileManagerView {
                                                 )
                                             })
                                             .child(
+                                                // Row: RDO + Taxpayer Type (50/50)
                                                 div()
                                                     .flex()
                                                     .gap_4()
+                                                    .w_full()
                                                     .child(
                                                         div()
                                                             .flex_1()
+                                                            .min_w_0()
                                                             .child(Self::field_label(
                                                                 "Revenue District Office (RDO)",
                                                                 cx,
@@ -1372,53 +1431,89 @@ impl Render for ProfileManagerView {
                                                     )
                                                     .child(
                                                         div()
-                                                            .flex()
-                                                            .gap_4()
-                                                            .child(
-                                                                div()
-                                                                    .flex_1()
-                                                                    .child(Self::field_label("Taxpayer Type", cx))
-                                                                    .child(Combobox::new(&self.type_select)),
-                                                            )
-                                                            .child(
-                                                                div()
-                                                                    .flex_1()
-                                                                    .child(Self::field_label("Tax Classification", cx))
-                                                                    .child(Combobox::new(&self.tax_classification_select)),
-                                                            )
-                                                            .child(
-                                                                div()
-                                                                    .flex_1()
-                                                                    .child(Self::field_label("EOPT Tier", cx))
-                                                                    .child(Combobox::new(&self.eopt_tier_select)),
-                                                            ),
-                                                    )
+                                                            .flex_1()
+                                                            .min_w_0()
+                                                            .child(Self::field_label("Taxpayer Type", cx))
+                                                            .child(Combobox::new(&self.type_select)),
+                                                    ),
                                             )
+                                            .when(is_individual, |this| {
+                                                this.child(
+                                                    // Row: Tax Classification + EOPT Tier (50/50)
+                                                    div()
+                                                        .flex()
+                                                        .gap_4()
+                                                        .w_full()
+                                                        .child(
+                                                            div()
+                                                                .flex_1()
+                                                                .min_w_0()
+                                                                .child(Self::field_label("Tax Classification", cx))
+                                                                .child(Combobox::new(&self.tax_classification_select)),
+                                                        )
+                                                        .child(
+                                                            div()
+                                                                .flex_1()
+                                                                .min_w_0()
+                                                                .child(Self::field_label("EOPT Tier", cx))
+                                                                .child(Combobox::new(&self.eopt_tier_select)),
+                                                        ),
+                                                )
+                                            })
+                                            .when(is_cooperative, |this| {
+                                                this.child(
+                                                    // Row: Cooperative Tax Treatment + EOPT Tier (50/50)
+                                                    div()
+                                                        .flex()
+                                                        .gap_4()
+                                                        .w_full()
+                                                        .child(
+                                                            div()
+                                                                .flex_1()
+                                                                .min_w_0()
+                                                                .child(Self::field_label("Cooperative Tax Treatment", cx))
+                                                                .child(Combobox::new(&self.cooperative_treatment_select)),
+                                                        )
+                                                        .child(
+                                                            div()
+                                                                .flex_1()
+                                                                .min_w_0()
+                                                                .child(Self::field_label("EOPT Tier", cx))
+                                                                .child(Combobox::new(&self.eopt_tier_select)),
+                                                        ),
+                                                )
+                                            })
                                             .child(
-                                                div()
+                                                // Line of Business (full width)
+                                                v_flex().w_full()
                                                     .child(Self::field_label("Line of Business", cx))
                                                     .child(Input::new(&self.line_of_business))
                                                     .child(self.field_error("line_of_business", cx)),
                                             )
                                             .child(
-                                                div()
+                                                // Taxpayer's Name (full width)
+                                                v_flex().w_full()
                                                     .child(Self::field_label("Taxpayer's Name", cx))
                                                     .child(Input::new(&self.name_input))
                                                     .child(self.field_error("full_name", cx)),
                                             )
                                             .child(
-                                                div()
+                                                // Registered Address (full width)
+                                                v_flex().w_full()
                                                     .child(Self::field_label("Registered Address", cx))
                                                     .child(Input::new(&self.address_input))
                                                     .child(self.field_error("registered_address", cx)),
                                             )
                                             .child(
+                                                // Row: Zip Code + Phone (50/50)
                                                 div()
                                                     .flex()
                                                     .gap_4()
+                                                    .w_full()
                                                     .child(
                                                         div()
                                                             .flex_1()
+                                                            .min_w_0()
                                                             .child(Self::field_label("Zip Code", cx))
                                                             .child(Combobox::new(&self.zip_select))
                                                             .child(self.field_error("zip_code", cx)),
@@ -1426,19 +1521,22 @@ impl Render for ProfileManagerView {
                                                     .child(
                                                         div()
                                                             .flex_1()
+                                                            .min_w_0()
                                                             .child(Self::field_label("Phone / Telephone No.", cx))
                                                             .child(Input::new(&self.tel_input))
                                                             .child(self.field_error("phone", cx)),
                                                     ),
                                             )
                                             .child(
-                                                div()
+                                                // Email Address (full width)
+                                                v_flex().w_full()
                                                     .child(Self::field_label("Email Address", cx))
                                                     .child(Input::new(&self.email_input))
                                                     .child(self.field_error("email", cx)),
                                             )
                                             .child(
-                                                div()
+                                                // Date field (full width)
+                                                v_flex().w_full()
                                                     .child(Self::field_label(date_label, cx))
                                                     .child(DateInput::new(&self.business_start_input))
                                                     .child(self.field_error("business_start_date", cx)),
@@ -1452,6 +1550,7 @@ impl Render for ProfileManagerView {
                                                     .cursor_pointer()
                                                     .on_click(cx.listener(|this, _, _, cx| {
                                                         this.is_vat_registered = !this.is_vat_registered;
+                                                        this.enforce_8_percent_eligibility(cx);
                                                         cx.notify();
                                                     }))
                                                     .child(
@@ -1541,61 +1640,41 @@ impl Render for ProfileManagerView {
                                                             )
                                                             .child(div().text_sm().text_color(cx.theme().foreground).child("Expanded Withholding Agent")),
                                                     )
-                                                    .child(
-                                                        div()
-                                                            .id("8_percent_toggle")
-                                                            .flex()
-                                                            .items_center()
-                                                            .gap_2()
-                                                            .cursor_pointer()
-                                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                                this.is_8_percent_flat_rate = !this.is_8_percent_flat_rate;
-                                                                cx.notify();
-                                                            }))
-                                                            .child(
-                                                                div()
-                                                                    .w_4()
-                                                                    .h_4()
-                                                                    .rounded_sm()
-                                                                    .border_1()
-                                                                    .border_color(cx.theme().border)
-                                                                    .bg(if self.is_8_percent_flat_rate { cx.theme().primary } else { cx.theme().background })
-                                                                    .flex()
-                                                                    .items_center()
-                                                                    .justify_center()
-                                                                    .child(if self.is_8_percent_flat_rate { div().text_xs().text_color(cx.theme().primary_foreground).child("✓") } else { div() }),
-                                                            )
-                                                            .child(div().text_sm().text_color(cx.theme().foreground).child("8% Income Tax Rate Election")),
-                                                    ),
+                                                    .when(is_eligible_for_8_percent, |this| {
+                                                        this.child(
+                                                            div()
+                                                                .id("8_percent_toggle")
+                                                                .flex()
+                                                                .items_center()
+                                                                .gap_2()
+                                                                .cursor_pointer()
+                                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                                    this.is_8_percent_flat_rate = !this.is_8_percent_flat_rate;
+                                                                    cx.notify();
+                                                                }))
+                                                                .child(
+                                                                    div()
+                                                                        .w_4()
+                                                                        .h_4()
+                                                                        .rounded_sm()
+                                                                        .border_1()
+                                                                        .border_color(cx.theme().border)
+                                                                        .bg(if self.is_8_percent_flat_rate { cx.theme().primary } else { cx.theme().background })
+                                                                        .flex()
+                                                                        .items_center()
+                                                                        .justify_center()
+                                                                        .child(if self.is_8_percent_flat_rate { div().text_xs().text_color(cx.theme().primary_foreground).child("✓") } else { div() }),
+                                                                )
+                                                                .child(div().text_sm().text_color(cx.theme().foreground).child("8% Income Tax Rate Election"))
+                                                        )
+                                                    }),
                                             )
                                             .child(
-                                                div()
-                                                    .flex()
-                                                    .flex_col()
-                                                    .gap_4()
+                                                v_flex()
+                                                    .w_full()
                                                     .mt_4()
                                                     .child(Self::field_label("Excise Tax Liabilities", cx))
-                                                    .child(
-                                                        div()
-                                                            .flex()
-                                                            .flex_wrap()
-                                                            .gap_6()
-                                                            .child(Self::render_excise_checkbox("Alcohol", self.is_subject_to_excise_alcohol, "alcohol", cx, |this| {
-                                                                this.is_subject_to_excise_alcohol = !this.is_subject_to_excise_alcohol;
-                                                            }))
-                                                            .child(Self::render_excise_checkbox("Automobiles & Non-Essential", self.is_subject_to_excise_auto, "auto", cx, |this| {
-                                                                this.is_subject_to_excise_auto = !this.is_subject_to_excise_auto;
-                                                            }))
-                                                            .child(Self::render_excise_checkbox("Mineral Products", self.is_subject_to_excise_mineral, "mineral", cx, |this| {
-                                                                this.is_subject_to_excise_mineral = !this.is_subject_to_excise_mineral;
-                                                            }))
-                                                            .child(Self::render_excise_checkbox("Petroleum Products", self.is_subject_to_excise_petroleum, "petroleum", cx, |this| {
-                                                                this.is_subject_to_excise_petroleum = !this.is_subject_to_excise_petroleum;
-                                                            }))
-                                                            .child(Self::render_excise_checkbox("Tobacco Products", self.is_subject_to_excise_tobacco, "tobacco", cx, |this| {
-                                                                this.is_subject_to_excise_tobacco = !this.is_subject_to_excise_tobacco;
-                                                            }))
-                                                    )
+                                                    .child(MultiSelect::new(&self.excise_select)),
                                             )
                                     } else { div() })
                                     .child(if self.active_tab == 1 {

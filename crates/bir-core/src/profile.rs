@@ -21,22 +21,27 @@ pub enum TaxpayerType {
 /// files (which forms are required, which ATC/tax rules apply), whereas
 /// `TaxpayerType` specifies *what kind* of entity they are.
 ///
-/// For example, an `Individual` taxpayer could be classified as
-/// `PurelyCompensation`, `ProfessionalOrFreelancer`, `SoleProprietorNonVat`,
-/// `SoleProprietorVat`, or `MixedIncome`.
+/// For Individual taxpayers, the user picks one of:
+///   - `PurelyCompensation` (salary only)
+///   - `SelfEmployed` (freelancer, professional, sole proprietor)
+///   - `MixedIncome` (both salary AND business)
+///
+/// For non-Individual types, the classification is auto-derived from the
+/// `TaxpayerType` (see `TaxpayerProfile::effective_classification()`).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TaxClassification {
     /// Individual with only employment income — files 1700/1701 only.
     PurelyCompensation,
-    /// Self-employed professional or freelancer — files 1701Q, 2551Q/2550M.
-    ProfessionalOrFreelancer,
-    /// Sole proprietor NOT registered for VAT — files 2551Q (percentage tax).
-    SoleProprietorNonVat,
-    /// Sole proprietor registered for VAT — files 2550M/2550Q.
-    SoleProprietorVat,
+    /// Self-employed professional, freelancer, or sole proprietor.
+    /// VAT routing is handled separately by `is_vat_registered`.
+    /// 8% election is handled by `TrainLaw8PercentRule`.
+    #[serde(alias = "ProfessionalOrFreelancer")]
+    #[serde(alias = "SoleProprietorNonVat")]
+    #[serde(alias = "SoleProprietorVat")]
+    SelfEmployed,
     /// Individual with both compensation and business/professional income.
     MixedIncome,
-    /// Corporation — files 1702Q, 1702RT.
+    /// Corporation or Partnership — files 1702Q, 1702RT.
     Corporation,
     /// Tax-exempt cooperative — files 1702-EX.
     CooperativeExempt,
@@ -83,6 +88,24 @@ pub enum ExciseTaxCategory {
     Mineral,
     Petroleum,
     Tobacco,
+}
+
+/// Registration and operational activity status.
+///
+/// Separates dormant from temporarily inactive from officially closed
+/// per FIND-011. Only open registration and tax-type obligations should
+/// generate NIL filings.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum RegistrationActivityStatus {
+    /// Normal active taxpayer.
+    #[default]
+    Active,
+    /// Dormant but operationally registered — may still need NIL filings.
+    DormantOperational,
+    /// Temporarily inactive — suspended operations.
+    TemporarilyInactive,
+    /// Officially closed with BIR — no further filing obligations.
+    OfficiallyClosed,
 }
 
 /// A ledger of historical tax regime elections made by the taxpayer.
@@ -209,9 +232,65 @@ pub struct TaxpayerProfile {
     /// Whether a PurelyCompensation earner has exactly one employer (triggers Substituted Filing)
     #[serde(default)]
     pub has_single_employer: bool,
+
+    // ── Granular Withholding Triggers (FIND-009) ──
+    /// Withholds compensation taxes from employee salaries.
+    #[serde(default)]
+    pub withholds_compensation: bool,
+
+    /// Withholds expanded taxes from payments to contractors/suppliers.
+    #[serde(default)]
+    pub withholds_expanded: bool,
+
+    /// Withholds final taxes on passive income (interest, dividends, etc).
+    #[serde(default)]
+    pub withholds_final: bool,
+
+    /// Top withholding agent designated by BIR.
+    #[serde(default)]
+    pub is_top_withholding_agent: bool,
+
+    /// Government entity required to withhold.
+    #[serde(default)]
+    pub is_government_withholding_entity: bool,
+
+    // ── Registration Activity Status (FIND-011) ──
+    /// The taxpayer's current registration/operational status.
+    #[serde(default)]
+    pub registration_activity_status: RegistrationActivityStatus,
 }
 
 impl TaxpayerProfile {
+    /// Returns the effective TaxClassification for the rule engine.
+    ///
+    /// For Individual taxpayers, this returns the user-selected classification.
+    /// For non-Individual types, it auto-derives from the TaxpayerType.
+    pub fn effective_classification(&self) -> Option<TaxClassification> {
+        match self.taxpayer_type {
+            TaxpayerType::Individual => self.tax_classification.clone(),
+            TaxpayerType::Corporation | TaxpayerType::Partnership => {
+                Some(TaxClassification::Corporation)
+            }
+            TaxpayerType::Cooperative => {
+                // Use user-specified coop sub-type, or default to Taxable
+                match self.tax_classification {
+                    Some(ref c)
+                        if matches!(
+                            c,
+                            TaxClassification::CooperativeExempt
+                                | TaxClassification::CooperativeTaxable
+                                | TaxClassification::CooperativeMixed
+                        ) =>
+                    {
+                        self.tax_classification.clone()
+                    }
+                    _ => Some(TaxClassification::CooperativeTaxable),
+                }
+            }
+            TaxpayerType::Estate | TaxpayerType::Trust => Some(TaxClassification::EstateOrTrust),
+        }
+    }
+
     /// Returns true if the 8% flat rate election is active for the given taxable year.
     /// It checks the historical ledger first, and falls back to the legacy compat flag.
     pub fn has_8_percent_election(&self, year: u16) -> bool {
@@ -229,8 +308,16 @@ impl TaxpayerProfile {
 
     /// Returns BIR form codes applicable to this taxpayer based on their
     /// classification, VAT status, and employee status.
-    pub fn applicable_forms(&self) -> Vec<&'static str> {
+    ///
+    /// Uses the current year. Prefer `applicable_forms_for_year(year)` when
+    /// the target year is known.
+    pub fn applicable_forms(&self) -> Vec<String> {
         crate::integration::applicable_forms_for_profile(self)
+    }
+
+    /// Returns BIR form codes applicable to this taxpayer for a specific year.
+    pub fn applicable_forms_for_year(&self, year: u16) -> Vec<String> {
+        crate::integration::applicable_forms_for_profile_and_year(self, year)
     }
 }
 

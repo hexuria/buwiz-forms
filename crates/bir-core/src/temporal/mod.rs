@@ -1,29 +1,56 @@
-//! Temporal Tax Form Engine — core module.
+//! Temporal Tax Compliance Engine — core module.
 //!
 //! This module replaces the static boolean-based form suggestion engine
-//! with a temporal, era-scoped rule engine that evaluates form eligibility
-//! for any target year.
+//! with a temporal, era-scoped rule engine that evaluates form eligibility,
+//! tax rates, and computation formulas for any target year.
 //!
 //! # Architecture
 //!
 //! ```text
-//! TemporalFormDef[] (registry) + TaxRule[] (rule modules)
-//!   ↓                              ↓
-//!   TemporalEngine::evaluate(profile, target_year)
+//! TemporalContext + TaxpayerProfile
 //!   ↓
-//!   Vec<FormDecision> (every form tagged with eligibility + audit log)
+//!   CompiledRuleSnapshot (embedded at build time)
+//!   ↓
+//!   TemporalEngine::evaluate(profile, context)
+//!   ↓
+//!   Vec<FormDecision> (every form tagged with ComplianceState + audit log)
+//!   ↓
+//!   DashboardFormDecision (UI view model for existing cards)
 //! ```
 
+// ── New canonical modules ──
+pub mod context;
+pub mod eligibility_facts;
+pub mod forms;
+pub mod formulas;
+pub mod rates;
+pub mod rule_model;
+pub mod snapshot;
+pub mod snapshot_loader;
+pub mod validator;
+
+// ── Existing modules (retained for backward compat) ──
 pub mod citations;
 pub mod compat;
 pub mod eligibility;
 pub mod engine;
-pub mod registry_loader;
 pub mod rules;
 pub mod traits;
 
+// ── Re-exports: New canonical types ──
+pub use context::{FilingMode, FilingPeriod, Jurisdiction, SnapshotId, TemporalContext};
+pub use eligibility::{
+    ComplianceState, DashboardFormDecision, FormDecision, FormEligibility, RuleApplication,
+};
+pub use eligibility_facts::{
+    CooperativeTaxTreatment, EligibilityFacts, IndividualIncomeKind, YearElection,
+};
+pub use forms::{
+    ArtifactLifecycle, FormArtifact, FormAvailability, FormIdentity, OperationalRecommendation,
+};
+pub use snapshot::{CompiledRuleSnapshot, Era};
+
+// ── Re-exports: Legacy types (backward compat) ──
 pub use citations::{CitationKind, LegalCitation};
-pub use eligibility::{FormDecision, FormEligibility, RuleApplication};
 pub use engine::TemporalEngine;
-pub use registry_loader::{RegulatoryStatus, TemporalFormDef, WithholdingTrigger};
 pub use traits::TaxRule;

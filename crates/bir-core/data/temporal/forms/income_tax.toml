@@ -1,0 +1,161 @@
+# Income Tax Form Artifacts — Individual
+
+[[artifacts]]
+artifact_id = "bir.1700.rev-1997"
+form_code = "1700"
+title = "Annual Income Tax Return (Purely Compensation)"
+category = "Income Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "Annual"
+taxpayer_types = ["Individual"]
+classifications = ["PurelyCompensation"]
+legal_citations = ["ra-8424-sec-24-a"]
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.1701q.rev-1997"
+form_code = "1701Q"
+title = "Quarterly Income Tax Return for Individuals, Estates and Trusts"
+category = "Income Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "Quarterly"
+taxpayer_types = ["Individual", "Estate", "Trust"]
+classifications = ["SelfEmployed", "MixedIncome", "EstateOrTrust"]
+legal_citations = ["ra-8424-sec-24-a"]
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.1701.rev-1997"
+form_code = "1701"
+title = "Annual Income Tax Return for Individuals, Estates and Trusts"
+category = "Income Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "Annual"
+taxpayer_types = ["Individual", "Estate", "Trust"]
+classifications = ["SelfEmployed", "MixedIncome", "EstateOrTrust"]
+legal_citations = ["ra-8424-sec-24-a"]
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.1701a.rev-2018"
+form_code = "1701A"
+title = "Annual Income Tax Return (8% / OSD)"
+category = "Income Tax"
+revision = "2018"
+effective_from = "2018-01-01"
+lifecycle = "Active"
+frequency = "Annual"
+taxpayer_types = ["Individual"]
+classifications = ["SelfEmployed"]
+legal_citations = ["ra-10963-sec-24-a-2-b"]
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.1701ms.rev-2024"
+form_code = "1701MS"
+title = "Annual Income Tax Return (Simplified) for Micro/Small Taxpayers"
+category = "Income Tax"
+revision = "2024"
+effective_from = "2024-01-01"
+lifecycle = "Active"
+frequency = "Annual"
+taxpayer_types = ["Individual"]
+classifications = ["SelfEmployed"]
+legal_citations = ["ra-11976-sec-45-a"]
+exclusive_priority = 0
+
+# Income Tax Form Artifacts — Corporate
+
+[[artifacts]]
+artifact_id = "bir.1702q.rev-1997"
+form_code = "1702Q"
+title = "Quarterly Income Tax Return for Corporations, Partnerships and Cooperatives"
+category = "Income Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "Quarterly"
+taxpayer_types = ["Corporation", "Partnership", "Cooperative"]
+classifications = ["Corporation", "CooperativeExempt", "CooperativeTaxable", "CooperativeMixed"]
+legal_citations = ["ra-8424-sec-27"]
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.1702.rev-1997"
+form_code = "1702"
+title = "Annual Income Tax Return for Corporations (Pre-TRAIN)"
+category = "Income Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+effective_until = "2017-12-31"
+lifecycle = "Abolished"
+frequency = "Annual"
+taxpayer_types = ["Corporation", "Partnership", "Cooperative"]
+classifications = ["Corporation", "CooperativeExempt", "CooperativeTaxable", "CooperativeMixed"]
+legal_citations = ["ra-8424-sec-27"]
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.1702rt.rev-2018"
+form_code = "1702RT"
+title = "Annual Income Tax Return — Regular Taxable"
+category = "Income Tax"
+revision = "2018"
+effective_from = "2018-01-01"
+lifecycle = "Active"
+frequency = "Annual"
+taxpayer_types = ["Corporation", "Partnership", "Cooperative"]
+classifications = ["Corporation", "CooperativeTaxable"]
+legal_citations = ["ra-10963"]
+exclusive_group = "ANNUAL_CORPORATE_ITR"
+exclusive_priority = 3
+
+[[artifacts]]
+artifact_id = "bir.1702ex.rev-2018"
+form_code = "1702EX"
+title = "Annual Income Tax Return — Tax-Exempt"
+category = "Income Tax"
+revision = "2018"
+effective_from = "2018-01-01"
+lifecycle = "Active"
+frequency = "Annual"
+taxpayer_types = ["Corporation", "Partnership", "Cooperative"]
+classifications = ["CooperativeExempt"]
+legal_citations = ["ra-10963"]
+exclusive_group = "ANNUAL_CORPORATE_ITR"
+exclusive_priority = 2
+
+[[artifacts]]
+artifact_id = "bir.1702mx.rev-2018"
+form_code = "1702MX"
+title = "Annual Income Tax Return — Mixed Income"
+category = "Income Tax"
+revision = "2018"
+effective_from = "2018-01-01"
+lifecycle = "Active"
+frequency = "Annual"
+taxpayer_types = ["Corporation", "Partnership", "Cooperative"]
+classifications = ["CooperativeMixed"]
+legal_citations = ["ra-10963"]
+exclusive_group = "ANNUAL_CORPORATE_ITR"
+exclusive_priority = 1
+
+[[artifacts]]
+artifact_id = "bir.1704.rev-1997"
+form_code = "1704"
+title = "Improperly Accumulated Earnings Tax Return"
+category = "Income Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "Annual"
+taxpayer_types = ["Corporation"]
+classifications = ["Corporation"]
+legal_citations = ["ra-8424-sec-27"]
+exclusive_priority = 0

@@ -1,0 +1,31 @@
+# Value-Added Tax Form Artifacts
+
+[[artifacts]]
+artifact_id = "bir.2550m.rev-1997"
+form_code = "2550M"
+title = "Monthly Value-Added Tax Declaration"
+category = "Value-Added Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "Monthly"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = ["SelfEmployed", "Corporation", "MixedIncome"]
+legal_citations = ["ra-8424-sec-105-115"]
+requires_vat = true
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.2550q.rev-1997"
+form_code = "2550Q"
+title = "Quarterly Value-Added Tax Return"
+category = "Value-Added Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "Quarterly"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = ["SelfEmployed", "Corporation", "MixedIncome"]
+legal_citations = ["ra-8424-sec-105-115"]
+requires_vat = true
+exclusive_priority = 0

@@ -351,7 +351,7 @@ impl Render for Form1601CView {
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.mark_submitted(window, cx);
                                     })),
-                            )
+                            ),
                     ),
             )
             .child(
@@ -725,7 +725,6 @@ impl Render for Form1601CView {
                             ),
                     ),
             )
-
     }
 }
 

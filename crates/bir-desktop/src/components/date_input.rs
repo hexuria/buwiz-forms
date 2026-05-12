@@ -4,9 +4,10 @@ use chrono::NaiveDate;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
-    ActiveTheme, Icon, IconName, Sizable,
+    ActiveTheme, Icon, IconName, Sizable, StyledExt,
     calendar::{Calendar, CalendarEvent, CalendarState},
     input::{Input, InputEvent, InputState},
+    v_flex,
 };
 
 pub struct DateInputEvent {
@@ -26,7 +27,7 @@ impl EventEmitter<DateInputEvent> for DateInputState {}
 
 impl DateInputState {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let input = cx.new(|cx| InputState::new(window, cx).placeholder("YYYY-MM-DD"));
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder("MM/DD/YYYY"));
         let calendar = cx.new(|cx| {
             let today = chrono::Local::now().naive_local().date();
             CalendarState::new(window, cx).year_range((1900, today.year() + 1))
@@ -150,7 +151,7 @@ impl Render for DateInputState {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let input_view = self.input.clone();
 
-        div()
+        v_flex()
             .w_full()
             .child(
                 div()
@@ -158,7 +159,7 @@ impl Render for DateInputState {
                     .flex()
                     .w_full()
                     .items_center()
-                    .child(div().w_full().child(Input::new(&input_view)))
+                    .child(div().flex_1().min_w_0().child(Input::new(&input_view)))
                     .child(
                         div()
                             .id("calendar_icon")

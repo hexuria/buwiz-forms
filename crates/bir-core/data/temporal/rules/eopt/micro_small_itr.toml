@@ -1,0 +1,29 @@
+# EOPT Act — Micro/Small ITR Simplification
+# RA 11976, Sec 45(a)
+# Micro/Small taxpayers should use simplified Form 1701-MS.
+
+[rule]
+rule_id = "rule.eopt.micro-small-itr"
+title = "EOPT Simplified ITR for Micro/Small"
+era_id = "EOPT_2024"
+effective_from = "2024-01-01"
+phase = "UiClassification"
+priority = 100
+citations = ["ra-11976-sec-45-a"]
+problem = "Micro/Small taxpayers have a simplified ITR option under EOPT"
+solution = "Recommend 1701MS for Micro/Small taxpayers, suppress 1701 for them"
+
+[rule.when]
+all = ["profile.eopt_tier in [Micro, Small]"]
+
+[[rule.mutations]]
+type = "Recommend"
+reason = "Micro/Small taxpayers should use the simplified Form 1701-MS"
+[rule.mutations.target]
+form_code = "1701MS"
+
+[[rule.mutations]]
+type = "Suppress"
+reason = "Micro/Small taxpayers should use Form 1701-MS instead"
+[rule.mutations.target]
+form_code = "1701"

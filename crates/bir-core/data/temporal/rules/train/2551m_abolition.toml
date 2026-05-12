@@ -1,0 +1,23 @@
+# TRAIN Law — 2551M Abolition
+# RA 10963, Sec 116
+# Monthly percentage tax abolished; replaced by quarterly 2551Q.
+
+[rule]
+rule_id = "rule.train.2551m-abolition"
+title = "2551M Abolished by TRAIN Law"
+era_id = "TRAIN_2018"
+effective_from = "2018-01-01"
+phase = "Lifecycle"
+priority = 100
+citations = ["ra-10963-sec-116"]
+problem = "Monthly percentage tax (2551M) was abolished by TRAIN Law"
+solution = "Deprecate 2551M for years 2018+"
+
+[rule.when]
+all = []
+
+[[rule.mutations]]
+type = "Deprecate"
+reason = "Monthly percentage tax abolished by TRAIN Law 2018"
+[rule.mutations.target]
+form_code = "2551M"

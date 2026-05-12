@@ -1,0 +1,23 @@
+# TRAIN Law — 1601E Replacement
+# RR 11-2018
+# 1601E replaced by 0619E (monthly) + 1601EQ (quarterly).
+
+[rule]
+rule_id = "rule.train.1601e-replacement"
+title = "1601E Replaced by 0619E/1601EQ"
+era_id = "TRAIN_2018"
+effective_from = "2018-01-01"
+phase = "Lifecycle"
+priority = 100
+citations = ["rr-11-2018"]
+problem = "Form 1601E was replaced under TRAIN Law restructuring"
+solution = "Deprecate 1601E for years 2018+"
+
+[rule.when]
+all = []
+
+[[rule.mutations]]
+type = "Deprecate"
+reason = "Replaced by 0619E and 1601EQ under TRAIN Law"
+[rule.mutations.target]
+form_code = "1601E"

@@ -158,39 +158,44 @@ impl Render for SmartDateFilterState {
                                         .justify_around()
                                         .gap_1()
                                         .pt_3()
-                                        .children((0..5).rev().map(|offset| {
-                                            let yr = current_real_year - offset;
-                                            let is_active = yr == selected_year;
-                                            div()
-                                                .id(format!("yr_{}", yr))
-                                                .flex_1()
-                                                .flex()
-                                                .justify_center()
-                                                .py_1p5()
-                                                .text_xs()
-                                                .font_weight(if is_active {
-                                                    FontWeight::BOLD
-                                                } else {
-                                                    FontWeight::MEDIUM
-                                                })
-                                                .rounded_md()
-                                                .cursor_pointer()
-                                                .when(is_active, |s| {
-                                                    s.bg(cx.theme().primary)
-                                                        .text_color(cx.theme().primary_foreground)
-                                                })
-                                                .when(!is_active, |s| {
-                                                    s.text_color(cx.theme().muted_foreground)
-                                                        .hover(|s| s.bg(cx.theme().secondary))
-                                                })
-                                                .on_click(cx.listener(move |this, _, _, cx| {
-                                                    this.selected_year = yr;
-                                                    cx.emit(SmartDateFilterEvent { year: yr });
-                                                    this.open = false;
-                                                    cx.notify();
-                                                }))
-                                                .child(format!("{}", yr))
-                                        })),
+                                        .children({
+                                            let end_yr =
+                                                std::cmp::min(selected_year + 2, current_real_year);
+                                            let start_yr = end_yr - 4;
+                                            (start_yr..=end_yr).map(|yr| {
+                                                let is_active = yr == selected_year;
+                                                div()
+                                                    .id(format!("yr_{}", yr))
+                                                    .flex_1()
+                                                    .flex()
+                                                    .justify_center()
+                                                    .py_1p5()
+                                                    .text_xs()
+                                                    .font_weight(if is_active {
+                                                        FontWeight::BOLD
+                                                    } else {
+                                                        FontWeight::MEDIUM
+                                                    })
+                                                    .rounded_md()
+                                                    .cursor_pointer()
+                                                    .when(is_active, |s| {
+                                                        s.bg(cx.theme().primary).text_color(
+                                                            cx.theme().primary_foreground,
+                                                        )
+                                                    })
+                                                    .when(!is_active, |s| {
+                                                        s.text_color(cx.theme().muted_foreground)
+                                                            .hover(|s| s.bg(cx.theme().secondary))
+                                                    })
+                                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                                        this.selected_year = yr;
+                                                        cx.emit(SmartDateFilterEvent { year: yr });
+                                                        this.open = false;
+                                                        cx.notify();
+                                                    }))
+                                                    .child(format!("{}", yr))
+                                            })
+                                        }),
                                 ),
                         ),
                     )

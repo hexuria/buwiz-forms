@@ -345,6 +345,12 @@ mod tests {
             has_employees: true,
             is_dormant: false,
             has_single_employer: false,
+            withholds_compensation: false,
+            withholds_expanded: false,
+            withholds_final: false,
+            is_top_withholding_agent: false,
+            is_government_withholding_entity: false,
+            registration_activity_status: Default::default(),
             profile_pin_hash: None,
             totp_secret: None,
         };

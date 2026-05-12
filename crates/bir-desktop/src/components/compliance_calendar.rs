@@ -25,10 +25,7 @@ impl ComplianceCalendar {
         let mut filters = std::collections::HashSet::new();
         filters.insert("All".to_string());
 
-        let available_filters = bir_core::forms::registry::FORM_REGISTRY
-            .iter()
-            .map(|f| f.code.to_string())
-            .collect();
+        let available_filters = bir_core::integration::all_form_codes();
 
         Self {
             filter_open: false,

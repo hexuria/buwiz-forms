@@ -1,0 +1,60 @@
+# Corporate Income Tax Rate Tables
+
+# Pre-CREATE Act (before July 1, 2020)
+[[rate_tables]]
+table_id = "rate.cit.pre-create"
+title = "Corporate Income Tax (Pre-CREATE Act)"
+jurisdiction = "PhBir"
+tax_type = "CIT"
+effective_from = "1997-01-01"
+effective_until = "2020-06-30"
+citations = ["ra-8424-sec-27"]
+
+[[rate_tables.rates]]
+key = "standard"
+rate = "0.30"
+
+# CREATE Act (July 1, 2020+)
+[[rate_tables]]
+table_id = "rate.cit.create-act"
+title = "Corporate Income Tax (CREATE Act)"
+jurisdiction = "PhBir"
+tax_type = "CIT"
+effective_from = "2020-07-01"
+citations = ["ra-11534"]
+
+[[rate_tables.rates]]
+key = "msme_20pct"
+rate = "0.20"
+applies_when = ["net_taxable_income <= 5_000_000", "total_assets_excl_land <= 100_000_000"]
+
+[[rate_tables.rates]]
+key = "standard_25pct"
+rate = "0.25"
+
+# MCIT Rate — Historical 1% period
+[[rate_tables]]
+table_id = "rate.mcit.create-1pct"
+title = "MCIT 1% (CREATE Act Historical)"
+jurisdiction = "PhBir"
+tax_type = "MCIT"
+effective_from = "2020-07-01"
+effective_until = "2023-06-30"
+citations = ["ra-11534"]
+
+[[rate_tables.rates]]
+key = "default"
+rate = "0.01"
+
+# MCIT Rate — Standard 2%
+[[rate_tables]]
+table_id = "rate.mcit.standard-2pct"
+title = "MCIT 2% (Standard)"
+jurisdiction = "PhBir"
+tax_type = "MCIT"
+effective_from = "2023-07-01"
+citations = ["ra-11534"]
+
+[[rate_tables.rates]]
+key = "default"
+rate = "0.02"
