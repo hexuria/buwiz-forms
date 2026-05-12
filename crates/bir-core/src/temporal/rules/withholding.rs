@@ -41,11 +41,11 @@ impl TaxRule for WithholdingAgentRule {
             Some(t) => t.as_str(),
             None => return current_state,
         };
-        // Match against the string representation from the snapshot
+        // Match against the granular withholding facts (FIND-009)
         let has_obligation = match trigger {
-            "Compensation" => facts.has_employees,
-            "Expanded" => facts.is_expanded_withholding_agent,
-            "Final" => facts.has_employees || facts.is_expanded_withholding_agent,
+            "Compensation" => facts.withholds_compensation,
+            "Expanded" => facts.withholds_expanded,
+            "Final" => facts.withholds_final,
             _ => return current_state,
         };
         if !has_obligation {

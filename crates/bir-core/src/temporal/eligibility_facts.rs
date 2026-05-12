@@ -61,7 +61,19 @@ pub struct EligibilityFacts {
     /// True when the taxpayer has business/professional activity (not purely compensation).
     pub has_business_activity: bool,
 
-    // ── Withholding ──
+    // ── Withholding (granular — FIND-009) ──
+    /// Withholds compensation taxes from employee salaries.
+    pub withholds_compensation: bool,
+    /// Withholds expanded taxes from payments to contractors/suppliers.
+    pub withholds_expanded: bool,
+    /// Withholds final taxes on passive income (interest, dividends, etc).
+    pub withholds_final: bool,
+    /// Top withholding agent designated by BIR.
+    pub is_top_withholding_agent: bool,
+    /// Government entity required to withhold.
+    pub is_government_withholding_entity: bool,
+
+    // ── Legacy compat (old coarse flags, still read by some rules) ──
     pub has_employees: bool,
     pub is_expanded_withholding_agent: bool,
 
@@ -136,12 +148,25 @@ impl EligibilityFacts {
             })
             .collect();
 
+        // Granular withholding: prefer the new flags, but auto-derive from old
+        // flags for backward compat (profiles that only have has_employees set).
+        let withholds_compensation =
+            profile.withholds_compensation || profile.has_employees;
+        let withholds_expanded =
+            profile.withholds_expanded || profile.is_expanded_withholding_agent;
+        let withholds_final = profile.withholds_final;
+
         Self {
             taxpayer_type: profile.taxpayer_type.clone(),
             individual_income_kind,
             cooperative_tax_treatment,
             is_vat_registered: profile.is_vat_registered,
             has_business_activity,
+            withholds_compensation,
+            withholds_expanded,
+            withholds_final,
+            is_top_withholding_agent: profile.is_top_withholding_agent,
+            is_government_withholding_entity: profile.is_government_withholding_entity,
             has_employees: profile.has_employees,
             is_expanded_withholding_agent: profile.is_expanded_withholding_agent,
             excise_tax_categories: profile.excise_tax_categories.clone(),

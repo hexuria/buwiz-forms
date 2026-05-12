@@ -40,7 +40,8 @@ frequency = "Annual"
 taxpayer_types = ["Individual", "Estate", "Trust"]
 classifications = ["SelfEmployed", "MixedIncome", "EstateOrTrust"]
 legal_citations = ["ra-8424-sec-24-a"]
-exclusive_priority = 0
+exclusive_group = "ANNUAL_INDIVIDUAL_ITR"
+exclusive_priority = 3
 
 [[artifacts]]
 artifact_id = "bir.1701a.rev-2018"
@@ -54,7 +55,8 @@ frequency = "Annual"
 taxpayer_types = ["Individual"]
 classifications = ["SelfEmployed"]
 legal_citations = ["ra-10963-sec-24-a-2-b"]
-exclusive_priority = 0
+exclusive_group = "ANNUAL_INDIVIDUAL_ITR"
+exclusive_priority = 2
 
 [[artifacts]]
 artifact_id = "bir.1701ms.rev-2024"
@@ -68,7 +70,8 @@ frequency = "Annual"
 taxpayer_types = ["Individual"]
 classifications = ["SelfEmployed"]
 legal_citations = ["ra-11976-sec-45-a"]
-exclusive_priority = 0
+exclusive_group = "ANNUAL_INDIVIDUAL_ITR"
+exclusive_priority = 1
 
 # Income Tax Form Artifacts — Corporate
 
