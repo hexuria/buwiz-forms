@@ -9,7 +9,11 @@ WIN_TARGET := "x86_64-pc-windows-msvc"
 LINUX_TARGET := "x86_64-unknown-linux-gnu"
 RELEASE_DIR := "target/release-artifacts"
 MAC_APP := RELEASE_DIR + "/" + APP_NAME + ".app"
-VERSION := `grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/'`
+VERSION := if os_family() == "windows" {
+    `(Select-String -Path Cargo.toml -Pattern '^\s*version' | Select-Object -First 1).Line.Trim() -replace '.*"(.*)".*', '$1'`
+} else {
+    `grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/'`
+}
 BUILD_NUMBER := env_var_or_default("BUILD_NUMBER", "21")
 
 # Default task: format, lint, and type check
