@@ -204,10 +204,10 @@ pub fn reclaim_keyboard_focus() {
         unsafe extern "system" fn enum_callback(hwnd: HWND, lparam: LPARAM) -> i32 {
             let target_pid = lparam as u32;
             let mut window_pid: u32 = 0;
-            GetWindowThreadProcessId(hwnd, &mut window_pid);
+            unsafe { GetWindowThreadProcessId(hwnd, &mut window_pid) };
 
-            if window_pid == target_pid && IsWindowVisible(hwnd) != 0 {
-                SetForegroundWindow(hwnd);
+            if window_pid == target_pid && unsafe { IsWindowVisible(hwnd) } != 0 {
+                unsafe { SetForegroundWindow(hwnd) };
                 return 0; // FALSE — stop enumeration
             }
             1 // TRUE — continue enumeration
@@ -225,7 +225,9 @@ pub const MONOSPACE_FONT: &str = "Cascadia Mono";
 // ── Dock Management ──────────────────────────────────────────────────────────
 
 #[cfg(target_os = "windows")]
-use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
+use windows::core::BOOL;
+#[cfg(target_os = "windows")]
+use windows::Win32::Foundation::{HWND, LPARAM};
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::GetCurrentProcessId;
 #[cfg(target_os = "windows")]
@@ -236,9 +238,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
 #[cfg(target_os = "windows")]
 unsafe extern "system" fn hide_window_callback(hwnd: HWND, _: LPARAM) -> BOOL {
     let mut pid = 0;
-    GetWindowThreadProcessId(hwnd, Some(&mut pid));
-    if pid == GetCurrentProcessId() {
-        ShowWindow(hwnd, SW_HIDE);
+    unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
+    if pid == unsafe { GetCurrentProcessId() } {
+        let _ = unsafe { ShowWindow(hwnd, SW_HIDE) };
     }
     BOOL(1) // TRUE to continue enumerating
 }
@@ -246,9 +248,9 @@ unsafe extern "system" fn hide_window_callback(hwnd: HWND, _: LPARAM) -> BOOL {
 #[cfg(target_os = "windows")]
 unsafe extern "system" fn show_window_callback(hwnd: HWND, _: LPARAM) -> BOOL {
     let mut pid = 0;
-    GetWindowThreadProcessId(hwnd, Some(&mut pid));
-    if pid == GetCurrentProcessId() {
-        ShowWindow(hwnd, SW_SHOW);
+    unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
+    if pid == unsafe { GetCurrentProcessId() } {
+        let _ = unsafe { ShowWindow(hwnd, SW_SHOW) };
     }
     BOOL(1)
 }
