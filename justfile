@@ -114,7 +114,6 @@ msix *args="":
     if (Test-Path $MSIX_DIR) { Remove-Item $MSIX_DIR -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $MSIX_DIR | Out-Null
     Copy-Item "target/{{WIN_TARGET}}/release/bir.exe" "$MSIX_DIR\"
-    Copy-Item "target/{{WIN_TARGET}}/release/bir-daemon.exe" "$MSIX_DIR\"
 
     # OpenSSL is statically compiled (vendored), so no need to package DLLs.
     # We still package the MSVC runtime dependency DLLs just in case, though the AppxManifest PackageDependency handles it for the Store.

@@ -1,7 +1,7 @@
 //! Platform-specific implementations for OS services.
 //!
 //! This module hides all `#[cfg(target_os)]` gating behind a clean public API.
-//! Consumers call `crate::platform::data_dir()`, `crate::platform::install_daemon()`,
+//! Consumers call `crate::platform::data_dir()`, `crate::platform::run_shell_command()`,
 //! etc. without knowing which OS they are on.
 
 #[cfg(target_os = "macos")]
