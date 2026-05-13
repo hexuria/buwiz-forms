@@ -474,8 +474,8 @@ impl Render for SettingsView {
                                     )
                             )
                     )
-                    // Global Hotkey — hidden on Mac App Store builds (requires Accessibility permission)
-                    .when(cfg!(not(feature = "mas_build")), |this| {
+                    // Global Toggle Hotkey
+                    .child({
                         let labels = crate::platform::hotkey_modifier_labels();
                         let combo_str = labels.join(" + ");
                         let description = format!(
@@ -483,37 +483,35 @@ impl Render for SettingsView {
                             combo_str
                         );
 
-                        this.child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .items_start()
-                                .p_6()
-                                .gap_4()
-                                .border_b_1()
-                                .border_color(border)
-                                .child(
-                                    div()
-                                        .flex()
-                                        .w_full()
-                                        .justify_between()
-                                        .items_center()
-                                        .child(
-                                            div()
-                                                .flex()
-                                                .flex_col()
-                                                .gap_1()
-                                                .child(div().font_weight(FontWeight::SEMIBOLD).child("Global Toggle Hotkey"))
-                                                .child(
-                                                    div()
-                                                        .text_sm()
-                                                        .text_color(cx.theme().muted_foreground)
-                                                        .child(description),
-                                                ),
-                                        )
-                                        .child(self.hotkey_recorder.clone())
-                                )
-                        )
+                        div()
+                            .flex()
+                            .flex_col()
+                            .items_start()
+                            .p_6()
+                            .gap_4()
+                            .border_b_1()
+                            .border_color(border)
+                            .child(
+                                div()
+                                    .flex()
+                                    .w_full()
+                                    .justify_between()
+                                    .items_center()
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .gap_1()
+                                            .child(div().font_weight(FontWeight::SEMIBOLD).child("Global Toggle Hotkey"))
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .child(description),
+                                            ),
+                                    )
+                                    .child(self.hotkey_recorder.clone())
+                            )
                     })
                     .child(
                         div()

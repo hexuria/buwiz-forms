@@ -198,10 +198,13 @@ pub fn show_in_dock() {
         use objc::{class, msg_send, sel, sel_impl};
         let app: *mut objc::runtime::Object = msg_send![class!(NSApplication), sharedApplication];
 
-        // Set activation policy back to Regular
+        // 1. Set activation policy back to Regular FIRST (makes the dock icon appear)
         let _: () = msg_send![app, setActivationPolicy: 0isize]; // NSApplicationActivationPolicyRegular
 
-        // Bring windows back from being explicitly ordered out
+        // 2. Activate the app (bring to foreground) BEFORE restoring windows
+        let _: () = msg_send![app, activateIgnoringOtherApps: true];
+
+        // 3. Now restore all windows from ordered-out state
         let windows: *mut objc::runtime::Object = msg_send![app, windows];
         let count: u64 = msg_send![windows, count];
         for i in 0..count {

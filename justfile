@@ -14,7 +14,7 @@ VERSION := if os_family() == "windows" {
 } else {
     `grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/'`
 }
-BUILD_NUMBER := env_var_or_default("BUILD_NUMBER", "24")
+BUILD_NUMBER := env_var_or_default("BUILD_NUMBER", "25")
 
 # Default task: format, lint, and type check
 default: check

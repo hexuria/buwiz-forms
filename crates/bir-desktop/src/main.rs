@@ -171,9 +171,16 @@ fn main() {
 
 
     let assets_dir = crate::platform::find_resource_dir("assets");
-    gpui_platform::application()
-        .with_assets(Assets { base: assets_dir })
-        .run(move |cx| {
+    let app = gpui_platform::application()
+        .with_assets(Assets { base: assets_dir });
+
+    // When the user clicks the dock icon or re-launches via Alfred/Spotlight,
+    // macOS fires applicationShouldHandleReopen. Restore the window.
+    app.on_reopen(|_cx| {
+        crate::platform::show_in_dock();
+    });
+
+    app.run(move |cx| {
             crate::ipc::start_ipc_listener(cx);
 
             gpui_component::init(cx);
