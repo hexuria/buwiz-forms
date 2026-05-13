@@ -9,6 +9,7 @@ use gpui::*;
 use gpui_component::{
     ActiveTheme, Icon, IconName, Sizable, StyledExt, h_flex,
     input::{Input, InputEvent, InputState},
+    scroll::ScrollableElement,
     tag::Tag,
     v_flex,
 };

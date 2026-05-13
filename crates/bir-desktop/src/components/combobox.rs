@@ -3,6 +3,7 @@ use gpui::*;
 use gpui_component::{
     ActiveTheme,
     input::{Input, InputEvent, InputState},
+    scroll::ScrollableElement,
 };
 
 #[allow(dead_code)]
