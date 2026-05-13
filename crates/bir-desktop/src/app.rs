@@ -197,7 +197,11 @@ impl AppState {
 
         let db_clone_lock = Arc::clone(&db);
         let lock_screen_view = if is_locked {
-            Some(cx.new(|cx| LockScreenView::new(db_clone_lock, window, cx)))
+            let view = cx.new(|cx| LockScreenView::new(db_clone_lock, window, cx));
+            // Auto-trigger OS biometrics when the app starts locked, so the user
+            // doesn't have to manually click the override button.
+            view.update(cx, |this, cx| this.trigger_auth(cx));
+            Some(view)
         } else {
             None
         };

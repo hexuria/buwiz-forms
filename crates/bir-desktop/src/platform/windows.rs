@@ -25,6 +25,9 @@ pub fn enforce_single_instance() {
         .collect();
 
     unsafe {
+        // NOTE: The handle is intentionally leaked (never stored/closed). Windows
+        // keeps the mutex alive for the entire process lifetime, which is exactly
+        // what we want — the lock is released automatically when the process exits.
         let handle = CreateMutexW(std::ptr::null_mut(), 0, name.as_ptr());
         if handle.is_null() || GetLastError() == 183 /* ERROR_ALREADY_EXISTS */ {
             std::process::exit(0);

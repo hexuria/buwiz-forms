@@ -113,6 +113,12 @@ impl AssetSource for Assets {
 
 fn main() {
     dotenvy::dotenv().ok();
+
+    // ── Single-Instance Enforcement ──────────────────────────────────────────
+    // Order matters: IPC runs first because it sends a SHOW command to bring
+    // the existing window forward (visible feedback for the user). The Win32
+    // Mutex is the hard fallback in case IPC fails (e.g. port file stale).
+    crate::ipc::prevent_multiple_instances();
     crate::platform::enforce_single_instance();
 
     let developer_mode = std::env::var("DEVELOPER_MODE")
@@ -163,7 +169,6 @@ fn main() {
         developer_mode
     );
 
-    crate::ipc::prevent_multiple_instances();
 
     let assets_dir = crate::platform::find_resource_dir("assets");
     gpui_platform::application()
