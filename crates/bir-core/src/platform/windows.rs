@@ -2,6 +2,10 @@
 
 use std::path::PathBuf;
 use tracing::info;
+use std::os::windows::process::CommandExt;
+
+/// Prevents console windows from flashing on screen when spawning subprocesses.
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 // ── Data Directory ───────────────────────────────────────────────────────────
 
@@ -40,6 +44,7 @@ pub fn install_daemon() {
         let daemon_path_str = daemon_path.to_string_lossy().to_string();
 
         let _ = std::process::Command::new("reg")
+            .creation_flags(CREATE_NO_WINDOW)
             .args([
                 "add",
                 "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
@@ -54,13 +59,16 @@ pub fn install_daemon() {
             .output();
 
         // Start it immediately
-        let _ = std::process::Command::new(&daemon_path).spawn();
+        let _ = std::process::Command::new(&daemon_path)
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn();
         info!("Windows Registry Run key added");
     }
 }
 
 pub fn uninstall_daemon() {
     let _ = std::process::Command::new("reg")
+        .creation_flags(CREATE_NO_WINDOW)
         .args([
             "delete",
             "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
@@ -72,6 +80,7 @@ pub fn uninstall_daemon() {
 
     // Kill the process if running
     let _ = std::process::Command::new("taskkill")
+        .creation_flags(CREATE_NO_WINDOW)
         .args(["/F", "/IM", "bir-daemon.exe"])
         .output();
     info!("Windows Registry Run key removed");
@@ -91,6 +100,7 @@ pub fn is_daemon_running() -> bool {
 /// Execute a shell command using the platform's native shell.
 pub async fn run_shell_command(cmd: &str) -> Result<std::process::Output, std::io::Error> {
     tokio::process::Command::new("cmd")
+        .creation_flags(CREATE_NO_WINDOW)
         .arg("/c")
         .arg(cmd)
         .output()
