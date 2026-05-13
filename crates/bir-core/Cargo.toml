@@ -27,6 +27,7 @@ rss = { workspace = true }
 rusqlite = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
+openssl = { version = "0.10", features = ["vendored"] }
 tracing = { workspace = true }
 dotenvy = { workspace = true }
 rand = "0.10.1"
