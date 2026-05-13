@@ -2,14 +2,13 @@
 #![allow(unexpected_cfgs)]
 
 use std::path::PathBuf;
-use tracing::{info, warn};
 
 // ── Data Directory ───────────────────────────────────────────────────────────
 
 /// Returns the macOS application data directory.
 ///
 /// Uses the App Group container so the database can be shared between the main
-/// app and the background daemon, even under App Sandbox.
+/// app and background tasks, even under App Sandbox.
 pub fn data_dir() -> PathBuf {
     if let Some(home) = std::env::var_os("HOME") {
         let group_container = PathBuf::from(home)
@@ -28,111 +27,6 @@ pub fn data_dir() -> PathBuf {
 /// Returns the temporary directory.
 pub fn temp_dir() -> PathBuf {
     std::env::temp_dir()
-}
-
-// ── Daemon Installer ─────────────────────────────────────────────────────────
-
-#[cfg(target_os = "macos")]
-#[link(name = "ServiceManagement", kind = "framework")]
-unsafe extern "C" {}
-
-#[cfg(target_os = "macos")]
-#[link(name = "Foundation", kind = "framework")]
-unsafe extern "C" {}
-
-pub fn install_daemon() {
-    #[cfg(target_os = "macos")]
-    {
-        use objc::runtime::Object;
-        use objc::{class, msg_send, sel, sel_impl};
-
-        let cls = objc::runtime::Class::get("SMAppService");
-        let Some(cls) = cls else {
-            warn!("SMAppService is not available on this macOS version.");
-            return;
-        };
-
-        unsafe {
-            let plist_name: *mut Object = msg_send![class!(NSString), stringWithUTF8String: c"com.bir.vault.daemon.plist".as_ptr()];
-            let service: *mut Object = msg_send![cls, agentServiceWithPlistName: plist_name];
-
-            let mut error: *mut Object = std::ptr::null_mut();
-            let success: bool = msg_send![service, registerAndReturnError: &mut error];
-
-            if success {
-                info!("macOS SMAppService LaunchAgent registered successfully");
-            } else {
-                let err_desc: *mut Object = msg_send![error, localizedDescription];
-                if !err_desc.is_null() {
-                    let err_str: *const std::ffi::c_char = msg_send![err_desc, UTF8String];
-                    if !err_str.is_null() {
-                        let err_msg = std::ffi::CStr::from_ptr(err_str).to_string_lossy();
-                        warn!("Failed to register macOS SMAppService: {}", err_msg);
-                        return;
-                    }
-                }
-                warn!("Failed to register macOS SMAppService (unknown error)");
-            }
-        }
-    }
-}
-
-pub fn uninstall_daemon() {
-    #[cfg(target_os = "macos")]
-    {
-        use objc::runtime::Object;
-        use objc::{class, msg_send, sel, sel_impl};
-
-        let cls = objc::runtime::Class::get("SMAppService");
-        let Some(cls) = cls else {
-            return;
-        };
-
-        unsafe {
-            let plist_name: *mut Object = msg_send![class!(NSString), stringWithUTF8String: c"com.bir.vault.daemon.plist".as_ptr()];
-            let service: *mut Object = msg_send![cls, agentServiceWithPlistName: plist_name];
-
-            let mut error: *mut Object = std::ptr::null_mut();
-            let success: bool = msg_send![service, unregisterAndReturnError: &mut error];
-
-            if success {
-                info!("macOS SMAppService LaunchAgent unregistered successfully");
-            } else {
-                warn!("Failed to unregister macOS SMAppService LaunchAgent");
-            }
-        }
-    }
-}
-
-pub fn is_daemon_running() -> bool {
-    #[cfg(target_os = "macos")]
-    {
-        use objc::runtime::Object;
-        use objc::{class, msg_send, sel, sel_impl};
-
-        let cls = objc::runtime::Class::get("SMAppService");
-        let Some(cls) = cls else {
-            // Fallback for older macOS
-            return std::process::Command::new("pgrep")
-                .arg("-x")
-                .arg("bir-daemon")
-                .output()
-                .map(|o| o.status.success())
-                .unwrap_or(false);
-        };
-
-        unsafe {
-            let plist_name: *mut Object = msg_send![class!(NSString), stringWithUTF8String: c"com.bir.vault.daemon.plist".as_ptr()];
-            let service: *mut Object = msg_send![cls, agentServiceWithPlistName: plist_name];
-
-            let status: isize = msg_send![service, status];
-            status == 1 // SMAppServiceStatusEnabled
-        }
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        false
-    }
 }
 
 // ── Shell Execution ──────────────────────────────────────────────────────────

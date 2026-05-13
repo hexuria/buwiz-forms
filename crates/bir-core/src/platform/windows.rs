@@ -1,7 +1,6 @@
 //! Windows-specific implementations for bir-core platform services.
 
 use std::path::PathBuf;
-use tracing::info;
 use std::os::windows::process::CommandExt;
 
 /// Prevents console windows from flashing on screen when spawning subprocesses.
@@ -34,65 +33,6 @@ pub fn data_dir() -> PathBuf {
 /// Returns the temporary directory.
 pub fn temp_dir() -> PathBuf {
     std::env::temp_dir()
-}
-
-// ── Daemon Installer ─────────────────────────────────────────────────────────
-
-pub fn install_daemon() {
-    if let Ok(exe_path) = std::env::current_exe() {
-        let daemon_path = exe_path.parent().unwrap().join("bir-daemon.exe");
-        let daemon_path_str = daemon_path.to_string_lossy().to_string();
-
-        let _ = std::process::Command::new("reg")
-            .creation_flags(CREATE_NO_WINDOW)
-            .args([
-                "add",
-                "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
-                "/v",
-                "BIRVaultDaemon",
-                "/t",
-                "REG_SZ",
-                "/d",
-                &daemon_path_str,
-                "/f",
-            ])
-            .output();
-
-        // Start it immediately
-        let _ = std::process::Command::new(&daemon_path)
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn();
-        info!("Windows Registry Run key added");
-    }
-}
-
-pub fn uninstall_daemon() {
-    let _ = std::process::Command::new("reg")
-        .creation_flags(CREATE_NO_WINDOW)
-        .args([
-            "delete",
-            "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
-            "/v",
-            "BIRVaultDaemon",
-            "/f",
-        ])
-        .output();
-
-    // Kill the process if running
-    let _ = std::process::Command::new("taskkill")
-        .creation_flags(CREATE_NO_WINDOW)
-        .args(["/F", "/IM", "bir-daemon.exe"])
-        .output();
-    info!("Windows Registry Run key removed");
-}
-
-pub fn is_daemon_running() -> bool {
-    std::process::Command::new("tasklist")
-        .arg("/FI")
-        .arg("IMAGENAME eq bir-daemon.exe")
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).contains("bir-daemon.exe"))
-        .unwrap_or(false)
 }
 
 // ── Shell Execution ──────────────────────────────────────────────────────────

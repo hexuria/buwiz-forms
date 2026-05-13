@@ -29,8 +29,7 @@ A modern, native, and secure desktop application for managing and filing eBIRFor
 - **Advanced Easy Filters**: Instantly sort and filter your dashboard by predefined timeframes: **Q1-Q4, Monthly, Yearly**, and by status (Pending, Confirmed, Paid).
 
 ### 🤖 Automation & Background Tasks
-- **Zero-Latency Event Bus**: UI components instantly react to database updates triggered by background jobs. On macOS, this leverages `NSDistributedNotificationCenter` for true native zero-polling IPC between the daemon and desktop app.
-- **Cron Jobs & Background Service**: A robust standalone daemon (`bir-daemon`) handles background tasks without needing the main UI open.
+- **In-Process Background Engine**: A robust cron engine runs background tasks on a dedicated thread within the app — no separate daemon process needed.
 - **Auto Fetch & Auto Receipt Tracking**: Integrated IMAP fetching automatically scans your inbox for official BIR confirmation receipts and automatically updates the status of your submitted forms from "Submitted" to "Confirmed" and "Paid".
 
 ### 💼 Taxpayer Management
@@ -248,7 +247,7 @@ This repository uses **Project-Local Skills** to automatically equip AI agents (
 - **Database Location:** 
   - macOS: `~/Library/Application Support/Taxman/eBIRForms/bir_data.db`
   - Linux/Windows: `~/.taxman-ebir/bir_data.db`
-- **Background Daemon:** Background cron tasks (auto-fetch) are decoupled from the active taxpayer profile and can be managed globally in the settings.
+- **Background Engine:** Background cron tasks (auto-fetch) run in-process on a dedicated thread and are decoupled from the active taxpayer profile.
 - **Schema Migrations:** Managed via a `schema_version` table with forward-only numbered migrations in `bir-core/src/db/migrations.rs`.
 - **Security:** Sensitive credential fields (`imap_app_password`, `oauth_access_token`, `oauth_refresh_token`, `profile_pin_hash`) are zeroed on `Drop` via the `zeroize` crate.
 - **Feature Flags:**
