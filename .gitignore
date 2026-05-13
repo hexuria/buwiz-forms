@@ -93,5 +93,3 @@ node_modules/
 
 .keys/
 *.p8
-# Local version state
-build_number.txt

@@ -58,7 +58,11 @@ jobs:
           cp -R formtypes "$APP/Contents/Resources/"
 
           cp assets/macos/Info.plist "$APP/Contents/Info.plist"
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Extract BUILD_NUMBER from justfile (single source of truth, synced with App Store Connect)
+          BUILD_NUMBER=$(grep '^BUILD_NUMBER' justfile | grep -o '"[0-9]*"' | tr -d '"')
           sed -i '' "s/VERSION_PLACEHOLDER/${VERSION}/g" "$APP/Contents/Info.plist"
+          sed -i '' "s/BUILD_NUMBER_PLACEHOLDER/${BUILD_NUMBER}/g" "$APP/Contents/Info.plist"
           sed -i '' "s/BUNDLE_ID_PLACEHOLDER/dev.goldcoders.bir/g" "$APP/Contents/Info.plist"
           sed -i '' "s/APP_NAME_PLACEHOLDER/${{ env.APP_NAME }}/g" "$APP/Contents/Info.plist"
 
@@ -231,8 +235,15 @@ jobs:
           Copy-Item "$PKG\*" "$MSIX_DIR\" -Recurse
           
           # Copy and stamp manifest
+          # Extract BUILD_NUMBER from justfile (single source of truth, synced with App Store Connect)
+          $BUILD_NUMBER = (Select-String -Path justfile -Pattern '^BUILD_NUMBER' | ForEach-Object { $_ -replace '.*"(\d+)".*', '$1' })
+          if (-not $BUILD_NUMBER) { $BUILD_NUMBER = '0' }
           Copy-Item "assets\windows\AppxManifest.xml" "$MSIX_DIR\AppxManifest.xml"
-          (Get-Content "$MSIX_DIR\AppxManifest.xml") -replace 'VERSION_PLACEHOLDER', $VERSION | Set-Content "$MSIX_DIR\AppxManifest.xml"
+          (Get-Content "$MSIX_DIR\AppxManifest.xml") `
+            -replace 'VERSION_PLACEHOLDER', $VERSION `
+            -replace 'BUILD_PLACEHOLDER', $BUILD_NUMBER | `
+            Set-Content "$MSIX_DIR\AppxManifest.xml"
+          Write-Host "Stamped MSIX manifest: $VERSION.$BUILD_NUMBER"
           
           # Build MSIX (unsigned — Microsoft Store will sign on submission)
           $SDK_DIR = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\10.*" | Sort-Object Name -Descending | Select-Object -First 1

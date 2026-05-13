@@ -126,15 +126,10 @@ msix *args="":
     Expand-Archive -Path $TYPST_ZIP -DestinationPath "target/typst-temp" -Force
     Copy-Item "target/typst-temp/typst-x86_64-pc-windows-msvc/typst.exe" "$MSIX_DIR\"
     
-    # Read, increment, and save local build number from text file
-    $BUILD_FILE = "build_number.txt"
-    $BUILD_NUMBER = 0
-    if (Test-Path $BUILD_FILE) {
-        $BUILD_NUMBER = [int](Get-Content $BUILD_FILE)
-    }
-    $BUILD_NUMBER++
-    Set-Content -Path $BUILD_FILE -Value $BUILD_NUMBER
-    Write-Host "Bumped build number to $BUILD_NUMBER"
+    # Use the shared BUILD_NUMBER from the justfile (synced with App Store Connect via bump-build).
+    # This ensures macOS and Windows builds share the same build counter.
+    $BUILD_NUMBER = "{{BUILD_NUMBER}}"
+    Write-Host "Using shared build number: $BUILD_NUMBER"
 
     # Copy and stamp manifest
     (Get-Content "assets\windows\AppxManifest.xml") `
