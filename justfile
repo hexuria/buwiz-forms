@@ -280,9 +280,9 @@ _package-mac args="":
     
     echo "Ad-hoc codesigning executables..."
     if [ -f "{{MAC_APP}}/Contents/MacOS/typst" ]; then
-        codesign --force --options runtime --entitlements assets/macos/typst.entitlements.plist --sign "-" "{{MAC_APP}}/Contents/MacOS/typst"
+        codesign --force --options runtime --entitlements assets/macos/typst.entitlements.dev.plist --sign "-" "{{MAC_APP}}/Contents/MacOS/typst"
     fi
-    codesign --force --options runtime --entitlements entitlements.plist --sign "-" "{{MAC_APP}}"
+    codesign --force --options runtime --entitlements entitlements.dev.plist --sign "-" "{{MAC_APP}}"
 
     echo "✅ {{MAC_APP}} created and codesigned"
     

@@ -1,7 +1,7 @@
 //! Windows-specific implementations for bir-core platform services.
 
-use std::path::PathBuf;
 use std::os::windows::process::CommandExt;
+use std::path::PathBuf;
 
 /// Prevents console windows from flashing on screen when spawning subprocesses.
 const CREATE_NO_WINDOW: u32 = 0x08000000;

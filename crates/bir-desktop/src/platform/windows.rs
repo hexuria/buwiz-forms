@@ -29,7 +29,9 @@ pub fn enforce_single_instance() {
         // keeps the mutex alive for the entire process lifetime, which is exactly
         // what we want — the lock is released automatically when the process exits.
         let handle = CreateMutexW(std::ptr::null_mut(), 0, name.as_ptr());
-        if handle.is_null() || GetLastError() == 183 /* ERROR_ALREADY_EXISTS */ {
+        if handle.is_null() || GetLastError() == 183
+        /* ERROR_ALREADY_EXISTS */
+        {
             std::process::exit(0);
         }
     }
@@ -130,7 +132,7 @@ pub fn open_in_system(path: &std::path::Path) {
     // Windows ShellExecute treats forward slashes as internet/UNC paths which triggers
     // a "trusted source" security prompt. Force all slashes to backslashes.
     let path_str = path.to_string_lossy().replace("/", "\\");
-    
+
     // Forcefully remove the Mark of the Web (Zone.Identifier) alternate data stream.
     // This completely unblocks the file and marks it as trusted, avoiding the Windows security prompt
     // for existing files that were copied over with the MotW stream intact.
@@ -187,9 +189,11 @@ pub fn print_pdf(path: &std::path::Path) -> Result<(), &'static str> {
         // ShellExecute returns a value > 32 if successful.
         if result <= 32 {
             let _ = open::that(path);
-            return Err("Your default PDF viewer (Edge) does not support the 'print' command.\nThe file has been opened instead. Please press Ctrl+P to print.");
+            return Err(
+                "Your default PDF viewer (Edge) does not support the 'print' command.\nThe file has been opened instead. Please press Ctrl+P to print.",
+            );
         }
-        
+
         Ok(())
     }
 
@@ -271,8 +275,6 @@ pub const MONOSPACE_FONT: &str = "Cascadia Mono";
 // ── Dock Management ──────────────────────────────────────────────────────────
 
 #[cfg(target_os = "windows")]
-use windows::core::BOOL;
-#[cfg(target_os = "windows")]
 use windows::Win32::Foundation::{HWND, LPARAM};
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::GetCurrentProcessId;
@@ -280,6 +282,8 @@ use windows::Win32::System::Threading::GetCurrentProcessId;
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetWindowThreadProcessId, SW_HIDE, SW_SHOW, ShowWindow,
 };
+#[cfg(target_os = "windows")]
+use windows::core::BOOL;
 
 #[cfg(target_os = "windows")]
 unsafe extern "system" fn hide_window_callback(hwnd: HWND, _: LPARAM) -> BOOL {
@@ -309,7 +313,9 @@ unsafe extern "system" fn toggle_window_callback(hwnd: HWND, _: LPARAM) -> BOOL 
     let mut pid = 0;
     unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
     if pid == unsafe { GetCurrentProcessId() } {
-        use windows::Win32::UI::WindowsAndMessaging::{IsWindowVisible, SW_RESTORE, SetForegroundWindow};
+        use windows::Win32::UI::WindowsAndMessaging::{
+            IsWindowVisible, SW_RESTORE, SetForegroundWindow,
+        };
         if unsafe { IsWindowVisible(hwnd) }.into() {
             let _ = unsafe { ShowWindow(hwnd, SW_HIDE) };
         } else {

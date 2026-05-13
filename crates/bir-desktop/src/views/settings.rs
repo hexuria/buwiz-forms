@@ -32,41 +32,46 @@ pub struct SettingsView {
 
 impl SettingsView {
     pub fn new(db: Arc<Mutex<Database>>, window: &mut Window, cx: &mut Context<'_, Self>) -> Self {
-        let (is_app_lock_enabled, is_app_totp_enabled, hide_tax_profiles, enable_profile_pins, global_hotkey) =
-            if let Ok(guard) = db.lock() {
-                let lock = guard
-                    .get_setting("app_lock_enabled")
-                    .ok()
-                    .flatten()
-                    .as_deref()
-                    == Some("true");
-                let totp = guard
-                    .get_setting("app_totp_secret")
-                    .ok()
-                    .flatten()
-                    .is_some();
-                let hide = guard
-                    .get_setting("hide_tax_profiles")
-                    .ok()
-                    .flatten()
-                    .as_deref()
-                    == Some("true");
-                let pins = guard
-                    .get_setting("enable_profile_pins")
-                    .ok()
-                    .flatten()
-                    .as_deref()
-                    == Some("true");
-                let hotkey: Option<String> = guard
-                    .get_setting("global_hotkey_key")
-                    .ok()
-                    .flatten()
-                    .map(|k| k.to_uppercase())
-                    .filter(|k| !k.is_empty());
-                (lock, totp, hide, pins, hotkey)
-            } else {
-                (false, false, false, false, None)
-            };
+        let (
+            is_app_lock_enabled,
+            is_app_totp_enabled,
+            hide_tax_profiles,
+            enable_profile_pins,
+            global_hotkey,
+        ) = if let Ok(guard) = db.lock() {
+            let lock = guard
+                .get_setting("app_lock_enabled")
+                .ok()
+                .flatten()
+                .as_deref()
+                == Some("true");
+            let totp = guard
+                .get_setting("app_totp_secret")
+                .ok()
+                .flatten()
+                .is_some();
+            let hide = guard
+                .get_setting("hide_tax_profiles")
+                .ok()
+                .flatten()
+                .as_deref()
+                == Some("true");
+            let pins = guard
+                .get_setting("enable_profile_pins")
+                .ok()
+                .flatten()
+                .as_deref()
+                == Some("true");
+            let hotkey: Option<String> = guard
+                .get_setting("global_hotkey_key")
+                .ok()
+                .flatten()
+                .map(|k| k.to_uppercase())
+                .filter(|k| !k.is_empty());
+            (lock, totp, hide, pins, hotkey)
+        } else {
+            (false, false, false, false, None)
+        };
 
         let setup_otp = cx.new(|cx| {
             let mut state = OtpState::new(4, window, cx);
@@ -80,9 +85,7 @@ impl SettingsView {
             state
         });
 
-        let hotkey_recorder = cx.new(|cx| {
-            HotkeyRecorder::new(global_hotkey, window, cx)
-        });
+        let hotkey_recorder = cx.new(|cx| HotkeyRecorder::new(global_hotkey, window, cx));
 
         let view = Self {
             db: db.clone(),

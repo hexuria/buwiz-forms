@@ -140,12 +140,7 @@ impl ComboboxState {
     }
 
     /// Render a single option item for the uniform_list.
-    fn render_option(
-        &self,
-        ix: usize,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    fn render_option(&self, ix: usize, _window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let option = self.filtered_options[ix].clone();
         let is_selected = self.selected_index == Some(ix);
         div()
@@ -178,9 +173,7 @@ impl Render for ComboboxState {
         let is_open = self.open && !self.filtered_options.is_empty();
         let filtered_count = self.filtered_options.len();
 
-        let dropdown_id = ElementId::Name(
-            format!("combobox_dropdown_{:?}", cx.entity_id()).into(),
-        );
+        let dropdown_id = ElementId::Name(format!("combobox_dropdown_{:?}", cx.entity_id()).into());
 
         div()
             .relative()
@@ -238,9 +231,7 @@ impl Render for ComboboxState {
                                         cx.processor(
                                             |this, range: std::ops::Range<usize>, window, cx| {
                                                 range
-                                                    .map(|ix| {
-                                                        this.render_option(ix, window, cx)
-                                                    })
+                                                    .map(|ix| this.render_option(ix, window, cx))
                                                     .collect()
                                             },
                                         ),

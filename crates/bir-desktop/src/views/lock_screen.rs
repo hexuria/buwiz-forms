@@ -252,7 +252,9 @@ impl LockScreenView {
             {
                 Some(p) => p,
                 None => {
-                    tracing::warn!("OS auth policy build returned None — biometrics may not be configured");
+                    tracing::warn!(
+                        "OS auth policy build returned None — biometrics may not be configured"
+                    );
                     let _ = this.update(cx, |this, cx| {
                         this.os_auth_triggered = false;
                         if this.phase == AuthPhase::Biometric {

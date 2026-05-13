@@ -28,9 +28,15 @@ pub struct HotkeyRecorder {
 impl EventEmitter<HotkeyRecorderEvent> for HotkeyRecorder {}
 
 impl HotkeyRecorder {
-    pub fn new(initial_key: Option<String>, _window: &mut Window, cx: &mut Context<'_, Self>) -> Self {
+    pub fn new(
+        initial_key: Option<String>,
+        _window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) -> Self {
         Self {
-            current_key: initial_key.map(|k| k.to_uppercase()).filter(|k| !k.is_empty()),
+            current_key: initial_key
+                .map(|k| k.to_uppercase())
+                .filter(|k| !k.is_empty()),
             recording: false,
             focus_handle: cx.focus_handle(),
         }
@@ -250,15 +256,12 @@ impl Render for HotkeyRecorder {
                         row
                     } else {
                         // Empty state: no hotkey bound
-                        div()
-                            .flex()
-                            .items_center()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("Not set — click to assign"),
-                            )
+                        div().flex().items_center().child(
+                            div()
+                                .text_sm()
+                                .text_color(cx.theme().muted_foreground)
+                                .child("Not set — click to assign"),
+                        )
                     }),
             )
             // Clear button (only visible when a key is bound and not recording)

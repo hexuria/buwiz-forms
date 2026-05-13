@@ -30,7 +30,9 @@ pub fn prevent_multiple_instances() {
                 #[cfg(target_os = "windows")]
                 {
                     unsafe {
-                        let _ = windows::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow(0xFFFFFFFF);
+                        let _ = windows::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow(
+                            0xFFFFFFFF,
+                        );
                     }
                 }
                 let _ = socket.set_read_timeout(Some(Duration::from_millis(100)));

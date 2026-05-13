@@ -3,7 +3,6 @@
 #![allow(clippy::let_unit_value)]
 #![allow(unused)]
 #![allow(clippy::redundant_pattern_matching)]
-
 // Suppress the console window on Windows release builds.
 // Debug builds retain the console for tracing output.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -169,10 +168,8 @@ fn main() {
         developer_mode
     );
 
-
     let assets_dir = crate::platform::find_resource_dir("assets");
-    let app = gpui_platform::application()
-        .with_assets(Assets { base: assets_dir });
+    let app = gpui_platform::application().with_assets(Assets { base: assets_dir });
 
     // When the user clicks the dock icon or re-launches via Alfred/Spotlight,
     // macOS fires applicationShouldHandleReopen. Restore the window.
@@ -181,197 +178,198 @@ fn main() {
     });
 
     app.run(move |cx| {
-            crate::ipc::start_ipc_listener(cx);
+        crate::ipc::start_ipc_listener(cx);
 
-            gpui_component::init(cx);
-            crate::platform::bind_global_keys(cx);
+        gpui_component::init(cx);
+        crate::platform::bind_global_keys(cx);
 
-            let bounds =
-                gpui::Bounds::centered(None, gpui::size(gpui::px(1024.0), gpui::px(768.0)), cx);
+        let bounds =
+            gpui::Bounds::centered(None, gpui::size(gpui::px(1024.0), gpui::px(768.0)), cx);
 
-            cx.spawn(async move |cx| {
-                let (db, profiles) = cx
-                    .background_executor()
-                    .spawn(async move {
-                        let db_path = bir_core::db::default_database_path();
-                        if let Some(parent) = db_path.parent() {
-                            let _ = std::fs::create_dir_all(parent);
-                        }
-                        let legacy_db_path = std::env::current_dir()
-                            .unwrap_or_default()
-                            .join("bir_data.db");
-                        if !db_path.exists()
-                            && legacy_db_path.exists()
-                            && legacy_db_path.metadata().map(|m| m.len()).unwrap_or(0) > 0
-                            && legacy_db_path != db_path
-                        {
-                            let _ = std::fs::copy(&legacy_db_path, &db_path);
-                        }
-                        let (db, recovered_backup) =
-                            bir_core::db::Database::open_or_recreate(&db_path)
-                                .expect("Failed to open database");
-                        if let Some(backup_path) = recovered_backup {
-                            eprintln!(
-                                "Recovered unreadable database at {} by moving it to {}",
-                                db_path.display(),
-                                backup_path.display()
-                            );
-                        }
-
-                        bir_core::reference::get_all_rdos();
-                        bir_core::reference::get_all_zipcodes();
-                        bir_core::reference::get_all_tax_types();
-                        bir_core::reference::get_all_regions();
-
-                        let profiles = db.list_profiles().unwrap_or_default();
-                        let db_arc = std::sync::Arc::new(std::sync::Mutex::new(db));
-
-                        (db_arc, profiles)
-                    })
-                    .await;
-
-                // Phase 2: In-App Background Orchestrator
-                let cron_db = db.clone();
-                std::thread::spawn(move || {
-                    if let Ok(rt) = tokio::runtime::Runtime::new() {
-                        rt.block_on(async move {
-                            bir_core::background_cron::start_cron_jobs(cron_db).await;
-                        });
-                    } else {
-                        eprintln!("Failed to initialize Tokio runtime for background tasks");
+        cx.spawn(async move |cx| {
+            let (db, profiles) = cx
+                .background_executor()
+                .spawn(async move {
+                    let db_path = bir_core::db::default_database_path();
+                    if let Some(parent) = db_path.parent() {
+                        let _ = std::fs::create_dir_all(parent);
                     }
-                });
-
-                // Phase 2b: Global Hotkey Listener (all platforms, except Mac App Store)
-                #[cfg(not(feature = "mas_build"))]
-                let _hotkey_manager = {
-                    let hotkey_key: Option<String> = if let Ok(guard) = db.lock() {
-                        guard.get_setting("global_hotkey_key")
-                            .ok()
-                            .flatten()
-                            .map(|k| k.to_uppercase())
-                            .filter(|k| !k.is_empty())
-                    } else {
-                        None
-                    };
-
-                    match global_hotkey::GlobalHotKeyManager::new() {
-                        Ok(manager) => {
-                            if let Some(ref key) = hotkey_key {
-                                if let Some(hotkey) = crate::platform::build_hotkey(key) {
-                                    if let Err(e) = manager.register(hotkey) {
-                                        tracing::warn!("Failed to register global hotkey: {e}");
-                                    } else {
-                                        tracing::info!("Global hotkey registered: {key}");
-                                    }
-                                }
-                            } else {
-                                tracing::info!("No global hotkey configured — skipping registration");
-                            }
-                            Some(manager)
-                        }
-                        Err(e) => {
-                            tracing::warn!("Failed to initialize global hotkey manager: {e}");
-                            None
-                        }
+                    let legacy_db_path = std::env::current_dir()
+                        .unwrap_or_default()
+                        .join("bir_data.db");
+                    if !db_path.exists()
+                        && legacy_db_path.exists()
+                        && legacy_db_path.metadata().map(|m| m.len()).unwrap_or(0) > 0
+                        && legacy_db_path != db_path
+                    {
+                        let _ = std::fs::copy(&legacy_db_path, &db_path);
                     }
-                };
+                    let (db, recovered_backup) = bir_core::db::Database::open_or_recreate(&db_path)
+                        .expect("Failed to open database");
+                    if let Some(backup_path) = recovered_backup {
+                        eprintln!(
+                            "Recovered unreadable database at {} by moving it to {}",
+                            db_path.display(),
+                            backup_path.display()
+                        );
+                    }
 
-                // Phase 3: System Tray Integration
-                let tray_menu = tray_icon::menu::Menu::new();
-                let show_i = tray_icon::menu::MenuItem::new("Show eBIRForms", true, None);
-                let hide_tray_i = tray_icon::menu::MenuItem::new("Hide eBIRForms", true, None);
-                let quit_i = tray_icon::menu::MenuItem::new("Quit", true, None);
-                tray_menu
-                    .append_items(&[
-                        &show_i,
-                        &hide_tray_i,
-                        &tray_icon::menu::PredefinedMenuItem::separator(),
-                        &quit_i,
-                    ])
-                    .expect("Failed to append tray menu items");
+                    bir_core::reference::get_all_rdos();
+                    bir_core::reference::get_all_zipcodes();
+                    bir_core::reference::get_all_tax_types();
+                    bir_core::reference::get_all_regions();
 
-                let icon_data = include_bytes!("../../../assets/images/e_logo.png");
-                let img = image::load_from_memory(icon_data)
-                    .expect("Failed to load tray icon")
-                    .into_rgba8();
-                let (width, height) = img.dimensions();
-                let tray_icon = tray_icon::Icon::from_rgba(img.into_raw(), width, height)
-                    .expect("Failed to create tray icon");
+                    let profiles = db.list_profiles().unwrap_or_default();
+                    let db_arc = std::sync::Arc::new(std::sync::Mutex::new(db));
 
-                let tray = tray_icon::TrayIconBuilder::new()
-                    .with_menu(Box::new(tray_menu))
-                    .with_tooltip("eBIRForms")
-                    .with_icon(tray_icon)
-                    .build()
-                    .unwrap();
+                    (db_arc, profiles)
+                })
+                .await;
 
-                let options = WindowOptions {
-                    titlebar: Some(TitlebarOptions {
-                        title: Some("e-BIRForms".into()),
-                        ..Default::default()
-                    }),
-                    window_bounds: Some(WindowBounds::Maximized(bounds)),
-                    window_min_size: Some(gpui::size(gpui::px(620.0), gpui::px(500.0))),
-                    ..Default::default()
-                };
-
-                let _ = cx.open_window(options, move |window, cx| {
-                    window.on_window_should_close(cx, |_, _cx| {
-                        // Phase 4: Window Close & macOS Dock Hijacking
-                        crate::platform::hide_from_dock();
-                        false // Prevent window destruction
+            // Phase 2: In-App Background Orchestrator
+            let cron_db = db.clone();
+            std::thread::spawn(move || {
+                if let Ok(rt) = tokio::runtime::Runtime::new() {
+                    rt.block_on(async move {
+                        bir_core::background_cron::start_cron_jobs(cron_db).await;
                     });
+                } else {
+                    eprintln!("Failed to initialize Tokio runtime for background tasks");
+                }
+            });
 
-                    // Listen to tray events
-                    let menu_channel = tray_icon::menu::MenuEvent::receiver();
-                    let tray_channel = tray_icon::TrayIconEvent::receiver();
+            // Phase 2b: Global Hotkey Listener (all platforms, except Mac App Store)
+            #[cfg(not(feature = "mas_build"))]
+            let _hotkey_manager = {
+                let hotkey_key: Option<String> = if let Ok(guard) = db.lock() {
+                    guard
+                        .get_setting("global_hotkey_key")
+                        .ok()
+                        .flatten()
+                        .map(|k| k.to_uppercase())
+                        .filter(|k| !k.is_empty())
+                } else {
+                    None
+                };
 
-                    cx.spawn(async move |cx| {
-                        loop {
-                            if let Ok(event) = menu_channel.try_recv() {
-                                if event.id == show_i.id() {
-                                    cx.update(|cx| {
-                                        crate::platform::show_in_dock();
-                                        cx.activate(true);
-                                    });
-                                } else if event.id == hide_tray_i.id() {
-                                    cx.update(|_cx| {
-                                        crate::platform::hide_from_dock();
-                                    });
-                                } else if event.id == quit_i.id() {
-                                    cx.update(|cx| {
-                                        // Ensure the tray icon is dropped properly before quitting
-                                        drop(tray);
-                                        cx.quit();
-                                    });
-                                    break;
+                match global_hotkey::GlobalHotKeyManager::new() {
+                    Ok(manager) => {
+                        if let Some(ref key) = hotkey_key {
+                            if let Some(hotkey) = crate::platform::build_hotkey(key) {
+                                if let Err(e) = manager.register(hotkey) {
+                                    tracing::warn!("Failed to register global hotkey: {e}");
+                                } else {
+                                    tracing::info!("Global hotkey registered: {key}");
                                 }
                             }
-
-                            // We no longer bring the app to foreground on tray click.
-                            // This allows native tray menus to open without side effects.
-                            if let Ok(_event) = tray_channel.try_recv() {}
-
-                            // Poll global hotkey events (cross-platform toggle)
-                            #[cfg(not(feature = "mas_build"))]
-                            if let Ok(_event) = global_hotkey::GlobalHotKeyEvent::receiver().try_recv() {
-                                cx.update(|_cx| {
-                                    crate::platform::toggle_app_visibility();
-                                });
-                            }
-
-                            cx.background_executor()
-                                .timer(std::time::Duration::from_millis(100))
-                                .await;
+                        } else {
+                            tracing::info!("No global hotkey configured — skipping registration");
                         }
-                    })
-                    .detach();
+                        Some(manager)
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to initialize global hotkey manager: {e}");
+                        None
+                    }
+                }
+            };
 
-                    let view = cx.new(|cx| app::AppState::new(db, profiles, window, cx));
-                    cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
+            // Phase 3: System Tray Integration
+            let tray_menu = tray_icon::menu::Menu::new();
+            let show_i = tray_icon::menu::MenuItem::new("Show eBIRForms", true, None);
+            let hide_tray_i = tray_icon::menu::MenuItem::new("Hide eBIRForms", true, None);
+            let quit_i = tray_icon::menu::MenuItem::new("Quit", true, None);
+            tray_menu
+                .append_items(&[
+                    &show_i,
+                    &hide_tray_i,
+                    &tray_icon::menu::PredefinedMenuItem::separator(),
+                    &quit_i,
+                ])
+                .expect("Failed to append tray menu items");
+
+            let icon_data = include_bytes!("../../../assets/images/e_logo.png");
+            let img = image::load_from_memory(icon_data)
+                .expect("Failed to load tray icon")
+                .into_rgba8();
+            let (width, height) = img.dimensions();
+            let tray_icon = tray_icon::Icon::from_rgba(img.into_raw(), width, height)
+                .expect("Failed to create tray icon");
+
+            let tray = tray_icon::TrayIconBuilder::new()
+                .with_menu(Box::new(tray_menu))
+                .with_tooltip("eBIRForms")
+                .with_icon(tray_icon)
+                .build()
+                .unwrap();
+
+            let options = WindowOptions {
+                titlebar: Some(TitlebarOptions {
+                    title: Some("e-BIRForms".into()),
+                    ..Default::default()
+                }),
+                window_bounds: Some(WindowBounds::Maximized(bounds)),
+                window_min_size: Some(gpui::size(gpui::px(620.0), gpui::px(500.0))),
+                ..Default::default()
+            };
+
+            let _ = cx.open_window(options, move |window, cx| {
+                window.on_window_should_close(cx, |_, _cx| {
+                    // Phase 4: Window Close & macOS Dock Hijacking
+                    crate::platform::hide_from_dock();
+                    false // Prevent window destruction
                 });
-            })
-            .detach();
-        });
+
+                // Listen to tray events
+                let menu_channel = tray_icon::menu::MenuEvent::receiver();
+                let tray_channel = tray_icon::TrayIconEvent::receiver();
+
+                cx.spawn(async move |cx| {
+                    loop {
+                        if let Ok(event) = menu_channel.try_recv() {
+                            if event.id == show_i.id() {
+                                cx.update(|cx| {
+                                    crate::platform::show_in_dock();
+                                    cx.activate(true);
+                                });
+                            } else if event.id == hide_tray_i.id() {
+                                cx.update(|_cx| {
+                                    crate::platform::hide_from_dock();
+                                });
+                            } else if event.id == quit_i.id() {
+                                cx.update(|cx| {
+                                    // Ensure the tray icon is dropped properly before quitting
+                                    drop(tray);
+                                    cx.quit();
+                                });
+                                break;
+                            }
+                        }
+
+                        // We no longer bring the app to foreground on tray click.
+                        // This allows native tray menus to open without side effects.
+                        if let Ok(_event) = tray_channel.try_recv() {}
+
+                        // Poll global hotkey events (cross-platform toggle)
+                        #[cfg(not(feature = "mas_build"))]
+                        if let Ok(_event) = global_hotkey::GlobalHotKeyEvent::receiver().try_recv()
+                        {
+                            cx.update(|_cx| {
+                                crate::platform::toggle_app_visibility();
+                            });
+                        }
+
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(100))
+                            .await;
+                    }
+                })
+                .detach();
+
+                let view = cx.new(|cx| app::AppState::new(db, profiles, window, cx));
+                cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
+            });
+        })
+        .detach();
+    });
 }
