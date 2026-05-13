@@ -13,10 +13,10 @@ use gpui_component::{
     v_flex,
 };
 
-/// Approximate height of each option row.
-const ITEM_HEIGHT: f32 = 30.0;
-/// Maximum visible items in the options area (set to 2 for testing, raise to 5+ for prod).
-const MAX_VISIBLE_ITEMS: usize = 2;
+/// Approximate height of each option row (used for dropdown max_h sizing).
+const ITEM_HEIGHT: f32 = 32.0;
+/// Maximum visible items in the options area before scrolling.
+const MAX_VISIBLE_ITEMS: usize = 6;
 
 /// Emitted when the selection changes.
 #[allow(dead_code)]
@@ -237,21 +237,8 @@ impl MultiSelectState {
 
     /// Scroll the options list so the highlighted item is visible.
     fn scroll_to_highlighted(&self) {
-        let Some(idx) = self.highlighted_index else {
-            return;
-        };
-        let viewport_h = px(MAX_VISIBLE_ITEMS as f32 * ITEM_HEIGHT);
-        let item_top = px(idx as f32 * ITEM_HEIGHT);
-        let item_bottom = item_top + px(ITEM_HEIGHT);
-        let current_scroll = -self.scroll_handle.offset().y;
-        let visible_bottom = current_scroll + viewport_h;
-
-        if item_top < current_scroll {
-            self.scroll_handle
-                .set_offset(point(px(0.), -item_top));
-        } else if item_bottom > visible_bottom {
-            self.scroll_handle
-                .set_offset(point(px(0.), -(item_bottom - viewport_h)));
+        if let Some(idx) = self.highlighted_index {
+            self.scroll_handle.scroll_to_item(idx);
         }
     }
 }
@@ -401,12 +388,12 @@ impl Render for MultiSelectState {
                                 .border_color(if checked {
                                     cx.theme().primary
                                 } else {
-                                    cx.theme().border
+                                    cx.theme().muted_foreground
                                 })
                                 .bg(if checked {
                                     cx.theme().primary
                                 } else {
-                                    gpui::transparent_black()
+                                    cx.theme().background
                                 })
                                 .flex()
                                 .items_center()

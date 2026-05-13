@@ -5,10 +5,10 @@ use gpui_component::{
     input::{Input, InputEvent, InputState},
 };
 
-/// Approximate height of each dropdown option row (px_3 + py_2 + text).
-const ITEM_HEIGHT: f32 = 36.0;
-/// Maximum number of visible items in the dropdown (set to 2 for testing, raise to 5+ for prod).
-const MAX_VISIBLE_ITEMS: usize = 2;
+/// Approximate height of each dropdown option row (used for max_h sizing).
+const ITEM_HEIGHT: f32 = 38.0;
+/// Maximum visible items before scrolling.
+const MAX_VISIBLE_ITEMS: usize = 6;
 
 #[allow(dead_code)]
 pub struct ComboboxEvent {
@@ -23,7 +23,7 @@ pub struct ComboboxState {
     pub open: bool,
     pub selected_index: Option<usize>,
     pub focus_handle: FocusHandle,
-    scroll_handle: ScrollHandle,
+    scroll_handle: UniformListScrollHandle,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -56,8 +56,6 @@ impl ComboboxState {
                     } else {
                         Some(0)
                     };
-                    // Reset scroll to top when filter changes
-                    this.scroll_handle.set_offset(point(px(0.), px(0.)));
                     this.open = true;
                     cx.notify();
                 } else if let InputEvent::Blur = event {
@@ -97,7 +95,7 @@ impl ComboboxState {
             open: false,
             selected_index: None,
             focus_handle,
-            scroll_handle: ScrollHandle::new(),
+            scroll_handle: UniformListScrollHandle::new(),
             _subscriptions,
         }
     }
@@ -128,22 +126,36 @@ impl ComboboxState {
 
     /// Scroll the dropdown so the selected item is visible.
     fn scroll_to_selected(&self) {
-        let Some(idx) = self.selected_index else {
-            return;
-        };
-        let viewport_h = px(MAX_VISIBLE_ITEMS as f32 * ITEM_HEIGHT);
-        let item_top = px(idx as f32 * ITEM_HEIGHT);
-        let item_bottom = item_top + px(ITEM_HEIGHT);
-        let current_scroll = -self.scroll_handle.offset().y;
-        let visible_bottom = current_scroll + viewport_h;
-
-        if item_top < current_scroll {
+        if let Some(idx) = self.selected_index {
             self.scroll_handle
-                .set_offset(point(px(0.), -item_top));
-        } else if item_bottom > visible_bottom {
-            self.scroll_handle
-                .set_offset(point(px(0.), -(item_bottom - viewport_h)));
+                .scroll_to_item(idx, ScrollStrategy::Nearest);
         }
+    }
+
+    /// Render a single option item for the uniform_list.
+    fn render_option(
+        &self,
+        ix: usize,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let option = self.filtered_options[ix].clone();
+        let is_selected = self.selected_index == Some(ix);
+        div()
+            .id(("option", ix))
+            .px_3()
+            .py_2()
+            .cursor_pointer()
+            .when(is_selected, |d| d.bg(cx.theme().secondary))
+            .hover(|d| d.bg(cx.theme().secondary.opacity(0.8)))
+            .child(option.clone())
+            .on_click(cx.listener({
+                let option = option.clone();
+                move |this, _, window, cx| {
+                    this.select_item(&option, window, cx);
+                }
+            }))
+            .into_any_element()
     }
 }
 
@@ -156,9 +168,8 @@ impl Focusable for ComboboxState {
 impl Render for ComboboxState {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let input_view = self.input.clone();
-        let options = self.filtered_options.clone();
-        let is_open = self.open && !options.is_empty();
-        let dropdown_max_h = px(MAX_VISIBLE_ITEMS as f32 * ITEM_HEIGHT);
+        let is_open = self.open && !self.filtered_options.is_empty();
+        let filtered_count = self.filtered_options.len();
 
         let dropdown_id = ElementId::Name(
             format!("combobox_dropdown_{:?}", cx.entity_id()).into(),
@@ -204,12 +215,8 @@ impl Render for ComboboxState {
                     deferred(
                         div().absolute().top(px(36.)).left_0().w_full().child(
                             div()
-                                .id(dropdown_id)
                                 .occlude()
                                 .mt_1p5()
-                                .max_h(dropdown_max_h)
-                                .overflow_y_scroll()
-                                .track_scroll(&self.scroll_handle)
                                 .w_full()
                                 .border_1()
                                 .border_color(cx.theme().border)
@@ -217,23 +224,25 @@ impl Render for ComboboxState {
                                 .rounded_md()
                                 .bg(cx.theme().popover)
                                 .text_color(cx.theme().popover_foreground)
-                                .children(options.into_iter().enumerate().map(|(i, option)| {
-                                    let is_selected = self.selected_index == Some(i);
-                                    div()
-                                        .id(("option", i))
-                                        .px_3()
-                                        .py_2()
-                                        .cursor_pointer()
-                                        .when(is_selected, |d| d.bg(cx.theme().secondary))
-                                        .hover(|d| d.bg(cx.theme().secondary.opacity(0.8)))
-                                        .child(option.clone())
-                                        .on_click(cx.listener({
-                                            let option = option.clone();
-                                            move |this, _, window, cx| {
-                                                this.select_item(&option, window, cx);
-                                            }
-                                        }))
-                                })),
+                                .child(
+                                    uniform_list(
+                                        dropdown_id,
+                                        filtered_count,
+                                        cx.processor(
+                                            |this, range: std::ops::Range<usize>, window, cx| {
+                                                range
+                                                    .map(|ix| {
+                                                        this.render_option(ix, window, cx)
+                                                    })
+                                                    .collect()
+                                            },
+                                        ),
+                                    )
+                                    .with_sizing_behavior(ListSizingBehavior::Infer)
+                                    .w_full()
+                                    .max_h(px(MAX_VISIBLE_ITEMS as f32 * ITEM_HEIGHT))
+                                    .track_scroll(&self.scroll_handle),
+                                ),
                         ),
                     )
                     .with_priority(2),
