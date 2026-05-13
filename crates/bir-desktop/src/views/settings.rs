@@ -1,8 +1,9 @@
+use crate::components::hotkey_recorder::{HotkeyRecorder, HotkeyRecorderEvent};
 use crate::components::otp_paste::paste_otp_value;
 use bir_core::db::Database;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use gpui_component::input::{Input, InputEvent, OtpInput, OtpState};
+use gpui_component::input::{InputEvent, OtpInput, OtpState};
 use gpui_component::switch::Switch;
 use gpui_component::*;
 use std::sync::{Arc, Mutex};
@@ -26,7 +27,7 @@ pub struct SettingsView {
     show_totp_secret_text: bool,
     hide_tax_profiles: bool,
     enable_profile_pins: bool,
-    global_hotkey_input: Entity<gpui_component::input::TextInput>,
+    hotkey_recorder: Entity<HotkeyRecorder>,
 }
 
 impl SettingsView {
@@ -56,15 +57,15 @@ impl SettingsView {
                     .flatten()
                     .as_deref()
                     == Some("true");
-                let hotkey = guard
+                let hotkey: Option<String> = guard
                     .get_setting("global_hotkey_key")
                     .ok()
                     .flatten()
-                    .unwrap_or_else(|| "E".to_string())
-                    .to_uppercase();
+                    .map(|k| k.to_uppercase())
+                    .filter(|k| !k.is_empty());
                 (lock, totp, hide, pins, hotkey)
             } else {
-                (false, false, false, false, "E".to_string())
+                (false, false, false, false, None)
             };
 
         let setup_otp = cx.new(|cx| {
@@ -79,10 +80,8 @@ impl SettingsView {
             state
         });
 
-        let global_hotkey_input = cx.new(|cx| {
-            let mut input = gpui_component::input::TextInput::new(window, cx);
-            input.set_text(global_hotkey, window, cx);
-            input
+        let hotkey_recorder = cx.new(|cx| {
+            HotkeyRecorder::new(global_hotkey, window, cx)
         });
 
         let view = Self {
@@ -98,7 +97,7 @@ impl SettingsView {
             show_totp_secret_text: false,
             hide_tax_profiles,
             enable_profile_pins,
-            global_hotkey_input: global_hotkey_input.clone(),
+            hotkey_recorder: hotkey_recorder.clone(),
         };
 
         cx.subscribe_in(
@@ -156,23 +155,23 @@ impl SettingsView {
         .detach();
 
         cx.subscribe_in(
-            &global_hotkey_input,
+            &hotkey_recorder,
             window,
-            |this: &mut Self, _entity, event: &InputEvent, window, cx| {
-                if let InputEvent::Change = event {
-                    let text = this.global_hotkey_input.read(cx).text().to_uppercase();
-                    let first_char = text.chars().next().unwrap_or('E').to_string();
-                    if text != first_char {
-                        this.global_hotkey_input.update(cx, |input, cx| {
-                            input.set_text(first_char.clone(), window, cx);
-                        });
+            |this: &mut Self, _entity, event: &HotkeyRecorderEvent, _window, cx| {
+                match event {
+                    HotkeyRecorderEvent::Changed(key) => {
+                        if let Ok(db_guard) = this.db.lock() {
+                            let _ = db_guard.set_setting("global_hotkey_key", key);
+                        }
                     }
-                    if let Ok(db_guard) = this.db.lock() {
-                        let _ = db_guard.set_setting("global_hotkey_key", &first_char);
+                    HotkeyRecorderEvent::Cleared => {
+                        if let Ok(db_guard) = this.db.lock() {
+                            let _ = db_guard.set_setting("global_hotkey_key", "");
+                        }
                     }
-                    cx.emit(SettingsEvent::ReloadApp);
-                    cx.notify();
                 }
+                cx.emit(SettingsEvent::ReloadApp);
+                cx.notify();
             },
         )
         .detach();
@@ -475,48 +474,47 @@ impl Render for SettingsView {
                                     )
                             )
                     )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .items_start()
-                            .p_6()
-                            .gap_4()
-                            .border_b_1()
-                            .border_color(border)
-                            .child(
-                                div()
-                                    .flex()
-                                    .w_full()
-                                    .justify_between()
-                                    .items_center()
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .flex_col()
-                                            .gap_1()
-                                            .child(div().font_weight(FontWeight::SEMIBOLD).child("Global Toggle Hotkey (Windows)"))
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child("Choose a letter to combine with Win + Shift to toggle the application from anywhere."),
-                                            ),
-                                    )
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap_2()
-                                            .child(div().text_sm().child("Win + Shift +"))
-                                            .child(
-                                                div()
-                                                    .w(px(50.))
-                                                    .child(Input::new(&self.global_hotkey_input))
-                                            )
-                                    )
-                            )
-                    )
+                    // Global Hotkey — hidden on Mac App Store builds (requires Accessibility permission)
+                    .when(cfg!(not(feature = "mas_build")), |this| {
+                        let labels = crate::platform::hotkey_modifier_labels();
+                        let combo_str = labels.join(" + ");
+                        let description = format!(
+                            "Press {} + [Key] to toggle eBIRForms from anywhere. Click the shortcut, then press a letter or number to reassign.",
+                            combo_str
+                        );
+
+                        this.child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .items_start()
+                                .p_6()
+                                .gap_4()
+                                .border_b_1()
+                                .border_color(border)
+                                .child(
+                                    div()
+                                        .flex()
+                                        .w_full()
+                                        .justify_between()
+                                        .items_center()
+                                        .child(
+                                            div()
+                                                .flex()
+                                                .flex_col()
+                                                .gap_1()
+                                                .child(div().font_weight(FontWeight::SEMIBOLD).child("Global Toggle Hotkey"))
+                                                .child(
+                                                    div()
+                                                        .text_sm()
+                                                        .text_color(cx.theme().muted_foreground)
+                                                        .child(description),
+                                                ),
+                                        )
+                                        .child(self.hotkey_recorder.clone())
+                                )
+                        )
+                    })
                     .child(
                         div()
                             .flex()

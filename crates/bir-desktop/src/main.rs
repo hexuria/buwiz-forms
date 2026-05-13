@@ -235,44 +235,40 @@ fn main() {
                     }
                 });
 
-                // Phase 2b: Global Hotkey Listener (Windows)
-                #[cfg(target_os = "windows")]
-                {
-                    let hotkey_db = db.clone();
-                    std::thread::spawn(move || {
-                        use windows::Win32::UI::Input::KeyboardAndMouse::{RegisterHotKey, MOD_WIN, MOD_SHIFT};
-                        use windows::Win32::UI::WindowsAndMessaging::{GetMessageW, MSG, WM_HOTKEY};
-                        
-                        let hotkey_char = if let Ok(guard) = hotkey_db.lock() {
-                            guard.get_setting("global_hotkey_key").ok().flatten().unwrap_or_else(|| "E".to_string()).to_uppercase()
-                        } else {
-                            "E".to_string()
-                        };
-                        
-                        let vk_code = hotkey_char.chars().next().unwrap_or('E') as u32;
+                // Phase 2b: Global Hotkey Listener (all platforms, except Mac App Store)
+                #[cfg(not(feature = "mas_build"))]
+                let _hotkey_manager = {
+                    let hotkey_key: Option<String> = if let Ok(guard) = db.lock() {
+                        guard.get_setting("global_hotkey_key")
+                            .ok()
+                            .flatten()
+                            .map(|k| k.to_uppercase())
+                            .filter(|k| !k.is_empty())
+                    } else {
+                        None
+                    };
 
-                        unsafe {
-                            let id = 1;
-                            // Win + Shift + [Key]
-                            let _ = RegisterHotKey(None, id, MOD_WIN | MOD_SHIFT, vk_code);
-                            let mut msg = MSG::default();
-                            while GetMessageW(&mut msg, None, 0, 0).into() {
-                                if msg.message == WM_HOTKEY {
-                                    if let Some(proj_dirs) = directories::ProjectDirs::from("com", "goldcoders", "eBIRForms") {
-                                        let port_file = proj_dirs.data_local_dir().join("instance.port");
-                                        if let Ok(port_str) = std::fs::read_to_string(&port_file) {
-                                            if let Ok(port) = port_str.trim().parse::<u16>() {
-                                                if let Ok(socket) = std::net::UdpSocket::bind("127.0.0.1:0") {
-                                                    let _ = socket.send_to(b"TOGGLE", format!("127.0.0.1:{}", port));
-                                                }
-                                            }
-                                        }
+                    match global_hotkey::GlobalHotKeyManager::new() {
+                        Ok(manager) => {
+                            if let Some(ref key) = hotkey_key {
+                                if let Some(hotkey) = crate::platform::build_hotkey(key) {
+                                    if let Err(e) = manager.register(hotkey) {
+                                        tracing::warn!("Failed to register global hotkey: {e}");
+                                    } else {
+                                        tracing::info!("Global hotkey registered: {key}");
                                     }
                                 }
+                            } else {
+                                tracing::info!("No global hotkey configured — skipping registration");
                             }
+                            Some(manager)
                         }
-                    });
-                }
+                        Err(e) => {
+                            tracing::warn!("Failed to initialize global hotkey manager: {e}");
+                            None
+                        }
+                    }
+                };
 
                 // Phase 3: System Tray Integration
                 let tray_menu = tray_icon::menu::Menu::new();
@@ -349,6 +345,15 @@ fn main() {
                             // We no longer bring the app to foreground on tray click.
                             // This allows native tray menus to open without side effects.
                             if let Ok(_event) = tray_channel.try_recv() {}
+
+                            // Poll global hotkey events (cross-platform toggle)
+                            #[cfg(not(feature = "mas_build"))]
+                            if let Ok(_event) = global_hotkey::GlobalHotKeyEvent::receiver().try_recv() {
+                                cx.update(|_cx| {
+                                    crate::platform::toggle_app_visibility();
+                                });
+                            }
+
                             cx.background_executor()
                                 .timer(std::time::Duration::from_millis(100))
                                 .await;

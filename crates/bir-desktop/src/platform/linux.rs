@@ -159,5 +159,27 @@ pub fn show_in_dock() {
 }
 
 pub fn toggle_app_visibility() {
-    // Basic stub for Linux
+    #[cfg(target_os = "linux")]
+    {
+        // Check if any windows are currently visible for this process
+        let pid = std::process::id();
+        let output = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(&format!(
+                "xdotool search --pid {} --onlyvisible 2>/dev/null | head -1",
+                pid
+            ))
+            .output();
+
+        match output {
+            Ok(out) if !out.stdout.is_empty() => {
+                // Windows are visible — hide them
+                hide_from_dock();
+            }
+            _ => {
+                // No visible windows — show them
+                show_in_dock();
+            }
+        }
+    }
 }

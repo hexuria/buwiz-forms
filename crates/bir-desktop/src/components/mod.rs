@@ -1,4 +1,5 @@
 pub mod auth_gate;
+pub mod hotkey_recorder;
 pub mod combobox;
 pub mod command_palette;
 pub mod compliance_calendar;
