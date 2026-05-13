@@ -466,7 +466,7 @@ impl Render for MultiSelectState {
 
             Some(
                 deferred(
-                    div().absolute().top(px(0.)).left_0().w_full().child(
+                    div().absolute().bottom(px(0.)).left_0().w_full().child(
                         v_flex()
                             .occlude()
                             .mt_1p5()
@@ -478,7 +478,7 @@ impl Render for MultiSelectState {
                             .rounded_md()
                             .bg(cx.theme().popover)
                             .text_color(cx.theme().popover_foreground)
-                            .overflow_hidden()
+                            .overflow_y_scroll()
                             // Sticky search bar
                             .child(
                                 div()
@@ -503,7 +503,7 @@ impl Render for MultiSelectState {
                             .child(
                                 v_flex()
                                     .max_h(px(220.))
-                                    .overflow_hidden()
+                                    .overflow_y_scroll()
                                     .children(option_rows)
                                     .when_some(empty_state, |d, empty| d.child(empty)),
                             ),
