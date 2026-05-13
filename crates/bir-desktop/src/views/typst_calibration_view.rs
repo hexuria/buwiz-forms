@@ -49,7 +49,7 @@ impl TypstCalibrationView {
         let formtypes_dir = crate::platform::find_resource_dir("formtypes");
         let available_forms = Self::discover_forms(&formtypes_dir);
 
-        let form_select = cx.new(|cx| ComboboxState::new(available_forms.clone(), window, cx));
+        let form_select = cx.new(|cx| ComboboxState::new(available_forms.clone(), 6, window, cx));
 
         cx.subscribe(
             &form_select,

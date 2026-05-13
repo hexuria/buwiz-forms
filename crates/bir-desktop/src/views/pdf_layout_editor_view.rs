@@ -66,7 +66,7 @@ impl PdfLayoutEditorView {
         }
         available_forms.sort();
 
-        let form_select = cx.new(|cx| ComboboxState::new(available_forms.clone(), window, cx));
+        let form_select = cx.new(|cx| ComboboxState::new(available_forms.clone(), 6, window, cx));
         let search_filter =
             cx.new(|cx| InputState::new(window, cx).placeholder("Search fields..."));
         let new_field_input =

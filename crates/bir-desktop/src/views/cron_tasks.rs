@@ -121,6 +121,7 @@ impl CronTasksView {
                     "Failed".into(),
                     "Archived".into(),
                 ],
+                6,
                 window,
                 cx,
             )
@@ -138,6 +139,7 @@ impl CronTasksView {
                     "Warn".into(),
                     "Info".into(),
                 ],
+                6,
                 window,
                 cx,
             )

@@ -109,7 +109,7 @@ impl ProfileManagerView {
             .map(|r| format!("{} - {}", r.code, r.description))
             .collect::<Vec<_>>();
 
-        let rdo_select = cx.new(|cx| ComboboxState::new(rdo_options.clone(), window, cx));
+        let rdo_select = cx.new(|cx| ComboboxState::new(rdo_options.clone(), 5, window, cx));
         let type_select = cx.new(|cx| {
             ComboboxState::new(
                 vec![
@@ -120,6 +120,7 @@ impl ProfileManagerView {
                     "Estate".to_string(),
                     "Trust".to_string(),
                 ],
+                6,
                 window,
                 cx,
             )
@@ -134,6 +135,7 @@ impl ProfileManagerView {
                     "Self-Employed / Professional".to_string(),
                     "Mixed Income".to_string(),
                 ],
+                3,
                 window,
                 cx,
             )
@@ -147,6 +149,7 @@ impl ProfileManagerView {
                     "Medium".to_string(),
                     "Large".to_string(),
                 ],
+                4,
                 window,
                 cx,
             )
@@ -160,6 +163,7 @@ impl ProfileManagerView {
                     "Taxable".to_string(),
                     "Mixed".to_string(),
                 ],
+                3,
                 window,
                 cx,
             )
@@ -191,7 +195,7 @@ impl ProfileManagerView {
         let address_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Registered Address"));
         let zip_options = bir_core::reference::get_all_zipcodes();
-        let zip_select = cx.new(|cx| ComboboxState::new(zip_options.clone(), window, cx));
+        let zip_select = cx.new(|cx| ComboboxState::new(zip_options.clone(), 5, window, cx));
         let tel_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Mobile or Telephone No."));
         let email_input = cx.new(|cx| InputState::new(window, cx).placeholder("Email Address"));

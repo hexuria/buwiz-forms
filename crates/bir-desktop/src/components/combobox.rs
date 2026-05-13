@@ -23,6 +23,7 @@ pub struct ComboboxState {
     pub open: bool,
     pub selected_index: Option<usize>,
     pub focus_handle: FocusHandle,
+    pub max_visible_items: usize,
     scroll_handle: UniformListScrollHandle,
     _subscriptions: Vec<Subscription>,
 }
@@ -30,7 +31,12 @@ pub struct ComboboxState {
 impl EventEmitter<ComboboxEvent> for ComboboxState {}
 
 impl ComboboxState {
-    pub fn new(options: Vec<String>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        options: Vec<String>,
+        max_visible_items: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let input = cx.new(|cx| InputState::new(window, cx));
         let focus_handle = cx.focus_handle();
 
@@ -95,6 +101,7 @@ impl ComboboxState {
             open: false,
             selected_index: None,
             focus_handle,
+            max_visible_items,
             scroll_handle: UniformListScrollHandle::new(),
             _subscriptions,
         }
@@ -240,7 +247,7 @@ impl Render for ComboboxState {
                                     )
                                     .with_sizing_behavior(ListSizingBehavior::Infer)
                                     .w_full()
-                                    .max_h(px(MAX_VISIBLE_ITEMS as f32 * ITEM_HEIGHT))
+                                    .max_h(px(self.max_visible_items as f32 * ITEM_HEIGHT))
                                     .track_scroll(&self.scroll_handle),
                                 ),
                         ),
