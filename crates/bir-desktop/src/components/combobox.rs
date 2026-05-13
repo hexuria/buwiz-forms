@@ -171,7 +171,7 @@ impl Render for ComboboxState {
                                 .occlude()
                                 .mt_1p5()
                                 .max_h(px(300.))
-                                .overflow_y_scroll()
+                                .overflow_y_scrollbar()
                                 .w_full()
                                 .border_1()
                                 .border_color(cx.theme().border)
