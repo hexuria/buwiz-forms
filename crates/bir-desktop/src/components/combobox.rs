@@ -1,10 +1,14 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
-    ActiveTheme,
+    ActiveTheme, StyledExt,
     input::{Input, InputEvent, InputState},
-    scroll::ScrollableElement,
 };
+
+/// Approximate height of each dropdown option row (px_3 + py_2 + text).
+const ITEM_HEIGHT: f32 = 36.0;
+/// Maximum number of visible items in the dropdown (set to 2 for testing, raise to 5+ for prod).
+const MAX_VISIBLE_ITEMS: usize = 2;
 
 #[allow(dead_code)]
 pub struct ComboboxEvent {
@@ -19,6 +23,7 @@ pub struct ComboboxState {
     pub open: bool,
     pub selected_index: Option<usize>,
     pub focus_handle: FocusHandle,
+    scroll_handle: ScrollHandle,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -51,6 +56,8 @@ impl ComboboxState {
                     } else {
                         Some(0)
                     };
+                    // Reset scroll to top when filter changes
+                    this.scroll_handle.set_offset(point(px(0.), px(0.)));
                     this.open = true;
                     cx.notify();
                 } else if let InputEvent::Blur = event {
@@ -90,6 +97,7 @@ impl ComboboxState {
             open: false,
             selected_index: None,
             focus_handle,
+            scroll_handle: ScrollHandle::new(),
             _subscriptions,
         }
     }
@@ -117,6 +125,26 @@ impl ComboboxState {
         });
         cx.notify();
     }
+
+    /// Scroll the dropdown so the selected item is visible.
+    fn scroll_to_selected(&self) {
+        let Some(idx) = self.selected_index else {
+            return;
+        };
+        let viewport_h = px(MAX_VISIBLE_ITEMS as f32 * ITEM_HEIGHT);
+        let item_top = px(idx as f32 * ITEM_HEIGHT);
+        let item_bottom = item_top + px(ITEM_HEIGHT);
+        let current_scroll = -self.scroll_handle.offset().y;
+        let visible_bottom = current_scroll + viewport_h;
+
+        if item_top < current_scroll {
+            self.scroll_handle
+                .set_offset(point(px(0.), -item_top));
+        } else if item_bottom > visible_bottom {
+            self.scroll_handle
+                .set_offset(point(px(0.), -(item_bottom - viewport_h)));
+        }
+    }
 }
 
 impl Focusable for ComboboxState {
@@ -130,6 +158,11 @@ impl Render for ComboboxState {
         let input_view = self.input.clone();
         let options = self.filtered_options.clone();
         let is_open = self.open && !options.is_empty();
+        let dropdown_max_h = px(MAX_VISIBLE_ITEMS as f32 * ITEM_HEIGHT);
+
+        let dropdown_id = ElementId::Name(
+            format!("combobox_dropdown_{:?}", cx.entity_id()).into(),
+        );
 
         div()
             .relative()
@@ -144,6 +177,7 @@ impl Render for ComboboxState {
                             if let Some(idx) = this.selected_index {
                                 this.selected_index = Some(idx.saturating_sub(1));
                             }
+                            this.scroll_to_selected();
                             cx.notify();
                         }
                         "down" => {
@@ -153,6 +187,7 @@ impl Render for ComboboxState {
                             } else {
                                 this.selected_index = Some(0);
                             }
+                            this.scroll_to_selected();
                             cx.notify();
                         }
                         "escape" => {
@@ -169,11 +204,12 @@ impl Render for ComboboxState {
                     deferred(
                         div().absolute().top(px(36.)).left_0().w_full().child(
                             div()
-                                .id("combobox_dropdown")
+                                .id(dropdown_id)
                                 .occlude()
                                 .mt_1p5()
-                                .max_h(px(300.))
-                                .overflow_y_scrollbar()
+                                .max_h(dropdown_max_h)
+                                .overflow_y_scroll()
+                                .track_scroll(&self.scroll_handle)
                                 .w_full()
                                 .border_1()
                                 .border_color(cx.theme().border)

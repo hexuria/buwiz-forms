@@ -9,10 +9,14 @@ use gpui::*;
 use gpui_component::{
     ActiveTheme, Icon, IconName, Sizable, StyledExt, h_flex,
     input::{Input, InputEvent, InputState},
-    scroll::ScrollableElement,
     tag::Tag,
     v_flex,
 };
+
+/// Approximate height of each option row.
+const ITEM_HEIGHT: f32 = 30.0;
+/// Maximum visible items in the options area (set to 2 for testing, raise to 5+ for prod).
+const MAX_VISIBLE_ITEMS: usize = 2;
 
 /// Emitted when the selection changes.
 #[allow(dead_code)]
@@ -57,6 +61,8 @@ pub struct MultiSelectState {
     placeholder: String,
     /// Maximum number of chips to show before collapsing.
     max_visible_chips: usize,
+    /// Scroll handle for the options list.
+    scroll_handle: ScrollHandle,
     /// Subscriptions.
     _subscriptions: Vec<Subscription>,
 }
@@ -130,6 +136,7 @@ impl MultiSelectState {
             focus_handle,
             placeholder: "Select items...".to_string(),
             max_visible_chips: 3,
+            scroll_handle: ScrollHandle::new(),
             _subscriptions,
         }
     }
@@ -226,6 +233,26 @@ impl MultiSelectState {
     /// Remove a single selection by ID.
     fn remove_selection(&mut self, id: &str) {
         self.selected_ids.retain(|s| s != id);
+    }
+
+    /// Scroll the options list so the highlighted item is visible.
+    fn scroll_to_highlighted(&self) {
+        let Some(idx) = self.highlighted_index else {
+            return;
+        };
+        let viewport_h = px(MAX_VISIBLE_ITEMS as f32 * ITEM_HEIGHT);
+        let item_top = px(idx as f32 * ITEM_HEIGHT);
+        let item_bottom = item_top + px(ITEM_HEIGHT);
+        let current_scroll = -self.scroll_handle.offset().y;
+        let visible_bottom = current_scroll + viewport_h;
+
+        if item_top < current_scroll {
+            self.scroll_handle
+                .set_offset(point(px(0.), -item_top));
+        } else if item_bottom > visible_bottom {
+            self.scroll_handle
+                .set_offset(point(px(0.), -(item_bottom - viewport_h)));
+        }
     }
 }
 
@@ -469,10 +496,8 @@ impl Render for MultiSelectState {
                 deferred(
                     div().absolute().bottom(px(0.)).left_0().w_full().child(
                         v_flex()
-                            .id("multi_select_dropdown")
                             .occlude()
                             .mt_1p5()
-                            .max_h(px(320.))
                             .w_full()
                             .border_1()
                             .border_color(cx.theme().border)
@@ -480,7 +505,6 @@ impl Render for MultiSelectState {
                             .rounded_md()
                             .bg(cx.theme().popover)
                             .text_color(cx.theme().popover_foreground)
-                            .overflow_y_scrollbar()
                             // Sticky search bar
                             .child(
                                 div()
@@ -504,9 +528,12 @@ impl Render for MultiSelectState {
                             // Options list (scrollable)
                             .child(
                                 v_flex()
-                                    .id("multi_select_options")
-                                    .max_h(px(220.))
-                                    .overflow_y_scrollbar()
+                                    .id(ElementId::Name(
+                                        format!("multi_select_options_{:?}", cx.entity_id()).into(),
+                                    ))
+                                    .max_h(px(MAX_VISIBLE_ITEMS as f32 * ITEM_HEIGHT))
+                                    .overflow_y_scroll()
+                                    .track_scroll(&self.scroll_handle)
                                     .children(option_rows)
                                     .when_some(empty_state, |d, empty| d.child(empty)),
                             ),
@@ -532,6 +559,7 @@ impl Render for MultiSelectState {
                             if let Some(idx) = this.highlighted_index {
                                 this.highlighted_index = Some(idx.saturating_sub(1));
                             }
+                            this.scroll_to_highlighted();
                             cx.notify();
                         }
                         "down" => {
@@ -541,6 +569,7 @@ impl Render for MultiSelectState {
                             } else {
                                 this.highlighted_index = Some(0);
                             }
+                            this.scroll_to_highlighted();
                             cx.notify();
                         }
                         "escape" => {
