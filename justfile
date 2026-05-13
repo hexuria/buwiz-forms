@@ -102,6 +102,10 @@ msix *args="":
     } else {
         cargo build --release --target {{WIN_TARGET}}
     }
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "❌ cargo build failed (exit code $LASTEXITCODE). Aborting MSIX packaging."
+        exit $LASTEXITCODE
+    }
     
     $VERSION = "{{VERSION}}"
     $MSIX_DIR = "target/release-artifacts/msix-staging"
