@@ -153,6 +153,14 @@ msix *args="":
     # Build MSIX
     $SDK_DIR = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\10.*" | Sort-Object Name -Descending | Select-Object -First 1
     $MAKEAPPX = "$($SDK_DIR.FullName)\x64\MakeAppx.exe"
+    $MAKEPRI = "$($SDK_DIR.FullName)\x64\MakePri.exe"
+    
+    if (Test-Path $MAKEPRI) {
+        Write-Host "Generating resources.pri for advanced tile icons..."
+        & $MAKEPRI createconfig /cf "$MSIX_DIR\priconfig.xml" /dq en-US /pv 10.0.0 /o
+        & $MAKEPRI new /pr "$MSIX_DIR" /cf "$MSIX_DIR\priconfig.xml" /in "GOLDCODERSCORP.ebirforms" /of "$MSIX_DIR\resources.pri" /o
+        Remove-Item "$MSIX_DIR\priconfig.xml" -Force
+    }
     
     if (Test-Path $MAKEAPPX) {
         & $MAKEAPPX pack /d "$MSIX_DIR" /p "target/release-artifacts/{{APP_NAME}}-Windows-$VERSION.msix" /o

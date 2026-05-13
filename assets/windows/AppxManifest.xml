@@ -35,7 +35,7 @@
       <uap:VisualElements
         DisplayName="eBIRForms"
         Description="Philippine BIR tax return filing application"
-        BackgroundColor="transparent"
+        BackgroundColor="#2B2B2B"
         Square150x150Logo="assets\icon.png"
         Square44x44Logo="assets\icon.png">
         <uap:DefaultTile Wide310x150Logo="assets\icon.png" />
