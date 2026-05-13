@@ -151,6 +151,69 @@ pub fn print_pdf(path: &std::path::Path) -> Result<(), &'static str> {
     }
 }
 
+// ── Keyboard Focus Recovery ──────────────────────────────────────────────────
+
+/// Workaround for a robius-authentication bug on Windows.
+///
+/// After `robius_authentication::Context::authenticate()` returns, the Windows
+/// Hello dialog sometimes leaves the Alt key logically pressed, which causes:
+///   - Backspace to emit `^H` instead of deleting text
+///   - Escape to cycle windows instead of dismissing dialogs
+///
+/// This function:
+///   1. Unconditionally sends a key-up for `VK_MENU` (Alt) so it is never stuck.
+///   2. Finds the top-level GPUI window and calls `SetForegroundWindow`
+///      so the app regains keyboard input.
+///
+/// Call this **after** every `robius_authentication::Context::authenticate()` returns.
+pub fn reclaim_keyboard_focus() {
+    // Win32 constants
+    const VK_MENU: u8 = 0x12; // Alt key
+    const KEYEVENTF_EXTENDEDKEY: u32 = 0x0001;
+    const KEYEVENTF_KEYUP: u32 = 0x0002;
+
+    type HWND = isize;
+    type LPARAM = isize;
+
+    unsafe extern "system" {
+        // user32.dll
+        fn GetAsyncKeyState(v_key: i32) -> i16;
+        fn keybd_event(b_vk: u8, b_scan: u8, dw_flags: u32, dw_extra_info: usize);
+        fn SetForegroundWindow(h_wnd: HWND) -> i32;
+        fn IsWindowVisible(h_wnd: HWND) -> i32;
+        fn GetWindowThreadProcessId(h_wnd: HWND, lpdw_process_id: *mut u32) -> u32;
+        fn EnumWindows(
+            lp_enum_func: Option<unsafe extern "system" fn(HWND, LPARAM) -> i32>,
+            l_param: LPARAM,
+        ) -> i32;
+    }
+
+    unsafe {
+        // 1. Release Alt key if it is logically held down.
+        //    GetAsyncKeyState MSB set => key is currently pressed.
+        if GetAsyncKeyState(VK_MENU as i32) < 0 {
+            keybd_event(VK_MENU, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+        }
+
+        // 2. Find our own window and bring it to the foreground.
+        let pid = std::process::id();
+
+        unsafe extern "system" fn enum_callback(hwnd: HWND, lparam: LPARAM) -> i32 {
+            let target_pid = lparam as u32;
+            let mut window_pid: u32 = 0;
+            GetWindowThreadProcessId(hwnd, &mut window_pid);
+
+            if window_pid == target_pid && IsWindowVisible(hwnd) != 0 {
+                SetForegroundWindow(hwnd);
+                return 0; // FALSE — stop enumeration
+            }
+            1 // TRUE — continue enumeration
+        }
+
+        EnumWindows(Some(enum_callback), pid as LPARAM);
+    }
+}
+
 // ── Typography ───────────────────────────────────────────────────────────────
 
 /// The platform's preferred monospace font family.

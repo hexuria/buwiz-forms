@@ -217,6 +217,11 @@ impl AppState {
                                                     .await
                                                     .is_ok();
 
+                                                // Fix: robius-authentication can leave the Alt key stuck on Windows,
+                                                // causing ^H for backspace and Escape cycling windows. Release it.
+                                                #[cfg(target_os = "windows")]
+                                                crate::platform::reclaim_keyboard_focus();
+
                                                 let _ = this.update(cx, |this, cx| {
                                                     this.os_auth_triggered = false;
                                                     if success {
@@ -485,6 +490,11 @@ impl AppState {
                                                     .authenticate(text, &policy)
                                                     .await
                                                     .is_ok();
+
+                                                // Fix: robius-authentication can leave the Alt key stuck on Windows,
+                                                // causing ^H for backspace and Escape cycling windows. Release it.
+                                                #[cfg(target_os = "windows")]
+                                                crate::platform::reclaim_keyboard_focus();
 
                                                 let _ = this.update(cx, |this, cx| {
                                                     this.admin_os_auth_triggered = false;
