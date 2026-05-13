@@ -169,6 +169,7 @@ impl Render for ComboboxState {
                     deferred(
                         div().absolute().top(px(36.)).left_0().w_full().child(
                             div()
+                                .id("combobox_dropdown")
                                 .occlude()
                                 .mt_1p5()
                                 .max_h(px(300.))

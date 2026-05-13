@@ -469,6 +469,7 @@ impl Render for MultiSelectState {
                 deferred(
                     div().absolute().bottom(px(0.)).left_0().w_full().child(
                         v_flex()
+                            .id("multi_select_dropdown")
                             .occlude()
                             .mt_1p5()
                             .max_h(px(320.))
@@ -503,6 +504,7 @@ impl Render for MultiSelectState {
                             // Options list (scrollable)
                             .child(
                                 v_flex()
+                                    .id("multi_select_options")
                                     .max_h(px(220.))
                                     .overflow_y_scrollbar()
                                     .children(option_rows)
