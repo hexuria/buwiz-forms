@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::db::DbError;
 
-const CURRENT_MIGRATION_VERSION: i32 = 3;
+const CURRENT_MIGRATION_VERSION: i32 = 4;
 
 pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
     let mut version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
@@ -175,6 +175,12 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         CREATE UNIQUE INDEX IF NOT EXISTS idx_submissions_dedup
             ON submissions(tin, form_type, period, COALESCE(submitted_at, ''));
         ",
+        // v4: Promote legacy compat boolean flags from profile JSON into
+        // normalized fields. This is a Rust-side data migration (no DDL change).
+        // The SQL marker is a no-op that just advances the user_version.
+        //
+        // Handled below in `migrate_v4_compat_fields()` after the SQL loop.
+        "SELECT 1; -- v4 marker: compat field promotion (Rust-side)",
     ];
 
     while version < CURRENT_MIGRATION_VERSION {
@@ -184,8 +190,128 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
             conn.execute_batch(migration_sql)?;
             version += 1;
             conn.pragma_update(None, "user_version", version)?;
+
+            // v4: After the SQL marker is committed, run the Rust data migration.
+            if version == 4 {
+                migrate_v4_compat_fields(conn)?;
+            }
         } else {
             break;
+        }
+    }
+
+    Ok(())
+}
+
+/// v4 data migration: promote legacy compat boolean flags out of stored profile JSON.
+///
+/// Reads the old field names directly from the raw `serde_json::Value` because
+/// the compat fields have been removed from `TaxpayerProfile`. Promotes:
+/// - `opted_for_8_percent_flat_rate: true` → appends `TaxElectionHistory(EightPercent)`
+/// - `imap_enabled: true` → sets `email_tracking_enabled = true`
+///
+/// Both transformations are idempotent.
+fn migrate_v4_compat_fields(conn: &Connection) -> Result<(), DbError> {
+    use crate::profile::{IncomeTaxElection, TaxElectionHistory, TaxpayerProfile};
+    use chrono::Datelike as _;
+
+    let rows: Vec<(i64, String)> = {
+        let mut stmt = conn.prepare("SELECT id, data_json FROM profiles")?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(DbError::Sqlite)?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(DbError::Sqlite)?
+    };
+
+    for (id, data_json) in rows {
+        // Parse compat flags from raw JSON (the fields no longer exist on the typed struct)
+        let raw: serde_json::Value = match serde_json::from_str(&data_json) {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!("v4 migration: failed to parse profile id={}: {}", id, e);
+                continue;
+            }
+        };
+
+        let opted_8pct = raw
+            .get("opted_for_8_percent_flat_rate")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let imap_enabled_compat = raw
+            .get("imap_enabled")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        if !opted_8pct && !imap_enabled_compat {
+            continue;
+        }
+
+        let mut profile: TaxpayerProfile = match serde_json::from_str(&data_json) {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::warn!(
+                    "v4 migration: failed to deserialize profile id={}: {}",
+                    id,
+                    e
+                );
+                continue;
+            }
+        };
+
+        let mut dirty = false;
+
+        // Promote 8% compat flag
+        if opted_8pct && profile.tax_elections.is_empty() {
+            let retroactive_year = profile
+                .business_start_date
+                .map(|d| d.year() as u16)
+                .unwrap_or_else(|| {
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default();
+                    let approx_year = (now.as_secs() / 31_557_600 + 1970) as u16;
+                    approx_year.saturating_sub(1)
+                });
+
+            profile.tax_elections.push(TaxElectionHistory {
+                taxable_year: retroactive_year,
+                election: IncomeTaxElection::EightPercent,
+                elected_at: chrono::NaiveDateTime::new(
+                    chrono::NaiveDate::from_ymd_opt(retroactive_year as i32, 4, 15)
+                        .unwrap_or_default(),
+                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap_or_default(),
+                ),
+                source_form: "legacy_compat_migration_v4".into(),
+            });
+            tracing::info!(
+                "v4 migration: promoted 8% election for profile id={} (year {})",
+                id,
+                retroactive_year
+            );
+            dirty = true;
+        }
+
+        // Promote imap_enabled compat flag
+        if imap_enabled_compat && !profile.email_tracking_enabled {
+            profile.email_tracking_enabled = true;
+            tracing::info!(
+                "v4 migration: promoted email_tracking_enabled for profile id={}",
+                id
+            );
+            dirty = true;
+        }
+
+        if dirty {
+            let updated_json =
+                serde_json::to_string(&profile).map_err(|e| DbError::Other(e.to_string()))?;
+            conn.execute(
+                "UPDATE profiles SET data_json = ?1 WHERE id = ?2",
+                rusqlite::params![updated_json, id],
+            )
+            .map_err(DbError::Sqlite)?;
         }
     }
 
@@ -416,5 +542,81 @@ mod tests {
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
         assert_eq!(v, CURRENT_MIGRATION_VERSION);
+    }
+
+    #[test]
+    fn test_v4_promotes_8pct_compat_flag() {
+        use crate::profile::{IncomeTaxElection, TaxpayerProfile};
+
+        let conn = test_conn();
+
+        // Run v1-v3 migrations to create the profiles table
+        conn.execute_batch(
+            "CREATE TABLE profiles (id INTEGER PRIMARY KEY AUTOINCREMENT, tin TEXT UNIQUE NOT NULL, data_json TEXT NOT NULL);",
+        )
+        .unwrap();
+        conn.pragma_update(None, "user_version", 3i32).unwrap();
+
+        // Insert a legacy profile with the old compat flag set to true
+        let legacy_profile_json = serde_json::json!({
+            "id": 1,
+            "full_name": "Test Taxpayer",
+            "tin": { "segment1": "123", "segment2": "456", "segment3": "789", "branch": "000" },
+            "rdo_code": "039",
+            "line_of_business": "Consulting",
+            "registered_address": "QC",
+            "zip_code": "1100",
+            "phone": "09156837000",
+            "email": "test@example.com",
+            "default_form_type": "2551Q",
+            "opted_for_8_percent_flat_rate": true,   // old compat field name
+            "imap_enabled": true,                     // old compat field name
+            "email_tracking_enabled": false,
+            "tax_elections": []
+        })
+        .to_string();
+
+        conn.execute(
+            "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
+            rusqlite::params!["123-456-789-000", legacy_profile_json],
+        )
+        .unwrap();
+
+        // Run v4 migration
+        migrate_database(&conn).unwrap();
+
+        // Verify the profile was updated
+        let updated_json: String = conn
+            .query_row(
+                "SELECT data_json FROM profiles WHERE tin = '123-456-789-000'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+
+        let updated_profile: TaxpayerProfile = serde_json::from_str(&updated_json).unwrap();
+
+        // 8% election should have been promoted to tax_elections
+        assert!(
+            !updated_profile.tax_elections.is_empty(),
+            "tax_elections should have been populated by v4 migration"
+        );
+        assert!(
+            matches!(
+                updated_profile.tax_elections[0].election,
+                IncomeTaxElection::EightPercent
+            ),
+            "election should be EightPercent"
+        );
+        assert_eq!(
+            updated_profile.tax_elections[0].source_form,
+            "legacy_compat_migration_v4"
+        );
+
+        // email_tracking should have been promoted
+        assert!(
+            updated_profile.email_tracking_enabled,
+            "email_tracking_enabled should have been set to true"
+        );
     }
 }

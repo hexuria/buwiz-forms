@@ -73,12 +73,6 @@ impl RateLimiter {
         })
     }
 
-    /// Total failed attempts since last reset.
-    #[allow(dead_code)]
-    pub fn failed_attempts(&self) -> u32 {
-        self.failed_attempts
-    }
-
     /// Human-readable lockout message, e.g. "Try again in 4:32".
     pub fn lockout_message(&self) -> Option<String> {
         self.remaining_lockout_secs().map(|secs| {

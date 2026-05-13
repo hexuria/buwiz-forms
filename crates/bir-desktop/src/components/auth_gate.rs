@@ -4,7 +4,6 @@
 //! Renders a full-screen overlay with OTP input, optional OS Auth override, and cancel button.
 //!
 // TODO: Wire AuthGateView into auth_overlays.rs to replace the remaining inline PIN modals.
-#![allow(dead_code)]
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;

@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use bir_core::db::Database;
 use bir_core::forms::registry::FilingFrequency;
 use bir_core::forms::{FormFilingProgress, QuarterState};
@@ -28,7 +27,6 @@ impl EventEmitter<DashboardEvent> for DashboardView {}
 const SIDEBAR_FULL_WIDTH: f32 = 280.0;
 const SIDEBAR_MINI_WIDTH: f32 = 70.0;
 const CONTENT_PADDING_X: f32 = 64.0;
-const _CARD_MIN_WIDTH: f32 = 365.0;
 const GRID_GAP: f32 = 20.0;
 const DESKTOP_3_COL_MIN_CONTENT: f32 = 1135.0; // 365 * 3 + 20 * 2
 const TABLET_2_COL_MIN_CONTENT: f32 = 750.0; // 365 * 2 + 20 * 1

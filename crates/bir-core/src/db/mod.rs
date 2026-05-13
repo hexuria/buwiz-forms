@@ -138,7 +138,11 @@ impl NoticeSourceKind {
             "BirCms" => NoticeSourceKind::BirCms,
             "Manual" => NoticeSourceKind::Manual,
             "FacebookGraph" => NoticeSourceKind::FacebookGraph,
-            _ => NoticeSourceKind::Rss,
+            "Rss" => NoticeSourceKind::Rss,
+            unknown => {
+                tracing::warn!("Unknown NoticeSourceKind '{}', defaulting to Rss", unknown);
+                NoticeSourceKind::Rss
+            }
         }
     }
 }
@@ -218,7 +222,7 @@ pub enum DbError {
 // =========================================================================
 
 pub struct Database {
-    pub conn: Connection,
+    pub(crate) conn: Connection,
 }
 
 pub fn default_database_path() -> std::path::PathBuf {
@@ -226,6 +230,15 @@ pub fn default_database_path() -> std::path::PathBuf {
 }
 
 impl Database {
+    /// Returns the current SQLite `data_version`, which increments whenever another connection
+    /// commits a write to the WAL. Used by the db-watcher in `bir-desktop` to detect external
+    /// database changes without requiring direct access to the raw `conn` field.
+    pub fn data_version(&self) -> Option<i32> {
+        self.conn
+            .query_row("PRAGMA data_version;", [], |row| row.get(0))
+            .ok()
+    }
+
     /// Opens the database, quarantining an unreadable existing file and
     /// recreating it when the on-disk contents are not a usable SQLCipher DB.
     pub fn open_or_recreate<P: AsRef<Path>>(path: P) -> Result<(Self, Option<PathBuf>), DbError> {
@@ -608,7 +621,6 @@ mod tests {
             atc_codes: vec![],
             excise_tax_categories: vec![],
             tax_elections: vec![],
-            _opted_for_8_percent_flat_rate_compat: None,
             has_employees: false,
             is_dormant: false,
             has_single_employer: false,
@@ -620,7 +632,6 @@ mod tests {
             registration_activity_status: Default::default(),
             profile_pin_hash: None,
             totp_secret: None,
-            _imap_enabled_compat: None,
         };
 
         db.save_profile(profile).expect("Failed to save profile");

@@ -50,7 +50,7 @@ pub use email::{
 pub use export::{export_database_zip, export_profile_data};
 pub use forms::{
     ATC_TABLE_2551Q, FilingStatus, Form2551QDraft, FormDraftSummary, FormFilingProgress,
-    QuarterState, Schedule1Row, find_atc, find_form, forms_for_taxpayer,
+    QuarterState, Schedule1Row, find_atc, find_form,
 };
 pub use import::{extract_database_zip, import_profile_data};
 pub use integration::{

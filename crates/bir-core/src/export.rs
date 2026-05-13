@@ -125,14 +125,18 @@ pub fn export_database_zip(db: &Database, zip_path: &Path) -> Result<(), DbError
     let temp_dir = std::env::temp_dir();
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or_default()
         .as_nanos();
     let temp_db_path = temp_dir.join(format!("bir_unencrypted_{}.db", timestamp));
 
     // Export current encrypted DB to a temporary unencrypted DB
     db.conn.execute(
         "ATTACH DATABASE ?1 AS plaintext KEY '';",
-        rusqlite::params![temp_db_path.to_str().unwrap()],
+        rusqlite::params![
+            temp_db_path
+                .to_str()
+                .ok_or_else(|| DbError::Other("DB path is not valid UTF-8".into()))?
+        ],
     )?;
     let mut stmt = db.conn.prepare("SELECT sqlcipher_export('plaintext');")?;
     let _ = stmt.query([])?.next()?;

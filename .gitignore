@@ -52,6 +52,29 @@ Desktop.ini
 # AI Agent Artifacts & Scratchpads
 .scratch/
 
+# Runtime logs — never commit these
+*.log
+crash.log
+debug.log
+dispatch.log
+error.log
+
+# CI/dev generated artifacts — use justfile targets, not committed files
+clippy_errors.txt
+test_errors.txt
+
+# Reverse-engineering workspace artifacts
+strings_bir.txt
+symbols.txt
+objc_classes.txt
+
+# One-off scratch files
+scratch*.js
+scratch*.rs
+fix_formtypes*.js
+test_objc.rs
+test_windows.rs
+
 # Node JS
 node_modules/
 

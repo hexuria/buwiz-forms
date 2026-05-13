@@ -27,6 +27,7 @@
 //! ```
 
 pub mod computation;
+#[cfg(feature = "erp-integration")]
 pub mod erp;
 pub mod fraud;
 pub mod mapper;

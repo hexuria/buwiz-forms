@@ -151,11 +151,8 @@ pub fn start_db_watcher(db: Arc<Mutex<Database>>, cx: &mut gpui::Context<crate::
                     let db = Arc::clone(&db);
                     async move {
                         if let Ok(db_guard) = db.lock() {
-                            // SQLite increments PRAGMA data_version when another connection commits to WAL.
-                            db_guard
-                                .conn
-                                .query_row("PRAGMA data_version;", [], |row| row.get(0))
-                                .ok()
+                            // data_version() increments when another WAL connection commits.
+                            db_guard.data_version()
                         } else {
                             None
                         }

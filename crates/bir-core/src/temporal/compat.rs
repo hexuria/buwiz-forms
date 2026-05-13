@@ -7,11 +7,10 @@ use crate::profile::TaxpayerProfile;
 use crate::temporal::context::TemporalContext;
 use crate::temporal::eligibility::FormDecision;
 use crate::temporal::engine::TemporalEngine;
-use chrono::Datelike;
 
 /// Primary temporal API: evaluate forms for a specific year.
 ///
-/// Use this instead of `applicable_forms_temporal` when you know the target year.
+/// Use this instead of the old `applicable_forms_temporal` (now removed).
 pub fn applicable_forms_for_year(profile: &TaxpayerProfile, year: u16) -> Vec<String> {
     let engine = TemporalEngine::default();
     let context = TemporalContext::current_compliance(year);
@@ -25,17 +24,6 @@ pub fn evaluate_forms_temporal(profile: &TaxpayerProfile, year: u16) -> Vec<Form
     let engine = TemporalEngine::default();
     let context = TemporalContext::current_compliance(year);
     engine.evaluate_with_context(profile, &context)
-}
-
-/// Drop-in replacement for the old `applicable_forms_for_profile()`.
-///
-/// Uses the temporal engine with `target_year = current year`.
-/// This is the ONLY remaining `Local::now()` call in the eligibility path,
-/// and it will be removed once the dashboard always provides an explicit year.
-#[deprecated(note = "Use applicable_forms_for_year(profile, year) instead")]
-pub fn applicable_forms_temporal(profile: &TaxpayerProfile) -> Vec<String> {
-    let current_year = chrono::Local::now().year() as u16;
-    applicable_forms_for_year(profile, current_year)
 }
 
 #[cfg(test)]
@@ -73,7 +61,6 @@ mod tests {
             atc_codes: vec![],
             excise_tax_categories: vec![],
             tax_elections: vec![],
-            _opted_for_8_percent_flat_rate_compat: None,
             has_employees: false,
             is_dormant: false,
             has_single_employer: false,
@@ -90,7 +77,6 @@ mod tests {
             email_auth_method: Default::default(),
             imap_email: None,
             imap_host: None,
-            _imap_enabled_compat: None,
             test_notification_enabled: false,
             imap_app_password: None,
             oauth_access_token: None,

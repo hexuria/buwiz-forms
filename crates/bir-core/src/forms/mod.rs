@@ -11,6 +11,8 @@ pub use atc::{ATC_TABLE_2551Q, AtcEntry, find_atc};
 pub use form_1601c::Form1601CDraft;
 pub use form_1701q::Form1701QDraft;
 pub use form_2551q::{Form2551QDraft, Schedule1Row};
+#[allow(deprecated)]
+// re-exporting deprecated forms_for_taxpayer / forms_for_profile for backward compat only
 pub use registry::{
     FORM_REGISTRY, FilingFrequency, FormDefinition, find_form, forms_for_profile,
     forms_for_taxpayer,

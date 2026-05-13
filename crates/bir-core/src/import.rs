@@ -62,7 +62,9 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
         if let Ok(file) = archive.by_index(i) {
             let name = file.name();
             if name.ends_with("profile.json") {
-                let base_dir = name.strip_suffix("profile.json").unwrap();
+                let Some(base_dir) = name.strip_suffix("profile.json") else {
+                    continue;
+                };
                 base_dirs.push(base_dir.to_string());
             }
         }
@@ -370,7 +372,6 @@ mod tests {
             email_auth_method: crate::profile::EmailAuthMethod::AppPassword,
             imap_email: None,
             imap_host: None,
-            _imap_enabled_compat: None,
             test_notification_enabled: false,
             imap_app_password: None,
             oauth_access_token: None,
@@ -386,7 +387,6 @@ mod tests {
             atc_codes: vec![],
             excise_tax_categories: vec![],
             tax_elections: vec![],
-            _opted_for_8_percent_flat_rate_compat: None,
             has_employees: false,
             is_dormant: false,
             has_single_employer: false,
@@ -463,7 +463,6 @@ mod tests {
             email_auth_method: crate::profile::EmailAuthMethod::AppPassword,
             imap_email: None,
             imap_host: None,
-            _imap_enabled_compat: None,
             test_notification_enabled: false,
             imap_app_password: None,
             oauth_access_token: None,
@@ -479,7 +478,6 @@ mod tests {
             atc_codes: vec![],
             excise_tax_categories: vec![],
             tax_elections: vec![],
-            _opted_for_8_percent_flat_rate_compat: None,
             has_employees: false,
             is_dormant: false,
             has_single_employer: false,
@@ -563,7 +561,6 @@ mod tests {
             email_auth_method: crate::profile::EmailAuthMethod::AppPassword,
             imap_email: None,
             imap_host: None,
-            _imap_enabled_compat: None,
             test_notification_enabled: false,
             imap_app_password: None,
             oauth_access_token: None,
@@ -579,7 +576,6 @@ mod tests {
             atc_codes: vec![],
             excise_tax_categories: vec![],
             tax_elections: vec![],
-            _opted_for_8_percent_flat_rate_compat: None,
             has_employees: false,
             is_dormant: false,
             has_single_employer: false,
@@ -674,7 +670,6 @@ mod tests {
             email_auth_method: crate::profile::EmailAuthMethod::AppPassword,
             imap_email: None,
             imap_host: None,
-            _imap_enabled_compat: None,
             test_notification_enabled: false,
             imap_app_password: None,
             oauth_access_token: None,
@@ -690,7 +685,6 @@ mod tests {
             atc_codes: vec![],
             excise_tax_categories: vec![],
             tax_elections: vec![],
-            _opted_for_8_percent_flat_rate_compat: None,
             has_employees: false,
             is_dormant: false,
             has_single_employer: false,

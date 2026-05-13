@@ -168,11 +168,6 @@ pub struct TaxpayerProfile {
     #[serde(default)]
     pub tax_elections: Vec<TaxElectionHistory>,
 
-    /// Legacy compat: preserve old `opted_for_8_percent_flat_rate` values from JSON.
-    #[serde(default, alias = "opted_for_8_percent_flat_rate")]
-    #[doc(hidden)]
-    pub _opted_for_8_percent_flat_rate_compat: Option<bool>,
-
     /// Soft delete flag. If true, the profile is archived and can be exported/hard-deleted.
     #[serde(default)]
     pub is_archived: bool,
@@ -198,11 +193,6 @@ pub struct TaxpayerProfile {
     /// IMAP server hostname (only needed for App Password mode; defaults to imap.gmail.com).
     #[serde(default)]
     pub imap_host: Option<String>,
-
-    // Legacy compat: keep deserializing old `imap_enabled` as an alias
-    #[serde(default, alias = "imap_enabled")]
-    #[doc(hidden)]
-    pub _imap_enabled_compat: Option<bool>,
 
     /// Toggle to enable/disable test OS notifications every minute.
     #[serde(default)]
@@ -292,18 +282,16 @@ impl TaxpayerProfile {
     }
 
     /// Returns true if the 8% flat rate election is active for the given taxable year.
-    /// It checks the historical ledger first, and falls back to the legacy compat flag.
+    /// Checks the historical `tax_elections` ledger (populated by migration v4 for old profiles).
     pub fn has_8_percent_election(&self, year: u16) -> bool {
-        if let Some(history) = self.tax_elections.iter().find(|h| h.taxable_year == year) {
-            matches!(history.election, IncomeTaxElection::EightPercent)
-        } else {
-            self._opted_for_8_percent_flat_rate_compat.unwrap_or(false)
-        }
+        self.tax_elections.iter().any(|h| {
+            h.taxable_year == year && matches!(h.election, IncomeTaxElection::EightPercent)
+        })
     }
 
-    /// Returns true if email tracking is active (handles legacy `imap_enabled` field).
+    /// Returns true if email tracking is active.
     pub fn is_email_tracking_active(&self) -> bool {
-        self.email_tracking_enabled || self._imap_enabled_compat.unwrap_or(false)
+        self.email_tracking_enabled
     }
 
     /// Returns BIR form codes applicable to this taxpayer based on their

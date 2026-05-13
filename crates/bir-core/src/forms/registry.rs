@@ -1,4 +1,14 @@
-//! Form type registry — defines all supported BIR forms and their filing rules.
+//! Form type registry — static metadata for all supported BIR forms.
+//!
+//! # Status
+//!
+//! This module is a **static data file**. Its primary active consumers are:
+//! - `news_fetcher::normalize_notice()` — matches article text against `FORM_REGISTRY` form codes
+//! - `dashboard.rs` — filters `FormArtifact` lists using `FilingFrequency`
+//!
+//! The eligibility helper functions (`forms_for_taxpayer`, `forms_for_profile`) are
+//! **deprecated** — use `TemporalEngine::evaluate_with_context()` or
+//! `integration::applicable_forms_for_profile_and_year()` instead.
 
 use crate::profile::TaxpayerType;
 
@@ -534,6 +544,15 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
 ];
 
 /// Returns forms available to a given taxpayer type.
+///
+/// # Deprecated
+/// This function performs a static registry lookup and is not era-aware.
+/// Use [`crate::integration::applicable_forms_for_profile_and_year`] or
+/// [`crate::temporal::TemporalEngine`] instead.
+#[deprecated(
+    since = "0.1.0",
+    note = "Use integration::applicable_forms_for_profile_and_year() or TemporalEngine instead"
+)]
 pub fn forms_for_taxpayer(taxpayer_type: &TaxpayerType) -> Vec<&'static FormDefinition> {
     FORM_REGISTRY
         .iter()
@@ -547,6 +566,15 @@ pub fn find_form(code: &str) -> Option<&'static FormDefinition> {
 }
 
 /// Returns forms filtered by taxpayer type, VAT status, and employee status.
+///
+/// # Deprecated
+/// This function performs a static registry lookup and is not era-aware.
+/// Use [`crate::integration::applicable_forms_for_profile_and_year`] or
+/// [`crate::temporal::TemporalEngine`] instead.
+#[deprecated(
+    since = "0.1.0",
+    note = "Use integration::applicable_forms_for_profile_and_year() or TemporalEngine instead"
+)]
 pub fn forms_for_profile(
     taxpayer_type: &TaxpayerType,
     is_vat_registered: bool,

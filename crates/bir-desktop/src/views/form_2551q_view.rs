@@ -1607,8 +1607,9 @@ impl Render for Form2551QView {
                         // View Receipt — opens receipt file in system viewer (Preview.app).
                         // Shown whenever a payment receipt file has been uploaded.
                         if matches!(self.draft.status, FilingStatus::Confirmed | FilingStatus::Paid)
-                            && self.draft.payment_receipt_path.is_some() {
-                                toolbar = toolbar.child(
+                            && self.draft.payment_receipt_path.is_some()
+                        {
+                            toolbar = toolbar.child(
                                     gpui_component::button::Button::new("view_receipt_btn")
                                         .label("View Receipt")
                                         .outline()
