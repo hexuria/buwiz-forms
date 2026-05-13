@@ -133,12 +133,17 @@ msix *args="":
     # Use the shared BUILD_NUMBER from the justfile (synced with App Store Connect via bump-build).
     # This ensures macOS and Windows builds share the same build counter.
     $BUILD_NUMBER = "{{BUILD_NUMBER}}"
-    Write-Host "Using shared build number: $BUILD_NUMBER"
+
+    # Microsoft Store requires Version format: Major.Minor.Build.0
+    # The 4th part (Revision) MUST be 0 — Microsoft reserves it.
+    # We use: Major.Minor.BuildNumber.0 (semver patch folds into build number progression).
+    $vParts = $VERSION.Split('.')
+    $MSIX_VERSION = "$($vParts[0]).$($vParts[1]).$BUILD_NUMBER.0"
+    Write-Host "MSIX version: $MSIX_VERSION (from app version $VERSION, build $BUILD_NUMBER)"
 
     # Copy and stamp manifest
     (Get-Content "assets\windows\AppxManifest.xml") `
-        -replace 'VERSION_PLACEHOLDER', $VERSION `
-        -replace 'BUILD_PLACEHOLDER', $BUILD_NUMBER | `
+        -replace 'MSIX_VERSION_PLACEHOLDER', $MSIX_VERSION | `
         Set-Content "$MSIX_DIR\AppxManifest.xml"
     
     # Build MSIX

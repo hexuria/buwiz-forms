@@ -238,12 +238,14 @@ jobs:
           # Extract BUILD_NUMBER from justfile (single source of truth, synced with App Store Connect)
           $BUILD_NUMBER = (Select-String -Path justfile -Pattern '^BUILD_NUMBER' | ForEach-Object { $_ -replace '.*"(\d+)".*', '$1' })
           if (-not $BUILD_NUMBER) { $BUILD_NUMBER = '0' }
+          # Microsoft Store requires: Major.Minor.Build.0 (Revision must be 0)
+          $vParts = $VERSION.Split('.')
+          $MSIX_VERSION = "$($vParts[0]).$($vParts[1]).$BUILD_NUMBER.0"
           Copy-Item "assets\windows\AppxManifest.xml" "$MSIX_DIR\AppxManifest.xml"
           (Get-Content "$MSIX_DIR\AppxManifest.xml") `
-            -replace 'VERSION_PLACEHOLDER', $VERSION `
-            -replace 'BUILD_PLACEHOLDER', $BUILD_NUMBER | `
+            -replace 'MSIX_VERSION_PLACEHOLDER', $MSIX_VERSION | `
             Set-Content "$MSIX_DIR\AppxManifest.xml"
-          Write-Host "Stamped MSIX manifest: $VERSION.$BUILD_NUMBER"
+          Write-Host "Stamped MSIX manifest: $MSIX_VERSION"
           
           # Build MSIX (unsigned — Microsoft Store will sign on submission)
           $SDK_DIR = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\10.*" | Sort-Object Name -Descending | Select-Object -First 1

@@ -9,7 +9,7 @@
   <Identity
     Name="GOLDCODERSCORP.ebirforms"
     Publisher="CN=04F86D81-D5D3-4477-A363-0CAE79356A84"
-    Version="VERSION_PLACEHOLDER.BUILD_PLACEHOLDER"
+    Version="MSIX_VERSION_PLACEHOLDER"
     ProcessorArchitecture="x64" />
 
   <Properties>
