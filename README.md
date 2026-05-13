@@ -138,6 +138,74 @@ We follow a "less is better" philosophy. You only need to remember a few core co
 
 ---
 
+## 🔢 Versioning & Build Numbers
+
+The project uses **two independent version identifiers** to satisfy both Apple App Store and Microsoft Store requirements:
+
+| Identifier | Source of Truth | Changed By | When |
+|---|---|---|---|
+| **App Version** (semver) | `Cargo.toml` → `version = "0.1.0"` | You, manually | Feature release or hotfix |
+| **Build Number** (counter) | `justfile` → `BUILD_NUMBER := "21"` | `just bump-build` (auto) | Every store submission |
+
+### Why Two Numbers?
+
+Apple and Microsoft handle versioning differently:
+
+| | macOS App Store | Microsoft Store |
+|---|---|---|
+| Marketing version | `CFBundleShortVersionString = "0.1.0"` | Store listing description |
+| Build identifier | `CFBundleVersion = "21"` (separate field) | `Version = "0.1.21.0"` in AppxManifest |
+| Multiple builds per version? | ✅ Yes | ❌ No — each submission needs a higher `Version` |
+
+**macOS** has two separate fields — one for the user-facing version, one for the internal build counter. **Microsoft** has only a single `Version` field, and the 4th part (Revision) must always be `0`.
+
+### How the Version Maps to Each Store
+
+Given `Cargo.toml version = "0.1.0"` and `BUILD_NUMBER = 22`:
+
+```
+macOS App Store:
+  CFBundleShortVersionString = "0.1.0"    ← what users see
+  CFBundleVersion            = "22"       ← internal build number
+
+Microsoft Store:
+  AppxManifest Version       = "0.1.22.0" ← Major.Minor.BuildNumber.0
+  Store listing              = "0.1.0"    ← what users see (set in Partner Center)
+```
+
+### Developer Workflow
+
+**Submitting a new build** (most common):
+```bash
+just bump-build    # Queries App Store Connect API, increments BUILD_NUMBER in justfile
+git add justfile && git commit -m "build: bump to $(just --evaluate BUILD_NUMBER)"
+# On macOS:
+just app           # Builds .app with version 0.1.0 (build 23)
+# On Windows:
+just msix          # Builds .msix with version 0.1.23.0
+```
+
+**Releasing a new version** (feature release or hotfix):
+```bash
+# 1. Manually edit Cargo.toml: version = "0.2.0"
+# 2. Then bump and build as usual:
+just bump-build
+git add Cargo.toml justfile && git commit -m "release: v0.2.0"
+```
+
+> **Note:** `just bump-build` only works on macOS — it requires the Apple App Store Connect API credentials (`.p8` key, `APP_STORE_ISSUER_ID`, `APP_STORE_KEY_ID` in `.env`). On Windows, simply `git pull` to get the latest `BUILD_NUMBER` from the justfile, then run `just msix`.
+
+### Version Progression Example
+
+| Action | Cargo.toml | BUILD_NUMBER | macOS | Windows MSIX |
+|---|---|---|---|---|
+| Initial | `0.1.0` | 21 | `0.1.0` (build 21) | `0.1.21.0` |
+| Bump build | `0.1.0` | 22 | `0.1.0` (build 22) | `0.1.22.0` |
+| Bump build | `0.1.0` | 23 | `0.1.0` (build 23) | `0.1.23.0` |
+| Hotfix | `0.1.1` | 24 | `0.1.1` (build 24) | `0.1.24.0` |
+| Feature release | `0.2.0` | 25 | `0.2.0` (build 25) | `0.2.25.0` |
+| Stable release | `1.0.0` | 30 | `1.0.0` (build 30) | `1.0.30.0` |
+
 ## 📂 Architecture
 
 - `crates/bir-core/`: Contains all domain logic, SQLite database integrations, API communications, IMAP automated email tracking, cryptography, and XML generation logic.
