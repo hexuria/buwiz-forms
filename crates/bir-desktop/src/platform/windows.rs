@@ -61,6 +61,52 @@ pub fn bind_global_keys(cx: &mut App) {
         KeyBinding::new("ctrl-0", ResetZoom, None),
         KeyBinding::new("ctrl-e", ToggleEditMode, None),
         KeyBinding::new("ctrl-s", SaveLayout, None),
+        // ── PDF Layout Editor ────────────────────────────────────────────
+        KeyBinding::new("ctrl-n", EditorNewBox, Some("PdfLayoutEditorView")),
+        KeyBinding::new("ctrl-enter", EditorRenameField, Some("PdfLayoutEditorView")),
+        KeyBinding::new("ctrl-c", EditorSetCharCount, Some("PdfLayoutEditorView")),
+        KeyBinding::new("ctrl-d", EditorDuplicateBox, Some("PdfLayoutEditorView")),
+        KeyBinding::new(
+            "ctrl-backspace",
+            EditorDeleteBox,
+            Some("PdfLayoutEditorView"),
+        ),
+        KeyBinding::new("ctrl-f", EditorFocusSearch, Some("PdfLayoutEditorView")),
+        KeyBinding::new("escape", EditorEscape, Some("PdfLayoutEditorView")),
+        KeyBinding::new("ctrl-[", EditorPrevField, None),
+        KeyBinding::new("ctrl-]", EditorNextField, None),
+        // ── Typst Calibration ────────────────────────────────────────────
+        KeyBinding::new("ctrl-.", OpacityIncrease, Some("TypstCalibrationView")),
+        KeyBinding::new("ctrl-,", OpacityDecrease, Some("TypstCalibrationView")),
+        KeyBinding::new("ctrl-right", NextPage, Some("TypstCalibrationView")),
+        KeyBinding::new("ctrl-left", PrevPage, Some("TypstCalibrationView")),
+        KeyBinding::new("ctrl-right", NextPage, Some("PdfLayoutEditorView")),
+        KeyBinding::new("ctrl-left", PrevPage, Some("PdfLayoutEditorView")),
+        // ── Editor Box Selection & Nudging ───────────────────────────────
+        KeyBinding::new("ctrl-1", EditorSelectBox1, Some("PdfLayoutEditorView")),
+        KeyBinding::new("up", EditorNudgeUp, Some("PdfLayoutEditorView")),
+        KeyBinding::new("down", EditorNudgeDown, Some("PdfLayoutEditorView")),
+        KeyBinding::new("left", EditorNudgeLeft, Some("PdfLayoutEditorView")),
+        KeyBinding::new("right", EditorNudgeRight, Some("PdfLayoutEditorView")),
+        KeyBinding::new("ctrl-2", EditorSelectBox2, Some("PdfLayoutEditorView")),
+        KeyBinding::new("ctrl-3", EditorSelectBox3, Some("PdfLayoutEditorView")),
+        KeyBinding::new("ctrl-4", EditorSelectBox4, Some("PdfLayoutEditorView")),
+        KeyBinding::new("ctrl-5", EditorSelectBox5, Some("PdfLayoutEditorView")),
+        KeyBinding::new("ctrl-6", EditorSelectBox6, Some("PdfLayoutEditorView")),
+        KeyBinding::new("ctrl-7", EditorSelectBox7, Some("PdfLayoutEditorView")),
+        KeyBinding::new("ctrl-8", EditorSelectBox8, Some("PdfLayoutEditorView")),
+        KeyBinding::new("ctrl-9", EditorSelectBox9, Some("PdfLayoutEditorView")),
+        KeyBinding::new(
+            "ctrl-shift-0",
+            EditorSelectLastBox,
+            Some("PdfLayoutEditorView"),
+        ),
+        KeyBinding::new("ctrl-t", EditorCycleType, Some("PdfLayoutEditorView")),
+        KeyBinding::new(
+            "ctrl-shift-d",
+            EditorToggleDirection,
+            Some("PdfLayoutEditorView"),
+        ),
     ]);
 }
 
