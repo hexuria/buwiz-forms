@@ -211,3 +211,18 @@ pub fn show_in_dock() {
         }
     }
 }
+
+pub fn toggle_app_visibility() {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        use objc::{class, msg_send, sel, sel_impl};
+        let app: *mut objc::runtime::Object = msg_send![class!(NSApplication), sharedApplication];
+        let policy: isize = msg_send![app, activationPolicy];
+        // NSApplicationActivationPolicyRegular is 0, Accessory is 1
+        if policy == 0 {
+            hide_from_dock();
+        } else {
+            show_in_dock();
+        }
+    }
+}

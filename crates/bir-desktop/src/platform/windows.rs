@@ -296,7 +296,27 @@ unsafe extern "system" fn show_window_callback(hwnd: HWND, _: LPARAM) -> BOOL {
     let mut pid = 0;
     unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
     if pid == unsafe { GetCurrentProcessId() } {
+        use windows::Win32::UI::WindowsAndMessaging::{SW_RESTORE, SetForegroundWindow};
+        let _ = unsafe { ShowWindow(hwnd, SW_RESTORE) };
         let _ = unsafe { ShowWindow(hwnd, SW_SHOW) };
+        let _ = unsafe { SetForegroundWindow(hwnd) };
+    }
+    BOOL(1)
+}
+
+#[cfg(target_os = "windows")]
+unsafe extern "system" fn toggle_window_callback(hwnd: HWND, _: LPARAM) -> BOOL {
+    let mut pid = 0;
+    unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
+    if pid == unsafe { GetCurrentProcessId() } {
+        use windows::Win32::UI::WindowsAndMessaging::{IsWindowVisible, SW_RESTORE, SetForegroundWindow};
+        if unsafe { IsWindowVisible(hwnd) }.into() {
+            let _ = unsafe { ShowWindow(hwnd, SW_HIDE) };
+        } else {
+            let _ = unsafe { ShowWindow(hwnd, SW_RESTORE) };
+            let _ = unsafe { ShowWindow(hwnd, SW_SHOW) };
+            let _ = unsafe { SetForegroundWindow(hwnd) };
+        }
     }
     BOOL(1)
 }
@@ -309,10 +329,18 @@ pub fn hide_from_dock() {
     }
 }
 
-/// Restores the application to the dock/taskbar.
+/// Restores the application to the dock/taskbar and brings to foreground.
 pub fn show_in_dock() {
     #[cfg(target_os = "windows")]
     unsafe {
         let _ = EnumWindows(Some(show_window_callback), LPARAM(0));
+    }
+}
+
+/// Toggles the application visibility on Windows.
+pub fn toggle_app_visibility() {
+    #[cfg(target_os = "windows")]
+    unsafe {
+        let _ = EnumWindows(Some(toggle_window_callback), LPARAM(0));
     }
 }

@@ -27,6 +27,12 @@ pub fn prevent_multiple_instances() {
     if let Ok(port_str) = std::fs::read_to_string(&port_file) {
         if let Ok(port) = port_str.trim().parse::<u16>() {
             if let Ok(socket) = StdUdpSocket::bind("127.0.0.1:0") {
+                #[cfg(target_os = "windows")]
+                {
+                    unsafe {
+                        let _ = windows::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow(0xFFFFFFFF);
+                    }
+                }
                 let _ = socket.set_read_timeout(Some(Duration::from_millis(100)));
                 let _ = socket.send_to(b"SHOW", format!("127.0.0.1:{}", port));
                 let mut buf = [0; 4];
@@ -57,6 +63,11 @@ pub fn start_ipc_listener(cx: &mut App) {
                         let _ = cx.update(|cx| {
                             crate::platform::show_in_dock();
                             cx.activate(true);
+                        });
+                    } else if &buf[..len] == b"TOGGLE" {
+                        let _ = socket.send_to(b"ACK", src).await;
+                        let _ = cx.update(|cx| {
+                            crate::platform::toggle_app_visibility();
                         });
                     }
                 }

@@ -157,3 +157,7 @@ pub fn show_in_dock() {
             .spawn();
     }
 }
+
+pub fn toggle_app_visibility() {
+    // Basic stub for Linux
+}

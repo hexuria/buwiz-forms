@@ -235,6 +235,45 @@ fn main() {
                     }
                 });
 
+                // Phase 2b: Global Hotkey Listener (Windows)
+                #[cfg(target_os = "windows")]
+                {
+                    let hotkey_db = db.clone();
+                    std::thread::spawn(move || {
+                        use windows::Win32::UI::Input::KeyboardAndMouse::{RegisterHotKey, MOD_WIN, MOD_SHIFT};
+                        use windows::Win32::UI::WindowsAndMessaging::{GetMessageW, MSG, WM_HOTKEY};
+                        
+                        let hotkey_char = if let Ok(guard) = hotkey_db.lock() {
+                            guard.get_setting("global_hotkey_key").ok().flatten().unwrap_or_else(|| "E".to_string()).to_uppercase()
+                        } else {
+                            "E".to_string()
+                        };
+                        
+                        let vk_code = hotkey_char.chars().next().unwrap_or('E') as u32;
+
+                        unsafe {
+                            let id = 1;
+                            // Win + Shift + [Key]
+                            let _ = RegisterHotKey(None, id, MOD_WIN | MOD_SHIFT, vk_code);
+                            let mut msg = MSG::default();
+                            while GetMessageW(&mut msg, None, 0, 0).into() {
+                                if msg.message == WM_HOTKEY {
+                                    if let Some(proj_dirs) = directories::ProjectDirs::from("com", "goldcoders", "eBIRForms") {
+                                        let port_file = proj_dirs.data_local_dir().join("instance.port");
+                                        if let Ok(port_str) = std::fs::read_to_string(&port_file) {
+                                            if let Ok(port) = port_str.trim().parse::<u16>() {
+                                                if let Ok(socket) = std::net::UdpSocket::bind("127.0.0.1:0") {
+                                                    let _ = socket.send_to(b"TOGGLE", format!("127.0.0.1:{}", port));
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+
                 // Phase 3: System Tray Integration
                 let tray_menu = tray_icon::menu::Menu::new();
                 let show_i = tray_icon::menu::MenuItem::new("Show eBIRForms", true, None);

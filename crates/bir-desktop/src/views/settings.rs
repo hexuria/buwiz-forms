@@ -2,7 +2,7 @@ use crate::components::otp_paste::paste_otp_value;
 use bir_core::db::Database;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use gpui_component::input::{InputEvent, OtpInput, OtpState};
+use gpui_component::input::{Input, InputEvent, OtpInput, OtpState};
 use gpui_component::switch::Switch;
 use gpui_component::*;
 use std::sync::{Arc, Mutex};
@@ -26,11 +26,12 @@ pub struct SettingsView {
     show_totp_secret_text: bool,
     hide_tax_profiles: bool,
     enable_profile_pins: bool,
+    global_hotkey_input: Entity<gpui_component::input::TextInput>,
 }
 
 impl SettingsView {
     pub fn new(db: Arc<Mutex<Database>>, window: &mut Window, cx: &mut Context<'_, Self>) -> Self {
-        let (is_app_lock_enabled, is_app_totp_enabled, hide_tax_profiles, enable_profile_pins) =
+        let (is_app_lock_enabled, is_app_totp_enabled, hide_tax_profiles, enable_profile_pins, global_hotkey) =
             if let Ok(guard) = db.lock() {
                 let lock = guard
                     .get_setting("app_lock_enabled")
@@ -55,9 +56,15 @@ impl SettingsView {
                     .flatten()
                     .as_deref()
                     == Some("true");
-                (lock, totp, hide, pins)
+                let hotkey = guard
+                    .get_setting("global_hotkey_key")
+                    .ok()
+                    .flatten()
+                    .unwrap_or_else(|| "E".to_string())
+                    .to_uppercase();
+                (lock, totp, hide, pins, hotkey)
             } else {
-                (false, false, false, false)
+                (false, false, false, false, "E".to_string())
             };
 
         let setup_otp = cx.new(|cx| {
@@ -70,6 +77,12 @@ impl SettingsView {
             let mut state = OtpState::new(6, window, cx);
             state = state.masked(false);
             state
+        });
+
+        let global_hotkey_input = cx.new(|cx| {
+            let mut input = gpui_component::input::TextInput::new(window, cx);
+            input.set_text(global_hotkey, window, cx);
+            input
         });
 
         let view = Self {
@@ -85,6 +98,7 @@ impl SettingsView {
             show_totp_secret_text: false,
             hide_tax_profiles,
             enable_profile_pins,
+            global_hotkey_input: global_hotkey_input.clone(),
         };
 
         cx.subscribe_in(
@@ -136,6 +150,28 @@ impl SettingsView {
                             });
                         }
                     }
+                }
+            },
+        )
+        .detach();
+
+        cx.subscribe_in(
+            &global_hotkey_input,
+            window,
+            |this: &mut Self, _entity, event: &InputEvent, window, cx| {
+                if let InputEvent::Change = event {
+                    let text = this.global_hotkey_input.read(cx).text().to_uppercase();
+                    let first_char = text.chars().next().unwrap_or('E').to_string();
+                    if text != first_char {
+                        this.global_hotkey_input.update(cx, |input, cx| {
+                            input.set_text(first_char.clone(), window, cx);
+                        });
+                    }
+                    if let Ok(db_guard) = this.db.lock() {
+                        let _ = db_guard.set_setting("global_hotkey_key", &first_char);
+                    }
+                    cx.emit(SettingsEvent::ReloadApp);
+                    cx.notify();
                 }
             },
         )
@@ -436,6 +472,48 @@ impl Render for SettingsView {
                                                     cx.notify();
                                                 }))
                                         )
+                                    )
+                            )
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .items_start()
+                            .p_6()
+                            .gap_4()
+                            .border_b_1()
+                            .border_color(border)
+                            .child(
+                                div()
+                                    .flex()
+                                    .w_full()
+                                    .justify_between()
+                                    .items_center()
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .gap_1()
+                                            .child(div().font_weight(FontWeight::SEMIBOLD).child("Global Toggle Hotkey (Windows)"))
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .child("Choose a letter to combine with Win + Shift to toggle the application from anywhere."),
+                                            ),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap_2()
+                                            .child(div().text_sm().child("Win + Shift +"))
+                                            .child(
+                                                div()
+                                                    .w(px(50.))
+                                                    .child(Input::new(&self.global_hotkey_input))
+                                            )
                                     )
                             )
                     )
