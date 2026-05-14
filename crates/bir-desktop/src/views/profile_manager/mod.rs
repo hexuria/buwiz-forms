@@ -44,9 +44,18 @@ pub struct ProfileManagerView {
     eopt_tier_select: Entity<ComboboxState>,
     cooperative_treatment_select: Entity<ComboboxState>,
     is_gpp_partner: bool,
-    has_employees: bool,
-    is_expanded_withholding_agent: bool,
-    is_8_percent_flat_rate: bool,
+    // ── Granular Withholding (replaces has_employees + is_expanded_withholding_agent) ──
+    withholds_compensation: bool,
+    withholds_expanded: bool,
+    withholds_final: bool,
+    is_top_withholding_agent: bool,
+    is_government_withholding_entity: bool,
+    has_single_employer: bool,
+    is_dormant: bool,
+    registration_activity_status_select: Entity<ComboboxState>,
+    // ── Tax Election Ledger (replaces is_8_percent_flat_rate) ──
+    tax_election_year_input: Entity<InputState>,
+    tax_election_select: Entity<ComboboxState>,
     excise_select: Entity<MultiSelectState>,
     line_of_business: Entity<InputState>,
     name_input: Entity<InputState>,
@@ -169,6 +178,41 @@ impl ProfileManagerView {
             )
         });
 
+        // Registration activity status
+        let registration_activity_status_select = cx.new(|cx| {
+            ComboboxState::new(
+                vec![
+                    "Active".to_string(),
+                    "Dormant Operational".to_string(),
+                    "Temporarily Inactive".to_string(),
+                    "Officially Closed".to_string(),
+                ],
+                4,
+                window,
+                cx,
+            )
+        });
+
+        // Tax election ledger inputs
+        let current_year = chrono::Local::now().date_naive().year();
+        let tax_election_year_input = cx.new(|cx| {
+            let mut input = InputState::new(window, cx).placeholder("Year");
+            input.set_value(current_year.to_string(), window, cx);
+            input
+        });
+        let tax_election_select = cx.new(|cx| {
+            ComboboxState::new(
+                vec![
+                    "8% Flat Rate".to_string(),
+                    "Graduated + OSD".to_string(),
+                    "Graduated + Itemized".to_string(),
+                ],
+                3,
+                window,
+                cx,
+            )
+        });
+
         // Excise tax liabilities multi-select
         let excise_select = cx.new(|cx| {
             MultiSelectState::new(
@@ -279,9 +323,16 @@ impl ProfileManagerView {
             eopt_tier_select,
             cooperative_treatment_select,
             is_gpp_partner: false,
-            has_employees: false,
-            is_expanded_withholding_agent: false,
-            is_8_percent_flat_rate: false,
+            withholds_compensation: false,
+            withholds_expanded: false,
+            withholds_final: false,
+            is_top_withholding_agent: false,
+            is_government_withholding_entity: false,
+            has_single_employer: false,
+            is_dormant: false,
+            registration_activity_status_select,
+            tax_election_year_input,
+            tax_election_select,
             excise_select,
             line_of_business,
             name_input,
@@ -332,9 +383,13 @@ impl ProfileManagerView {
         self.editing_id = None;
         self.tin_duplicate_error = None;
         self.is_vat_registered = false;
-        self.has_employees = false;
-        self.is_expanded_withholding_agent = false;
-        self.is_8_percent_flat_rate = false;
+        self.withholds_compensation = false;
+        self.withholds_expanded = false;
+        self.withholds_final = false;
+        self.is_top_withholding_agent = false;
+        self.is_government_withholding_entity = false;
+        self.has_single_employer = false;
+        self.is_dormant = false;
         self.is_gpp_partner = false;
         self.excise_select.update(cx, |state, cx| {
             state.set_selected_ids(vec![], cx);
@@ -444,10 +499,13 @@ impl ProfileManagerView {
     ) {
         self.editing_id = profile.id;
         self.is_vat_registered = profile.is_vat_registered;
-        self.has_employees = profile.has_employees;
-        self.is_expanded_withholding_agent = profile.is_expanded_withholding_agent;
-        self.is_8_percent_flat_rate =
-            profile.has_8_percent_election(chrono::Local::now().date_naive().year() as u16);
+        self.withholds_compensation = profile.withholds_compensation;
+        self.withholds_expanded = profile.withholds_expanded;
+        self.withholds_final = profile.withholds_final;
+        self.is_top_withholding_agent = profile.is_top_withholding_agent;
+        self.is_government_withholding_entity = profile.is_government_withholding_entity;
+        self.has_single_employer = profile.has_single_employer;
+        self.is_dormant = profile.is_dormant;
         self.is_gpp_partner = profile.is_gpp_partner;
         self.stored_tax_elections = profile.tax_elections.clone();
         // Populate excise tax multi-select from profile categories
@@ -725,8 +783,6 @@ impl ProfileManagerView {
                 cx.notify();
             }
         }
-        // Any combobox change might affect 8% eligibility (type, classification, EOPT tier)
-        self.enforce_8_percent_eligibility(cx);
     }
 
     fn on_date_event(
@@ -748,29 +804,7 @@ impl ProfileManagerView {
         cx.notify();
     }
 
-    /// Auto-uncheck the 8% flat rate if the taxpayer is no longer eligible.
-    /// Called whenever type, classification, EOPT tier, or VAT status changes.
-    fn enforce_8_percent_eligibility(&mut self, cx: &mut Context<Self>) {
-        if !self.is_8_percent_flat_rate {
-            return; // Nothing to enforce
-        }
-        let type_val = self.type_select.read(cx).selected_value(cx);
-        let class_val = self.tax_classification_select.read(cx).selected_value(cx);
-        let eopt_val = self.eopt_tier_select.read(cx).selected_value(cx);
 
-        let eligible = type_val == "Individual"
-            && !self.is_vat_registered
-            && matches!(
-                class_val.as_str(),
-                "Self-Employed / Professional" | "Mixed Income"
-            )
-            && matches!(eopt_val.as_str(), "Micro" | "");
-
-        if !eligible {
-            self.is_8_percent_flat_rate = false;
-            cx.notify();
-        }
-    }
 
     fn current_profile(&self, cx: &mut Context<Self>) -> TaxpayerProfile {
         let tin_val = self.tin_input.read(cx).formatted_value(cx);
@@ -914,7 +948,9 @@ impl ProfileManagerView {
             is_bmbe: false,
             is_gpp_partner: self.is_gpp_partner,
             is_create_msme: false,
-            is_expanded_withholding_agent: self.is_expanded_withholding_agent,
+            is_expanded_withholding_agent: self.withholds_expanded
+                || self.is_top_withholding_agent
+                || self.is_government_withholding_entity,
             atc_codes: vec![],
             excise_tax_categories: {
                 let selected = self.excise_select.read(cx).selected_ids();
@@ -932,37 +968,34 @@ impl ProfileManagerView {
                 }
                 cats
             },
-            tax_elections: {
-                let current_year = chrono::Local::now().date_naive().year() as u16;
-                let mut elections = self.stored_tax_elections.clone();
-                // Remove any existing 8% entry for the current year only
-                elections.retain(|e| {
-                    !(e.taxable_year == current_year
-                        && matches!(
-                            e.election,
-                            bir_core::profile::IncomeTaxElection::EightPercent
-                        ))
-                });
-                // Re-add if the checkbox is checked
-                if self.is_8_percent_flat_rate {
-                    elections.push(bir_core::profile::TaxElectionHistory {
-                        taxable_year: current_year,
-                        election: bir_core::profile::IncomeTaxElection::EightPercent,
-                        elected_at: chrono::Local::now().naive_local(),
-                        source_form: "profile_manager".to_string(),
-                    });
+            // Tax elections are now managed via the ledger UI — pass through directly
+            tax_elections: self.stored_tax_elections.clone(),
+            has_employees: self.withholds_compensation, // compat mirror
+            is_dormant: self.is_dormant,
+            has_single_employer: self.has_single_employer,
+            withholds_compensation: self.withholds_compensation,
+            withholds_expanded: self.withholds_expanded,
+            withholds_final: self.withholds_final,
+            is_top_withholding_agent: self.is_top_withholding_agent,
+            is_government_withholding_entity: self.is_government_withholding_entity,
+            registration_activity_status: {
+                let val = self
+                    .registration_activity_status_select
+                    .read(cx)
+                    .selected_value(cx);
+                match val.as_str() {
+                    "Dormant Operational" => {
+                        bir_core::profile::RegistrationActivityStatus::DormantOperational
+                    }
+                    "Temporarily Inactive" => {
+                        bir_core::profile::RegistrationActivityStatus::TemporarilyInactive
+                    }
+                    "Officially Closed" => {
+                        bir_core::profile::RegistrationActivityStatus::OfficiallyClosed
+                    }
+                    _ => bir_core::profile::RegistrationActivityStatus::Active,
                 }
-                elections
             },
-            has_employees: self.has_employees,
-            is_dormant: false,
-            has_single_employer: false,
-            withholds_compensation: false,
-            withholds_expanded: false,
-            withholds_final: false,
-            is_top_withholding_agent: false,
-            is_government_withholding_entity: false,
-            registration_activity_status: bir_core::profile::RegistrationActivityStatus::Active,
         }
     }
 
@@ -1200,14 +1233,12 @@ impl Render for ProfileManagerView {
         let is_cooperative = type_val == "Cooperative";
 
         let tax_class_val = self.tax_classification_select.read(cx).selected_value(cx);
-        let eopt_val = self.eopt_tier_select.read(cx).selected_value(cx);
-        let is_eligible_for_8_percent = is_individual
+        let is_eligible_for_election = is_individual
             && !self.is_vat_registered
             && matches!(
                 tax_class_val.as_str(),
                 "Self-Employed / Professional" | "Mixed Income"
-            )
-            && matches!(eopt_val.as_str(), "Micro" | "");
+            );
 
         let date_label = if is_individual {
             "Birth Date"
@@ -1414,7 +1445,7 @@ impl Render for ProfileManagerView {
                                     .child(self.render_tax_profile_tab(
                                         is_individual,
                                         is_cooperative,
-                                        is_eligible_for_8_percent,
+                                        is_eligible_for_election,
                                         date_label,
                                         cx,
                                     ))

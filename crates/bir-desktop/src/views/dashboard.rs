@@ -2,6 +2,7 @@ use bir_core::db::Database;
 use bir_core::forms::registry::FilingFrequency;
 use bir_core::forms::{FormFilingProgress, QuarterState};
 use bir_core::profile::TaxpayerProfile;
+use bir_core::temporal::support_level::form_support_level;
 use chrono::{Datelike, Local};
 use gpui::*;
 use gpui_component::*;
@@ -367,7 +368,36 @@ impl Render for DashboardView {
                     .and_then(|y| y.get(&year))
                     .cloned();
 
-                let card = match &form_def.frequency {
+                let support = form_support_level(&code);
+                let is_fileable = support.is_fileable_in_app();
+
+                let card = if !is_fileable {
+                    // ── Unsupported form: render as informational card ──
+                    let support_label = support.action_label();
+                    Self::build_card(form_def, year, card_width, cx)
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .gap_3()
+                                .py_3()
+                                .px_6()
+                                .rounded_full()
+                                .border_1()
+                                .border_color(cx.theme().border)
+                                .bg(gpui::transparent_black())
+                                .opacity(0.6)
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child(support_label),
+                                ),
+                        )
+                } else {
+                    match &form_def.frequency {
                     FilingFrequency::Quarterly => {
                         let quarters = progress.as_ref().map(|p| p.quarters.clone()).unwrap_or([
                             QuarterState::NotStarted,
@@ -794,7 +824,8 @@ impl Render for DashboardView {
                                     })),
                             )
                     }
-                };
+                    } // close match
+                }; // close if/else
 
                 row = row.child(card);
                 cards_rendered += 1;

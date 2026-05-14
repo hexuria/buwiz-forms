@@ -1,6 +1,6 @@
 //! Exclusive group rule — ensures mutual exclusion (e.g., 1702 family, 1701 family).
 
-use crate::profile::{EoptTier, TaxClassification};
+use crate::profile::TaxClassification;
 use crate::temporal::eligibility_facts::{EligibilityFacts, IndividualIncomeKind};
 use crate::temporal::forms::FormArtifact;
 use crate::temporal::traits::TaxRule;
@@ -63,39 +63,77 @@ impl TaxRule for ExclusiveGroupRule {
         }
 
         // ── Individual ITR family: 1701 vs 1701A vs 1701MS ──
+        //
+        // Unlike corporate ITR (strict exclusive selection), individual ITR uses
+        // ranked recommendations: the primary form is kept at current_state,
+        // alternatives are marked Optional (not Suppressed) so they remain visible
+        // but secondary. Only truly inapplicable combinations are Suppressed.
         if group == "ANNUAL_INDIVIDUAL_ITR" {
-            let winner = match &facts.individual_income_kind {
-                // Mixed income always needs the full 1701 form
-                // (has both compensation and business/professional sections)
-                Some(IndividualIncomeKind::MixedIncome) => "1701",
-
-                // Self-employed / Professional
-                Some(IndividualIncomeKind::BusinessOrProfessionOnly)
-                    if facts.has_8_percent_election(target_year) =>
-                {
-                    // 8% elected: prefer simplified form
-                    let is_micro_small = matches!(
-                        facts.eopt_tier,
-                        Some(EoptTier::Micro) | Some(EoptTier::Small)
+            match &facts.individual_income_kind {
+                // ── Mixed income: only 1701 has both comp + business sections ──
+                Some(IndividualIncomeKind::MixedIncome) => {
+                    if form.form_code == "1701" {
+                        return current_state; // Primary
+                    }
+                    return FormEligibility::Suppressed(
+                        "Mixed income requires full 1701 form".into(),
                     );
-                    if is_micro_small {
-                        "1701MS" // EOPT simplified
+                }
+
+                // ── Business/profession only ──
+                Some(IndividualIncomeKind::BusinessOrProfessionOnly) => {
+                    if facts.has_8_percent_election(target_year) {
+                        // 8% elected: 1701A is primary, 1701 is allowed alternative
+                        match form.form_code.as_str() {
+                            "1701A" => return current_state, // Primary simplified form
+                            "1701" => {
+                                return FormEligibility::Optional(
+                                    "Full form also allowed for 8% filers".into(),
+                                );
+                            }
+                            "1701MS" => {
+                                // Let EoptMicroSmallRule handle Recommended vs Suppressed
+                                return current_state;
+                            }
+                            _ => return current_state,
+                        }
                     } else {
-                        "1701A" // 8% / OSD simplified
+                        // No 8% election: 1701 is primary, 1701A is allowed alternative
+                        match form.form_code.as_str() {
+                            "1701" => return current_state, // Primary full form
+                            "1701A" => {
+                                return FormEligibility::Optional(
+                                    "Simplified form available for OSD filers".into(),
+                                );
+                            }
+                            "1701MS" => {
+                                // Let EoptMicroSmallRule handle Recommended vs Suppressed
+                                return current_state;
+                            }
+                            _ => return current_state,
+                        }
                     }
                 }
 
-                // Estates/Trusts or unknown → full 1701
-                _ => "1701",
-            };
+                // ── Compensation only: 1701 (or 1700 via SubstitutedFilingRule) ──
+                Some(IndividualIncomeKind::CompensationOnly) => {
+                    if form.form_code == "1701" {
+                        return current_state;
+                    }
+                    return FormEligibility::Suppressed(
+                        "Compensation-only filers use 1701/1700".into(),
+                    );
+                }
 
-            if form.form_code == winner {
-                return current_state; // Keep this one
-            } else {
-                return FormEligibility::Suppressed(format!(
-                    "Exclusive group: {} selected instead",
-                    winner
-                ));
+                // ── Unconfigured/Estate/Trust: default to 1701, suppress others ──
+                None => {
+                    if form.form_code == "1701" {
+                        return current_state;
+                    }
+                    return FormEligibility::Suppressed(
+                        "Classification not configured; defaulting to 1701".into(),
+                    );
+                }
             }
         }
 

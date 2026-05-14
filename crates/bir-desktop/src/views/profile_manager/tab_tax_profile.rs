@@ -6,19 +6,22 @@ impl ProfileManagerView {
     /// Render the "Tax Profile" tab (tab index 0).
     ///
     /// Contains: TIN input, duplicate TIN error, RDO/type row, classification/EOPT row,
-    /// line-of-business, name, address, zip/phone row, email, date, VAT/employees toggles,
-    /// 8% election toggle, and excise tax multi-select.
+    /// line-of-business, name, address, zip/phone row, email, date, VAT toggle,
+    /// granular withholding obligation switches, tax election ledger, and excise tax multi-select.
     pub(super) fn render_tax_profile_tab(
         &self,
         is_individual: bool,
         is_cooperative: bool,
-        is_eligible_for_8_percent: bool,
+        is_eligible_for_election: bool,
         date_label: &'static str,
         cx: &Context<Self>,
     ) -> gpui::AnyElement {
         if self.active_tab != 0 {
             return div().into_any_element();
         }
+
+        let tax_class_val = self.tax_classification_select.read(cx).selected_value(cx);
+        let is_purely_compensation = is_individual && tax_class_val == "Purely Compensation";
 
         div()
             .flex()
@@ -184,6 +187,36 @@ impl ProfileManagerView {
                     .child(DateInput::new(&self.business_start_input))
                     .child(self.field_error("business_start_date", cx)),
             )
+            // ── Registration & Status ──
+            .child(
+                div()
+                    .flex()
+                    .gap_4()
+                    .w_full()
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(Self::field_label("Registration Activity Status", cx))
+                            .child(Combobox::new(&self.registration_activity_status_select)),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .items_end()
+                            .child(
+                                Self::render_checkbox(
+                                    "dormant_toggle",
+                                    "Dormant Entity",
+                                    self.is_dormant,
+                                    cx,
+                                ),
+                            ),
+                    ),
+            )
+            // ── VAT Registration ──
             .child(
                 div()
                     .id("vat_toggle")
@@ -193,7 +226,6 @@ impl ProfileManagerView {
                     .cursor_pointer()
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.is_vat_registered = !this.is_vat_registered;
-                        this.enforce_8_percent_eligibility(cx);
                         cx.notify();
                     }))
                     .child(
@@ -227,140 +259,77 @@ impl ProfileManagerView {
                             .child("VAT registered taxpayer"),
                     ),
             )
+            // ── Granular Withholding Obligations ──
             .child(
                 div()
                     .flex()
-                    .gap_6()
+                    .flex_col()
+                    .gap_2()
                     .child(
                         div()
-                            .id("employees_toggle")
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .cursor_pointer()
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.has_employees = !this.has_employees;
-                                cx.notify();
-                            }))
-                            .child(
-                                div()
-                                    .w_4()
-                                    .h_4()
-                                    .rounded_sm()
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .bg(if self.has_employees {
-                                        cx.theme().primary
-                                    } else {
-                                        cx.theme().background
-                                    })
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .child(if self.has_employees {
-                                        div()
-                                            .text_xs()
-                                            .text_color(cx.theme().primary_foreground)
-                                            .child("✓")
-                                    } else {
-                                        div()
-                                    }),
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().foreground)
-                                    .child("Has Employees"),
-                            ),
+                            .text_sm()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(cx.theme().foreground)
+                            .child("Withholding Obligations"),
                     )
                     .child(
                         div()
-                            .id("expanded_withholding_toggle")
                             .flex()
-                            .items_center()
-                            .gap_2()
-                            .cursor_pointer()
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.is_expanded_withholding_agent =
-                                    !this.is_expanded_withholding_agent;
-                                cx.notify();
-                            }))
-                            .child(
-                                div()
-                                    .w_4()
-                                    .h_4()
-                                    .rounded_sm()
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .bg(if self.is_expanded_withholding_agent {
-                                        cx.theme().primary
-                                    } else {
-                                        cx.theme().background
-                                    })
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .child(if self.is_expanded_withholding_agent {
-                                        div()
-                                            .text_xs()
-                                            .text_color(cx.theme().primary_foreground)
-                                            .child("✓")
-                                    } else {
-                                        div()
-                                    }),
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().foreground)
-                                    .child("Expanded Withholding Agent"),
-                            ),
-                    )
-                    .when(is_eligible_for_8_percent, |this| {
-                        this.child(
-                            div()
-                                .id("8_percent_toggle")
-                                .flex()
-                                .items_center()
-                                .gap_2()
-                                .cursor_pointer()
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.is_8_percent_flat_rate = !this.is_8_percent_flat_rate;
-                                    cx.notify();
-                                }))
-                                .child(
-                                    div()
-                                        .w_4()
-                                        .h_4()
-                                        .rounded_sm()
-                                        .border_1()
-                                        .border_color(cx.theme().border)
-                                        .bg(if self.is_8_percent_flat_rate {
-                                            cx.theme().primary
-                                        } else {
-                                            cx.theme().background
-                                        })
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .child(if self.is_8_percent_flat_rate {
-                                            div()
-                                                .text_xs()
-                                                .text_color(cx.theme().primary_foreground)
-                                                .child("✓")
-                                        } else {
-                                            div()
-                                        }),
-                                )
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(cx.theme().foreground)
-                                        .child("8% Income Tax Rate Election"),
-                                ),
-                        )
-                    }),
+                            .flex_wrap()
+                            .gap_x(px(24.))
+                            .gap_y(px(8.))
+                            .child(Self::render_checkbox(
+                                "wh_compensation_toggle",
+                                "Compensation",
+                                self.withholds_compensation,
+                                cx,
+                            ))
+                            .child(Self::render_checkbox(
+                                "wh_expanded_toggle",
+                                "Expanded",
+                                self.withholds_expanded,
+                                cx,
+                            ))
+                            .child(Self::render_checkbox(
+                                "wh_final_toggle",
+                                "Final",
+                                self.withholds_final,
+                                cx,
+                            ))
+                            .child(Self::render_checkbox(
+                                "wh_top_agent_toggle",
+                                "Top Withholding Agent",
+                                self.is_top_withholding_agent,
+                                cx,
+                            ))
+                            .child(Self::render_checkbox(
+                                "wh_govt_toggle",
+                                "Government Entity",
+                                self.is_government_withholding_entity,
+                                cx,
+                            )),
+                    ),
             )
+            // ── GPP Partner ──
+            .child(Self::render_checkbox(
+                "gpp_partner_toggle",
+                "GPP Partner",
+                self.is_gpp_partner,
+                cx,
+            ))
+            // ── Substituted filing (purely compensation only) ──
+            .when(is_purely_compensation, |this| {
+                this.child(Self::render_checkbox(
+                    "single_employer_toggle",
+                    "Single employer (eligible for substituted filing)",
+                    self.has_single_employer,
+                    cx,
+                ))
+            })
+            // ── Tax Election Ledger (replaces 8% checkbox) ──
+            .when(is_eligible_for_election, |this| {
+                this.child(self.render_tax_election_section(cx))
+            })
             .child(
                 v_flex()
                     .w_full()
@@ -369,5 +338,237 @@ impl ProfileManagerView {
                     .child(MultiSelect::new(&self.excise_select)),
             )
             .into_any_element()
+    }
+
+    /// Render the tax election ledger section — per-year election management.
+    fn render_tax_election_section(&self, cx: &Context<Self>) -> Div {
+        let elections = &self.stored_tax_elections;
+
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .p_4()
+            .rounded_lg()
+            .border_1()
+            .border_color(cx.theme().border)
+            .bg(cx.theme().secondary)
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(cx.theme().foreground)
+                    .child("Income Tax Rate Elections"),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child("Manage per-taxable-year income tax elections (e.g. 8% flat rate, graduated + OSD)."),
+            )
+            // ── Existing elections table ──
+            .when(!elections.is_empty(), |this| {
+                let mut table = div().flex().flex_col().gap_1().mt_2();
+                for election in elections {
+                    let label = match &election.election {
+                        bir_core::profile::IncomeTaxElection::EightPercent => "8% Flat Rate",
+                        bir_core::profile::IncomeTaxElection::GraduatedOsd => "Graduated + OSD",
+                        bir_core::profile::IncomeTaxElection::GraduatedItemized => {
+                            "Graduated + Itemized"
+                        }
+                    };
+                    let year = election.taxable_year;
+                    table = table.child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .px_3()
+                            .py_1p5()
+                            .rounded_md()
+                            .bg(cx.theme().background)
+                            .border_1()
+                            .border_color(cx.theme().border)
+                            .child(
+                                div()
+                                    .flex()
+                                    .gap_3()
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(cx.theme().foreground)
+                                            .child(format!("{}", year)),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child(label),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .id(format!("remove_election_{}", year))
+                                    .text_xs()
+                                    .text_color(gpui::Hsla::from(gpui::rgba(0xef4444ff)))
+                                    .cursor_pointer()
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.stored_tax_elections
+                                            .retain(|e| e.taxable_year != year);
+                                        cx.notify();
+                                    }))
+                                    .child("Remove"),
+                            ),
+                    );
+                }
+                this.child(table)
+            })
+            // ── Add new election row ──
+            .child(
+                div()
+                    .flex()
+                    .items_end()
+                    .gap_3()
+                    .mt_2()
+                    .child(
+                        div()
+                            .w(px(80.))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .mb_1()
+                                    .child("Year"),
+                            )
+                            .child(Input::new(&self.tax_election_year_input)),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .mb_1()
+                                    .child("Election"),
+                            )
+                            .child(Combobox::new(&self.tax_election_select)),
+                    )
+                    .child(
+                        gpui_component::button::Button::new("add_election_btn")
+                            .label("Add")
+                            .small()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                let year_str = this
+                                    .tax_election_year_input
+                                    .read(cx)
+                                    .value()
+                                    .trim()
+                                    .to_string();
+                                let election_val = this
+                                    .tax_election_select
+                                    .read(cx)
+                                    .selected_value(cx);
+                                if let Ok(year) = year_str.parse::<u16>() {
+                                    let election = match election_val.as_str() {
+                                        "8% Flat Rate" => {
+                                            bir_core::profile::IncomeTaxElection::EightPercent
+                                        }
+                                        "Graduated + OSD" => {
+                                            bir_core::profile::IncomeTaxElection::GraduatedOsd
+                                        }
+                                        "Graduated + Itemized" => {
+                                            bir_core::profile::IncomeTaxElection::GraduatedItemized
+                                        }
+                                        _ => return,
+                                    };
+                                    // Remove existing election for this year, then add new
+                                    this.stored_tax_elections
+                                        .retain(|e| e.taxable_year != year);
+                                    this.stored_tax_elections
+                                        .push(bir_core::profile::TaxElectionHistory {
+                                            taxable_year: year,
+                                            election,
+                                            elected_at: chrono::Local::now().naive_local(),
+                                            source_form: "profile_manager".to_string(),
+                                        });
+                                    // Sort by year descending for display
+                                    this.stored_tax_elections
+                                        .sort_by(|a, b| b.taxable_year.cmp(&a.taxable_year));
+                                    cx.notify();
+                                }
+                            })),
+                    ),
+            )
+    }
+
+    /// Reusable checkbox rendering helper.
+    fn render_checkbox(
+        id: &'static str,
+        label: &'static str,
+        checked: bool,
+        cx: &Context<Self>,
+    ) -> Stateful<Div> {
+        div()
+            .id(id)
+            .flex()
+            .items_center()
+            .gap_2()
+            .cursor_pointer()
+            .on_click(cx.listener(move |this, _, _, cx| {
+                match id {
+                    "wh_compensation_toggle" => {
+                        this.withholds_compensation = !this.withholds_compensation
+                    }
+                    "wh_expanded_toggle" => this.withholds_expanded = !this.withholds_expanded,
+                    "wh_final_toggle" => this.withholds_final = !this.withholds_final,
+                    "wh_top_agent_toggle" => {
+                        this.is_top_withholding_agent = !this.is_top_withholding_agent
+                    }
+                    "wh_govt_toggle" => {
+                        this.is_government_withholding_entity =
+                            !this.is_government_withholding_entity
+                    }
+                    "gpp_partner_toggle" => this.is_gpp_partner = !this.is_gpp_partner,
+                    "single_employer_toggle" => {
+                        this.has_single_employer = !this.has_single_employer
+                    }
+                    "dormant_toggle" => this.is_dormant = !this.is_dormant,
+                    _ => {}
+                }
+                cx.notify();
+            }))
+            .child(
+                div()
+                    .w_4()
+                    .h_4()
+                    .rounded_sm()
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .bg(if checked {
+                        cx.theme().primary
+                    } else {
+                        cx.theme().background
+                    })
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(if checked {
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().primary_foreground)
+                            .child("✓")
+                    } else {
+                        div()
+                    }),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().foreground)
+                    .child(label),
+            )
     }
 }

@@ -5,6 +5,7 @@
 
 use super::citations::LegalCitation;
 use crate::forms::registry::FilingFrequency;
+use crate::temporal::support_level::{FormSupportLevel, form_support_level};
 use serde::{Deserialize, Serialize};
 
 /// The resolved compliance state of a form for a given profile + temporal context.
@@ -188,6 +189,8 @@ pub struct DashboardFormDecision {
     pub artifact_id: Option<String>,
     /// The formula ID resolved for this decision.
     pub formula_id: Option<String>,
+    /// Whether this form is implemented in-app, manual-only, or planned.
+    pub support_level: FormSupportLevel,
 }
 
 impl From<&FormDecision> for DashboardFormDecision {
@@ -215,6 +218,7 @@ impl From<&FormDecision> for DashboardFormDecision {
             audit_summary,
             artifact_id: decision.artifact_id.clone(),
             formula_id: decision.formula_id.clone(),
+            support_level: form_support_level(&decision.form_code),
         }
     }
 }

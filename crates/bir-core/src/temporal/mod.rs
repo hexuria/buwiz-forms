@@ -27,6 +27,7 @@ pub mod rates;
 pub mod rule_model;
 pub mod snapshot;
 pub mod snapshot_loader;
+pub mod support_level;
 pub mod validator;
 
 // ── Existing modules (retained for backward compat) ──
@@ -48,6 +49,7 @@ pub use eligibility_facts::{
 pub use forms::{
     ArtifactLifecycle, FormArtifact, FormAvailability, FormIdentity, OperationalRecommendation,
 };
+pub use support_level::{FormSupportLevel, form_support_level};
 pub use snapshot::{CompiledRuleSnapshot, Era};
 
 // ── Re-exports: Legacy types (backward compat) ──

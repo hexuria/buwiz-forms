@@ -918,6 +918,15 @@ impl AppState {
         let year = *year;
         let quarter = *quarter;
 
+        // Guard: only open in-app form views for implemented forms
+        if !bir_core::temporal::form_support_level(form_code).is_fileable_in_app() {
+            tracing::warn!(
+                form_code,
+                "Attempted to file unsupported form — manual filing required"
+            );
+            return;
+        }
+
         if form_code == "2551Q"
             && let Some(tin) = &self.active_profile_tin
             && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
