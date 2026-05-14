@@ -1,9 +1,16 @@
-//! BIR form data models, ATC tables, and form registry.
+//! BIR form data models, ATC tables, form registry, and typed form traits.
 
 pub mod atc;
+pub mod form_0605;
+pub mod form_0619e;
+pub mod form_0619f;
 pub mod form_1601c;
+pub mod form_1701;
 pub mod form_1701q;
+pub mod form_1702mx;
+pub mod form_1702rt;
 pub mod form_2307;
+pub mod form_2550q;
 pub mod form_2551q;
 pub mod registry;
 
@@ -18,12 +25,88 @@ pub use registry::{
     forms_for_taxpayer,
 };
 
+pub mod form_0605_xml;
+pub mod form_0619e_xml;
+pub mod form_0619f_xml;
 pub mod form_1601c_xml;
+pub mod form_1701_xml;
+pub mod form_1702mx_xml;
+pub mod form_1702rt_xml;
+pub mod form_2550q_xml;
 pub mod form_2551q_xml;
 
 pub trait FormValidator {
     /// Returns a list of (field_id, error_message)
     fn validate(&self) -> Vec<(String, String)>;
+}
+
+use std::collections::BTreeMap;
+
+/// Filing period for a tax form — replaces the ambiguous quarter/month column.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum FilingPeriod {
+    /// Monthly filing: month 1-12.
+    Monthly(u8),
+    /// Quarterly filing: quarter 1-4.
+    Quarterly(u8),
+    /// Annual filing.
+    Annual,
+    /// Open-ended (filed as needed, e.g., payment forms).
+    OpenEnded(u32),
+}
+
+impl FilingPeriod {
+    /// Convert to a database `period_key` string.
+    pub fn to_period_key(&self) -> String {
+        match self {
+            Self::Monthly(m) => format!("M{m:02}"),
+            Self::Quarterly(q) => format!("Q{q}"),
+            Self::Annual => "A".to_string(),
+            Self::OpenEnded(n) => format!("O{n}"),
+        }
+    }
+
+    /// Parse from a database `period_key` string.
+    pub fn from_period_key(key: &str) -> Option<Self> {
+        if key == "A" {
+            return Some(Self::Annual);
+        }
+        let (prefix, rest) = key.split_at(1);
+        let num: u32 = rest.parse().ok()?;
+        match prefix {
+            "M" => Some(Self::Monthly(num as u8)),
+            "Q" => Some(Self::Quarterly(num as u8)),
+            "O" => Some(Self::OpenEnded(num)),
+            _ => None,
+        }
+    }
+}
+
+/// Unified trait for all typed BIR form implementations.
+///
+/// Generated forms implement this trait to provide a consistent interface
+/// for form code identification, filing period, computation, validation,
+/// and BIR XML export.
+pub trait TypedBirForm: FormValidator {
+    /// BIR form code (e.g., "2551Q", "0605").
+    fn form_code(&self) -> &'static str;
+
+    /// Versioned form type ID (e.g., "2551Qv2018", "0605v1999").
+    fn form_type_id(&self) -> &'static str;
+
+    /// Filing period for this form instance.
+    fn filing_period(&self) -> FilingPeriod;
+
+    /// Recompute all derived fields from user-entered data.
+    fn recompute(&mut self);
+
+    /// Convert to BIR field map for XML export and PDF rendering.
+    fn to_bir_field_map(&self) -> BTreeMap<String, String>;
+
+    /// Generate BIR pseudo-XML payload.
+    fn to_bir_xml(&self) -> String {
+        crate::bir_xml::generate_bir_xml(&self.to_bir_field_map())
+    }
 }
 
 /// Status of a form draft or filed return.
@@ -152,9 +235,15 @@ impl FormFilingProgress {
 }
 
 pub enum FormDraft {
-    Form2551Q(Form2551QDraft),
-    Form1601C(Form1601CDraft),
-    // Future forms will be added here
+    Form2551Q(Box<Form2551QDraft>),
+    Form1601C(Box<Form1601CDraft>),
+    Form0605(Box<form_0605::Form0605Draft>),
+    Form0619E(Box<form_0619e::Form0619EDraft>),
+    Form0619F(Box<form_0619f::Form0619FDraft>),
+    Form1701(Box<form_1701::Form1701Draft>),
+    Form1702MX(Box<form_1702mx::Form1702MXDraft>),
+    Form1702RT(Box<form_1702rt::Form1702RTDraft>),
+    Form2550Q(Box<form_2550q::Form2550QDraft>),
 }
 
 impl FormDraft {
@@ -162,6 +251,13 @@ impl FormDraft {
         match self {
             Self::Form2551Q(_) => "2551Q",
             Self::Form1601C(_) => "1601C",
+            Self::Form0605(_) => "0605",
+            Self::Form0619E(_) => "0619E",
+            Self::Form0619F(_) => "0619F",
+            Self::Form1701(_) => "1701",
+            Self::Form1702MX(_) => "1702MX",
+            Self::Form1702RT(_) => "1702RT",
+            Self::Form2550Q(_) => "2550Q",
         }
     }
 
@@ -169,6 +265,13 @@ impl FormDraft {
         match self {
             Self::Form2551Q(f) => &f.status,
             Self::Form1601C(f) => &f.status,
+            Self::Form0605(f) => &f.status,
+            Self::Form0619E(f) => &f.status,
+            Self::Form0619F(f) => &f.status,
+            Self::Form1701(f) => &f.status,
+            Self::Form1702MX(f) => &f.status,
+            Self::Form1702RT(f) => &f.status,
+            Self::Form2550Q(f) => &f.status,
         }
     }
 
@@ -176,6 +279,13 @@ impl FormDraft {
         match self {
             Self::Form2551Q(f) => f.validate(),
             Self::Form1601C(f) => f.validate(),
+            Self::Form0605(f) => f.validate(),
+            Self::Form0619E(f) => f.validate(),
+            Self::Form0619F(f) => f.validate(),
+            Self::Form1701(f) => f.validate(),
+            Self::Form1702MX(f) => f.validate(),
+            Self::Form1702RT(f) => f.validate(),
+            Self::Form2550Q(f) => f.validate(),
         }
     }
 }

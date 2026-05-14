@@ -804,8 +804,6 @@ impl ProfileManagerView {
         cx.notify();
     }
 
-
-
     fn current_profile(&self, cx: &mut Context<Self>) -> TaxpayerProfile {
         let tin_val = self.tin_input.read(cx).formatted_value(cx);
         let tin_clean = tin_val.replace("-", "");

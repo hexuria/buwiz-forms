@@ -465,4 +465,175 @@ mod tests {
             );
         }
     }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Annual Individual ITR Recommendation Tests
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /// Mixed income → only 1701 is visible (1701A/1701MS suppressed).
+    #[test]
+    fn test_itr_mixed_income_only_1701() {
+        let engine = TemporalEngine::default();
+        let profile = test_profile(
+            TaxpayerType::Individual,
+            Some(TaxClassification::MixedIncome),
+        );
+        let decisions = engine.evaluate(&profile, 2024);
+
+        let d1701 = decisions.iter().find(|d| d.form_code == "1701");
+        let d1701a = decisions.iter().find(|d| d.form_code == "1701A");
+        let d1701ms = decisions.iter().find(|d| d.form_code == "1701MS");
+
+        assert!(
+            d1701.is_some() && d1701.unwrap().eligibility.is_visible(),
+            "1701 should be visible for mixed income"
+        );
+        assert!(
+            d1701a.is_none() || !d1701a.unwrap().eligibility.is_visible(),
+            "1701A should be suppressed for mixed income"
+        );
+        assert!(
+            d1701ms.is_none() || !d1701ms.unwrap().eligibility.is_visible(),
+            "1701MS should be suppressed for mixed income"
+        );
+    }
+
+    /// Mixed income + micro/small tier → 1701MS should STILL be suppressed
+    /// (EOPT rule must respect the exclusive group's suppression for mixed income).
+    #[test]
+    fn test_itr_mixed_income_micro_small_suppresses_1701ms() {
+        use crate::profile::EoptTier;
+
+        let engine = TemporalEngine::default();
+        let mut profile = test_profile(
+            TaxpayerType::Individual,
+            Some(TaxClassification::MixedIncome),
+        );
+        profile.eopt_tier = Some(EoptTier::Micro);
+
+        let decisions = engine.evaluate(&profile, 2024);
+        let d1701ms = decisions.iter().find(|d| d.form_code == "1701MS");
+
+        assert!(
+            d1701ms.is_none() || !d1701ms.unwrap().eligibility.is_visible(),
+            "1701MS should be suppressed for mixed income even with Micro tier"
+        );
+    }
+
+    /// Business/profession + 8% election → 1701A primary, 1701 Optional, 1701MS Recommended (micro).
+    #[test]
+    fn test_itr_business_8pct_micro_small_recommendation() {
+        use crate::profile::{EoptTier, IncomeTaxElection, TaxElectionHistory};
+
+        let engine = TemporalEngine::default();
+        let mut profile = test_profile(
+            TaxpayerType::Individual,
+            Some(TaxClassification::SelfEmployed),
+        );
+        profile.eopt_tier = Some(EoptTier::Micro);
+        profile.tax_elections.push(TaxElectionHistory {
+            taxable_year: 2024,
+            election: IncomeTaxElection::EightPercent,
+            elected_at: chrono::NaiveDateTime::default(),
+            source_form: "1701Q".into(),
+        });
+
+        let decisions = engine.evaluate(&profile, 2024);
+
+        let d1701 = decisions.iter().find(|d| d.form_code == "1701");
+        let d1701a = decisions.iter().find(|d| d.form_code == "1701A");
+        let d1701ms = decisions.iter().find(|d| d.form_code == "1701MS");
+
+        // 1701A: primary (unchanged Applicable)
+        assert!(
+            d1701a.is_some() && d1701a.unwrap().eligibility.is_visible(),
+            "1701A should be visible for business with 8%"
+        );
+
+        // 1701: Optional alternative
+        assert!(
+            d1701.is_some() && d1701.unwrap().eligibility.is_visible(),
+            "1701 should be visible (Optional) for business with 8%"
+        );
+        assert!(
+            matches!(&d1701.unwrap().eligibility, ComplianceState::Optional(_)),
+            "1701 should be Optional for 8% filers, got: {:?}",
+            d1701.unwrap().eligibility
+        );
+
+        // 1701MS: Recommended for Micro
+        assert!(
+            d1701ms.is_some() && d1701ms.unwrap().eligibility.is_visible(),
+            "1701MS should be visible for micro taxpayer with 8%"
+        );
+        assert!(
+            matches!(
+                &d1701ms.unwrap().eligibility,
+                ComplianceState::Recommended(_)
+            ),
+            "1701MS should be Recommended for Micro, got: {:?}",
+            d1701ms.unwrap().eligibility
+        );
+    }
+
+    /// Business/profession + no 8% election → 1701 primary, 1701A Optional.
+    #[test]
+    fn test_itr_business_no_8pct_1701_primary() {
+        let engine = TemporalEngine::default();
+        let profile = test_profile(
+            TaxpayerType::Individual,
+            Some(TaxClassification::SelfEmployed),
+        );
+
+        let decisions = engine.evaluate(&profile, 2024);
+
+        let d1701 = decisions.iter().find(|d| d.form_code == "1701");
+        let d1701a = decisions.iter().find(|d| d.form_code == "1701A");
+
+        assert!(
+            d1701.is_some() && d1701.unwrap().eligibility.is_visible(),
+            "1701 should be visible as primary"
+        );
+
+        assert!(
+            d1701a.is_some() && d1701a.unwrap().eligibility.is_visible(),
+            "1701A should be visible (Optional)"
+        );
+        assert!(
+            matches!(&d1701a.unwrap().eligibility, ComplianceState::Optional(_)),
+            "1701A should be Optional without 8% election, got: {:?}",
+            d1701a.unwrap().eligibility
+        );
+    }
+
+    /// Compensation only → 1701 is NOT in classifications (PurelyCompensation uses
+    /// substituted filing via employer / 1700). 1701A and 1701MS are also suppressed.
+    #[test]
+    fn test_itr_compensation_only_suppressed() {
+        let engine = TemporalEngine::default();
+        let profile = test_profile(
+            TaxpayerType::Individual,
+            Some(TaxClassification::PurelyCompensation),
+        );
+
+        let decisions = engine.evaluate(&profile, 2024);
+
+        let d1701 = decisions.iter().find(|d| d.form_code == "1701");
+        let d1701a = decisions.iter().find(|d| d.form_code == "1701A");
+        let d1701ms = decisions.iter().find(|d| d.form_code == "1701MS");
+
+        // 1701 is only for SelfEmployed/MixedIncome/EstateOrTrust per TOML snapshot
+        assert!(
+            d1701.is_none() || !d1701.unwrap().eligibility.is_visible(),
+            "1701 should be suppressed for purely compensation (classification gate)"
+        );
+        assert!(
+            d1701a.is_none() || !d1701a.unwrap().eligibility.is_visible(),
+            "1701A should be suppressed for compensation-only"
+        );
+        assert!(
+            d1701ms.is_none() || !d1701ms.unwrap().eligibility.is_visible(),
+            "1701MS should be suppressed for compensation-only"
+        );
+    }
 }

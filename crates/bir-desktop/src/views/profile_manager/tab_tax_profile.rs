@@ -22,6 +22,18 @@ impl ProfileManagerView {
 
         let tax_class_val = self.tax_classification_select.read(cx).selected_value(cx);
         let is_purely_compensation = is_individual && tax_class_val == "Purely Compensation";
+        // VAT is only relevant for entities with business/professional activity
+        let has_business_activity = !is_purely_compensation
+            && !matches!(
+                self.type_select.read(cx).selected_value(cx).as_str(),
+                "Estate" | "Trust"
+            );
+        // GPP partner only relevant for individual with business/professional or mixed income
+        let is_individual_with_business = is_individual
+            && matches!(
+                tax_class_val.as_str(),
+                "Self-Employed / Professional" | "Mixed Income"
+            );
 
         div()
             .flex()
@@ -200,65 +212,60 @@ impl ProfileManagerView {
                             .child(Self::field_label("Registration Activity Status", cx))
                             .child(Combobox::new(&self.registration_activity_status_select)),
                     )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .items_end()
-                            .child(
-                                Self::render_checkbox(
-                                    "dormant_toggle",
-                                    "Dormant Entity",
-                                    self.is_dormant,
-                                    cx,
-                                ),
-                            ),
-                    ),
+                    .child(div().flex_1().min_w_0().flex().items_end().child(
+                        Self::render_checkbox(
+                            "dormant_toggle",
+                            "Dormant Entity",
+                            self.is_dormant,
+                            cx,
+                        ),
+                    )),
             )
-            // ── VAT Registration ──
-            .child(
-                div()
-                    .id("vat_toggle")
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .cursor_pointer()
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.is_vat_registered = !this.is_vat_registered;
-                        cx.notify();
-                    }))
-                    .child(
-                        div()
-                            .w_4()
-                            .h_4()
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(cx.theme().border)
-                            .bg(if self.is_vat_registered {
-                                cx.theme().primary
-                            } else {
-                                cx.theme().background
-                            })
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(if self.is_vat_registered {
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().primary_foreground)
-                                    .child("✓")
-                            } else {
-                                div()
-                            }),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().foreground)
-                            .child("VAT registered taxpayer"),
-                    ),
-            )
+            // ── VAT Registration (only for entities with business activity) ──
+            .when(has_business_activity, |this| {
+                this.child(
+                    div()
+                        .id("vat_toggle")
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .cursor_pointer()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.is_vat_registered = !this.is_vat_registered;
+                            cx.notify();
+                        }))
+                        .child(
+                            div()
+                                .w_4()
+                                .h_4()
+                                .rounded_sm()
+                                .border_1()
+                                .border_color(cx.theme().border)
+                                .bg(if self.is_vat_registered {
+                                    cx.theme().primary
+                                } else {
+                                    cx.theme().background
+                                })
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(if self.is_vat_registered {
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().primary_foreground)
+                                        .child("✓")
+                                } else {
+                                    div()
+                                }),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(cx.theme().foreground)
+                                .child("VAT registered taxpayer"),
+                        ),
+                )
+            })
             // ── Granular Withholding Obligations ──
             .child(
                 div()
@@ -310,13 +317,15 @@ impl ProfileManagerView {
                             )),
                     ),
             )
-            // ── GPP Partner ──
-            .child(Self::render_checkbox(
-                "gpp_partner_toggle",
-                "GPP Partner",
-                self.is_gpp_partner,
-                cx,
-            ))
+            // ── GPP Partner (individual business/professional or mixed income only) ──
+            .when(is_individual_with_business, |this| {
+                this.child(Self::render_checkbox(
+                    "gpp_partner_toggle",
+                    "GPP Partner",
+                    self.is_gpp_partner,
+                    cx,
+                ))
+            })
             // ── Substituted filing (purely compensation only) ──
             .when(is_purely_compensation, |this| {
                 this.child(Self::render_checkbox(
@@ -496,7 +505,7 @@ impl ProfileManagerView {
                                         });
                                     // Sort by year descending for display
                                     this.stored_tax_elections
-                                        .sort_by(|a, b| b.taxable_year.cmp(&a.taxable_year));
+                                        .sort_by_key(|b| std::cmp::Reverse(b.taxable_year));
                                     cx.notify();
                                 }
                             })),

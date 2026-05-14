@@ -352,4 +352,77 @@ impl Database {
         }
         Ok(summaries)
     }
+
+    // ── Period-key-aware methods (v2) ──
+    //
+    // These use the `period_key` column added in v5 migration.
+    // They complement the legacy methods above which use the raw `quarter` column.
+
+    /// Save or update a form draft using a `period_key` for unified period handling.
+    ///
+    /// Uses UPSERT on (tin, form_code, taxable_year, period_key).
+    pub fn save_form_draft_v2<T: serde::Serialize>(
+        &self,
+        tin: &str,
+        form_code: &str,
+        year: u16,
+        period: &crate::forms::FilingPeriod,
+        status: &FilingStatus,
+        draft: &T,
+    ) -> Result<i64, DbError> {
+        let json = serde_json::to_string(draft)?;
+        let status_str = match status {
+            FilingStatus::Draft => "Draft",
+            FilingStatus::Queued => "Queued",
+            FilingStatus::Submitted => "Submitted",
+            FilingStatus::Confirmed => "Confirmed",
+            FilingStatus::Paid => "Paid",
+        };
+        let period_key = period.to_period_key();
+
+        // Also set the legacy quarter column for backward compatibility
+        let quarter_val: Option<i64> = match period {
+            crate::forms::FilingPeriod::Monthly(m) => Some(*m as i64),
+            crate::forms::FilingPeriod::Quarterly(q) => Some(*q as i64),
+            _ => None,
+        };
+
+        self.conn.execute(
+            "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             ON CONFLICT(tin, form_code, taxable_year, quarter)
+             DO UPDATE SET status = excluded.status,
+                           data_json = excluded.data_json,
+                           period_key = excluded.period_key,
+                           updated_at = datetime('now')",
+            params![tin, form_code, year as i64, quarter_val, period_key, status_str, json],
+        )?;
+
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Load a form draft by period_key.
+    pub fn get_form_draft_v2<T: serde::de::DeserializeOwned>(
+        &self,
+        tin: &str,
+        form_code: &str,
+        year: u16,
+        period: &crate::forms::FilingPeriod,
+    ) -> Result<Option<T>, DbError> {
+        let period_key = period.to_period_key();
+        let mut stmt = self.conn.prepare(
+            "SELECT data_json FROM form_drafts
+             WHERE tin = ?1 AND form_code = ?2
+               AND taxable_year = ?3 AND period_key = ?4",
+        )?;
+        let mut rows = stmt.query(params![tin, form_code, year as i64, period_key])?;
+
+        if let Some(row) = rows.next()? {
+            let json: String = row.get(0)?;
+            let draft: T = serde_json::from_str(&json)?;
+            Ok(Some(draft))
+        } else {
+            Ok(None)
+        }
+    }
 }

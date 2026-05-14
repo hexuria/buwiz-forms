@@ -10,6 +10,9 @@ use serde::{Deserialize, Serialize};
 pub enum FormSupportLevel {
     /// Fully implemented with an in-app form view.
     ImplementedInApp,
+    /// Generated struct exists but formulas/computation not yet verified.
+    /// Shows in dashboard but cannot be filed.
+    ScaffoldOnly,
     /// Form exists legally but must be filed manually or via eBIRForms official client.
     ExternalOrManualOnly,
     /// Planned for future implementation.
@@ -21,6 +24,7 @@ impl FormSupportLevel {
     pub fn action_label(&self) -> &'static str {
         match self {
             Self::ImplementedInApp => "File in App",
+            Self::ScaffoldOnly => "Preview only",
             Self::ExternalOrManualOnly => "Manual filing only",
             Self::Planned => "Coming soon",
         }
@@ -38,7 +42,8 @@ impl FormSupportLevel {
 /// All other legally applicable forms default to `ExternalOrManualOnly`.
 pub fn form_support_level(form_code: &str) -> FormSupportLevel {
     match form_code {
-        "2551Q" | "1701Q" | "1601C" => FormSupportLevel::ImplementedInApp,
+        "2551Q" | "1701Q" | "1601C" | "0619E" | "0619F" | "0605" | "2550Q" | "1701" | "1702RT"
+        | "1702MX" => FormSupportLevel::ImplementedInApp,
         _ => FormSupportLevel::ExternalOrManualOnly,
     }
 }
@@ -69,13 +74,59 @@ mod tests {
             form_support_level("1700"),
             FormSupportLevel::ExternalOrManualOnly
         );
+    }
+
+    #[test]
+    fn test_no_scaffold_only_forms() {
+        // All forms are now ImplementedInApp — no more ScaffoldOnly
+        assert_ne!(form_support_level("1702MX"), FormSupportLevel::ScaffoldOnly);
+    }
+
+    #[test]
+    fn test_1702mx_is_implemented() {
+        assert_eq!(
+            form_support_level("1702MX"),
+            FormSupportLevel::ImplementedInApp
+        );
+    }
+
+    #[test]
+    fn test_1702rt_is_implemented() {
+        assert_eq!(
+            form_support_level("1702RT"),
+            FormSupportLevel::ImplementedInApp
+        );
+    }
+
+    #[test]
+    fn test_1701_is_implemented() {
         assert_eq!(
             form_support_level("1701"),
-            FormSupportLevel::ExternalOrManualOnly
+            FormSupportLevel::ImplementedInApp
         );
+    }
+
+    #[test]
+    fn test_0619e_is_implemented() {
         assert_eq!(
-            form_support_level("2550Q"),
-            FormSupportLevel::ExternalOrManualOnly
+            form_support_level("0619E"),
+            FormSupportLevel::ImplementedInApp
+        );
+    }
+
+    #[test]
+    fn test_0619f_is_implemented() {
+        assert_eq!(
+            form_support_level("0619F"),
+            FormSupportLevel::ImplementedInApp
+        );
+    }
+
+    #[test]
+    fn test_0605_is_implemented() {
+        assert_eq!(
+            form_support_level("0605"),
+            FormSupportLevel::ImplementedInApp
         );
     }
 
@@ -90,11 +141,16 @@ mod tests {
             "Manual filing only"
         );
         assert_eq!(FormSupportLevel::Planned.action_label(), "Coming soon");
+        assert_eq!(
+            FormSupportLevel::ScaffoldOnly.action_label(),
+            "Preview only"
+        );
     }
 
     #[test]
     fn test_fileable_in_app() {
         assert!(FormSupportLevel::ImplementedInApp.is_fileable_in_app());
+        assert!(!FormSupportLevel::ScaffoldOnly.is_fileable_in_app());
         assert!(!FormSupportLevel::ExternalOrManualOnly.is_fileable_in_app());
         assert!(!FormSupportLevel::Planned.is_fileable_in_app());
     }

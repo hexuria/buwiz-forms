@@ -1,7 +1,14 @@
 use crate::views::cron_tasks::CronTasksView;
 use crate::views::dashboard::{DashboardEvent, DashboardView};
+use crate::views::form_0605_view::{Form0605Event, Form0605View};
+use crate::views::form_0619e_view::{Form0619EEvent, Form0619EView};
+use crate::views::form_0619f_view::{Form0619FEvent, Form0619FView};
 use crate::views::form_1601c_view::{Form1601CEvent, Form1601CView};
+use crate::views::form_1701_view::{Form1701Event, Form1701View};
 use crate::views::form_1701q_view::{Form1701QEvent, Form1701QView};
+use crate::views::form_1702mx_view::{Form1702MXEvent, Form1702MXView};
+use crate::views::form_1702rt_view::{Form1702RTEvent, Form1702RTView};
+use crate::views::form_2550q_view::{Form2550QV2Event, Form2550QV2View};
 use crate::views::form_2551q_view::{Form2551QEvent, Form2551QView};
 use crate::views::global_dashboard::{GlobalDashboardEvent, GlobalDashboardView};
 use crate::views::import_export::{ImportExportEvent, ImportExportView};
@@ -45,6 +52,13 @@ pub enum ActiveView {
     Form2551Q,
     Form1701Q,
     Form1601C,
+    Form0619E,
+    Form0619F,
+    Form0605,
+    Form2550Q,
+    Form1701,
+    Form1702RT,
+    Form1702MX,
     ProfileManager,
     CronTasks,
     ImportExport,
@@ -83,6 +97,20 @@ pub struct AppState {
     pub(crate) pending_form_1701q_draft: Option<bir_core::forms::form_1701q::Form1701QDraft>,
     pub(crate) form_1601c_view: Option<Entity<Form1601CView>>,
     pub(crate) pending_form_1601c_draft: Option<bir_core::forms::form_1601c::Form1601CDraft>,
+    pub(crate) form_0619e_view: Option<Entity<Form0619EView>>,
+    pub(crate) pending_form_0619e_draft: Option<bir_core::forms::form_0619e::Form0619EDraft>,
+    pub(crate) form_0619f_view: Option<Entity<Form0619FView>>,
+    pub(crate) pending_form_0619f_draft: Option<bir_core::forms::form_0619f::Form0619FDraft>,
+    pub(crate) form_0605_view: Option<Entity<Form0605View>>,
+    pub(crate) pending_form_0605_draft: Option<bir_core::forms::form_0605::Form0605Draft>,
+    pub(crate) form_2550q_view: Option<Entity<Form2550QV2View>>,
+    pub(crate) pending_form_2550q_draft: Option<bir_core::forms::form_2550q::Form2550QDraft>,
+    pub(crate) form_1701_view: Option<Entity<Form1701View>>,
+    pub(crate) pending_form_1701_draft: Option<bir_core::forms::form_1701::Form1701Draft>,
+    pub(crate) form_1702rt_view: Option<Entity<Form1702RTView>>,
+    pub(crate) pending_form_1702rt_draft: Option<bir_core::forms::form_1702rt::Form1702RTDraft>,
+    pub(crate) form_1702mx_view: Option<Entity<Form1702MXView>>,
+    pub(crate) pending_form_1702mx_draft: Option<bir_core::forms::form_1702mx::Form1702MXDraft>,
     pub(crate) db: Arc<Mutex<Database>>,
     pub(crate) profiles: Vec<TaxpayerProfile>,
     pub(crate) active_profile_tin: Option<String>,
@@ -689,6 +717,20 @@ impl AppState {
             pending_form_1701q_draft: None,
             form_1601c_view: None,
             pending_form_1601c_draft: None,
+            form_0619e_view: None,
+            pending_form_0619e_draft: None,
+            form_0619f_view: None,
+            pending_form_0619f_draft: None,
+            form_0605_view: None,
+            pending_form_0605_draft: None,
+            form_2550q_view: None,
+            pending_form_2550q_draft: None,
+            form_1701_view: None,
+            pending_form_1701_draft: None,
+            form_1702rt_view: None,
+            pending_form_1702rt_draft: None,
+            form_1702mx_view: None,
+            pending_form_1702mx_draft: None,
             db,
             profiles,
             active_profile_tin: None,
@@ -903,6 +945,55 @@ impl AppState {
                     div().child("No form loaded").into_any_element()
                 }
             }
+            ActiveView::Form0619E => {
+                if let Some(view) = &self.form_0619e_view {
+                    view.clone().into_any_element()
+                } else {
+                    div().child("No form loaded").into_any_element()
+                }
+            }
+            ActiveView::Form0619F => {
+                if let Some(view) = &self.form_0619f_view {
+                    view.clone().into_any_element()
+                } else {
+                    div().child("No form loaded").into_any_element()
+                }
+            }
+            ActiveView::Form0605 => {
+                if let Some(view) = &self.form_0605_view {
+                    view.clone().into_any_element()
+                } else {
+                    div().child("No form loaded").into_any_element()
+                }
+            }
+            ActiveView::Form2550Q => {
+                if let Some(view) = &self.form_2550q_view {
+                    view.clone().into_any_element()
+                } else {
+                    div().child("No form loaded").into_any_element()
+                }
+            }
+            ActiveView::Form1701 => {
+                if let Some(view) = &self.form_1701_view {
+                    view.clone().into_any_element()
+                } else {
+                    div().child("No form loaded").into_any_element()
+                }
+            }
+            ActiveView::Form1702RT => {
+                if let Some(view) = &self.form_1702rt_view {
+                    view.clone().into_any_element()
+                } else {
+                    div().child("No form loaded").into_any_element()
+                }
+            }
+            ActiveView::Form1702MX => {
+                if let Some(view) = &self.form_1702mx_view {
+                    view.clone().into_any_element()
+                } else {
+                    div().child("No form loaded").into_any_element()
+                }
+            }
         }
     }
 
@@ -998,6 +1089,177 @@ impl AppState {
             );
             self.pending_form_1601c_draft = Some(draft);
             self.active_view = ActiveView::Form1601C;
+            cx.notify();
+        } else if form_code == "0619E"
+            && let Some(tin) = &self.active_profile_tin
+            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
+        {
+            let draft = if let Ok(db) = self.db.lock() {
+                db.get_form_draft::<bir_core::forms::form_0619e::Form0619EDraft>(
+                    tin,
+                    "0619E",
+                    year,
+                    Some(quarter),
+                )
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| {
+                    bir_core::forms::form_0619e::Form0619EDraft::new_from_profile(
+                        profile, year, quarter,
+                    )
+                })
+            } else {
+                bir_core::forms::form_0619e::Form0619EDraft::new_from_profile(
+                    profile, year, quarter,
+                )
+            };
+            self.pending_form_0619e_draft = Some(draft);
+            self.active_view = ActiveView::Form0619E;
+            cx.notify();
+        } else if form_code == "0619F"
+            && let Some(tin) = &self.active_profile_tin
+            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
+        {
+            let draft = if let Ok(db) = self.db.lock() {
+                db.get_form_draft::<bir_core::forms::form_0619f::Form0619FDraft>(
+                    tin,
+                    "0619F",
+                    year,
+                    Some(quarter),
+                )
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| {
+                    bir_core::forms::form_0619f::Form0619FDraft::new_from_profile(
+                        profile, year, quarter,
+                    )
+                })
+            } else {
+                bir_core::forms::form_0619f::Form0619FDraft::new_from_profile(
+                    profile, year, quarter,
+                )
+            };
+            self.pending_form_0619f_draft = Some(draft);
+            self.active_view = ActiveView::Form0619F;
+            cx.notify();
+        } else if form_code == "0605"
+            && let Some(tin) = &self.active_profile_tin
+            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
+        {
+            let draft = if let Ok(db) = self.db.lock() {
+                db.get_form_draft::<bir_core::forms::form_0605::Form0605Draft>(
+                    tin,
+                    "0605",
+                    year,
+                    Some(quarter),
+                )
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| {
+                    bir_core::forms::form_0605::Form0605Draft::new_from_profile(
+                        profile, year, quarter,
+                    )
+                })
+            } else {
+                bir_core::forms::form_0605::Form0605Draft::new_from_profile(profile, year, quarter)
+            };
+            self.pending_form_0605_draft = Some(draft);
+            self.active_view = ActiveView::Form0605;
+            cx.notify();
+        } else if form_code == "2550Q"
+            && let Some(tin) = &self.active_profile_tin
+            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
+        {
+            let draft = if let Ok(db) = self.db.lock() {
+                db.get_form_draft::<bir_core::forms::form_2550q::Form2550QDraft>(
+                    tin,
+                    "2550Q",
+                    year,
+                    Some(quarter),
+                )
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| {
+                    bir_core::forms::form_2550q::Form2550QDraft::new_from_profile(
+                        profile, year, quarter,
+                    )
+                })
+            } else {
+                bir_core::forms::form_2550q::Form2550QDraft::new_from_profile(
+                    profile, year, quarter,
+                )
+            };
+            self.pending_form_2550q_draft = Some(draft);
+            self.active_view = ActiveView::Form2550Q;
+            cx.notify();
+        } else if form_code == "1701"
+            && let Some(tin) = &self.active_profile_tin
+            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
+        {
+            let draft = if let Ok(db) = self.db.lock() {
+                db.get_form_draft::<bir_core::forms::form_1701::Form1701Draft>(
+                    tin,
+                    "1701",
+                    year,
+                    Some(quarter),
+                )
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| {
+                    bir_core::forms::form_1701::Form1701Draft::new_from_profile(
+                        profile, year, quarter,
+                    )
+                })
+            } else {
+                bir_core::forms::form_1701::Form1701Draft::new_from_profile(profile, year, quarter)
+            };
+            self.pending_form_1701_draft = Some(draft);
+            self.active_view = ActiveView::Form1701;
+            cx.notify();
+        } else if form_code == "1702RT"
+            && let Some(tin) = &self.active_profile_tin
+            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
+        {
+            let draft = if let Ok(db) = self.db.lock() {
+                db.get_form_draft::<bir_core::forms::form_1702rt::Form1702RTDraft>(
+                    tin,
+                    "1702RT",
+                    year,
+                    Some(quarter),
+                )
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| {
+                    bir_core::forms::form_1702rt::Form1702RTDraft::new_from_profile(
+                        profile, year, quarter,
+                    )
+                })
+            } else {
+                bir_core::forms::form_1702rt::Form1702RTDraft::new_from_profile(
+                    profile, year, quarter,
+                )
+            };
+            self.pending_form_1702rt_draft = Some(draft);
+            self.active_view = ActiveView::Form1702RT;
+            cx.notify();
+        } else if form_code == "1702MX"
+            && let Some(tin) = &self.active_profile_tin
+            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
+        {
+            let draft = if let Ok(db) = self.db.lock() {
+                db.get_form_draft::<bir_core::forms::form_1702mx::Form1702MXDraft>(
+                    tin, "1702MX", year, None,
+                )
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| {
+                    bir_core::forms::form_1702mx::Form1702MXDraft::new_from_profile(profile, year)
+                })
+            } else {
+                bir_core::forms::form_1702mx::Form1702MXDraft::new_from_profile(profile, year)
+            };
+            self.pending_form_1702mx_draft = Some(draft);
+            self.active_view = ActiveView::Form1702MX;
             cx.notify();
         }
     }
@@ -1110,6 +1372,183 @@ impl Render for AppState {
             .detach();
 
             self.form_1601c_view = Some(form_view);
+        }
+
+        if let Some(draft) = self.pending_form_0619e_draft.take() {
+            let db_for_view = Arc::clone(&self.db);
+            let form_view = cx.new(|cx| Form0619EView::new(draft, db_for_view, window, cx));
+
+            cx.subscribe_in(
+                &form_view,
+                window,
+                |this: &mut Self, _entity, event: &Form0619EEvent, window, cx| match event {
+                    Form0619EEvent::BackToDashboard => {
+                        this.active_view = ActiveView::Dashboard;
+                        cx.notify();
+                    }
+                    Form0619EEvent::PushNotification(level, title, message) => {
+                        push_notification(level, title, message, window, cx);
+                    }
+                    Form0619EEvent::Saved
+                    | Form0619EEvent::Submitted
+                    | Form0619EEvent::Confirmed => {
+                        cx.notify();
+                    }
+                },
+            )
+            .detach();
+
+            self.form_0619e_view = Some(form_view);
+        }
+
+        if let Some(draft) = self.pending_form_0619f_draft.take() {
+            let db_for_view = Arc::clone(&self.db);
+            let form_view = cx.new(|cx| Form0619FView::new(draft, db_for_view, window, cx));
+
+            cx.subscribe_in(
+                &form_view,
+                window,
+                |this: &mut Self, _entity, event: &Form0619FEvent, window, cx| match event {
+                    Form0619FEvent::BackToDashboard => {
+                        this.active_view = ActiveView::Dashboard;
+                        cx.notify();
+                    }
+                    Form0619FEvent::PushNotification(level, title, message) => {
+                        push_notification(level, title, message, window, cx);
+                    }
+                    Form0619FEvent::Saved
+                    | Form0619FEvent::Submitted
+                    | Form0619FEvent::Confirmed => {
+                        cx.notify();
+                    }
+                },
+            )
+            .detach();
+
+            self.form_0619f_view = Some(form_view);
+        }
+
+        if let Some(draft) = self.pending_form_0605_draft.take() {
+            let db_for_view = Arc::clone(&self.db);
+            let form_view = cx.new(|cx| Form0605View::new(draft, db_for_view, window, cx));
+
+            cx.subscribe_in(
+                &form_view,
+                window,
+                |this: &mut Self, _entity, event: &Form0605Event, window, cx| match event {
+                    Form0605Event::BackToDashboard => {
+                        this.active_view = ActiveView::Dashboard;
+                        cx.notify();
+                    }
+                    Form0605Event::PushNotification(level, title, message) => {
+                        push_notification(level, title, message, window, cx);
+                    }
+                    Form0605Event::Saved | Form0605Event::Submitted | Form0605Event::Confirmed => {
+                        cx.notify();
+                    }
+                },
+            )
+            .detach();
+
+            self.form_0605_view = Some(form_view);
+        }
+
+        if let Some(draft) = self.pending_form_2550q_draft.take() {
+            let db_for_view = Arc::clone(&self.db);
+            let form_view = cx.new(|cx| Form2550QV2View::new(draft, db_for_view, window, cx));
+            cx.subscribe_in(
+                &form_view,
+                window,
+                |this: &mut Self, _entity, event: &Form2550QV2Event, window, cx| match event {
+                    Form2550QV2Event::BackToDashboard => {
+                        this.active_view = ActiveView::Dashboard;
+                        cx.notify();
+                    }
+                    Form2550QV2Event::PushNotification(level, title, message) => {
+                        push_notification(level, title, message, window, cx);
+                    }
+                    Form2550QV2Event::Saved
+                    | Form2550QV2Event::Submitted
+                    | Form2550QV2Event::Confirmed => {
+                        cx.notify();
+                    }
+                },
+            )
+            .detach();
+            self.form_2550q_view = Some(form_view);
+        }
+
+        if let Some(draft) = self.pending_form_1701_draft.take() {
+            let db_for_view = Arc::clone(&self.db);
+            let form_view = cx.new(|cx| Form1701View::new(draft, db_for_view, window, cx));
+            cx.subscribe_in(
+                &form_view,
+                window,
+                |this: &mut Self, _entity, event: &Form1701Event, window, cx| match event {
+                    Form1701Event::BackToDashboard => {
+                        this.active_view = ActiveView::Dashboard;
+                        cx.notify();
+                    }
+                    Form1701Event::PushNotification(level, title, message) => {
+                        push_notification(level, title, message, window, cx);
+                    }
+                    Form1701Event::Saved | Form1701Event::Submitted | Form1701Event::Confirmed => {
+                        cx.notify();
+                    }
+                },
+            )
+            .detach();
+            self.form_1701_view = Some(form_view);
+        }
+
+        if let Some(draft) = self.pending_form_1702rt_draft.take() {
+            let db_for_view = Arc::clone(&self.db);
+            let form_view = cx.new(|cx| Form1702RTView::new(draft, db_for_view, window, cx));
+            cx.subscribe_in(
+                &form_view,
+                window,
+                |this: &mut Self, _entity, event: &Form1702RTEvent, window, cx| match event {
+                    Form1702RTEvent::BackToDashboard => {
+                        this.active_view = ActiveView::Dashboard;
+                        cx.notify();
+                    }
+                    Form1702RTEvent::PushNotification(level, title, message) => {
+                        push_notification(level, title, message, window, cx);
+                    }
+                    Form1702RTEvent::Saved
+                    | Form1702RTEvent::Submitted
+                    | Form1702RTEvent::Confirmed => {
+                        cx.notify();
+                    }
+                },
+            )
+            .detach();
+            self.form_1702rt_view = Some(form_view);
+        }
+
+        if let Some(draft) = self.pending_form_1702mx_draft.take() {
+            let db_for_view = Arc::clone(&self.db);
+            let form_view = cx.new(|cx| Form1702MXView::new(draft, db_for_view, window, cx));
+            cx.subscribe_in(
+                &form_view,
+                window,
+                |this: &mut Self, _entity, event: &Form1702MXEvent, window, cx| match event {
+                    Form1702MXEvent::BackToDashboard => {
+                        this.active_view = ActiveView::Dashboard;
+                        cx.notify();
+                    }
+                    Form1702MXEvent::PushNotification(level, title, message) => {
+                        push_notification(level, title, message, window, cx);
+                    }
+                    Form1702MXEvent::Saved
+                    | Form1702MXEvent::Submitted
+                    | Form1702MXEvent::Confirmed => {
+                        cx.notify();
+                    }
+                },
+            )
+            .detach();
+            self.form_1702mx_view = Some(form_view);
         }
 
         if let Some((profile, action)) = self.unlocked_profile.take() {

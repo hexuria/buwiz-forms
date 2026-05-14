@@ -46,6 +46,12 @@ impl TaxRule for EoptMicroSmallRule {
         );
 
         if form.form_code == "1701MS" {
+            // Respect prior suppression from a higher-priority rule (e.g., ExclusiveGroupRule
+            // suppresses 1701MS for mixed-income because it lacks compensation sections).
+            if matches!(current_state, FormEligibility::Suppressed(_)) {
+                return current_state;
+            }
+
             if is_micro_small {
                 return FormEligibility::Recommended(
                     "EOPT: Simplified ITR available for Micro/Small taxpayers".into(),

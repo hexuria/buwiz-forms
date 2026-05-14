@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::db::DbError;
 
-const CURRENT_MIGRATION_VERSION: i32 = 4;
+const CURRENT_MIGRATION_VERSION: i32 = 5;
 
 pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
     let mut version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
@@ -181,6 +181,10 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         //
         // Handled below in `migrate_v4_compat_fields()` after the SQL loop.
         "SELECT 1; -- v4 marker: compat field promotion (Rust-side)",
+        // v5: Add period_key column for unified period handling.
+        // Column addition is handled in Rust (below) to be idempotent
+        // since SQLite does not support ADD COLUMN IF NOT EXISTS.
+        "SELECT 1; -- v5 marker: period_key column (Rust-side)",
     ];
 
     while version < CURRENT_MIGRATION_VERSION {
@@ -194,6 +198,11 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
             // v4: After the SQL marker is committed, run the Rust data migration.
             if version == 4 {
                 migrate_v4_compat_fields(conn)?;
+            }
+
+            // v5: Backfill period_key from existing quarter column.
+            if version == 5 {
+                migrate_v5_backfill_period_key(conn)?;
             }
         } else {
             break;
@@ -313,6 +322,96 @@ fn migrate_v4_compat_fields(conn: &Connection) -> Result<(), DbError> {
             )
             .map_err(DbError::Sqlite)?;
         }
+    }
+
+    Ok(())
+}
+
+/// v5 data migration: add `period_key` column and backfill from the existing `quarter` column.
+///
+/// Uses form_code to determine the correct period format:
+/// - Monthly forms (1601C, 0619E, 0619F, etc.) → `M{quarter:02}` (quarter holds month)
+/// - Quarterly forms (2551Q, 1701Q, etc.) → `Q{quarter}`
+/// - Annual/NULL quarter → `A`
+fn migrate_v5_backfill_period_key(conn: &Connection) -> Result<(), DbError> {
+    // Check if form_drafts table exists (some test scenarios skip v1)
+    let has_form_drafts: bool = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='form_drafts'",
+            [],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+
+    if !has_form_drafts {
+        return Ok(());
+    }
+
+    // Idempotent column addition: check PRAGMA table_info for `period_key`
+    let has_period_key: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(form_drafts)")?;
+        let col_names: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .map_err(DbError::Sqlite)?
+            .filter_map(|r| r.ok())
+            .collect();
+        col_names.iter().any(|name| name == "period_key")
+    };
+
+    if !has_period_key {
+        conn.execute_batch(
+            "ALTER TABLE form_drafts ADD COLUMN period_key TEXT;
+             CREATE INDEX IF NOT EXISTS idx_form_drafts_period_key
+                 ON form_drafts(tin, form_code, taxable_year, period_key);",
+        )?;
+        info!("v5 migration: added period_key column to form_drafts");
+    }
+
+    // Monthly form codes that repurpose `quarter` as month
+    let monthly_forms = [
+        "1601C", "1601E", "1601F", "0619E", "0619F", "1600", "1600WP", "1602", "2550M", "2551M",
+        "2200A", "2200AN", "2200M", "2200P", "2200T",
+    ];
+
+    let rows: Vec<(i64, String, Option<i64>)> = {
+        let mut stmt = conn
+            .prepare("SELECT id, form_code, quarter FROM form_drafts WHERE period_key IS NULL")?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<i64>>(2)?,
+                ))
+            })
+            .map_err(DbError::Sqlite)?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(DbError::Sqlite)?
+    };
+
+    let count = rows.len();
+
+    for (id, form_code, quarter_opt) in rows {
+        let period_key = match quarter_opt {
+            Some(q) => {
+                if monthly_forms.iter().any(|m| *m == form_code) {
+                    format!("M{q:02}")
+                } else {
+                    format!("Q{q}")
+                }
+            }
+            None => "A".to_string(),
+        };
+
+        conn.execute(
+            "UPDATE form_drafts SET period_key = ?1 WHERE id = ?2",
+            rusqlite::params![period_key, id],
+        )
+        .map_err(DbError::Sqlite)?;
+    }
+
+    if count > 0 {
+        info!("v5 migration: backfilled period_key for {} rows", count);
     }
 
     Ok(())

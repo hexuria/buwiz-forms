@@ -49,8 +49,8 @@ pub use eligibility_facts::{
 pub use forms::{
     ArtifactLifecycle, FormArtifact, FormAvailability, FormIdentity, OperationalRecommendation,
 };
-pub use support_level::{FormSupportLevel, form_support_level};
 pub use snapshot::{CompiledRuleSnapshot, Era};
+pub use support_level::{FormSupportLevel, form_support_level};
 
 // ── Re-exports: Legacy types (backward compat) ──
 pub use citations::{CitationKind, LegalCitation};
