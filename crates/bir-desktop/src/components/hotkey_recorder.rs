@@ -85,8 +85,8 @@ impl HotkeyRecorder {
             return c.is_ascii_uppercase() || c.is_ascii_digit();
         }
         // F1-F12
-        if k.starts_with('F') {
-            if let Ok(n) = k[1..].parse::<u8>() {
+        if let Some(stripped) = k.strip_prefix('F') {
+            if let Ok(n) = stripped.parse::<u8>() {
                 return (1..=12).contains(&n);
             }
         }

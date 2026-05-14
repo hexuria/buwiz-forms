@@ -430,7 +430,7 @@ impl Render for LockScreenView {
                             ActiveAuthMethod::Totp => "Enter Authenticator Code",
                             ActiveAuthMethod::Pin => "Enter PIN to unlock e-BIRForms",
                         };
-                        
+
                         let disable_pin_input = self.auth_method == ActiveAuthMethod::Pin && !self.has_pin_configured;
 
                         this.child(

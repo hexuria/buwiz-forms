@@ -54,11 +54,8 @@ pub use show_in_dock;
 
 /// The default key character for the global toggle hotkey on each platform.
 pub fn default_hotkey_key() -> &'static str {
-    if cfg!(target_os = "macos") {
-        "E" // Ctrl+Option+E
-    } else {
-        "E" // Win+Shift+E (Windows) or Super+Shift+E (Linux)
-    }
+    // Ctrl+Option+E on macOS, Win+Shift+E on Windows, Super+Shift+E on Linux
+    "E"
 }
 
 /// Human-readable modifier labels for the platform's global hotkey combo.
