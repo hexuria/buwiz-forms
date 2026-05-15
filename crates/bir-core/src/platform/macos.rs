@@ -46,26 +46,14 @@ mod tests {
 
     #[test]
     fn test_data_dir_resolution() {
-        // Temporarily set HOME to ensure consistent test output
-        let old_home = std::env::var_os("HOME");
-        unsafe {
-            std::env::set_var("HOME", "/Users/testuser");
-        }
-
-        let path = data_dir();
-        assert!(path.to_string_lossy().contains("group.dev.goldcoders.bir"));
-        assert!(
-            path.to_string_lossy()
-                .contains("/Users/testuser/Library/Group Containers")
-        );
-
-        // Restore
-        unsafe {
-            if let Some(h) = old_home {
-                std::env::set_var("HOME", h);
-            } else {
-                std::env::remove_var("HOME");
-            }
-        }
+        // Use temp_env to safely set HOME without unsafe — also auto-restores on panic.
+        temp_env::with_var("HOME", Some("/Users/testuser"), || {
+            let path = data_dir();
+            assert!(path.to_string_lossy().contains("group.dev.goldcoders.bir"));
+            assert!(
+                path.to_string_lossy()
+                    .contains("/Users/testuser/Library/Group Containers")
+            );
+        });
     }
 }

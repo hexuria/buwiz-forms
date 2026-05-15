@@ -38,6 +38,16 @@ pub fn start_macos_notification_listener(cx: &mut gpui::Context<crate::app::AppS
     // We use a lightweight 100ms check on this flag instead of 1s PRAGMA polling.
     static NOTIFICATION_RECEIVED: AtomicBool = AtomicBool::new(false);
 
+    // SAFETY: These are raw bindings to Core Foundation C APIs. No safe Rust
+    // wrapper exists for CFNotificationCenter. Invariants:
+    // 1. `CFNotificationCenterGetDistributedCenter()` returns a process-wide
+    //    singleton; always non-null and safe to call from any thread.
+    // 2. `CFStringCreateWithCString` returns a valid CFStringRef for any valid
+    //    null-terminated UTF-8 C string. The CString outlives this block.
+    // 3. `CFNotificationCenterAddObserver` borrows center and name without
+    //    taking ownership. The `on_notification` fn pointer is 'static.
+    // 4. The `cf_name` pointer is intentionally leaked (documented below) —
+    //    it must remain valid for the lifetime of the registered observer.
     unsafe extern "C" {
         fn CFNotificationCenterGetDistributedCenter() -> *const c_void;
         fn CFNotificationCenterAddObserver(
@@ -75,7 +85,10 @@ pub fn start_macos_notification_listener(cx: &mut gpui::Context<crate::app::AppS
         NOTIFICATION_RECEIVED.store(true, Ordering::Release);
     }
 
-    // Register the observer
+    // SAFETY: All invariants documented on the `unsafe extern "C"` block above
+    // are upheld. The CString (`name_cstr`) outlives all CF calls. The
+    // `cf_name` pointer is intentionally leaked so it remains valid for the
+    // entire process lifetime of the observer registration.
     unsafe {
         let center = CFNotificationCenterGetDistributedCenter();
         let name_cstr = std::ffi::CString::new(NOTIFICATION_NAME).unwrap();

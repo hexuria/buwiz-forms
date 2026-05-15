@@ -29,11 +29,16 @@ pub fn prevent_multiple_instances() {
             if let Ok(socket) = StdUdpSocket::bind("127.0.0.1:0") {
                 #[cfg(target_os = "windows")]
                 {
-                    unsafe {
-                        let _ = windows::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow(
+                    // SAFETY: `AllowSetForegroundWindow(ASFW_ANY = 0xFFFFFFFF)` is a
+                    // best-effort hint to Windows that we allow *any* process to steal
+                    // the foreground. No memory is touched; the only side-effect is
+                    // that the target process (the existing instance we are about to
+                    // signal) will be allowed to bring itself to the foreground.
+                    let _ = unsafe {
+                        windows::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow(
                             0xFFFFFFFF,
-                        );
-                    }
+                        )
+                    };
                 }
                 let _ = socket.set_read_timeout(Some(Duration::from_millis(100)));
                 let _ = socket.send_to(b"SHOW", format!("127.0.0.1:{}", port));

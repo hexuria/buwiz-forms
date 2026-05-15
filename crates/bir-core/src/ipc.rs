@@ -13,6 +13,16 @@ const NOTIFICATION_NAME: &str = "dev.goldcoders.bir.DatabaseChanged";
 pub fn post_db_changed() {
     use std::os::raw::c_void;
 
+    // SAFETY: These are raw bindings to Core Foundation C APIs that have no
+    // safe Rust wrapper. The invariants upheld here are:
+    // 1. `CFNotificationCenterGetDistributedCenter()` always returns a non-null
+    //    pointer to a process-wide singleton — it is safe to call at any time.
+    // 2. `CFStringCreateWithCString` returns a valid CFStringRef for any valid
+    //    UTF-8 C string. The CString is kept alive for the duration of the call.
+    // 3. `CFNotificationCenterPostNotification` consumes a borrowed reference to
+    //    the center and name; no ownership is transferred.
+    // 4. `CFRelease(cf_name)` correctly releases the one strong reference
+    //    created by `CFStringCreateWithCString` — no double-free is possible.
     unsafe extern "C" {
         fn CFNotificationCenterGetDistributedCenter() -> *const c_void;
         fn CFNotificationCenterPostNotification(
@@ -33,6 +43,8 @@ pub fn post_db_changed() {
     // kCFStringEncodingUTF8 = 0x08000100
     const K_CF_STRING_ENCODING_UTF8: u32 = 0x08000100;
 
+    // SAFETY: All invariants documented on the `unsafe extern "C"` block above
+    // are upheld. The CString outlives all CF calls in this block.
     unsafe {
         let center = CFNotificationCenterGetDistributedCenter();
         let name_cstr = std::ffi::CString::new(NOTIFICATION_NAME).unwrap();

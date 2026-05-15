@@ -14,28 +14,7 @@ const TEMPLATE_2551Q: &str = include_str!("../../../formtypes/2551Qv2018/templat
 const PAGE1_SVG_2551Q: &str = include_str!("../../../formtypes/2551Qv2018/pages/page1.svg");
 const PAGE2_SVG_2551Q: &str = include_str!("../../../formtypes/2551Qv2018/pages/page2.svg");
 
-#[cfg(target_os = "macos")]
-pub fn print_html_mac(_html_content: &str) {
-    /*
-    let mtm = unsafe { MainThreadMarker::new_unchecked() };
 
-    unsafe {
-        let _app = NSApplication::sharedApplication(mtm);
-
-        let web_view = WKWebView::new_mtm(mtm);
-        let ns_string = NSString::from_str(html_content);
-
-        web_view.loadHTMLString_baseURL(&ns_string, None);
-
-        let print_info = NSPrintInfo::sharedPrintInfo();
-        let print_op = web_view.printOperationWithPrintInfo(&print_info);
-
-        // This opens the native macOS print dialog!
-        print_op.runOperation();
-    }
-    */
-    println!("Print function temporarily disabled to fix compilation");
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PaperSize {

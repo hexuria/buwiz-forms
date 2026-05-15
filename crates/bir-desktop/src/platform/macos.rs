@@ -171,58 +171,79 @@ pub const MONOSPACE_FONT: &str = ".SF NS Mono";
 
 // ── Dock Management ──────────────────────────────────────────────────────────
 
-/// Hides the application from the macOS Dock and explicitly hides all windows from tiling window managers.
+/// Hides the application from the macOS Dock and explicitly hides all windows
+/// from tiling window managers (e.g. AeroSpace).
 pub fn hide_from_dock() {
     #[cfg(target_os = "macos")]
-    unsafe {
-        use objc::{class, msg_send, sel, sel_impl};
-        let app: *mut objc::runtime::Object = msg_send![class!(NSApplication), sharedApplication];
+    {
+        use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
+        use objc2_foundation::MainThreadMarker;
 
-        // Order out all windows explicitly so tiling window managers (like AeroSpace) drop them from the layout
-        let windows: *mut objc::runtime::Object = msg_send![app, windows];
-        let count: u64 = msg_send![windows, count];
-        for i in 0..count {
-            let window: *mut objc::runtime::Object = msg_send![windows, objectAtIndex: i];
-            let _: () = msg_send![window, orderOut: std::ptr::null_mut::<std::ffi::c_void>()];
+        // SAFETY: These dock management functions are only ever called by GPUI
+        // from the main thread (enforced by GPUI's async executor). Constructing
+        // a MainThreadMarker here is sound because the calling context guarantees
+        // main-thread execution.
+        let mtm = unsafe { MainThreadMarker::new_unchecked() };
+        let app = NSApplication::sharedApplication(mtm);
+
+        // Order out all windows so tiling WMs drop them from the layout.
+        let windows = app.windows();
+        for i in 0..windows.len() {
+            if let Some(window) = windows.get(i) {
+                window.orderOut(None);
+            }
         }
 
-        // Set activation policy to Accessory
-        let _: () = msg_send![app, setActivationPolicy: 1isize]; // NSApplicationActivationPolicyAccessory
+        // Set activation policy to Accessory (removes the Dock icon).
+        app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
     }
 }
 
-/// Restores the application to the macOS Dock and restores the windows.
+/// Restores the application to the macOS Dock and brings all windows back.
 pub fn show_in_dock() {
     #[cfg(target_os = "macos")]
-    unsafe {
-        use objc::{class, msg_send, sel, sel_impl};
-        let app: *mut objc::runtime::Object = msg_send![class!(NSApplication), sharedApplication];
+    {
+        use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
+        use objc2_foundation::MainThreadMarker;
 
-        // 1. Set activation policy back to Regular FIRST (makes the dock icon appear)
-        let _: () = msg_send![app, setActivationPolicy: 0isize]; // NSApplicationActivationPolicyRegular
+        // SAFETY: See `hide_from_dock` — always called on the GPUI main thread.
+        let mtm = unsafe { MainThreadMarker::new_unchecked() };
+        let app = NSApplication::sharedApplication(mtm);
 
-        // 2. Activate the app (bring to foreground) BEFORE restoring windows
-        let _: () = msg_send![app, activateIgnoringOtherApps: true];
+        // 1. Restore Dock icon first.
+        app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
 
-        // 3. Now restore all windows from ordered-out state
-        let windows: *mut objc::runtime::Object = msg_send![app, windows];
-        let count: u64 = msg_send![windows, count];
-        for i in 0..count {
-            let window: *mut objc::runtime::Object = msg_send![windows, objectAtIndex: i];
-            let _: () =
-                msg_send![window, makeKeyAndOrderFront: std::ptr::null_mut::<std::ffi::c_void>()];
+        // 2. Activate and bring to foreground.
+        app.activateIgnoringOtherApps(true);
+
+        // 3. Restore all windows.
+        let windows = app.windows();
+        for i in 0..windows.len() {
+            if let Some(window) = windows.get(i) {
+                window.makeKeyAndOrderFront(None);
+            }
         }
     }
 }
 
+/// Toggles the application visibility: hides if visible, shows if hidden.
 pub fn toggle_app_visibility() {
     #[cfg(target_os = "macos")]
-    unsafe {
-        use objc::{class, msg_send, sel, sel_impl};
-        let app: *mut objc::runtime::Object = msg_send![class!(NSApplication), sharedApplication];
-        let policy: isize = msg_send![app, activationPolicy];
-        // NSApplicationActivationPolicyRegular is 0, Accessory is 1
-        if policy == 0 {
+    {
+        use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
+        use objc2_foundation::MainThreadMarker;
+
+        // SAFETY: See `hide_from_dock` — always called on the GPUI main thread.
+        let mtm = unsafe { MainThreadMarker::new_unchecked() };
+        let app = NSApplication::sharedApplication(mtm);
+
+        // SAFETY: `activationPolicy` is marked unsafe in objc2-app-kit 0.2 because the
+        // Objective-C runtime cannot statically verify the policy value. We only read
+        // the policy and pass it to a safe match — no invalid policy value is ever
+        // written, and `NSApplication::sharedApplication` guarantees a valid receiver.
+        let policy = unsafe { app.activationPolicy() };
+
+        if policy == NSApplicationActivationPolicy::Regular {
             hide_from_dock();
         } else {
             show_in_dock();

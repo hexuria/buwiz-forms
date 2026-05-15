@@ -6,33 +6,38 @@ use gpui::*;
 
 /// Enforces that only one instance of the application runs at a time.
 pub fn enforce_single_instance() {
-    use std::ffi::OsStr;
-    use std::os::windows::ffi::OsStrExt;
+    #[cfg(target_os = "windows")]
+    {
+        use std::ffi::OsStr;
+        use std::os::windows::ffi::OsStrExt;
+        use windows::Win32::Foundation::ERROR_ALREADY_EXISTS;
+        use windows::Win32::System::Threading::CreateMutexW;
+        use windows_core::PCWSTR;
 
-    #[link(name = "kernel32")]
-    unsafe extern "system" {
-        fn CreateMutexW(
-            lpMutexAttributes: *mut std::ffi::c_void,
-            bInitialOwner: i32,
-            lpName: *const u16,
-        ) -> *mut std::ffi::c_void;
-        fn GetLastError() -> u32;
-    }
+        let name: Vec<u16> = OsStr::new("eBIRForms_Desktop_App_Mutex_Lock")
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
 
-    let name: Vec<u16> = OsStr::new("eBIRForms_Desktop_App_Mutex_Lock")
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect();
-
-    unsafe {
-        // NOTE: The handle is intentionally leaked (never stored/closed). Windows
-        // keeps the mutex alive for the entire process lifetime, which is exactly
-        // what we want — the lock is released automatically when the process exits.
-        let handle = CreateMutexW(std::ptr::null_mut(), 0, name.as_ptr());
-        if handle.is_null() || GetLastError() == 183
-        /* ERROR_ALREADY_EXISTS */
-        {
-            std::process::exit(0);
+        // SAFETY: `CreateMutexW` is an FFI call into kernel32. The name pointer is
+        // valid for the duration of the call (stack-allocated Vec). The handle is
+        // intentionally leaked — Windows releases it automatically when the process
+        // exits, which is exactly what we want for a single-instance guard.
+        let result = unsafe { CreateMutexW(None, false, PCWSTR(name.as_ptr())) };
+        match result {
+            Err(_) => std::process::exit(0),
+            Ok(_handle) => {
+                // Check if the mutex already existed (ERROR_ALREADY_EXISTS = 183).
+                // We must call GetLastError *after* a successful CreateMutexW.
+                use windows::Win32::Foundation::GetLastError;
+                // SAFETY: Called immediately after CreateMutexW with no other Win32
+                // calls in between, so the thread-local last-error is valid.
+                if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
+                    std::process::exit(0);
+                }
+                // Intentionally forget the handle — leak it for process lifetime.
+                std::mem::forget(_handle);
+            }
         }
     }
 }
@@ -150,19 +155,10 @@ pub fn open_in_system(path: &std::path::Path) {
 pub fn print_pdf(path: &std::path::Path) -> Result<(), &'static str> {
     #[cfg(target_os = "windows")]
     {
+        use windows::Win32::UI::Shell::ShellExecuteW;
+        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+        use windows_core::PCWSTR;
         use std::os::windows::ffi::OsStrExt;
-
-        #[link(name = "shell32")]
-        unsafe extern "system" {
-            fn ShellExecuteW(
-                hwnd: isize,
-                lpOperation: *const u16,
-                lpFile: *const u16,
-                lpParameters: *const u16,
-                lpDirectory: *const u16,
-                nShowCmd: i32,
-            ) -> isize;
-        }
 
         let verb: Vec<u16> = std::ffi::OsStr::new("print")
             .encode_wide()
@@ -174,20 +170,23 @@ pub fn print_pdf(path: &std::path::Path) -> Result<(), &'static str> {
             .chain(std::iter::once(0))
             .collect();
 
-        // SW_HIDE = 0, SW_SHOWNORMAL = 1
+        // SAFETY: `ShellExecuteW` is an FFI call into shell32. Both wide-string
+        // slices are null-terminated and live for the duration of the call.
+        // The hwnd, parameters, and directory arguments are intentionally null
+        // (use process default), which is a documented valid usage.
         let result = unsafe {
             ShellExecuteW(
-                0,
-                verb.as_ptr(),
-                file_path.as_ptr(),
-                std::ptr::null(),
-                std::ptr::null(),
-                1, // SW_SHOWNORMAL
+                None,
+                PCWSTR(verb.as_ptr()),
+                PCWSTR(file_path.as_ptr()),
+                PCWSTR::null(),
+                PCWSTR::null(),
+                SW_SHOWNORMAL,
             )
         };
 
         // ShellExecute returns a value > 32 if successful.
-        if result <= 32 {
+        if result.0 as isize <= 32 {
             let _ = open::that(path);
             return Err(
                 "Your default PDF viewer (Edge) does not support the 'print' command.\nThe file has been opened instead. Please press Ctrl+P to print.",
@@ -220,50 +219,61 @@ pub fn print_pdf(path: &std::path::Path) -> Result<(), &'static str> {
 ///
 /// Call this **after** every `robius_authentication::Context::authenticate()` returns.
 pub fn reclaim_keyboard_focus() {
-    // Win32 constants
-    const VK_MENU: u8 = 0x12; // Alt key
-    const KEYEVENTF_EXTENDEDKEY: u32 = 0x0001;
-    const KEYEVENTF_KEYUP: u32 = 0x0002;
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::UI::Input::KeyboardAndMouse::{
+            GetAsyncKeyState, KEYBD_EVENT_FLAGS, KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP,
+            VK_MENU, keybd_event,
+        };
+        use windows::Win32::UI::WindowsAndMessaging::{
+            EnumWindows, GetWindowThreadProcessId, IsWindowVisible, SetForegroundWindow,
+        };
 
-    type HWND = isize;
-    type LPARAM = isize;
-
-    unsafe extern "system" {
-        // user32.dll
-        fn GetAsyncKeyState(v_key: i32) -> i16;
-        fn keybd_event(b_vk: u8, b_scan: u8, dw_flags: u32, dw_extra_info: usize);
-        fn SetForegroundWindow(h_wnd: HWND) -> i32;
-        fn IsWindowVisible(h_wnd: HWND) -> i32;
-        fn GetWindowThreadProcessId(h_wnd: HWND, lpdw_process_id: *mut u32) -> u32;
-        fn EnumWindows(
-            lp_enum_func: Option<unsafe extern "system" fn(HWND, LPARAM) -> i32>,
-            l_param: LPARAM,
-        ) -> i32;
-    }
-
-    unsafe {
-        // 1. Release Alt key if it is logically held down.
-        //    GetAsyncKeyState MSB set => key is currently pressed.
-        if GetAsyncKeyState(VK_MENU as i32) < 0 {
-            keybd_event(VK_MENU, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+        // SAFETY: `GetAsyncKeyState` reads keyboard state atomically. The key
+        // code VK_MENU is a well-known constant (0x12). No preconditions.
+        unsafe {
+            if GetAsyncKeyState(VK_MENU.0 as i32) < 0 {
+                // SAFETY: `keybd_event` is a legacy but still valid Win32 API.
+                // We send a single KEYUP event for VK_MENU with no scan code.
+                // No window handle or thread affinity is required.
+                keybd_event(
+                    VK_MENU.0 as u8,
+                    0,
+                    KEYBD_EVENT_FLAGS(KEYEVENTF_EXTENDEDKEY.0 | KEYEVENTF_KEYUP.0),
+                    0,
+                );
+            }
         }
 
-        // 2. Find our own window and bring it to the foreground.
         let pid = std::process::id();
 
-        unsafe extern "system" fn enum_callback(hwnd: HWND, lparam: LPARAM) -> i32 {
+        // SAFETY: `enum_callback` is a valid Win32 EnumWindows callback.
+        // `pid` is passed as LPARAM (integer) and reinterpreted inside the
+        // callback as u32 — the cast is safe because process IDs fit in u32.
+        unsafe extern "system" fn enum_callback(hwnd: HWND, lparam: isize) -> i32 {
             let target_pid = lparam as u32;
             let mut window_pid: u32 = 0;
-            unsafe { GetWindowThreadProcessId(hwnd, &mut window_pid) };
+            // SAFETY: hwnd comes from EnumWindows (always valid). window_pid is
+            // a local variable passed by mutable reference.
+            unsafe { GetWindowThreadProcessId(hwnd, Some(&mut window_pid)) };
 
-            if window_pid == target_pid && unsafe { IsWindowVisible(hwnd) } != 0 {
-                unsafe { SetForegroundWindow(hwnd) };
+            if window_pid == target_pid
+                // SAFETY: hwnd is a valid window handle provided by EnumWindows.
+                && unsafe { IsWindowVisible(hwnd) }.as_bool()
+            {
+                // SAFETY: hwnd belongs to our process and is visible.
+                let _ = unsafe { SetForegroundWindow(hwnd) };
                 return 0; // FALSE — stop enumeration
             }
             1 // TRUE — continue enumeration
         }
 
-        EnumWindows(Some(enum_callback), pid as LPARAM);
+        // SAFETY: `enum_callback` has the correct `unsafe extern "system"` ABI
+        // expected by EnumWindows. The LPARAM is our process ID cast to isize.
+        unsafe {
+            let _ = EnumWindows(Some(enum_callback), pid as isize);
+        }
     }
 }
 
@@ -275,19 +285,26 @@ pub const MONOSPACE_FONT: &str = "Cascadia Mono";
 // ── Dock Management ──────────────────────────────────────────────────────────
 
 #[cfg(target_os = "windows")]
-use windows::Win32::Foundation::{HWND, LPARAM};
+use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::GetCurrentProcessId;
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetWindowThreadProcessId, SW_HIDE, SW_SHOW, ShowWindow,
+    EnumWindows, GetWindowThreadProcessId, IsWindowVisible, SW_HIDE, SW_SHOW,
+    SetForegroundWindow, ShowWindow,
 };
-#[cfg(target_os = "windows")]
-use windows::core::BOOL;
+
+// SAFETY: These three functions are Win32 EnumWindows callbacks — the
+// `unsafe extern "system"` ABI is an unavoidable requirement of the Win32 API.
+// Each function:
+//   - Only calls Win32 APIs on `hwnd` values provided by the OS (always valid).
+//   - Reads `GetCurrentProcessId()` to filter to our own process windows only.
+//   - Returns BOOL(1) to continue enumeration or BOOL(0) to stop.
 
 #[cfg(target_os = "windows")]
 unsafe extern "system" fn hide_window_callback(hwnd: HWND, _: LPARAM) -> BOOL {
     let mut pid = 0;
+    // SAFETY: hwnd is a valid handle from EnumWindows; pid is a local variable.
     unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
     if pid == unsafe { GetCurrentProcessId() } {
         let _ = unsafe { ShowWindow(hwnd, SW_HIDE) };
@@ -298,9 +315,11 @@ unsafe extern "system" fn hide_window_callback(hwnd: HWND, _: LPARAM) -> BOOL {
 #[cfg(target_os = "windows")]
 unsafe extern "system" fn show_window_callback(hwnd: HWND, _: LPARAM) -> BOOL {
     let mut pid = 0;
+    // SAFETY: hwnd is a valid handle from EnumWindows; pid is a local variable.
     unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
     if pid == unsafe { GetCurrentProcessId() } {
         use windows::Win32::UI::WindowsAndMessaging::{SW_RESTORE, SetForegroundWindow};
+        // SAFETY: hwnd belongs to our process — safe to show and foreground.
         let _ = unsafe { ShowWindow(hwnd, SW_RESTORE) };
         let _ = unsafe { ShowWindow(hwnd, SW_SHOW) };
         let _ = unsafe { SetForegroundWindow(hwnd) };
@@ -311,14 +330,17 @@ unsafe extern "system" fn show_window_callback(hwnd: HWND, _: LPARAM) -> BOOL {
 #[cfg(target_os = "windows")]
 unsafe extern "system" fn toggle_window_callback(hwnd: HWND, _: LPARAM) -> BOOL {
     let mut pid = 0;
+    // SAFETY: hwnd is a valid handle from EnumWindows; pid is a local variable.
     unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
     if pid == unsafe { GetCurrentProcessId() } {
         use windows::Win32::UI::WindowsAndMessaging::{
             IsWindowVisible, SW_RESTORE, SetForegroundWindow,
         };
+        // SAFETY: hwnd belongs to our process — safe to query visibility.
         if unsafe { IsWindowVisible(hwnd) }.into() {
             let _ = unsafe { ShowWindow(hwnd, SW_HIDE) };
         } else {
+            // SAFETY: hwnd belongs to our process — safe to show and foreground.
             let _ = unsafe { ShowWindow(hwnd, SW_RESTORE) };
             let _ = unsafe { ShowWindow(hwnd, SW_SHOW) };
             let _ = unsafe { SetForegroundWindow(hwnd) };
@@ -330,6 +352,7 @@ unsafe extern "system" fn toggle_window_callback(hwnd: HWND, _: LPARAM) -> BOOL 
 /// Hides the application from the dock/taskbar and explicit tiling managers.
 pub fn hide_from_dock() {
     #[cfg(target_os = "windows")]
+    // SAFETY: `hide_window_callback` is a correctly-typed Win32 EnumWindows callback.
     unsafe {
         let _ = EnumWindows(Some(hide_window_callback), LPARAM(0));
     }
@@ -338,6 +361,7 @@ pub fn hide_from_dock() {
 /// Restores the application to the dock/taskbar and brings to foreground.
 pub fn show_in_dock() {
     #[cfg(target_os = "windows")]
+    // SAFETY: `show_window_callback` is a correctly-typed Win32 EnumWindows callback.
     unsafe {
         let _ = EnumWindows(Some(show_window_callback), LPARAM(0));
     }
@@ -346,6 +370,7 @@ pub fn show_in_dock() {
 /// Toggles the application visibility on Windows.
 pub fn toggle_app_visibility() {
     #[cfg(target_os = "windows")]
+    // SAFETY: `toggle_window_callback` is a correctly-typed Win32 EnumWindows callback.
     unsafe {
         let _ = EnumWindows(Some(toggle_window_callback), LPARAM(0));
     }
