@@ -205,6 +205,22 @@ git add Cargo.toml justfile && git commit -m "release: v0.2.0"
 | Feature release | `0.2.0` | 25 | `0.2.0` (build 25) | `0.2.25.0` |
 | Stable release | `1.0.0` | 30 | `1.0.0` (build 30) | `1.0.30.0` |
 
+## 🔐 CI/CD Secrets & Codesigning
+
+The GitHub Actions workflows (`ci.yml` and `release.yml`) are fully automated. Windows and Linux builds require **no secrets** to compile successfully. 
+
+However, if you want to automatically codesign and notarize the **macOS** DMG on GitHub Releases, you must configure the following Repository Secrets in your GitHub settings:
+
+| Secret Name | Required For | Description |
+|---|---|---|
+| `APPLE_CERTIFICATE_P12` | macOS Codesign | Base64-encoded `Developer ID Application` .p12 certificate |
+| `APPLE_CERTIFICATE_PASSWORD` | macOS Codesign | Password to unlock the .p12 certificate |
+| `APPLE_TEAM_ID` | macOS Codesign & Notarization | Your Apple Developer Team ID (e.g., `A1B2C3D4E5`) |
+| `APPLE_ID` | macOS Notarization | Your Apple ID email address |
+| `APPLE_APP_PASSWORD` | macOS Notarization | App-specific password generated at appleid.apple.com |
+
+> **Note:** If these secrets are missing, the macOS release workflow will gracefully skip the signing and notarization steps and still provide an unsigned DMG and ZIP fallback.
+
 ## 📂 Architecture
 
 - `crates/bir-core/`: Contains all domain logic, SQLite database integrations, API communications, IMAP automated email tracking, cryptography, and XML generation logic.

@@ -21,6 +21,7 @@ WizardStyle=modern
 
 [Files]
 Source: "target\x86_64-pc-windows-msvc\release\bir.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "target\typst-temp\typst-x86_64-pc-windows-msvc\typst.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "formtypes\*"; DestDir: "{app}\formtypes"; Flags: ignoreversion recursesubdirs createallsubdirs
 

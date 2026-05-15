@@ -154,7 +154,7 @@ jobs:
       - name: Install Windows Dependencies
         shell: pwsh
         run: |
-          choco install openssl typst -y
+          choco install openssl innosetup wixtoolset -y
           $openssl_dir = ""
           if (Test-Path "C:\Program Files\OpenSSL\include") {
               $openssl_dir = "C:\Program Files\OpenSSL"
@@ -189,6 +189,13 @@ jobs:
       - name: Build
         run: cargo build --release --target x86_64-pc-windows-msvc
 
+      - name: Download Typst
+        shell: pwsh
+        run: |
+          $TYPST_URL = "https://github.com/typst/typst/releases/latest/download/typst-x86_64-pc-windows-msvc.zip"
+          Invoke-WebRequest -Uri $TYPST_URL -OutFile "target/typst.zip"
+          Expand-Archive -Path "target/typst.zip" -DestinationPath "target/typst-temp" -Force
+
       - name: Package (.zip)
         shell: pwsh
         run: |
@@ -196,6 +203,7 @@ jobs:
           $PKG = "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}"
           New-Item -ItemType Directory -Force -Path $PKG
           Copy-Item "target/x86_64-pc-windows-msvc/release/bir.exe" "$PKG/"
+          Copy-Item "target/typst-temp/typst-x86_64-pc-windows-msvc/typst.exe" "$PKG/"
           Copy-Item -Recurse "assets" "$PKG/"
           Copy-Item -Recurse "formtypes" "$PKG/"
           Compress-Archive -Path "$PKG" -DestinationPath "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}.zip"
@@ -204,7 +212,8 @@ jobs:
         shell: pwsh
         run: |
           $VERSION = "${{ github.ref_name }}".TrimStart('v')
-          iscc "/DMyAppVersion=$VERSION" installer.iss
+          $ISCC = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          & $ISCC /DMyAppVersion=$VERSION installer.iss
 
       - name: Create MSI Installer
         shell: pwsh

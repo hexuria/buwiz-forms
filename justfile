@@ -20,9 +20,25 @@ BUILD_NUMBER := env_var_or_default("BUILD_NUMBER", "26")
 default: check
 
 # Automatically fetch the latest build from App Store Connect and increment the justfile BUILD_NUMBER
+[unix]
 bump-build:
     @echo "Bumping build number via App Store Connect API..."
     @set -a && source .env && set +a && uv run scripts/bump_build.py
+
+[windows]
+bump-build:
+    #!pwsh -NoProfile
+    $ErrorActionPreference = 'Stop'
+    Write-Host "Bumping build number via App Store Connect API..."
+    # Load .env vars into the current process
+    if (Test-Path .env) {
+        Get-Content .env | ForEach-Object {
+            if ($_ -match '^\s*([^#][^=]+)=(.*)$') {
+                [Environment]::SetEnvironmentVariable($matches[1].Trim(), $matches[2].Trim(), 'Process')
+            }
+        }
+    }
+    uv run scripts/bump_build.py
 
 # Show available commands
 help:
@@ -33,12 +49,24 @@ run:
     cargo run --bin bir --features dev-tools,layout-editor
 
 # Run code formatting, linting, and type checking
+[unix]
 check:
     cargo fmt --all
     cargo check --workspace
     cargo clippy --workspace -- -D warnings
 
+[windows]
+check:
+    #!pwsh -NoProfile
+    cargo fmt --all
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    cargo check --workspace
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    cargo clippy --workspace -- -D warnings
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 # Check for vulnerability advisories (requires: cargo install cargo-audit)
+[unix]
 audit:
     @if command -v cargo-audit >/dev/null 2>&1; then \
         cargo audit; \
@@ -46,7 +74,17 @@ audit:
         echo "⚠️ cargo-audit is not installed. Run 'cargo install cargo-audit' to enable vulnerability scanning."; \
     fi
 
+[windows]
+audit:
+    #!pwsh -NoProfile
+    if (Get-Command cargo-audit -ErrorAction SilentlyContinue) {
+        cargo audit
+    } else {
+        Write-Warning "cargo-audit is not installed. Run 'cargo install cargo-audit' to enable vulnerability scanning."
+    }
+
 # Check for outdated dependencies (requires: cargo install cargo-outdated)
+[unix]
 outdated:
     @if command -v cargo-outdated >/dev/null 2>&1; then \
         cargo outdated; \
@@ -54,7 +92,17 @@ outdated:
         echo "⚠️ cargo-outdated is not installed. Run 'cargo install cargo-outdated' to enable."; \
     fi
 
+[windows]
+outdated:
+    #!pwsh -NoProfile
+    if (Get-Command cargo-outdated -ErrorAction SilentlyContinue) {
+        cargo outdated
+    } else {
+        Write-Warning "cargo-outdated is not installed. Run 'cargo install cargo-outdated' to enable."
+    }
+
 # Find unused dependencies in Cargo.toml (requires: cargo install cargo-machete)
+[unix]
 unused:
     @if command -v cargo-machete >/dev/null 2>&1; then \
         cargo machete; \
@@ -62,19 +110,158 @@ unused:
         echo "⚠️ cargo-machete is not installed. Run 'cargo install cargo-machete' to enable."; \
     fi
 
+[windows]
+unused:
+    #!pwsh -NoProfile
+    if (Get-Command cargo-machete -ErrorAction SilentlyContinue) {
+        cargo machete
+    } else {
+        Write-Warning "cargo-machete is not installed. Run 'cargo install cargo-machete' to enable."
+    }
+
 # Run all unit and integration tests
 test:
     cargo test --workspace
 
-# Automatically figure out your OS and build the installer package
-install *args="":
-    @if [ "{{os()}}" = "macos" ]; then \
-        just _package-mac "{{args}}"; \
-    elif [ "{{os()}}" = "windows" ]; then \
-        just _package-win "{{args}}"; \
-    else \
-        just _package-linux "{{args}}"; \
+# Install a built package (auto-detects available artifacts)
+# Usage: just install [format]
+# Formats: exe, msix (Windows) | app, pkg, dmg (macOS) | deb, tar (Linux)
+# If no format given: installs the only available artifact, or lists choices if multiple exist
+[windows]
+install format="":
+    #!pwsh -NoProfile
+    $ErrorActionPreference = 'Stop'
+    $VERSION = "{{VERSION}}"
+    $DIR = "{{RELEASE_DIR}}"
+    $format = "{{format}}"
+
+    # Scan for available installers
+    $artifacts = [ordered]@{}
+    $msix = Get-ChildItem "$DIR\*.msix" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($msix) { $artifacts["msix"] = $msix.FullName }
+    $exe = Get-ChildItem "$DIR\*-Setup.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($exe) { $artifacts["exe"] = $exe.FullName }
+
+    if ($format) {
+        if (-not $artifacts.Contains($format)) {
+            Write-Host "❌ No '$format' artifact found in $DIR." -ForegroundColor Red
+            Write-Host "   Run 'just $format' to build it first."
+            exit 1
+        }
+    } elseif ($artifacts.Count -eq 0) {
+        Write-Host "❌ No installers found in $DIR." -ForegroundColor Red
+        Write-Host "   Build one first with: just exe  or  just msix"
+        exit 1
+    } elseif ($artifacts.Count -eq 1) {
+        $format = $artifacts.Keys | Select-Object -First 1
+        Write-Host "Found one installer, auto-selecting: $format" -ForegroundColor Cyan
+    } else {
+        Write-Host "Multiple installers found — please specify which one:" -ForegroundColor Yellow
+        Write-Host ""
+        foreach ($key in $artifacts.Keys) {
+            $path = $artifacts[$key]
+            $size = [math]::Round((Get-Item $path).Length / 1MB, 1)
+            Write-Host "  just install $key" -ForegroundColor Green -NoNewline
+            Write-Host "  →  $([System.IO.Path]::GetFileName($path)) ($($size) MB)"
+        }
+        Write-Host ""
+        exit 0
+    }
+
+    $path = $artifacts[$format]
+    switch ($format) {
+        "msix" {
+            Write-Host "Installing MSIX package: $path" -ForegroundColor Cyan
+            Write-Host "⚠️  MSIX must be signed before sideloading. Run 'just sign-dev' first if you haven't." -ForegroundColor Yellow
+            Add-AppxPackage -Path $path
+            Write-Host "✅ MSIX installed successfully!"
+        }
+        "exe" {
+            Write-Host "Launching Setup installer: $path" -ForegroundColor Cyan
+            Start-Process -FilePath $path -Wait
+            Write-Host "✅ Setup installer completed!"
+        }
+    }
+
+[unix]
+install format="":
+    #!/usr/bin/env bash
+    set -e
+    VERSION="{{VERSION}}"
+    DIR="{{RELEASE_DIR}}"
+    format="{{format}}"
+
+    declare -A artifacts
+
+    if [ "$(uname)" = "Darwin" ]; then
+        # macOS: look for .app, .pkg, .dmg
+        if [ -d "$DIR/{{APP_NAME}}.app" ]; then artifacts[app]="$DIR/{{APP_NAME}}.app"; fi
+        pkg=$(find "$DIR" -maxdepth 1 -name "*-MAS-*.pkg" 2>/dev/null | head -1)
+        [ -n "$pkg" ] && artifacts[pkg]="$pkg"
+        dmg=$(find "$DIR" -maxdepth 1 -name "*.dmg" 2>/dev/null | head -1)
+        [ -n "$dmg" ] && artifacts[dmg]="$dmg"
+        valid_formats="app, pkg, or dmg"
+    else
+        # Linux: look for .deb, .tar.gz
+        deb=$(find "$DIR" -maxdepth 1 -name "*.deb" 2>/dev/null | head -1)
+        [ -n "$deb" ] && artifacts[deb]="$deb"
+        tarball=$(find "$DIR" -maxdepth 1 -name "*.tar.gz" 2>/dev/null | head -1)
+        [ -n "$tarball" ] && artifacts[tar]="$tarball"
+        valid_formats="deb or tar"
     fi
+
+    if [ -n "$format" ]; then
+        if [ -z "${artifacts[$format]+x}" ]; then
+            echo "❌ No '$format' artifact found in $DIR."
+            echo "   Build it first, then retry."
+            exit 1
+        fi
+    elif [ ${#artifacts[@]} -eq 0 ]; then
+        echo "❌ No installers found in $DIR."
+        echo "   Build one first (e.g. just app, just install)."
+        exit 1
+    elif [ ${#artifacts[@]} -eq 1 ]; then
+        format="${!artifacts[@]}"
+        echo "Found one installer, auto-selecting: $format"
+    else
+        echo "Multiple installers found — please specify which one:"
+        echo ""
+        for key in "${!artifacts[@]}"; do
+            size=$(du -h "${artifacts[$key]}" | cut -f1)
+            echo "  just install $key  →  $(basename "${artifacts[$key]}") ($size)"
+        done
+        echo ""
+        exit 0
+    fi
+
+    path="${artifacts[$format]}"
+    case "$format" in
+        app)
+            echo "Copying {{APP_NAME}}.app to /Applications..."
+            cp -R "$path" /Applications/
+            echo "✅ Installed to /Applications/{{APP_NAME}}.app"
+            ;;
+        pkg)
+            echo "Installing PKG: $path"
+            sudo installer -pkg "$path" -target /
+            echo "✅ PKG installed successfully!"
+            ;;
+        dmg)
+            echo "Opening DMG: $path"
+            open "$path"
+            echo "✅ DMG mounted — drag {{APP_NAME}}.app to Applications."
+            ;;
+        deb)
+            echo "Installing DEB: $path"
+            sudo dpkg -i "$path"
+            echo "✅ DEB installed successfully!"
+            ;;
+        tar)
+            echo "Extracting tarball: $path"
+            tar xzf "$path" -C "$DIR"
+            echo "✅ Extracted to $DIR/ — run the binary from there."
+            ;;
+    esac
 
 # Build and package the app for Mac App Store submission
 # Set CODESIGN_IDENTITY env var to override the default ad-hoc signing ("-")
@@ -84,6 +271,49 @@ app *args="": bump-build
     else \
         echo "⚠️ App Store builds are only supported on macOS."; \
     fi
+
+# Build the Inno Setup executable installer (Windows only)
+exe *args="":
+    #!pwsh -NoProfile
+    $ErrorActionPreference = 'Stop'
+    
+    $features = @()
+    foreach ($arg in '{{args}}'.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)) {
+        if ($arg -eq '--layout-editor') { $features += 'layout-editor' }
+        if ($arg -eq '--inspector') { $features += 'inspector' }
+    }
+    
+    if ($features.Count -gt 0) {
+        $featureList = $features -join ','
+        cargo build --release --target {{WIN_TARGET}} --features $featureList
+    } else {
+        cargo build --release --target {{WIN_TARGET}}
+    }
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "❌ cargo build failed (exit code $LASTEXITCODE). Aborting EXE packaging."
+        exit $LASTEXITCODE
+    }
+    
+    $VERSION = "{{VERSION}}"
+    
+    # Bundle Typst binary
+    $TYPST_URL = "https://github.com/typst/typst/releases/latest/download/typst-x86_64-pc-windows-msvc.zip"
+    $TYPST_ZIP = "target/typst.zip"
+    if (-not (Test-Path "target/typst-temp/typst-x86_64-pc-windows-msvc/typst.exe")) {
+        Write-Host "Downloading typst for bundling..."
+        Invoke-WebRequest -Uri $TYPST_URL -OutFile $TYPST_ZIP
+        Expand-Archive -Path $TYPST_ZIP -DestinationPath "target/typst-temp" -Force
+    }
+
+    $ISCC = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+    if (Test-Path $ISCC) {
+        Write-Host "Building installer with Inno Setup..."
+        & $ISCC /DMyAppVersion=$VERSION installer.iss
+        Write-Host "✅ Setup EXE created: target/release-artifacts/{{APP_NAME}}-Windows-x64-$VERSION-Setup.exe"
+    } else {
+        Write-Warning "⚠️ ISCC.exe not found at $ISCC. Please install Inno Setup 6 (https://jrsoftware.org/isinfo.php)."
+        exit 1
+    }
 
 # Build the MSIX package for the Microsoft Store (Windows only)
 msix *args="":
@@ -208,6 +438,7 @@ sign-dev:
     }
 
 # Publish a new release (tags and pushes to trigger CI)
+[unix]
 publish version="":
     #!/usr/bin/env bash
     set -e
@@ -230,10 +461,39 @@ publish version="":
     git push origin "v$NEW_VER"
     echo "🚀 Release v$NEW_VER triggered"
 
+[windows]
+publish version="":
+    #!pwsh -NoProfile
+    $ErrorActionPreference = 'Stop'
+    $ver = '{{version}}'
+    if ($ver) {
+        Write-Host "Forcing version to $ver"
+        (Get-Content Cargo.toml) -replace '^version = ".*"', "version = `"$ver`"" | Set-Content Cargo.toml
+        if (Test-Path crates/bir-print/Cargo.toml) {
+            (Get-Content crates/bir-print/Cargo.toml) -replace '^version = ".*"', "version = `"$ver`"" | Set-Content crates/bir-print/Cargo.toml
+        }
+        $NEW_VER = $ver
+    } else {
+        $NEW_VER = "{{VERSION}}"
+    }
+    git add -A
+    git commit -m "release: v$NEW_VER" --allow-empty
+    git tag -a "v$NEW_VER" -m "Release v$NEW_VER"
+    git push origin main
+    git push origin "v$NEW_VER"
+    Write-Host "🚀 Release v$NEW_VER triggered"
+
 # Remove build artifacts
+[unix]
 clean:
     cargo clean
     rm -rf {{RELEASE_DIR}}
+
+[windows]
+clean:
+    #!pwsh -NoProfile
+    cargo clean
+    if (Test-Path "{{RELEASE_DIR}}") { Remove-Item "{{RELEASE_DIR}}" -Recurse -Force }
 
 # --- Hidden OS-specific packaging tasks ---
 
@@ -384,29 +644,7 @@ _package-mac-appstore args="":
         echo "⚠️  Note: You must also codesign the .pkg with an 'Apple Distribution' certificate before submitting."
     fi
 
-_package-win args="":
-    #!/usr/bin/env bash
-    set -e
-    FEATURES=""
-    for arg in {{args}}; do
-        case "$arg" in
-            --layout-editor) FEATURES="${FEATURES:+$FEATURES,}layout-editor" ;;
-            --inspector)     FEATURES="${FEATURES:+$FEATURES,}inspector" ;;
-        esac
-    done
-    FEATURES_FLAG=""
-    if [ -n "$FEATURES" ]; then FEATURES_FLAG="--features $FEATURES"; fi
-    cargo build --release --target {{WIN_TARGET}} $FEATURES_FLAG
-    mkdir -p {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}
-    cp target/{{WIN_TARGET}}/release/bir.exe {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/
-    if command -v typst >/dev/null 2>&1; then cp $(which typst) {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/; fi
-    cp -R assets {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/
-    cp -R formtypes {{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/
-    if [ "$DEV_MODE" = "true" ] || [ "$DEVELOPER_MODE" = "true" ]; then
-        echo "DEVELOPER_MODE=true" > "{{RELEASE_DIR}}/{{APP_NAME}}-Windows-{{VERSION}}/.env"
-    fi
-    cd {{RELEASE_DIR}} && zip -r "{{APP_NAME}}-Windows-x64-{{VERSION}}.zip" "{{APP_NAME}}-Windows-{{VERSION}}"
-    echo "✅ Windows package: {{RELEASE_DIR}}/{{APP_NAME}}-Windows-x64-{{VERSION}}.zip"
+# NOTE: _package-win was removed — use 'just exe' or 'just msix' instead.
 
 _package-linux args="":
     #!/usr/bin/env bash
