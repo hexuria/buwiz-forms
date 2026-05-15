@@ -30,6 +30,7 @@ pub mod form_0619e_xml;
 pub mod form_0619f_xml;
 pub mod form_1601c_xml;
 pub mod form_1701_xml;
+pub mod form_1701q_xml;
 pub mod form_1702mx_xml;
 pub mod form_1702rt_xml;
 pub mod form_2550q_xml;
@@ -71,13 +72,43 @@ impl FilingPeriod {
         if key == "A" {
             return Some(Self::Annual);
         }
+        if key.is_empty() {
+            return None;
+        }
         let (prefix, rest) = key.split_at(1);
         let num: u32 = rest.parse().ok()?;
         match prefix {
-            "M" => Some(Self::Monthly(num as u8)),
-            "Q" => Some(Self::Quarterly(num as u8)),
-            "O" => Some(Self::OpenEnded(num)),
+            "M" if (1..=12).contains(&num) => Some(Self::Monthly(num as u8)),
+            "Q" if (1..=4).contains(&num) => Some(Self::Quarterly(num as u8)),
+            "O" if num > 0 => Some(Self::OpenEnded(num)),
             _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod period_tests {
+    use super::FilingPeriod;
+
+    #[test]
+    fn period_key_round_trips_supported_periods() {
+        for period in [
+            FilingPeriod::Monthly(1),
+            FilingPeriod::Monthly(12),
+            FilingPeriod::Quarterly(1),
+            FilingPeriod::Quarterly(4),
+            FilingPeriod::Annual,
+            FilingPeriod::OpenEnded(17),
+        ] {
+            let key = period.to_period_key();
+            assert_eq!(FilingPeriod::from_period_key(&key), Some(period));
+        }
+    }
+
+    #[test]
+    fn period_key_parser_rejects_empty_and_out_of_range_values() {
+        for key in ["", "M00", "M13", "Q0", "Q5", "O0", "X1", "QX"] {
+            assert_eq!(FilingPeriod::from_period_key(key), None);
         }
     }
 }
@@ -241,6 +272,7 @@ pub enum FormDraft {
     Form0619E(Box<form_0619e::Form0619EDraft>),
     Form0619F(Box<form_0619f::Form0619FDraft>),
     Form1701(Box<form_1701::Form1701Draft>),
+    Form1701Q(Box<form_1701q::Form1701QDraft>),
     Form1702MX(Box<form_1702mx::Form1702MXDraft>),
     Form1702RT(Box<form_1702rt::Form1702RTDraft>),
     Form2550Q(Box<form_2550q::Form2550QDraft>),
@@ -255,6 +287,7 @@ impl FormDraft {
             Self::Form0619E(_) => "0619E",
             Self::Form0619F(_) => "0619F",
             Self::Form1701(_) => "1701",
+            Self::Form1701Q(_) => "1701Q",
             Self::Form1702MX(_) => "1702MX",
             Self::Form1702RT(_) => "1702RT",
             Self::Form2550Q(_) => "2550Q",
@@ -269,6 +302,7 @@ impl FormDraft {
             Self::Form0619E(f) => &f.status,
             Self::Form0619F(f) => &f.status,
             Self::Form1701(f) => &f.status,
+            Self::Form1701Q(f) => &f.status,
             Self::Form1702MX(f) => &f.status,
             Self::Form1702RT(f) => &f.status,
             Self::Form2550Q(f) => &f.status,
@@ -283,6 +317,7 @@ impl FormDraft {
             Self::Form0619E(f) => f.validate(),
             Self::Form0619F(f) => f.validate(),
             Self::Form1701(f) => f.validate(),
+            Self::Form1701Q(f) => f.validate(),
             Self::Form1702MX(f) => f.validate(),
             Self::Form1702RT(f) => f.validate(),
             Self::Form2550Q(f) => f.validate(),

@@ -372,6 +372,10 @@ fn migrate_v5_backfill_period_key(conn: &Connection) -> Result<(), DbError> {
         "1601C", "1601E", "1601F", "0619E", "0619F", "1600", "1600WP", "1602", "2550M", "2551M",
         "2200A", "2200AN", "2200M", "2200P", "2200T",
     ];
+    let annual_forms = [
+        "1604CF", "1604E", "1700", "1701", "1701A", "1701MS", "1702", "1702RT", "1702EX", "1702MX",
+    ];
+    let open_ended_forms = ["0605", "2000"];
 
     let rows: Vec<(i64, String, Option<i64>)> = {
         let mut stmt = conn
@@ -394,10 +398,14 @@ fn migrate_v5_backfill_period_key(conn: &Connection) -> Result<(), DbError> {
     for (id, form_code, quarter_opt) in rows {
         let period_key = match quarter_opt {
             Some(q) => {
-                if monthly_forms.iter().any(|m| *m == form_code) {
+                if open_ended_forms.iter().any(|m| *m == form_code) {
+                    format!("O{}", q.max(1))
+                } else if annual_forms.iter().any(|m| *m == form_code) {
+                    "A".to_string()
+                } else if monthly_forms.iter().any(|m| *m == form_code) {
                     format!("M{q:02}")
                 } else {
-                    format!("Q{q}")
+                    format!("Q{}", q.clamp(1, 4))
                 }
             }
             None => "A".to_string(),

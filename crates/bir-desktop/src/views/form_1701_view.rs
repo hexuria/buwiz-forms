@@ -281,7 +281,7 @@ impl FormViewTrait for Form1701View {
                 &self.draft.tin,
                 "1701",
                 self.draft.taxable_year,
-                Some(self.draft.month),
+                None,
                 &self.draft.status,
                 &self.draft,
             );
@@ -297,19 +297,11 @@ impl FormViewTrait for Form1701View {
         }
     }
 
-    fn mark_submitted(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.sync_from_inputs(cx);
-        if !self.validation_errors.is_empty() {
-            cx.notify();
-            return;
-        }
-        self.draft.status = FilingStatus::Queued;
-        self.save_draft(window, cx);
-        bir_core::background_cron::wake();
+    fn mark_submitted(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         cx.emit(Form1701Event::PushNotification(
-            "info".into(),
-            "Form Queued".into(),
-            "Queued for submission.".into(),
+            "warning".into(),
+            "Preview Only".into(),
+            "Form 1701 is scaffold-only and cannot be queued for submission yet.".into(),
         ));
         cx.notify();
     }
@@ -374,9 +366,9 @@ impl Render for Form1701View {
                             )
                             .child(
                                 gpui_component::button::Button::new("submit_btn")
-                                    .label("Generate XML & Submit")
+                                    .label("Preview Only")
                                     .primary()
-                                    .disabled(!is_draft || !self.validation_errors.is_empty())
+                                    .disabled(true)
                                     .on_click(
                                         cx.listener(|this, _, w, cx| this.mark_submitted(w, cx)),
                                     ),

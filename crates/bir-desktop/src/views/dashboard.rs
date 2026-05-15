@@ -774,6 +774,8 @@ impl Render for DashboardView {
                         }
                         FilingFrequency::OpenEnded => {
                             let count = progress.as_ref().map(|p| p.open_ended_count).unwrap_or(0);
+                            let next_open_ended_key =
+                                count.saturating_add(1).min(u32::from(u8::MAX)) as u8;
                             let code_click = code.clone();
                             let hover_bg = cx.theme().accent;
                             let primary = cx.theme().primary;
@@ -831,7 +833,7 @@ impl Render for DashboardView {
                                             cx.emit(DashboardEvent::FileForm {
                                                 form_code: code_click.clone(),
                                                 year,
-                                                quarter: 0,
+                                                quarter: next_open_ended_key,
                                             });
                                         })),
                                 )

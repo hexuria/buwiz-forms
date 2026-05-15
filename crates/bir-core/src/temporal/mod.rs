@@ -50,7 +50,9 @@ pub use forms::{
     ArtifactLifecycle, FormArtifact, FormAvailability, FormIdentity, OperationalRecommendation,
 };
 pub use snapshot::{CompiledRuleSnapshot, Era};
-pub use support_level::{FormSupportLevel, form_support_level};
+pub use support_level::{
+    FormSupportLevel, can_queue_for_submission, fileable_form_type_id, form_support_level,
+};
 
 // ── Re-exports: Legacy types (backward compat) ──
 pub use citations::{CitationKind, LegalCitation};

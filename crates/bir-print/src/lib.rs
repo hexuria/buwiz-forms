@@ -1248,7 +1248,6 @@ mod tests {
     use super::*;
     use bir_core::naming::Tin;
     use bir_core::profile::{TaxpayerProfile, TaxpayerType};
-    use std::collections::BTreeSet;
 
     fn sample_draft() -> Form2551QDraft {
         let profile = TaxpayerProfile {
@@ -1274,7 +1273,6 @@ mod tests {
             email_auth_method: Default::default(),
             imap_email: None,
             imap_host: None,
-            _imap_enabled_compat: None,
 
             test_notification_enabled: false,
             imap_app_password: None,
@@ -1287,8 +1285,8 @@ mod tests {
             is_create_msme: false,
             is_expanded_withholding_agent: false,
             atc_codes: vec![],
+            excise_tax_categories: vec![],
             tax_elections: vec![],
-            _opted_for_8_percent_flat_rate_compat: None,
             has_employees: false,
             is_dormant: false,
             has_single_employer: false,
@@ -1305,7 +1303,7 @@ mod tests {
         let mut draft = Form2551QDraft::new_from_profile(&profile, 2026, 1);
         draft.schedule_1[0].taxable_amount = 10_000.0;
         draft.creditable_tax_withheld = 25.0;
-        draft.recompute();
+        draft.recompute(None);
         draft
     }
 
@@ -1319,6 +1317,64 @@ mod tests {
             .fields
             .iter()
             .any(|field| field.key == "txtTotalSched1"));
+    }
+
+    #[test]
+    fn loads_generated_1702_formtype_shells_from_filesystem() {
+        let formtypes_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join("formtypes");
+
+        let rt = load_formtype_resolved("1702RTv2018C", Some(&formtypes_dir))
+            .expect("1702RT draft formtype should load from formtypes/");
+        assert_eq!(rt.page_width, 612.0);
+        assert_eq!(rt.page_height, 936.0);
+        assert_eq!(rt.page_count(), 4);
+        assert_eq!(rt.fields.len(), 427);
+        assert!(
+            formtypes_dir
+                .join("1702RTv2018C")
+                .join("template.typ")
+                .exists(),
+            "1702RT should have a template file"
+        );
+
+        let mx = load_formtype_resolved("1702MXv2018C", Some(&formtypes_dir))
+            .expect("1702MX draft formtype should load from formtypes/");
+        assert_eq!(mx.page_width, 612.0);
+        assert_eq!(mx.page_height, 936.0);
+        assert_eq!(mx.page_count(), 4);
+        assert_eq!(mx.fields.len(), 779);
+        assert!(
+            formtypes_dir
+                .join("1702MXv2018C")
+                .join("template.typ")
+                .exists(),
+            "1702MX should have a template file"
+        );
+    }
+
+    #[test]
+    fn loads_priority_formtype_shells_from_filesystem() {
+        let formtypes_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join("formtypes");
+
+        for (form_id, page_width, page_height, page_count, field_count) in [
+            ("1601Cv2018", 612.0, 936.0, 2, 123),
+            ("1701v2018", 612.0, 936.0, 4, 955),
+            ("1701Qv2018", 612.0, 936.0, 2, 504),
+            ("2550Qv2024", 612.0, 1008.0, 2, 404),
+            ("1702RTv2018C", 612.0, 936.0, 4, 427),
+            ("1702MXv2018C", 612.0, 936.0, 4, 779),
+        ] {
+            let layout = load_formtype_resolved(form_id, Some(&formtypes_dir))
+                .unwrap_or_else(|err| panic!("{form_id} formtype should load: {err}"));
+            assert_eq!(layout.page_width, page_width, "{form_id} page width");
+            assert_eq!(layout.page_height, page_height, "{form_id} page height");
+            assert_eq!(layout.page_count(), page_count, "{form_id} page count");
+            assert_eq!(layout.fields.len(), field_count, "{form_id} field count");
+        }
     }
 
     #[test]

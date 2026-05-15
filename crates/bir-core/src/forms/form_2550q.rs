@@ -623,16 +623,10 @@ impl Form2550QDraft {
 
     pub fn transition_to_queued(&mut self) -> Result<(), Vec<(String, String)>> {
         assert!(matches!(self.status, FilingStatus::Draft), "Must be Draft");
-        let errors = <Self as FormValidator>::validate(self);
-        if !errors.is_empty() {
-            return Err(errors);
-        }
-        self.status = FilingStatus::Queued;
-        self.submission_attempts = 0;
-        self.next_retry_at = Some(chrono::Utc::now().to_rfc3339());
-        self.last_error = None;
-        self.updated_at = chrono::Utc::now().to_rfc3339();
-        Ok(())
+        Err(vec![(
+            "support_level".to_string(),
+            "Form 2550Q is scaffold-only and cannot be queued for submission yet.".to_string(),
+        )])
     }
 
     pub fn transition_to_submitted(&mut self, filename: String) {

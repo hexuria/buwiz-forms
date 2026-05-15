@@ -326,20 +326,15 @@ impl FormViewTrait for Form2550QV2View {
         }
     }
 
-    fn mark_submitted(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.sync_from_inputs(cx);
-        if !self.validation_errors.is_empty() {
-            self.status_message = Some("Fix validation errors first".into());
-            cx.notify();
-            return;
-        }
-        self.draft.status = FilingStatus::Queued;
-        self.save_draft(window, cx);
-        bir_core::background_cron::wake();
+    fn mark_submitted(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.status_message = Some(
+            "Preview only: validation, XML submission, persistence, and print layout are not certified."
+                .into(),
+        );
         cx.emit(Form2550QV2Event::PushNotification(
-            "info".into(),
-            "Form Queued".into(),
-            "Queued for submission.".into(),
+            "warning".into(),
+            "Preview Only".into(),
+            "Form 2550Q is scaffold-only and cannot be queued for submission yet.".into(),
         ));
         cx.notify();
     }
@@ -403,9 +398,9 @@ impl Render for Form2550QV2View {
                             )
                             .child(
                                 gpui_component::button::Button::new("submit_btn")
-                                    .label("Generate XML & Submit")
+                                    .label("Preview Only")
                                     .primary()
-                                    .disabled(!is_draft || !self.validation_errors.is_empty())
+                                    .disabled(true)
                                     .on_click(
                                         cx.listener(|this, _, w, cx| this.mark_submitted(w, cx)),
                                     ),

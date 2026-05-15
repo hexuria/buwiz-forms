@@ -1198,20 +1198,15 @@ impl AppState {
         {
             let draft = if let Ok(db) = self.db.lock() {
                 db.get_form_draft::<bir_core::forms::form_1701::Form1701Draft>(
-                    tin,
-                    "1701",
-                    year,
-                    Some(quarter),
+                    tin, "1701", year, None,
                 )
                 .ok()
                 .flatten()
                 .unwrap_or_else(|| {
-                    bir_core::forms::form_1701::Form1701Draft::new_from_profile(
-                        profile, year, quarter,
-                    )
+                    bir_core::forms::form_1701::Form1701Draft::new_from_profile(profile, year, 1)
                 })
             } else {
-                bir_core::forms::form_1701::Form1701Draft::new_from_profile(profile, year, quarter)
+                bir_core::forms::form_1701::Form1701Draft::new_from_profile(profile, year, 1)
             };
             self.pending_form_1701_draft = Some(draft);
             self.active_view = ActiveView::Form1701;
@@ -1222,22 +1217,17 @@ impl AppState {
         {
             let draft = if let Ok(db) = self.db.lock() {
                 db.get_form_draft::<bir_core::forms::form_1702rt::Form1702RTDraft>(
-                    tin,
-                    "1702RT",
-                    year,
-                    Some(quarter),
+                    tin, "1702RT", year, None,
                 )
                 .ok()
                 .flatten()
                 .unwrap_or_else(|| {
                     bir_core::forms::form_1702rt::Form1702RTDraft::new_from_profile(
-                        profile, year, quarter,
+                        profile, year, 1,
                     )
                 })
             } else {
-                bir_core::forms::form_1702rt::Form1702RTDraft::new_from_profile(
-                    profile, year, quarter,
-                )
+                bir_core::forms::form_1702rt::Form1702RTDraft::new_from_profile(profile, year, 1)
             };
             self.pending_form_1702rt_draft = Some(draft);
             self.active_view = ActiveView::Form1702RT;

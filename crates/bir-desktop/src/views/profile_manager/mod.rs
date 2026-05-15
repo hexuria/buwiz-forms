@@ -853,6 +853,27 @@ impl ProfileManagerView {
             }
             _ => None, // Auto-derived via effective_classification()
         };
+        let has_business_activity =
+            !matches!(
+                tax_classification,
+                Some(bir_core::profile::TaxClassification::PurelyCompensation)
+            ) && !matches!(taxpayer_type, TaxpayerType::Estate | TaxpayerType::Trust);
+        let is_individual_with_business = matches!(taxpayer_type, TaxpayerType::Individual)
+            && matches!(
+                tax_classification,
+                Some(bir_core::profile::TaxClassification::SelfEmployed)
+                    | Some(bir_core::profile::TaxClassification::MixedIncome)
+            );
+        let is_vat_registered = if has_business_activity {
+            self.is_vat_registered
+        } else {
+            false
+        };
+        let is_gpp_partner = if is_individual_with_business {
+            self.is_gpp_partner
+        } else {
+            false
+        };
 
         let tier_val = self.eopt_tier_select.read(cx).selected_value(cx);
         let eopt_tier = match tier_val.as_str() {
@@ -905,7 +926,7 @@ impl ProfileManagerView {
             email: self.email_input.read(cx).value().trim().to_string(),
             default_form_type: "2551Qv2018".into(),
             taxpayer_type,
-            is_vat_registered: self.is_vat_registered,
+            is_vat_registered,
             business_start_date,
             email_tracking_enabled: self.email_tracking_enabled,
 
@@ -944,7 +965,7 @@ impl ProfileManagerView {
             tax_classification,
             eopt_tier,
             is_bmbe: false,
-            is_gpp_partner: self.is_gpp_partner,
+            is_gpp_partner,
             is_create_msme: false,
             is_expanded_withholding_agent: self.withholds_expanded
                 || self.is_top_withholding_agent
