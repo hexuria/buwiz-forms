@@ -49,6 +49,7 @@ pub struct Form2551QView {
     // Editable inputs
     quarter: u8,
     is_amended: bool,
+    original_return_filed_and_paid_on_time: bool,
     tax_relief: bool,
 
     // Schedule 1 row inputs (parallel to draft.schedule_1)
@@ -69,6 +70,7 @@ pub struct Form2551QView {
     show_tax_computation: bool,
     show_receipt: bool,
     is_email_tracking_active: bool,
+    is_generating_pdf: bool,
 
     _subscriptions: Vec<Subscription>,
 }
@@ -118,6 +120,7 @@ impl Form2551QView {
 
         let quarter = draft.quarter;
         let is_amended = draft.is_amended;
+        let original_return_filed_and_paid_on_time = draft.original_return_filed_and_paid_on_time;
         let tax_relief = draft.tax_relief;
 
         let mut row_inputs = Vec::new();
@@ -254,6 +257,7 @@ impl Form2551QView {
             is_validated: false,
             quarter,
             is_amended,
+            original_return_filed_and_paid_on_time,
             tax_relief,
             row_inputs,
             creditable_withheld_input,
@@ -269,6 +273,7 @@ impl Form2551QView {
             show_tax_computation: true,
             show_receipt: false,
             is_email_tracking_active,
+            is_generating_pdf: false,
             _subscriptions: subscriptions,
         };
         view.validation_errors = view.validate_for_submit(cx);
@@ -281,6 +286,11 @@ impl Form2551QView {
     fn sync_from_inputs(&mut self, cx: &mut Context<Self>) {
         self.draft.quarter = self.quarter;
         self.draft.is_amended = self.is_amended;
+        self.draft.original_return_filed_and_paid_on_time = if self.is_amended {
+            self.original_return_filed_and_paid_on_time
+        } else {
+            false
+        };
         self.draft.tax_relief = self.tax_relief;
 
         // Sync schedule rows
@@ -631,6 +641,12 @@ impl Form2551QView {
     }
 
     fn preview_pdf(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.is_generating_pdf {
+            return;
+        }
+        self.is_generating_pdf = true;
+        cx.notify();
+
         // Draft mode: use current in-memory state so latest edits + profile sync are reflected.
         // Non-draft mode: reload from DB to render the persisted/submitted state (data integrity).
         let render_draft = if matches!(self.draft.status, FilingStatus::Draft) {
@@ -656,89 +672,87 @@ impl Form2551QView {
 
         let dir = PdfViewerView::unique_output_dir();
         let formtypes_dir = crate::platform::find_resource_dir("formtypes");
-        match render_2551q_print(&render_draft, &dir, Some(formtypes_dir)) {
-            Ok(result) => {
-                let draft = render_draft;
-                let output_dir = dir.clone();
-                let options = WindowOptions {
-                    window_bounds: Some(WindowBounds::centered(size(px(1200.), px(900.)), cx)),
-                    titlebar: Some(TitlebarOptions {
-                        title: Some("Print Preview".into()),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                };
 
-                let mut raw_html = None;
-                let mut confirmation = None;
-                if let Some(receipt_id) = draft.receipt_id
-                    && let Ok(db) = self.db.lock()
-                    && let Ok(Some(receipt)) = db.get_submission_receipt_by_id(receipt_id)
-                {
-                    raw_html = receipt.raw_html;
-                    confirmation = Some(super::pdf_viewer::ConfirmationInfo {
-                        subject: "Tax Return Receipt Confirmation".to_string(),
-                        from: receipt
-                            .source_from
-                            .unwrap_or_else(|| "ebirforms-noreply@bir.gov.ph".to_string()),
-                        to: draft.email.clone(),
-                        received_date: receipt.received_date.clone(),
-                        received_time: receipt.received_time.clone(),
-                        body: receipt.raw_text,
+        let db = self.db.clone();
+
+        cx.spawn(async move |this, mut cx| {
+            let render_draft_bg = render_draft.clone();
+            let dir_bg = dir.clone();
+            let result =
+                cx.background_executor()
+                    .spawn(async move {
+                        render_2551q_print(&render_draft_bg, &dir_bg, Some(formtypes_dir))
+                    })
+                    .await;
+
+            cx.update(|cx| {
+                if let Some(this) = this.upgrade() {
+                    this.update(cx, |this, cx| {
+                        this.is_generating_pdf = false;
+                        cx.notify();
+
+                        match result {
+                            Ok(result) => {
+                                let draft = render_draft;
+                                let output_dir = dir.clone();
+                                let options = WindowOptions {
+                                    window_bounds: Some(WindowBounds::centered(
+                                        size(px(1200.), px(900.)),
+                                        cx,
+                                    )),
+                                    titlebar: Some(TitlebarOptions {
+                                        title: Some("Print Preview".into()),
+                                        ..Default::default()
+                                    }),
+                                    ..Default::default()
+                                };
+
+                                let mut raw_html = None;
+                                let mut confirmation = None;
+                                if let Some(receipt_id) = draft.receipt_id
+                                    && let Ok(db) = db.lock()
+                                    && let Ok(Some(receipt)) =
+                                        db.get_submission_receipt_by_id(receipt_id)
+                                {
+                                    raw_html = receipt.raw_html;
+                                    confirmation = Some(super::pdf_viewer::ConfirmationInfo {
+                                        subject: "Tax Return Receipt Confirmation".to_string(),
+                                        from: receipt.source_from.unwrap_or_else(|| {
+                                            "ebirforms-noreply@bir.gov.ph".to_string()
+                                        }),
+                                        to: draft.email.clone(),
+                                        received_date: receipt.received_date.clone(),
+                                        received_time: receipt.received_time.clone(),
+                                        body: receipt.raw_text,
+                                    });
+                                }
+
+                                if let Err(err) = cx.open_window(options, move |_window, cx| {
+                                    cx.new(|_cx| {
+                                        PdfViewerView::new(
+                                            draft,
+                                            result,
+                                            output_dir,
+                                            raw_html,
+                                            confirmation,
+                                            _cx,
+                                        )
+                                    })
+                                }) {
+                                    tracing::error!("PDF viewer failed to open: {err}");
+                                } else {
+                                    tracing::info!("PDF viewer opened");
+                                }
+                            }
+                            Err(err) => {
+                                tracing::error!("PDF generation failed: {err}");
+                            }
+                        }
                     });
                 }
-
-                let draft_status = draft.status.clone();
-                let has_confirmation = confirmation.is_some();
-                if let Err(err) = cx.open_window(options, move |_window, cx| {
-                    cx.new(|_cx| {
-                        PdfViewerView::new(draft, result, output_dir, raw_html, confirmation, _cx)
-                    })
-                }) {
-                    use gpui_component::WindowExt;
-                    window.push_notification(
-                        gpui_component::notification::Notification::new()
-                            .message(format!("PDF viewer failed to open: {err}"))
-                            .with_type(gpui_component::notification::NotificationType::Error)
-                            .autohide(true),
-                        cx,
-                    );
-                    return;
-                }
-
-                use gpui_component::WindowExt;
-                if !has_confirmation
-                    && matches!(draft_status, FilingStatus::Confirmed | FilingStatus::Paid)
-                {
-                    window.push_notification(
-                        gpui_component::notification::Notification::new()
-                            .message("Notice: PDF will not include BIR email receipt because automatic tracking is disabled.".to_string())
-                            .with_type(gpui_component::notification::NotificationType::Warning)
-                            .autohide(false),
-                        cx,
-                    );
-                } else {
-                    window.push_notification(
-                        gpui_component::notification::Notification::new()
-                            .message("PDF viewer opened".to_string())
-                            .with_type(gpui_component::notification::NotificationType::Success)
-                            .autohide(true),
-                        cx,
-                    );
-                }
-            }
-            Err(err) => {
-                use gpui_component::WindowExt;
-                window.push_notification(
-                    gpui_component::notification::Notification::new()
-                        .message(format!("PDF generation failed: {err}"))
-                        .with_type(gpui_component::notification::NotificationType::Error)
-                        .autohide(true),
-                    cx,
-                );
-            }
-        }
-        cx.notify();
+            });
+        })
+        .detach();
     }
 
     fn print_confirmation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -966,6 +980,11 @@ impl FormViewTrait for Form2551QView {
     fn form_version(&self) -> &'static str {
         "January 2018 (ENCS)"
     }
+
+    fn is_generating_pdf(&self) -> bool {
+        self.is_generating_pdf
+    }
+
     fn current_status(&self) -> FilingStatus {
         self.draft.status.clone()
     }
@@ -997,6 +1016,7 @@ impl Render for Form2551QView {
         let is_mobile = window.viewport_size().width < px(1100.);
         let carry_label = self.draft.carry_forward_label();
         let is_amended = self.is_amended;
+        let original_return_filed_and_paid_on_time = self.original_return_filed_and_paid_on_time;
         let total_due = self.draft.total_tax_due;
         let tax_payable = self.draft.tax_payable;
         let is_editable = self.is_editable();
@@ -1071,6 +1091,7 @@ impl Render for Form2551QView {
                                         this.is_amended = !this.is_amended;
                                         if !this.is_amended {
                                             this.draft.tax_paid_previous = 0.0;
+                                            this.original_return_filed_and_paid_on_time = false;
                                         }
                                         this.is_validated = false;
                                         this.sync_from_inputs(cx);
@@ -1106,6 +1127,55 @@ impl Render for Form2551QView {
                                             .child("Amended Return"),
                                     ),
                             )
+                            .when(is_amended, |options| {
+                                options.child(
+                                    div()
+                                        .id("original_on_time_toggle")
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .when(is_editable, |el| el.cursor_pointer())
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            if !this.is_editable() {
+                                                return;
+                                            }
+                                            this.original_return_filed_and_paid_on_time =
+                                                !this.original_return_filed_and_paid_on_time;
+                                            this.is_validated = false;
+                                            this.sync_from_inputs(cx);
+                                        }))
+                                        .child(
+                                            div()
+                                                .w_4()
+                                                .h_4()
+                                                .rounded_sm()
+                                                .border_1()
+                                                .border_color(cx.theme().border)
+                                                .bg(if original_return_filed_and_paid_on_time {
+                                                    cx.theme().primary
+                                                } else {
+                                                    cx.theme().background
+                                                })
+                                                .flex()
+                                                .items_center()
+                                                .justify_center()
+                                                .child(if original_return_filed_and_paid_on_time {
+                                                    div()
+                                                        .text_xs()
+                                                        .text_color(cx.theme().primary_foreground)
+                                                        .child("✓")
+                                                } else {
+                                                    div()
+                                                }),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .text_color(cx.theme().foreground)
+                                                .child("Original Return Filed/Paid On Time"),
+                                        ),
+                                )
+                            })
                             .child(
                                 div()
                                     .id("tax_relief_toggle")

@@ -63,6 +63,7 @@ pub enum ActiveView {
     CronTasks,
     ImportExport,
     Settings,
+    AdminCalendarDashboard,
     #[cfg(feature = "layout-editor")]
     PdfLayoutEditor,
     #[cfg(feature = "layout-editor")]
@@ -85,6 +86,8 @@ pub struct AppState {
     pub(crate) cron_tasks_view: Entity<CronTasksView>,
     pub(crate) import_export_view: Entity<ImportExportView>,
     pub(crate) settings_view: Entity<SettingsView>,
+    pub(crate) admin_calendar_dashboard_view:
+        Entity<crate::views::admin_calendar_dashboard::AdminCalendarDashboard>,
     #[cfg(feature = "layout-editor")]
     pub(crate) pdf_layout_editor_view:
         Entity<crate::views::pdf_layout_editor_view::PdfLayoutEditorView>,
@@ -446,7 +449,6 @@ impl AppState {
                         view.hide_tax_profiles = this.hide_tax_profiles;
                         view.active_session_tin = this.active_session_tin.clone();
                         view.set_profiles(profiles.clone(), cx);
-                        view.reload_actionable_forms(cx);
                     });
                     this.cron_tasks_view.update(cx, |view, cx| {
                         view.load_settings(cx);
@@ -478,6 +480,15 @@ impl AppState {
 
         let db_clone_settings = Arc::clone(&db);
         let settings_view = cx.new(|cx| SettingsView::new(db_clone_settings, window, cx));
+
+        let db_clone_admin_cal = Arc::clone(&db);
+        let admin_calendar_dashboard_view = cx.new(|cx| {
+            crate::views::admin_calendar_dashboard::AdminCalendarDashboard::new(
+                db_clone_admin_cal,
+                window,
+                cx,
+            )
+        });
 
         #[cfg(feature = "layout-editor")]
         let pdf_layout_editor_view =
@@ -513,10 +524,9 @@ impl AppState {
                         this.active_session_tin = None;
                     }
                     let active_session = this.active_session_tin.clone();
-                    this.global_dashboard_view.update(cx, |view, cx| {
+                    this.global_dashboard_view.update(cx, |view, _cx| {
                         view.hide_tax_profiles = htp;
                         view.active_session_tin = active_session;
-                        view.reload_actionable_forms(cx);
                     });
                     cx.notify();
                 }
@@ -617,7 +627,6 @@ impl AppState {
                             view.hide_tax_profiles = this.hide_tax_profiles;
                             view.active_session_tin = this.active_session_tin.clone();
                             view.set_profiles(profiles.clone(), cx);
-                            view.reload_actionable_forms(cx);
                         });
 
                         if let Some(tin) = &active_tin
@@ -756,6 +765,7 @@ impl AppState {
             os_auth_triggered: false,
             unlocked_profile: None,
             settings_view,
+            admin_calendar_dashboard_view,
             hide_tax_profiles,
             enable_profile_pins,
             pending_admin_view: None,
@@ -902,9 +912,8 @@ impl AppState {
         self.active_profile_tin = None;
         self.active_view = ActiveView::GlobalDashboard;
 
-        self.global_dashboard_view.update(cx, |view, cx| {
+        self.global_dashboard_view.update(cx, |view, _cx| {
             view.active_session_tin = None;
-            view.reload_actionable_forms(cx);
         });
 
         cx.notify();
@@ -919,6 +928,10 @@ impl AppState {
             ActiveView::CronTasks => self.cron_tasks_view.clone().into_any_element(),
             ActiveView::ImportExport => self.import_export_view.clone().into_any_element(),
             ActiveView::Settings => self.settings_view.clone().into_any_element(),
+            ActiveView::AdminCalendarDashboard => self
+                .admin_calendar_dashboard_view
+                .clone()
+                .into_any_element(),
             #[cfg(feature = "layout-editor")]
             ActiveView::PdfLayoutEditor => self.pdf_layout_editor_view.clone().into_any_element(),
             #[cfg(feature = "layout-editor")]

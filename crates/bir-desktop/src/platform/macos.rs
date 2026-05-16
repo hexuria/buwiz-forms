@@ -213,8 +213,8 @@ pub fn show_in_dock() {
         // 1. Restore Dock icon first.
         app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
 
-        // 2. Activate and bring to foreground.
-        app.activateIgnoringOtherApps(true);
+        // SAFETY: Activation is safe as it's a standard NSApplication method
+        unsafe { app.activate() };
 
         // 3. Restore all windows.
         let windows = app.windows();

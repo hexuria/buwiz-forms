@@ -3,6 +3,9 @@
 //! Data model and auto-computation logic based on 1601Cv2018 ENCS offline forms.
 
 use super::{FilingStatus, FormValidator};
+use crate::penalties::{
+    PenaltyConfig, PenaltyContext, PenaltyEngine, PenaltyProfile, TaxpayerClass,
+};
 use crate::profile::TaxpayerProfile;
 use crate::validation::{validate_ph_phone, validate_zip};
 use serde::{Deserialize, Serialize};
@@ -264,6 +267,47 @@ impl Form1601CDraft {
             * 100.0)
             .round()
             / 100.0;
+
+        // Auto-compute penalties if enabled and still in Draft
+        if self.auto_compute_penalties && matches!(self.status, FilingStatus::Draft) {
+            // 1601C monthly deadline: 10th of the following month (15th for December)
+            let (deadline_year, deadline_month) = if self.month == 12 {
+                (self.taxable_year as i32 + 1, 1u32)
+            } else {
+                (self.taxable_year as i32, self.month as u32 + 1)
+            };
+            let deadline_day = if self.month == 12 { 15 } else { 10 };
+
+            if let Some(deadline) =
+                chrono::NaiveDate::from_ymd_opt(deadline_year, deadline_month, deadline_day)
+            {
+                let today = chrono::Local::now().date_naive();
+                let config = PenaltyConfig::default_rules();
+
+                let penalty_tax_base = self.tax_31_tax_still_due.max(0.0);
+
+                let ctx = PenaltyContext {
+                    form_code: "1601Cv2018".to_string(),
+                    tax_type: PenaltyProfile::Withholding,
+                    taxpayer_class: TaxpayerClass::Regular,
+                    taxable_period: format!("M{:02} {}", self.month, self.taxable_year),
+                    is_amended_return: self.is_amended,
+                    original_was_on_time: false,
+                    is_fraud_or_willful_neglect: false,
+                    basic_tax_due: penalty_tax_base,
+                    amount_paid_before_deadline: 0.0,
+                    gross_sales_or_receipts: self.tax_14_total_compensation,
+                    due_date: deadline,
+                    filing_date: today,
+                    payment_date: None,
+                };
+
+                let penalties = PenaltyEngine::calculate(&ctx, &config);
+                self.tax_32_surcharge = penalties.surcharge;
+                self.tax_33_interest = penalties.interest;
+                self.tax_34_compromise = penalties.compromise;
+            }
+        }
 
         // Line 35 = 32 + 33 + 34
         self.tax_35_total_penalties =

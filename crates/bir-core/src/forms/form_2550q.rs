@@ -7,8 +7,15 @@
 //! ⚠️ ScaffoldOnly — formula evidence not yet verified
 
 use crate::forms::{FilingStatus, FormValidator};
+use crate::penalties::{
+    PenaltyConfig, PenaltyContext, PenaltyEngine, PenaltyProfile, TaxpayerClass,
+};
 use crate::profile::TaxpayerProfile;
 use serde::{Deserialize, Serialize};
+
+fn default_true() -> bool {
+    true
+}
 
 /// Complete draft for Form 2550Qv2024.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,6 +30,7 @@ pub struct Form2550QDraft {
 
     // === Header / Options ===
     pub is_amended: bool,
+    pub eopt_tier: Option<crate::profile::EoptTier>,
 
     // === Profile Fields (pre-filled) ===
     pub rdo_code: String,
@@ -205,6 +213,11 @@ pub struct Form2550QDraft {
     pub result_other_credits_no47: f64,
     /// BIR: `resultOtherCreditsNo56` (sample: `0.00`)
     pub result_other_credits_no56: f64,
+
+    // === Penalty Control ===
+    #[serde(default = "default_true")]
+    pub auto_compute_penalties: bool,
+
     /// BIR: `sched1TotalBalNext` (sample: `0.00`)
     pub sched1total_bal_next: f64,
     /// BIR: `sched1TotalBalPrev` (sample: `0.00`)
@@ -358,6 +371,7 @@ impl Form2550QDraft {
             taxable_year: year,
             month,
             is_amended: false,
+            eopt_tier: profile.eopt_tier.clone(),
             rdo_code: profile.rdo_code.clone(),
             taxpayer_name: profile.full_name.clone(),
             registered_address: profile.registered_address.clone(),
@@ -450,6 +464,7 @@ impl Form2550QDraft {
             result_other_credits_no42: 0.0,
             result_other_credits_no47: 0.0,
             result_other_credits_no56: 0.0,
+            auto_compute_penalties: true,
             sched1total_bal_next: 0.0,
             sched1total_bal_prev: 0.0,
             sched3total_income: 0.0,
@@ -607,6 +622,56 @@ impl Form2550QDraft {
         self.excess_credits = vat_after_credits;
 
         // ── Penalties ──
+        // Auto-compute penalties if enabled and still in Draft
+        if self.auto_compute_penalties && matches!(self.status, FilingStatus::Draft) {
+            // 2550Q quarterly deadline: 25th of the month following close of quarter
+            // month field holds the ending month of the quarter
+            let (deadline_year, deadline_month) = if self.month >= 12 {
+                (self.taxable_year as i32 + 1, 1u32)
+            } else {
+                (self.taxable_year as i32, self.month as u32 + 1)
+            };
+
+            if let Some(deadline) =
+                chrono::NaiveDate::from_ymd_opt(deadline_year, deadline_month, 25)
+            {
+                let today = chrono::Local::now().date_naive();
+                let config = PenaltyConfig::default_rules();
+
+                let penalty_tax_base = vat_after_credits.max(0.0);
+                let gross_sales = self.total_sales;
+
+                let taxpayer_class = match self.eopt_tier {
+                    Some(crate::profile::EoptTier::Micro) => TaxpayerClass::Micro,
+                    Some(crate::profile::EoptTier::Small) => TaxpayerClass::Small,
+                    Some(crate::profile::EoptTier::Medium) => TaxpayerClass::Medium,
+                    Some(crate::profile::EoptTier::Large) => TaxpayerClass::Large,
+                    None => TaxpayerClass::Regular,
+                };
+
+                let ctx = PenaltyContext {
+                    form_code: "2550Qv2024".to_string(),
+                    tax_type: PenaltyProfile::StandardFiling,
+                    taxpayer_class,
+                    taxable_period: format!("M{:02} {}", self.month, self.taxable_year),
+                    is_amended_return: self.is_amended,
+                    original_was_on_time: false,
+                    is_fraud_or_willful_neglect: false,
+                    basic_tax_due: penalty_tax_base,
+                    amount_paid_before_deadline: 0.0,
+                    gross_sales_or_receipts: gross_sales,
+                    due_date: deadline,
+                    filing_date: today,
+                    payment_date: None,
+                };
+
+                let penalties = PenaltyEngine::calculate(&ctx, &config);
+                self.surcharge = penalties.surcharge;
+                self.interest = penalties.interest;
+                self.compromise = penalties.compromise;
+            }
+        }
+
         self.penalties = self.surcharge + self.interest + self.compromise;
 
         // ── Total Payable ──

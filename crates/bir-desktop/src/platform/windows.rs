@@ -155,10 +155,10 @@ pub fn open_in_system(path: &std::path::Path) {
 pub fn print_pdf(path: &std::path::Path) -> Result<(), &'static str> {
     #[cfg(target_os = "windows")]
     {
+        use std::os::windows::ffi::OsStrExt;
         use windows::Win32::UI::Shell::ShellExecuteW;
         use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
         use windows_core::PCWSTR;
-        use std::os::windows::ffi::OsStrExt;
 
         let verb: Vec<u16> = std::ffi::OsStr::new("print")
             .encode_wide()
@@ -223,8 +223,8 @@ pub fn reclaim_keyboard_focus() {
     {
         use windows::Win32::Foundation::HWND;
         use windows::Win32::UI::Input::KeyboardAndMouse::{
-            GetAsyncKeyState, KEYBD_EVENT_FLAGS, KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP,
-            VK_MENU, keybd_event,
+            GetAsyncKeyState, KEYBD_EVENT_FLAGS, KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, VK_MENU,
+            keybd_event,
         };
         use windows::Win32::UI::WindowsAndMessaging::{
             EnumWindows, GetWindowThreadProcessId, IsWindowVisible, SetForegroundWindow,
@@ -290,8 +290,8 @@ use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
 use windows::Win32::System::Threading::GetCurrentProcessId;
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetWindowThreadProcessId, IsWindowVisible, SW_HIDE, SW_SHOW,
-    SetForegroundWindow, ShowWindow,
+    EnumWindows, GetWindowThreadProcessId, IsWindowVisible, SW_HIDE, SW_SHOW, SetForegroundWindow,
+    ShowWindow,
 };
 
 // SAFETY: These three functions are Win32 EnumWindows callbacks — the

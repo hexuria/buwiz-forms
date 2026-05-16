@@ -8,6 +8,7 @@ pub mod filter_bar;
 pub mod hotkey_recorder;
 pub mod multi_select;
 pub mod smart_date_filter;
+pub mod upcoming_deadlines_list;
 
 pub mod footer;
 pub mod form_engine;

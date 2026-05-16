@@ -7,8 +7,15 @@
 //! ⚠️ ScaffoldOnly — formula evidence not yet verified
 
 use crate::forms::{FilingStatus, FormValidator};
+use crate::penalties::{
+    PenaltyConfig, PenaltyContext, PenaltyEngine, PenaltyProfile, TaxpayerClass,
+};
 use crate::profile::TaxpayerProfile;
 use serde::{Deserialize, Serialize};
+
+fn default_true() -> bool {
+    true
+}
 
 /// Complete draft for Form 0619E.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -114,6 +121,10 @@ pub struct Form0619EDraft {
     /// BIR: `frm0619E:txtTaxTypeCode` (sample: `WE`)
     pub txt_tax_type_code: String,
 
+    // === Penalty Control ===
+    #[serde(default = "default_true")]
+    pub auto_compute_penalties: bool,
+
     // === Lifecycle ===
     pub status: FilingStatus,
     pub created_at: String,
@@ -200,6 +211,7 @@ impl Form0619EDraft {
             txt_tax17d: 0.0,
             txt_tax18: 0.0,
             txt_tax_type_code: String::new(),
+            auto_compute_penalties: true,
             status: FilingStatus::Draft,
             created_at: now.clone(),
             updated_at: now,
@@ -224,6 +236,46 @@ impl Form0619EDraft {
     pub fn recompute(&mut self) {
         // Item 16: Tax Still Due (cannot be negative per BIR)
         self.txt_tax16 = (self.txt_tax14 - self.txt_tax15).max(0.0);
+
+        // Auto-compute penalties if enabled and still in Draft
+        if self.auto_compute_penalties && matches!(self.status, FilingStatus::Draft) {
+            // 0619E monthly deadline: 10th of the following month
+            let (deadline_year, deadline_month) = if self.month == 12 {
+                (self.taxable_year as i32 + 1, 1u32)
+            } else {
+                (self.taxable_year as i32, self.month as u32 + 1)
+            };
+
+            if let Some(deadline) =
+                chrono::NaiveDate::from_ymd_opt(deadline_year, deadline_month, 10)
+            {
+                let today = chrono::Local::now().date_naive();
+                let config = PenaltyConfig::default_rules();
+
+                let penalty_tax_base = self.txt_tax16.max(0.0);
+
+                let ctx = PenaltyContext {
+                    form_code: "0619E".to_string(),
+                    tax_type: PenaltyProfile::Withholding,
+                    taxpayer_class: TaxpayerClass::Regular,
+                    taxable_period: format!("M{:02} {}", self.month, self.taxable_year),
+                    is_amended_return: self.is_amended,
+                    original_was_on_time: false,
+                    is_fraud_or_willful_neglect: false,
+                    basic_tax_due: penalty_tax_base,
+                    amount_paid_before_deadline: 0.0,
+                    gross_sales_or_receipts: self.txt_tax14,
+                    due_date: deadline,
+                    filing_date: today,
+                    payment_date: None,
+                };
+
+                let penalties = PenaltyEngine::calculate(&ctx, &config);
+                self.txt_tax17a = penalties.surcharge;
+                self.txt_tax17b = penalties.interest;
+                self.txt_tax17c = penalties.compromise;
+            }
+        }
 
         // Item 17D: Total Penalties
         self.txt_tax17d = self.txt_tax17a + self.txt_tax17b + self.txt_tax17c;
@@ -386,6 +438,7 @@ mod tests {
     #[test]
     fn test_recompute_basic() {
         let mut draft = Form0619EDraft::new_from_profile(&test_profile(), 2024, 4);
+        draft.auto_compute_penalties = false; // test manual penalty values
         draft.txt_tax14 = 10_000.0; // Total withheld
         draft.txt_tax15 = 2_000.0; // Adjustment
         draft.txt_tax17a = 250.0; // Surcharge
@@ -402,6 +455,7 @@ mod tests {
     #[test]
     fn test_recompute_zero_adjustments() {
         let mut draft = Form0619EDraft::new_from_profile(&test_profile(), 2024, 4);
+        draft.auto_compute_penalties = false; // test computation only
         draft.txt_tax14 = 5_000.0;
         // All other fields default to 0.0
 
@@ -415,6 +469,7 @@ mod tests {
     #[test]
     fn test_recompute_negative_guard() {
         let mut draft = Form0619EDraft::new_from_profile(&test_profile(), 2024, 4);
+        draft.auto_compute_penalties = false; // test computation only
         draft.txt_tax14 = 1_000.0;
         draft.txt_tax15 = 5_000.0; // Over-adjustment exceeds withheld
 

@@ -12,6 +12,7 @@ pub struct SmartDateFilterEvent {
 pub struct SmartDateFilterState {
     pub open: bool,
     pub selected_year: i32,
+    pub min_year: i32,
     pub focus_handle: FocusHandle,
 }
 
@@ -23,8 +24,20 @@ impl SmartDateFilterState {
         Self {
             open: false,
             selected_year: now.year(),
+            min_year: 1997,
             focus_handle: cx.focus_handle(),
         }
+    }
+
+    pub fn set_min_year(&mut self, min_year: i32, cx: &mut Context<Self>) {
+        self.min_year = min_year;
+        if self.selected_year < min_year {
+            self.selected_year = min_year;
+            cx.emit(SmartDateFilterEvent {
+                year: self.selected_year,
+            });
+        }
+        cx.notify();
     }
 
     pub fn toggle_open(&mut self, cx: &mut Context<Self>) {
@@ -44,6 +57,7 @@ impl Render for SmartDateFilterState {
         let current_real_year = Local::now().date_naive().year();
         let selected_year = self.selected_year;
         let can_go_forward = selected_year < current_real_year;
+        let can_go_backward = selected_year > self.min_year;
 
         div()
             .relative()
@@ -106,15 +120,22 @@ impl Render for SmartDateFilterState {
                                                 .py_1()
                                                 .text_sm()
                                                 .cursor_pointer()
-                                                .text_color(cx.theme().muted_foreground)
-                                                .hover(|s| s.text_color(cx.theme().foreground))
-                                                .on_click(cx.listener(|this, _, _, cx| {
-                                                    this.selected_year -= 1;
-                                                    cx.emit(SmartDateFilterEvent {
-                                                        year: this.selected_year,
-                                                    });
-                                                    cx.notify();
-                                                }))
+                                                .when(can_go_backward, |s| {
+                                                    s.text_color(cx.theme().muted_foreground)
+                                                        .hover(|s| {
+                                                            s.text_color(cx.theme().foreground)
+                                                        })
+                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                            this.selected_year -= 1;
+                                                            cx.emit(SmartDateFilterEvent {
+                                                                year: this.selected_year,
+                                                            });
+                                                            cx.notify();
+                                                        }))
+                                                })
+                                                .when(!can_go_backward, |s| {
+                                                    s.text_color(cx.theme().border)
+                                                })
                                                 .child("◀"),
                                         )
                                         .child(
@@ -161,7 +182,7 @@ impl Render for SmartDateFilterState {
                                         .children({
                                             let end_yr =
                                                 std::cmp::min(selected_year + 2, current_real_year);
-                                            let start_yr = end_yr - 4;
+                                            let start_yr = std::cmp::max(end_yr - 4, self.min_year);
                                             (start_yr..=end_yr).map(|yr| {
                                                 let is_active = yr == selected_year;
                                                 div()

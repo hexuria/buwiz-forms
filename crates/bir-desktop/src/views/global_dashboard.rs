@@ -1,11 +1,12 @@
 #![allow(dead_code)]
-use bir_core::db::{BirNotice, Database, TaxDeadline};
-use bir_core::forms::FormDraftSummary;
+use bir_core::calendar_rules::{DeadlineOverride, DeadlineResolver, ResolvedTaxDeadline};
+use bir_core::db::{BirNotice, Database};
 use bir_core::profile::TaxpayerProfile;
 use chrono::{Datelike, Local};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::*;
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 pub enum GlobalDashboardEvent {
@@ -27,9 +28,8 @@ pub enum GlobalDashboardEvent {
 pub struct GlobalDashboardView {
     db: Arc<Mutex<Database>>,
     profiles: Vec<TaxpayerProfile>,
-    deadlines: Vec<TaxDeadline>,
+    deadlines: Vec<ResolvedTaxDeadline>,
     announcements: Vec<BirNotice>,
-    actionable_forms: Vec<(String, FormDraftSummary)>,
     is_fetching_news: bool,
     compliance_calendar: Entity<crate::components::compliance_calendar::ComplianceCalendar>,
     pub hide_tax_profiles: bool,
@@ -40,52 +40,16 @@ impl EventEmitter<GlobalDashboardEvent> for GlobalDashboardView {}
 
 impl GlobalDashboardView {
     pub fn new(db: Arc<Mutex<Database>>, window: &mut Window, cx: &mut Context<'_, Self>) -> Self {
-        let (profiles, deadlines, announcements, actionable_forms) = if let Ok(db_lock) = db.lock()
-        {
+        let (profiles, deadlines, announcements) = if let Ok(db_lock) = db.lock() {
             let profiles = db_lock.list_profiles().unwrap_or_default();
-            let mut deadlines = db_lock.list_tax_deadlines().unwrap_or_default();
+            let year = chrono::Local::now().year();
+            let overrides = db_lock.get_deadline_overrides();
+            let deadlines = Self::deadlines_for_profiles(&profiles, year, &overrides);
             let announcements = db_lock.list_bir_notices().unwrap_or_default();
 
-            let mut actionable_forms = Vec::new();
-            let current_year = chrono::Local::now().date_naive().year() as u16;
-            for p in &profiles {
-                if let Ok(summaries) = db_lock.list_draft_summaries(&p.tin.full(), current_year) {
-                    for sum in summaries {
-                        actionable_forms.push((p.full_name.clone(), sum));
-                    }
-                }
-            }
-
-            if deadlines.is_empty() {
-                let mock_deadlines = vec![
-                    TaxDeadline {
-                        id: None,
-                        form_type: "2551Q".into(),
-                        due_date: "2026-04-25".into(),
-                        description: "Q1 Percentage Tax".into(),
-                    },
-                    TaxDeadline {
-                        id: None,
-                        form_type: "1701Q".into(),
-                        due_date: "2026-05-15".into(),
-                        description: "Q1 Income Tax".into(),
-                    },
-                    TaxDeadline {
-                        id: None,
-                        form_type: "2550M".into(),
-                        due_date: "2026-05-20".into(),
-                        description: "April VAT".into(),
-                    },
-                ];
-                for d in mock_deadlines.clone() {
-                    let _ = db_lock.save_tax_deadline(&d);
-                }
-                deadlines = mock_deadlines;
-            }
-
-            (profiles, deadlines, announcements, actionable_forms)
+            (profiles, deadlines, announcements)
         } else {
-            (Vec::new(), Vec::new(), Vec::new(), Vec::new())
+            (Vec::new(), Vec::new(), Vec::new())
         };
 
         let compliance_calendar = cx
@@ -96,7 +60,6 @@ impl GlobalDashboardView {
             profiles,
             deadlines,
             announcements,
-            actionable_forms,
             is_fetching_news: false,
             compliance_calendar,
             hide_tax_profiles: false,
@@ -109,8 +72,7 @@ impl GlobalDashboardView {
             |this: &mut Self, _bus, event: &crate::events::AppEvent, cx| {
                 match event {
                     crate::events::AppEvent::DatabaseChanged => {
-                        this.reload_actionable_forms(cx);
-                        // Also refresh profiles and other DB-backed info if needed
+                        // Refresh profiles and other DB-backed info if needed
                     }
                 }
             },
@@ -150,8 +112,46 @@ impl GlobalDashboardView {
     }
     pub fn set_profiles(&mut self, profiles: Vec<TaxpayerProfile>, cx: &mut Context<Self>) {
         self.profiles = profiles;
-        // Optionally reload penalties here
+        let year = chrono::Local::now().year();
+        let overrides = self
+            .db
+            .lock()
+            .map(|db| db.get_deadline_overrides())
+            .unwrap_or_default();
+        self.deadlines = Self::deadlines_for_profiles(&self.profiles, year, &overrides);
         cx.notify();
+    }
+
+    pub fn reload_deadlines(&mut self, cx: &mut Context<Self>) {
+        let year = chrono::Local::now().year();
+        let overrides = self
+            .db
+            .lock()
+            .map(|db| db.get_deadline_overrides())
+            .unwrap_or_default();
+        self.deadlines = Self::deadlines_for_profiles(&self.profiles, year, &overrides);
+        cx.notify();
+    }
+
+    fn deadlines_for_profiles(
+        profiles: &[TaxpayerProfile],
+        calendar_year: i32,
+        overrides: &[DeadlineOverride],
+    ) -> Vec<ResolvedTaxDeadline> {
+        let applicable_codes: HashSet<String> = profiles
+            .iter()
+            .flat_map(|profile| {
+                bir_core::integration::applicable_forms_for_profile_and_year(
+                    profile,
+                    calendar_year as u16,
+                )
+            })
+            .collect();
+
+        DeadlineResolver::resolve_deadline_calendar_year_with_overrides(calendar_year, overrides)
+            .into_iter()
+            .filter(|deadline| applicable_codes.contains(&deadline.form_code))
+            .collect()
     }
 }
 
@@ -215,7 +215,6 @@ impl Render for GlobalDashboardView {
                             .flex()
                             .flex_col()
                             .gap_6()
-                            .child(self.urgent_actions_section(window, cx))
                             .child(self.compliance_calendar.clone()),
                     )
                     .child(
@@ -233,511 +232,6 @@ impl Render for GlobalDashboardView {
 }
 
 impl GlobalDashboardView {
-    /// Reload actionable forms from the database (called after email check updates status).
-    pub fn reload_actionable_forms(&mut self, cx: &mut Context<Self>) {
-        if let Ok(db_lock) = self.db.lock() {
-            let current_year = chrono::Local::now().date_naive().year() as u16;
-            let mut actionable = Vec::new();
-            for p in &self.profiles {
-                if self.hide_tax_profiles && self.active_session_tin.as_ref() != Some(&p.tin.full())
-                {
-                    continue;
-                }
-                if let Ok(summaries) = db_lock.list_draft_summaries(&p.tin.full(), current_year) {
-                    for sum in summaries {
-                        actionable.push((p.full_name.clone(), sum));
-                    }
-                }
-            }
-            self.actionable_forms = actionable;
-        }
-        cx.notify();
-    }
-
-    fn urgent_actions_section(&self, window: &Window, cx: &mut Context<Self>) -> gpui::Div {
-        let items: Vec<_> = self
-            .actionable_forms
-            .iter()
-            .filter(|(_, sum)| sum.status != bir_core::forms::FilingStatus::Paid)
-            .map(|(profile_name, sum)| {
-                let (status_text, action_label, is_urgent) = match sum.status {
-                    bir_core::forms::FilingStatus::Draft => ("Draft", "Resume", false),
-                    bir_core::forms::FilingStatus::Queued => ("Queued", "Check Status", false),
-                    bir_core::forms::FilingStatus::Submitted => {
-                        ("Awaiting Confirmation", "Check Confirmation", true)
-                    }
-                    bir_core::forms::FilingStatus::Confirmed => {
-                        ("Confirmed", "Upload Receipt", true)
-                    }
-                    bir_core::forms::FilingStatus::Paid => ("Paid", "View Paid Return", false),
-                };
-                (
-                    profile_name.as_str(),
-                    sum.tin.as_str(),
-                    sum.form_code.as_str(),
-                    sum.taxable_year,
-                    sum.quarter,
-                    status_text,
-                    action_label,
-                    is_urgent,
-                )
-            })
-            .collect();
-
-        let use_card_view = window.viewport_size().width < px(900.);
-
-        let content = if items.is_empty() {
-            div()
-                .w_full()
-                .bg(cx.theme().background)
-                .border_1()
-                .border_color(cx.theme().border)
-                .rounded_xl()
-                .shadow_sm()
-                .child(
-                    div()
-                        .p_4()
-                        .text_sm()
-                        .text_color(cx.theme().muted_foreground)
-                        .child("No actionable items found."),
-                )
-        } else if use_card_view {
-            self.render_action_cards(&items, cx)
-        } else {
-            self.render_action_table(&items, cx)
-        };
-
-        div()
-            .flex()
-            .flex_col()
-            .gap_4()
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap_2()
-                    .justify_between()
-                    .items_center()
-                    .child(
-                        div()
-                            .text_xl()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(cx.theme().foreground)
-                            .child("Action Required"),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().primary)
-                            .cursor_pointer()
-                            .child("View All"),
-                    ),
-            )
-            .child(content)
-    }
-
-    /// Table layout for wider viewports.
-    #[allow(clippy::type_complexity)]
-    fn render_action_table(
-        &self,
-        items: &[(&str, &str, &str, u16, Option<u8>, &str, &str, bool)],
-        cx: &mut Context<Self>,
-    ) -> gpui::Div {
-        let mut rows = div().flex().flex_col();
-        for &(profile, tin, form, year, quarter, status, action_label, is_urgent) in items {
-            rows = rows.child(Self::action_table_row(
-                profile,
-                tin,
-                form,
-                year,
-                quarter,
-                status,
-                action_label,
-                is_urgent,
-                cx,
-            ));
-        }
-
-        div()
-            .w_full()
-            .bg(cx.theme().background)
-            .border_1()
-            .border_color(cx.theme().border)
-            .rounded_xl()
-            .shadow_sm()
-            .flex()
-            .flex_col()
-            .child(
-                // Table Header
-                div()
-                    .flex()
-                    .p_3()
-                    .bg(cx.theme().muted)
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .text_xs()
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(cx.theme().muted_foreground)
-                    .child(div().flex_1().child("Profile"))
-                    .child(div().w(px(80.)).child("Form"))
-                    .child(div().flex_1().child("Status / Issue"))
-                    .child(div().w(px(50.)).text_center().child("Action")),
-            )
-            .child(rows)
-    }
-
-    /// Card layout for narrow viewports.
-    #[allow(clippy::type_complexity)]
-    fn render_action_cards(
-        &self,
-        items: &[(&str, &str, &str, u16, Option<u8>, &str, &str, bool)],
-        cx: &mut Context<Self>,
-    ) -> gpui::Div {
-        let mut cards = div().flex().flex_col().gap_3();
-        for &(profile, tin, form, year, quarter, status, action_label, is_urgent) in items {
-            cards = cards.child(Self::action_card(
-                profile,
-                tin,
-                form,
-                year,
-                quarter,
-                status,
-                action_label,
-                is_urgent,
-                cx,
-            ));
-        }
-        cards
-    }
-
-    /// Single table row for the action required table.
-    #[allow(clippy::too_many_arguments)]
-    fn action_table_row(
-        profile: &str,
-        tin: &str,
-        form: &str,
-        year: u16,
-        quarter: Option<u8>,
-        status: &str,
-        action_label: &str,
-        is_urgent: bool,
-        cx: &mut Context<Self>,
-    ) -> gpui::Div {
-        let warning_color: gpui::Hsla = gpui::rgb(0xef4444).into();
-        let tin_clone = tin.to_string();
-        let form_clone = form.to_string();
-        let q_num = quarter.unwrap_or(0);
-
-        div()
-            .flex()
-            .p_3()
-            .items_center()
-            .border_b_1()
-            .border_color(cx.theme().border)
-            .text_sm()
-            .child(
-                div()
-                    .flex_1()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(cx.theme().foreground)
-                    .overflow_hidden()
-                    .child(profile.to_string()),
-            )
-            .child(
-                div()
-                    .w(px(80.))
-                    .text_color(cx.theme().muted_foreground)
-                    .child(form.to_string()),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .overflow_hidden()
-                    .children(if is_urgent {
-                        Some(
-                            div()
-                                .px_2()
-                                .py_0p5()
-                                .bg(warning_color.opacity(0.1))
-                                .text_color(warning_color)
-                                .rounded_md()
-                                .text_xs()
-                                .font_weight(FontWeight::BOLD)
-                                .child("!"),
-                        )
-                    } else {
-                        None
-                    })
-                    .child(
-                        div()
-                            .text_color(if is_urgent {
-                                warning_color
-                            } else {
-                                cx.theme().foreground
-                            })
-                            .child(status.to_string()),
-                    ),
-            )
-            .child(Self::action_icon_button(
-                &tin_clone,
-                &form_clone,
-                year,
-                q_num,
-                action_label,
-                is_urgent,
-                cx,
-            ))
-    }
-
-    /// Single card for narrow viewport.
-    #[allow(clippy::too_many_arguments)]
-    fn action_card(
-        profile: &str,
-        tin: &str,
-        form: &str,
-        year: u16,
-        quarter: Option<u8>,
-        status: &str,
-        action_label: &str,
-        is_urgent: bool,
-        cx: &mut Context<Self>,
-    ) -> gpui::Div {
-        let warning_color: gpui::Hsla = gpui::rgb(0xef4444).into();
-        let tin_clone = tin.to_string();
-        let form_clone = form.to_string();
-        let q_num = quarter.unwrap_or(0);
-
-        div()
-            .w_full()
-            .p_4()
-            .bg(cx.theme().background)
-            .border_1()
-            .border_color(cx.theme().border)
-            .rounded_lg()
-            .shadow_sm()
-            .flex()
-            .flex_col()
-            .gap_2()
-            // Top row: profile name + action button
-            .child(
-                div()
-                    .flex()
-                    .justify_between()
-                    .items_center()
-                    .child(
-                        div()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(cx.theme().foreground)
-                            .child(profile.to_string()),
-                    )
-                    .child(Self::action_icon_button(
-                        &tin_clone,
-                        &form_clone,
-                        year,
-                        q_num,
-                        action_label,
-                        is_urgent,
-                        cx,
-                    )),
-            )
-            // Form type
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(format!("Form: {}", form)),
-            )
-            // Status with urgency indicator
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .children(if is_urgent {
-                        Some(
-                            div()
-                                .px_2()
-                                .py_0p5()
-                                .bg(warning_color.opacity(0.1))
-                                .text_color(warning_color)
-                                .rounded_md()
-                                .text_xs()
-                                .font_weight(FontWeight::BOLD)
-                                .child("!"),
-                        )
-                    } else {
-                        None
-                    })
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(if is_urgent {
-                                warning_color
-                            } else {
-                                cx.theme().foreground
-                            })
-                            .child(status.to_string()),
-                    ),
-            )
-    }
-
-    /// Compact icon-only action button with tooltip.
-    fn action_icon_button(
-        tin: &str,
-        form: &str,
-        year: u16,
-        q_num: u8,
-        action_label: &str,
-        _is_check_status: bool,
-        cx: &mut Context<Self>,
-    ) -> gpui::Div {
-        let tin_clone = tin.to_string();
-        let form_clone = form.to_string();
-        let tooltip_text = action_label.to_string();
-
-        let icon = if action_label == "Check Confirmation" {
-            "✉"
-        } else if action_label == "Upload Receipt" {
-            "↑"
-        } else {
-            "▶"
-        };
-
-        div()
-            .w(px(50.))
-            .flex()
-            .items_center()
-            .justify_center()
-            .child(
-                div()
-                    .id(format!("action-btn-{}-{}-{}", tin, form, q_num))
-                    .w(px(32.))
-                    .h(px(32.))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .bg(cx.theme().secondary)
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .rounded_md()
-                    .cursor_pointer()
-                    .hover(|s| s.bg(cx.theme().secondary_hover))
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().foreground)
-                            .child(icon),
-                    )
-                    .tooltip(move |window, cx| {
-                        gpui_component::tooltip::Tooltip::new(tooltip_text.clone())
-                            .build(window, cx)
-                    })
-                    .on_click(cx.listener({
-                        let is_check = action_label == "Check Confirmation";
-                        move |this, _, window, cx| {
-                            if is_check {
-                                this.check_status_for_tin(&tin_clone, window, cx);
-                            } else {
-                                cx.emit(GlobalDashboardEvent::OpenForm {
-                                    tin: tin_clone.clone(),
-                                    form_code: form_clone.clone(),
-                                    year,
-                                    quarter: q_num,
-                                });
-                            }
-                        }
-                    })),
-            )
-    }
-
-    /// Run the email check for a specific TIN — the core of the "Check Status" action.
-    fn check_status_for_tin(&mut self, tin: &str, window: &mut Window, cx: &mut Context<Self>) {
-        use gpui_component::WindowExt;
-
-        // Look up the profile
-        let profile = self
-            .db
-            .lock()
-            .ok()
-            .and_then(|db| db.get_profile(tin).ok().flatten());
-
-        let Some(profile) = profile else {
-            window.push_notification(
-                gpui_component::notification::Notification::error("Profile Not Found".to_string())
-                    .message(format!("Could not find profile for TIN {}", tin)),
-                cx,
-            );
-            return;
-        };
-
-        if !profile.is_email_tracking_active() {
-            window.push_notification(
-                gpui_component::notification::Notification::error(
-                    "Email Tracking Not Enabled".to_string(),
-                )
-                .message(
-                    "Go to Email Settings in your profile to set up App Password or Google OAuth2."
-                        .to_string(),
-                ),
-                cx,
-            );
-            return;
-        }
-
-        // Show progress notification
-        window.push_notification(
-            gpui_component::notification::Notification::new()
-                .message("Checking email for BIR confirmation...".to_string())
-                .with_type(gpui_component::notification::NotificationType::Info)
-                .autohide(true),
-            cx,
-        );
-
-        let db_clone = self.db.clone();
-        cx.spawn(async move |this, cx| {
-            let result = cx.background_executor().spawn(async move {
-                bir_core::email::fetch_and_process_emails(&profile, db_clone)
-            }).await;
-
-            cx.update(|cx| {
-                if let Some(this) = this.upgrade() {
-                    this.update(cx, |this, cx| {
-                        match result {
-                            Ok(receipts) if !receipts.is_empty() => {
-                                // Refresh actionable forms from DB
-                                this.reload_actionable_forms(cx);
-                                cx.emit(GlobalDashboardEvent::PushNotification(
-                                    "success".to_string(),
-                                    "Confirmation Received!".to_string(),
-                                    format!("{} confirmation(s) processed successfully.", receipts.len()),
-                                ));
-                                cx.emit(GlobalDashboardEvent::StatusChanged);
-                            }
-                            Ok(_) => {
-                                cx.emit(GlobalDashboardEvent::PushNotification(
-                                    "info".to_string(),
-                                    "No Confirmation Yet".to_string(),
-                                    "No new confirmation email from BIR was found. Please try again later.".to_string(),
-                                ));
-                            }
-                            Err(e) => {
-                                cx.emit(GlobalDashboardEvent::PushNotification(
-                                    "error".to_string(),
-                                    "Email Check Failed".to_string(),
-                                    e.to_string(),
-                                ));
-                            }
-                        }
-                        cx.notify();
-                    });
-                }
-            });
-        }).detach();
-    }
-
     fn news_section(&self, cx: &mut Context<Self>) -> gpui::Div {
         let mut news_list = div().id("news-list").flex().flex_col().gap_4().pr_2(); // add some padding
 

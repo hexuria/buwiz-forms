@@ -8,13 +8,25 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+#[allow(unused_mut)]
+fn build_typst_command() -> Command {
+    let mut cmd = Command::new(get_typst_binary());
+    #[cfg(windows)]
+    {
+        // CREATE_NO_WINDOW = 0x08000000
+        cmd.creation_flags(0x08000000);
+    }
+    cmd
+}
+
 const FORM_2551Q_ID: &str = "2551Qv2018";
 const LAYOUT_2551Q: &str = include_str!("../../../formtypes/2551Qv2018/formtype.json");
 const TEMPLATE_2551Q: &str = include_str!("../../../formtypes/2551Qv2018/template.typ");
 const PAGE1_SVG_2551Q: &str = include_str!("../../../formtypes/2551Qv2018/pages/page1.svg");
 const PAGE2_SVG_2551Q: &str = include_str!("../../../formtypes/2551Qv2018/pages/page2.svg");
-
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PaperSize {
@@ -139,7 +151,7 @@ impl TypstCompiler for CliTypstCompiler {
         pdf_path: &Path,
         root_dir: &Path,
     ) -> Result<(), PrintError> {
-        let output = Command::new(get_typst_binary())
+        let output = build_typst_command()
             .arg("compile")
             .arg("--root")
             .arg(root_dir)
@@ -780,7 +792,7 @@ fn export_preview_pngs(
     page_count: usize,
 ) -> Result<Vec<PathBuf>, PrintError> {
     let pattern = output_dir.join("preview-{p}.png");
-    let output = Command::new(get_typst_binary())
+    let output = build_typst_command()
         .arg("compile")
         .arg("--root")
         .arg(output_dir)

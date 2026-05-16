@@ -67,6 +67,8 @@ pub struct Form2551QDraft {
 
     // === Header Options ===
     pub is_amended: bool,
+    #[serde(default)]
+    pub original_return_filed_and_paid_on_time: bool,
     pub tax_relief: bool,
 
     // === Part I — pre-filled from profile, read-only in UI ===
@@ -153,6 +155,7 @@ impl Form2551QDraft {
             quarter,
             eopt_tier: profile.eopt_tier.clone(),
             is_amended: false,
+            original_return_filed_and_paid_on_time: false,
             tax_relief: false,
             rdo_code: profile.rdo_code.clone(),
             taxpayer_name: profile.full_name.clone(),
@@ -296,7 +299,7 @@ impl Form2551QDraft {
                     taxpayer_class,
                     taxable_period: format!("Q{} {}", self.quarter, self.taxable_year),
                     is_amended_return: self.is_amended,
-                    original_was_on_time: true,
+                    original_was_on_time: self.original_return_filed_and_paid_on_time,
                     is_fraud_or_willful_neglect: is_fraud,
                     basic_tax_due: penalty_tax_base,
                     amount_paid_before_deadline: 0.0,

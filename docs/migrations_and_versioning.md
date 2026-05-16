@@ -37,6 +37,13 @@ let migrations = [
 
 > **Note:** Do *not* edit past migrations unless you are absolutely sure it won't break existing databases. Migrations should generally only append new `ALTER` or `CREATE` statements.
 
+### Current schema notes
+
+- v6 is a static tax-calendar marker only. Fresh databases should not create the removed calendar CRUD tables (`tax_calendars`, `tax_forms`, `tax_deadline_rules`, `tax_deadline_overrides`, `resolved_tax_deadlines`).
+- Official recurring calendar rules live in `crates/bir-core/src/calendar_rules.rs`.
+- Emergency or advisory deadline changes are applied through the typed override model in the calendar resolver, not through user-editable base-rule tables.
+- Existing databases that already have legacy calendar tables keep them untouched; do not drop them without a dedicated backup and migration plan.
+
 ---
 
 ## 2. JSON Export & Import Versioning (`export.rs` / `import.rs`)

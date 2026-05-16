@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::db::DbError;
 
-const CURRENT_MIGRATION_VERSION: i32 = 5;
+const CURRENT_MIGRATION_VERSION: i32 = 6;
 
 pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
     let mut version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
@@ -185,6 +185,14 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         // Column addition is handled in Rust (below) to be idempotent
         // since SQLite does not support ADD COLUMN IF NOT EXISTS.
         "SELECT 1; -- v5 marker: period_key column (Rust-side)",
+        // v6: Static tax-calendar marker.
+        //
+        // The official recurring calendar now lives in `calendar_rules.rs` as
+        // compiled base rules. Fresh databases should not create the removed
+        // calendar CRUD tables (`tax_calendars`, `tax_deadline_rules`,
+        // `tax_deadline_overrides`, `resolved_tax_deadlines`). Existing
+        // databases keep those legacy tables untouched.
+        "SELECT 1; -- v6 marker: static tax calendar rules",
     ];
 
     while version < CURRENT_MIGRATION_VERSION {

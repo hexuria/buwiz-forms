@@ -588,6 +588,24 @@ impl Database {
             .execute("DELETE FROM settings WHERE key = ?1", params![key])?;
         Ok(())
     }
+
+    /// Retrieve deadline overrides stored in the settings table.
+    pub fn get_deadline_overrides(&self) -> Vec<crate::calendar_rules::DeadlineOverride> {
+        self.get_setting("deadline_overrides")
+            .ok()
+            .flatten()
+            .and_then(|json| serde_json::from_str(&json).ok())
+            .unwrap_or_default()
+    }
+
+    /// Persist deadline overrides to the settings table.
+    pub fn set_deadline_overrides(
+        &self,
+        overrides: &[crate::calendar_rules::DeadlineOverride],
+    ) -> Result<(), DbError> {
+        let json = serde_json::to_string(overrides).map_err(|e| DbError::Other(e.to_string()))?;
+        self.set_setting("deadline_overrides", &json)
+    }
 }
 
 // =========================================================================

@@ -1,4 +1,5 @@
-use bir_core::db::Database;
+use bir_core::calendar_rules::{DeadlineResolver, ResolvedTaxDeadline};
+use bir_core::db::{BirNotice, Database, NoticeSourceKind};
 use bir_core::forms::registry::FilingFrequency;
 use bir_core::forms::{FormFilingProgress, QuarterState};
 use bir_core::profile::TaxpayerProfile;
@@ -53,6 +54,11 @@ fn tax_form_card_width(window_width: f32, sidebar_width: f32, columns: usize) ->
     }
 }
 
+pub enum ProfileTab {
+    Calendar,
+    Forms,
+}
+
 pub struct DashboardView {
     active_profile: Option<TaxpayerProfile>,
     db: Arc<Mutex<Database>>,
@@ -64,6 +70,11 @@ pub struct DashboardView {
         std::collections::HashMap<String, std::collections::HashMap<u16, FormFilingProgress>>,
     is_mini_sidebar: bool,
     pub hide_tax_profiles: bool,
+    active_tab: ProfileTab,
+    deadlines: Vec<ResolvedTaxDeadline>,
+    actionable_forms: Vec<(String, bir_core::forms::FormDraftSummary)>,
+    upcoming_deadlines_list:
+        Entity<crate::components::upcoming_deadlines_list::UpcomingDeadlinesList>,
 }
 
 impl DashboardView {
@@ -113,6 +124,28 @@ impl DashboardView {
         )
         .detach();
 
+        let upcoming_deadlines_list = cx.new(|cx| {
+            crate::components::upcoming_deadlines_list::UpcomingDeadlinesList::new(window, cx)
+        });
+
+        cx.subscribe(
+            &upcoming_deadlines_list,
+            |this: &mut Self, _, event: &crate::components::upcoming_deadlines_list::UpcomingDeadlinesListEvent, cx| match event {
+                crate::components::upcoming_deadlines_list::UpcomingDeadlinesListEvent::DeadlineClicked {
+                    form_code,
+                    year,
+                    quarter,
+                } => {
+                    cx.emit(DashboardEvent::FileForm {
+                        form_code: form_code.clone(),
+                        year: *year,
+                        quarter: *quarter,
+                    });
+                }
+            },
+        )
+        .detach();
+
         Self {
             active_profile: None,
             db,
@@ -122,6 +155,10 @@ impl DashboardView {
             filing_progress: std::collections::HashMap::new(),
             is_mini_sidebar: false,
             hide_tax_profiles: false,
+            active_tab: ProfileTab::Calendar,
+            deadlines: Vec::new(),
+            actionable_forms: Vec::new(),
+            upcoming_deadlines_list,
         }
     }
 
@@ -138,12 +175,15 @@ impl DashboardView {
     /// Query the DB for all form progress for this profile in the selected year.
     fn reload_filing_progress(&mut self, profile: &TaxpayerProfile) {
         self.filing_progress.clear();
+        self.actionable_forms.clear();
+        self.deadlines.clear();
+
         if let Ok(db) = self.db.lock() {
             let year = self.selected_year as u16;
             let applicable_codes =
                 bir_core::integration::applicable_forms_for_profile_and_year(profile, year);
 
-            for code in applicable_codes {
+            for code in applicable_codes.clone() {
                 let mut year_progress = std::collections::HashMap::new();
                 if let Ok(progress) = db.get_form_filing_progress(&profile.tin.full(), &code, year)
                 {
@@ -151,6 +191,37 @@ impl DashboardView {
                 }
                 self.filing_progress.insert(code, year_progress);
             }
+
+            if let Ok(summaries) = db.list_draft_summaries(&profile.tin.full(), year) {
+                // Only keep drafts that are applicable for this profile AND not yet done
+                let codes_set_for_filter: std::collections::HashSet<String> =
+                    applicable_codes.iter().cloned().collect();
+                for sum in summaries {
+                    // Skip forms not applicable to this profile
+                    if !codes_set_for_filter.contains(&sum.form_code) {
+                        continue;
+                    }
+                    // Skip completed forms (Confirmed/Paid are "done")
+                    if matches!(
+                        sum.status,
+                        bir_core::forms::FilingStatus::Confirmed
+                            | bir_core::forms::FilingStatus::Paid
+                    ) {
+                        continue;
+                    }
+                    self.actionable_forms.push((profile.full_name.clone(), sum));
+                }
+            }
+
+            let overrides = db.get_deadline_overrides();
+            let deadlines_for_year =
+                DeadlineResolver::resolve_taxable_year_with_overrides(year as i32, &overrides);
+            let codes_set: std::collections::HashSet<String> =
+                applicable_codes.into_iter().collect();
+            self.deadlines = deadlines_for_year
+                .into_iter()
+                .filter(|d| codes_set.contains(&d.form_code))
+                .collect();
         }
     }
 
@@ -370,59 +441,193 @@ impl Render for DashboardView {
 
                 let support = form_support_level(&code);
                 let is_fileable = support.is_fileable_in_app();
+                let support_label = support.action_label();
 
-                let card = if !is_fileable {
-                    // ── Unsupported form: render as informational card ──
-                    let support_label = support.action_label();
-                    Self::build_card(form_def, year, card_width, cx).child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .gap_3()
-                            .py_3()
-                            .px_6()
-                            .rounded_full()
-                            .border_1()
-                            .border_color(cx.theme().border)
-                            .bg(gpui::transparent_black())
-                            .opacity(0.6)
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(support_label),
-                            ),
-                    )
-                } else {
-                    match &form_def.frequency {
-                        FilingFrequency::Quarterly => {
-                            let quarters =
-                                progress.as_ref().map(|p| p.quarters.clone()).unwrap_or([
-                                    QuarterState::NotStarted,
-                                    QuarterState::NotStarted,
-                                    QuarterState::NotStarted,
-                                    QuarterState::NotStarted,
-                                ]);
-                            let filed = quarters
-                                .iter()
-                                .filter(|s| {
-                                    **s == QuarterState::Submitted
-                                        || **s == QuarterState::Confirmed
-                                        || **s == QuarterState::Paid
-                                })
-                                .count();
+                let card = match &form_def.frequency {
+                    FilingFrequency::Quarterly => {
+                        let quarters = progress.as_ref().map(|p| p.quarters.clone()).unwrap_or([
+                            QuarterState::NotStarted,
+                            QuarterState::NotStarted,
+                            QuarterState::NotStarted,
+                            QuarterState::NotStarted,
+                        ]);
+                        let filed = quarters
+                            .iter()
+                            .filter(|s| {
+                                **s == QuarterState::Submitted
+                                    || **s == QuarterState::Confirmed
+                                    || **s == QuarterState::Paid
+                            })
+                            .count();
 
-                            // Interactive quarter dots — each one is clickable
-                            let mut quarter_dots = div().flex().gap_2().w_full();
-                            for (idx, q_state) in quarters.iter().enumerate() {
-                                let q_num = (idx + 1) as u8;
+                        // Interactive quarter dots — each one is clickable
+                        let mut quarter_dots = div().flex().gap_2().w_full();
+                        for (idx, q_state) in quarters.iter().enumerate() {
+                            let q_num = (idx + 1) as u8;
+                            let should_dim =
+                                has_quarter_filter && !active_quarters.contains(&q_num);
+
+                            if should_dim {
+                                quarter_dots = quarter_dots.child(
+                                    div()
+                                        .flex()
+                                        .flex_1()
+                                        .flex_col()
+                                        .items_center()
+                                        .justify_center()
+                                        .gap_1()
+                                        .opacity(0.2)
+                                        .py_3()
+                                        .rounded_xl()
+                                        .border_1()
+                                        .border_color(cx.theme().border)
+                                        .bg(gpui::transparent_black())
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::BOLD)
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child(format!("Q{}", q_num)),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child("-"),
+                                        ),
+                                );
+                            } else {
+                                let (bg, border_clr, accent, _icon, status_label) =
+                                    Self::state_style(q_state, cx);
+                                let hover_bg = Self::state_hover_bg(q_state, cx);
+                                let code_click = code.clone();
+
+                                let mut dot = div()
+                                    .id(format!("q_{}_{}_{}", form_def.form_code, year, q_num))
+                                    .flex()
+                                    .flex_1()
+                                    .flex_col()
+                                    .items_center()
+                                    .justify_center()
+                                    .gap_1()
+                                    .py_3()
+                                    .rounded_xl()
+                                    .border_1()
+                                    .border_color(border_clr)
+                                    .bg(bg)
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(
+                                                if matches!(q_state, QuarterState::NotStarted) {
+                                                    cx.theme().foreground
+                                                } else {
+                                                    accent
+                                                },
+                                            )
+                                            .child(format!("Q{}", q_num)),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(accent)
+                                            .child(status_label),
+                                    );
+
+                                if is_fileable {
+                                    dot = dot
+                                        .cursor_pointer()
+                                        .hover(move |s| s.bg(hover_bg).border_color(accent))
+                                        .on_click(cx.listener(move |_this, _ev, _window, cx| {
+                                            cx.emit(DashboardEvent::FileForm {
+                                                form_code: code_click.clone(),
+                                                year,
+                                                quarter: q_num,
+                                            });
+                                        }));
+                                } else {
+                                    dot = dot.cursor_default();
+                                }
+
+                                quarter_dots = quarter_dots.child(dot);
+                            }
+                        }
+
+                        Self::build_card(form_def, year, card_width, cx).child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .justify_between()
+                                        .items_center()
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child(format!("Year {}:", year)),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .font_weight(FontWeight::BOLD)
+                                                .text_color(cx.theme().foreground)
+                                                .child(if is_fileable {
+                                                    format!("{}/4 filed", filed)
+                                                } else {
+                                                    support_label.to_string()
+                                                }),
+                                        ),
+                                )
+                                .child(quarter_dots),
+                        )
+                    }
+                    FilingFrequency::Monthly => {
+                        let months = progress.as_ref().map(|p| p.months.clone()).unwrap_or([
+                            QuarterState::NotStarted,
+                            QuarterState::NotStarted,
+                            QuarterState::NotStarted,
+                            QuarterState::NotStarted,
+                            QuarterState::NotStarted,
+                            QuarterState::NotStarted,
+                            QuarterState::NotStarted,
+                            QuarterState::NotStarted,
+                            QuarterState::NotStarted,
+                            QuarterState::NotStarted,
+                            QuarterState::NotStarted,
+                            QuarterState::NotStarted,
+                        ]);
+                        let filed = months
+                            .iter()
+                            .filter(|s| {
+                                **s == QuarterState::Submitted
+                                    || **s == QuarterState::Confirmed
+                                    || **s == QuarterState::Paid
+                            })
+                            .count();
+
+                        let month_names = [
+                            "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
+                            "Nov", "Dec",
+                        ];
+                        let mut month_dots = div().flex().flex_col().gap_2().w_full();
+
+                        for chunk in months.chunks(4).enumerate() {
+                            let (chunk_idx, chunk) = chunk;
+                            let mut row = div().flex().gap_2().w_full();
+
+                            for (idx, m_state) in chunk.iter().enumerate() {
+                                let absolute_idx = chunk_idx * 4 + idx;
+                                let m_num = (absolute_idx + 1) as u8;
                                 let should_dim =
-                                    has_quarter_filter && !active_quarters.contains(&q_num);
+                                    has_month_filter && !active_months.contains(&m_num);
 
                                 if should_dim {
-                                    quarter_dots = quarter_dots.child(
+                                    row = row.child(
                                         div()
                                             .flex()
                                             .flex_1()
@@ -441,7 +646,7 @@ impl Render for DashboardView {
                                                     .text_sm()
                                                     .font_weight(FontWeight::BOLD)
                                                     .text_color(cx.theme().muted_foreground)
-                                                    .child(format!("Q{}", q_num)),
+                                                    .child(month_names[absolute_idx]),
                                             )
                                             .child(
                                                 div()
@@ -452,335 +657,72 @@ impl Render for DashboardView {
                                     );
                                 } else {
                                     let (bg, border_clr, accent, _icon, status_label) =
-                                        Self::state_style(q_state, cx);
-                                    let hover_bg = Self::state_hover_bg(q_state, cx);
+                                        Self::state_style(m_state, cx);
+                                    let hover_bg = Self::state_hover_bg(m_state, cx);
                                     let code_click = code.clone();
 
-                                    quarter_dots = quarter_dots.child(
-                                        div()
-                                            .id(format!(
-                                                "q_{}_{}_{}",
-                                                form_def.form_code, year, q_num
-                                            ))
-                                            .flex()
-                                            .flex_1()
-                                            .flex_col()
-                                            .items_center()
-                                            .justify_center()
-                                            .gap_1()
-                                            .py_3()
-                                            .cursor_pointer()
-                                            .rounded_xl()
-                                            .border_1()
-                                            .border_color(border_clr)
-                                            .bg(bg)
-                                            .hover(move |s| s.bg(hover_bg).border_color(accent))
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .font_weight(FontWeight::BOLD)
-                                                    .text_color(
-                                                        if matches!(
-                                                            q_state,
-                                                            QuarterState::NotStarted
-                                                        ) {
-                                                            cx.theme().foreground
-                                                        } else {
-                                                            accent
-                                                        },
-                                                    )
-                                                    .child(format!("Q{}", q_num)),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .font_weight(FontWeight::SEMIBOLD)
-                                                    .text_color(accent)
-                                                    .child(status_label),
-                                            )
-                                            .on_click(cx.listener(
-                                                move |_this, _ev, _window, cx| {
-                                                    cx.emit(DashboardEvent::FileForm {
-                                                        form_code: code_click.clone(),
-                                                        year,
-                                                        quarter: q_num,
-                                                    });
-                                                },
-                                            )),
-                                    );
-                                }
-                            }
-
-                            Self::build_card(form_def, year, card_width, cx).child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_3()
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .justify_between()
-                                            .items_center()
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child(format!("Year {}:", year)),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .font_weight(FontWeight::BOLD)
-                                                    .text_color(cx.theme().foreground)
-                                                    .child(format!("{}/4 filed", filed)),
-                                            ),
-                                    )
-                                    .child(quarter_dots),
-                            )
-                        }
-                        FilingFrequency::Monthly => {
-                            let months = progress.as_ref().map(|p| p.months.clone()).unwrap_or([
-                                QuarterState::NotStarted,
-                                QuarterState::NotStarted,
-                                QuarterState::NotStarted,
-                                QuarterState::NotStarted,
-                                QuarterState::NotStarted,
-                                QuarterState::NotStarted,
-                                QuarterState::NotStarted,
-                                QuarterState::NotStarted,
-                                QuarterState::NotStarted,
-                                QuarterState::NotStarted,
-                                QuarterState::NotStarted,
-                                QuarterState::NotStarted,
-                            ]);
-                            let filed = months
-                                .iter()
-                                .filter(|s| {
-                                    **s == QuarterState::Submitted
-                                        || **s == QuarterState::Confirmed
-                                        || **s == QuarterState::Paid
-                                })
-                                .count();
-
-                            let month_names = [
-                                "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep",
-                                "Oct", "Nov", "Dec",
-                            ];
-                            let mut month_dots = div().flex().flex_col().gap_2().w_full();
-
-                            for chunk in months.chunks(4).enumerate() {
-                                let (chunk_idx, chunk) = chunk;
-                                let mut row = div().flex().gap_2().w_full();
-
-                                for (idx, m_state) in chunk.iter().enumerate() {
-                                    let absolute_idx = chunk_idx * 4 + idx;
-                                    let m_num = (absolute_idx + 1) as u8;
-                                    let should_dim =
-                                        has_month_filter && !active_months.contains(&m_num);
-
-                                    if should_dim {
-                                        row = row.child(
-                                            div()
-                                                .flex()
-                                                .flex_1()
-                                                .flex_col()
-                                                .items_center()
-                                                .justify_center()
-                                                .gap_1()
-                                                .opacity(0.2)
-                                                .py_3()
-                                                .rounded_xl()
-                                                .border_1()
-                                                .border_color(cx.theme().border)
-                                                .bg(gpui::transparent_black())
-                                                .child(
-                                                    div()
-                                                        .text_sm()
-                                                        .font_weight(FontWeight::BOLD)
-                                                        .text_color(cx.theme().muted_foreground)
-                                                        .child(month_names[absolute_idx]),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .text_xs()
-                                                        .text_color(cx.theme().muted_foreground)
-                                                        .child("-"),
-                                                ),
-                                        );
-                                    } else {
-                                        let (bg, border_clr, accent, _icon, status_label) =
-                                            Self::state_style(m_state, cx);
-                                        let hover_bg = Self::state_hover_bg(m_state, cx);
-                                        let code_click = code.clone();
-
-                                        row = row.child(
-                                            div()
-                                                .id(format!(
-                                                    "m_{}_{}_{}",
-                                                    form_def.form_code, year, m_num
-                                                ))
-                                                .flex()
-                                                .flex_1()
-                                                .flex_col()
-                                                .items_center()
-                                                .justify_center()
-                                                .gap_1()
-                                                .py_3()
-                                                .cursor_pointer()
-                                                .rounded_xl()
-                                                .border_1()
-                                                .border_color(border_clr)
-                                                .bg(bg)
-                                                .hover(move |s| s.bg(hover_bg).border_color(accent))
-                                                .child(
-                                                    div()
-                                                        .text_sm()
-                                                        .font_weight(FontWeight::BOLD)
-                                                        .text_color(
-                                                            if matches!(
-                                                                m_state,
-                                                                QuarterState::NotStarted
-                                                            ) {
-                                                                cx.theme().foreground
-                                                            } else {
-                                                                accent
-                                                            },
-                                                        )
-                                                        .child(month_names[absolute_idx]),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .text_xs()
-                                                        .font_weight(FontWeight::SEMIBOLD)
-                                                        .text_color(accent)
-                                                        .child(status_label),
-                                                )
-                                                .on_click(cx.listener(
-                                                    move |_this, _ev, _window, cx| {
-                                                        cx.emit(DashboardEvent::FileForm {
-                                                            form_code: code_click.clone(),
-                                                            year,
-                                                            quarter: m_num,
-                                                        });
-                                                    },
-                                                )),
-                                        );
-                                    }
-                                }
-                                month_dots = month_dots.child(row);
-                            }
-
-                            Self::build_card(form_def, year, card_width, cx).child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_3()
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .justify_between()
-                                            .items_center()
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child(format!("Year {}:", year)),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .font_weight(FontWeight::BOLD)
-                                                    .text_color(cx.theme().foreground)
-                                                    .child(format!("{}/12 filed", filed)),
-                                            ),
-                                    )
-                                    .child(month_dots),
-                            )
-                        }
-                        FilingFrequency::Annual => {
-                            let status = progress
-                                .as_ref()
-                                .map(|p| p.annual_status.clone())
-                                .unwrap_or(QuarterState::NotStarted);
-
-                            let (bg, border_clr, accent, icon, _action_label) =
-                                Self::state_style(&status, cx);
-                            let hover_bg = Self::state_hover_bg(&status, cx);
-                            let code_click = code.clone();
-
-                            Self::build_card(form_def, year, card_width, cx)
-                                .child(
-                                    div().flex().justify_between().items_center().child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child(format!("Year {}:", year)),
-                                    ),
-                                )
-                                .child(
-                                    div()
-                                        .id(format!("annual_{}_{}", form_def.form_code, year))
+                                    let mut dot = div()
+                                        .id(format!("m_{}_{}_{}", form_def.form_code, year, m_num))
                                         .flex()
+                                        .flex_1()
+                                        .flex_col()
                                         .items_center()
                                         .justify_center()
-                                        .gap_3()
+                                        .gap_1()
                                         .py_3()
-                                        .px_6()
-                                        .rounded_full()
+                                        .rounded_xl()
                                         .border_1()
                                         .border_color(border_clr)
                                         .bg(bg)
-                                        .cursor_pointer()
-                                        .hover(move |s| s.bg(hover_bg).border_color(accent))
-                                        .child(
-                                            div()
-                                                .text_base()
-                                                .font_weight(FontWeight::BOLD)
-                                                .text_color(accent)
-                                                .child(icon),
-                                        )
                                         .child(
                                             div()
                                                 .text_sm()
                                                 .font_weight(FontWeight::BOLD)
                                                 .text_color(
-                                                    if matches!(&status, QuarterState::NotStarted) {
+                                                    if matches!(m_state, QuarterState::NotStarted) {
                                                         cx.theme().foreground
                                                     } else {
                                                         accent
                                                     },
                                                 )
-                                                .child(match &status {
-                                                    QuarterState::Paid => "View Paid Return",
-                                                    QuarterState::Confirmed => {
-                                                        "View Confirmed Return"
-                                                    }
-                                                    QuarterState::Submitted => "View Submission",
-                                                    QuarterState::Queued => "View Queued Return",
-                                                    QuarterState::Draft => "Resume Draft",
-                                                    QuarterState::NotStarted => {
-                                                        "File Annual Return"
-                                                    }
-                                                }),
+                                                .child(month_names[absolute_idx]),
                                         )
-                                        .on_click(cx.listener(move |_this, _ev, _window, cx| {
-                                            cx.emit(DashboardEvent::FileForm {
-                                                form_code: code_click.clone(),
-                                                year,
-                                                quarter: 0,
-                                            });
-                                        })),
-                                )
-                        }
-                        FilingFrequency::OpenEnded => {
-                            let count = progress.as_ref().map(|p| p.open_ended_count).unwrap_or(0);
-                            let next_open_ended_key =
-                                count.saturating_add(1).min(u32::from(u8::MAX)) as u8;
-                            let code_click = code.clone();
-                            let hover_bg = cx.theme().accent;
-                            let primary = cx.theme().primary;
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .font_weight(FontWeight::SEMIBOLD)
+                                                .text_color(accent)
+                                                .child(status_label),
+                                        );
 
-                            Self::build_card(form_def, year, card_width, cx)
+                                    if is_fileable {
+                                        dot = dot
+                                            .cursor_pointer()
+                                            .hover(move |s| s.bg(hover_bg).border_color(accent))
+                                            .on_click(cx.listener(
+                                                move |_this, _ev, _window, cx| {
+                                                    cx.emit(DashboardEvent::FileForm {
+                                                        form_code: code_click.clone(),
+                                                        year,
+                                                        quarter: m_num,
+                                                    });
+                                                },
+                                            ));
+                                    } else {
+                                        dot = dot.cursor_default();
+                                    }
+
+                                    row = row.child(dot);
+                                }
+                            }
+                            month_dots = month_dots.child(row);
+                        }
+
+                        Self::build_card(form_def, year, card_width, cx).child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_3()
                                 .child(
                                     div()
                                         .flex()
@@ -797,49 +739,182 @@ impl Render for DashboardView {
                                                 .text_xs()
                                                 .font_weight(FontWeight::BOLD)
                                                 .text_color(cx.theme().foreground)
-                                                .child(format!("{} filed", count)),
+                                                .child(if is_fileable {
+                                                    format!("{}/12 filed", filed)
+                                                } else {
+                                                    support_label.to_string()
+                                                }),
                                         ),
                                 )
-                                .child(
+                                .child(month_dots),
+                        )
+                    }
+                    FilingFrequency::Annual => {
+                        let status = progress
+                            .as_ref()
+                            .map(|p| p.annual_status.clone())
+                            .unwrap_or(QuarterState::NotStarted);
+
+                        let (bg, border_clr, accent, icon, _action_label) =
+                            Self::state_style(&status, cx);
+                        let hover_bg = Self::state_hover_bg(&status, cx);
+                        let code_click = code.clone();
+
+                        Self::build_card(form_def, year, card_width, cx)
+                            .child(
+                                div().flex().justify_between().items_center().child(
                                     div()
-                                        .id(format!("monthly_{}_{}", form_def.form_code, year))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .gap_3()
-                                        .py_3()
-                                        .px_6()
-                                        .rounded_full()
-                                        .border_1()
-                                        .border_color(cx.theme().border)
-                                        .bg(gpui::transparent_black())
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child(format!("Year {}:", year)),
+                                ),
+                            )
+                            .child({
+                                let mut dot = div()
+                                    .id(format!("annual_{}_{}", form_def.form_code, year))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .gap_3()
+                                    .py_3()
+                                    .px_6()
+                                    .rounded_full()
+                                    .border_1()
+                                    .border_color(border_clr)
+                                    .bg(bg)
+                                    .child(
+                                        div()
+                                            .text_base()
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(accent)
+                                            .child(icon),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(
+                                                if matches!(&status, QuarterState::NotStarted) {
+                                                    cx.theme().foreground
+                                                } else {
+                                                    accent
+                                                },
+                                            )
+                                            .child(if is_fileable {
+                                                match &status {
+                                                    QuarterState::Paid => "View Paid Return",
+                                                    QuarterState::Confirmed => {
+                                                        "View Confirmed Return"
+                                                    }
+                                                    QuarterState::Submitted => "View Submission",
+                                                    QuarterState::Queued => "View Queued Return",
+                                                    QuarterState::Draft => "Resume Draft",
+                                                    QuarterState::NotStarted => {
+                                                        "File Annual Return"
+                                                    }
+                                                }
+                                            } else {
+                                                support_label
+                                            }),
+                                    );
+
+                                if is_fileable {
+                                    dot = dot
+                                        .cursor_pointer()
+                                        .hover(move |s| s.bg(hover_bg).border_color(accent))
+                                        .on_click(cx.listener(move |_this, _ev, _window, cx| {
+                                            cx.emit(DashboardEvent::FileForm {
+                                                form_code: code_click.clone(),
+                                                year,
+                                                quarter: 0,
+                                            });
+                                        }));
+                                } else {
+                                    dot = dot.cursor_default();
+                                }
+
+                                dot
+                            })
+                    }
+                    FilingFrequency::OpenEnded => {
+                        let count = progress.as_ref().map(|p| p.open_ended_count).unwrap_or(0);
+                        let next_open_ended_key =
+                            count.saturating_add(1).min(u32::from(u8::MAX)) as u8;
+                        let code_click = code.clone();
+                        let hover_bg = cx.theme().accent;
+                        let primary = cx.theme().primary;
+
+                        Self::build_card(form_def, year, card_width, cx)
+                            .child(
+                                div()
+                                    .flex()
+                                    .justify_between()
+                                    .items_center()
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child(format!("Year {}:", year)),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(cx.theme().foreground)
+                                            .child(format!("{} filed", count)),
+                                    ),
+                            )
+                            .child({
+                                let mut dot = div()
+                                    .id(format!("monthly_{}_{}", form_def.form_code, year))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .gap_3()
+                                    .py_3()
+                                    .px_6()
+                                    .rounded_full()
+                                    .border_1()
+                                    .border_color(cx.theme().border)
+                                    .bg(gpui::transparent_black())
+                                    .child(
+                                        div()
+                                            .text_base()
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(cx.theme().foreground)
+                                            .child(if is_fileable { "+" } else { "" }),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(cx.theme().foreground)
+                                            .child(if is_fileable {
+                                                "File New Return"
+                                            } else {
+                                                support_label
+                                            }),
+                                    );
+
+                                if is_fileable {
+                                    dot = dot
                                         .cursor_pointer()
                                         .hover(move |s| s.bg(hover_bg).border_color(primary))
-                                        .child(
-                                            div()
-                                                .text_base()
-                                                .font_weight(FontWeight::BOLD)
-                                                .text_color(cx.theme().foreground)
-                                                .child("+"),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_sm()
-                                                .font_weight(FontWeight::BOLD)
-                                                .text_color(cx.theme().foreground)
-                                                .child("File New Return"),
-                                        )
                                         .on_click(cx.listener(move |_this, _ev, _window, cx| {
                                             cx.emit(DashboardEvent::FileForm {
                                                 form_code: code_click.clone(),
                                                 year,
                                                 quarter: next_open_ended_key,
                                             });
-                                        })),
-                                )
-                        }
-                    } // close match
-                }; // close if/else
+                                        }));
+                                } else {
+                                    dot = dot.cursor_default();
+                                }
+
+                                dot
+                            })
+                    }
+                };
 
                 row = row.child(card);
                 cards_rendered += 1;
@@ -854,7 +929,7 @@ impl Render for DashboardView {
             forms_ui = forms_ui.child(row);
         }
 
-        let main_content = if cards_rendered == 0 {
+        let forms_ui = if cards_rendered == 0 {
             div()
                 .flex()
                 .flex_col()
@@ -883,6 +958,395 @@ impl Render for DashboardView {
                 )
         } else {
             forms_ui
+        };
+
+        // Filter deadlines based on selected month/quarter
+        // When no filter is active, default to current month
+        let today = chrono::Local::now().date_naive();
+        let current_month = today.month() as u8;
+
+        let (effective_months, effective_quarters, _implicit_month) =
+            if has_month_filter || has_quarter_filter {
+                (active_months.clone(), active_quarters.clone(), false)
+            } else {
+                (vec![current_month], vec![], true)
+            };
+
+        // For the Calendar tab, use ALL applicable form codes (not frequency-filtered)
+        // so that quarterly forms show up when month filter is active.
+        let all_applicable_codes: std::collections::HashSet<String> =
+            self.deadlines.iter().map(|d| d.form_code.clone()).collect();
+
+        // For Forms tab, use frequency-filtered form codes
+        let _forms_tab_codes: std::collections::HashSet<String> = available_forms
+            .iter()
+            .map(|f| f.form_code.clone())
+            .collect();
+
+        // Use deadline-date-based filter (checks actual due date month, not filing period)
+        let all_matching_deadlines: Vec<_> = self
+            .deadlines
+            .iter()
+            .filter(|d| all_applicable_codes.contains(&d.form_code))
+            .filter(|d| d.matches_deadline_date_filter(&effective_months, &effective_quarters))
+            .cloned()
+            .collect();
+
+        // Split into upcoming (today or future) and overdue (past)
+        let upcoming_deadlines: Vec<_> = all_matching_deadlines
+            .iter()
+            .filter(|d| d.final_deadline_date().is_some_and(|date| date >= today))
+            .cloned()
+            .collect();
+        let overdue_deadlines: Vec<_> = all_matching_deadlines
+            .iter()
+            .filter(|d| d.final_deadline_date().is_some_and(|date| date < today))
+            .cloned()
+            .collect();
+
+        self.upcoming_deadlines_list.update(cx, |list, _| {
+            list.set_data(upcoming_deadlines, vec![]);
+        });
+
+        // Build dynamic header label based on filter
+        let deadline_header = if has_quarter_filter {
+            let qs: Vec<String> = active_quarters.iter().map(|q| format!("Q{}", q)).collect();
+            format!("{} Deadlines", qs.join(", "))
+        } else if has_month_filter {
+            let ms: Vec<String> = active_months
+                .iter()
+                .filter_map(|m| Self::month_num_to_full_label(*m))
+                .collect();
+            format!("{} Deadlines", ms.join(", "))
+        } else {
+            // Implicit current month
+            Self::month_num_to_full_label(current_month)
+                .map(|m| format!("{} Deadlines", m))
+                .unwrap_or_else(|| "Deadlines".to_string())
+        };
+
+        let main_content = match self.active_tab {
+            ProfileTab::Calendar => {
+                // Build overdue column
+                let mut overdue_col = div().flex_1().flex().flex_col().gap_4().child(
+                    div()
+                        .text_xl()
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(gpui::hsla(0.0, 0.8, 0.5, 1.0))
+                        .child("Overdue"),
+                );
+
+                if overdue_deadlines.is_empty() {
+                    overdue_col = overdue_col.child(
+                        div()
+                            .p_4()
+                            .bg(cx.theme().background)
+                            .border_1()
+                            .border_color(cx.theme().border)
+                            .rounded_lg()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("No overdue deadlines. You're on track!"),
+                            ),
+                    );
+                } else {
+                    for d in &overdue_deadlines {
+                        let days_overdue = d
+                            .final_deadline_date()
+                            .map(|date| (today - date).num_days())
+                            .unwrap_or(0);
+                        let deadline_date = d.final_deadline_date();
+                        let month_label = deadline_date
+                            .map(|date| date.format("%b").to_string().to_uppercase())
+                            .unwrap_or_else(|| "--".to_string());
+                        let day_label = deadline_date
+                            .map(|date| date.format("%d").to_string())
+                            .unwrap_or_else(|| "--".to_string());
+
+                        overdue_col = overdue_col.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_4()
+                                .p_3()
+                                .bg(gpui::hsla(0.0, 0.9, 0.97, 1.0))
+                                .border_1()
+                                .border_color(gpui::hsla(0.0, 0.8, 0.85, 1.0))
+                                .rounded_lg()
+                                .child(
+                                    // Date badge
+                                    div()
+                                        .w(px(56.))
+                                        .h(px(56.))
+                                        .flex()
+                                        .flex_col()
+                                        .items_center()
+                                        .justify_center()
+                                        .bg(gpui::hsla(0.0, 0.8, 0.93, 1.0))
+                                        .border_1()
+                                        .border_color(gpui::hsla(0.0, 0.7, 0.85, 1.0))
+                                        .rounded_md()
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .font_weight(FontWeight::BOLD)
+                                                .text_color(gpui::hsla(0.0, 0.8, 0.4, 1.0))
+                                                .child(month_label),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xl()
+                                                .font_weight(FontWeight::BLACK)
+                                                .text_color(gpui::hsla(0.0, 0.8, 0.4, 1.0))
+                                                .child(day_label),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_1()
+                                        .child(
+                                            div()
+                                                .flex()
+                                                .items_center()
+                                                .gap_2()
+                                                .child(
+                                                    div()
+                                                        .text_base()
+                                                        .font_weight(FontWeight::BOLD)
+                                                        .text_color(gpui::hsla(0.0, 0.8, 0.4, 1.0))
+                                                        .child(d.display_form_no.clone()),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_xs()
+                                                        .px_2()
+                                                        .py(px(2.))
+                                                        .bg(gpui::hsla(0.0, 0.8, 0.5, 1.0))
+                                                        .text_color(gpui::white())
+                                                        .rounded(px(4.))
+                                                        .child(format!(
+                                                            "{} day{} overdue",
+                                                            days_overdue,
+                                                            if days_overdue == 1 {
+                                                                ""
+                                                            } else {
+                                                                "s"
+                                                            }
+                                                        )),
+                                                ),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child(d.form_name.clone()),
+                                        ),
+                                ),
+                        );
+                    }
+                }
+
+                // Build action required column
+                let mut action_col = div().flex_1().flex().flex_col().gap_4().child(
+                    div()
+                        .text_xl()
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(cx.theme().foreground)
+                        .child("Action Required"),
+                );
+
+                if self.actionable_forms.is_empty() {
+                    action_col = action_col.child(
+                        div()
+                            .p_4()
+                            .bg(cx.theme().background)
+                            .border_1()
+                            .border_color(cx.theme().border)
+                            .rounded_lg()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("No pending forms. All caught up!"),
+                            ),
+                    );
+                } else {
+                    for (_p, f) in &self.actionable_forms {
+                        let period_label = if let Some(q) = f.quarter {
+                            format!("Q{}", q)
+                        } else if let Some(m) = f.month {
+                            Self::month_num_to_full_label(m).unwrap_or_else(|| format!("M{}", m))
+                        } else {
+                            "Annual".to_string()
+                        };
+
+                        let status_color = match f.status {
+                            bir_core::forms::FilingStatus::Draft => gpui::hsla(0.13, 0.9, 0.5, 1.0),
+                            bir_core::forms::FilingStatus::Queued => {
+                                gpui::hsla(0.58, 0.7, 0.5, 1.0)
+                            }
+                            bir_core::forms::FilingStatus::Submitted => {
+                                gpui::hsla(0.33, 0.7, 0.45, 1.0)
+                            }
+                            _ => cx.theme().muted_foreground,
+                        };
+
+                        // Look up the deadline date for this form
+                        let deadline_date = self.deadlines.iter().find_map(|d| {
+                            if d.form_code != f.form_code {
+                                return None;
+                            }
+                            // Match by period
+                            match &d.period {
+                                bir_core::calendar_rules::DeadlinePeriod::Monthly {
+                                    month, ..
+                                } => {
+                                    if f.month == Some(*month) {
+                                        d.final_deadline_date()
+                                    } else {
+                                        None
+                                    }
+                                }
+                                bir_core::calendar_rules::DeadlinePeriod::Quarterly {
+                                    quarter,
+                                    ..
+                                } => {
+                                    if f.quarter == Some(*quarter) {
+                                        d.final_deadline_date()
+                                    } else {
+                                        None
+                                    }
+                                }
+                                bir_core::calendar_rules::DeadlinePeriod::Annual { .. } => {
+                                    d.final_deadline_date()
+                                }
+                                bir_core::calendar_rules::DeadlinePeriod::EventBased => None,
+                            }
+                        });
+
+                        let month_label = deadline_date
+                            .map(|date| date.format("%b").to_string().to_uppercase())
+                            .unwrap_or_else(|| "--".to_string());
+                        let day_label = deadline_date
+                            .map(|date| date.format("%d").to_string())
+                            .unwrap_or_else(|| "--".to_string());
+
+                        action_col = action_col.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_4()
+                                .p_3()
+                                .bg(cx.theme().background)
+                                .border_1()
+                                .border_color(cx.theme().border)
+                                .rounded_lg()
+                                .child(
+                                    // Date badge
+                                    div()
+                                        .w(px(56.))
+                                        .h(px(56.))
+                                        .flex()
+                                        .flex_col()
+                                        .items_center()
+                                        .justify_center()
+                                        .bg(cx.theme().secondary)
+                                        .border_1()
+                                        .border_color(cx.theme().border)
+                                        .rounded_md()
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .font_weight(FontWeight::BOLD)
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child(month_label),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xl()
+                                                .font_weight(FontWeight::BLACK)
+                                                .text_color(cx.theme().foreground)
+                                                .child(day_label),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_1()
+                                        .child(
+                                            div()
+                                                .flex()
+                                                .items_center()
+                                                .gap_2()
+                                                .child(
+                                                    div()
+                                                        .text_base()
+                                                        .font_weight(FontWeight::BOLD)
+                                                        .text_color(cx.theme().foreground)
+                                                        .child(format!(
+                                                            "{} - {} {}",
+                                                            f.form_code,
+                                                            f.taxable_year,
+                                                            period_label
+                                                        )),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_xs()
+                                                        .px_2()
+                                                        .py(px(2.))
+                                                        .bg(status_color)
+                                                        .text_color(gpui::white())
+                                                        .rounded(px(4.))
+                                                        .child(format!("{:?}", f.status)),
+                                                ),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child(format!(
+                                                    "Due: {}",
+                                                    deadline_date
+                                                        .map(|d| d.format("%b %d, %Y").to_string())
+                                                        .unwrap_or_else(|| "N/A".to_string())
+                                                )),
+                                        ),
+                                ),
+                        );
+                    }
+                }
+
+                div()
+                    .flex()
+                    .flex_row()
+                    .gap_6()
+                    .child(
+                        div()
+                            .flex_1()
+                            .flex()
+                            .flex_col()
+                            .gap_4()
+                            .child(
+                                div()
+                                    .text_xl()
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_color(cx.theme().foreground)
+                                    .child(deadline_header.clone()),
+                            )
+                            .child(self.upcoming_deadlines_list.clone()),
+                    )
+                    .child(action_col)
+                    .child(overdue_col)
+            }
+            ProfileTab::Forms => forms_ui,
         };
 
         // Build subtitle with active period filters
@@ -960,10 +1424,58 @@ impl Render for DashboardView {
                             .gap_4()
                             .child(
                                 div()
-                                    .text_xl()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(cx.theme().foreground)
-                                    .child("Tax Form Library"),
+                                    .flex()
+                                    .gap_4()
+                                    .child(
+                                        div()
+                                            .id("tab_calendar")
+                                            .p_2()
+                                            .border_b_2()
+                                            .border_color(
+                                                if matches!(self.active_tab, ProfileTab::Calendar) {
+                                                    cx.theme().primary
+                                                } else {
+                                                    gpui::transparent_black()
+                                                },
+                                            )
+                                            .cursor_pointer()
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.active_tab = ProfileTab::Calendar;
+                                                cx.notify();
+                                            }))
+                                            .child(
+                                                div()
+                                                    .text_xl()
+                                                    .font_weight(FontWeight::BOLD)
+                                                    .text_color(cx.theme().foreground)
+                                                    .child("Calendar"),
+                                            ),
+                                    )
+                                    .child(
+                                        div()
+                                            .id("tab_forms")
+                                            .p_2()
+                                            .border_b_2()
+                                            .border_color(
+                                                if matches!(self.active_tab, ProfileTab::Forms) {
+                                                    cx.theme().primary
+                                                } else {
+                                                    gpui::transparent_black()
+                                                },
+                                            )
+                                            .cursor_pointer()
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.active_tab = ProfileTab::Forms;
+                                                cx.notify();
+                                            }))
+                                            .child(
+                                                div()
+                                                    .text_xl()
+                                                    .font_weight(FontWeight::BOLD)
+                                                    .text_color(cx.theme().foreground)
+                                                    .child("Tax Form Library"),
+                                            ),
+                                    ),
                             )
                             .child(main_content),
                     ),
@@ -1059,6 +1571,24 @@ impl DashboardView {
             10 => Some("Oct".into()),
             11 => Some("Nov".into()),
             12 => Some("Dec".into()),
+            _ => None,
+        }
+    }
+
+    fn month_num_to_full_label(num: u8) -> Option<String> {
+        match num {
+            1 => Some("January".into()),
+            2 => Some("February".into()),
+            3 => Some("March".into()),
+            4 => Some("April".into()),
+            5 => Some("May".into()),
+            6 => Some("June".into()),
+            7 => Some("July".into()),
+            8 => Some("August".into()),
+            9 => Some("September".into()),
+            10 => Some("October".into()),
+            11 => Some("November".into()),
+            12 => Some("December".into()),
             _ => None,
         }
     }

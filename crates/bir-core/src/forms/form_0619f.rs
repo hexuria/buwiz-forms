@@ -7,8 +7,15 @@
 //! ⚠️ ScaffoldOnly — formula evidence not yet verified
 
 use crate::forms::{FilingStatus, FormValidator};
+use crate::penalties::{
+    PenaltyConfig, PenaltyContext, PenaltyEngine, PenaltyProfile, TaxpayerClass,
+};
 use crate::profile::TaxpayerProfile;
 use serde::{Deserialize, Serialize};
+
+fn default_true() -> bool {
+    true
+}
 
 /// Complete draft for Form 0619F.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -116,6 +123,10 @@ pub struct Form0619FDraft {
     /// BIR: `frm0619F:txtTaxTypeCode` (sample: `WB`)
     pub txt_tax_type_code: String,
 
+    // === Penalty Control ===
+    #[serde(default = "default_true")]
+    pub auto_compute_penalties: bool,
+
     // === Lifecycle ===
     pub status: FilingStatus,
     pub created_at: String,
@@ -203,6 +214,7 @@ impl Form0619FDraft {
             txt_tax18d: 0.0,
             txt_tax19: 0.0,
             txt_tax_type_code: String::new(),
+            auto_compute_penalties: true,
             status: FilingStatus::Draft,
             created_at: now.clone(),
             updated_at: now,
@@ -231,6 +243,46 @@ impl Form0619FDraft {
 
         // Item 17: Tax Still Due (cannot be negative per BIR)
         self.txt_tax17 = (self.txt_tax15 - self.txt_tax16).max(0.0);
+
+        // Auto-compute penalties if enabled and still in Draft
+        if self.auto_compute_penalties && matches!(self.status, FilingStatus::Draft) {
+            // 0619F monthly deadline: 10th of the following month
+            let (deadline_year, deadline_month) = if self.month == 12 {
+                (self.taxable_year as i32 + 1, 1u32)
+            } else {
+                (self.taxable_year as i32, self.month as u32 + 1)
+            };
+
+            if let Some(deadline) =
+                chrono::NaiveDate::from_ymd_opt(deadline_year, deadline_month, 10)
+            {
+                let today = chrono::Local::now().date_naive();
+                let config = PenaltyConfig::default_rules();
+
+                let penalty_tax_base = self.txt_tax17.max(0.0);
+
+                let ctx = PenaltyContext {
+                    form_code: "0619F".to_string(),
+                    tax_type: PenaltyProfile::Withholding,
+                    taxpayer_class: TaxpayerClass::Regular,
+                    taxable_period: format!("M{:02} {}", self.month, self.taxable_year),
+                    is_amended_return: self.is_amended,
+                    original_was_on_time: false,
+                    is_fraud_or_willful_neglect: false,
+                    basic_tax_due: penalty_tax_base,
+                    amount_paid_before_deadline: 0.0,
+                    gross_sales_or_receipts: self.txt_tax13,
+                    due_date: deadline,
+                    filing_date: today,
+                    payment_date: None,
+                };
+
+                let penalties = PenaltyEngine::calculate(&ctx, &config);
+                self.txt_tax18a = penalties.surcharge;
+                self.txt_tax18b = penalties.interest;
+                self.txt_tax18c = penalties.compromise;
+            }
+        }
 
         // Item 18D: Total Penalties
         self.txt_tax18d = self.txt_tax18a + self.txt_tax18b + self.txt_tax18c;

@@ -1,3 +1,4 @@
+pub mod admin_calendar_dashboard;
 pub mod cron_tasks;
 pub mod dashboard;
 pub mod debug_log_viewer;

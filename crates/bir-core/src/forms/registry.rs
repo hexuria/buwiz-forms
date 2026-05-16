@@ -388,7 +388,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         code: "2552",
         title: "Percentage Tax Return on Transactions Involving Shares of Stock",
         category: "Percentage Tax",
-        frequency: FilingFrequency::Quarterly,
+        frequency: FilingFrequency::OpenEnded,
         taxpayer_types: &[
             TaxpayerType::Individual,
             TaxpayerType::Corporation,
@@ -402,7 +402,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         code: "2553",
         title: "Percentage Tax Payable Under Special Laws",
         category: "Percentage Tax",
-        frequency: FilingFrequency::Quarterly,
+        frequency: FilingFrequency::OpenEnded,
         taxpayer_types: &[
             TaxpayerType::Individual,
             TaxpayerType::Corporation,

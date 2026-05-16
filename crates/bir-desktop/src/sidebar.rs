@@ -725,6 +725,28 @@ impl AppState {
                     )
                     .child(
                         div()
+                            .id("admin_calendar_sidebar_btn")
+                            .flex()
+                            .items_center()
+                            .w_full()
+                            .cursor_pointer()
+                            .hover(|s| s.bg(cx.theme().muted))
+                            .when(is_mini, |this| {
+                                this.justify_center().size(px(48.)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
+                            })
+                            .when(!is_mini, |this| {
+                                this.justify_start().h_10().px_3().gap_3().rounded_md().bg(cx.theme().secondary)
+                            })
+                            .on_click(cx.listener(|this, _ev, window, cx| {
+                                this.request_admin_access(ActiveView::AdminCalendarDashboard, window, cx);
+                            }))
+                            .child(Icon::new(IconName::Calendar).size(px(20.)).text_color(cx.theme().foreground))
+                            .when(!is_mini, |this| {
+                                this.child(div().text_sm().text_color(cx.theme().foreground).child("Tax Calendars"))
+                            })
+                    )
+                    .child(
+                        div()
                             .id("settings_sidebar_btn")
                             .flex()
                             .items_center()

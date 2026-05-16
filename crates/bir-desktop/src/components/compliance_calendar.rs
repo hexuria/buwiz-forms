@@ -1,4 +1,5 @@
-use bir_core::db::{BirNotice, TaxDeadline};
+use bir_core::calendar_rules::{DeadlineKind, DeadlineStatus, ResolvedTaxDeadline};
+use bir_core::db::BirNotice;
 use chrono::{Datelike, Local, NaiveDate};
 use gpui::prelude::*;
 use gpui::*;
@@ -12,7 +13,7 @@ pub struct ComplianceCalendar {
     pub current_month: NaiveDate,
 
     // Extracted props so it can hold the data temporarily during render
-    deadlines: Vec<TaxDeadline>,
+    deadlines: Vec<ResolvedTaxDeadline>,
     announcements: Vec<BirNotice>,
 }
 
@@ -38,7 +39,7 @@ impl ComplianceCalendar {
         }
     }
 
-    pub fn set_data(&mut self, deadlines: Vec<TaxDeadline>, announcements: Vec<BirNotice>) {
+    pub fn set_data(&mut self, deadlines: Vec<ResolvedTaxDeadline>, announcements: Vec<BirNotice>) {
         self.deadlines = deadlines;
         self.announcements = announcements;
     }
@@ -239,19 +240,21 @@ impl ComplianceCalendar {
         div().relative().child(filter_button).child(dropdown)
     }
 
-    fn filtered_deadlines(&self) -> Vec<&TaxDeadline> {
+    fn filtered_deadlines(&self) -> Vec<&ResolvedTaxDeadline> {
         let mut filtered: Vec<_> = if self.filters.contains("All") {
             self.deadlines.iter().collect()
         } else {
             self.deadlines
                 .iter()
-                .filter(|d| self.filters.contains(&d.form_type))
+                .filter(|d| self.filters.contains(&d.form_code))
                 .collect()
         };
 
+        // Event-based deadlines have no calendar date; exclude from grid/schedule views
+        filtered.retain(|d| d.final_deadline_date().is_some());
+
         if let Some(date) = self.selected_date {
-            let date_str = date.format("%Y-%m-%d").to_string();
-            filtered.retain(|d| d.due_date == date_str);
+            filtered.retain(|d| d.final_deadline_date() == Some(date));
         }
 
         filtered
@@ -284,7 +287,15 @@ impl ComplianceCalendar {
                 let has_update = self
                     .announcements
                     .iter()
-                    .any(|a| a.title.contains(&d.form_type) || a.body.contains(&d.form_type));
+                    .any(|a| a.title.contains(&d.form_code) || a.body.contains(&d.form_code));
+
+                let deadline_date = d.final_deadline_date();
+                let date_label = deadline_date
+                    .map(|date| date.format("%b").to_string().to_uppercase())
+                    .unwrap_or_else(|| "EVT".to_string());
+                let day_label = deadline_date
+                    .map(|date| date.format("%d").to_string())
+                    .unwrap_or_else(|| "--".to_string());
 
                 let date_card = div()
                     .group("list-item")
@@ -318,22 +329,14 @@ impl ComplianceCalendar {
                                     .text_xs()
                                     .font_weight(FontWeight::BOLD)
                                     .text_color(cx.theme().primary)
-                                    .child(
-                                        chrono::NaiveDate::parse_from_str(&d.due_date, "%Y-%m-%d")
-                                            .map(|date| {
-                                                date.format("%b").to_string().to_uppercase()
-                                            })
-                                            .unwrap_or_else(|_| {
-                                                d.due_date[5..7].to_string().to_uppercase()
-                                            }),
-                                    ),
+                                    .child(date_label),
                             ) // month
                             .child(
                                 div()
                                     .text_xl()
                                     .font_weight(FontWeight::BLACK)
                                     .text_color(cx.theme().primary)
-                                    .child(d.due_date[8..10].to_string()),
+                                    .child(day_label),
                             ), // day
                     )
                     .child(
@@ -352,7 +355,7 @@ impl ComplianceCalendar {
                                             .text_base()
                                             .font_weight(FontWeight::BOLD)
                                             .text_color(cx.theme().foreground)
-                                            .child(d.form_type.clone()),
+                                            .child(d.display_form_no.clone()),
                                     )
                                     .children(if has_update {
                                         Some(
@@ -376,14 +379,61 @@ impl ComplianceCalendar {
                                         )
                                     } else {
                                         None
+                                    })
+                                    .children(if d.status != DeadlineStatus::Normal {
+                                        Some(
+                                            div()
+                                                .px_2()
+                                                .py_0p5()
+                                                .bg(cx.theme().primary.opacity(0.1))
+                                                .border_1()
+                                                .border_color(cx.theme().primary.opacity(0.2))
+                                                .rounded_full()
+                                                .flex()
+                                                .items_center()
+                                                .gap_1()
+                                                .child(
+                                                    div()
+                                                        .text_xs()
+                                                        .font_weight(FontWeight::SEMIBOLD)
+                                                        .text_color(cx.theme().primary)
+                                                        .child(d.status.label()),
+                                                ),
+                                        )
+                                    } else {
+                                        None
                                     }),
                             )
                             .child(
                                 div()
                                     .text_sm()
                                     .text_color(cx.theme().muted_foreground)
-                                    .child(d.description.clone()),
-                            ),
+                                    .child(d.form_name.clone()),
+                            )
+                            .children(match &d.deadline {
+                                DeadlineKind::Dated {
+                                    original_deadline,
+                                    final_deadline,
+                                } if original_deadline != final_deadline => Some(
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child(format!(
+                                            "Originally due on: {}",
+                                            original_deadline.format("%Y-%m-%d")
+                                        )),
+                                ),
+                                DeadlineKind::EventBased {
+                                    trigger,
+                                    statutory_window,
+                                } => Some(
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child(format!("{trigger} · {statutory_window}")),
+                                ),
+                                _ => None,
+                            }),
                     );
                 schedule_list = schedule_list.child(date_card);
             }
@@ -469,13 +519,6 @@ impl ComplianceCalendar {
                     );
                 } else {
                     let day = (slot - start_weekday + 1) as i64;
-                    let date_str = format!(
-                        "{:04}-{:02}-{:02}",
-                        self.current_month.year(),
-                        self.current_month.month(),
-                        day
-                    );
-
                     let current_date = NaiveDate::from_ymd_opt(
                         self.current_month.year(),
                         self.current_month.month(),
@@ -485,7 +528,7 @@ impl ComplianceCalendar {
 
                     let day_deadlines: Vec<_> = deadlines
                         .iter()
-                        .filter(|d| d.due_date == date_str)
+                        .filter(|d| d.final_deadline_date() == Some(current_date))
                         .collect();
 
                     let is_today = today == current_date;
