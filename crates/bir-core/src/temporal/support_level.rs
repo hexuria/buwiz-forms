@@ -5,7 +5,9 @@
 
 use serde::{Deserialize, Serialize};
 
-const FILEABLE_FORM_CODES: &[&str] = &["2551Q", "1601C"];
+const FILEABLE_FORM_CODES: &[&str] = &[
+    "2551Q", "1601C", "2550Q", "1701Q", "1702RT", "1702MX", "1701", "0605", "0619E", "0619F",
+];
 
 /// Whether the app can actually draft/file this form.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,12 +49,9 @@ pub fn form_support_level(form_code: &str) -> FormSupportLevel {
         return FormSupportLevel::ImplementedInApp;
     }
 
-    match form_code {
-        "0605" | "0619E" | "0619F" | "1701Q" | "2550Q" | "1701" | "1702RT" | "1702MX" => {
-            FormSupportLevel::ScaffoldOnly
-        }
-        _ => FormSupportLevel::ExternalOrManualOnly,
-    }
+    // All scaffold forms have been promoted. Remaining form codes
+    // are external-only until savefiles are acquired.
+    FormSupportLevel::ExternalOrManualOnly
 }
 
 /// Whether the app may place this form in the background submission queue.
@@ -65,6 +64,14 @@ pub fn fileable_form_type_id(form_code: &str) -> Option<&'static str> {
     match form_code {
         "2551Q" => Some("2551Qv2018"),
         "1601C" => Some("1601Cv2018"),
+        "2550Q" => Some("2550Qv2024"),
+        "1701Q" => Some("1701Qv2018"),
+        "1702RT" => Some("1702RTv2018C"),
+        "1702MX" => Some("1702MXv2018C"),
+        "1701" => Some("1701v2018"),
+        "0605" => Some("0605v1999"),
+        "0619E" => Some("0619Ev2018"),
+        "0619F" => Some("0619Fv2018"),
         _ => None,
     }
 }
@@ -94,13 +101,12 @@ mod tests {
     }
 
     #[test]
-    fn test_generated_forms_are_scaffold_only() {
-        for form_code in [
-            "0605", "0619E", "0619F", "1701Q", "2550Q", "1701", "1702RT", "1702MX",
-        ] {
+    fn test_no_more_scaffold_only_forms() {
+        // All originally scaffolded forms have been promoted
+        for form_code in ["0605", "0619E", "0619F"] {
             let support = form_support_level(form_code);
-            assert_eq!(support, FormSupportLevel::ScaffoldOnly);
-            assert!(!support.is_fileable_in_app());
+            assert_eq!(support, FormSupportLevel::ImplementedInApp);
+            assert!(support.is_fileable_in_app());
         }
     }
 
@@ -131,14 +137,17 @@ mod tests {
 
     #[test]
     fn test_queue_allowlist_matches_support_level() {
-        for form_code in [
-            "0605", "0619E", "0619F", "1701Q", "2550Q", "1701", "1702RT", "1702MX",
-        ] {
+        // Unimplemented forms cannot be queued
+        for form_code in ["1700", "2316", "9999"] {
             assert!(!can_queue_for_submission(form_code));
             assert_eq!(fileable_form_type_id(form_code), None);
         }
 
-        for form_code in ["2551Q", "1601C"] {
+        // All implemented forms can be queued
+        for form_code in [
+            "2551Q", "1601C", "2550Q", "1701Q", "1702RT", "1702MX", "1701", "0605", "0619E",
+            "0619F",
+        ] {
             assert!(can_queue_for_submission(form_code));
             assert!(form_support_level(form_code).is_fileable_in_app());
             assert!(fileable_form_type_id(form_code).is_some());

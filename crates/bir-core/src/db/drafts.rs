@@ -83,9 +83,10 @@ mod tests {
     #[test]
     fn scaffold_forms_reject_queue_persistence() {
         let db = test_db();
+        // Use a form that is still ExternalOrManualOnly (1700 is not implemented in-app)
         let result = db.save_form_draft_v2(
             "123456789000",
-            "1702RT",
+            "1700",
             2026,
             &FilingPeriod::Annual,
             &FilingStatus::Queued,

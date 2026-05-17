@@ -1,0 +1,1271 @@
+{
+  "form_id": "0605v1999",
+  "page_width": 612.0,
+  "page_height": 936.0,
+  "fields": [
+    {
+      "key": "_field_000",
+      "kind": "char",
+      "page": 1,
+      "x": 13.4,
+      "y": 682.3,
+      "widget": {
+        "type": "text",
+        "width": 98.5,
+        "height": 27.6,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_002",
+      "kind": "char",
+      "page": 1,
+      "x": 126.0,
+      "y": 682.3,
+      "widget": {
+        "type": "text",
+        "width": 453.9,
+        "height": 27.6,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_003",
+      "kind": "char",
+      "page": 1,
+      "x": 30.2,
+      "y": 246.1,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 38.6,
+        "height": 19.0,
+        "max_length": 2,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_004",
+      "kind": "char",
+      "page": 1,
+      "x": 324.0,
+      "y": 778.1,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 52.7,
+        "height": 19.0,
+        "max_length": 3,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_005",
+      "kind": "char",
+      "page": 1,
+      "x": 109.1,
+      "y": 149.5,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 56.6,
+        "height": 19.0,
+        "max_length": 4,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_006",
+      "kind": "char",
+      "page": 1,
+      "x": 92.5,
+      "y": 272.3,
+      "widget": {
+        "type": "text",
+        "width": 358.4,
+        "height": 19.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_007",
+      "kind": "char",
+      "page": 1,
+      "x": 404.3,
+      "y": 507.8,
+      "widget": {
+        "type": "text",
+        "width": 171.8,
+        "height": 20.4,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_008",
+      "kind": "char",
+      "page": 1,
+      "x": 404.3,
+      "y": 483.4,
+      "widget": {
+        "type": "text",
+        "width": 171.8,
+        "height": 21.6,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_009",
+      "kind": "char",
+      "page": 1,
+      "x": 293.3,
+      "y": 484.7,
+      "widget": {
+        "type": "text",
+        "width": 94.4,
+        "height": 21.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_010",
+      "kind": "bool",
+      "page": 1,
+      "x": 272.8,
+      "y": 379.6,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 12.6,
+        "height": 10.9
+      }
+    },
+    {
+      "key": "_field_011",
+      "kind": "bool",
+      "page": 1,
+      "x": 272.8,
+      "y": 367.2,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 12.6,
+        "height": 10.9
+      }
+    },
+    {
+      "key": "_field_012",
+      "kind": "char",
+      "page": 1,
+      "x": 321.6,
+      "y": 185.9,
+      "widget": {
+        "type": "text",
+        "width": 254.5,
+        "height": 19.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_014",
+      "kind": "bool",
+      "page": 1,
+      "x": 63.4,
+      "y": 137.2,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 12.6,
+        "height": 10.2
+      }
+    },
+    {
+      "key": "_field_015",
+      "kind": "bool",
+      "page": 1,
+      "x": 120.8,
+      "y": 137.2,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 12.6,
+        "height": 10.2
+      }
+    },
+    {
+      "key": "_field_016",
+      "kind": "char",
+      "page": 1,
+      "x": 40.6,
+      "y": 185.9,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 31.4,
+        "height": 19.7,
+        "max_length": 2,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_017",
+      "kind": "char",
+      "page": 1,
+      "x": 404.3,
+      "y": 453.5,
+      "widget": {
+        "type": "text",
+        "width": 171.8,
+        "height": 21.8,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_018",
+      "kind": "char",
+      "page": 1,
+      "x": 269.6,
+      "y": 778.1,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 26.8,
+        "height": 19.0,
+        "max_length": 1,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_019",
+      "kind": "char",
+      "page": 1,
+      "x": 464.3,
+      "y": 149.5,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 30.7,
+        "height": 19.0,
+        "max_length": 2,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_020",
+      "kind": "char",
+      "page": 1,
+      "x": 72.0,
+      "y": 185.9,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 31.6,
+        "height": 19.7,
+        "max_length": 2,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_021",
+      "kind": "char",
+      "page": 1,
+      "x": 82.3,
+      "y": 149.5,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 26.8,
+        "height": 19.0,
+        "max_length": 1,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_022",
+      "kind": "char",
+      "page": 1,
+      "x": 103.6,
+      "y": 185.9,
+      "widget": {
+        "type": "text",
+        "width": 62.2,
+        "height": 19.7,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_023",
+      "kind": "char",
+      "page": 1,
+      "x": 357.8,
+      "y": 149.5,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 55.9,
+        "height": 19.0,
+        "max_length": 3,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_024",
+      "kind": "char",
+      "page": 1,
+      "x": 304.3,
+      "y": 149.5,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 26.8,
+        "height": 19.0,
+        "max_length": 1,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_025",
+      "kind": "char",
+      "page": 1,
+      "x": 331.1,
+      "y": 149.5,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 26.8,
+        "height": 19.0,
+        "max_length": 1,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_026",
+      "kind": "char",
+      "page": 1,
+      "x": 81.5,
+      "y": 246.1,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 40.1,
+        "height": 19.0,
+        "max_length": 2,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_027",
+      "kind": "char",
+      "page": 1,
+      "x": 134.2,
+      "y": 246.1,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 38.5,
+        "height": 19.0,
+        "max_length": 2,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_028",
+      "kind": "char",
+      "page": 1,
+      "x": 183.0,
+      "y": 246.1,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 40.9,
+        "height": 19.0,
+        "max_length": 2,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_029",
+      "kind": "char",
+      "page": 1,
+      "x": 397.9,
+      "y": 701.3,
+      "widget": {
+        "type": "text",
+        "width": 178.2,
+        "height": 20.3,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_030",
+      "kind": "char",
+      "page": 1,
+      "x": 397.9,
+      "y": 778.1,
+      "widget": {
+        "type": "text",
+        "width": 178.2,
+        "height": 19.7,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_031",
+      "kind": "char",
+      "page": 1,
+      "x": 269.6,
+      "y": 754.9,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 26.8,
+        "height": 18.1,
+        "max_length": 1,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_032",
+      "kind": "char",
+      "page": 1,
+      "x": 296.4,
+      "y": 754.9,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 27.6,
+        "height": 18.1,
+        "max_length": 1,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_033",
+      "kind": "char",
+      "page": 1,
+      "x": 324.0,
+      "y": 754.9,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 52.7,
+        "height": 18.1,
+        "max_length": 3,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_034",
+      "kind": "char",
+      "page": 1,
+      "x": 397.9,
+      "y": 753.5,
+      "widget": {
+        "type": "text",
+        "width": 178.2,
+        "height": 20.3,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_035",
+      "kind": "char",
+      "page": 1,
+      "x": 172.7,
+      "y": 754.9,
+      "widget": {
+        "type": "text",
+        "width": 68.5,
+        "height": 18.8,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_036",
+      "kind": "char",
+      "page": 1,
+      "x": 172.7,
+      "y": 778.8,
+      "widget": {
+        "type": "text",
+        "width": 68.5,
+        "height": 18.2,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_037",
+      "kind": "char",
+      "page": 1,
+      "x": 75.2,
+      "y": 778.8,
+      "widget": {
+        "type": "text",
+        "width": 76.3,
+        "height": 18.2,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_038",
+      "kind": "char",
+      "page": 1,
+      "x": 85.4,
+      "y": 310.1,
+      "widget": {
+        "type": "text",
+        "width": 365.5,
+        "height": 18.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_039",
+      "kind": "char",
+      "page": 1,
+      "x": 170.4,
+      "y": 484.7,
+      "widget": {
+        "type": "text",
+        "width": 106.3,
+        "height": 21.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_040",
+      "kind": "char",
+      "page": 1,
+      "x": 48.5,
+      "y": 484.1,
+      "widget": {
+        "type": "text",
+        "width": 106.9,
+        "height": 21.6,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_042",
+      "kind": "char",
+      "page": 1,
+      "x": 269.6,
+      "y": 754.9,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 26.8,
+        "height": 18.1,
+        "max_length": 1,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_043",
+      "kind": "char",
+      "page": 1,
+      "x": 296.4,
+      "y": 778.1,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 27.6,
+        "height": 19.0,
+        "max_length": 1,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_044",
+      "kind": "char",
+      "page": 1,
+      "x": 324.0,
+      "y": 727.3,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 52.7,
+        "height": 19.0,
+        "max_length": 3,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_045",
+      "kind": "char",
+      "page": 1,
+      "x": 269.6,
+      "y": 727.3,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 26.8,
+        "height": 19.0,
+        "max_length": 1,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_046",
+      "kind": "char",
+      "page": 1,
+      "x": 397.9,
+      "y": 727.3,
+      "widget": {
+        "type": "text",
+        "width": 178.2,
+        "height": 19.7,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_047",
+      "kind": "char",
+      "page": 1,
+      "x": 172.7,
+      "y": 728.0,
+      "widget": {
+        "type": "text",
+        "width": 68.5,
+        "height": 18.2,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_048",
+      "kind": "char",
+      "page": 1,
+      "x": 75.2,
+      "y": 728.0,
+      "widget": {
+        "type": "text",
+        "width": 76.3,
+        "height": 18.2,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_049",
+      "kind": "char",
+      "page": 1,
+      "x": 296.4,
+      "y": 727.3,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 27.6,
+        "height": 19.0,
+        "max_length": 1,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_050",
+      "kind": "char",
+      "page": 1,
+      "x": 518.5,
+      "y": 149.5,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 57.6,
+        "height": 19.0,
+        "max_length": 4,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_051",
+      "kind": "char",
+      "page": 1,
+      "x": 472.9,
+      "y": 281.0,
+      "widget": {
+        "type": "text",
+        "width": 103.2,
+        "height": 19.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_052",
+      "kind": "char",
+      "page": 1,
+      "x": 518.5,
+      "y": 309.4,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 57.6,
+        "height": 18.7,
+        "max_length": 4,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_053",
+      "kind": "bool",
+      "page": 1,
+      "x": 28.7,
+      "y": 391.9,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 11.9,
+        "height": 11.6
+      }
+    },
+    {
+      "key": "_field_054",
+      "kind": "bool",
+      "page": 1,
+      "x": 28.7,
+      "y": 379.6,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 11.9,
+        "height": 10.9
+      }
+    },
+    {
+      "key": "_field_055",
+      "kind": "bool",
+      "page": 1,
+      "x": 28.7,
+      "y": 367.2,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 11.9,
+        "height": 10.9
+      }
+    },
+    {
+      "key": "_field_056",
+      "kind": "bool",
+      "page": 1,
+      "x": 470.6,
+      "y": 382.4,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 12.5,
+        "height": 10.9
+      }
+    },
+    {
+      "key": "_field_057",
+      "kind": "bool",
+      "page": 1,
+      "x": 470.6,
+      "y": 403.6,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 12.5,
+        "height": 10.9
+      }
+    },
+    {
+      "key": "_field_058",
+      "kind": "bool",
+      "page": 1,
+      "x": 470.6,
+      "y": 369.4,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 12.5,
+        "height": 10.9
+      }
+    },
+    {
+      "key": "_field_059",
+      "kind": "bool",
+      "page": 1,
+      "x": 470.6,
+      "y": 356.3,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 12.5,
+        "height": 10.9
+      }
+    },
+    {
+      "key": "_field_060",
+      "kind": "bool",
+      "page": 1,
+      "x": 184.6,
+      "y": 149.5,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 12.6,
+        "height": 10.2
+      }
+    },
+    {
+      "key": "_field_061",
+      "kind": "bool",
+      "page": 1,
+      "x": 272.8,
+      "y": 149.5,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 12.6,
+        "height": 10.2
+      }
+    },
+    {
+      "key": "_field_062",
+      "kind": "bool",
+      "page": 1,
+      "x": 243.6,
+      "y": 149.5,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 12.6,
+        "height": 10.2
+      }
+    },
+    {
+      "key": "_field_063",
+      "kind": "bool",
+      "page": 1,
+      "x": 216.0,
+      "y": 149.5,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 12.6,
+        "height": 10.2
+      }
+    },
+    {
+      "key": "_field_064",
+      "kind": "char",
+      "page": 1,
+      "x": 212.2,
+      "y": 186.6,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 29.9,
+        "height": 19.0,
+        "max_length": 2,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_065",
+      "kind": "bool",
+      "page": 1,
+      "x": 28.7,
+      "y": 415.2,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 11.9,
+        "height": 11.6
+      }
+    },
+    {
+      "key": "_field_066",
+      "kind": "bool",
+      "page": 1,
+      "x": 169.6,
+      "y": 367.2,
+      "optional": true,
+      "widget": {
+        "type": "checkbox",
+        "width": 12.6,
+        "height": 10.9
+      }
+    },
+    {
+      "key": "_field_067",
+      "kind": "char",
+      "page": 1,
+      "x": 109.1,
+      "y": 407.9,
+      "widget": {
+        "type": "text",
+        "width": 158.2,
+        "height": 18.2,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_068",
+      "kind": "char",
+      "page": 1,
+      "x": 242.8,
+      "y": 246.1,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 43.4,
+        "height": 19.0,
+        "max_length": 3,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_071",
+      "kind": "char",
+      "page": 1,
+      "x": 418.4,
+      "y": 246.1,
+      "widget": {
+        "type": "text",
+        "width": 158.4,
+        "height": 19.0,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_073",
+      "kind": "char",
+      "page": 2,
+      "x": 22.1,
+      "y": 47.3,
+      "widget": {
+        "type": "text",
+        "width": 400.0,
+        "height": 12.6,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_074",
+      "kind": "char",
+      "page": 2,
+      "x": 422.0,
+      "y": 47.3,
+      "widget": {
+        "type": "text",
+        "width": 169.8,
+        "height": 12.6,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_075",
+      "kind": "char",
+      "page": 2,
+      "x": 22.1,
+      "y": 59.8,
+      "widget": {
+        "type": "text",
+        "width": 257.2,
+        "height": 8.3,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_076",
+      "kind": "char",
+      "page": 2,
+      "x": 279.2,
+      "y": 59.8,
+      "widget": {
+        "type": "text",
+        "width": 142.9,
+        "height": 8.3,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_077",
+      "kind": "char",
+      "page": 2,
+      "x": 422.0,
+      "y": 59.8,
+      "widget": {
+        "type": "text",
+        "width": 169.8,
+        "height": 8.3,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_078",
+      "kind": "char",
+      "page": 2,
+      "x": 22.1,
+      "y": 150.3,
+      "widget": {
+        "type": "text",
+        "width": 257.2,
+        "height": 8.3,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_079",
+      "kind": "char",
+      "page": 2,
+      "x": 279.2,
+      "y": 150.3,
+      "widget": {
+        "type": "text",
+        "width": 142.9,
+        "height": 8.3,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_080",
+      "kind": "char",
+      "page": 2,
+      "x": 422.0,
+      "y": 150.3,
+      "widget": {
+        "type": "text",
+        "width": 169.8,
+        "height": 8.3,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_081",
+      "kind": "char",
+      "page": 2,
+      "x": 22.1,
+      "y": 166.6,
+      "widget": {
+        "type": "text",
+        "width": 200.1,
+        "height": 8.3,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_082",
+      "kind": "char",
+      "page": 2,
+      "x": 279.2,
+      "y": 166.6,
+      "widget": {
+        "type": "text",
+        "width": 142.9,
+        "height": 8.3,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_083",
+      "kind": "char",
+      "page": 2,
+      "x": 422.0,
+      "y": 166.6,
+      "widget": {
+        "type": "text",
+        "width": 169.8,
+        "height": 8.3,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_084",
+      "kind": "char",
+      "page": 2,
+      "x": 22.1,
+      "y": 174.7,
+      "widget": {
+        "type": "text",
+        "width": 457.2,
+        "height": 8.3,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_085",
+      "kind": "char",
+      "page": 2,
+      "x": 479.1,
+      "y": 174.7,
+      "widget": {
+        "type": "text",
+        "width": 112.7,
+        "height": 8.3,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_086",
+      "kind": "char",
+      "page": 2,
+      "x": 22.1,
+      "y": 199.2,
+      "widget": {
+        "type": "text",
+        "width": 457.2,
+        "height": 8.3,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_087",
+      "kind": "char",
+      "page": 2,
+      "x": 479.1,
+      "y": 199.2,
+      "widget": {
+        "type": "text",
+        "width": 112.7,
+        "height": 8.3,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_088",
+      "kind": "char",
+      "page": 2,
+      "x": 22.1,
+      "y": 207.4,
+      "widget": {
+        "type": "text",
+        "width": 257.2,
+        "height": 8.3,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_089",
+      "kind": "char",
+      "page": 2,
+      "x": 279.2,
+      "y": 207.4,
+      "widget": {
+        "type": "text",
+        "width": 142.9,
+        "height": 8.3,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_090",
+      "kind": "char",
+      "page": 2,
+      "x": 422.0,
+      "y": 207.4,
+      "widget": {
+        "type": "text",
+        "width": 169.8,
+        "height": 8.3,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_091",
+      "kind": "char",
+      "page": 2,
+      "x": 22.1,
+      "y": 223.7,
+      "cell_w": 14.0,
+      "widget": {
+        "type": "text",
+        "width": 57.2,
+        "height": 16.4,
+        "max_length": 4,
+        "comb": true,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_092",
+      "kind": "char",
+      "page": 2,
+      "x": 79.2,
+      "y": 223.7,
+      "widget": {
+        "type": "text",
+        "width": 143.0,
+        "height": 16.4,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_093",
+      "kind": "char",
+      "page": 2,
+      "x": 222.1,
+      "y": 223.7,
+      "widget": {
+        "type": "text",
+        "width": 369.8,
+        "height": 16.4,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_094",
+      "kind": "char",
+      "page": 2,
+      "x": 22.1,
+      "y": 248.2,
+      "widget": {
+        "type": "text",
+        "width": 257.2,
+        "height": 8.3,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_095",
+      "kind": "char",
+      "page": 2,
+      "x": 279.2,
+      "y": 248.2,
+      "widget": {
+        "type": "text",
+        "width": 142.9,
+        "height": 8.3,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "_field_096",
+      "kind": "char",
+      "page": 2,
+      "x": 422.0,
+      "y": 248.2,
+      "widget": {
+        "type": "text",
+        "width": 169.8,
+        "height": 8.3,
+        "font_size": 8.5
+      }
+    }
+  ]
+}

@@ -326,17 +326,38 @@ impl FormViewTrait for Form2550QV2View {
         }
     }
 
-    fn mark_submitted(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.status_message = Some(
-            "Preview only: validation, XML submission, persistence, and print layout are not certified."
-                .into(),
-        );
-        cx.emit(Form2550QV2Event::PushNotification(
-            "warning".into(),
-            "Preview Only".into(),
-            "Form 2550Q is scaffold-only and cannot be queued for submission yet.".into(),
-        ));
-        cx.notify();
+    fn mark_submitted(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.sync_from_inputs(cx);
+        use bir_core::forms::FormValidator;
+        let errors = self.draft.validate();
+        if !errors.is_empty() {
+            self.is_validated = true;
+            self.validation_errors = errors;
+            cx.emit(Form2550QV2Event::PushNotification(
+                "warning".into(),
+                "Validation Failed".into(),
+                "Please fix the errors before submitting.".into(),
+            ));
+            cx.notify();
+            return;
+        }
+
+        match self.draft.transition_to_queued() {
+            Ok(()) => {
+                self.save_draft(window, cx);
+                cx.emit(Form2550QV2Event::Submitted);
+            }
+            Err(errs) => {
+                self.is_validated = true;
+                self.validation_errors = errs;
+                cx.emit(Form2550QV2Event::PushNotification(
+                    "warning".into(),
+                    "Cannot Submit".into(),
+                    "Form validation failed. Check the form for errors.".into(),
+                ));
+                cx.notify();
+            }
+        }
     }
 
     fn mark_paid(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -398,9 +419,9 @@ impl Render for Form2550QV2View {
                             )
                             .child(
                                 gpui_component::button::Button::new("submit_btn")
-                                    .label("Preview Only")
+                                    .label("Submit for Filing")
                                     .primary()
-                                    .disabled(true)
+                                    .disabled(!is_draft)
                                     .on_click(
                                         cx.listener(|this, _, w, cx| this.mark_submitted(w, cx)),
                                     ),

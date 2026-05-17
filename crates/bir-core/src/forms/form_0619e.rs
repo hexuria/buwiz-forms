@@ -294,10 +294,15 @@ impl Form0619EDraft {
 
     pub fn transition_to_queued(&mut self) -> Result<(), Vec<(String, String)>> {
         assert!(matches!(self.status, FilingStatus::Draft), "Must be Draft");
-        Err(vec![(
-            "support_level".to_string(),
-            "Form 0619E is scaffold-only and cannot be queued for submission yet.".to_string(),
-        )])
+        let errors = self.validate();
+        if errors.is_empty() {
+            self.recompute();
+            self.status = FilingStatus::Queued;
+            self.updated_at = chrono::Utc::now().to_rfc3339();
+            Ok(())
+        } else {
+            Err(errors)
+        }
     }
 
     pub fn transition_to_submitted(&mut self, filename: String) {

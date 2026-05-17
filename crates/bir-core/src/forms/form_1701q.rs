@@ -105,10 +105,15 @@ impl Form1701QDraft {
 
     pub fn transition_to_queued(&mut self) -> Result<(), Vec<(String, String)>> {
         assert!(matches!(self.status, FilingStatus::Draft), "Must be Draft");
-        Err(vec![(
-            "support_level".to_string(),
-            "Form 1701Q is scaffold-only and cannot be queued for submission yet.".to_string(),
-        )])
+        let errors = self.validate();
+        if errors.is_empty() {
+            self.recompute();
+            self.status = FilingStatus::Queued;
+            self.updated_at = Some(chrono::Utc::now().to_rfc3339());
+            Ok(())
+        } else {
+            Err(errors)
+        }
     }
 
     pub fn transition_to_submitted(&mut self, filename: String) {
@@ -210,16 +215,33 @@ mod tests {
     }
 
     #[test]
-    fn scaffold_transition_rejects_queue() {
+    fn transition_to_queued_succeeds_with_valid_data() {
+        let mut draft = Form1701QDraft {
+            tin: "123456789000".into(),
+            rdo_code: "039".into(),
+            taxpayer_name: "JUAN DELA CRUZ".into(),
+            taxable_year: "2026".into(),
+            quarter: "1".into(),
+            total_tax_due: 100.0,
+            status: FilingStatus::Draft,
+            ..Default::default()
+        };
+
+        draft.transition_to_queued().expect("should queue");
+        assert_eq!(draft.status, FilingStatus::Queued);
+        assert_eq!(draft.total_amount_payable, 100.0);
+    }
+
+    #[test]
+    fn transition_to_queued_rejects_invalid_data() {
         let mut draft = Form1701QDraft {
             status: FilingStatus::Draft,
             ..Default::default()
         };
 
-        let errors = draft.transition_to_queued().expect_err("must stay gated");
-
+        let errors = draft.transition_to_queued().expect_err("must fail validation");
         assert_eq!(draft.status, FilingStatus::Draft);
-        assert_eq!(errors[0].0, "support_level");
+        assert!(!errors.is_empty());
     }
 
     #[test]
