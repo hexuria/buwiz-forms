@@ -41,6 +41,10 @@ let migrations = [
 
 - v6 is a static tax-calendar marker only. Fresh databases should not create the removed calendar CRUD tables (`tax_calendars`, `tax_forms`, `tax_deadline_rules`, `tax_deadline_overrides`, `resolved_tax_deadlines`).
 - Official recurring calendar rules live in `crates/bir-core/src/calendar_rules.rs`.
+- Deadline adjustment is handled by the core `BusinessDayCalendar`: weekends are
+  known by default, while holidays, local holidays, special non-working days,
+  and closures must be supplied as configured non-working days or source-backed
+  overrides. See `docs/calendar-business-day-adjustment.md`.
 - Emergency or advisory deadline changes are applied through the typed override model in the calendar resolver, not through user-editable base-rule tables.
 - Existing databases that already have legacy calendar tables keep them untouched; do not drop them without a dedicated backup and migration plan.
 

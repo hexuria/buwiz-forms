@@ -86,6 +86,8 @@ pub enum DeadlineKind {
 pub enum DeadlineStatus {
     Normal,
     WeekendAdjusted,
+    HolidayAdjusted,
+    NonWorkingDayAdjusted,
     Extended,
 }
 ```
@@ -96,7 +98,9 @@ Tasks:
 2. Add `form_code` for internal use and `display_form_no` for UI labels.
 3. Add typed `DeadlinePeriod` so dashboard clicks can derive year/month/quarter correctly.
 4. Add `DeadlineKind::EventBased` so undated obligations never need fake `YYYY-12-31` dates.
-5. Add small helper methods for UI compatibility:
+5. Add `BusinessDayCalendar` so weekend and configured non-working-day adjustment
+   is part of core deadline resolution, not UI rendering.
+6. Add small helper methods for UI compatibility:
    - `final_deadline_date() -> Option<NaiveDate>`
    - `period_start() -> Option<NaiveDate>`
    - `period_end() -> Option<NaiveDate>`
@@ -104,7 +108,8 @@ Tasks:
 
 Acceptance criteria:
 
-- Weekend adjustment preserves both original and final due date.
+- Weekend, holiday, and configured non-working-day adjustment preserves both
+  original and final due date.
 - Event-based forms cannot be sorted into dated calendar cells by accident.
 - UI callers no longer slice date strings like `d.final_deadline[8..10]`.
 
@@ -255,11 +260,14 @@ pub struct DeadlineOverride {
 
 Tasks:
 
-1. Add override application after base deadline generation and weekend adjustment.
+1. Add override application after base deadline generation and business-day
+   adjustment.
 2. Match overrides by canonical form code plus original/final date scope.
 3. Preserve source reference and original deadline in `DeadlineStatus::Extended`.
-4. Support a bundled JSON override source first.
-5. Later, optionally map synced `BirNotice` deadline advisories into candidate overrides, but require explicit trusted-source parsing.
+4. Run business-day adjustment again after applying an override, because an
+   extended due date can also fall on a holiday or non-working day.
+5. Support a bundled JSON override source first.
+6. Later, optionally map synced `BirNotice` deadline advisories into candidate overrides, but require explicit trusted-source parsing.
 
 Acceptance criteria:
 
@@ -308,9 +316,12 @@ Core tests:
 3. `resolve_deadline_calendar_year(2026)` excludes January/April 2027 deadlines from taxable year 2026.
 4. `1701Q` Q1/Q2/Q3 entries preserve taxable quarter metadata while due dates land in May/August/October.
 5. Weekend adjustment preserves `original_deadline` and changes only `final_deadline`.
-6. Every static rule form maps to a canonical form code or explicit external marker.
-7. Event-based rules do not produce dated deadlines.
-8. Override application requires source reference and correct affected form/date scope.
+6. Business-day adjustment keeps advancing across consecutive weekends and
+   configured holidays/non-working days.
+7. Override adjusted dates are rechecked against the business-day calendar.
+8. Every static rule form maps to a canonical form code or explicit external marker.
+9. Event-based rules do not produce dated deadlines.
+10. Override application requires source reference and correct affected form/date scope.
 
 Desktop-facing tests or focused component checks:
 
@@ -334,7 +345,8 @@ The calendar feature should not be described as compliance-ready until all of th
 3. UI period filters use taxable-period metadata.
 4. Deadline clicks open the correct form period.
 5. Event-based forms are removed from fake dated rows.
-6. Weekend and extension adjustments preserve source and original-date evidence.
+6. Weekend, configured non-working-day, and extension adjustments preserve
+   source and original-date evidence.
 7. Profile dashboards filter by taxpayer applicability.
 8. Override strategy is implemented or explicitly deferred with a visible product limitation.
 9. Schema docs and migrations match the chosen architecture.

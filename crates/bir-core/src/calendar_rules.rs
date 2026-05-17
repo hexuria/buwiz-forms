@@ -86,6 +86,8 @@ pub enum DeadlineKind {
 pub enum DeadlineStatus {
     Normal,
     WeekendAdjusted,
+    HolidayAdjusted,
+    NonWorkingDayAdjusted,
     Extended,
     EventBased,
 }
@@ -95,8 +97,107 @@ impl DeadlineStatus {
         match self {
             Self::Normal => "Normal",
             Self::WeekendAdjusted => "Weekend Adjusted",
+            Self::HolidayAdjusted => "Holiday Adjusted",
+            Self::NonWorkingDayAdjusted => "Non-working Day Adjusted",
             Self::Extended => "Extended",
             Self::EventBased => "Event Based",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NonWorkingDayKind {
+    RegularHoliday,
+    LocalHoliday,
+    SpecialNonWorkingDay,
+    OtherClosure,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NonWorkingDay {
+    pub date: NaiveDate,
+    pub name: String,
+    pub kind: NonWorkingDayKind,
+    pub regions: Vec<String>,
+    pub source_reference: Option<String>,
+}
+
+impl NonWorkingDay {
+    pub fn regular_holiday(date: NaiveDate, name: impl Into<String>) -> Self {
+        Self {
+            date,
+            name: name.into(),
+            kind: NonWorkingDayKind::RegularHoliday,
+            regions: Vec::new(),
+            source_reference: None,
+        }
+    }
+
+    pub fn special_non_working_day(date: NaiveDate, name: impl Into<String>) -> Self {
+        Self {
+            date,
+            name: name.into(),
+            kind: NonWorkingDayKind::SpecialNonWorkingDay,
+            regions: Vec::new(),
+            source_reference: None,
+        }
+    }
+
+    fn adjustment_status(&self) -> DeadlineStatus {
+        match self.kind {
+            NonWorkingDayKind::RegularHoliday | NonWorkingDayKind::LocalHoliday => {
+                DeadlineStatus::HolidayAdjusted
+            }
+            NonWorkingDayKind::SpecialNonWorkingDay | NonWorkingDayKind::OtherClosure => {
+                DeadlineStatus::NonWorkingDayAdjusted
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct BusinessDayCalendar {
+    pub non_working_days: Vec<NonWorkingDay>,
+}
+
+impl BusinessDayCalendar {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_non_working_days(non_working_days: Vec<NonWorkingDay>) -> Self {
+        Self { non_working_days }
+    }
+
+    pub fn is_non_working_day(&self, date: NaiveDate) -> bool {
+        self.non_working_reason(date).is_some()
+    }
+
+    pub fn is_business_day(&self, date: NaiveDate) -> bool {
+        self.non_working_reason(date).is_none()
+    }
+
+    pub fn adjust_to_next_business_day(&self, date: NaiveDate) -> (NaiveDate, DeadlineStatus) {
+        let Some(status) = self.non_working_reason(date) else {
+            return (date, DeadlineStatus::Normal);
+        };
+
+        let mut adjusted = date + Duration::days(1);
+        while self.is_non_working_day(adjusted) {
+            adjusted += Duration::days(1);
+        }
+
+        (adjusted, status)
+    }
+
+    fn non_working_reason(&self, date: NaiveDate) -> Option<DeadlineStatus> {
+        match date.weekday() {
+            chrono::Weekday::Sat | chrono::Weekday::Sun => Some(DeadlineStatus::WeekendAdjusted),
+            _ => self
+                .non_working_days
+                .iter()
+                .find(|day| day.date == date)
+                .map(NonWorkingDay::adjustment_status),
         }
     }
 }
@@ -140,12 +241,8 @@ impl ResolvedTaxDeadline {
         original_deadline: NaiveDate,
         description: &str,
     ) -> Self {
-        let final_deadline = Self::adjust_weekend(original_deadline);
-        let status = if final_deadline == original_deadline {
-            DeadlineStatus::Normal
-        } else {
-            DeadlineStatus::WeekendAdjusted
-        };
+        let (final_deadline, status) =
+            BusinessDayCalendar::default().adjust_to_next_business_day(original_deadline);
 
         Self {
             form_code: canonical_form_code(display_form_no).to_string(),
@@ -185,14 +282,6 @@ impl ResolvedTaxDeadline {
             status: DeadlineStatus::EventBased,
             description: description.to_string(),
             source_reference: None,
-        }
-    }
-
-    fn adjust_weekend(date: NaiveDate) -> NaiveDate {
-        match date.weekday() {
-            chrono::Weekday::Sat => date + Duration::days(2),
-            chrono::Weekday::Sun => date + Duration::days(1),
-            _ => date,
         }
     }
 
@@ -277,7 +366,25 @@ impl ResolvedTaxDeadline {
         month_match && quarter_match
     }
 
-    fn apply_override(&mut self, deadline_override: &DeadlineOverride) -> bool {
+    fn apply_business_day_calendar(&mut self, calendar: &BusinessDayCalendar) {
+        let DeadlineKind::Dated {
+            original_deadline,
+            final_deadline,
+        } = &mut self.deadline
+        else {
+            return;
+        };
+
+        let (adjusted, status) = calendar.adjust_to_next_business_day(*original_deadline);
+        *final_deadline = adjusted;
+        self.status = status;
+    }
+
+    fn apply_override(
+        &mut self,
+        deadline_override: &DeadlineOverride,
+        calendar: &BusinessDayCalendar,
+    ) -> bool {
         if !deadline_override
             .affected_form_codes
             .iter()
@@ -300,7 +407,9 @@ impl ResolvedTaxDeadline {
             return false;
         }
 
-        *final_deadline = deadline_override.adjusted_deadline;
+        *final_deadline = calendar
+            .adjust_to_next_business_day(deadline_override.adjusted_deadline)
+            .0;
         self.status = DeadlineStatus::Extended;
         self.source_reference = Some(deadline_override.source_reference.clone());
         true
@@ -337,9 +446,28 @@ impl DeadlineResolver {
         Self::resolve_taxable_year_with_overrides(taxable_year, &[])
     }
 
+    pub fn resolve_taxable_year_with_calendar(
+        taxable_year: i32,
+        calendar: &BusinessDayCalendar,
+    ) -> Vec<ResolvedTaxDeadline> {
+        Self::resolve_taxable_year_with_overrides_and_calendar(taxable_year, &[], calendar)
+    }
+
     pub fn resolve_taxable_year_with_overrides(
         taxable_year: i32,
         overrides: &[DeadlineOverride],
+    ) -> Vec<ResolvedTaxDeadline> {
+        Self::resolve_taxable_year_with_overrides_and_calendar(
+            taxable_year,
+            overrides,
+            &BusinessDayCalendar::default(),
+        )
+    }
+
+    pub fn resolve_taxable_year_with_overrides_and_calendar(
+        taxable_year: i32,
+        overrides: &[DeadlineOverride],
+        calendar: &BusinessDayCalendar,
     ) -> Vec<ResolvedTaxDeadline> {
         let mut all_deadlines = Vec::new();
 
@@ -353,7 +481,8 @@ impl DeadlineResolver {
             all_deadlines.extend(deadlines);
         }
 
-        Self::apply_overrides(&mut all_deadlines, overrides);
+        Self::apply_business_day_calendar(&mut all_deadlines, calendar);
+        Self::apply_overrides(&mut all_deadlines, overrides, calendar);
         Self::sort_deadlines(all_deadlines)
     }
 
@@ -361,16 +490,40 @@ impl DeadlineResolver {
         Self::resolve_deadline_calendar_year_with_overrides(calendar_year, &[])
     }
 
+    pub fn resolve_deadline_calendar_year_with_calendar(
+        calendar_year: i32,
+        calendar: &BusinessDayCalendar,
+    ) -> Vec<ResolvedTaxDeadline> {
+        Self::resolve_deadline_calendar_year_with_overrides_and_calendar(
+            calendar_year,
+            &[],
+            calendar,
+        )
+    }
+
     pub fn resolve_deadline_calendar_year_with_overrides(
         calendar_year: i32,
         overrides: &[DeadlineOverride],
     ) -> Vec<ResolvedTaxDeadline> {
+        Self::resolve_deadline_calendar_year_with_overrides_and_calendar(
+            calendar_year,
+            overrides,
+            &BusinessDayCalendar::default(),
+        )
+    }
+
+    pub fn resolve_deadline_calendar_year_with_overrides_and_calendar(
+        calendar_year: i32,
+        overrides: &[DeadlineOverride],
+        calendar: &BusinessDayCalendar,
+    ) -> Vec<ResolvedTaxDeadline> {
         let mut all_deadlines = Vec::new();
 
         for taxable_year in (calendar_year - 1)..=(calendar_year + 1) {
-            all_deadlines.extend(Self::resolve_taxable_year_with_overrides(
+            all_deadlines.extend(Self::resolve_taxable_year_with_overrides_and_calendar(
                 taxable_year,
                 overrides,
+                calendar,
             ));
         }
 
@@ -595,14 +748,27 @@ impl DeadlineResolver {
         deadlines
     }
 
-    fn apply_overrides(deadlines: &mut [ResolvedTaxDeadline], overrides: &[DeadlineOverride]) {
+    fn apply_business_day_calendar(
+        deadlines: &mut [ResolvedTaxDeadline],
+        calendar: &BusinessDayCalendar,
+    ) {
+        for deadline in deadlines.iter_mut() {
+            deadline.apply_business_day_calendar(calendar);
+        }
+    }
+
+    fn apply_overrides(
+        deadlines: &mut [ResolvedTaxDeadline],
+        overrides: &[DeadlineOverride],
+        calendar: &BusinessDayCalendar,
+    ) {
         for deadline_override in overrides {
             if deadline_override.source_reference.trim().is_empty() {
                 continue;
             }
 
             for deadline in deadlines.iter_mut() {
-                deadline.apply_override(deadline_override);
+                deadline.apply_override(deadline_override, calendar);
             }
         }
     }
@@ -985,6 +1151,102 @@ mod tests {
     }
 
     #[test]
+    fn business_day_calendar_moves_saturday_and_sunday_to_monday() {
+        let calendar = BusinessDayCalendar::default();
+
+        let saturday = NaiveDate::from_ymd_opt(2026, 8, 15).unwrap();
+        let sunday = NaiveDate::from_ymd_opt(2026, 8, 16).unwrap();
+        let monday = NaiveDate::from_ymd_opt(2026, 8, 17).unwrap();
+
+        assert_eq!(
+            calendar.adjust_to_next_business_day(saturday),
+            (monday, DeadlineStatus::WeekendAdjusted)
+        );
+        assert_eq!(
+            calendar.adjust_to_next_business_day(sunday),
+            (monday, DeadlineStatus::WeekendAdjusted)
+        );
+    }
+
+    #[test]
+    fn business_day_calendar_keeps_advancing_after_weekend_into_holiday() {
+        let calendar =
+            BusinessDayCalendar::with_non_working_days(vec![NonWorkingDay::regular_holiday(
+                NaiveDate::from_ymd_opt(2026, 6, 1).unwrap(),
+                "Configured Monday holiday",
+            )]);
+
+        assert_eq!(
+            calendar.adjust_to_next_business_day(NaiveDate::from_ymd_opt(2026, 5, 30).unwrap()),
+            (
+                NaiveDate::from_ymd_opt(2026, 6, 2).unwrap(),
+                DeadlineStatus::WeekendAdjusted
+            )
+        );
+    }
+
+    #[test]
+    fn business_day_calendar_moves_friday_holiday_past_following_weekend() {
+        let calendar =
+            BusinessDayCalendar::with_non_working_days(vec![NonWorkingDay::regular_holiday(
+                NaiveDate::from_ymd_opt(2026, 6, 12).unwrap(),
+                "Configured Friday holiday",
+            )]);
+
+        assert_eq!(
+            calendar.adjust_to_next_business_day(NaiveDate::from_ymd_opt(2026, 6, 12).unwrap()),
+            (
+                NaiveDate::from_ymd_opt(2026, 6, 15).unwrap(),
+                DeadlineStatus::HolidayAdjusted
+            )
+        );
+    }
+
+    #[test]
+    fn business_day_calendar_distinguishes_special_non_working_days() {
+        let calendar = BusinessDayCalendar::with_non_working_days(vec![
+            NonWorkingDay::special_non_working_day(
+                NaiveDate::from_ymd_opt(2026, 11, 2).unwrap(),
+                "Configured special non-working day",
+            ),
+        ]);
+
+        assert_eq!(
+            calendar.adjust_to_next_business_day(NaiveDate::from_ymd_opt(2026, 11, 2).unwrap()),
+            (
+                NaiveDate::from_ymd_opt(2026, 11, 3).unwrap(),
+                DeadlineStatus::NonWorkingDayAdjusted
+            )
+        );
+    }
+
+    #[test]
+    fn q1_1702q_2026_keeps_weekend_adjusted_june_first_deadline() {
+        let deadlines = DeadlineResolver::resolve_taxable_year(2026);
+        let q1_1702q = deadlines
+            .iter()
+            .find(|d| {
+                d.form_code == "1702Q"
+                    && d.period
+                        == (DeadlinePeriod::Quarterly {
+                            taxable_year: 2026,
+                            quarter: 1,
+                        })
+            })
+            .expect("1702Q Q1 missing");
+
+        assert_eq!(
+            q1_1702q.original_deadline_date(),
+            Some(NaiveDate::from_ymd_opt(2026, 5, 30).unwrap())
+        );
+        assert_eq!(
+            q1_1702q.final_deadline_date(),
+            Some(NaiveDate::from_ymd_opt(2026, 6, 1).unwrap())
+        );
+        assert_eq!(q1_1702q.status, DeadlineStatus::WeekendAdjusted);
+    }
+
+    #[test]
     fn event_based_obligations_are_not_dated_deadlines() {
         let calendar = DeadlineResolver::resolve_deadline_calendar_year(2026);
         assert!(calendar.iter().all(|d| d.final_deadline_date().is_some()));
@@ -1056,6 +1318,56 @@ mod tests {
         assert!(q1.matches_period_filter(&[], &[1]));
         assert!(q1.matches_period_filter(&[1, 2, 3], &[]));
         assert!(!q1.matches_period_filter(&[6], &[]));
+        assert_eq!(q1.status, DeadlineStatus::Extended);
+        assert_eq!(q1.source_reference.as_deref(), Some("BIR test advisory"));
+    }
+
+    #[test]
+    fn override_adjusted_date_is_moved_to_next_business_day() {
+        let calendar =
+            BusinessDayCalendar::with_non_working_days(vec![NonWorkingDay::regular_holiday(
+                NaiveDate::from_ymd_opt(2026, 6, 15).unwrap(),
+                "Configured extension-day holiday",
+            )]);
+        let override_rule = DeadlineOverride {
+            id: "test-extension-holiday".to_string(),
+            title: "Test extension onto holiday".to_string(),
+            source_reference: "BIR test advisory".to_string(),
+            affected_form_codes: vec!["1701Q".to_string()],
+            original_deadline: NaiveDate::from_ymd_opt(2026, 5, 15).unwrap(),
+            adjusted_deadline: NaiveDate::from_ymd_opt(2026, 6, 15).unwrap(),
+            affected_regions: Vec::new(),
+            affected_taxpayer_types: Vec::new(),
+            effective_from: None,
+            effective_until: None,
+            expires_at: None,
+        };
+
+        let deadlines = DeadlineResolver::resolve_taxable_year_with_overrides_and_calendar(
+            2026,
+            &[override_rule],
+            &calendar,
+        );
+        let q1 = deadlines
+            .iter()
+            .find(|d| {
+                d.form_code == "1701Q"
+                    && d.period
+                        == (DeadlinePeriod::Quarterly {
+                            taxable_year: 2026,
+                            quarter: 1,
+                        })
+            })
+            .expect("1701Q Q1 missing");
+
+        assert_eq!(
+            q1.original_deadline_date(),
+            Some(NaiveDate::from_ymd_opt(2026, 5, 15).unwrap())
+        );
+        assert_eq!(
+            q1.final_deadline_date(),
+            Some(NaiveDate::from_ymd_opt(2026, 6, 16).unwrap())
+        );
         assert_eq!(q1.status, DeadlineStatus::Extended);
         assert_eq!(q1.source_reference.as_deref(), Some("BIR test advisory"));
     }
