@@ -6,13 +6,19 @@
 //! **Form eligibility is evaluated exclusively through the temporal engine.**
 //! There is no separate hardcoded eligibility matrix in this module.
 
+use crate::calendar_rules::{
+    DeadlineOverride, DeadlinePeriod, ResolvedTaxDeadline, canonical_form_code,
+};
 use crate::forms::registry::FilingFrequency;
 use crate::integration::models::UniversalTaxPayload;
-use crate::profile::TaxpayerProfile;
+use crate::profile::{
+    ManualObligationOverrideAction, RegisteredTaxType, TaxProfileVersion, TaxpayerProfile,
+};
 use crate::temporal::FormDecision;
 use crate::temporal::snapshot_loader::compiled_snapshot;
-use chrono::Datelike;
+use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FormSuggestionDecision {
@@ -20,6 +26,48 @@ pub struct FormSuggestionDecision {
     pub is_suggested: bool,
     pub reason: String,
     pub legal_authority_citation: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ProfileConsistencySeverity {
+    Info,
+    Warning,
+    NeedsReview,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProfileConsistencyIssue {
+    pub severity: ProfileConsistencySeverity,
+    pub code: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProfileConsistencyReport {
+    pub issues: Vec<ProfileConsistencyIssue>,
+}
+
+impl ProfileConsistencyReport {
+    fn push(
+        &mut self,
+        severity: ProfileConsistencySeverity,
+        code: impl Into<String>,
+        message: impl Into<String>,
+    ) {
+        self.issues.push(ProfileConsistencyIssue {
+            severity,
+            code: code.into(),
+            message: message.into(),
+        });
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolvedProfileObligations {
+    pub taxable_year: u16,
+    pub form_codes: Vec<String>,
+    pub active_version_ids: Vec<String>,
+    pub consistency_report: ProfileConsistencyReport,
 }
 
 /// A single validation issue found in a payload.
@@ -225,17 +273,352 @@ pub fn recurring_obligation_forms_for_profile_and_year(
     profile: &TaxpayerProfile,
     year: u16,
 ) -> Vec<String> {
+    resolve_profile_obligations_for_year(profile, year).form_codes
+}
+
+pub fn recurring_obligation_decisions_for_profile_and_year(
+    profile: &TaxpayerProfile,
+    year: u16,
+) -> Vec<FormDecision> {
+    let obligations = resolve_profile_obligations_for_year(profile, year);
+    let wanted: BTreeSet<_> = obligations.form_codes.into_iter().collect();
+    let mut by_code = BTreeMap::new();
+
+    for version in profile.active_profile_versions_for_year(year) {
+        let projected = profile.projection_for_version(&version);
+        for decision in evaluated_recurring_decisions_for_projection(&projected, year) {
+            if wanted.contains(&decision.form_code) {
+                by_code
+                    .entry(decision.form_code.clone())
+                    .or_insert(decision);
+            }
+        }
+    }
+
+    by_code.into_values().collect()
+}
+
+pub fn resolve_profile_obligations_for_year(
+    profile: &TaxpayerProfile,
+    year: u16,
+) -> ResolvedProfileObligations {
+    let mut all_codes = BTreeSet::new();
+    let mut active_version_ids = Vec::new();
+    let mut consistency_report = ProfileConsistencyReport::default();
+
+    for version in profile.active_profile_versions_for_year(year) {
+        active_version_ids.push(version.id.clone());
+        let projected = profile.projection_for_version(&version);
+        let version_codes = recurring_obligation_codes_for_version(
+            &projected,
+            &version,
+            year,
+            &mut consistency_report,
+        );
+        all_codes.extend(version_codes);
+    }
+
+    ResolvedProfileObligations {
+        taxable_year: year,
+        form_codes: all_codes.into_iter().collect(),
+        active_version_ids,
+        consistency_report,
+    }
+}
+
+pub fn deadline_applies_to_profile(
+    profile: &TaxpayerProfile,
+    deadline: &ResolvedTaxDeadline,
+) -> bool {
+    let Some(taxable_year) = deadline.period.taxable_year() else {
+        return false;
+    };
+    let Some((period_start, period_end)) = deadline_period_bounds(deadline) else {
+        return false;
+    };
+
+    profile
+        .active_profile_versions_for_period(period_start, period_end)
+        .into_iter()
+        .any(|version| {
+            let projected = profile.projection_for_version(&version);
+            let mut report = ProfileConsistencyReport::default();
+            recurring_obligation_codes_for_version(
+                &projected,
+                &version,
+                taxable_year as u16,
+                &mut report,
+            )
+            .contains(&deadline.form_code)
+        })
+}
+
+pub fn profile_deadline_overrides_for_year(
+    profile: &TaxpayerProfile,
+    year: u16,
+) -> Vec<DeadlineOverride> {
+    profile
+        .active_profile_versions_for_year(year)
+        .into_iter()
+        .flat_map(|version| {
+            version
+                .deadline_overrides
+                .into_iter()
+                .map(|override_rule| DeadlineOverride {
+                    id: override_rule.id,
+                    title: override_rule.title,
+                    source_reference: override_rule.source_reference,
+                    affected_form_codes: override_rule
+                        .affected_form_codes
+                        .into_iter()
+                        .map(|code| normalize_form_code(&code))
+                        .collect(),
+                    original_deadline: override_rule.original_deadline,
+                    adjusted_deadline: override_rule.adjusted_deadline,
+                    affected_regions: vec![],
+                    affected_taxpayer_types: vec![],
+                    effective_from: None,
+                    effective_until: None,
+                    expires_at: None,
+                })
+        })
+        .collect()
+}
+
+fn evaluated_recurring_decisions_for_projection(
+    profile: &TaxpayerProfile,
+    year: u16,
+) -> Vec<FormDecision> {
     let engine = crate::temporal::TemporalEngine::default();
     let context = crate::temporal::TemporalContext::current_compliance(year);
 
     engine
         .evaluate_with_context(profile, &context)
         .into_iter()
+        .filter(is_recurring_profile_obligation)
+        .collect()
+}
+
+fn recurring_obligation_codes_for_version(
+    projected: &TaxpayerProfile,
+    version: &TaxProfileVersion,
+    year: u16,
+    report: &mut ProfileConsistencyReport,
+) -> BTreeSet<String> {
+    let engine = crate::temporal::TemporalEngine::default();
+    let context = crate::temporal::TemporalContext::current_compliance(year);
+    let all_decisions = engine.evaluate_with_context(projected, &context);
+    let recurring_visible: BTreeSet<String> = all_decisions
+        .iter()
         .filter(|decision| {
             decision.eligibility.is_visible() && is_recurring_profile_obligation(decision)
         })
-        .map(|decision| decision.form_code)
-        .collect()
+        .map(|decision| decision.form_code.clone())
+        .collect();
+
+    let has_cor_gate = !version.registered_tax_types.is_empty();
+    let mut gated = BTreeSet::new();
+
+    for code in &recurring_visible {
+        if !has_cor_gate || registered_tax_types_allow_form(&version.registered_tax_types, code) {
+            gated.insert(code.clone());
+        } else {
+            report.push(
+                ProfileConsistencySeverity::Warning,
+                code,
+                format!(
+                    "TTCE suggests {code}, but active COR/profile version '{}' does not register the matching tax type.",
+                    version.label
+                ),
+            );
+        }
+    }
+
+    if has_cor_gate {
+        report_missing_ttce_categories(version, &gated, report);
+    }
+
+    for override_rule in &version.obligation_overrides {
+        let code = normalize_form_code(&override_rule.form_code);
+        match override_rule.action {
+            ManualObligationOverrideAction::Include => {
+                if !compiled_snapshot().has_form_code(&code) {
+                    report.push(
+                        ProfileConsistencySeverity::NeedsReview,
+                        &code,
+                        format!(
+                            "Manual include references {code}, but this form is not in the temporal snapshot."
+                        ),
+                    );
+                }
+                gated.insert(code);
+            }
+            ManualObligationOverrideAction::Exclude => {
+                if gated.remove(&code) {
+                    report.push(
+                        ProfileConsistencySeverity::Info,
+                        &code,
+                        format!("Manual override excludes {code}: {}", override_rule.reason),
+                    );
+                }
+            }
+        }
+    }
+
+    gated
+}
+
+fn deadline_period_bounds(deadline: &ResolvedTaxDeadline) -> Option<(NaiveDate, NaiveDate)> {
+    match deadline.period {
+        DeadlinePeriod::Monthly { .. }
+        | DeadlinePeriod::Quarterly { .. }
+        | DeadlinePeriod::Annual { .. } => Some((deadline.period_start?, deadline.period_end?)),
+        DeadlinePeriod::EventBased => None,
+    }
+}
+
+fn normalize_form_code(code: &str) -> String {
+    let canonical = canonical_form_code(code);
+    if canonical == "UNKNOWN" {
+        code.to_string()
+    } else {
+        canonical.to_string()
+    }
+}
+
+fn report_missing_ttce_categories(
+    version: &TaxProfileVersion,
+    codes: &BTreeSet<String>,
+    report: &mut ProfileConsistencyReport,
+) {
+    let category_expectations: &[(RegisteredTaxType, &[&str], &str)] = &[
+        (
+            RegisteredTaxType::IncomeTax,
+            &[
+                "1700", "1701", "1701A", "1701MS", "1701Q", "1702EX", "1702MX", "1702Q", "1702RT",
+            ],
+            "COR/profile version registers income tax but TTCE did not produce an income tax recurring obligation.",
+        ),
+        (
+            RegisteredTaxType::ValueAddedTax,
+            &["2550DS", "2550M", "2550Q"],
+            "COR/profile version registers VAT but TTCE did not produce a VAT recurring obligation.",
+        ),
+        (
+            RegisteredTaxType::PercentageTax,
+            &["2551Q", "2551M"],
+            "COR/profile version registers percentage tax but TTCE did not produce a percentage tax recurring obligation.",
+        ),
+        (
+            RegisteredTaxType::WithholdingExpanded,
+            &["0619E", "1601EQ", "1604E"],
+            "COR/profile version registers expanded withholding but TTCE did not produce expanded withholding obligations.",
+        ),
+        (
+            RegisteredTaxType::WithholdingCompensation,
+            &["1601C", "1604CF", "2316"],
+            "COR/profile version registers compensation withholding but TTCE did not produce compensation withholding obligations.",
+        ),
+        (
+            RegisteredTaxType::WithholdingFinal,
+            &["0619F", "1601F", "1601FQ", "1602", "1603"],
+            "COR/profile version registers final withholding but TTCE did not produce final withholding obligations.",
+        ),
+        (
+            RegisteredTaxType::ExciseTax,
+            &[
+                "2200A", "2200AN", "2200C", "2200M", "2200P", "2200S", "2200T",
+            ],
+            "COR/profile version registers excise tax but TTCE did not produce excise obligations.",
+        ),
+    ];
+
+    for (tax_type, forms, message) in category_expectations {
+        if version.registered_tax_types.contains(tax_type)
+            && !forms.iter().any(|code| codes.contains(*code))
+        {
+            report.push(
+                ProfileConsistencySeverity::NeedsReview,
+                format!("{tax_type:?}"),
+                *message,
+            );
+        }
+    }
+}
+
+fn registered_tax_types_allow_form(tax_types: &[RegisteredTaxType], code: &str) -> bool {
+    if is_income_tax_form(code) {
+        return tax_types.contains(&RegisteredTaxType::IncomeTax);
+    }
+    if is_vat_form(code) {
+        return tax_types.contains(&RegisteredTaxType::ValueAddedTax);
+    }
+    if is_percentage_tax_form(code) {
+        return tax_types.contains(&RegisteredTaxType::PercentageTax);
+    }
+    if is_expanded_withholding_form(code) {
+        return tax_types.contains(&RegisteredTaxType::WithholdingExpanded);
+    }
+    if is_compensation_withholding_form(code) {
+        return tax_types.contains(&RegisteredTaxType::WithholdingCompensation);
+    }
+    if is_final_withholding_form(code) {
+        return tax_types.contains(&RegisteredTaxType::WithholdingFinal);
+    }
+    if is_excise_form(code) {
+        return tax_types.contains(&RegisteredTaxType::ExciseTax);
+    }
+    if code == "0605" {
+        return tax_types.contains(&RegisteredTaxType::RegistrationFee);
+    }
+
+    true
+}
+
+fn is_income_tax_form(code: &str) -> bool {
+    matches!(
+        code,
+        "1700"
+            | "1701"
+            | "1701A"
+            | "1701MS"
+            | "1701Q"
+            | "1702EX"
+            | "1702MX"
+            | "1702Q"
+            | "1702RT"
+            | "1704"
+    )
+}
+
+fn is_vat_form(code: &str) -> bool {
+    matches!(code, "2550DS" | "2550M" | "2550Q")
+}
+
+fn is_percentage_tax_form(code: &str) -> bool {
+    matches!(code, "2551M" | "2551Q")
+}
+
+fn is_expanded_withholding_form(code: &str) -> bool {
+    matches!(code, "0619E" | "1601EQ" | "1604E" | "1606" | "1621")
+}
+
+fn is_compensation_withholding_form(code: &str) -> bool {
+    matches!(code, "0620" | "1600" | "1601C" | "1604CF" | "2316")
+}
+
+fn is_final_withholding_form(code: &str) -> bool {
+    matches!(
+        code,
+        "0619F" | "1600WP" | "1601F" | "1601FQ" | "1602" | "1603"
+    )
+}
+
+fn is_excise_form(code: &str) -> bool {
+    matches!(
+        code,
+        "2200A" | "2200AN" | "2200C" | "2200M" | "2200P" | "2200S" | "2200T"
+    )
 }
 
 fn is_recurring_profile_obligation(decision: &FormDecision) -> bool {
@@ -337,6 +720,7 @@ mod tests {
             imap_app_password: None,
             oauth_access_token: None,
             oauth_refresh_token: None,
+            profile_versions: vec![],
         }
     }
 
@@ -453,6 +837,7 @@ mod tests {
             imap_app_password: None,
             oauth_access_token: None,
             oauth_refresh_token: None,
+            profile_versions: vec![],
         };
 
         // PurelyCompensation should NOT be allowed to file 2551Q
@@ -518,6 +903,7 @@ mod tests {
             imap_app_password: None,
             oauth_access_token: None,
             oauth_refresh_token: None,
+            profile_versions: vec![],
         };
 
         let forms = applicable_forms_for_profile(&profile);

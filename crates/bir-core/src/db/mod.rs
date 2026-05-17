@@ -669,6 +669,7 @@ mod tests {
             imap_app_password: None,
             oauth_access_token: None,
             oauth_refresh_token: None,
+            profile_versions: vec![],
             zip_code: "1103".into(),
             phone: "0999".into(),
             email: "miley@example.com".into(),

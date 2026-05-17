@@ -60,6 +60,7 @@ fn test_full_form_lifecycle() {
             imap_app_password: None,
             oauth_access_token: None,
             oauth_refresh_token: None,
+            profile_versions: vec![],
         };
         let saved_profile = db.save_profile(profile).expect("Failed to save profile");
 

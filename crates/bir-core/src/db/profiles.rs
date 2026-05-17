@@ -7,6 +7,7 @@ use crate::profile::TaxpayerProfile;
 
 impl Database {
     pub fn save_profile(&self, mut profile: TaxpayerProfile) -> Result<TaxpayerProfile, DbError> {
+        profile.ensure_profile_version_ledger();
         let json_data = serde_json::to_string(&profile)?;
         let tin = profile.tin.full();
 
@@ -49,6 +50,7 @@ impl Database {
             let json_data: String = row.get(0)?;
             let mut profile: TaxpayerProfile = serde_json::from_str(&json_data)?;
             profile.id = row.get(1).ok();
+            profile.ensure_profile_version_ledger();
             Ok(Some(profile))
         } else {
             Ok(None)
@@ -71,6 +73,7 @@ impl Database {
             let (id, json_data) = row_result?;
             let mut profile: TaxpayerProfile = serde_json::from_str(&json_data)?;
             profile.id = Some(id);
+            profile.ensure_profile_version_ledger();
             profiles.push(profile);
         }
 

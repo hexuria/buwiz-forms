@@ -1,9 +1,14 @@
+use bir_core::calendar_rules::{DeadlineKind, DeadlinePeriod, DeadlineResolver};
 use bir_core::integration::recurring_obligation_forms_for_profile_and_year;
+use bir_core::integration::{deadline_applies_to_profile, profile_deadline_overrides_for_year};
 use bir_core::naming::Tin;
 use bir_core::profile::{
-    EoptTier, ExciseTaxCategory, IncomeTaxElection, RegistrationActivityStatus, TaxClassification,
-    TaxElectionHistory, TaxpayerProfile, TaxpayerType,
+    EoptTier, ExciseTaxCategory, IncomeTaxElection, ProfileDeadlineOverride, RegisteredTaxType,
+    RegistrationActivityStatus, TaxClassification, TaxElectionHistory, TaxProfileVersion,
+    TaxProfileVersionStatus, TaxpayerProfile, TaxpayerType,
 };
+use bir_core::validation::validate_profile;
+use chrono::NaiveDate;
 use std::collections::BTreeSet;
 
 const TAXABLE_YEAR: u16 = 2026;
@@ -79,6 +84,7 @@ fn base_profile(
         imap_app_password: None,
         oauth_access_token: None,
         oauth_refresh_token: None,
+        profile_versions: vec![],
     }
 }
 
@@ -131,6 +137,27 @@ fn self_employed_profile(
     }
 
     profile
+}
+
+fn confirmed_version(
+    profile: &TaxpayerProfile,
+    id: &str,
+    label: &str,
+    from: Option<(i32, u32, u32)>,
+    until: Option<(i32, u32, u32)>,
+    tax_types: Vec<RegisteredTaxType>,
+    vat: bool,
+) -> TaxProfileVersion {
+    let mut version = TaxProfileVersion::from_profile_backfill(profile);
+    version.id = id.to_string();
+    version.label = label.to_string();
+    version.status = TaxProfileVersionStatus::Confirmed;
+    version.effective_from = from.map(|(y, m, d)| NaiveDate::from_ymd_opt(y, m, d).unwrap());
+    version.effective_until = until.map(|(y, m, d)| NaiveDate::from_ymd_opt(y, m, d).unwrap());
+    version.needs_effective_date_review = version.effective_from.is_none();
+    version.registered_tax_types = tax_types;
+    version.is_vat_registered = vat;
+    version
 }
 
 #[test]
@@ -513,4 +540,209 @@ fn dashboard_profile_matrix_excise_modifiers() {
             "2551Q", "1701A",
         ],
     );
+}
+
+#[test]
+fn versioned_cor_uses_the_profile_active_for_the_selected_year() {
+    let mut profile = self_employed_profile(false, None, false);
+
+    let non_vat_2025 = confirmed_version(
+        &profile,
+        "cor-2025",
+        "2025 non-VAT COR",
+        Some((2025, 1, 1)),
+        Some((2025, 12, 31)),
+        vec![
+            RegisteredTaxType::IncomeTax,
+            RegisteredTaxType::PercentageTax,
+            RegisteredTaxType::RegistrationFee,
+        ],
+        false,
+    );
+    let vat_2026 = confirmed_version(
+        &profile,
+        "cor-2026",
+        "2026 VAT COR",
+        Some((2026, 1, 1)),
+        None,
+        vec![
+            RegisteredTaxType::IncomeTax,
+            RegisteredTaxType::ValueAddedTax,
+            RegisteredTaxType::RegistrationFee,
+        ],
+        true,
+    );
+    profile.profile_versions = vec![non_vat_2025, vat_2026];
+
+    let forms_2025: BTreeSet<_> = recurring_obligation_forms_for_profile_and_year(&profile, 2025)
+        .into_iter()
+        .collect();
+    let forms_2026 = forms_for(&profile);
+
+    assert!(forms_2025.contains("2551Q"));
+    assert!(!forms_2025.contains("2550Q"));
+    assert!(forms_2026.contains("2550Q"));
+    assert!(!forms_2026.contains("2551Q"));
+}
+
+#[test]
+fn cor_effective_date_filters_deadlines_by_taxable_period_not_due_month() {
+    let mut profile = self_employed_profile(false, None, false);
+    let version = confirmed_version(
+        &profile,
+        "cor-june-2026",
+        "June 2026 registration",
+        Some((2026, 6, 1)),
+        None,
+        vec![
+            RegisteredTaxType::IncomeTax,
+            RegisteredTaxType::PercentageTax,
+            RegisteredTaxType::RegistrationFee,
+        ],
+        false,
+    );
+    profile.profile_versions = vec![version];
+
+    let deadlines = DeadlineResolver::resolve_taxable_year(2026);
+    let q1_1701q = deadlines
+        .iter()
+        .find(|deadline| {
+            deadline.form_code == "1701Q"
+                && matches!(
+                    deadline.period,
+                    DeadlinePeriod::Quarterly {
+                        taxable_year: 2026,
+                        quarter: 1
+                    }
+                )
+        })
+        .unwrap();
+    let q2_1701q = deadlines
+        .iter()
+        .find(|deadline| {
+            deadline.form_code == "1701Q"
+                && matches!(
+                    deadline.period,
+                    DeadlinePeriod::Quarterly {
+                        taxable_year: 2026,
+                        quarter: 2
+                    }
+                )
+        })
+        .unwrap();
+
+    assert!(!deadline_applies_to_profile(&profile, q1_1701q));
+    assert!(deadline_applies_to_profile(&profile, q2_1701q));
+}
+
+#[test]
+fn profile_version_validation_rejects_overlaps_and_ignores_draft_versions() {
+    let mut profile = self_employed_profile(false, None, false);
+    let current = confirmed_version(
+        &profile,
+        "current",
+        "Current COR",
+        Some((2025, 1, 1)),
+        None,
+        vec![
+            RegisteredTaxType::IncomeTax,
+            RegisteredTaxType::PercentageTax,
+            RegisteredTaxType::RegistrationFee,
+        ],
+        false,
+    );
+    let mut draft_vat = confirmed_version(
+        &profile,
+        "draft",
+        "Draft VAT COR",
+        Some((2026, 1, 1)),
+        None,
+        vec![
+            RegisteredTaxType::IncomeTax,
+            RegisteredTaxType::ValueAddedTax,
+            RegisteredTaxType::RegistrationFee,
+        ],
+        true,
+    );
+    draft_vat.status = TaxProfileVersionStatus::Draft;
+    profile.profile_versions = vec![current.clone(), draft_vat];
+
+    let forms = forms_for(&profile);
+    assert!(forms.contains("2551Q"));
+    assert!(!forms.contains("2550Q"));
+    assert!(
+        validate_profile(&profile)
+            .iter()
+            .all(|error| error.field != "profile_versions")
+    );
+
+    let mut overlapping = confirmed_version(
+        &profile,
+        "overlap",
+        "Overlapping COR",
+        Some((2026, 1, 1)),
+        None,
+        vec![RegisteredTaxType::IncomeTax],
+        false,
+    );
+    overlapping.status = TaxProfileVersionStatus::Confirmed;
+    profile.profile_versions = vec![current, overlapping];
+
+    assert!(
+        validate_profile(&profile)
+            .iter()
+            .any(|error| error.field == "profile_versions")
+    );
+}
+
+#[test]
+fn profile_scoped_deadline_override_applies_after_global_rules() {
+    let mut profile = self_employed_profile(false, None, false);
+    let mut version = confirmed_version(
+        &profile,
+        "cor-2026",
+        "2026 COR",
+        Some((2026, 1, 1)),
+        None,
+        vec![
+            RegisteredTaxType::IncomeTax,
+            RegisteredTaxType::PercentageTax,
+            RegisteredTaxType::RegistrationFee,
+        ],
+        false,
+    );
+    version.deadline_overrides.push(ProfileDeadlineOverride {
+        id: "profile-q1-extension".into(),
+        title: "Profile-specific Q1 extension".into(),
+        source_reference: "Manual COR override".into(),
+        affected_form_codes: vec!["1701Q".into()],
+        original_deadline: NaiveDate::from_ymd_opt(2026, 5, 15).unwrap(),
+        adjusted_deadline: NaiveDate::from_ymd_opt(2026, 5, 20).unwrap(),
+        reason: Some("RDO-specific extension".into()),
+    });
+    profile.profile_versions = vec![version];
+
+    let overrides = profile_deadline_overrides_for_year(&profile, 2026);
+    let deadlines = DeadlineResolver::resolve_taxable_year_with_overrides(2026, &overrides);
+    let q1_1701q = deadlines
+        .iter()
+        .find(|deadline| {
+            deadline.form_code == "1701Q"
+                && matches!(
+                    deadline.period,
+                    DeadlinePeriod::Quarterly {
+                        taxable_year: 2026,
+                        quarter: 1
+                    }
+                )
+        })
+        .unwrap();
+
+    assert!(matches!(
+        q1_1701q.deadline,
+        DeadlineKind::Dated {
+            final_deadline,
+            ..
+        } if final_deadline == NaiveDate::from_ymd_opt(2026, 5, 20).unwrap()
+    ));
 }

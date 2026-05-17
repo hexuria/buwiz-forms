@@ -602,6 +602,7 @@ mod tests {
             imap_app_password: None,
             oauth_access_token: None,
             oauth_refresh_token: None,
+            profile_versions: vec![],
             tax_classification: None,
             eopt_tier: None,
             is_bmbe: false,

@@ -1,5 +1,5 @@
 use crate::naming::Tin;
-use crate::profile::TaxpayerProfile;
+use crate::profile::{TaxProfileVersionSource, TaxProfileVersionStatus, TaxpayerProfile};
 use regex::Regex;
 use std::sync::OnceLock;
 
@@ -127,6 +127,50 @@ pub fn validate_profile(profile: &TaxpayerProfile) -> Vec<ValidationError> {
 
     if !profile.email.trim().is_empty() && !validate_email(&profile.email) {
         errors.push(ValidationError::new("email", "Email address is invalid"));
+    }
+
+    let mut confirmed_versions: Vec<_> = profile
+        .profile_versions
+        .iter()
+        .filter(|version| version.status == TaxProfileVersionStatus::Confirmed)
+        .collect();
+
+    for version in &confirmed_versions {
+        if version.effective_from.is_none()
+            && version.source != TaxProfileVersionSource::MigrationBackfill
+        {
+            errors.push(ValidationError::new(
+                "profile_versions",
+                format!(
+                    "Confirmed profile version '{}' must have an effective start date",
+                    version.label
+                ),
+            ));
+        }
+    }
+
+    confirmed_versions.sort_by(|a, b| {
+        a.effective_from
+            .cmp(&b.effective_from)
+            .then(a.id.cmp(&b.id))
+    });
+    for pair in confirmed_versions.windows(2) {
+        let previous = pair[0];
+        let next = pair[1];
+        let overlaps = match (previous.effective_until, next.effective_from) {
+            (Some(previous_end), Some(next_start)) => previous_end >= next_start,
+            _ => true,
+        };
+
+        if overlaps {
+            errors.push(ValidationError::new(
+                "profile_versions",
+                format!(
+                    "Confirmed profile versions '{}' and '{}' overlap",
+                    previous.label, next.label
+                ),
+            ));
+        }
     }
 
     errors

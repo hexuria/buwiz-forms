@@ -57,12 +57,18 @@ pub use import::{extract_database_zip, import_profile_data};
 pub use integration::{
     FormDraftOutput, FormMapper, IncomeCategory, IncomeSource, Mapper2551Q, MapperError,
     PayloadValidationError, SyncError, SyncResponse, SyncResult, UniversalTaxPayload,
-    applicable_forms_for_profile, import_payload_directory, import_payload_file, process_sync,
-    process_sync_json, validate_form_applicability, validate_payload,
+    applicable_forms_for_profile, deadline_applies_to_profile, import_payload_directory,
+    import_payload_file, process_sync, process_sync_json, profile_deadline_overrides_for_year,
+    recurring_obligation_decisions_for_profile_and_year, resolve_profile_obligations_for_year,
+    validate_form_applicability, validate_payload,
 };
 pub use naming::{Tin, iaf_filename, savefile_name};
 pub use official_import::{OfficialSavefile, import_and_submit_savefile, parse_period_code};
-pub use profile::{EmailAuthMethod, TaxClassification, TaxpayerProfile};
+pub use profile::{
+    CorDocumentRef, CorRegistrationFacts, EmailAuthMethod, ManualObligationOverride,
+    ManualObligationOverrideAction, ProfileDeadlineOverride, RegisteredTaxType, TaxClassification,
+    TaxProfileVersion, TaxProfileVersionSource, TaxProfileVersionStatus, TaxpayerProfile,
+};
 pub use receipt::{BirReceiptConfirmation, parse_bir_receipt_email, split_bir_filename};
 pub use time_utils::format_next_run;
 pub use validation::{ValidationError, validate_ph_phone, validate_profile, validate_zip};

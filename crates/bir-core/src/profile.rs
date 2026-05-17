@@ -119,6 +119,139 @@ pub struct TaxElectionHistory {
     pub source_form: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TaxProfileVersionStatus {
+    Draft,
+    Confirmed,
+    Archived,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TaxProfileVersionSource {
+    ManualCor,
+    OcrCor,
+    UserOverride,
+    MigrationBackfill,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RegisteredTaxType {
+    IncomeTax,
+    ValueAddedTax,
+    PercentageTax,
+    RegistrationFee,
+    WithholdingExpanded,
+    WithholdingCompensation,
+    WithholdingFinal,
+    ExciseTax,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorRegistrationFacts {
+    #[serde(default)]
+    pub registration_date: Option<NaiveDate>,
+    #[serde(default)]
+    pub registered_name: String,
+    #[serde(default)]
+    pub trade_name: Option<String>,
+    #[serde(default)]
+    pub registered_address: String,
+    #[serde(default)]
+    pub rdo_code: String,
+    #[serde(default)]
+    pub line_of_business_code: Option<String>,
+    #[serde(default)]
+    pub line_of_business_description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorDocumentRef {
+    pub id: String,
+    pub file_name: String,
+    pub stored_path: String,
+    #[serde(default)]
+    pub ocr_text: Option<String>,
+    #[serde(default)]
+    pub ocr_confidence: Option<f32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ManualObligationOverrideAction {
+    Include,
+    Exclude,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManualObligationOverride {
+    pub form_code: String,
+    pub action: ManualObligationOverrideAction,
+    pub reason: String,
+    #[serde(default)]
+    pub source_reference: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileDeadlineOverride {
+    pub id: String,
+    pub title: String,
+    pub source_reference: String,
+    pub affected_form_codes: Vec<String>,
+    pub original_deadline: NaiveDate,
+    pub adjusted_deadline: NaiveDate,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// Effective-dated COR/manual profile configuration.
+///
+/// The flat `TaxpayerProfile` fields are kept for compatibility and form
+/// prefills. Dashboard compliance resolves through confirmed versions first.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaxProfileVersion {
+    pub id: String,
+    pub label: String,
+    pub status: TaxProfileVersionStatus,
+    pub source: TaxProfileVersionSource,
+    #[serde(default)]
+    pub effective_from: Option<NaiveDate>,
+    #[serde(default)]
+    pub effective_until: Option<NaiveDate>,
+    #[serde(default)]
+    pub needs_effective_date_review: bool,
+    pub cor: CorRegistrationFacts,
+    #[serde(default)]
+    pub registered_tax_types: Vec<RegisteredTaxType>,
+    pub taxpayer_type: TaxpayerType,
+    #[serde(default)]
+    pub tax_classification: Option<TaxClassification>,
+    #[serde(default)]
+    pub eopt_tier: Option<EoptTier>,
+    #[serde(default)]
+    pub is_vat_registered: bool,
+    #[serde(default)]
+    pub is_gpp_partner: bool,
+    #[serde(default)]
+    pub withholds_compensation: bool,
+    #[serde(default)]
+    pub withholds_expanded: bool,
+    #[serde(default)]
+    pub withholds_final: bool,
+    #[serde(default)]
+    pub is_top_withholding_agent: bool,
+    #[serde(default)]
+    pub is_government_withholding_entity: bool,
+    #[serde(default)]
+    pub excise_tax_categories: Vec<ExciseTaxCategory>,
+    #[serde(default)]
+    pub registration_activity_status: RegistrationActivityStatus,
+    #[serde(default)]
+    pub evidence: Vec<CorDocumentRef>,
+    #[serde(default)]
+    pub obligation_overrides: Vec<ManualObligationOverride>,
+    #[serde(default)]
+    pub deadline_overrides: Vec<ProfileDeadlineOverride>,
+}
+
 /// Taxpayer profile stored in encrypted SQLite.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaxpayerProfile {
@@ -250,6 +383,10 @@ pub struct TaxpayerProfile {
     /// The taxpayer's current registration/operational status.
     #[serde(default)]
     pub registration_activity_status: RegistrationActivityStatus,
+
+    /// Effective-dated COR/manual profile configuration ledger.
+    #[serde(default)]
+    pub profile_versions: Vec<TaxProfileVersion>,
 }
 
 impl TaxpayerProfile {
@@ -308,6 +445,175 @@ impl TaxpayerProfile {
     /// Returns BIR form codes applicable to this taxpayer for a specific year.
     pub fn applicable_forms_for_year(&self, year: u16) -> Vec<String> {
         crate::integration::applicable_forms_for_profile_and_year(self, year)
+    }
+
+    pub fn ensure_profile_version_ledger(&mut self) {
+        if self.profile_versions.is_empty() {
+            self.profile_versions
+                .push(TaxProfileVersion::from_profile_backfill(self));
+        }
+    }
+
+    pub fn confirmed_profile_versions(&self) -> Vec<TaxProfileVersion> {
+        let mut versions: Vec<_> = self
+            .profile_versions
+            .iter()
+            .filter(|version| version.status == TaxProfileVersionStatus::Confirmed)
+            .cloned()
+            .collect();
+
+        if versions.is_empty() {
+            versions.push(TaxProfileVersion::from_profile_backfill(self));
+        }
+
+        versions.sort_by(|a, b| {
+            a.effective_from
+                .cmp(&b.effective_from)
+                .then(a.id.cmp(&b.id))
+        });
+        versions
+    }
+
+    pub fn active_profile_versions_for_period(
+        &self,
+        period_start: NaiveDate,
+        period_end: NaiveDate,
+    ) -> Vec<TaxProfileVersion> {
+        self.confirmed_profile_versions()
+            .into_iter()
+            .filter(|version| version.overlaps_period(period_start, period_end))
+            .collect()
+    }
+
+    pub fn active_profile_versions_for_year(&self, year: u16) -> Vec<TaxProfileVersion> {
+        let start = NaiveDate::from_ymd_opt(year as i32, 1, 1).unwrap();
+        let end = NaiveDate::from_ymd_opt(year as i32, 12, 31).unwrap();
+        self.active_profile_versions_for_period(start, end)
+    }
+
+    pub fn projection_for_version(&self, version: &TaxProfileVersion) -> TaxpayerProfile {
+        let mut projected = self.clone();
+        projected.full_name = version.cor.registered_name.clone();
+        projected.rdo_code = version.cor.rdo_code.clone();
+        projected.line_of_business = version.cor.line_of_business_description.clone();
+        projected.registered_address = version.cor.registered_address.clone();
+        projected.business_start_date = version.cor.registration_date;
+        projected.taxpayer_type = version.taxpayer_type.clone();
+        projected.tax_classification = version.tax_classification.clone();
+        projected.eopt_tier = version.eopt_tier.clone();
+        projected.is_vat_registered = version.is_vat_registered;
+        projected.is_gpp_partner = version.is_gpp_partner;
+        projected.withholds_compensation = version.withholds_compensation;
+        projected.has_employees = version.withholds_compensation;
+        projected.withholds_expanded = version.withholds_expanded;
+        projected.is_expanded_withholding_agent = version.withholds_expanded
+            || version.is_top_withholding_agent
+            || version.is_government_withholding_entity;
+        projected.withholds_final = version.withholds_final;
+        projected.is_top_withholding_agent = version.is_top_withholding_agent;
+        projected.is_government_withholding_entity = version.is_government_withholding_entity;
+        projected.excise_tax_categories = version.excise_tax_categories.clone();
+        projected.registration_activity_status = version.registration_activity_status.clone();
+        projected.profile_versions = Vec::new();
+        projected
+    }
+
+    pub fn inferred_registered_tax_types(&self) -> Vec<RegisteredTaxType> {
+        let mut tax_types = Vec::new();
+        tax_types.push(RegisteredTaxType::IncomeTax);
+
+        let has_business_activity = !matches!(
+            self.effective_classification(),
+            Some(TaxClassification::PurelyCompensation)
+        );
+
+        if has_business_activity {
+            if self.is_vat_registered {
+                tax_types.push(RegisteredTaxType::ValueAddedTax);
+            } else {
+                tax_types.push(RegisteredTaxType::PercentageTax);
+            }
+            tax_types.push(RegisteredTaxType::RegistrationFee);
+        }
+
+        if self.withholds_compensation || self.has_employees {
+            tax_types.push(RegisteredTaxType::WithholdingCompensation);
+        }
+        if self.withholds_expanded
+            || self.is_expanded_withholding_agent
+            || self.is_top_withholding_agent
+            || self.is_government_withholding_entity
+        {
+            tax_types.push(RegisteredTaxType::WithholdingExpanded);
+        }
+        if self.withholds_final {
+            tax_types.push(RegisteredTaxType::WithholdingFinal);
+        }
+        if !self.excise_tax_categories.is_empty() {
+            tax_types.push(RegisteredTaxType::ExciseTax);
+        }
+
+        tax_types.sort();
+        tax_types.dedup();
+        tax_types
+    }
+}
+
+impl TaxProfileVersion {
+    pub fn from_profile_backfill(profile: &TaxpayerProfile) -> Self {
+        let effective_from = profile.business_start_date;
+        Self {
+            id: "legacy-current-profile".to_string(),
+            label: "Current profile".to_string(),
+            status: TaxProfileVersionStatus::Confirmed,
+            source: TaxProfileVersionSource::MigrationBackfill,
+            effective_from,
+            effective_until: None,
+            needs_effective_date_review: effective_from.is_none(),
+            cor: CorRegistrationFacts {
+                registration_date: effective_from,
+                registered_name: profile.full_name.clone(),
+                trade_name: None,
+                registered_address: profile.registered_address.clone(),
+                rdo_code: profile.rdo_code.clone(),
+                line_of_business_code: None,
+                line_of_business_description: profile.line_of_business.clone(),
+            },
+            registered_tax_types: profile.inferred_registered_tax_types(),
+            taxpayer_type: profile.taxpayer_type.clone(),
+            tax_classification: profile.tax_classification.clone(),
+            eopt_tier: profile.eopt_tier.clone(),
+            is_vat_registered: profile.is_vat_registered,
+            is_gpp_partner: profile.is_gpp_partner,
+            withholds_compensation: profile.withholds_compensation || profile.has_employees,
+            withholds_expanded: profile.withholds_expanded
+                || profile.is_expanded_withholding_agent
+                || profile.is_top_withholding_agent
+                || profile.is_government_withholding_entity,
+            withholds_final: profile.withholds_final,
+            is_top_withholding_agent: profile.is_top_withholding_agent,
+            is_government_withholding_entity: profile.is_government_withholding_entity,
+            excise_tax_categories: profile.excise_tax_categories.clone(),
+            registration_activity_status: profile.registration_activity_status.clone(),
+            evidence: Vec::new(),
+            obligation_overrides: Vec::new(),
+            deadline_overrides: Vec::new(),
+        }
+    }
+
+    pub fn overlaps_period(&self, period_start: NaiveDate, period_end: NaiveDate) -> bool {
+        if self.status != TaxProfileVersionStatus::Confirmed {
+            return false;
+        }
+
+        let starts_before_period_ends = self
+            .effective_from
+            .is_none_or(|effective_from| effective_from <= period_end);
+        let ends_after_period_starts = self
+            .effective_until
+            .is_none_or(|effective_until| effective_until >= period_start);
+
+        starts_before_period_ends && ends_after_period_starts
     }
 }
 

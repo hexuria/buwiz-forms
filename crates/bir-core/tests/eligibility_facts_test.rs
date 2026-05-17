@@ -66,6 +66,7 @@ fn base_profile(tp: TaxpayerType, tc: Option<TaxClassification>) -> TaxpayerProf
         imap_app_password: None,
         oauth_access_token: None,
         oauth_refresh_token: None,
+        profile_versions: vec![],
     }
 }
 

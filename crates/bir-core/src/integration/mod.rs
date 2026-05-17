@@ -47,7 +47,11 @@ pub use service::{
     process_sync, process_sync_json,
 };
 pub use validation::{
-    PayloadValidationError, all_form_codes, applicable_forms_for_profile,
-    applicable_forms_for_profile_and_year, evaluate_forms_for_year,
-    recurring_obligation_forms_for_profile_and_year, validate_form_applicability, validate_payload,
+    PayloadValidationError, ProfileConsistencyIssue, ProfileConsistencyReport,
+    ProfileConsistencySeverity, ResolvedProfileObligations, all_form_codes,
+    applicable_forms_for_profile, applicable_forms_for_profile_and_year,
+    deadline_applies_to_profile, evaluate_forms_for_year, profile_deadline_overrides_for_year,
+    recurring_obligation_decisions_for_profile_and_year,
+    recurring_obligation_forms_for_profile_and_year, resolve_profile_obligations_for_year,
+    validate_form_applicability, validate_payload,
 };
