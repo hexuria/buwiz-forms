@@ -61,6 +61,7 @@ fn test_full_form_lifecycle() {
             oauth_access_token: None,
             oauth_refresh_token: None,
             profile_versions: vec![],
+            compliance_source_mode: Default::default(),
         };
         let saved_profile = db.save_profile(profile).expect("Failed to save profile");
 

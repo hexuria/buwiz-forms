@@ -670,6 +670,7 @@ mod tests {
             oauth_access_token: None,
             oauth_refresh_token: None,
             profile_versions: vec![],
+            compliance_source_mode: Default::default(),
             zip_code: "1103".into(),
             phone: "0999".into(),
             email: "miley@example.com".into(),

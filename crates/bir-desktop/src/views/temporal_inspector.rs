@@ -155,6 +155,7 @@ impl TemporalInspectorView {
             oauth_access_token: None,
             oauth_refresh_token: None,
             profile_versions: vec![],
+            compliance_source_mode: Default::default(),
         };
 
         let engine = TemporalEngine::default();

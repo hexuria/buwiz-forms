@@ -65,9 +65,10 @@ pub use integration::{
 pub use naming::{Tin, iaf_filename, savefile_name};
 pub use official_import::{OfficialSavefile, import_and_submit_savefile, parse_period_code};
 pub use profile::{
-    CorDocumentRef, CorRegistrationFacts, EmailAuthMethod, ManualObligationOverride,
-    ManualObligationOverrideAction, ProfileDeadlineOverride, RegisteredTaxType, TaxClassification,
-    TaxProfileVersion, TaxProfileVersionSource, TaxProfileVersionStatus, TaxpayerProfile,
+    ComplianceSourceMode, CorDocumentRef, CorRegistrationFacts, EmailAuthMethod,
+    ManualObligationOverride, ManualObligationOverrideAction, ProfileDeadlineOverride,
+    RegisteredTaxType, TaxClassification, TaxProfileVersion, TaxProfileVersionSource,
+    TaxProfileVersionStatus, TaxpayerProfile,
 };
 pub use receipt::{BirReceiptConfirmation, parse_bir_receipt_email, split_bir_filename};
 pub use time_utils::format_next_run;

@@ -16,7 +16,10 @@ use crate::components::otp_paste::paste_otp_value;
 use crate::components::tin_input::TinInput;
 use bir_core::db::Database;
 use bir_core::naming::Tin;
-use bir_core::profile::{TaxpayerProfile, TaxpayerType};
+use bir_core::profile::{
+    ComplianceSourceMode, EoptTier, RegisteredTaxType, RegistrationActivityStatus,
+    TaxClassification, TaxpayerProfile, TaxpayerType,
+};
 use bir_core::reference::get_all_rdos;
 use bir_core::validation::{ValidationError, validate_profile};
 
@@ -94,6 +97,31 @@ pub struct ProfileManagerView {
     stored_profile_pin_hash: Option<String>,
     stored_tax_elections: Vec<bir_core::profile::TaxElectionHistory>,
     stored_profile_versions: Vec<bir_core::profile::TaxProfileVersion>,
+    compliance_source_mode: ComplianceSourceMode,
+    cor_editing_version_id: Option<String>,
+    cor_version_label_input: Entity<InputState>,
+    cor_effective_from_input: Entity<InputState>,
+    cor_effective_until_input: Entity<InputState>,
+    cor_registration_date_input: Entity<InputState>,
+    cor_registered_name_input: Entity<InputState>,
+    cor_trade_name_input: Entity<InputState>,
+    cor_rdo_code_input: Entity<InputState>,
+    cor_registered_address_input: Entity<InputState>,
+    cor_lob_code_input: Entity<InputState>,
+    cor_lob_description_input: Entity<InputState>,
+    cor_taxpayer_type_select: Entity<ComboboxState>,
+    cor_tax_classification_select: Entity<ComboboxState>,
+    cor_eopt_tier_select: Entity<ComboboxState>,
+    cor_registration_status_select: Entity<ComboboxState>,
+    cor_obligation_form_input: Entity<InputState>,
+    cor_obligation_reason_input: Entity<InputState>,
+    cor_obligation_source_input: Entity<InputState>,
+    cor_deadline_title_input: Entity<InputState>,
+    cor_deadline_source_input: Entity<InputState>,
+    cor_deadline_forms_input: Entity<InputState>,
+    cor_deadline_original_input: Entity<InputState>,
+    cor_deadline_adjusted_input: Entity<InputState>,
+    cor_deadline_reason_input: Entity<InputState>,
 
     enable_profile_pin: bool,
     profile_pin_input: Entity<OtpState>,
@@ -247,6 +275,103 @@ impl ProfileManagerView {
             cx.new(|cx| InputState::new(window, cx).placeholder("Mobile or Telephone No."));
         let email_input = cx.new(|cx| InputState::new(window, cx).placeholder("Email Address"));
         let business_start_input = cx.new(|cx| DateInputState::new(window, cx));
+        let cor_version_label_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Version label"));
+        let cor_effective_from_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Effective from YYYY-MM-DD"));
+        let cor_effective_until_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Effective until YYYY-MM-DD"));
+        let cor_registration_date_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Registration date YYYY-MM-DD"));
+        let cor_registered_name_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Registered name"));
+        let cor_trade_name_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Trade name"));
+        let cor_rdo_code_input = cx.new(|cx| InputState::new(window, cx).placeholder("RDO code"));
+        let cor_registered_address_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Registered address"));
+        let cor_lob_code_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Line of business code"));
+        let cor_lob_description_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Line of business description"));
+        let cor_taxpayer_type_select = cx.new(|cx| {
+            ComboboxState::new(
+                vec![
+                    "Individual".to_string(),
+                    "Corporation".to_string(),
+                    "Partnership".to_string(),
+                    "Cooperative".to_string(),
+                    "Estate".to_string(),
+                    "Trust".to_string(),
+                ],
+                6,
+                window,
+                cx,
+            )
+        });
+        let cor_tax_classification_select = cx.new(|cx| {
+            ComboboxState::new(
+                vec![
+                    "Purely Compensation".to_string(),
+                    "Self-Employed / Professional".to_string(),
+                    "Mixed Income".to_string(),
+                    "Corporation".to_string(),
+                    "Cooperative Exempt".to_string(),
+                    "Cooperative Taxable".to_string(),
+                    "Cooperative Mixed".to_string(),
+                    "Estate or Trust".to_string(),
+                    "None".to_string(),
+                ],
+                4,
+                window,
+                cx,
+            )
+        });
+        let cor_eopt_tier_select = cx.new(|cx| {
+            ComboboxState::new(
+                vec![
+                    "Micro".to_string(),
+                    "Small".to_string(),
+                    "Medium".to_string(),
+                    "Large".to_string(),
+                    "None".to_string(),
+                ],
+                5,
+                window,
+                cx,
+            )
+        });
+        let cor_registration_status_select = cx.new(|cx| {
+            ComboboxState::new(
+                vec![
+                    "Active".to_string(),
+                    "Dormant Operational".to_string(),
+                    "Temporarily Inactive".to_string(),
+                    "Officially Closed".to_string(),
+                ],
+                4,
+                window,
+                cx,
+            )
+        });
+        let cor_obligation_form_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Form code (e.g. 2551Q)"));
+        let cor_obligation_reason_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Reason required"));
+        let cor_obligation_source_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Source required"));
+        let cor_deadline_title_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Title"));
+        let cor_deadline_source_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Source required"));
+        let cor_deadline_forms_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Form codes (e.g. 1702Q,2551Q)"));
+        let cor_deadline_original_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Original deadline YYYY-MM-DD"));
+        let cor_deadline_adjusted_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Adjusted deadline YYYY-MM-DD"));
+        let cor_deadline_reason_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Reason / note"));
 
         let imap_email_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Email Address"));
@@ -369,6 +494,31 @@ impl ProfileManagerView {
             stored_profile_pin_hash: None,
             stored_tax_elections: vec![],
             stored_profile_versions: vec![],
+            compliance_source_mode: ComplianceSourceMode::TemporalSuggestion,
+            cor_editing_version_id: None,
+            cor_version_label_input,
+            cor_effective_from_input,
+            cor_effective_until_input,
+            cor_registration_date_input,
+            cor_registered_name_input,
+            cor_trade_name_input,
+            cor_rdo_code_input,
+            cor_registered_address_input,
+            cor_lob_code_input,
+            cor_lob_description_input,
+            cor_taxpayer_type_select,
+            cor_tax_classification_select,
+            cor_eopt_tier_select,
+            cor_registration_status_select,
+            cor_obligation_form_input,
+            cor_obligation_reason_input,
+            cor_obligation_source_input,
+            cor_deadline_title_input,
+            cor_deadline_source_input,
+            cor_deadline_forms_input,
+            cor_deadline_original_input,
+            cor_deadline_adjusted_input,
+            cor_deadline_reason_input,
             enable_profile_pin: false,
             profile_pin_input,
             is_totp_enabled: false,
@@ -415,6 +565,10 @@ impl ProfileManagerView {
         self.stored_profile_pin_hash = None;
         self.stored_tax_elections = vec![];
         self.stored_profile_versions = vec![];
+        self.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
+        self.cor_editing_version_id = None;
+        self.clear_cor_version_editor(window, cx);
+        self.clear_cor_override_inputs(window, cx);
         self.is_totp_enabled = false;
         self.show_totp_setup = false;
         self.show_totp_secret_text = false;
@@ -514,6 +668,7 @@ impl ProfileManagerView {
         self.is_gpp_partner = profile.is_gpp_partner;
         self.stored_tax_elections = profile.tax_elections.clone();
         self.stored_profile_versions = profile.profile_versions.clone();
+        self.compliance_source_mode = profile.compliance_source_mode.clone();
         // Populate excise tax multi-select from profile categories
         let mut excise_ids = Vec::new();
         for cat in &profile.excise_tax_categories {
@@ -1032,20 +1187,784 @@ impl ProfileManagerView {
                 }
             },
             profile_versions: self.stored_profile_versions.clone(),
+            compliance_source_mode: self.compliance_source_mode.clone(),
         };
 
-        if profile.profile_versions.is_empty()
-            || (profile.profile_versions.len() == 1
-                && profile.profile_versions[0].source
-                    == bir_core::profile::TaxProfileVersionSource::MigrationBackfill)
-        {
-            profile.profile_versions =
-                vec![bir_core::profile::TaxProfileVersion::from_profile_backfill(
-                    &profile,
-                )];
+        profile
+    }
+
+    fn sync_current_profile_to_cor_draft(&mut self, cx: &mut Context<Self>) {
+        let mut profile = self.current_profile(cx);
+        profile.profile_versions.clear();
+        profile.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
+
+        let mut version = bir_core::profile::TaxProfileVersion::from_profile_backfill(&profile);
+        version.id = format!("manual-cor-{}", chrono::Local::now().timestamp_millis());
+        version.label = format!("Manual COR {}", chrono::Local::now().format("%Y-%m-%d"));
+        version.status = bir_core::profile::TaxProfileVersionStatus::Draft;
+        version.source = bir_core::profile::TaxProfileVersionSource::ManualCor;
+        version.needs_effective_date_review = version.effective_from.is_none();
+
+        self.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+        self.stored_profile_versions.retain(|existing| {
+            existing.status != bir_core::profile::TaxProfileVersionStatus::Draft
+        });
+        self.stored_profile_versions.push(version);
+    }
+
+    fn upload_cor_document(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        let mut profile = self.current_profile(cx);
+        profile.profile_versions.clear();
+        profile.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
+        let tin = profile.tin.full().replace(['-', ' '], "");
+
+        cx.spawn(async move |this, cx| {
+            let Some(file_handle) = rfd::AsyncFileDialog::new()
+                .add_filter("COR document", &["png", "jpg", "jpeg", "pdf"])
+                .pick_file()
+                .await
+            else {
+                return;
+            };
+            let source_path = file_handle.path().to_path_buf();
+            match crate::cor_evidence::store_cor_document(&source_path, &tin) {
+                Ok(evidence) => {
+                    let _ = this.update(cx, move |this, cx| {
+                        let mut version =
+                            bir_core::profile::TaxProfileVersion::from_profile_backfill(&profile);
+                        version.id = format!(
+                            "ocr-cor-{}",
+                            chrono::Local::now().timestamp_millis()
+                        );
+                        version.label =
+                            format!("Uploaded COR {}", chrono::Local::now().format("%Y-%m-%d"));
+                        version.status = bir_core::profile::TaxProfileVersionStatus::Draft;
+                        version.source = bir_core::profile::TaxProfileVersionSource::OcrCor;
+                        version.needs_effective_date_review = version.effective_from.is_none();
+                        version.evidence.push(evidence);
+
+                        this.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+                        this.cor_editing_version_id = None;
+                        this.stored_profile_versions.push(version);
+                        this.save_message = Some(
+                            "COR uploaded and attached to a draft. OCR is not configured yet, so review the fields manually before confirming.".into(),
+                        );
+                        cx.notify();
+                    });
+                }
+                Err(error) => {
+                    let _ = this.update(cx, |this, cx| {
+                        this.save_message = Some(error);
+                        cx.notify();
+                    });
+                }
+            }
+        })
+        .detach();
+    }
+
+    fn open_cor_document(&self, version_id: &str, document_id: &str) {
+        let Some(path) = self
+            .stored_profile_versions
+            .iter()
+            .find(|version| version.id == version_id)
+            .and_then(|version| {
+                version
+                    .evidence
+                    .iter()
+                    .find(|doc| doc.id == document_id)
+                    .map(|doc| doc.stored_path.clone())
+            })
+        else {
+            return;
+        };
+        crate::platform::open_in_system(std::path::Path::new(&path));
+    }
+
+    fn remove_cor_document(&mut self, version_id: &str, document_id: &str) {
+        let Some(version) = self
+            .stored_profile_versions
+            .iter_mut()
+            .find(|version| version.id == version_id)
+        else {
+            self.save_message = Some("COR version was not found.".to_string());
+            return;
+        };
+
+        let removed_path = version
+            .evidence
+            .iter()
+            .find(|document| document.id == document_id)
+            .map(|document| document.stored_path.clone());
+        let before = version.evidence.len();
+        version
+            .evidence
+            .retain(|document| document.id != document_id);
+
+        if version.evidence.len() == before {
+            self.save_message = Some("COR evidence file was not found.".to_string());
+            return;
         }
 
-        profile
+        if let Some(path) = removed_path {
+            let _ = std::fs::remove_file(path);
+        }
+        self.save_message =
+            Some("COR evidence removed. Save the profile to persist the change.".to_string());
+    }
+
+    fn confirm_cor_version(&mut self, version_id: &str) -> Result<(), String> {
+        let Some(version) = self
+            .stored_profile_versions
+            .iter()
+            .find(|version| version.id == version_id)
+        else {
+            return Err("COR version was not found.".to_string());
+        };
+        let Some(effective_from) = version.effective_from.or(version.cor.registration_date) else {
+            return Err(
+                "Set the Business Start Date before confirming this COR version.".to_string(),
+            );
+        };
+
+        let mut profile = TaxpayerProfile {
+            id: self.editing_id,
+            full_name: String::new(),
+            tin: Tin {
+                segment1: String::new(),
+                segment2: String::new(),
+                segment3: String::new(),
+                branch: String::new(),
+            },
+            rdo_code: String::new(),
+            line_of_business: String::new(),
+            registered_address: String::new(),
+            zip_code: String::new(),
+            phone: String::new(),
+            email: String::new(),
+            default_form_type: String::new(),
+            taxpayer_type: TaxpayerType::Individual,
+            is_vat_registered: false,
+            business_start_date: None,
+            tax_classification: None,
+            eopt_tier: None,
+            is_bmbe: false,
+            is_gpp_partner: false,
+            is_create_msme: false,
+            is_expanded_withholding_agent: false,
+            atc_codes: vec![],
+            excise_tax_categories: vec![],
+            tax_elections: vec![],
+            has_employees: false,
+            is_dormant: false,
+            has_single_employer: false,
+            withholds_compensation: false,
+            withholds_expanded: false,
+            withholds_final: false,
+            is_top_withholding_agent: false,
+            is_government_withholding_entity: false,
+            registration_activity_status: Default::default(),
+            is_archived: false,
+            profile_pin_hash: None,
+            totp_secret: None,
+            email_tracking_enabled: false,
+            email_auth_method: Default::default(),
+            imap_email: None,
+            imap_host: None,
+            test_notification_enabled: false,
+            imap_app_password: None,
+            oauth_access_token: None,
+            oauth_refresh_token: None,
+            profile_versions: self.stored_profile_versions.clone(),
+            compliance_source_mode: ComplianceSourceMode::CorVersioned,
+        };
+
+        if profile.set_profile_version_confirmed(version_id, effective_from) {
+            self.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+            self.stored_profile_versions = profile.profile_versions.clone();
+            Ok(())
+        } else {
+            Err("COR version was not found.".to_string())
+        }
+    }
+
+    fn clear_cor_override_inputs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        for input in [
+            &self.cor_obligation_form_input,
+            &self.cor_obligation_reason_input,
+            &self.cor_obligation_source_input,
+            &self.cor_deadline_title_input,
+            &self.cor_deadline_source_input,
+            &self.cor_deadline_forms_input,
+            &self.cor_deadline_original_input,
+            &self.cor_deadline_adjusted_input,
+            &self.cor_deadline_reason_input,
+        ] {
+            input.update(cx, |input, cx| input.set_value("", window, cx));
+        }
+    }
+
+    fn clear_cor_version_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        for input in [
+            &self.cor_version_label_input,
+            &self.cor_effective_from_input,
+            &self.cor_effective_until_input,
+            &self.cor_registration_date_input,
+            &self.cor_registered_name_input,
+            &self.cor_trade_name_input,
+            &self.cor_rdo_code_input,
+            &self.cor_registered_address_input,
+            &self.cor_lob_code_input,
+            &self.cor_lob_description_input,
+        ] {
+            input.update(cx, |input, cx| input.set_value("", window, cx));
+        }
+        self.cor_taxpayer_type_select.update(cx, |state, cx| {
+            state.set_selected_value("Individual", window, cx)
+        });
+        self.cor_tax_classification_select.update(cx, |state, cx| {
+            state.set_selected_value("Self-Employed / Professional", window, cx)
+        });
+        self.cor_eopt_tier_select
+            .update(cx, |state, cx| state.set_selected_value("None", window, cx));
+        self.cor_registration_status_select.update(cx, |state, cx| {
+            state.set_selected_value("Active", window, cx)
+        });
+    }
+
+    fn load_cor_version_editor(
+        &mut self,
+        version_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        let Some(version) = self
+            .stored_profile_versions
+            .iter()
+            .find(|version| version.id == version_id)
+            .cloned()
+        else {
+            return Err("COR version was not found.".to_string());
+        };
+
+        self.cor_editing_version_id = Some(version.id.clone());
+        self.cor_version_label_input
+            .update(cx, |input, cx| input.set_value(version.label, window, cx));
+        self.cor_effective_from_input.update(cx, |input, cx| {
+            input.set_value(
+                version
+                    .effective_from
+                    .map(|date| date.to_string())
+                    .unwrap_or_default(),
+                window,
+                cx,
+            )
+        });
+        self.cor_effective_until_input.update(cx, |input, cx| {
+            input.set_value(
+                version
+                    .effective_until
+                    .map(|date| date.to_string())
+                    .unwrap_or_default(),
+                window,
+                cx,
+            )
+        });
+        self.cor_registration_date_input.update(cx, |input, cx| {
+            input.set_value(
+                version
+                    .cor
+                    .registration_date
+                    .map(|date| date.to_string())
+                    .unwrap_or_default(),
+                window,
+                cx,
+            )
+        });
+        self.cor_registered_name_input.update(cx, |input, cx| {
+            input.set_value(version.cor.registered_name, window, cx)
+        });
+        self.cor_trade_name_input.update(cx, |input, cx| {
+            input.set_value(version.cor.trade_name.unwrap_or_default(), window, cx)
+        });
+        self.cor_rdo_code_input.update(cx, |input, cx| {
+            input.set_value(version.cor.rdo_code, window, cx)
+        });
+        self.cor_registered_address_input.update(cx, |input, cx| {
+            input.set_value(version.cor.registered_address, window, cx)
+        });
+        self.cor_lob_code_input.update(cx, |input, cx| {
+            input.set_value(
+                version.cor.line_of_business_code.unwrap_or_default(),
+                window,
+                cx,
+            )
+        });
+        self.cor_lob_description_input.update(cx, |input, cx| {
+            input.set_value(version.cor.line_of_business_description, window, cx)
+        });
+        self.cor_taxpayer_type_select.update(cx, |state, cx| {
+            state.set_selected_value(
+                Self::taxpayer_type_label(&version.taxpayer_type),
+                window,
+                cx,
+            )
+        });
+        self.cor_tax_classification_select.update(cx, |state, cx| {
+            state.set_selected_value(
+                version
+                    .tax_classification
+                    .as_ref()
+                    .map(Self::tax_classification_label)
+                    .unwrap_or("None"),
+                window,
+                cx,
+            )
+        });
+        self.cor_eopt_tier_select.update(cx, |state, cx| {
+            state.set_selected_value(
+                version
+                    .eopt_tier
+                    .as_ref()
+                    .map(Self::eopt_tier_label)
+                    .unwrap_or("None"),
+                window,
+                cx,
+            )
+        });
+        self.cor_registration_status_select.update(cx, |state, cx| {
+            state.set_selected_value(
+                Self::registration_status_label(&version.registration_activity_status),
+                window,
+                cx,
+            )
+        });
+        Ok(())
+    }
+
+    fn apply_cor_version_editor(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        let Some(version_id) = self.cor_editing_version_id.clone() else {
+            return Err("Select a COR version to edit first.".to_string());
+        };
+        let effective_from = Self::parse_optional_cor_date(
+            self.cor_effective_from_input.read(cx).value().trim(),
+            "effective from",
+        )?;
+        let effective_until = Self::parse_optional_cor_date(
+            self.cor_effective_until_input.read(cx).value().trim(),
+            "effective until",
+        )?;
+        if let (Some(from), Some(until)) = (effective_from, effective_until)
+            && until < from
+        {
+            return Err("Effective until cannot be before effective from.".to_string());
+        }
+        let registration_date = Self::parse_optional_cor_date(
+            self.cor_registration_date_input.read(cx).value().trim(),
+            "registration date",
+        )?;
+
+        let Some(version) = self
+            .stored_profile_versions
+            .iter_mut()
+            .find(|version| version.id == version_id)
+        else {
+            return Err("COR version was not found.".to_string());
+        };
+
+        let label = self
+            .cor_version_label_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+        if label.is_empty() {
+            return Err("COR version label is required.".to_string());
+        }
+
+        version.label = label;
+        version.effective_from = effective_from;
+        version.effective_until = effective_until;
+        version.needs_effective_date_review = version.effective_from.is_none();
+        version.cor.registration_date = registration_date;
+        version.cor.registered_name = self
+            .cor_registered_name_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+        version.cor.trade_name = {
+            let value = self
+                .cor_trade_name_input
+                .read(cx)
+                .value()
+                .trim()
+                .to_string();
+            if value.is_empty() { None } else { Some(value) }
+        };
+        version.cor.rdo_code = self.cor_rdo_code_input.read(cx).value().trim().to_string();
+        version.cor.registered_address = self
+            .cor_registered_address_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+        version.cor.line_of_business_code = {
+            let value = self.cor_lob_code_input.read(cx).value().trim().to_string();
+            if value.is_empty() { None } else { Some(value) }
+        };
+        version.cor.line_of_business_description = self
+            .cor_lob_description_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+        version.taxpayer_type = Self::taxpayer_type_from_label(
+            &self.cor_taxpayer_type_select.read(cx).selected_value(cx),
+        );
+        version.tax_classification = Self::tax_classification_from_label(
+            &self
+                .cor_tax_classification_select
+                .read(cx)
+                .selected_value(cx),
+        );
+        version.eopt_tier =
+            Self::eopt_tier_from_label(&self.cor_eopt_tier_select.read(cx).selected_value(cx));
+        version.registration_activity_status = Self::registration_status_from_label(
+            &self
+                .cor_registration_status_select
+                .read(cx)
+                .selected_value(cx),
+        );
+
+        self.save_message =
+            Some("COR version details updated. Save the profile to persist them.".to_string());
+        self.load_cor_version_editor(&version_id, window, cx)?;
+        Ok(())
+    }
+
+    fn toggle_cor_registered_tax_type(&mut self, version_id: &str, tax_type: RegisteredTaxType) {
+        let Some(version) = self
+            .stored_profile_versions
+            .iter_mut()
+            .find(|version| version.id == version_id)
+        else {
+            self.save_message = Some("COR version was not found.".to_string());
+            return;
+        };
+
+        if let Some(index) = version
+            .registered_tax_types
+            .iter()
+            .position(|existing| existing == &tax_type)
+        {
+            version.registered_tax_types.remove(index);
+        } else {
+            version.registered_tax_types.push(tax_type);
+            version.registered_tax_types.sort();
+        }
+        Self::sync_version_flags_from_registered_tax_types(version);
+        self.save_message =
+            Some("Registered tax type updated. Save the profile to persist it.".to_string());
+    }
+
+    fn sync_version_flags_from_registered_tax_types(
+        version: &mut bir_core::profile::TaxProfileVersion,
+    ) {
+        version.is_vat_registered = version
+            .registered_tax_types
+            .contains(&RegisteredTaxType::ValueAddedTax);
+        version.withholds_compensation = version
+            .registered_tax_types
+            .contains(&RegisteredTaxType::WithholdingCompensation);
+        version.withholds_expanded = version
+            .registered_tax_types
+            .contains(&RegisteredTaxType::WithholdingExpanded);
+        version.withholds_final = version
+            .registered_tax_types
+            .contains(&RegisteredTaxType::WithholdingFinal);
+    }
+
+    fn parse_optional_cor_date(
+        value: &str,
+        label: &str,
+    ) -> Result<Option<chrono::NaiveDate>, String> {
+        if value.is_empty() {
+            return Ok(None);
+        }
+        chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d")
+            .map(Some)
+            .map_err(|_| format!("COR {label} must use YYYY-MM-DD."))
+    }
+
+    fn taxpayer_type_label(taxpayer_type: &TaxpayerType) -> &'static str {
+        match taxpayer_type {
+            TaxpayerType::Individual => "Individual",
+            TaxpayerType::Corporation => "Corporation",
+            TaxpayerType::Partnership => "Partnership",
+            TaxpayerType::Cooperative => "Cooperative",
+            TaxpayerType::Estate => "Estate",
+            TaxpayerType::Trust => "Trust",
+        }
+    }
+
+    fn taxpayer_type_from_label(label: &str) -> TaxpayerType {
+        match label {
+            "Corporation" => TaxpayerType::Corporation,
+            "Partnership" => TaxpayerType::Partnership,
+            "Cooperative" => TaxpayerType::Cooperative,
+            "Estate" => TaxpayerType::Estate,
+            "Trust" => TaxpayerType::Trust,
+            _ => TaxpayerType::Individual,
+        }
+    }
+
+    fn tax_classification_label(classification: &TaxClassification) -> &'static str {
+        match classification {
+            TaxClassification::PurelyCompensation => "Purely Compensation",
+            TaxClassification::SelfEmployed => "Self-Employed / Professional",
+            TaxClassification::Corporation => "Corporation",
+            TaxClassification::CooperativeExempt => "Cooperative Exempt",
+            TaxClassification::CooperativeTaxable => "Cooperative Taxable",
+            TaxClassification::CooperativeMixed => "Cooperative Mixed",
+            TaxClassification::EstateOrTrust => "Estate or Trust",
+            TaxClassification::MixedIncome => "Mixed Income",
+        }
+    }
+
+    fn tax_classification_from_label(label: &str) -> Option<TaxClassification> {
+        match label {
+            "Purely Compensation" => Some(TaxClassification::PurelyCompensation),
+            "Self-Employed / Professional" => Some(TaxClassification::SelfEmployed),
+            "Corporation" => Some(TaxClassification::Corporation),
+            "Cooperative Exempt" => Some(TaxClassification::CooperativeExempt),
+            "Cooperative Taxable" => Some(TaxClassification::CooperativeTaxable),
+            "Cooperative Mixed" => Some(TaxClassification::CooperativeMixed),
+            "Estate or Trust" => Some(TaxClassification::EstateOrTrust),
+            "Mixed Income" => Some(TaxClassification::MixedIncome),
+            _ => None,
+        }
+    }
+
+    fn eopt_tier_label(tier: &EoptTier) -> &'static str {
+        match tier {
+            EoptTier::Micro => "Micro",
+            EoptTier::Small => "Small",
+            EoptTier::Medium => "Medium",
+            EoptTier::Large => "Large",
+        }
+    }
+
+    fn eopt_tier_from_label(label: &str) -> Option<EoptTier> {
+        match label {
+            "Micro" => Some(EoptTier::Micro),
+            "Small" => Some(EoptTier::Small),
+            "Medium" => Some(EoptTier::Medium),
+            "Large" => Some(EoptTier::Large),
+            _ => None,
+        }
+    }
+
+    fn registration_status_label(status: &RegistrationActivityStatus) -> &'static str {
+        match status {
+            RegistrationActivityStatus::Active => "Active",
+            RegistrationActivityStatus::DormantOperational => "Dormant Operational",
+            RegistrationActivityStatus::TemporarilyInactive => "Temporarily Inactive",
+            RegistrationActivityStatus::OfficiallyClosed => "Officially Closed",
+        }
+    }
+
+    fn registration_status_from_label(label: &str) -> RegistrationActivityStatus {
+        match label {
+            "Dormant Operational" => RegistrationActivityStatus::DormantOperational,
+            "Temporarily Inactive" => RegistrationActivityStatus::TemporarilyInactive,
+            "Officially Closed" => RegistrationActivityStatus::OfficiallyClosed,
+            _ => RegistrationActivityStatus::Active,
+        }
+    }
+
+    fn add_cor_obligation_override(
+        &mut self,
+        action: bir_core::profile::ManualObligationOverrideAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        let form_code = self
+            .cor_obligation_form_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_ascii_uppercase()
+            .replace(' ', "");
+        let reason = self
+            .cor_obligation_reason_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+        let source_reference = self
+            .cor_obligation_source_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+
+        if form_code.is_empty() {
+            return Err("Set a form code for the obligation override.".to_string());
+        }
+        if reason.is_empty() || source_reference.is_empty() {
+            return Err("Obligation overrides require both a reason and source.".to_string());
+        }
+
+        let Some(version) = self
+            .stored_profile_versions
+            .iter_mut()
+            .rev()
+            .find(|version| version.status != bir_core::profile::TaxProfileVersionStatus::Archived)
+        else {
+            return Err("Create a COR/manual version before adding profile overrides.".to_string());
+        };
+
+        version
+            .obligation_overrides
+            .retain(|override_rule| override_rule.form_code.to_ascii_uppercase() != form_code);
+        version
+            .obligation_overrides
+            .push(bir_core::profile::ManualObligationOverride {
+                form_code: form_code.clone(),
+                action,
+                reason,
+                source_reference: Some(source_reference),
+            });
+        self.clear_cor_override_inputs(window, cx);
+        self.save_message = Some(format!(
+            "Profile obligation override for {form_code} added. Save the profile to persist it."
+        ));
+        Ok(())
+    }
+
+    fn remove_cor_obligation_override(&mut self, version_id: &str, index: usize) {
+        let Some(version) = self
+            .stored_profile_versions
+            .iter_mut()
+            .find(|version| version.id == version_id)
+        else {
+            self.save_message = Some("COR version was not found.".to_string());
+            return;
+        };
+        if index >= version.obligation_overrides.len() {
+            self.save_message = Some("Profile obligation override was not found.".to_string());
+            return;
+        }
+        version.obligation_overrides.remove(index);
+        self.save_message = Some(
+            "Profile obligation override removed. Save the profile to persist it.".to_string(),
+        );
+    }
+
+    fn add_cor_deadline_override(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        let title = self
+            .cor_deadline_title_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+        let source_reference = self
+            .cor_deadline_source_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+        let form_codes = self
+            .cor_deadline_forms_input
+            .read(cx)
+            .value()
+            .split(',')
+            .map(|code| code.trim().to_ascii_uppercase().replace(' ', ""))
+            .filter(|code| !code.is_empty())
+            .collect::<Vec<_>>();
+        let original_deadline = chrono::NaiveDate::parse_from_str(
+            self.cor_deadline_original_input.read(cx).value().trim(),
+            "%Y-%m-%d",
+        )
+        .map_err(|_| "Original deadline must use YYYY-MM-DD.".to_string())?;
+        let adjusted_deadline = chrono::NaiveDate::parse_from_str(
+            self.cor_deadline_adjusted_input.read(cx).value().trim(),
+            "%Y-%m-%d",
+        )
+        .map_err(|_| "Adjusted deadline must use YYYY-MM-DD.".to_string())?;
+        let reason = self
+            .cor_deadline_reason_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+
+        if title.is_empty() || source_reference.is_empty() || form_codes.is_empty() {
+            return Err(
+                "Deadline overrides require a title, source, and at least one form code."
+                    .to_string(),
+            );
+        }
+
+        let Some(version) = self
+            .stored_profile_versions
+            .iter_mut()
+            .rev()
+            .find(|version| version.status != bir_core::profile::TaxProfileVersionStatus::Archived)
+        else {
+            return Err("Create a COR/manual version before adding profile overrides.".to_string());
+        };
+
+        version
+            .deadline_overrides
+            .push(bir_core::profile::ProfileDeadlineOverride {
+                id: format!(
+                    "profile-deadline-{}",
+                    chrono::Local::now().timestamp_millis()
+                ),
+                title: title.clone(),
+                source_reference,
+                affected_form_codes: form_codes,
+                original_deadline,
+                adjusted_deadline,
+                reason: if reason.is_empty() {
+                    None
+                } else {
+                    Some(reason)
+                },
+            });
+        self.clear_cor_override_inputs(window, cx);
+        self.save_message = Some(format!(
+            "Profile deadline override '{title}' added. Save the profile to persist it."
+        ));
+        Ok(())
+    }
+
+    fn remove_cor_deadline_override(&mut self, version_id: &str, index: usize) {
+        let Some(version) = self
+            .stored_profile_versions
+            .iter_mut()
+            .find(|version| version.id == version_id)
+        else {
+            self.save_message = Some("COR version was not found.".to_string());
+            return;
+        };
+        if index >= version.deadline_overrides.len() {
+            self.save_message = Some("Profile deadline override was not found.".to_string());
+            return;
+        }
+        version.deadline_overrides.remove(index);
+        self.save_message =
+            Some("Profile deadline override removed. Save the profile to persist it.".to_string());
     }
 
     fn save_profile(&mut self, _window: &mut Window, cx: &mut Context<Self>) {

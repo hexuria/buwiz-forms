@@ -721,6 +721,7 @@ mod tests {
             oauth_access_token: None,
             oauth_refresh_token: None,
             profile_versions: vec![],
+            compliance_source_mode: Default::default(),
         }
     }
 
@@ -838,6 +839,7 @@ mod tests {
             oauth_access_token: None,
             oauth_refresh_token: None,
             profile_versions: vec![],
+            compliance_source_mode: Default::default(),
         };
 
         // PurelyCompensation should NOT be allowed to file 2551Q
@@ -904,6 +906,7 @@ mod tests {
             oauth_access_token: None,
             oauth_refresh_token: None,
             profile_versions: vec![],
+            compliance_source_mode: Default::default(),
         };
 
         let forms = applicable_forms_for_profile(&profile);

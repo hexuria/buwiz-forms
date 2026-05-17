@@ -15,6 +15,7 @@ mod actions;
 mod app;
 mod auth_overlays;
 mod components;
+mod cor_evidence;
 pub mod events;
 mod ipc;
 mod platform;

@@ -1,7 +1,7 @@
 //! Taxpayer profile management.
 
 use crate::naming::Tin;
-use chrono::NaiveDate;
+use chrono::{Duration, NaiveDate};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -124,6 +124,13 @@ pub enum TaxProfileVersionStatus {
     Draft,
     Confirmed,
     Archived,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum ComplianceSourceMode {
+    #[default]
+    TemporalSuggestion,
+    CorVersioned,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -387,6 +394,11 @@ pub struct TaxpayerProfile {
     /// Effective-dated COR/manual profile configuration ledger.
     #[serde(default)]
     pub profile_versions: Vec<TaxProfileVersion>,
+
+    /// Selects whether compliance uses the flat profile/TTCE projection or the
+    /// confirmed COR/manual version ledger.
+    #[serde(default)]
+    pub compliance_source_mode: ComplianceSourceMode,
 }
 
 impl TaxpayerProfile {
@@ -448,23 +460,29 @@ impl TaxpayerProfile {
     }
 
     pub fn ensure_profile_version_ledger(&mut self) {
-        if self.profile_versions.is_empty() {
+        if self.compliance_source_mode == ComplianceSourceMode::CorVersioned
+            && self.profile_versions.is_empty()
+        {
             self.profile_versions
                 .push(TaxProfileVersion::from_profile_backfill(self));
         }
     }
 
+    pub fn compliance_mode(&self) -> ComplianceSourceMode {
+        self.compliance_source_mode.clone()
+    }
+
     pub fn confirmed_profile_versions(&self) -> Vec<TaxProfileVersion> {
+        if self.compliance_source_mode == ComplianceSourceMode::TemporalSuggestion {
+            return vec![TaxProfileVersion::from_profile_backfill(self)];
+        }
+
         let mut versions: Vec<_> = self
             .profile_versions
             .iter()
             .filter(|version| version.status == TaxProfileVersionStatus::Confirmed)
             .cloned()
             .collect();
-
-        if versions.is_empty() {
-            versions.push(TaxProfileVersion::from_profile_backfill(self));
-        }
 
         versions.sort_by(|a, b| {
             a.effective_from
@@ -491,6 +509,60 @@ impl TaxpayerProfile {
         self.active_profile_versions_for_period(start, end)
     }
 
+    pub fn current_cor_version(&self, as_of_year: u16) -> Option<TaxProfileVersion> {
+        if self.compliance_source_mode != ComplianceSourceMode::CorVersioned {
+            return None;
+        }
+
+        self.active_profile_versions_for_year(as_of_year)
+            .into_iter()
+            .filter(|version| version.source != TaxProfileVersionSource::MigrationBackfill)
+            .last()
+    }
+
+    pub fn preview_obligations_for_year(
+        &self,
+        year: u16,
+    ) -> crate::integration::ResolvedProfileObligations {
+        crate::integration::resolve_profile_obligations_for_year(self, year)
+    }
+
+    pub fn auto_close_previous_confirmed_version(&mut self, new_effective_from: NaiveDate) {
+        let close_at = new_effective_from - Duration::days(1);
+        for version in &mut self.profile_versions {
+            if version.status == TaxProfileVersionStatus::Confirmed
+                && version.effective_until.is_none()
+                && version
+                    .effective_from
+                    .is_none_or(|start| start < new_effective_from)
+            {
+                version.effective_until = Some(close_at);
+            }
+        }
+    }
+
+    pub fn set_profile_version_confirmed(
+        &mut self,
+        version_id: &str,
+        effective_from: NaiveDate,
+    ) -> bool {
+        self.auto_close_previous_confirmed_version(effective_from);
+        if let Some(version) = self
+            .profile_versions
+            .iter_mut()
+            .find(|version| version.id == version_id)
+        {
+            version.status = TaxProfileVersionStatus::Confirmed;
+            version.effective_from = Some(effective_from);
+            version.effective_until = None;
+            version.needs_effective_date_review = false;
+            self.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn projection_for_version(&self, version: &TaxProfileVersion) -> TaxpayerProfile {
         let mut projected = self.clone();
         projected.full_name = version.cor.registered_name.clone();
@@ -515,6 +587,7 @@ impl TaxpayerProfile {
         projected.excise_tax_categories = version.excise_tax_categories.clone();
         projected.registration_activity_status = version.registration_activity_status.clone();
         projected.profile_versions = Vec::new();
+        projected.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
         projected
     }
 

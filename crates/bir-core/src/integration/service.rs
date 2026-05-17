@@ -283,6 +283,7 @@ mod tests {
             oauth_access_token: None,
             oauth_refresh_token: None,
             profile_versions: vec![],
+            compliance_source_mode: Default::default(),
         };
 
         db.save_profile(profile).unwrap();

@@ -3,7 +3,8 @@ use bir_core::integration::recurring_obligation_forms_for_profile_and_year;
 use bir_core::integration::{deadline_applies_to_profile, profile_deadline_overrides_for_year};
 use bir_core::naming::Tin;
 use bir_core::profile::{
-    EoptTier, ExciseTaxCategory, IncomeTaxElection, ProfileDeadlineOverride, RegisteredTaxType,
+    ComplianceSourceMode, EoptTier, ExciseTaxCategory, IncomeTaxElection, ManualObligationOverride,
+    ManualObligationOverrideAction, ProfileDeadlineOverride, RegisteredTaxType,
     RegistrationActivityStatus, TaxClassification, TaxElectionHistory, TaxProfileVersion,
     TaxProfileVersionStatus, TaxpayerProfile, TaxpayerType,
 };
@@ -85,6 +86,7 @@ fn base_profile(
         oauth_access_token: None,
         oauth_refresh_token: None,
         profile_versions: vec![],
+        compliance_source_mode: Default::default(),
     }
 }
 
@@ -573,6 +575,7 @@ fn versioned_cor_uses_the_profile_active_for_the_selected_year() {
         true,
     );
     profile.profile_versions = vec![non_vat_2025, vat_2026];
+    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
 
     let forms_2025: BTreeSet<_> = recurring_obligation_forms_for_profile_and_year(&profile, 2025)
         .into_iter()
@@ -583,6 +586,105 @@ fn versioned_cor_uses_the_profile_active_for_the_selected_year() {
     assert!(!forms_2025.contains("2550Q"));
     assert!(forms_2026.contains("2550Q"));
     assert!(!forms_2026.contains("2551Q"));
+}
+
+#[test]
+fn temporal_suggestion_mode_ignores_stored_cor_versions() {
+    let mut profile = self_employed_profile(false, None, false);
+    let vat_cor = confirmed_version(
+        &profile,
+        "cor-vat",
+        "VAT COR",
+        Some((2026, 1, 1)),
+        None,
+        vec![
+            RegisteredTaxType::IncomeTax,
+            RegisteredTaxType::ValueAddedTax,
+            RegisteredTaxType::RegistrationFee,
+        ],
+        true,
+    );
+    profile.profile_versions = vec![vat_cor];
+    profile.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
+
+    let forms = forms_for(&profile);
+
+    assert!(forms.contains("2551Q"));
+    assert!(!forms.contains("2550Q"));
+}
+
+#[test]
+fn cor_versioned_mode_requires_confirmed_versions() {
+    let mut profile = self_employed_profile(false, None, false);
+    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+
+    assert!(forms_for(&profile).is_empty());
+    assert!(
+        validate_profile(&profile)
+            .iter()
+            .any(|error| error.field == "profile_versions")
+    );
+}
+
+#[test]
+fn confirming_new_cor_version_auto_closes_previous_version() {
+    let mut profile = self_employed_profile(false, None, false);
+    let current = confirmed_version(
+        &profile,
+        "current",
+        "Current COR",
+        Some((2025, 1, 1)),
+        None,
+        vec![
+            RegisteredTaxType::IncomeTax,
+            RegisteredTaxType::PercentageTax,
+            RegisteredTaxType::RegistrationFee,
+        ],
+        false,
+    );
+    let mut draft = confirmed_version(
+        &profile,
+        "draft-vat",
+        "Draft VAT COR",
+        Some((2026, 1, 1)),
+        None,
+        vec![
+            RegisteredTaxType::IncomeTax,
+            RegisteredTaxType::ValueAddedTax,
+            RegisteredTaxType::RegistrationFee,
+        ],
+        true,
+    );
+    draft.status = TaxProfileVersionStatus::Draft;
+    profile.profile_versions = vec![current, draft];
+
+    assert!(
+        profile.set_profile_version_confirmed(
+            "draft-vat",
+            NaiveDate::from_ymd_opt(2026, 1, 1).unwrap()
+        )
+    );
+
+    let previous = profile
+        .profile_versions
+        .iter()
+        .find(|version| version.id == "current")
+        .unwrap();
+    let confirmed = profile
+        .profile_versions
+        .iter()
+        .find(|version| version.id == "draft-vat")
+        .unwrap();
+
+    assert_eq!(
+        previous.effective_until,
+        Some(NaiveDate::from_ymd_opt(2025, 12, 31).unwrap())
+    );
+    assert_eq!(confirmed.status, TaxProfileVersionStatus::Confirmed);
+    assert_eq!(
+        profile.compliance_source_mode,
+        ComplianceSourceMode::CorVersioned
+    );
 }
 
 #[test]
@@ -602,6 +704,7 @@ fn cor_effective_date_filters_deadlines_by_taxable_period_not_due_month() {
         false,
     );
     profile.profile_versions = vec![version];
+    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
 
     let deadlines = DeadlineResolver::resolve_taxable_year(2026);
     let q1_1701q = deadlines
@@ -666,6 +769,7 @@ fn profile_version_validation_rejects_overlaps_and_ignores_draft_versions() {
     );
     draft_vat.status = TaxProfileVersionStatus::Draft;
     profile.profile_versions = vec![current.clone(), draft_vat];
+    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
 
     let forms = forms_for(&profile);
     assert!(forms.contains("2551Q"));
@@ -687,6 +791,7 @@ fn profile_version_validation_rejects_overlaps_and_ignores_draft_versions() {
     );
     overlapping.status = TaxProfileVersionStatus::Confirmed;
     profile.profile_versions = vec![current, overlapping];
+    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
 
     assert!(
         validate_profile(&profile)
@@ -721,6 +826,7 @@ fn profile_scoped_deadline_override_applies_after_global_rules() {
         reason: Some("RDO-specific extension".into()),
     });
     profile.profile_versions = vec![version];
+    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
 
     let overrides = profile_deadline_overrides_for_year(&profile, 2026);
     let deadlines = DeadlineResolver::resolve_taxable_year_with_overrides(2026, &overrides);
@@ -745,4 +851,76 @@ fn profile_scoped_deadline_override_applies_after_global_rules() {
             ..
         } if final_deadline == NaiveDate::from_ymd_opt(2026, 5, 20).unwrap()
     ));
+}
+
+#[test]
+fn profile_override_validation_requires_reason_and_source() {
+    let mut profile = self_employed_profile(false, None, false);
+    let mut version = confirmed_version(
+        &profile,
+        "cor-2026",
+        "2026 COR",
+        Some((2026, 1, 1)),
+        None,
+        vec![
+            RegisteredTaxType::IncomeTax,
+            RegisteredTaxType::PercentageTax,
+        ],
+        false,
+    );
+    version.obligation_overrides.push(ManualObligationOverride {
+        form_code: "2551Q".into(),
+        action: ManualObligationOverrideAction::Exclude,
+        reason: String::new(),
+        source_reference: None,
+    });
+    version.deadline_overrides.push(ProfileDeadlineOverride {
+        id: "missing-source".into(),
+        title: String::new(),
+        source_reference: String::new(),
+        affected_form_codes: vec![],
+        original_deadline: NaiveDate::from_ymd_opt(2026, 4, 25).unwrap(),
+        adjusted_deadline: NaiveDate::from_ymd_opt(2026, 4, 28).unwrap(),
+        reason: None,
+    });
+    profile.profile_versions = vec![version];
+    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+
+    let messages = validate_profile(&profile)
+        .into_iter()
+        .map(|error| error.message)
+        .collect::<Vec<_>>();
+
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("requires a reason and source"))
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|message| { message.contains("requires a title, source, and form code") })
+    );
+}
+
+#[test]
+fn profile_version_validation_rejects_invalid_effective_date_range() {
+    let mut profile = self_employed_profile(false, None, false);
+    let version = confirmed_version(
+        &profile,
+        "bad-range",
+        "Bad Range COR",
+        Some((2026, 6, 1)),
+        Some((2026, 5, 31)),
+        vec![RegisteredTaxType::IncomeTax],
+        false,
+    );
+    profile.profile_versions = vec![version];
+    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+
+    assert!(validate_profile(&profile).iter().any(|error| {
+        error
+            .message
+            .contains("effective end date before its start date")
+    }));
 }
