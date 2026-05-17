@@ -154,6 +154,7 @@ impl TemporalInspectorView {
             imap_app_password: None,
             oauth_access_token: None,
             oauth_refresh_token: None,
+            profile_versions: vec![],
         };
 
         let engine = TemporalEngine::default();

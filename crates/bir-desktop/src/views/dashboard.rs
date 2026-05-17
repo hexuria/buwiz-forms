@@ -379,9 +379,8 @@ impl DashboardView {
         if let Ok(db) = self.db.lock() {
             let year = self.selected_year as u16;
             let applicable_codes =
-                bir_core::integration::recurring_obligation_forms_for_profile_and_year(
-                    profile, year,
-                );
+                bir_core::integration::resolve_profile_obligations_for_year(profile, year)
+                    .form_codes;
 
             for code in applicable_codes.clone() {
                 let mut year_progress = std::collections::HashMap::new();
@@ -401,26 +400,26 @@ impl DashboardView {
                     if !codes_set_for_filter.contains(&sum.form_code) {
                         continue;
                     }
-                    // Skip completed forms (Confirmed/Paid are "done")
-                    if matches!(
-                        sum.status,
-                        bir_core::forms::FilingStatus::Confirmed
-                            | bir_core::forms::FilingStatus::Paid
-                    ) {
+                    // Only Paid means the taxpayer has complied. Submitted and
+                    // Confirmed still need payment or explicit paid marking.
+                    if matches!(sum.status, bir_core::forms::FilingStatus::Paid) {
                         continue;
                     }
                     self.actionable_forms.push((profile.full_name.clone(), sum));
                 }
             }
 
-            let overrides = db.get_deadline_overrides();
+            let mut overrides = db.get_deadline_overrides();
+            overrides.extend(bir_core::integration::profile_deadline_overrides_for_year(
+                profile, year,
+            ));
             let deadlines_for_year =
                 DeadlineResolver::resolve_taxable_year_with_overrides(year as i32, &overrides);
-            let codes_set: std::collections::HashSet<String> =
-                applicable_codes.into_iter().collect();
             self.deadlines = deadlines_for_year
                 .into_iter()
-                .filter(|d| codes_set.contains(&d.form_code))
+                .filter(|deadline| {
+                    bir_core::integration::deadline_applies_to_profile(profile, deadline)
+                })
                 .collect();
         }
     }
@@ -606,20 +605,10 @@ impl Render for DashboardView {
 
         let year = self.selected_year as u16;
 
-        let context = bir_core::temporal::TemporalContext::current_compliance(year);
-        let engine = bir_core::temporal::TemporalEngine::default();
-        let profile_form_codes: std::collections::HashSet<String> =
-            bir_core::integration::recurring_obligation_forms_for_profile_and_year(profile, year)
-                .into_iter()
-                .collect();
-        let mut available_forms: Vec<_> = engine
-            .evaluate_with_context(profile, &context)
-            .into_iter()
-            .filter(|decision| {
-                decision.eligibility.is_visible()
-                    && profile_form_codes.contains(&decision.form_code)
-            })
-            .collect();
+        let mut available_forms =
+            bir_core::integration::recurring_obligation_decisions_for_profile_and_year(
+                profile, year,
+            );
 
         // ━━━ Monthly/Quarterly filing exclusion ━━━
         // If the user has already filed ANY quarterly return for a form category,
@@ -1349,25 +1338,22 @@ impl Render for DashboardView {
         let main_content = match self.active_tab {
             ProfileTab::Calendar => {
                 // Build overdue column
-                let mut overdue_col = div().flex_1().flex().flex_col().gap_4().child(
-                    div()
-                        .text_xl()
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(gpui::hsla(0.0, 0.8, 0.5, 1.0))
-                        .child("Overdue"),
-                );
+                let mut overdue_inner = div().flex().flex_col().gap_3();
 
                 if overdue_deadlines.is_empty() {
-                    overdue_col = overdue_col.child(
+                    overdue_inner = overdue_inner.child(
                         div()
-                            .p_4()
-                            .bg(cx.theme().background)
-                            .border_1()
-                            .border_color(cx.theme().border)
-                            .rounded_lg()
+                            .w_full()
+                            .flex()
+                            .flex_col()
+                            .items_center()
+                            .justify_center()
+                            .py_8()
+                            .gap_2()
                             .child(
                                 div()
                                     .text_sm()
+                                    .font_weight(FontWeight::MEDIUM)
                                     .text_color(cx.theme().muted_foreground)
                                     .child("No overdue deadlines. You're on track!"),
                             ),
@@ -1458,7 +1444,7 @@ impl Render for DashboardView {
                                 }));
                         }
 
-                        overdue_col = overdue_col.child(
+                        overdue_inner = overdue_inner.child(
                             card.child(
                                 // Date badge
                                 div()
@@ -1531,26 +1517,47 @@ impl Render for DashboardView {
                     }
                 }
 
-                // Build action required column
-                let mut action_col = div().flex_1().flex().flex_col().gap_4().child(
-                    div()
-                        .text_xl()
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(cx.theme().foreground)
-                        .child("Action Required"),
-                );
-
-                if matching_actionable_forms.is_empty() {
-                    action_col = action_col.child(
+                let overdue_col = div()
+                    .flex_1()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
                         div()
+                            .text_xl()
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(gpui::hsla(0.0, 0.8, 0.5, 1.0))
+                            .child("Overdue"),
+                    )
+                    .child(
+                        div()
+                            .w_full()
                             .p_4()
                             .bg(cx.theme().background)
                             .border_1()
                             .border_color(cx.theme().border)
-                            .rounded_lg()
+                            .rounded_xl()
+                            .shadow_sm()
+                            .child(overdue_inner),
+                    );
+
+                // Build action required column
+                let mut action_inner = div().flex().flex_col().gap_3();
+
+                if matching_actionable_forms.is_empty() {
+                    action_inner = action_inner.child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .flex_col()
+                            .items_center()
+                            .justify_center()
+                            .py_8()
+                            .gap_2()
                             .child(
                                 div()
                                     .text_sm()
+                                    .font_weight(FontWeight::MEDIUM)
                                     .text_color(cx.theme().muted_foreground)
                                     .child("No pending forms. All caught up!"),
                             ),
@@ -1637,7 +1644,7 @@ impl Render for DashboardView {
                         );
                         let btn_form_code = f.form_code.clone();
 
-                        action_col = action_col.child(
+                        action_inner = action_inner.child(
                             div()
                                 .id(card_id)
                                 .flex()
@@ -1738,28 +1745,61 @@ impl Render for DashboardView {
                     }
                 }
 
-                div()
+                let action_col = div()
+                    .flex_1()
                     .flex()
-                    .flex_row()
-                    .items_start()
-                    .gap_6()
+                    .flex_col()
+                    .gap_2()
                     .child(
                         div()
-                            .flex_1()
-                            .flex()
-                            .flex_col()
-                            .gap_4()
-                            .child(
-                                div()
-                                    .text_xl()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(cx.theme().foreground)
-                                    .child(deadline_header.clone()),
-                            )
-                            .child(self.upcoming_deadlines_list.clone()),
+                            .text_xl()
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(cx.theme().foreground)
+                            .child("Action Required"),
                     )
-                    .child(action_col)
-                    .child(overdue_col)
+                    .child(
+                        div()
+                            .w_full()
+                            .p_4()
+                            .bg(cx.theme().background)
+                            .border_1()
+                            .border_color(cx.theme().border)
+                            .rounded_xl()
+                            .shadow_sm()
+                            .child(action_inner),
+                    );
+
+                // Wrap the upcoming deadlines list in a column matching action/overdue
+                let upcoming_col = div()
+                    .flex_1()
+                    .flex()
+                    .flex_col()
+                    .gap_4()
+                    .child(self.upcoming_deadlines_list.clone());
+
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_4()
+                    // Full-width header row
+                    .child(
+                        div()
+                            .text_xl()
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(cx.theme().foreground)
+                            .child(deadline_header.clone()),
+                    )
+                    // Three equal columns below
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_start()
+                            .gap_6()
+                            .child(upcoming_col)
+                            .child(action_col)
+                            .child(overdue_col),
+                    )
             }
             ProfileTab::Forms => forms_ui,
         };

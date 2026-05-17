@@ -176,7 +176,6 @@ impl GlobalDashboardView {
 
 impl Render for GlobalDashboardView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
-
         let is_narrow = window.viewport_size().width < px(768.);
 
         self.compliance_calendar.update(cx, |calendar, _| {

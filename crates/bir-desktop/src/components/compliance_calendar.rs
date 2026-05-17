@@ -569,7 +569,9 @@ impl ComplianceCalendar {
                                         this.selected_date = None;
                                         let new_year = this.current_month.year();
                                         if new_year != old_year {
-                                            cx.emit(ComplianceCalendarEvent::YearChanged { year: new_year });
+                                            cx.emit(ComplianceCalendarEvent::YearChanged {
+                                                year: new_year,
+                                            });
                                         }
                                         cx.notify();
                                     }))
@@ -609,7 +611,9 @@ impl ComplianceCalendar {
                                         this.selected_date = None;
                                         let new_year = this.current_month.year();
                                         if new_year != old_year {
-                                            cx.emit(ComplianceCalendarEvent::YearChanged { year: new_year });
+                                            cx.emit(ComplianceCalendarEvent::YearChanged {
+                                                year: new_year,
+                                            });
                                         }
                                         cx.notify();
                                     }))

@@ -93,6 +93,7 @@ pub struct ProfileManagerView {
     stored_is_archived: bool,
     stored_profile_pin_hash: Option<String>,
     stored_tax_elections: Vec<bir_core::profile::TaxElectionHistory>,
+    stored_profile_versions: Vec<bir_core::profile::TaxProfileVersion>,
 
     enable_profile_pin: bool,
     profile_pin_input: Entity<OtpState>,
@@ -367,6 +368,7 @@ impl ProfileManagerView {
             stored_is_archived: false,
             stored_profile_pin_hash: None,
             stored_tax_elections: vec![],
+            stored_profile_versions: vec![],
             enable_profile_pin: false,
             profile_pin_input,
             is_totp_enabled: false,
@@ -412,6 +414,7 @@ impl ProfileManagerView {
         self.is_editing_password = true;
         self.stored_profile_pin_hash = None;
         self.stored_tax_elections = vec![];
+        self.stored_profile_versions = vec![];
         self.is_totp_enabled = false;
         self.show_totp_setup = false;
         self.show_totp_secret_text = false;
@@ -510,6 +513,7 @@ impl ProfileManagerView {
         self.is_dormant = profile.is_dormant;
         self.is_gpp_partner = profile.is_gpp_partner;
         self.stored_tax_elections = profile.tax_elections.clone();
+        self.stored_profile_versions = profile.profile_versions.clone();
         // Populate excise tax multi-select from profile categories
         let mut excise_ids = Vec::new();
         for cat in &profile.excise_tax_categories {
@@ -914,7 +918,7 @@ impl ProfileManagerView {
             None
         };
 
-        TaxpayerProfile {
+        let mut profile = TaxpayerProfile {
             id: self.editing_id,
             full_name: self.name_input.read(cx).value().trim().to_string(),
             tin,
@@ -1027,7 +1031,21 @@ impl ProfileManagerView {
                     _ => bir_core::profile::RegistrationActivityStatus::Active,
                 }
             },
+            profile_versions: self.stored_profile_versions.clone(),
+        };
+
+        if profile.profile_versions.is_empty()
+            || (profile.profile_versions.len() == 1
+                && profile.profile_versions[0].source
+                    == bir_core::profile::TaxProfileVersionSource::MigrationBackfill)
+        {
+            profile.profile_versions =
+                vec![bir_core::profile::TaxProfileVersion::from_profile_backfill(
+                    &profile,
+                )];
         }
+
+        profile
     }
 
     fn save_profile(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
