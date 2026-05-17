@@ -162,3 +162,74 @@ taxpayer_types = ["Corporation"]
 classifications = ["Corporation"]
 legal_citations = ["ra-8424-sec-27"]
 exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.1706.rev-1997"
+form_code = "1706"
+title = "Capital Gains Tax Return for Onerous Transfer of Real Property"
+category = "Income Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "OpenEnded"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = []
+legal_citations = ["ra-8424-sec-24-d"]
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.1707.rev-1997"
+form_code = "1707"
+title = "Capital Gains Tax Return on Shares of Stock Not Traded in the Stock Exchange"
+category = "Income Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "OpenEnded"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = []
+legal_citations = ["ra-8424-sec-24-c"]
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.1707a.rev-1997"
+form_code = "1707A"
+title = "Annual Capital Gains Tax Return on Shares of Stock Not Traded"
+category = "Income Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "Annual"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = []
+legal_citations = ["ra-8424-sec-24-c"]
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.1800.rev-1997"
+form_code = "1800"
+title = "Donor's Tax Return"
+category = "Income Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "OpenEnded"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = []
+legal_citations = ["ra-8424-sec-98"]
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.1801.rev-1997"
+form_code = "1801"
+title = "Estate Tax Return"
+category = "Income Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "OpenEnded"
+taxpayer_types = ["Individual"]
+classifications = []
+legal_citations = ["ra-8424-sec-84"]
+exclusive_priority = 0
+

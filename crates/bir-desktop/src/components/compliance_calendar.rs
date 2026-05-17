@@ -3,39 +3,78 @@ use bir_core::db::BirNotice;
 use chrono::{Datelike, Local, NaiveDate};
 use gpui::prelude::*;
 use gpui::*;
+use gpui_component::popover::Popover;
 use gpui_component::*;
 
+use super::multi_select::{MultiSelect, MultiSelectEvent, MultiSelectOption, MultiSelectState};
+
+pub enum ComplianceCalendarEvent {
+    YearChanged { year: i32 },
+}
+
+impl EventEmitter<ComplianceCalendarEvent> for ComplianceCalendar {}
+
 pub struct ComplianceCalendar {
-    pub filter_open: bool,
     pub filters: std::collections::HashSet<String>,
-    pub available_filters: Vec<String>,
+    pub form_filter: Entity<MultiSelectState>,
     pub selected_date: Option<NaiveDate>,
     pub current_month: NaiveDate,
 
     // Extracted props so it can hold the data temporarily during render
     deadlines: Vec<ResolvedTaxDeadline>,
     announcements: Vec<BirNotice>,
+    _subscriptions: Vec<Subscription>,
 }
 
 impl ComplianceCalendar {
-    pub fn new(_window: &mut Window, _cx: &mut Context<Self>) -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let current_date = Local::now().date_naive();
         let current_month =
             NaiveDate::from_ymd_opt(current_date.year(), current_date.month(), 1).unwrap();
 
-        let mut filters = std::collections::HashSet::new();
-        filters.insert("All".to_string());
-
         let available_filters = bir_core::integration::all_form_codes();
 
+        let mut filters = std::collections::HashSet::new();
+        for filter in &available_filters {
+            filters.insert(filter.clone());
+        }
+
+        let options: Vec<MultiSelectOption> = available_filters
+            .iter()
+            .map(|code| MultiSelectOption::new(code, code))
+            .collect();
+
+        let form_filter = cx.new(|cx| {
+            MultiSelectState::new(options, window, cx)
+                .placeholder("All Forms")
+                .max_visible_chips(1)
+                .drop_down(true)
+                .max_visible_items(10)
+        });
+
+        form_filter.update(cx, |state, cx| {
+            state.set_selected_ids(available_filters, cx);
+        });
+
+        let subscriptions = vec![cx.subscribe(
+            &form_filter,
+            |this: &mut Self, _entity, event: &MultiSelectEvent, cx| {
+                this.filters.clear();
+                for id in &event.selected {
+                    this.filters.insert(id.clone());
+                }
+                cx.notify();
+            },
+        )];
+
         Self {
-            filter_open: false,
             filters,
-            available_filters,
+            form_filter,
             selected_date: None,
             current_month,
             deadlines: Vec::new(),
             announcements: Vec::new(),
+            _subscriptions: subscriptions,
         }
     }
 
@@ -44,217 +83,28 @@ impl ComplianceCalendar {
         self.announcements = announcements;
     }
 
-    fn toggle_filter(&mut self, filter: &str, cx: &mut Context<Self>) {
-        if filter == "All" {
-            self.filters.clear();
-            self.filters.insert("All".to_string());
-        } else {
-            self.filters.remove("All");
-            if self.filters.contains(filter) {
-                self.filters.remove(filter);
-                if self.filters.is_empty() {
-                    self.filters.insert("All".to_string());
-                }
-            } else {
-                self.filters.insert(filter.to_string());
-            }
-        }
-        cx.notify();
-    }
-
-    fn render_filter_combobox(&self, cx: &mut Context<Self>) -> gpui::Div {
-        let selected_text = if self.filters.contains("All") {
-            "All Forms".to_string()
-        } else {
-            let count = self.filters.len();
-            if count == 1 {
-                self.filters.iter().next().unwrap().clone()
-            } else {
-                format!("{} selected", count)
-            }
-        };
-
-        let filter_button = div()
-            .id("filter-combobox")
-            .px_3()
-            .py_1p5()
-            .bg(cx.theme().background)
-            .border_1()
-            .border_color(cx.theme().border)
-            .rounded_md()
-            .flex()
-            .items_center()
-            .gap_2()
-            .cursor_pointer()
-            .hover(|s| s.bg(cx.theme().secondary))
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(cx.theme().foreground)
-                    .child(selected_text),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(cx.theme().muted_foreground)
-                    .child("▼"),
-            )
-            .on_click(cx.listener(|this, _, _, cx| {
-                this.filter_open = !this.filter_open;
-                cx.notify();
-            }));
-
-        let dropdown = if self.filter_open {
-            let mut options_list = div().flex().flex_col().w_full();
-
-            // "All" option
-            let is_all = self.filters.contains("All");
-            options_list = options_list.child(
-                div()
-                    .id("filter-all")
-                    .px_3()
-                    .py_2()
-                    .cursor_pointer()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .hover(|s| s.bg(cx.theme().secondary))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.toggle_filter("All", cx);
-                    }))
-                    .child(
-                        div()
-                            .w(px(16.))
-                            .h(px(16.))
-                            .border_1()
-                            .border_color(if is_all {
-                                cx.theme().primary
-                            } else {
-                                cx.theme().border
-                            })
-                            .bg(if is_all {
-                                cx.theme().primary
-                            } else {
-                                cx.theme().background
-                            })
-                            .rounded_sm()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(if is_all {
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().primary_foreground)
-                                    .child("✓")
-                            } else {
-                                div()
-                            }),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().foreground)
-                            .child("All Forms"),
-                    ),
-            );
-
-            // Other options
-            for (i, opt) in self.available_filters.iter().enumerate() {
-                let is_selected = self.filters.contains(opt);
-                let opt_clone = opt.clone();
-                options_list = options_list.child(
-                    div()
-                        .id(("filter-opt", i))
-                        .px_3()
-                        .py_2()
-                        .cursor_pointer()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .hover(|s| s.bg(cx.theme().secondary))
-                        .on_click(cx.listener({
-                            let opt_clone = opt_clone.clone();
-                            move |this, _, _, cx| {
-                                this.toggle_filter(&opt_clone, cx);
-                            }
-                        }))
-                        .child(
-                            div()
-                                .w(px(16.))
-                                .h(px(16.))
-                                .border_1()
-                                .border_color(if is_selected {
-                                    cx.theme().primary
-                                } else {
-                                    cx.theme().border
-                                })
-                                .bg(if is_selected {
-                                    cx.theme().primary
-                                } else {
-                                    cx.theme().background
-                                })
-                                .rounded_sm()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .child(if is_selected {
-                                    div()
-                                        .text_xs()
-                                        .text_color(cx.theme().primary_foreground)
-                                        .child("✓")
-                                } else {
-                                    div()
-                                }),
-                        )
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(cx.theme().foreground)
-                                .child(opt.clone()),
-                        ),
-                );
-            }
-
-            deferred(
-                anchored().snap_to_window_with_margin(px(8.)).child(
-                    div()
-                        .occlude()
-                        .mt_1p5()
-                        .w(px(200.))
-                        .border_1()
-                        .border_color(cx.theme().border)
-                        .shadow_lg()
-                        .rounded_md()
-                        .bg(cx.theme().popover)
-                        .child(options_list),
-                ),
-            )
-            .with_priority(2)
-            .into_any_element()
-        } else {
-            div().into_any_element()
-        };
-
-        div().relative().child(filter_button).child(dropdown)
-    }
-
     fn filtered_deadlines(&self) -> Vec<&ResolvedTaxDeadline> {
-        let mut filtered: Vec<_> = if self.filters.contains("All") {
-            self.deadlines.iter().collect()
-        } else {
-            self.deadlines
-                .iter()
-                .filter(|d| self.filters.contains(&d.form_code))
-                .collect()
-        };
+        let mut filtered: Vec<_> = self
+            .deadlines
+            .iter()
+            .filter(|d| self.filters.contains(&d.form_code))
+            .collect();
 
         // Event-based deadlines have no calendar date; exclude from grid/schedule views
         filtered.retain(|d| d.final_deadline_date().is_some());
 
         if let Some(date) = self.selected_date {
             filtered.retain(|d| d.final_deadline_date() == Some(date));
+        } else {
+            // Only show deadlines for the currently viewed month if no specific date is selected
+            filtered.retain(|d| {
+                if let Some(date) = d.final_deadline_date() {
+                    date.year() == self.current_month.year()
+                        && date.month() == self.current_month.month()
+                } else {
+                    false
+                }
+            });
         }
 
         filtered
@@ -700,6 +550,7 @@ impl ComplianceCalendar {
                                     .cursor_pointer()
                                     .hover(|s| s.bg(cx.theme().secondary))
                                     .on_click(cx.listener(|this, _, _, cx| {
+                                        let old_year = this.current_month.year();
                                         if this.current_month.month() == 1 {
                                             this.current_month = NaiveDate::from_ymd_opt(
                                                 this.current_month.year() - 1,
@@ -714,6 +565,11 @@ impl ComplianceCalendar {
                                                 1,
                                             )
                                             .unwrap();
+                                        }
+                                        this.selected_date = None;
+                                        let new_year = this.current_month.year();
+                                        if new_year != old_year {
+                                            cx.emit(ComplianceCalendarEvent::YearChanged { year: new_year });
                                         }
                                         cx.notify();
                                     }))
@@ -734,6 +590,7 @@ impl ComplianceCalendar {
                                     .cursor_pointer()
                                     .hover(|s| s.bg(cx.theme().secondary))
                                     .on_click(cx.listener(|this, _, _, cx| {
+                                        let old_year = this.current_month.year();
                                         if this.current_month.month() == 12 {
                                             this.current_month = NaiveDate::from_ymd_opt(
                                                 this.current_month.year() + 1,
@@ -748,6 +605,11 @@ impl ComplianceCalendar {
                                                 1,
                                             )
                                             .unwrap();
+                                        }
+                                        this.selected_date = None;
+                                        let new_year = this.current_month.year();
+                                        if new_year != old_year {
+                                            cx.emit(ComplianceCalendarEvent::YearChanged { year: new_year });
                                         }
                                         cx.notify();
                                     }))
@@ -791,7 +653,7 @@ impl Render for ComplianceCalendar {
                             .gap_2()
                             .items_center()
                             // Filter Combobox
-                            .child(self.render_filter_combobox(cx)),
+                            .child(div().w(px(240.)).child(MultiSelect::new(&self.form_filter))),
                     ),
             )
             .child(
@@ -814,7 +676,7 @@ impl Render for ComplianceCalendar {
                             .child(if let Some(date) = self.selected_date {
                                 format!("Deadlines for {}", date.format("%b %d, %Y"))
                             } else {
-                                "Upcoming Deadlines".to_string()
+                                format!("Deadlines for {}", self.current_month.format("%B %Y"))
                             }),
                     )
                     .child(self.render_list_view(window, cx)),

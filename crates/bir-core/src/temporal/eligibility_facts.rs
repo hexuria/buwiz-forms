@@ -8,8 +8,8 @@
 //! and produces clean boolean/enum signals that rules consume.
 
 use crate::profile::{
-    EoptTier, ExciseTaxCategory, IncomeTaxElection, TaxClassification, TaxpayerProfile,
-    TaxpayerType,
+    EoptTier, ExciseTaxCategory, IncomeTaxElection, RegistrationActivityStatus, TaxClassification,
+    TaxpayerProfile, TaxpayerType,
 };
 
 /// What kind of income does this Individual earn?
@@ -85,6 +85,7 @@ pub struct EligibilityFacts {
 
     // ── Status ──
     pub is_dormant: bool,
+    pub registration_activity_status: RegistrationActivityStatus,
     pub has_single_employer: bool,
     pub is_gpp_partner: bool,
 
@@ -151,9 +152,17 @@ impl EligibilityFacts {
         // Granular withholding: prefer the new flags, but auto-derive from old
         // flags for backward compat (profiles that only have has_employees set).
         let withholds_compensation = profile.withholds_compensation || profile.has_employees;
-        let withholds_expanded =
-            profile.withholds_expanded || profile.is_expanded_withholding_agent;
+        let withholds_expanded = profile.withholds_expanded
+            || profile.is_expanded_withholding_agent
+            || profile.is_top_withholding_agent
+            || profile.is_government_withholding_entity;
         let withholds_final = profile.withholds_final;
+        let is_dormant = profile.is_dormant
+            || matches!(
+                profile.registration_activity_status,
+                RegistrationActivityStatus::DormantOperational
+                    | RegistrationActivityStatus::TemporarilyInactive
+            );
 
         Self {
             taxpayer_type: profile.taxpayer_type.clone(),
@@ -170,7 +179,8 @@ impl EligibilityFacts {
             is_expanded_withholding_agent: profile.is_expanded_withholding_agent,
             excise_tax_categories: profile.excise_tax_categories.clone(),
             tax_elections,
-            is_dormant: profile.is_dormant,
+            is_dormant,
+            registration_activity_status: profile.registration_activity_status.clone(),
             has_single_employer: profile.has_single_employer,
             is_gpp_partner: profile.is_gpp_partner,
             eopt_tier: profile.eopt_tier.clone(),
@@ -227,13 +237,13 @@ mod tests {
             tax_elections: vec![],
             has_employees: false,
             is_dormant: false,
+            registration_activity_status: Default::default(),
             has_single_employer: false,
             withholds_compensation: false,
             withholds_expanded: false,
             withholds_final: false,
             is_top_withholding_agent: false,
             is_government_withholding_entity: false,
-            registration_activity_status: Default::default(),
             is_archived: false,
             profile_pin_hash: None,
             totp_secret: None,

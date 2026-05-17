@@ -152,10 +152,15 @@ impl NoticeProvider for BirCmsProvider {
 
             if item.code == "eBIRForms" {
                 notice_type = NoticeType::EbirFormsVersion;
-                // Try to find version
+                // Try to find version securely without grabbing massive HTML chunks
                 if let Some(v_idx) = html_content.find("Offline eBIRForms Package v") {
-                    let end_idx = html_content[v_idx..].find("setup").unwrap_or(30) + v_idx;
-                    title = html_content[v_idx..end_idx].trim().to_string();
+                    let slice = &html_content[v_idx..];
+                    let end_idx = slice
+                        .find('<')
+                        .unwrap_or(slice.len())
+                        .min(slice.find('"').unwrap_or(slice.len()))
+                        .min(150);
+                    title = slice[..end_idx].trim().to_string();
                     external_id = format!("bir-cms:ebirforms:{}", title.replace(" ", "-"));
                 }
             }

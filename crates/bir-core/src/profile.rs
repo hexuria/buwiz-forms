@@ -88,6 +88,8 @@ pub enum ExciseTaxCategory {
     Mineral,
     Petroleum,
     Tobacco,
+    SweetenedBeverages,
+    CoalAndCoke,
 }
 
 /// Registration and operational activity status.

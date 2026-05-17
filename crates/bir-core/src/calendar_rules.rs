@@ -40,6 +40,20 @@ impl DeadlinePeriod {
         }
     }
 
+    fn matches_month_filter(&self, months: &[u8]) -> bool {
+        match self {
+            Self::Monthly { month, .. } => months.contains(month),
+            Self::Quarterly { quarter, .. } => {
+                let first_month = ((*quarter - 1) * 3) + 1;
+                let last_month = first_month + 2;
+                months
+                    .iter()
+                    .any(|month| (first_month..=last_month).contains(month))
+            }
+            Self::Annual { .. } | Self::EventBased => false,
+        }
+    }
+
     pub fn label(&self) -> String {
         match self {
             Self::Monthly {
@@ -232,18 +246,18 @@ impl ResolvedTaxDeadline {
     }
 
     pub fn matches_period_filter(&self, months: &[u8], quarters: &[u8]) -> bool {
-        let month_match = months.is_empty()
-            || self
-                .period
-                .month()
-                .is_some_and(|month| months.contains(&month));
-        let quarter_match = quarters.is_empty()
-            || self
+        if months.is_empty() && quarters.is_empty() {
+            return true;
+        }
+
+        let month_match = !months.is_empty() && self.period.matches_month_filter(months);
+        let quarter_match = !quarters.is_empty()
+            && self
                 .period
                 .quarter()
                 .is_some_and(|quarter| quarters.contains(&quarter));
 
-        month_match && quarter_match
+        month_match || quarter_match
     }
 
     /// Filter by the actual deadline DATE's month/quarter, not the filing period.
@@ -382,18 +396,9 @@ impl DeadlineResolver {
 
     pub fn official_rules() -> Vec<OfficialRule> {
         vec![
-            OfficialRule {
-                form_nos: vec!["2000"],
-                form_name: "Documentary Stamp Tax",
-                frequency: Frequency::Monthly,
-                description: "5th day of the following month",
-                generator: |year, forms, desc, name| {
-                    Self::gen_monthly(year, forms, desc, name, |y, m| {
-                        let (ty, tm) = next_month(y, m);
-                        NaiveDate::from_ymd_opt(ty, tm, 5).unwrap()
-                    })
-                },
-            },
+            // NOTE: Form 2000 (DST) is NOT a recurring monthly obligation.
+            // It is event-based — only filed when a taxable document transaction
+            // occurs in a given month. Moved to the AsNeeded bucket below.
             OfficialRule {
                 form_nos: vec!["0620", "1600-VT", "1600-PT", "1606", "2200-C"],
                 form_name: "Monthly Remittance / Excise Tax",
@@ -488,6 +493,18 @@ impl DeadlineResolver {
                 },
             },
             OfficialRule {
+                form_nos: vec!["2200-M"],
+                form_name: "Quarterly Excise Tax Return (Minerals)",
+                frequency: Frequency::Quarterly,
+                description: "15th day following the close of calendar quarter",
+                generator: |year, forms, desc, name| {
+                    Self::gen_quarterly(year, forms, desc, name, |y, q| {
+                        let (ty, tm) = if q == 4 { (y + 1, 1) } else { (y, q * 3 + 1) };
+                        NaiveDate::from_ymd_opt(ty, tm, 15).unwrap()
+                    })
+                },
+            },
+            OfficialRule {
                 form_nos: vec!["1604-C", "1604-F"],
                 form_name: "Annual Information Return",
                 frequency: Frequency::Annual,
@@ -541,7 +558,7 @@ impl DeadlineResolver {
             OfficialRule {
                 form_nos: vec![
                     "2552", "1600-WP", "1706", "1707", "1800", "1801", "0605", "0611-A", "0613",
-                    "2200-A", "2200-AN", "2200-M", "2200P", "2200-S", "2200-T", "2553",
+                    "2200-A", "2200-AN", "2200-M", "2200P", "2200-S", "2200-T", "2553", "2000",
                 ],
                 form_name: "As Needed / Special / Event-Based",
                 frequency: Frequency::AsNeeded,
@@ -834,8 +851,8 @@ pub fn canonical_form_code(display_form_no: &str) -> &'static str {
             "0613" => "0613",
             "0620" => "0620",
             "1606" => "1606",
-            "1602Q" => "1602Q",
-            "1603Q" => "1603Q",
+            "1602Q" => "1602",
+            "1603Q" => "1603",
             "1621" => "1621",
             "1700" => "1700",
             "1701" => "1701",
@@ -934,6 +951,11 @@ mod tests {
         );
         assert!(q1.matches_period_filter(&[], &[1]));
         assert!(!q1.matches_period_filter(&[], &[2]));
+        assert!(q1.matches_period_filter(&[1], &[]));
+        assert!(q1.matches_period_filter(&[2], &[]));
+        assert!(q1.matches_period_filter(&[3], &[]));
+        assert!(!q1.matches_period_filter(&[4], &[]));
+        assert!(!q1.matches_period_filter(&[5], &[]));
     }
 
     #[test]
@@ -1031,6 +1053,9 @@ mod tests {
             q1.final_deadline_date(),
             Some(NaiveDate::from_ymd_opt(2026, 6, 15).unwrap())
         );
+        assert!(q1.matches_period_filter(&[], &[1]));
+        assert!(q1.matches_period_filter(&[1, 2, 3], &[]));
+        assert!(!q1.matches_period_filter(&[6], &[]));
         assert_eq!(q1.status, DeadlineStatus::Extended);
         assert_eq!(q1.source_reference.as_deref(), Some("BIR test advisory"));
     }

@@ -1,5 +1,6 @@
 //! Dormancy rule — annotates or suppresses forms based on business status.
 
+use crate::profile::RegistrationActivityStatus;
 use crate::temporal::eligibility_facts::EligibilityFacts;
 use crate::temporal::forms::FormArtifact;
 use crate::temporal::traits::TaxRule;
@@ -37,6 +38,15 @@ impl TaxRule for DormancyRule {
         current_state: FormEligibility,
         _target_year: u16,
     ) -> FormEligibility {
+        if matches!(
+            facts.registration_activity_status,
+            RegistrationActivityStatus::OfficiallyClosed
+        ) {
+            return FormEligibility::Suppressed(
+                "Officially closed with BIR - no further filing obligations".into(),
+            );
+        }
+
         if !facts.is_dormant {
             return current_state;
         }

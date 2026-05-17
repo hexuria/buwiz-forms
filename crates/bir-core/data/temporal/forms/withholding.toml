@@ -165,3 +165,94 @@ classifications = []
 legal_citations = ["ra-8424-sec-57-58"]
 withholding_trigger = "Final"
 exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.0619f.rev-2018"
+form_code = "0619F"
+title = "Monthly Remittance Form of Final Income Taxes Withheld"
+category = "Withholding Tax"
+revision = "2018"
+effective_from = "2018-01-01"
+lifecycle = "Active"
+frequency = "Monthly"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = []
+legal_citations = ["rr-11-2018"]
+withholding_trigger = "Final"
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.0620.rev-1997"
+form_code = "0620"
+title = "Monthly Remittance Form of Tax Withheld on the Amount Withdrawn from the Decedent's Deposit Account"
+category = "Withholding Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "Monthly"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = []
+legal_citations = ["ra-8424-sec-57-58"]
+withholding_trigger = "Compensation"
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.1601fq.rev-2018"
+form_code = "1601FQ"
+title = "Quarterly Remittance Return of Final Income Taxes Withheld"
+category = "Withholding Tax"
+revision = "2018"
+effective_from = "2018-01-01"
+lifecycle = "Active"
+frequency = "Quarterly"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = []
+legal_citations = ["rr-11-2018"]
+withholding_trigger = "Final"
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.1606.rev-1997"
+form_code = "1606"
+title = "Withholding Tax Remittance Return on Government Money Payments"
+category = "Withholding Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "Monthly"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = []
+legal_citations = ["ra-8424-sec-57-58"]
+withholding_trigger = "Expanded"
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.1621.rev-1997"
+form_code = "1621"
+title = "Quarterly Remittance Return of Tax Withheld on the Profit Sharing of GPP"
+category = "Withholding Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "Quarterly"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = []
+legal_citations = ["ra-8424-sec-57-58"]
+withholding_trigger = "Expanded"
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.2316.rev-1997"
+form_code = "2316"
+title = "Certificate of Compensation Payment / Tax Withheld"
+category = "Withholding Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "Annual"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = []
+legal_citations = ["ra-8424-sec-57-58"]
+withholding_trigger = "Compensation"
+exclusive_priority = 0
+

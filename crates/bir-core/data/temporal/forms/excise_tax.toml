@@ -90,3 +90,34 @@ taxpayer_types = ["Individual", "Corporation", "Partnership"]
 classifications = []
 legal_citations = ["ra-8424-nirc"]
 exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.2200s.rev-2018"
+form_code = "2200S"
+title = "Excise Tax Return for Sweetened Beverages"
+category = "Excise Tax"
+revision = "2018"
+effective_from = "2018-01-01"
+lifecycle = "Active"
+frequency = "Monthly"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = []
+legal_citations = ["ra-10963-title-vi"]
+excise_category = "SweetenedBeverages"
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.2200c.rev-1997"
+form_code = "2200C"
+title = "Excise Tax Return for Coal and Coke"
+category = "Excise Tax"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "Monthly"
+taxpayer_types = ["Individual", "Corporation", "Partnership"]
+classifications = []
+legal_citations = ["ra-8424-title-vi"]
+excise_category = "CoalAndCoke"
+exclusive_priority = 0
+

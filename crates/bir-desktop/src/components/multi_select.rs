@@ -63,6 +63,10 @@ pub struct MultiSelectState {
     max_visible_chips: usize,
     /// Scroll handle for the options list.
     scroll_handle: ScrollHandle,
+    /// Whether the dropdown opens downward (true) or upward (false, default).
+    drop_down: bool,
+    /// Maximum visible items in the options area before scrolling.
+    max_visible_items: usize,
     /// Subscriptions.
     _subscriptions: Vec<Subscription>,
 }
@@ -137,6 +141,8 @@ impl MultiSelectState {
             placeholder: "Select items...".to_string(),
             max_visible_chips: 3,
             scroll_handle: ScrollHandle::new(),
+            drop_down: false,
+            max_visible_items: MAX_VISIBLE_ITEMS,
             _subscriptions,
         }
     }
@@ -152,6 +158,20 @@ impl MultiSelectState {
     #[allow(dead_code)]
     pub fn max_visible_chips(mut self, count: usize) -> Self {
         self.max_visible_chips = count;
+        self
+    }
+
+    /// Set whether the dropdown opens downward (true) or upward (false, default).
+    #[allow(dead_code)]
+    pub fn drop_down(mut self, enabled: bool) -> Self {
+        self.drop_down = enabled;
+        self
+    }
+
+    /// Set the maximum number of visible items before the list scrolls.
+    #[allow(dead_code)]
+    pub fn max_visible_items(mut self, count: usize) -> Self {
+        self.max_visible_items = count;
         self
     }
 
@@ -481,50 +501,56 @@ impl Render for MultiSelectState {
 
             Some(
                 deferred(
-                    div().absolute().bottom(px(0.)).left_0().w_full().child(
-                        v_flex()
-                            .occlude()
-                            .mt_1p5()
-                            .w_full()
-                            .border_1()
-                            .border_color(cx.theme().border)
-                            .shadow_md()
-                            .rounded_md()
-                            .bg(cx.theme().popover)
-                            .text_color(cx.theme().popover_foreground)
-                            // Sticky search bar
-                            .child(
-                                div()
-                                    .px_2()
-                                    .py_1p5()
-                                    .border_b_1()
-                                    .border_color(cx.theme().border)
-                                    .child(
-                                        Input::new(&self.search_input)
-                                            .small()
-                                            .prefix(
-                                                Icon::new(IconName::Search)
-                                                    .xsmall()
-                                                    .text_color(cx.theme().muted_foreground),
-                                            )
-                                            .appearance(false),
-                                    ),
-                            )
-                            // Action bar
-                            .child(action_bar)
-                            // Options list (scrollable)
-                            .child(
-                                v_flex()
-                                    .id(ElementId::Name(
-                                        format!("multi_select_options_{:?}", cx.entity_id()).into(),
-                                    ))
-                                    .max_h(px(MAX_VISIBLE_ITEMS as f32 * ITEM_HEIGHT))
-                                    .overflow_y_scroll()
-                                    .track_scroll(&self.scroll_handle)
-                                    .children(option_rows)
-                                    .when_some(empty_state, |d, empty| d.child(empty)),
-                            ),
-                    ),
+                    div()
+                        .absolute()
+                        .left_0()
+                        .w_full()
+                        .when(!self.drop_down, |d| d.bottom(px(0.)))
+                        .child(
+                            v_flex()
+                                .occlude()
+                                .mt_1p5()
+                                .w_full()
+                                .border_1()
+                                .border_color(cx.theme().border)
+                                .shadow_md()
+                                .rounded_md()
+                                .bg(cx.theme().popover)
+                                .text_color(cx.theme().popover_foreground)
+                                // Sticky search bar
+                                .child(
+                                    div()
+                                        .px_2()
+                                        .py_1p5()
+                                        .border_b_1()
+                                        .border_color(cx.theme().border)
+                                        .child(
+                                            Input::new(&self.search_input)
+                                                .small()
+                                                .prefix(
+                                                    Icon::new(IconName::Search)
+                                                        .xsmall()
+                                                        .text_color(cx.theme().muted_foreground),
+                                                )
+                                                .appearance(false),
+                                        ),
+                                )
+                                // Action bar
+                                .child(action_bar)
+                                // Options list (scrollable)
+                                .child(
+                                    v_flex()
+                                        .id(ElementId::Name(
+                                            format!("multi_select_options_{:?}", cx.entity_id())
+                                                .into(),
+                                        ))
+                                        .max_h(px(self.max_visible_items as f32 * ITEM_HEIGHT))
+                                        .overflow_y_scroll()
+                                        .track_scroll(&self.scroll_handle)
+                                        .children(option_rows)
+                                        .when_some(empty_state, |d, empty| d.child(empty)),
+                                ),
+                        ),
                 )
                 .with_priority(3),
             )

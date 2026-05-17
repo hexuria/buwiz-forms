@@ -46,13 +46,24 @@ impl TaxRule for ExciseTaxRule {
                 "Mineral" => ExciseTaxCategory::Mineral,
                 "Petroleum" => ExciseTaxCategory::Petroleum,
                 "Tobacco" => ExciseTaxCategory::Tobacco,
-                _ => return current_state,
+                "SweetenedBeverages" => ExciseTaxCategory::SweetenedBeverages,
+                "CoalAndCoke" => ExciseTaxCategory::CoalAndCoke,
+                _ => {
+                    return FormEligibility::Suppressed(format!(
+                        "Unknown excise category: {}",
+                        required_cat_str
+                    ));
+                }
             };
             if !facts.excise_tax_categories.contains(&required_cat) {
                 return FormEligibility::Suppressed(format!(
                     "Not liable for {:?} excise tax",
                     required_cat
                 ));
+            }
+        } else if form.category == "Excise Tax" {
+            if facts.excise_tax_categories.is_empty() {
+                return FormEligibility::Suppressed("No excise tax liabilities".into());
             }
         }
         current_state

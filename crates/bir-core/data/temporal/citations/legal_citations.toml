@@ -143,3 +143,43 @@ kind = "BirFormInstruction"
 number = "1702"
 section = "Annual Corporate ITR variant instructions"
 year = 2018
+
+# ── Capital Gains, Donor's Tax, Estate Tax ──
+
+[[citations]]
+citation_id = "ra-8424-sec-24-c"
+kind = "RepublicAct"
+number = "8424"
+section = "Sec 24(C) - Capital Gains from Sale of Shares Not Traded"
+year = 1997
+
+[[citations]]
+citation_id = "ra-8424-sec-24-d"
+kind = "RepublicAct"
+number = "8424"
+section = "Sec 24(D) - Capital Gains from Sale of Real Property"
+year = 1997
+
+[[citations]]
+citation_id = "ra-8424-sec-84"
+kind = "RepublicAct"
+number = "8424"
+section = "Sec 84 - Estate Tax"
+year = 1997
+
+[[citations]]
+citation_id = "ra-8424-sec-98"
+kind = "RepublicAct"
+number = "8424"
+section = "Sec 98 - Donor's Tax"
+year = 1997
+
+# ── TRAIN Excise Tax ──
+
+[[citations]]
+citation_id = "ra-10963-title-vi"
+kind = "RepublicAct"
+number = "10963"
+section = "Title VI - Excise Tax on Sweetened Beverages (TRAIN)"
+year = 2018
+

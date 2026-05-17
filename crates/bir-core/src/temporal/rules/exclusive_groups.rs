@@ -38,6 +38,10 @@ impl TaxRule for ExclusiveGroupRule {
         current_state: FormEligibility,
         target_year: u16,
     ) -> FormEligibility {
+        if !current_state.is_visible() {
+            return current_state;
+        }
+
         let group = match &form.exclusive_group {
             Some(g) => g.as_str(),
             None => return current_state,

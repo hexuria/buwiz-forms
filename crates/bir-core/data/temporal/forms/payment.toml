@@ -13,3 +13,32 @@ taxpayer_types = ["Individual", "Corporation", "Partnership", "Cooperative", "Es
 classifications = []
 legal_citations = ["ra-8424-nirc"]
 exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.0611a.rev-1997"
+form_code = "0611A"
+title = "Payment Form Covered by a Letter of Authority / Notice for Informal Conference"
+category = "Payment"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "OpenEnded"
+taxpayer_types = ["Individual", "Corporation", "Partnership", "Cooperative", "Estate", "Trust"]
+classifications = []
+legal_citations = ["ra-8424-nirc"]
+exclusive_priority = 0
+
+[[artifacts]]
+artifact_id = "bir.0613.rev-1997"
+form_code = "0613"
+title = "Payment Form for Payment of Deficiency Tax Assessed"
+category = "Payment"
+revision = "1997"
+effective_from = "1997-01-01"
+lifecycle = "Active"
+frequency = "OpenEnded"
+taxpayer_types = ["Individual", "Corporation", "Partnership", "Cooperative", "Estate", "Trust"]
+classifications = []
+legal_citations = ["ra-8424-nirc"]
+exclusive_priority = 0
+

@@ -99,6 +99,11 @@ impl FilterState {
         self.active_chips.iter().any(|c| c.group == "Month")
     }
 
+    /// Check if the Annual chip is active
+    pub fn has_annual_filter(&self) -> bool {
+        self.active_chips.iter().any(|c| c.group == "Annual")
+    }
+
     /// Update the available form types based on the active profile.
     pub fn update_for_profile(
         &mut self,
@@ -107,7 +112,7 @@ impl FilterState {
         cx: &mut Context<Self>,
     ) {
         let applicable_form_codes =
-            bir_core::integration::applicable_forms_for_profile_and_year(profile, year);
+            bir_core::integration::recurring_obligation_forms_for_profile_and_year(profile, year);
 
         self.available_form_types = applicable_form_codes;
 
@@ -157,31 +162,36 @@ impl FilterState {
             .iter()
             .find(|q| q.eq_ignore_ascii_case(&query))
         {
-            if !self.has_month_filter() {
-                self.add_chip(
-                    FilterChip {
-                        id: format!("quarter_{}", matched),
-                        label: matched.clone(),
-                        group: "Quarter".to_string(),
-                    },
-                    cx,
-                );
-            }
+            self.add_chip(
+                FilterChip {
+                    id: format!("quarter_{}", matched),
+                    label: matched.clone(),
+                    group: "Quarter".to_string(),
+                },
+                cx,
+            );
         } else if let Some(matched) = self
             .available_months
             .iter()
             .find(|m| m.eq_ignore_ascii_case(&query))
         {
-            if !self.has_quarter_filter() {
-                self.add_chip(
-                    FilterChip {
-                        id: format!("month_{}", matched),
-                        label: matched.clone(),
-                        group: "Month".to_string(),
-                    },
-                    cx,
-                );
-            }
+            self.add_chip(
+                FilterChip {
+                    id: format!("month_{}", matched),
+                    label: matched.clone(),
+                    group: "Month".to_string(),
+                },
+                cx,
+            );
+        } else if query.eq_ignore_ascii_case("annual") || query.eq_ignore_ascii_case("year") {
+            self.add_chip(
+                FilterChip {
+                    id: "annual".to_string(),
+                    label: "Annual".to_string(),
+                    group: "Annual".to_string(),
+                },
+                cx,
+            );
         } else {
             // Unmatched query acts as generic text search (matches form code + title)
             cx.emit(FilterEvent {
@@ -247,8 +257,7 @@ impl FilterState {
         let quarters = state.available_quarters.clone();
         let months = state.available_months.clone();
         let active_chips = state.active_chips.clone();
-        let has_quarter = state.has_quarter_filter();
-        let has_month = state.has_month_filter();
+        let has_annual = state.has_annual_filter();
 
         div()
             .flex()
@@ -319,22 +328,79 @@ impl FilterState {
                             .child(div().text_sm().child(t))
                     })),
             )
-            // Quarter section — hidden if any Month filter is active
-            .when(!has_month, |this| {
-                this.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap_2()
-                        .child(
-                            div()
-                                .text_xs()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(cx.theme().muted_foreground)
-                                .child("QUARTER"),
-                        )
-                        .child(div().flex().items_center().gap_1().children(
-                            quarters.into_iter().map(|q| {
+            // Annual section
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(cx.theme().muted_foreground)
+                            .child("ANNUAL"),
+                    )
+                    .child(
+                        div()
+                            .id("popover_annual")
+                            .flex()
+                            .justify_center()
+                            .py_1p5()
+                            .text_sm()
+                            .rounded_md()
+                            .cursor_pointer()
+                            .when(has_annual, |s| {
+                                s.bg(cx.theme().primary)
+                                    .text_color(cx.theme().primary_foreground)
+                                    .font_weight(FontWeight::BOLD)
+                            })
+                            .when(!has_annual, |s| {
+                                s.bg(cx.theme().secondary)
+                                    .text_color(cx.theme().secondary_foreground)
+                                    .hover(|s| s.bg(cx.theme().accent))
+                            })
+                            .on_click({
+                                let entity = entity.clone();
+                                move |_, _, cx| {
+                                    entity.update(cx, |this, cx| {
+                                        if has_annual {
+                                            this.remove_chip("annual", cx);
+                                        } else {
+                                            this.add_chip(
+                                                FilterChip {
+                                                    id: "annual".to_string(),
+                                                    label: "Annual".to_string(),
+                                                    group: "Annual".to_string(),
+                                                },
+                                                cx,
+                                            );
+                                        }
+                                    });
+                                }
+                            })
+                            .child("Annual"),
+                    ),
+            )
+            // Quarter section
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(cx.theme().muted_foreground)
+                            .child("QUARTER"),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .children(quarters.into_iter().map(|q| {
                                 let is_active = active_chips
                                     .iter()
                                     .any(|c| c.id == format!("quarter_{}", q));
@@ -381,79 +447,76 @@ impl FilterState {
                                         }
                                     })
                                     .child(q)
-                            }),
-                        )),
-                )
-            })
-            // Month section — hidden if any Quarter filter is active
-            .when(!has_quarter, |this| {
-                this.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap_2()
-                        .child(
-                            div()
-                                .text_xs()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(cx.theme().muted_foreground)
-                                .child("MONTH"),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_wrap()
-                                .gap_1()
-                                .children(months.into_iter().map(|m| {
-                                    let is_active =
-                                        active_chips.iter().any(|c| c.id == format!("month_{}", m));
-                                    let m_clone = m.clone();
-                                    div()
-                                        .id(format!("popover_m_{}", m))
-                                        .w(px(60.))
-                                        .flex()
-                                        .justify_center()
-                                        .py_1p5()
-                                        .text_xs()
-                                        .rounded_md()
-                                        .cursor_pointer()
-                                        .when(is_active, |s| {
-                                            s.bg(cx.theme().primary)
-                                                .text_color(cx.theme().primary_foreground)
-                                                .font_weight(FontWeight::BOLD)
-                                        })
-                                        .when(!is_active, |s| {
-                                            s.bg(cx.theme().secondary)
-                                                .text_color(cx.theme().secondary_foreground)
-                                                .hover(|s| s.bg(cx.theme().accent))
-                                        })
-                                        .on_click({
-                                            let entity = entity.clone();
-                                            move |_, _, cx| {
-                                                entity.update(cx, |this, cx| {
-                                                    if is_active {
-                                                        this.remove_chip(
-                                                            &format!("month_{}", m_clone),
-                                                            cx,
-                                                        );
-                                                    } else {
-                                                        this.add_chip(
-                                                            FilterChip {
-                                                                id: format!("month_{}", m_clone),
-                                                                label: m_clone.clone(),
-                                                                group: "Month".to_string(),
-                                                            },
-                                                            cx,
-                                                        );
-                                                    }
-                                                });
-                                            }
-                                        })
-                                        .child(m)
-                                })),
-                        ),
-                )
-            })
+                            })),
+                    ),
+            )
+            // Month section
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(cx.theme().muted_foreground)
+                            .child("MONTH"),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .gap_1()
+                            .children(months.into_iter().map(|m| {
+                                let is_active =
+                                    active_chips.iter().any(|c| c.id == format!("month_{}", m));
+                                let m_clone = m.clone();
+                                div()
+                                    .id(format!("popover_m_{}", m))
+                                    .w(px(60.))
+                                    .flex()
+                                    .justify_center()
+                                    .py_1p5()
+                                    .text_xs()
+                                    .rounded_md()
+                                    .cursor_pointer()
+                                    .when(is_active, |s| {
+                                        s.bg(cx.theme().primary)
+                                            .text_color(cx.theme().primary_foreground)
+                                            .font_weight(FontWeight::BOLD)
+                                    })
+                                    .when(!is_active, |s| {
+                                        s.bg(cx.theme().secondary)
+                                            .text_color(cx.theme().secondary_foreground)
+                                            .hover(|s| s.bg(cx.theme().accent))
+                                    })
+                                    .on_click({
+                                        let entity = entity.clone();
+                                        move |_, _, cx| {
+                                            entity.update(cx, |this, cx| {
+                                                if is_active {
+                                                    this.remove_chip(
+                                                        &format!("month_{}", m_clone),
+                                                        cx,
+                                                    );
+                                                } else {
+                                                    this.add_chip(
+                                                        FilterChip {
+                                                            id: format!("month_{}", m_clone),
+                                                            label: m_clone.clone(),
+                                                            group: "Month".to_string(),
+                                                        },
+                                                        cx,
+                                                    );
+                                                }
+                                            });
+                                        }
+                                    })
+                                    .child(m)
+                            })),
+                    ),
+            )
     }
 }
 

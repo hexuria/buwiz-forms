@@ -222,6 +222,8 @@ impl ProfileManagerView {
                     MultiSelectOption::new("mineral", "Mineral Products"),
                     MultiSelectOption::new("petroleum", "Petroleum Products"),
                     MultiSelectOption::new("tobacco", "Tobacco Products"),
+                    MultiSelectOption::new("sweetened", "Sweetened Beverages"),
+                    MultiSelectOption::new("coal", "Coal and Coke"),
                 ],
                 window,
                 cx,
@@ -526,6 +528,12 @@ impl ProfileManagerView {
                 }
                 bir_core::profile::ExciseTaxCategory::Tobacco => {
                     excise_ids.push("tobacco".to_string())
+                }
+                bir_core::profile::ExciseTaxCategory::SweetenedBeverages => {
+                    excise_ids.push("sweetened".to_string())
+                }
+                bir_core::profile::ExciseTaxCategory::CoalAndCoke => {
+                    excise_ids.push("coal".to_string())
                 }
             }
         }
@@ -982,6 +990,10 @@ impl ProfileManagerView {
                         "mineral" => cats.push(bir_core::profile::ExciseTaxCategory::Mineral),
                         "petroleum" => cats.push(bir_core::profile::ExciseTaxCategory::Petroleum),
                         "tobacco" => cats.push(bir_core::profile::ExciseTaxCategory::Tobacco),
+                        "sweetened" => {
+                            cats.push(bir_core::profile::ExciseTaxCategory::SweetenedBeverages)
+                        }
+                        "coal" => cats.push(bir_core::profile::ExciseTaxCategory::CoalAndCoke),
                         _ => {}
                     }
                 }

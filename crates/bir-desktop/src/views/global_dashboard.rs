@@ -6,8 +6,9 @@ use chrono::{Datelike, Local};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::*;
-use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
+
+use crate::components::compliance_calendar::ComplianceCalendarEvent;
 
 pub enum GlobalDashboardEvent {
     OpenForm {
@@ -34,15 +35,16 @@ pub struct GlobalDashboardView {
     compliance_calendar: Entity<crate::components::compliance_calendar::ComplianceCalendar>,
     pub hide_tax_profiles: bool,
     pub active_session_tin: Option<String>,
+    calendar_year: i32,
 }
 
 impl EventEmitter<GlobalDashboardEvent> for GlobalDashboardView {}
 
 impl GlobalDashboardView {
     pub fn new(db: Arc<Mutex<Database>>, window: &mut Window, cx: &mut Context<'_, Self>) -> Self {
+        let year = chrono::Local::now().year();
         let (profiles, deadlines, announcements) = if let Ok(db_lock) = db.lock() {
             let profiles = db_lock.list_profiles().unwrap_or_default();
-            let year = chrono::Local::now().year();
             let overrides = db_lock.get_deadline_overrides();
             let deadlines = Self::deadlines_for_profiles(&profiles, year, &overrides);
             let announcements = db_lock.list_bir_notices().unwrap_or_default();
@@ -55,6 +57,24 @@ impl GlobalDashboardView {
         let compliance_calendar = cx
             .new(|cx| crate::components::compliance_calendar::ComplianceCalendar::new(window, cx));
 
+        cx.subscribe(
+            &compliance_calendar,
+            |this: &mut Self, _entity, event: &ComplianceCalendarEvent, cx| match event {
+                ComplianceCalendarEvent::YearChanged { year } => {
+                    this.calendar_year = *year;
+                    let overrides = this
+                        .db
+                        .lock()
+                        .map(|db| db.get_deadline_overrides())
+                        .unwrap_or_default();
+                    this.deadlines =
+                        Self::deadlines_for_profiles(&this.profiles, *year, &overrides);
+                    cx.notify();
+                }
+            },
+        )
+        .detach();
+
         let mut view = Self {
             db,
             profiles,
@@ -64,6 +84,7 @@ impl GlobalDashboardView {
             compliance_calendar,
             hide_tax_profiles: false,
             active_session_tin: None,
+            calendar_year: year,
         };
 
         let bus = cx.global::<crate::events::GlobalEventBus>().0.clone();
@@ -112,7 +133,7 @@ impl GlobalDashboardView {
     }
     pub fn set_profiles(&mut self, profiles: Vec<TaxpayerProfile>, cx: &mut Context<Self>) {
         self.profiles = profiles;
-        let year = chrono::Local::now().year();
+        let year = self.calendar_year;
         let overrides = self
             .db
             .lock()
@@ -123,7 +144,7 @@ impl GlobalDashboardView {
     }
 
     pub fn reload_deadlines(&mut self, cx: &mut Context<Self>) {
-        let year = chrono::Local::now().year();
+        let year = self.calendar_year;
         let overrides = self
             .db
             .lock()
@@ -134,31 +155,27 @@ impl GlobalDashboardView {
     }
 
     fn deadlines_for_profiles(
-        profiles: &[TaxpayerProfile],
+        _profiles: &[TaxpayerProfile],
         calendar_year: i32,
         overrides: &[DeadlineOverride],
     ) -> Vec<ResolvedTaxDeadline> {
-        let applicable_codes: HashSet<String> = profiles
-            .iter()
-            .flat_map(|profile| {
-                bir_core::integration::applicable_forms_for_profile_and_year(
-                    profile,
-                    calendar_year as u16,
-                )
-            })
-            .collect();
+        // Show the FULL BIR tax calendar — all forms, all frequencies.
+        // Profile-specific filtering belongs in the per-profile DashboardView,
+        // not here. The Global Dashboard mirrors BIR's official tax calendar.
+        let mut all = DeadlineResolver::resolve_deadline_calendar_year_with_overrides(
+            calendar_year,
+            overrides,
+        );
 
-        DeadlineResolver::resolve_deadline_calendar_year_with_overrides(calendar_year, overrides)
-            .into_iter()
-            .filter(|deadline| applicable_codes.contains(&deadline.form_code))
-            .collect()
+        // Append event-based (as-needed) obligations that have no fixed date
+        all.extend(DeadlineResolver::event_based_obligations());
+
+        all
     }
 }
 
 impl Render for GlobalDashboardView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
-        let now = Local::now().date_naive();
-        let year = now.year();
 
         let is_narrow = window.viewport_size().width < px(768.);
 
@@ -190,7 +207,10 @@ impl Render for GlobalDashboardView {
                         div()
                             .text_base()
                             .text_color(cx.theme().muted_foreground)
-                            .child(format!("Overview of all taxpayer profiles for {}", year)),
+                            .child(format!(
+                                "Overview of all taxpayer profiles for {}",
+                                self.calendar_year
+                            )),
                     ),
             )
             .child(
@@ -340,14 +360,50 @@ impl GlobalDashboardView {
                     .text_sm()
                     .font_weight(FontWeight::BOLD)
                     .text_color(cx.theme().foreground)
-                    .child(notice.title.to_string()),
+                    .child(if notice.title.len() > 150 {
+                        format!("{}...", &notice.title[..147])
+                    } else {
+                        notice.title.to_string()
+                    }),
             )
             .child(
                 div()
                     .text_xs()
                     .text_color(cx.theme().muted_foreground)
                     .line_height(relative(1.4))
-                    .child(notice.body.to_string()),
+                    .child(Self::clean_html_summary(&notice.body, 250)),
             )
+    }
+
+    fn clean_html_summary(html: &str, max_len: usize) -> String {
+        let mut cleaned = String::with_capacity(html.len());
+        let mut in_tag = false;
+        for c in html.chars() {
+            if c == '<' {
+                in_tag = true;
+            } else if c == '>' {
+                in_tag = false;
+            } else if !in_tag {
+                cleaned.push(c);
+            }
+        }
+
+        cleaned = cleaned
+            .replace("&nbsp;", " ")
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace("&#39;", "'");
+
+        let words: Vec<&str> = cleaned.split_whitespace().collect();
+        let condensed = words.join(" ");
+
+        if condensed.chars().count() > max_len {
+            let truncated: String = condensed.chars().take(max_len).collect();
+            format!("{}...", truncated.trim_end())
+        } else {
+            condensed
+        }
     }
 }

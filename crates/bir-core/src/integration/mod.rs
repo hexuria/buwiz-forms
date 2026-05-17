@@ -48,6 +48,6 @@ pub use service::{
 };
 pub use validation::{
     PayloadValidationError, all_form_codes, applicable_forms_for_profile,
-    applicable_forms_for_profile_and_year, evaluate_forms_for_year, validate_form_applicability,
-    validate_payload,
+    applicable_forms_for_profile_and_year, evaluate_forms_for_year,
+    recurring_obligation_forms_for_profile_and_year, validate_form_applicability, validate_payload,
 };

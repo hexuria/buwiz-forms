@@ -6,8 +6,10 @@
 //! **Form eligibility is evaluated exclusively through the temporal engine.**
 //! There is no separate hardcoded eligibility matrix in this module.
 
+use crate::forms::registry::FilingFrequency;
 use crate::integration::models::UniversalTaxPayload;
 use crate::profile::TaxpayerProfile;
+use crate::temporal::FormDecision;
 use crate::temporal::snapshot_loader::compiled_snapshot;
 use chrono::Datelike;
 use serde::{Deserialize, Serialize};
@@ -214,6 +216,41 @@ pub fn applicable_forms_for_profile_and_year(profile: &TaxpayerProfile, year: u1
     engine.visible_form_codes(profile, year)
 }
 
+/// Returns recurring dashboard obligations for a profile in a specific year.
+///
+/// This is intentionally narrower than `applicable_forms_for_profile_and_year()`.
+/// The broader API answers "can this profile ever use this form"; the dashboard
+/// needs "which forms belong to this profile's normal filing calendar".
+pub fn recurring_obligation_forms_for_profile_and_year(
+    profile: &TaxpayerProfile,
+    year: u16,
+) -> Vec<String> {
+    let engine = crate::temporal::TemporalEngine::default();
+    let context = crate::temporal::TemporalContext::current_compliance(year);
+
+    engine
+        .evaluate_with_context(profile, &context)
+        .into_iter()
+        .filter(|decision| {
+            decision.eligibility.is_visible() && is_recurring_profile_obligation(decision)
+        })
+        .map(|decision| decision.form_code)
+        .collect()
+}
+
+fn is_recurring_profile_obligation(decision: &FormDecision) -> bool {
+    if matches!(decision.frequency, FilingFrequency::OpenEnded) {
+        return false;
+    }
+
+    !matches!(
+        decision.form_code.as_str(),
+        // Transaction/special-law forms require a separate triggering event that
+        // is not represented by the taxpayer profile configuration.
+        "1707A" | "2552" | "2553"
+    )
+}
+
 /// Returns all form codes known by the compiled temporal snapshot.
 pub fn all_form_codes() -> Vec<String> {
     compiled_snapshot().form_codes()
@@ -242,6 +279,64 @@ mod tests {
             creditable_withholdings: 0.0,
             previous_tax_paid: 0.0,
             metadata: Default::default(),
+        }
+    }
+
+    fn profile_for_dashboard(
+        classification: crate::profile::TaxClassification,
+        is_vat_registered: bool,
+    ) -> TaxpayerProfile {
+        use crate::naming::Tin;
+        use crate::profile::TaxpayerType;
+
+        TaxpayerProfile {
+            id: Some(1),
+            full_name: "Dashboard Test".into(),
+            tin: Tin {
+                segment1: "010".into(),
+                segment2: "558".into(),
+                segment3: "054".into(),
+                branch: "000".into(),
+            },
+            rdo_code: "039".into(),
+            line_of_business: "Consulting".into(),
+            registered_address: "QC".into(),
+            zip_code: "1100".into(),
+            phone: "09156837000".into(),
+            email: "test@example.com".into(),
+            default_form_type: "2551Q".into(),
+            taxpayer_type: TaxpayerType::Individual,
+            is_vat_registered,
+            business_start_date: None,
+            tax_classification: Some(classification),
+            eopt_tier: None,
+            is_bmbe: false,
+            is_gpp_partner: false,
+            is_create_msme: false,
+            is_expanded_withholding_agent: false,
+            atc_codes: vec![],
+            excise_tax_categories: vec![],
+            tax_elections: vec![],
+            has_employees: false,
+            is_dormant: false,
+            has_single_employer: false,
+            withholds_compensation: false,
+            withholds_expanded: false,
+            withholds_final: false,
+            is_top_withholding_agent: false,
+            is_government_withholding_entity: false,
+            registration_activity_status: Default::default(),
+            is_archived: false,
+            profile_pin_hash: None,
+            totp_secret: None,
+            email_tracking_enabled: false,
+            email_auth_method: Default::default(),
+            imap_email: None,
+            imap_host: None,
+            test_notification_enabled: false,
+            imap_app_password: None,
+            oauth_access_token: None,
+            oauth_refresh_token: None,
         }
     }
 
@@ -431,5 +526,30 @@ mod tests {
         assert!(forms.iter().any(|code| code == "1701"));
         // Should NOT have VAT form
         assert!(!forms.iter().any(|code| code == "2550M"));
+    }
+
+    #[test]
+    fn recurring_dashboard_forms_hide_transaction_forms_for_compensation_profile() {
+        let profile =
+            profile_for_dashboard(crate::profile::TaxClassification::PurelyCompensation, false);
+
+        let forms = recurring_obligation_forms_for_profile_and_year(&profile, 2026);
+
+        assert_eq!(forms, vec!["1700".to_string()]);
+    }
+
+    #[test]
+    fn recurring_dashboard_forms_keep_only_profile_obligations_for_non_vat_business() {
+        let profile = profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, false);
+
+        let forms = recurring_obligation_forms_for_profile_and_year(&profile, 2026);
+
+        assert!(forms.iter().any(|code| code == "1701Q"));
+        assert!(forms.iter().any(|code| code == "1701"));
+        assert!(forms.iter().any(|code| code == "2551Q"));
+        assert!(!forms.iter().any(|code| code == "0605"));
+        assert!(!forms.iter().any(|code| code == "1707A"));
+        assert!(!forms.iter().any(|code| code == "2552"));
+        assert!(!forms.iter().any(|code| code == "2553"));
     }
 }
