@@ -7,7 +7,7 @@
 //! There is no separate hardcoded eligibility matrix in this module.
 
 use crate::calendar_rules::{
-    DeadlineOverride, DeadlinePeriod, ResolvedTaxDeadline, canonical_form_code,
+    DeadlineOverride, DeadlinePeriod, DeadlineResolver, ResolvedTaxDeadline, canonical_form_code,
 };
 use crate::forms::registry::FilingFrequency;
 use crate::integration::models::UniversalTaxPayload;
@@ -40,6 +40,14 @@ pub struct ProfileConsistencyIssue {
     pub severity: ProfileConsistencySeverity,
     pub code: String,
     pub message: String,
+    #[serde(default)]
+    pub version_id: Option<String>,
+    #[serde(default)]
+    pub form_code: Option<String>,
+    #[serde(default)]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub fix_hint: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -48,16 +56,24 @@ pub struct ProfileConsistencyReport {
 }
 
 impl ProfileConsistencyReport {
-    fn push(
+    fn push_detailed(
         &mut self,
         severity: ProfileConsistencySeverity,
         code: impl Into<String>,
         message: impl Into<String>,
+        version_id: Option<String>,
+        form_code: Option<String>,
+        source: Option<String>,
+        fix_hint: Option<String>,
     ) {
         self.issues.push(ProfileConsistencyIssue {
             severity,
             code: code.into(),
             message: message.into(),
+            version_id,
+            form_code,
+            source,
+            fix_hint,
         });
     }
 }
@@ -304,6 +320,7 @@ pub fn resolve_profile_obligations_for_year(
 ) -> ResolvedProfileObligations {
     let mut all_codes = BTreeSet::new();
     let mut active_version_ids = Vec::new();
+    let mut code_version_ids: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     let mut consistency_report = ProfileConsistencyReport::default();
 
     for version in profile.active_profile_versions_for_year(year) {
@@ -315,8 +332,21 @@ pub fn resolve_profile_obligations_for_year(
             year,
             &mut consistency_report,
         );
+        for code in &version_codes {
+            code_version_ids
+                .entry(code.clone())
+                .or_default()
+                .insert(version.id.clone());
+        }
         all_codes.extend(version_codes);
     }
+
+    report_obligations_without_calendar_rules(
+        year,
+        &all_codes,
+        &code_version_ids,
+        &mut consistency_report,
+    );
 
     ResolvedProfileObligations {
         taxable_year: year,
@@ -324,6 +354,21 @@ pub fn resolve_profile_obligations_for_year(
         active_version_ids,
         consistency_report,
     }
+}
+
+pub fn resolve_profile_obligations_for_year_with_global_overrides(
+    profile: &TaxpayerProfile,
+    year: u16,
+    global_deadline_overrides: &[DeadlineOverride],
+) -> ResolvedProfileObligations {
+    let mut resolved = resolve_profile_obligations_for_year(profile, year);
+    report_profile_global_deadline_override_conflicts(
+        profile,
+        year,
+        global_deadline_overrides,
+        &mut resolved.consistency_report,
+    );
+    resolved
 }
 
 pub fn deadline_applies_to_profile(
@@ -385,6 +430,74 @@ pub fn profile_deadline_overrides_for_year(
         .collect()
 }
 
+fn report_profile_global_deadline_override_conflicts(
+    profile: &TaxpayerProfile,
+    year: u16,
+    global_deadline_overrides: &[DeadlineOverride],
+    report: &mut ProfileConsistencyReport,
+) {
+    let profile_overrides_by_version = profile
+        .active_profile_versions_for_year(year)
+        .into_iter()
+        .flat_map(|version| {
+            let version_id = version.id.clone();
+            version
+                .deadline_overrides
+                .into_iter()
+                .map(move |override_rule| (version_id.clone(), override_rule))
+        })
+        .collect::<Vec<_>>();
+
+    for (version_id, profile_override) in profile_overrides_by_version {
+        let profile_codes = profile_override
+            .affected_form_codes
+            .iter()
+            .map(|code| normalize_form_code(code))
+            .collect::<BTreeSet<_>>();
+
+        for global_override in global_deadline_overrides {
+            if profile_override.original_deadline != global_override.original_deadline {
+                continue;
+            }
+            if profile_override.adjusted_deadline == global_override.adjusted_deadline {
+                continue;
+            }
+
+            let shared_codes = global_override
+                .affected_form_codes
+                .iter()
+                .map(|code| normalize_form_code(code))
+                .filter(|code| profile_codes.contains(code))
+                .collect::<Vec<_>>();
+
+            if shared_codes.is_empty() {
+                continue;
+            }
+
+            let shared_label = shared_codes.join(", ");
+            report.push_detailed(
+                ProfileConsistencySeverity::Warning,
+                "PROFILE_GLOBAL_DEADLINE_OVERRIDE_CONFLICT",
+                format!(
+                    "Profile deadline override '{}' adjusts {shared_label} from {} to {}, but global override '{}' adjusts the same statutory date to {}.",
+                    profile_override.title,
+                    profile_override.original_deadline,
+                    profile_override.adjusted_deadline,
+                    global_override.title,
+                    global_override.adjusted_deadline
+                ),
+                Some(version_id.clone()),
+                shared_codes.first().cloned(),
+                Some("Profile deadline override + global deadline override".into()),
+                Some(
+                    "Confirm which source controls this taxpayer. Profile-specific overrides win for dashboard resolution, but the conflict should stay documented."
+                        .into(),
+                ),
+            );
+        }
+    }
+}
+
 fn evaluated_recurring_decisions_for_projection(
     profile: &TaxpayerProfile,
     year: u16,
@@ -423,19 +536,26 @@ fn recurring_obligation_codes_for_version(
         if !has_cor_gate || registered_tax_types_allow_form(&version.registered_tax_types, code) {
             gated.insert(code.clone());
         } else {
-            report.push(
+            report.push_detailed(
                 ProfileConsistencySeverity::Warning,
-                code,
+                "TTCE_COR_TAX_TYPE_MISMATCH",
                 format!(
                     "TTCE suggests {code}, but active COR/profile version '{}' does not register the matching tax type.",
                     version.label
+                ),
+                Some(version.id.clone()),
+                Some(code.clone()),
+                Some("TTCE".into()),
+                Some(
+                    "If the COR is correct, add a sourced manual exclude. If TTCE is correct, update the registered tax types on this COR version."
+                        .into(),
                 ),
             );
         }
     }
 
     if has_cor_gate {
-        report_missing_ttce_categories(version, &gated, report);
+        report_missing_ttce_categories(projected, version, year, &gated, report);
     }
 
     for override_rule in &version.obligation_overrides {
@@ -443,22 +563,33 @@ fn recurring_obligation_codes_for_version(
         match override_rule.action {
             ManualObligationOverrideAction::Include => {
                 if !compiled_snapshot().has_form_code(&code) {
-                    report.push(
+                    report.push_detailed(
                         ProfileConsistencySeverity::NeedsReview,
-                        &code,
+                        "MANUAL_INCLUDE_UNKNOWN_FORM",
                         format!(
                             "Manual include references {code}, but this form is not in the temporal snapshot."
                         ),
+                        Some(version.id.clone()),
+                        Some(code.clone()),
+                        Some("Manual obligation override".into()),
+                        Some("Check the form code or add TTCE/calendar support before relying on this override.".into()),
                     );
                 }
                 gated.insert(code);
             }
             ManualObligationOverrideAction::Exclude => {
                 if gated.remove(&code) {
-                    report.push(
+                    report.push_detailed(
                         ProfileConsistencySeverity::Info,
-                        &code,
+                        "MANUAL_EXCLUDE_APPLIED",
                         format!("Manual override excludes {code}: {}", override_rule.reason),
+                        Some(version.id.clone()),
+                        Some(code.clone()),
+                        Some("Manual obligation override".into()),
+                        override_rule
+                            .source_reference
+                            .as_ref()
+                            .map(|source| format!("Verify this exclusion against {source}.")),
                     );
                 }
             }
@@ -486,8 +617,43 @@ fn normalize_form_code(code: &str) -> String {
     }
 }
 
+fn report_obligations_without_calendar_rules(
+    year: u16,
+    codes: &BTreeSet<String>,
+    code_version_ids: &BTreeMap<String, BTreeSet<String>>,
+    report: &mut ProfileConsistencyReport,
+) {
+    let calendar_codes = DeadlineResolver::resolve_taxable_year(year as i32)
+        .into_iter()
+        .map(|deadline| deadline.form_code)
+        .collect::<BTreeSet<_>>();
+
+    for code in codes {
+        if !calendar_codes.contains(code) {
+            report.push_detailed(
+                ProfileConsistencySeverity::NeedsReview,
+                "OBLIGATION_WITHOUT_CALENDAR_RULE",
+                format!(
+                    "{code} is required by the resolved profile obligations, but no calendar deadline rule exists for taxable year {year}."
+                ),
+                code_version_ids
+                    .get(code)
+                    .and_then(|ids| ids.iter().next().cloned()),
+                Some(code.clone()),
+                Some("Calendar rules".into()),
+                Some(
+                    "Add or correct the official calendar rule before relying on dashboard upcoming/overdue status for this form."
+                        .into(),
+                ),
+            );
+        }
+    }
+}
+
 fn report_missing_ttce_categories(
+    projected: &TaxpayerProfile,
     version: &TaxProfileVersion,
+    year: u16,
     codes: &BTreeSet<String>,
     report: &mut ProfileConsistencyReport,
 ) {
@@ -537,10 +703,35 @@ fn report_missing_ttce_categories(
         if version.registered_tax_types.contains(tax_type)
             && !forms.iter().any(|code| codes.contains(*code))
         {
-            report.push(
-                ProfileConsistencySeverity::NeedsReview,
-                format!("{tax_type:?}"),
-                *message,
+            let (severity, code, message, source, fix_hint) = if tax_type
+                == &RegisteredTaxType::PercentageTax
+                && projected.has_8_percent_election(year)
+            {
+                (
+                    ProfileConsistencySeverity::Info,
+                    "PERCENTAGE_TAX_SUPPRESSED_BY_8_PERCENT",
+                    "COR/profile version registers percentage tax, but this taxable year has an 8% income tax election so TTCE suppresses percentage tax forms.",
+                    "Income tax election + TTCE",
+                    "If the 8% election is wrong for this year, update the income tax election ledger; otherwise this suppression is expected.",
+                )
+            } else {
+                (
+                    ProfileConsistencySeverity::NeedsReview,
+                    "COR_TAX_TYPE_WITHOUT_TTCE_FORM",
+                    *message,
+                    "COR/profile version",
+                    "Verify the registered tax type, then add a sourced manual include only if the COR obligation is correct and TTCE is missing support.",
+                )
+            };
+
+            report.push_detailed(
+                severity,
+                code,
+                message,
+                Some(version.id.clone()),
+                None,
+                Some(source.into()),
+                Some(fix_hint.into()),
             );
         }
     }

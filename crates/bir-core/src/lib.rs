@@ -60,7 +60,8 @@ pub use integration::{
     applicable_forms_for_profile, deadline_applies_to_profile, import_payload_directory,
     import_payload_file, process_sync, process_sync_json, profile_deadline_overrides_for_year,
     recurring_obligation_decisions_for_profile_and_year, resolve_profile_obligations_for_year,
-    validate_form_applicability, validate_payload,
+    resolve_profile_obligations_for_year_with_global_overrides, validate_form_applicability,
+    validate_payload,
 };
 pub use naming::{Tin, iaf_filename, savefile_name};
 pub use official_import::{OfficialSavefile, import_and_submit_savefile, parse_period_code};

@@ -447,7 +447,21 @@ impl ProfileManagerView {
     }
 
     fn render_cor_timeline_section(&self, cx: &Context<Self>) -> Div {
-        let selected_year = chrono::Local::now().year() as u16;
+        let preview_year_text = self
+            .cor_preview_year_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+        let selected_year = preview_year_text
+            .parse::<u16>()
+            .ok()
+            .filter(|year| (1900..=2200).contains(year))
+            .unwrap_or_else(|| chrono::Local::now().year() as u16);
+        let preview_year_needs_review = preview_year_text
+            .parse::<u16>()
+            .map(|year| !(1900..=2200).contains(&year))
+            .unwrap_or(true);
         let mut preview_profile = TaxpayerProfile {
             id: self.editing_id,
             full_name: String::new(),
@@ -500,12 +514,108 @@ impl ProfileManagerView {
             compliance_source_mode: bir_core::profile::ComplianceSourceMode::CorVersioned,
         };
         preview_profile.profile_versions = self.stored_profile_versions.clone();
-        let preview = preview_profile.preview_obligations_for_year(selected_year);
+        let draft_preview = self
+            .cor_editing_version_id
+            .as_ref()
+            .and_then(|editing_id| {
+                self.stored_profile_versions.iter().find(|version| {
+                    version.id == *editing_id
+                        && version.status == bir_core::profile::TaxProfileVersionStatus::Draft
+                })
+            })
+            .or_else(|| {
+                self.stored_profile_versions.iter().find(|version| {
+                    version.status == bir_core::profile::TaxProfileVersionStatus::Draft
+                })
+            })
+            .map(|version| {
+                (
+                    version.id.clone(),
+                    version.label.clone(),
+                    version.effective_from.is_none(),
+                )
+            });
+        if let Some((version_id, _, missing_effective_from)) = draft_preview.as_ref() {
+            let assumed_effective_from =
+                chrono::NaiveDate::from_ymd_opt(selected_year as i32, 1, 1).unwrap();
+            let effective_from = preview_profile
+                .profile_versions
+                .iter_mut()
+                .find(|version| version.id == *version_id)
+                .map(|version| {
+                    if version.effective_from.is_none() {
+                        version.effective_from = Some(assumed_effective_from);
+                        version.needs_effective_date_review = true;
+                    }
+                    version.effective_from.unwrap_or(assumed_effective_from)
+                })
+                .unwrap_or(assumed_effective_from);
+            if *missing_effective_from {
+                preview_profile
+                    .profile_versions
+                    .iter_mut()
+                    .filter(|version| version.id == *version_id)
+                    .for_each(|version| version.needs_effective_date_review = true);
+            }
+            preview_profile.set_profile_version_confirmed(version_id, effective_from);
+        }
+        let global_deadline_overrides = self
+            .db
+            .lock()
+            .map(|db| db.get_deadline_overrides())
+            .unwrap_or_default();
+        let preview =
+            bir_core::integration::resolve_profile_obligations_for_year_with_global_overrides(
+                &preview_profile,
+                selected_year,
+                &global_deadline_overrides,
+            );
+        let mut preview_deadline_overrides = global_deadline_overrides;
+        preview_deadline_overrides.extend(
+            bir_core::integration::profile_deadline_overrides_for_year(
+                &preview_profile,
+                selected_year,
+            ),
+        );
+        let preview_deadlines =
+            bir_core::calendar_rules::DeadlineResolver::resolve_taxable_year_with_overrides(
+                selected_year as i32,
+                &preview_deadline_overrides,
+            )
+            .into_iter()
+            .filter(|deadline| {
+                bir_core::integration::deadline_applies_to_profile(&preview_profile, deadline)
+            })
+            .collect::<Vec<_>>();
         let preview_forms = if preview.form_codes.is_empty() {
-            "No confirmed COR obligations for this year.".to_string()
+            if draft_preview.is_some() {
+                "No draft COR obligations for this preview year.".to_string()
+            } else {
+                "No confirmed COR obligations for this year.".to_string()
+            }
         } else {
             preview.form_codes.join(", ")
         };
+        let active_versions = if preview.active_version_ids.is_empty() {
+            "No active confirmed COR version for this year.".to_string()
+        } else {
+            format!(
+                "Active version(s): {}",
+                preview.active_version_ids.join(", ")
+            )
+        };
+        let draft_preview_message =
+            draft_preview
+                .as_ref()
+                .map(|(_, label, missing_effective_from)| {
+                    if *missing_effective_from {
+                        format!(
+                            "Draft preview: {label} is evaluated as if confirmed from {selected_year}-01-01 because its effective date is missing."
+                        )
+                    } else {
+                        format!("Draft preview: {label} is evaluated as if confirmed.")
+                    }
+                });
 
         let mut versions = div().flex().flex_col().gap_2();
         if self.stored_profile_versions.is_empty() {
@@ -763,8 +873,17 @@ impl ProfileManagerView {
                             .flex()
                             .gap_2()
                             .child(
+                                div()
+                                    .w(px(120.))
+                                    .child(Input::new(&self.cor_preview_year_input)),
+                            )
+                            .child(
                                 gpui_component::button::Button::new("upload_cor_document")
-                                    .label("Upload COR")
+                                    .label(if self.gemini_ocr_enabled {
+                                        "Extract with Gemini using my API key"
+                                    } else {
+                                        "Upload COR"
+                                    })
                                     .small()
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.upload_cor_document(window, cx);
@@ -785,6 +904,7 @@ impl ProfileManagerView {
                             ),
                     ),
             )
+            .child(self.render_cor_ocr_settings(cx))
             .child(versions)
             .when(self.cor_editing_version_id.is_some(), |this| {
                 this.child(self.render_cor_version_editor(cx))
@@ -806,20 +926,127 @@ impl ProfileManagerView {
                             .text_color(cx.theme().foreground)
                             .child(format!("Generated forms preview ({selected_year})")),
                     )
+                    .when(preview_year_needs_review, |this| {
+                        this.child(
+                            div()
+                                .text_xs()
+                                .text_color(gpui::Hsla::from(gpui::rgba(0xef4444ff)))
+                                .child("Preview year must be between 1900 and 2200."),
+                        )
+                    })
                     .child(
                         div()
                             .text_xs()
                             .text_color(cx.theme().muted_foreground)
                             .child(preview_forms),
                     )
-                    .when(!preview.consistency_report.issues.is_empty(), |this| {
-                        let mut issues = div().flex().flex_col().gap_1().mt_2();
-                        for issue in preview.consistency_report.issues.iter().take(4) {
-                            issues = issues.child(
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(active_versions),
+                    )
+                    .when(draft_preview_message.is_some(), |this| {
+                        this.child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(draft_preview_message.clone().unwrap_or_default()),
+                        )
+                    })
+                    .child(
+                        div()
+                            .mt_2()
+                            .text_xs()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(cx.theme().foreground)
+                            .child("Deadline preview"),
+                    )
+                    .when(preview_deadlines.is_empty(), |this| {
+                        this.child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child("No dated deadlines for this preview year."),
+                        )
+                    })
+                    .when(!preview_deadlines.is_empty(), |this| {
+                        let mut deadlines = div().flex().flex_col().gap_1();
+                        for deadline in preview_deadlines.iter().take(6) {
+                            let source = deadline
+                                .source_reference
+                                .as_ref()
+                                .map(|source| format!(" - {source}"))
+                                .unwrap_or_default();
+                            deadlines = deadlines.child(
                                 div()
                                     .text_xs()
                                     .text_color(cx.theme().muted_foreground)
-                                    .child(format!("{}: {}", issue.code, issue.message)),
+                                    .child(format!(
+                                        "{} due {} - {} - {}{}",
+                                        deadline.display_form_no,
+                                        deadline.final_deadline_string(),
+                                        deadline.period.label(),
+                                        deadline.status.label(),
+                                        source
+                                    )),
+                            );
+                        }
+                        if preview_deadlines.len() > 6 {
+                            deadlines = deadlines.child(
+                                div().text_xs().text_color(cx.theme().muted_foreground).child(
+                                    format!(
+                                        "{} more deadline(s) hidden in preview.",
+                                        preview_deadlines.len() - 6
+                                    ),
+                                ),
+                            );
+                        }
+                        this.child(deadlines)
+                    })
+                    .when(!preview.consistency_report.issues.is_empty(), |this| {
+                        let mut issues = div().flex().flex_col().gap_1().mt_2();
+                        for issue in preview.consistency_report.issues.iter().take(4) {
+                            let severity = Self::profile_consistency_severity_label(&issue.severity);
+                            let context = [
+                                issue
+                                    .version_id
+                                    .as_ref()
+                                    .map(|version_id| format!("version {version_id}")),
+                                issue
+                                    .form_code
+                                    .as_ref()
+                                    .map(|form_code| format!("form {form_code}")),
+                                issue.source.as_ref().map(|source| format!("source {source}")),
+                            ]
+                            .into_iter()
+                            .flatten()
+                            .collect::<Vec<_>>()
+                            .join(" - ");
+                            let detail = if context.is_empty() {
+                                format!("{severity}: {} - {}", issue.code, issue.message)
+                            } else {
+                                format!(
+                                    "{severity}: {} - {} ({context})",
+                                    issue.code, issue.message
+                                )
+                            };
+                            issues = issues.child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(detail)
+                                    .when(issue.fix_hint.is_some(), |this| {
+                                        this.child(
+                                            div().child(format!(
+                                                "Fix: {}",
+                                                issue.fix_hint.clone().unwrap_or_default()
+                                            )),
+                                        )
+                                    }),
                             );
                         }
                         this.child(issues)
@@ -827,6 +1054,146 @@ impl ProfileManagerView {
             )
             .when(!self.stored_profile_versions.is_empty(), |this| {
                 this.child(self.render_cor_override_editor(cx))
+            })
+    }
+
+    fn render_cor_ocr_settings(&self, cx: &Context<Self>) -> Div {
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .p_3()
+            .rounded_md()
+            .border_1()
+            .border_color(cx.theme().border)
+            .bg(cx.theme().background)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_3()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(cx.theme().foreground)
+                                    .child("COR OCR"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(
+                                        "Default stays local/manual. Gemini runs only when enabled and consented for an upload.",
+                                    ),
+                            ),
+                    )
+                    .child(Self::render_checkbox(
+                        "gemini_ocr_enabled_toggle",
+                        "Enable Gemini OCR",
+                        self.gemini_ocr_enabled,
+                        cx,
+                    )),
+            )
+            .when(self.gemini_ocr_enabled, |this| {
+                this.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_3()
+                        .child(
+                            div()
+                                .grid()
+                                .grid_cols(2)
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_1()
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .font_weight(FontWeight::SEMIBOLD)
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child("API Key"),
+                                        )
+                                        .child(Input::new(&self.gemini_ocr_api_key_input)),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_1()
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .font_weight(FontWeight::SEMIBOLD)
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child("Model"),
+                                        )
+                                        .child(Combobox::new(&self.gemini_ocr_model_select)),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(
+                                    "BYOK only. Free tier, paid tier, quota, and availability depend on your Google account and selected Gemini model.",
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .child(
+                                    gpui_component::button::Button::new("save_cor_ocr_settings")
+                                        .label("Save OCR Settings")
+                                        .small()
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.save_cor_ocr_settings(window, cx);
+                                        })),
+                                )
+                                .child(
+                                    gpui_component::button::Button::new("test_cor_ocr_settings")
+                                        .label("Test Key")
+                                        .small()
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.test_cor_ocr_settings(cx);
+                                        })),
+                                )
+                                .child(
+                                    gpui_component::button::Button::new("remove_cor_ocr_key")
+                                        .label("Remove Key")
+                                        .small()
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.remove_gemini_ocr_key(cx);
+                                        })),
+                                ),
+                        )
+                        .child(Self::render_checkbox(
+                            "gemini_ocr_consent_toggle",
+                            "For the next COR upload, send the selected document to Google Gemini using my API key",
+                            self.gemini_ocr_cloud_consent,
+                            cx,
+                        ))
+                        .when(self.gemini_ocr_status.is_some(), |this| {
+                            this.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(self.gemini_ocr_status.clone().unwrap_or_default()),
+                            )
+                        }),
+                )
             })
     }
 
@@ -1336,6 +1703,16 @@ impl ProfileManagerView {
         }
     }
 
+    fn profile_consistency_severity_label(
+        severity: &bir_core::integration::ProfileConsistencySeverity,
+    ) -> &'static str {
+        match severity {
+            bir_core::integration::ProfileConsistencySeverity::Info => "Info",
+            bir_core::integration::ProfileConsistencySeverity::Warning => "Warning",
+            bir_core::integration::ProfileConsistencySeverity::NeedsReview => "Needs review",
+        }
+    }
+
     /// Render the tax election ledger section — per-year election management.
     fn render_tax_election_section(&self, cx: &Context<Self>) -> Div {
         let elections = &self.stored_tax_elections;
@@ -1532,6 +1909,16 @@ impl ProfileManagerView {
                         this.has_single_employer = !this.has_single_employer
                     }
                     "dormant_toggle" => this.is_dormant = !this.is_dormant,
+                    "gemini_ocr_enabled_toggle" => {
+                        this.gemini_ocr_enabled = !this.gemini_ocr_enabled;
+                        if !this.gemini_ocr_enabled {
+                            this.gemini_ocr_cloud_consent = false;
+                        }
+                        this.gemini_ocr_status = None;
+                    }
+                    "gemini_ocr_consent_toggle" => {
+                        this.gemini_ocr_cloud_consent = !this.gemini_ocr_cloud_consent;
+                    }
                     _ => {}
                 }
                 cx.notify();

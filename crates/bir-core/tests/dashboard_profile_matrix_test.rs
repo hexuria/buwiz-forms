@@ -1,6 +1,9 @@
-use bir_core::calendar_rules::{DeadlineKind, DeadlinePeriod, DeadlineResolver};
+use bir_core::calendar_rules::{DeadlineKind, DeadlineOverride, DeadlinePeriod, DeadlineResolver};
 use bir_core::integration::recurring_obligation_forms_for_profile_and_year;
-use bir_core::integration::{deadline_applies_to_profile, profile_deadline_overrides_for_year};
+use bir_core::integration::{
+    deadline_applies_to_profile, profile_deadline_overrides_for_year,
+    resolve_profile_obligations_for_year_with_global_overrides,
+};
 use bir_core::naming::Tin;
 use bir_core::profile::{
     ComplianceSourceMode, EoptTier, ExciseTaxCategory, IncomeTaxElection, ManualObligationOverride,
@@ -300,14 +303,14 @@ fn dashboard_profile_matrix_base_forms_for_2026() {
     assert_forms(
         "corporation non-vat",
         &corp_non_vat,
-        &["1702Q", "1702RT", "1704", "2551Q"],
+        &["1702Q", "1702RT", "2551Q"],
     );
     let mut corp_vat = corp_non_vat.clone();
     corp_vat.is_vat_registered = true;
     assert_forms(
         "corporation vat",
         &corp_vat,
-        &["1702Q", "1702RT", "1704", "2550DS", "2550Q", "2550M"],
+        &["1702Q", "1702RT", "2550DS", "2550Q", "2550M"],
     );
 
     let partnership_non_vat = base_profile(TaxpayerType::Partnership, None);
@@ -854,6 +857,74 @@ fn profile_scoped_deadline_override_applies_after_global_rules() {
 }
 
 #[test]
+fn profile_global_deadline_override_conflict_is_reported() {
+    let mut profile = self_employed_profile(false, None, false);
+    let mut version = confirmed_version(
+        &profile,
+        "cor-2026",
+        "2026 COR",
+        Some((2026, 1, 1)),
+        None,
+        vec![
+            RegisteredTaxType::IncomeTax,
+            RegisteredTaxType::PercentageTax,
+        ],
+        false,
+    );
+    version.deadline_overrides.push(ProfileDeadlineOverride {
+        id: "profile-q1-extension".into(),
+        title: "Profile-specific Q1 extension".into(),
+        source_reference: "Manual COR override".into(),
+        affected_form_codes: vec!["1701Q".into()],
+        original_deadline: NaiveDate::from_ymd_opt(2026, 5, 15).unwrap(),
+        adjusted_deadline: NaiveDate::from_ymd_opt(2026, 5, 20).unwrap(),
+        reason: Some("RDO-specific extension".into()),
+    });
+    profile.profile_versions = vec![version];
+    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+
+    let global_overrides = vec![DeadlineOverride {
+        id: "global-q1-extension".into(),
+        title: "Global Q1 extension".into(),
+        source_reference: "BIR advisory".into(),
+        affected_form_codes: vec!["1701Q".into()],
+        original_deadline: NaiveDate::from_ymd_opt(2026, 5, 15).unwrap(),
+        adjusted_deadline: NaiveDate::from_ymd_opt(2026, 5, 19).unwrap(),
+        affected_regions: vec![],
+        affected_taxpayer_types: vec![],
+        effective_from: None,
+        effective_until: None,
+        expires_at: None,
+    }];
+
+    let preview = resolve_profile_obligations_for_year_with_global_overrides(
+        &profile,
+        2026,
+        &global_overrides,
+    );
+    let issue = preview
+        .consistency_report
+        .issues
+        .iter()
+        .find(|issue| issue.code == "PROFILE_GLOBAL_DEADLINE_OVERRIDE_CONFLICT")
+        .expect("missing profile/global override conflict diagnostic");
+
+    assert_eq!(issue.version_id.as_deref(), Some("cor-2026"));
+    assert_eq!(issue.form_code.as_deref(), Some("1701Q"));
+    assert_eq!(
+        issue.source.as_deref(),
+        Some("Profile deadline override + global deadline override")
+    );
+    assert!(
+        issue
+            .fix_hint
+            .as_deref()
+            .unwrap_or_default()
+            .contains("Profile-specific overrides win")
+    );
+}
+
+#[test]
 fn profile_override_validation_requires_reason_and_source() {
     let mut profile = self_employed_profile(false, None, false);
     let mut version = confirmed_version(
@@ -901,6 +972,167 @@ fn profile_override_validation_requires_reason_and_source() {
             .iter()
             .any(|message| { message.contains("requires a title, source, and form code") })
     );
+}
+
+#[test]
+fn cor_consistency_report_explains_8_percent_percentage_tax_suppression() {
+    let mut profile = self_employed_profile(false, None, true);
+    let version = confirmed_version(
+        &profile,
+        "cor-2026",
+        "2026 COR",
+        Some((2026, 1, 1)),
+        None,
+        vec![
+            RegisteredTaxType::IncomeTax,
+            RegisteredTaxType::PercentageTax,
+        ],
+        false,
+    );
+    profile.profile_versions = vec![version];
+    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+
+    let preview = profile.preview_obligations_for_year(2026);
+    let issue = preview
+        .consistency_report
+        .issues
+        .iter()
+        .find(|issue| issue.code == "PERCENTAGE_TAX_SUPPRESSED_BY_8_PERCENT")
+        .expect("8% suppression diagnostic");
+
+    assert_eq!(
+        issue.severity,
+        bir_core::integration::ProfileConsistencySeverity::Info
+    );
+    assert_eq!(issue.version_id.as_deref(), Some("cor-2026"));
+    assert_eq!(issue.source.as_deref(), Some("Income tax election + TTCE"));
+    assert!(
+        issue
+            .fix_hint
+            .as_deref()
+            .unwrap_or_default()
+            .contains("income tax election ledger")
+    );
+    assert!(!preview.form_codes.iter().any(|code| code == "2551Q"));
+}
+
+#[test]
+fn cor_consistency_report_includes_manual_override_context() {
+    let mut profile = self_employed_profile(false, None, false);
+    let mut version = confirmed_version(
+        &profile,
+        "cor-2026",
+        "2026 COR",
+        Some((2026, 1, 1)),
+        None,
+        vec![RegisteredTaxType::IncomeTax],
+        false,
+    );
+    version.obligation_overrides.push(ManualObligationOverride {
+        form_code: "9999Z".into(),
+        action: ManualObligationOverrideAction::Include,
+        reason: "Local exception".into(),
+        source_reference: Some("RDO memo".into()),
+    });
+    profile.profile_versions = vec![version];
+    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+
+    let preview = profile.preview_obligations_for_year(2026);
+    let issue = preview
+        .consistency_report
+        .issues
+        .iter()
+        .find(|issue| issue.code == "MANUAL_INCLUDE_UNKNOWN_FORM")
+        .expect("manual include diagnostic");
+
+    assert_eq!(issue.version_id.as_deref(), Some("cor-2026"));
+    assert_eq!(issue.form_code.as_deref(), Some("9999Z"));
+    assert_eq!(issue.source.as_deref(), Some("Manual obligation override"));
+    assert!(
+        issue
+            .fix_hint
+            .as_deref()
+            .unwrap_or_default()
+            .contains("TTCE/calendar support")
+    );
+}
+
+#[test]
+fn abolished_1704_is_not_a_current_corporate_dashboard_obligation() {
+    let mut profile = base_profile(
+        TaxpayerType::Corporation,
+        Some(TaxClassification::Corporation),
+    );
+    let version = confirmed_version(
+        &profile,
+        "corp-cor-2026",
+        "Corporate COR",
+        Some((2026, 1, 1)),
+        None,
+        vec![RegisteredTaxType::IncomeTax],
+        false,
+    );
+    profile.profile_versions = vec![version];
+    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+
+    let preview = profile.preview_obligations_for_year(2026);
+    assert!(!preview.form_codes.iter().any(|code| code == "1704"));
+    assert!(
+        !preview
+            .consistency_report
+            .issues
+            .iter()
+            .any(|issue| issue.code == "OBLIGATION_WITHOUT_CALENDAR_RULE"
+                && issue.form_code.as_deref() == Some("1704")),
+        "abolished 1704 should not produce a missing calendar rule diagnostic for 2026"
+    );
+}
+
+#[test]
+fn manual_include_still_reports_missing_calendar_rule_for_1704() {
+    let mut profile = base_profile(
+        TaxpayerType::Corporation,
+        Some(TaxClassification::Corporation),
+    );
+    let mut version = confirmed_version(
+        &profile,
+        "corp-cor-2026",
+        "Corporate COR",
+        Some((2026, 1, 1)),
+        None,
+        vec![RegisteredTaxType::IncomeTax],
+        false,
+    );
+    version.obligation_overrides.push(ManualObligationOverride {
+        form_code: "1704".into(),
+        action: ManualObligationOverrideAction::Include,
+        reason: "Legacy/special IAET obligation asserted by user".into(),
+        source_reference: Some("Manual evidence".into()),
+    });
+    profile.profile_versions = vec![version];
+    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+
+    let preview = profile.preview_obligations_for_year(2026);
+    let issue = preview
+        .consistency_report
+        .issues
+        .iter()
+        .find(|issue| {
+            issue.code == "OBLIGATION_WITHOUT_CALENDAR_RULE"
+                && issue.form_code.as_deref() == Some("1704")
+        })
+        .expect("missing calendar rule diagnostic for 1704");
+
+    assert_eq!(issue.version_id.as_deref(), Some("corp-cor-2026"));
+    assert_eq!(issue.source.as_deref(), Some("Calendar rules"));
+    assert!(
+        issue
+            .fix_hint
+            .as_deref()
+            .unwrap_or_default()
+            .contains("official calendar rule")
+    );
+    assert!(preview.form_codes.iter().any(|code| code == "1704"));
 }
 
 #[test]

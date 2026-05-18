@@ -239,7 +239,9 @@ mod tests {
             ..Default::default()
         };
 
-        let errors = draft.transition_to_queued().expect_err("must fail validation");
+        let errors = draft
+            .transition_to_queued()
+            .expect_err("must fail validation");
         assert_eq!(draft.status, FilingStatus::Draft);
         assert!(!errors.is_empty());
     }

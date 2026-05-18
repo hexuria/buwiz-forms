@@ -156,11 +156,12 @@ title = "Improperly Accumulated Earnings Tax Return"
 category = "Income Tax"
 revision = "1997"
 effective_from = "1997-01-01"
-lifecycle = "Active"
+effective_until = "2020-12-31"
+lifecycle = "Abolished"
 frequency = "Annual"
 taxpayer_types = ["Corporation"]
 classifications = ["Corporation"]
-legal_citations = ["ra-8424-sec-27"]
+legal_citations = ["ra-8424-sec-27", "ra-11534"]
 exclusive_priority = 0
 
 [[artifacts]]
@@ -232,4 +233,3 @@ taxpayer_types = ["Individual"]
 classifications = []
 legal_citations = ["ra-8424-sec-84"]
 exclusive_priority = 0
-
