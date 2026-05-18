@@ -3,12 +3,12 @@
 use super::*;
 
 impl ProfileManagerView {
-    /// Render the "Export" tab (tab index 3).
+    /// Render the "Export" tab (tab index 4).
     ///
     /// Only shown when editing an existing profile (`editing_id.is_some()`).
     /// Contains: profile ZIP export workflow with folder picker dialog.
     pub(super) fn render_export_tab(&self, cx: &Context<Self>) -> gpui::AnyElement {
-        if self.active_tab != 3 || self.editing_id.is_none() {
+        if self.active_tab != 4 || self.editing_id.is_none() {
             return div().into_any_element();
         }
 

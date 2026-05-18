@@ -56,6 +56,7 @@ pub struct ProfileConsistencyReport {
 }
 
 impl ProfileConsistencyReport {
+    #[allow(clippy::too_many_arguments)]
     fn push_detailed(
         &mut self,
         severity: ProfileConsistencySeverity,
@@ -325,6 +326,7 @@ pub fn resolve_profile_obligations_for_year(
 
     for version in profile.active_profile_versions_for_year(year) {
         active_version_ids.push(version.id.clone());
+        report_cor_tin_mismatch(profile, &version, &mut consistency_report);
         let projected = profile.projection_for_version(&version);
         let version_codes = recurring_obligation_codes_for_version(
             &projected,
@@ -597,6 +599,41 @@ fn recurring_obligation_codes_for_version(
     }
 
     gated
+}
+
+fn report_cor_tin_mismatch(
+    profile: &TaxpayerProfile,
+    version: &TaxProfileVersion,
+    report: &mut ProfileConsistencyReport,
+) {
+    let Some(cor_tin) = version.cor.tin.as_deref() else {
+        return;
+    };
+
+    let normalized_cor_tin = cor_tin
+        .chars()
+        .filter(|ch| ch.is_ascii_digit())
+        .collect::<String>();
+    if normalized_cor_tin.is_empty() || normalized_cor_tin == profile.tin.full() {
+        return;
+    }
+
+    report.push_detailed(
+        ProfileConsistencySeverity::NeedsReview,
+        "COR_TIN_MISMATCH",
+        format!(
+            "Active COR/profile version '{}' has TIN {cor_tin}, but the taxpayer profile TIN is {}.",
+            version.label,
+            profile.tin.formatted()
+        ),
+        Some(version.id.clone()),
+        None,
+        Some("COR/profile version".into()),
+        Some(
+            "Verify the uploaded COR and taxpayer profile before confirming this version or using it for compliance deadlines."
+                .into(),
+        ),
+    );
 }
 
 fn deadline_period_bounds(deadline: &ResolvedTaxDeadline) -> Option<(NaiveDate, NaiveDate)> {

@@ -3,13 +3,13 @@
 use super::*;
 
 impl ProfileManagerView {
-    /// Render the "Email Settings" tab (tab index 1).
+    /// Render the "Email Settings" tab (tab index 2).
     ///
     /// Contains: authentication method radio (App Password vs Google OAuth),
     /// IMAP host/email/password fields with edit toggle, OAuth connect button,
     /// connection test button and status indicator, and email tracking status.
     pub(super) fn render_email_settings_tab(&self, cx: &Context<Self>) -> gpui::AnyElement {
-        if self.active_tab != 1 {
+        if self.active_tab != 2 {
             return div().into_any_element();
         }
 

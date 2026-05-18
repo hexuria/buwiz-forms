@@ -1017,6 +1017,48 @@ fn cor_consistency_report_explains_8_percent_percentage_tax_suppression() {
 }
 
 #[test]
+fn cor_consistency_report_flags_cor_tin_mismatch() {
+    let mut profile = self_employed_profile(false, None, false);
+    let mut version = confirmed_version(
+        &profile,
+        "cor-2026",
+        "2026 COR",
+        Some((2026, 1, 1)),
+        None,
+        vec![
+            RegisteredTaxType::IncomeTax,
+            RegisteredTaxType::PercentageTax,
+        ],
+        false,
+    );
+    version.cor.tin = Some("999-888-777-00000".into());
+    profile.profile_versions = vec![version];
+    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+
+    let preview = profile.preview_obligations_for_year(2026);
+    let issue = preview
+        .consistency_report
+        .issues
+        .iter()
+        .find(|issue| issue.code == "COR_TIN_MISMATCH")
+        .expect("COR TIN mismatch diagnostic");
+
+    assert_eq!(
+        issue.severity,
+        bir_core::integration::ProfileConsistencySeverity::NeedsReview
+    );
+    assert_eq!(issue.version_id.as_deref(), Some("cor-2026"));
+    assert_eq!(issue.source.as_deref(), Some("COR/profile version"));
+    assert!(
+        issue
+            .fix_hint
+            .as_deref()
+            .unwrap_or_default()
+            .contains("Verify the uploaded COR")
+    );
+}
+
+#[test]
 fn cor_consistency_report_includes_manual_override_context() {
     let mut profile = self_employed_profile(false, None, false);
     let mut version = confirmed_version(

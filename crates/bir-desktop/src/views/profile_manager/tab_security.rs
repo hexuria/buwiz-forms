@@ -3,7 +3,7 @@
 use super::*;
 
 impl ProfileManagerView {
-    /// Render the "Security" tab (tab index 2).
+    /// Render the "Security" tab (tab index 3).
     ///
     /// Shown only when `global_pins_enabled` is true.
     /// Contains: Profile PIN enable toggle + 4-digit OTP input, TOTP authenticator
@@ -13,7 +13,7 @@ impl ProfileManagerView {
         global_pins_enabled: bool,
         cx: &Context<Self>,
     ) -> gpui::AnyElement {
-        if self.active_tab != 2 || !global_pins_enabled {
+        if self.active_tab != 3 || !global_pins_enabled {
             return div().into_any_element();
         }
 

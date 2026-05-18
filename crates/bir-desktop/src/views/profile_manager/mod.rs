@@ -98,11 +98,13 @@ pub struct ProfileManagerView {
     stored_tax_elections: Vec<bir_core::profile::TaxElectionHistory>,
     stored_profile_versions: Vec<bir_core::profile::TaxProfileVersion>,
     compliance_source_mode: ComplianceSourceMode,
+    ocr_selected_version_id: Option<String>,
     cor_editing_version_id: Option<String>,
     cor_preview_year_input: Entity<InputState>,
     cor_version_label_input: Entity<InputState>,
     cor_effective_from_input: Entity<InputState>,
     cor_effective_until_input: Entity<InputState>,
+    cor_tin_input: Entity<InputState>,
     cor_registration_date_input: Entity<InputState>,
     cor_registered_name_input: Entity<InputState>,
     cor_trade_name_input: Entity<InputState>,
@@ -127,6 +129,7 @@ pub struct ProfileManagerView {
     gemini_ocr_cloud_consent: bool,
     gemini_ocr_api_key_input: Entity<InputState>,
     gemini_ocr_model_select: Entity<ComboboxState>,
+    gemini_ocr_custom_model_input: Entity<InputState>,
     gemini_ocr_status: Option<String>,
 
     enable_profile_pin: bool,
@@ -292,6 +295,7 @@ impl ProfileManagerView {
             cx.new(|cx| InputState::new(window, cx).placeholder("Effective from YYYY-MM-DD"));
         let cor_effective_until_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Effective until YYYY-MM-DD"));
+        let cor_tin_input = cx.new(|cx| InputState::new(window, cx).placeholder("COR TIN"));
         let cor_registration_date_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Registration date YYYY-MM-DD"));
         let cor_registered_name_input =
@@ -399,16 +403,14 @@ impl ProfileManagerView {
         } else {
             (false, crate::cor_ocr::DEFAULT_GEMINI_MODEL.to_string())
         };
-        let gemini_key_placeholder = if crate::cor_ocr::has_gemini_api_key() {
-            "Gemini API key saved in OS keychain"
-        } else {
-            "Paste Gemini API key"
-        };
+        let gemini_key_placeholder = "Paste Gemini API key (stored in OS keychain)";
         let gemini_ocr_api_key_input = cx.new(|cx| {
             InputState::new(window, cx)
                 .masked(true)
                 .placeholder(gemini_key_placeholder)
         });
+        let gemini_model_is_supported =
+            crate::cor_ocr::SUPPORTED_GEMINI_MODELS.contains(&gemini_ocr_model.as_str());
         let gemini_ocr_model_select = cx.new(|cx| {
             let mut state = ComboboxState::new(
                 crate::cor_ocr::SUPPORTED_GEMINI_MODELS
@@ -419,8 +421,23 @@ impl ProfileManagerView {
                 window,
                 cx,
             );
-            state.set_selected_value(&gemini_ocr_model, window, cx);
+            state.set_selected_value(
+                if gemini_model_is_supported {
+                    &gemini_ocr_model
+                } else {
+                    crate::cor_ocr::DEFAULT_GEMINI_MODEL
+                },
+                window,
+                cx,
+            );
             state
+        });
+        let gemini_ocr_custom_model_input = cx.new(|cx| {
+            let mut input = InputState::new(window, cx).placeholder("Custom Gemini model id");
+            if !gemini_model_is_supported {
+                input.set_value(gemini_ocr_model.clone(), window, cx);
+            }
+            input
         });
 
         let imap_email_input =
@@ -546,11 +563,13 @@ impl ProfileManagerView {
             stored_tax_elections: vec![],
             stored_profile_versions: vec![],
             compliance_source_mode: ComplianceSourceMode::TemporalSuggestion,
+            ocr_selected_version_id: None,
             cor_editing_version_id: None,
             cor_preview_year_input,
             cor_version_label_input,
             cor_effective_from_input,
             cor_effective_until_input,
+            cor_tin_input,
             cor_registration_date_input,
             cor_registered_name_input,
             cor_trade_name_input,
@@ -575,6 +594,7 @@ impl ProfileManagerView {
             gemini_ocr_cloud_consent: false,
             gemini_ocr_api_key_input,
             gemini_ocr_model_select,
+            gemini_ocr_custom_model_input,
             gemini_ocr_status: None,
             enable_profile_pin: false,
             profile_pin_input,
@@ -623,6 +643,7 @@ impl ProfileManagerView {
         self.stored_tax_elections = vec![];
         self.stored_profile_versions = vec![];
         self.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
+        self.ocr_selected_version_id = None;
         self.cor_editing_version_id = None;
         self.gemini_ocr_cloud_consent = false;
         self.gemini_ocr_status = None;
@@ -731,7 +752,13 @@ impl ProfileManagerView {
         self.is_gpp_partner = profile.is_gpp_partner;
         self.stored_tax_elections = profile.tax_elections.clone();
         self.stored_profile_versions = profile.profile_versions.clone();
-        self.compliance_source_mode = profile.compliance_source_mode.clone();
+        self.compliance_source_mode =
+            Self::derive_compliance_source_mode(&self.stored_profile_versions);
+        self.ocr_selected_version_id = self
+            .stored_profile_versions
+            .iter()
+            .find(|version| !version.evidence.is_empty())
+            .map(|version| version.id.clone());
         self.gemini_ocr_cloud_consent = false;
         self.gemini_ocr_status = None;
         // Populate excise tax multi-select from profile categories
@@ -1039,6 +1066,19 @@ impl ProfileManagerView {
         cx.notify();
     }
 
+    fn derive_compliance_source_mode(
+        versions: &[bir_core::profile::TaxProfileVersion],
+    ) -> ComplianceSourceMode {
+        if versions
+            .iter()
+            .any(|version| version.status == bir_core::profile::TaxProfileVersionStatus::Confirmed)
+        {
+            ComplianceSourceMode::CorVersioned
+        } else {
+            ComplianceSourceMode::TemporalSuggestion
+        }
+    }
+
     fn current_profile(&self, cx: &mut Context<Self>) -> TaxpayerProfile {
         let tin_val = self.tin_input.read(cx).formatted_value(cx);
         let tin_clean = tin_val.replace("-", "");
@@ -1141,7 +1181,7 @@ impl ProfileManagerView {
             None
         };
 
-        let mut profile = TaxpayerProfile {
+        TaxpayerProfile {
             id: self.editing_id,
             full_name: self.name_input.read(cx).value().trim().to_string(),
             tin,
@@ -1255,30 +1295,37 @@ impl ProfileManagerView {
                 }
             },
             profile_versions: self.stored_profile_versions.clone(),
-            compliance_source_mode: self.compliance_source_mode.clone(),
-        };
-
-        profile
+            compliance_source_mode: Self::derive_compliance_source_mode(
+                &self.stored_profile_versions,
+            ),
+        }
     }
 
-    fn cor_ocr_options(&self, cx: &mut Context<Self>) -> crate::cor_ocr::CorOcrOptions {
-        let model = self
+    fn selected_gemini_ocr_model(&self, cx: &mut Context<Self>) -> String {
+        let custom_model = self
+            .gemini_ocr_custom_model_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+        let selected_model = self
             .gemini_ocr_model_select
             .read(cx)
             .selected_value(cx)
             .trim()
             .to_string();
+        crate::cor_ocr::resolve_gemini_model_id(&selected_model, &custom_model)
+    }
+
+    fn cor_ocr_options(&self, cx: &mut Context<Self>) -> crate::cor_ocr::CorOcrOptions {
+        let model = self.selected_gemini_ocr_model(cx);
         crate::cor_ocr::CorOcrOptions {
             provider: if self.gemini_ocr_enabled {
                 crate::cor_ocr::CorOcrProviderKind::GeminiByok
             } else {
                 crate::cor_ocr::CorOcrProviderKind::SidecarText
             },
-            gemini_model: if model.is_empty() {
-                crate::cor_ocr::DEFAULT_GEMINI_MODEL.to_string()
-            } else {
-                model
-            },
+            gemini_model: model,
             allow_cloud_upload: self.gemini_ocr_cloud_consent,
         }
     }
@@ -1290,16 +1337,6 @@ impl ProfileManagerView {
             .value()
             .trim()
             .to_string();
-        if !typed_key.is_empty() {
-            if let Err(error) = crate::cor_ocr::save_gemini_api_key(&typed_key) {
-                self.gemini_ocr_status = Some(error);
-                cx.notify();
-                return;
-            }
-            self.gemini_ocr_api_key_input
-                .update(cx, |input, cx| input.set_value("", window, cx));
-        }
-
         if let Ok(db_guard) = self.db.lock() {
             let _ = db_guard.set_setting(
                 crate::cor_ocr::COR_OCR_GEMINI_ENABLED_SETTING,
@@ -1309,36 +1346,58 @@ impl ProfileManagerView {
                     "false"
                 },
             );
-            let model = self
-                .gemini_ocr_model_select
-                .read(cx)
-                .selected_value(cx)
-                .trim()
-                .to_string();
-            let _ = db_guard.set_setting(
-                crate::cor_ocr::COR_OCR_GEMINI_MODEL_SETTING,
-                if model.is_empty() {
-                    crate::cor_ocr::DEFAULT_GEMINI_MODEL
-                } else {
-                    &model
-                },
-            );
+            let model = self.selected_gemini_ocr_model(cx);
+            let _ = db_guard.set_setting(crate::cor_ocr::COR_OCR_GEMINI_MODEL_SETTING, &model);
         }
 
-        self.gemini_ocr_status = Some(
-            "Gemini OCR settings saved. API keys are stored outside profile JSON.".to_string(),
-        );
+        if !typed_key.is_empty() {
+            self.gemini_ocr_api_key_input
+                .update(cx, |input, cx| input.set_value("", window, cx));
+            self.gemini_ocr_status =
+                Some("Saving Gemini OCR key to OS secure storage...".to_string());
+            cx.spawn(async move |this, cx| {
+                let result = cx
+                    .background_executor()
+                    .spawn(async move { crate::cor_ocr::save_gemini_api_key(&typed_key) })
+                    .await;
+                let _ = this.update(cx, |this, cx| {
+                    this.gemini_ocr_status = Some(match result {
+                        Ok(()) => {
+                            "Gemini OCR settings saved. API keys are stored outside profile JSON."
+                                .to_string()
+                        }
+                        Err(error) => error,
+                    });
+                    cx.notify();
+                });
+            })
+            .detach();
+        } else {
+            self.gemini_ocr_status = Some(
+                "Gemini OCR settings saved. API keys are stored outside profile JSON.".to_string(),
+            );
+        }
         cx.notify();
     }
 
     fn remove_gemini_ocr_key(&mut self, cx: &mut Context<Self>) {
-        match crate::cor_ocr::delete_gemini_api_key() {
-            Ok(()) => {
-                self.gemini_ocr_status =
-                    Some("Gemini API key removed from OS keychain.".to_string())
-            }
-            Err(error) => self.gemini_ocr_status = Some(error),
-        }
+        self.gemini_ocr_cloud_consent = false;
+        self.gemini_ocr_status =
+            Some("Removing Gemini API key from OS secure storage...".to_string());
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move { crate::cor_ocr::delete_gemini_api_key() })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                this.gemini_ocr_status = Some(match result {
+                    Ok(()) => "Gemini API key removed from OS keychain.".to_string(),
+                    Err(error) => error,
+                });
+                cx.notify();
+            });
+        })
+        .detach();
         cx.notify();
     }
 
@@ -1354,17 +1413,7 @@ impl ProfileManagerView {
         } else {
             Some(typed_key)
         };
-        let model = self
-            .gemini_ocr_model_select
-            .read(cx)
-            .selected_value(cx)
-            .trim()
-            .to_string();
-        let model = if model.is_empty() {
-            crate::cor_ocr::DEFAULT_GEMINI_MODEL.to_string()
-        } else {
-            model
-        };
+        let model = self.selected_gemini_ocr_model(cx);
         self.gemini_ocr_status =
             Some("Testing Gemini OCR key. This sends a tiny test request to Google.".to_string());
         cx.spawn(async move |this, cx| {
@@ -1398,11 +1447,13 @@ impl ProfileManagerView {
         version.source = bir_core::profile::TaxProfileVersionSource::ManualCor;
         version.needs_effective_date_review = version.effective_from.is_none();
 
-        self.compliance_source_mode = ComplianceSourceMode::CorVersioned;
         self.stored_profile_versions.retain(|existing| {
             existing.status != bir_core::profile::TaxProfileVersionStatus::Draft
         });
+        self.ocr_selected_version_id = Some(version.id.clone());
         self.stored_profile_versions.push(version);
+        self.compliance_source_mode =
+            Self::derive_compliance_source_mode(&self.stored_profile_versions);
     }
 
     fn upload_cor_document(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
@@ -1411,6 +1462,19 @@ impl ProfileManagerView {
         profile.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
         let tin = profile.tin.full().replace(['-', ' '], "");
         let ocr_options = self.cor_ocr_options(cx);
+        let provider_label =
+            if ocr_options.provider == crate::cor_ocr::CorOcrProviderKind::GeminiByok {
+                "Gemini BYOK"
+            } else {
+                "Local/manual"
+            }
+            .to_string();
+        let model_label = if ocr_options.provider == crate::cor_ocr::CorOcrProviderKind::GeminiByok
+        {
+            Some(ocr_options.gemini_model.clone())
+        } else {
+            None
+        };
 
         cx.spawn(async move |this, cx| {
             let Some(file_handle) = rfd::AsyncFileDialog::new()
@@ -1424,66 +1488,23 @@ impl ProfileManagerView {
             let ocr = crate::cor_ocr::extract_cor_document_with_options(&source_path, &ocr_options);
             match crate::cor_evidence::store_cor_document(&source_path, &tin) {
                 Ok(mut evidence) => {
-                    evidence.ocr_text = ocr.text.clone();
-                    evidence.ocr_confidence = ocr.confidence;
+                    evidence.provider = Some(provider_label);
+                    evidence.model = model_label;
                     let _ = this.update(cx, move |this, cx| {
-                        let mut version =
-                            bir_core::profile::TaxProfileVersion::from_profile_backfill(&profile);
-                        version.id = format!("ocr-cor-{}", chrono::Local::now().timestamp_millis());
-                        version.label =
-                            format!("Uploaded COR {}", chrono::Local::now().format("%Y-%m-%d"));
-                        version.status = bir_core::profile::TaxProfileVersionStatus::Draft;
-                        version.source = bir_core::profile::TaxProfileVersionSource::OcrCor;
-                        version.needs_effective_date_review = version.effective_from.is_none();
-                        if let Some(registration_date) = ocr.fields.registration_date {
-                            version.cor.registration_date = Some(registration_date);
-                            if version.effective_from.is_none() {
-                                version.effective_from = Some(registration_date);
-                                version.needs_effective_date_review = false;
-                            }
-                        }
-                        if let Some(registered_name) = ocr.fields.registered_name {
-                            version.cor.registered_name = registered_name;
-                        }
-                        if let Some(trade_name) = ocr.fields.trade_name {
-                            version.cor.trade_name = Some(trade_name);
-                        }
-                        if let Some(rdo_code) = ocr.fields.rdo_code {
-                            version.cor.rdo_code = rdo_code;
-                        }
-                        if let Some(registered_address) = ocr.fields.registered_address {
-                            version.cor.registered_address = registered_address;
-                        }
-                        if let Some(line_of_business_code) = ocr.fields.line_of_business_code {
-                            version.cor.line_of_business_code = Some(line_of_business_code);
-                        }
-                        if let Some(line_of_business_description) =
-                            ocr.fields.line_of_business_description
-                        {
-                            version.cor.line_of_business_description = line_of_business_description;
-                        }
-                        if let Some(taxpayer_type) = ocr.fields.taxpayer_type {
-                            version.taxpayer_type = taxpayer_type;
-                        }
-                        if !ocr.fields.registered_tax_types.is_empty() {
-                            version.registered_tax_types = ocr.fields.registered_tax_types;
-                            Self::sync_version_flags_from_registered_tax_types(&mut version);
-                        }
-                        if !ocr.fields.filing_reminders.is_empty() {
-                            let reminders = ocr.fields.filing_reminders.join("\n");
-                            evidence.ocr_text = Some(match evidence.ocr_text.take() {
-                                Some(text) if !text.trim().is_empty() => {
-                                    format!("{text}\n\nFiling reminders detected:\n{reminders}")
-                                }
-                                _ => reminders,
-                            });
-                        }
-                        version.evidence.push(evidence);
+                        let version = crate::cor_ocr::create_draft_cor_version_from_ocr(
+                            &profile,
+                            evidence,
+                            ocr.clone(),
+                            chrono::Local::now().naive_local(),
+                        );
 
-                        this.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+                        let version_id = version.id.clone();
+                        this.ocr_selected_version_id = Some(version_id);
                         this.cor_editing_version_id = None;
                         this.gemini_ocr_cloud_consent = false;
                         this.stored_profile_versions.push(version);
+                        this.compliance_source_mode =
+                            Self::derive_compliance_source_mode(&this.stored_profile_versions);
                         this.save_message = Some(ocr.status_message);
                         cx.notify();
                     });
@@ -1640,11 +1661,29 @@ impl ProfileManagerView {
         }
     }
 
+    fn cor_override_target_version_id(&self) -> Option<String> {
+        if let Some(editing_id) = self.cor_editing_version_id.as_ref()
+            && self.stored_profile_versions.iter().any(|version| {
+                version.id == *editing_id
+                    && version.status != bir_core::profile::TaxProfileVersionStatus::Archived
+            })
+        {
+            return Some(editing_id.clone());
+        }
+
+        self.stored_profile_versions
+            .iter()
+            .rev()
+            .find(|version| version.status != bir_core::profile::TaxProfileVersionStatus::Archived)
+            .map(|version| version.id.clone())
+    }
+
     fn clear_cor_version_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         for input in [
             &self.cor_version_label_input,
             &self.cor_effective_from_input,
             &self.cor_effective_until_input,
+            &self.cor_tin_input,
             &self.cor_registration_date_input,
             &self.cor_registered_name_input,
             &self.cor_trade_name_input,
@@ -1705,6 +1744,9 @@ impl ProfileManagerView {
                 window,
                 cx,
             )
+        });
+        self.cor_tin_input.update(cx, |input, cx| {
+            input.set_value(version.cor.tin.unwrap_or_default(), window, cx)
         });
         self.cor_registration_date_input.update(cx, |input, cx| {
             input.set_value(
@@ -1826,6 +1868,10 @@ impl ProfileManagerView {
         version.effective_from = effective_from;
         version.effective_until = effective_until;
         version.needs_effective_date_review = version.effective_from.is_none();
+        version.cor.tin = {
+            let value = self.cor_tin_input.read(cx).value().trim().to_string();
+            if value.is_empty() { None } else { Some(value) }
+        };
         version.cor.registration_date = registration_date;
         version.cor.registered_name = self
             .cor_registered_name_input
@@ -2056,13 +2102,15 @@ impl ProfileManagerView {
             return Err("Obligation overrides require both a reason and source.".to_string());
         }
 
+        let Some(target_version_id) = self.cor_override_target_version_id() else {
+            return Err("Create a COR/manual version before adding profile overrides.".to_string());
+        };
         let Some(version) = self
             .stored_profile_versions
             .iter_mut()
-            .rev()
-            .find(|version| version.status != bir_core::profile::TaxProfileVersionStatus::Archived)
+            .find(|version| version.id == target_version_id)
         else {
-            return Err("Create a COR/manual version before adding profile overrides.".to_string());
+            return Err("COR version was not found.".to_string());
         };
 
         version
@@ -2151,13 +2199,15 @@ impl ProfileManagerView {
             );
         }
 
+        let Some(target_version_id) = self.cor_override_target_version_id() else {
+            return Err("Create a COR/manual version before adding profile overrides.".to_string());
+        };
         let Some(version) = self
             .stored_profile_versions
             .iter_mut()
-            .rev()
-            .find(|version| version.status != bir_core::profile::TaxProfileVersionStatus::Archived)
+            .find(|version| version.id == target_version_id)
         else {
-            return Err("Create a COR/manual version before adding profile overrides.".to_string());
+            return Err("COR version was not found.".to_string());
         };
 
         version
@@ -2275,7 +2325,7 @@ impl ProfileManagerView {
                     gpui_component::notification::NotificationType::Error,
                     "A 4-digit PIN is required for this profile.".to_string(),
                 ));
-                self.active_tab = 2;
+                self.active_tab = 3;
                 cx.notify();
                 return;
             }
@@ -2503,7 +2553,7 @@ impl Render for ProfileManagerView {
                             .flex()
                             .flex_col()
                             .w_full()
-                            .max_w(px(600.))
+                            .max_w(px(960.))
                             .gap_6()
                             .child(
                                 div()
@@ -2584,35 +2634,33 @@ impl Render for ProfileManagerView {
                                                         this.active_tab = 1;
                                                         cx.notify();
                                                     }))
+                                                    .child(div().text_sm().child("OCR")),
+                                            )
+                                            .child(
+                                                div()
+                                                    .id("tab_2")
+                                                    .px_4()
+                                                    .py_1p5()
+                                                    .rounded_md()
+                                                    .cursor_pointer()
+                                                    .when(self.active_tab == 2, |s| {
+                                                        s.bg(cx.theme().background)
+                                                            .shadow_sm()
+                                                            .text_color(cx.theme().foreground)
+                                                            .font_weight(FontWeight::SEMIBOLD)
+                                                    })
+                                                    .when(self.active_tab != 2, |s| {
+                                                        s.hover(|s| s.bg(cx.theme().muted))
+                                                            .text_color(cx.theme().muted_foreground)
+                                                            .font_weight(FontWeight::MEDIUM)
+                                                    })
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.active_tab = 2;
+                                                        cx.notify();
+                                                    }))
                                                     .child(div().text_sm().child("Email Settings")),
                                             )
                                             .when(global_pins_enabled, |this| {
-                                                this.child(
-                                                    div()
-                                                        .id("tab_2")
-                                                        .px_4()
-                                                        .py_1p5()
-                                                        .rounded_md()
-                                                        .cursor_pointer()
-                                                        .when(self.active_tab == 2, |s| {
-                                                            s.bg(cx.theme().background)
-                                                                .shadow_sm()
-                                                                .text_color(cx.theme().foreground)
-                                                                .font_weight(FontWeight::SEMIBOLD)
-                                                        })
-                                                        .when(self.active_tab != 2, |s| {
-                                                            s.hover(|s| s.bg(cx.theme().muted))
-                                                                .text_color(cx.theme().muted_foreground)
-                                                                .font_weight(FontWeight::MEDIUM)
-                                                        })
-                                                        .on_click(cx.listener(|this, _, _, cx| {
-                                                            this.active_tab = 2;
-                                                            cx.notify();
-                                                        }))
-                                                        .child(div().text_sm().child("Security")),
-                                                )
-                                            })
-                                            .when(self.editing_id.is_some(), |this| {
                                                 this.child(
                                                     div()
                                                         .id("tab_3")
@@ -2635,6 +2683,32 @@ impl Render for ProfileManagerView {
                                                             this.active_tab = 3;
                                                             cx.notify();
                                                         }))
+                                                        .child(div().text_sm().child("Security")),
+                                                )
+                                            })
+                                            .when(self.editing_id.is_some(), |this| {
+                                                this.child(
+                                                    div()
+                                                        .id("tab_4")
+                                                        .px_4()
+                                                        .py_1p5()
+                                                        .rounded_md()
+                                                        .cursor_pointer()
+                                                        .when(self.active_tab == 4, |s| {
+                                                            s.bg(cx.theme().background)
+                                                                .shadow_sm()
+                                                                .text_color(cx.theme().foreground)
+                                                                .font_weight(FontWeight::SEMIBOLD)
+                                                        })
+                                                        .when(self.active_tab != 4, |s| {
+                                                            s.hover(|s| s.bg(cx.theme().muted))
+                                                                .text_color(cx.theme().muted_foreground)
+                                                                .font_weight(FontWeight::MEDIUM)
+                                                        })
+                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                            this.active_tab = 4;
+                                                            cx.notify();
+                                                        }))
                                                         .child(div().text_sm().child("Export")),
                                                 )
                                             }),
@@ -2653,6 +2727,7 @@ impl Render for ProfileManagerView {
                                         date_label,
                                         cx,
                                     ))
+                                    .child(self.render_ocr_tab(cx))
                                     .child(self.render_email_settings_tab(cx))
                             )
                             .child(self.render_security_tab(global_pins_enabled, cx))

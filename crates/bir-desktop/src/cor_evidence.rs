@@ -45,6 +45,12 @@ fn store_cor_document_in_dir(
             .unwrap_or(&file_name)
             .to_string(),
         stored_path: stored_path.to_string_lossy().to_string(),
+        uploaded_at: Some(chrono::Local::now().naive_local()),
+        provider: None,
+        model: None,
+        document_type: None,
+        extracted_form_codes: vec![],
+        extracted_deadline_rules: vec![],
         ocr_text: None,
         ocr_confidence: None,
     })

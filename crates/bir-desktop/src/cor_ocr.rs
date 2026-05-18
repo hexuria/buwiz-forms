@@ -52,6 +52,7 @@ impl Default for CorOcrOptions {
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct CorOcrFields {
+    pub document_type: Option<String>,
     pub tin: Option<String>,
     pub registration_date: Option<NaiveDate>,
     pub registered_name: Option<String>,
@@ -62,6 +63,8 @@ pub(crate) struct CorOcrFields {
     pub line_of_business_description: Option<String>,
     pub taxpayer_type: Option<TaxpayerType>,
     pub registered_tax_types: Vec<RegisteredTaxType>,
+    pub extracted_form_codes: Vec<String>,
+    pub deadline_rule_evidence: Vec<String>,
     pub filing_reminders: Vec<String>,
 }
 
@@ -79,6 +82,15 @@ trait CorOcrProvider {
 
 pub(crate) fn extract_cor_document(source_path: &Path) -> CorOcrResult {
     extract_cor_document_with_options(source_path, &CorOcrOptions::default())
+}
+
+pub(crate) fn resolve_gemini_model_id(selected_model: &str, custom_model: &str) -> String {
+    let custom_model = custom_model.trim();
+    if !custom_model.is_empty() {
+        return custom_model.to_string();
+    }
+
+    normalize_model_id(selected_model)
 }
 
 pub(crate) fn extract_cor_document_with_options(
@@ -115,6 +127,12 @@ pub(crate) fn create_draft_cor_version_from_ocr(
 ) -> TaxProfileVersion {
     evidence.ocr_text = ocr.text.clone();
     evidence.ocr_confidence = ocr.confidence;
+    evidence.document_type = ocr.fields.document_type.clone();
+    evidence.extracted_form_codes = ocr.fields.extracted_form_codes.clone();
+    evidence.extracted_deadline_rules = ocr.fields.deadline_rule_evidence.clone();
+    if evidence.uploaded_at.is_none() {
+        evidence.uploaded_at = Some(now);
+    }
 
     let mut version = TaxProfileVersion::from_profile_backfill(profile);
     version.id = format!("ocr-cor-{}", now.and_utc().timestamp_millis());
@@ -123,6 +141,9 @@ pub(crate) fn create_draft_cor_version_from_ocr(
     version.source = TaxProfileVersionSource::OcrCor;
     version.needs_effective_date_review = version.effective_from.is_none();
 
+    if let Some(tin) = ocr.fields.tin {
+        version.cor.tin = Some(tin);
+    }
     if let Some(registration_date) = ocr.fields.registration_date {
         version.cor.registration_date = Some(registration_date);
         if version.effective_from.is_none() {
@@ -157,6 +178,9 @@ pub(crate) fn create_draft_cor_version_from_ocr(
     }
     if !ocr.fields.filing_reminders.is_empty() {
         let reminders = ocr.fields.filing_reminders.join("\n");
+        if evidence.extracted_deadline_rules.is_empty() {
+            evidence.extracted_deadline_rules = ocr.fields.filing_reminders.clone();
+        }
         evidence.ocr_text = Some(match evidence.ocr_text.take() {
             Some(text) if !text.trim().is_empty() => {
                 format!("{text}\n\nFiling reminders detected:\n{reminders}")
@@ -181,10 +205,6 @@ fn sync_version_flags_from_registered_tax_types(version: &mut TaxProfileVersion)
     version.withholds_final = version
         .registered_tax_types
         .contains(&RegisteredTaxType::WithholdingFinal);
-}
-
-pub(crate) fn has_gemini_api_key() -> bool {
-    read_gemini_api_key().ok().flatten().is_some()
 }
 
 pub(crate) fn save_gemini_api_key(api_key: &str) -> Result<(), String> {
@@ -215,12 +235,7 @@ pub(crate) fn test_gemini_api_key(
     model: &str,
     candidate_key: Option<&str>,
 ) -> Result<String, String> {
-    let api_key = candidate_key
-        .map(str::trim)
-        .filter(|key| !key.is_empty())
-        .map(str::to_string)
-        .or_else(|| read_gemini_api_key().ok().flatten())
-        .ok_or_else(|| "Add a Gemini API key before testing OCR.".to_string())?;
+    let api_key = resolve_gemini_api_key(candidate_key)?;
 
     let model = normalize_model_id(model);
     let response = call_gemini(
@@ -241,6 +256,25 @@ pub(crate) fn test_gemini_api_key(
     let _: serde_json::Value = serde_json::from_str(&response)
         .map_err(|error| format!("Gemini responded, but the test JSON was invalid: {error}"))?;
     Ok(format!("Gemini OCR key accepted for model {model}."))
+}
+
+fn resolve_gemini_api_key(candidate_key: Option<&str>) -> Result<String, String> {
+    resolve_gemini_api_key_from_sources(candidate_key, read_gemini_api_key)
+}
+
+fn resolve_gemini_api_key_from_sources<F>(
+    candidate_key: Option<&str>,
+    stored_key: F,
+) -> Result<String, String>
+where
+    F: FnOnce() -> Result<Option<String>, String>,
+{
+    candidate_key
+        .map(str::trim)
+        .filter(|key| !key.is_empty())
+        .map(str::to_string)
+        .or_else(|| stored_key().ok().flatten())
+        .ok_or_else(|| "Add a Gemini API key before testing OCR.".to_string())
 }
 
 fn read_gemini_api_key() -> Result<Option<String>, String> {
@@ -361,6 +395,8 @@ impl GeminiByokProvider {
         let mime_type = mime_type_for_path(source_path)?;
         let encoded = BASE64_STANDARD.encode(bytes);
 
+        // Gemini supports PDF document understanding directly, so this provider
+        // sends the original PDF/image bytes and does not rasterize PDFs first.
         let response_text = call_gemini(
             &api_key,
             &self.model,
@@ -478,8 +514,11 @@ fn parse_cor_text(text: &str) -> CorOcrFields {
     );
     let (line_of_business_code, line_of_business_description) =
         split_line_of_business(line_of_business.as_deref());
+    let extracted_form_codes = extract_form_codes_from_text(text);
+    let deadline_rule_evidence = extract_deadline_rule_evidence(text);
 
     CorOcrFields {
+        document_type: detect_document_type(text),
         tin,
         registration_date,
         registered_name,
@@ -490,8 +529,56 @@ fn parse_cor_text(text: &str) -> CorOcrFields {
         line_of_business_description,
         taxpayer_type: None,
         registered_tax_types: infer_tax_types_from_text(text),
+        extracted_form_codes,
+        deadline_rule_evidence,
         filing_reminders: vec![],
     }
+}
+
+fn detect_document_type(text: &str) -> Option<String> {
+    let normalized = normalize(text);
+    if normalized.contains("CERTIFICATE OF REGISTRATION") || normalized.contains("FORM 2303") {
+        Some("BIR Form 2303 / Certificate of Registration".to_string())
+    } else {
+        None
+    }
+}
+
+fn extract_form_codes_from_text(text: &str) -> Vec<String> {
+    let known_codes = [
+        "2303", "0605", "0619E", "0619F", "1600", "1600PT", "1600VT", "1601C", "1601EQ", "1601FQ",
+        "1602Q", "1603Q", "1604C", "1604CF", "1604E", "1621", "1701", "1701A", "1701MS", "1701Q",
+        "1702EX", "1702MX", "1702Q", "1702RT", "1704", "2200M", "2200P", "2316", "2550DS", "2550M",
+        "2550Q", "2551Q",
+    ];
+    let normalized = normalize(text).replace(' ', "");
+    let mut codes = known_codes
+        .into_iter()
+        .filter(|code| normalized.contains(code))
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    codes.sort();
+    codes.dedup();
+    codes
+}
+
+fn extract_deadline_rule_evidence(text: &str) -> Vec<String> {
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .filter(|line| {
+            let normalized = normalize(line);
+            normalized.contains("DAY")
+                || normalized.contains("DAYS")
+                || normalized.contains("MONTH")
+                || normalized.contains("QUARTER")
+                || normalized.contains("ANNUAL")
+                || normalized.contains("DEADLINE")
+                || normalized.contains("REMINDER")
+        })
+        .take(12)
+        .map(str::to_string)
+        .collect()
 }
 
 fn extract_label_value(text: &str, labels: &[&str]) -> Option<String> {
@@ -619,7 +706,7 @@ fn normalize_model_id(model: &str) -> String {
 }
 
 fn cor_extraction_prompt() -> &'static str {
-    "You are extracting structured data from a Philippine BIR Certificate of Registration, Form 2303. Return JSON only. If a value is unreadable, use an empty string. Do not invent facts. Filing reminders are evidence text only; do not convert them into legal rules. The user must review the result before it affects compliance."
+    "You are extracting structured data from a Philippine BIR Certificate of Registration, Form 2303. Return JSON only. If a value is unreadable, use an empty string. Do not invent facts. Capture form codes and filing reminder/deadline text as evidence only; do not convert them into legal rules. The user must review the result before it affects compliance."
 }
 
 fn cor_response_schema() -> serde_json::Value {
@@ -627,6 +714,7 @@ fn cor_response_schema() -> serde_json::Value {
         "type": "object",
         "properties": {
             "confidence": { "type": "number" },
+            "document_type": { "type": "string" },
             "tin": { "type": "string" },
             "registration_date": { "type": "string" },
             "registered_name": { "type": "string" },
@@ -640,6 +728,14 @@ fn cor_response_schema() -> serde_json::Value {
                 "type": "array",
                 "items": { "type": "string" }
             },
+            "extracted_form_codes": {
+                "type": "array",
+                "items": { "type": "string" }
+            },
+            "deadline_rule_evidence": {
+                "type": "array",
+                "items": { "type": "string" }
+            },
             "filing_reminders": {
                 "type": "array",
                 "items": { "type": "string" }
@@ -647,6 +743,7 @@ fn cor_response_schema() -> serde_json::Value {
         },
         "required": [
             "confidence",
+            "document_type",
             "tin",
             "registration_date",
             "registered_name",
@@ -657,6 +754,8 @@ fn cor_response_schema() -> serde_json::Value {
             "line_of_business_description",
             "taxpayer_type",
             "registered_tax_types",
+            "extracted_form_codes",
+            "deadline_rule_evidence",
             "filing_reminders"
         ]
     })
@@ -745,6 +844,8 @@ struct GeminiCorExtraction {
     #[serde(default)]
     confidence: Option<f32>,
     #[serde(default)]
+    document_type: String,
+    #[serde(default)]
     tin: String,
     #[serde(default)]
     registration_date: String,
@@ -765,6 +866,10 @@ struct GeminiCorExtraction {
     #[serde(default)]
     registered_tax_types: Vec<String>,
     #[serde(default)]
+    extracted_form_codes: Vec<String>,
+    #[serde(default)]
+    deadline_rule_evidence: Vec<String>,
+    #[serde(default)]
     filing_reminders: Vec<String>,
 }
 
@@ -779,6 +884,7 @@ impl GeminiCorExtraction {
         registered_tax_types.sort();
 
         CorOcrFields {
+            document_type: non_empty(self.document_type),
             tin: non_empty(self.tin),
             registration_date: parse_date(&self.registration_date),
             registered_name: non_empty(self.registered_name),
@@ -789,6 +895,13 @@ impl GeminiCorExtraction {
             line_of_business_description: non_empty(self.line_of_business_description),
             taxpayer_type: parse_taxpayer_type(&self.taxpayer_type),
             registered_tax_types,
+            extracted_form_codes: normalize_form_codes(self.extracted_form_codes),
+            deadline_rule_evidence: self
+                .deadline_rule_evidence
+                .into_iter()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+                .collect(),
             filing_reminders: self
                 .filing_reminders
                 .into_iter()
@@ -797,6 +910,29 @@ impl GeminiCorExtraction {
                 .collect(),
         }
     }
+}
+
+fn normalize_form_codes(codes: Vec<String>) -> Vec<String> {
+    let mut codes = codes
+        .into_iter()
+        .flat_map(|value| {
+            value
+                .split([',', ';', '\n'])
+                .map(str::trim)
+                .filter(|code| !code.is_empty())
+                .map(|code| {
+                    code.chars()
+                        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '-')
+                        .collect::<String>()
+                        .to_ascii_uppercase()
+                })
+                .collect::<Vec<_>>()
+        })
+        .filter(|code| !code.is_empty())
+        .collect::<Vec<_>>();
+    codes.sort();
+    codes.dedup();
+    codes
 }
 
 fn non_empty(value: String) -> Option<String> {
@@ -839,9 +975,85 @@ struct GeminiError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bir_core::{
+        naming::Tin,
+        profile::{
+            ComplianceSourceMode, EmailAuthMethod, RegistrationActivityStatus, TaxClassification,
+        },
+    };
 
     fn temp_cor_dir() -> PathBuf {
         std::env::temp_dir().join(format!("bir-cor-ocr-test-{}", uuid::Uuid::new_v4()))
+    }
+
+    fn sample_profile() -> TaxpayerProfile {
+        TaxpayerProfile {
+            id: None,
+            full_name: "Legacy Name".to_string(),
+            tin: Tin {
+                segment1: "123".into(),
+                segment2: "456".into(),
+                segment3: "789".into(),
+                branch: "00000".into(),
+            },
+            rdo_code: "018".to_string(),
+            line_of_business: "Software Development".to_string(),
+            registered_address: "Olongapo".to_string(),
+            zip_code: "2200".to_string(),
+            phone: "09123456789".to_string(),
+            email: "taxpayer@example.com".to_string(),
+            default_form_type: "2551Q".to_string(),
+            taxpayer_type: TaxpayerType::Individual,
+            is_vat_registered: false,
+            business_start_date: None,
+            tax_classification: Some(TaxClassification::SelfEmployed),
+            eopt_tier: None,
+            is_bmbe: false,
+            is_gpp_partner: false,
+            is_create_msme: false,
+            is_expanded_withholding_agent: false,
+            atc_codes: vec![],
+            excise_tax_categories: vec![],
+            tax_elections: vec![],
+            is_archived: false,
+            profile_pin_hash: None,
+            totp_secret: None,
+            email_tracking_enabled: false,
+            email_auth_method: EmailAuthMethod::AppPassword,
+            imap_email: None,
+            imap_host: None,
+            test_notification_enabled: false,
+            imap_app_password: None,
+            oauth_access_token: None,
+            oauth_refresh_token: None,
+            has_employees: false,
+            is_dormant: false,
+            has_single_employer: false,
+            withholds_compensation: false,
+            withholds_expanded: false,
+            withholds_final: false,
+            is_top_withholding_agent: false,
+            is_government_withholding_entity: false,
+            registration_activity_status: RegistrationActivityStatus::Active,
+            profile_versions: vec![],
+            compliance_source_mode: ComplianceSourceMode::TemporalSuggestion,
+        }
+    }
+
+    fn sample_evidence() -> CorDocumentRef {
+        CorDocumentRef {
+            id: "doc-id".to_string(),
+            file_name: "cor.pdf".to_string(),
+            stored_path: "/tmp/cor.pdf".to_string(),
+            uploaded_at: None,
+            provider: None,
+            model: None,
+            document_type: None,
+            extracted_form_codes: vec![],
+            extracted_deadline_rules: vec![],
+            ocr_text: None,
+            ocr_confidence: None,
+        }
     }
 
     #[test]
@@ -985,6 +1197,7 @@ PERCENTAGE TAX
         let text = r#"
         {
           "confidence": 0.78,
+          "document_type": "BIR Form 2303 / Certificate of Registration",
           "tin": "123-456-789-00000",
           "registration_date": "2020-02-17",
           "registered_name": "Gold Coders Corp.",
@@ -995,12 +1208,18 @@ PERCENTAGE TAX
           "line_of_business_description": "Software Publishing",
           "taxpayer_type": "Corporation",
           "registered_tax_types": ["Income Tax", "Percentage Tax", "Withholding Tax - Expanded"],
+          "extracted_form_codes": ["1702Q", "2551Q"],
+          "deadline_rule_evidence": ["1702Q - 60 days after quarter end"],
           "filing_reminders": ["1702Q - 60 days after quarter end"]
         }"#;
 
         let extraction = parse_gemini_cor_json(text).unwrap();
         assert_eq!(extraction.confidence, Some(0.78));
         let fields = extraction.into_fields();
+        assert_eq!(
+            fields.document_type.as_deref(),
+            Some("BIR Form 2303 / Certificate of Registration")
+        );
         assert_eq!(fields.tin.as_deref(), Some("123-456-789-00000"));
         assert_eq!(
             fields.registration_date,
@@ -1016,6 +1235,11 @@ PERCENTAGE TAX
             ]
         );
         assert_eq!(fields.filing_reminders.len(), 1);
+        assert_eq!(
+            fields.extracted_form_codes,
+            vec!["1702Q".to_string(), "2551Q".to_string()]
+        );
+        assert_eq!(fields.deadline_rule_evidence.len(), 1);
     }
 
     #[test]
@@ -1025,10 +1249,170 @@ PERCENTAGE TAX
     }
 
     #[test]
-    fn missing_key_disables_gemini_test_path() {
-        let result = test_gemini_api_key(DEFAULT_GEMINI_MODEL, Some(""));
-        if std::env::var("GEMINI_API_KEY").is_err() && !has_gemini_api_key() {
-            assert!(result.unwrap_err().contains("Add a Gemini API key"));
-        }
+    fn gemini_provider_sends_pdf_directly_as_pdf_mime_type() {
+        assert_eq!(
+            mime_type_for_path(Path::new("certificate-of-registration.pdf")).unwrap(),
+            "application/pdf"
+        );
+    }
+
+    #[test]
+    fn missing_key_resolution_disables_gemini_test_path_without_network() {
+        let result = resolve_gemini_api_key_from_sources(Some("  "), || Ok(None));
+        assert!(result.unwrap_err().contains("Add a Gemini API key"));
+    }
+
+    #[test]
+    fn candidate_key_takes_precedence_over_stored_key() {
+        let result = resolve_gemini_api_key_from_sources(Some(" candidate-key "), || {
+            Ok(Some("stored-key".to_string()))
+        })
+        .unwrap();
+        assert_eq!(result, "candidate-key");
+    }
+
+    #[test]
+    fn custom_gemini_model_takes_precedence_over_selected_model() {
+        let model = resolve_gemini_model_id("gemini-2.5-flash", " gemini-future-custom-preview ");
+
+        assert_eq!(model, "gemini-future-custom-preview");
+    }
+
+    #[test]
+    fn empty_gemini_model_selection_uses_default_model() {
+        let model = resolve_gemini_model_id("  ", "  ");
+
+        assert_eq!(model, DEFAULT_GEMINI_MODEL);
+    }
+
+    #[test]
+    fn ocr_result_creates_review_only_draft_cor_version() {
+        let mut ocr = CorOcrResult {
+            text: Some("{\"source\":\"gemini\"}".to_string()),
+            confidence: Some(0.77),
+            fields: CorOcrFields {
+                tin: Some("123-456-789-00000".to_string()),
+                registration_date: NaiveDate::from_ymd_opt(2026, 2, 17),
+                registered_name: Some("Gold Coders Corp.".to_string()),
+                trade_name: Some("Buwiz".to_string()),
+                rdo_code: Some("018".to_string()),
+                registered_address: Some("Olongapo City".to_string()),
+                line_of_business_code: Some("7221".to_string()),
+                line_of_business_description: Some("Software Publishing".to_string()),
+                taxpayer_type: Some(TaxpayerType::Corporation),
+                document_type: Some("BIR Form 2303 / Certificate of Registration".to_string()),
+                registered_tax_types: vec![
+                    RegisteredTaxType::IncomeTax,
+                    RegisteredTaxType::ValueAddedTax,
+                    RegisteredTaxType::WithholdingCompensation,
+                    RegisteredTaxType::WithholdingExpanded,
+                    RegisteredTaxType::WithholdingFinal,
+                ],
+                extracted_form_codes: vec!["1702Q".to_string(), "2551Q".to_string()],
+                deadline_rule_evidence: vec!["1702Q - 60 days after quarter end".to_string()],
+                filing_reminders: vec!["1702Q - 60 days after quarter end".to_string()],
+                ..Default::default()
+            },
+            status_message: "Gemini OCR extracted COR fields.".to_string(),
+        };
+        ocr.fields.registered_tax_types.sort();
+
+        let version = create_draft_cor_version_from_ocr(
+            &sample_profile(),
+            sample_evidence(),
+            ocr,
+            NaiveDate::from_ymd_opt(2026, 3, 1)
+                .unwrap()
+                .and_hms_opt(8, 30, 0)
+                .unwrap(),
+        );
+
+        assert_eq!(version.status, TaxProfileVersionStatus::Draft);
+        assert_eq!(version.source, TaxProfileVersionSource::OcrCor);
+        assert_eq!(version.effective_from, NaiveDate::from_ymd_opt(2026, 2, 17));
+        assert!(!version.needs_effective_date_review);
+        assert_eq!(version.cor.tin.as_deref(), Some("123-456-789-00000"));
+        assert_eq!(version.cor.registered_name, "Gold Coders Corp.");
+        assert_eq!(version.cor.trade_name.as_deref(), Some("Buwiz"));
+        assert_eq!(version.cor.rdo_code, "018");
+        assert_eq!(version.taxpayer_type, TaxpayerType::Corporation);
+        assert!(version.is_vat_registered);
+        assert!(version.withholds_compensation);
+        assert!(version.withholds_expanded);
+        assert!(version.withholds_final);
+        assert_eq!(version.evidence.len(), 1);
+        assert_eq!(version.evidence[0].ocr_confidence, Some(0.77));
+        assert_eq!(
+            version.evidence[0].document_type.as_deref(),
+            Some("BIR Form 2303 / Certificate of Registration")
+        );
+        assert_eq!(
+            version.evidence[0].extracted_form_codes,
+            vec!["1702Q".to_string(), "2551Q".to_string()]
+        );
+        assert!(
+            version.evidence[0]
+                .ocr_text
+                .as_deref()
+                .unwrap_or_default()
+                .contains("Filing reminders detected")
+        );
+    }
+
+    #[test]
+    fn ocr_draft_does_not_affect_obligations_until_confirmed() {
+        let profile = sample_profile();
+        let ocr = CorOcrResult {
+            text: Some("{\"source\":\"gemini\"}".to_string()),
+            confidence: Some(0.81),
+            fields: CorOcrFields {
+                tin: Some(profile.tin.formatted()),
+                registration_date: NaiveDate::from_ymd_opt(2026, 1, 15),
+                registered_name: Some("Legacy Name".to_string()),
+                rdo_code: Some("018".to_string()),
+                registered_address: Some("Olongapo".to_string()),
+                line_of_business_description: Some("Software Development".to_string()),
+                taxpayer_type: Some(TaxpayerType::Individual),
+                registered_tax_types: vec![
+                    RegisteredTaxType::IncomeTax,
+                    RegisteredTaxType::PercentageTax,
+                ],
+                ..Default::default()
+            },
+            status_message: "Gemini OCR extracted COR fields.".to_string(),
+        };
+        let draft = create_draft_cor_version_from_ocr(
+            &profile,
+            sample_evidence(),
+            ocr,
+            NaiveDate::from_ymd_opt(2026, 2, 1)
+                .unwrap()
+                .and_hms_opt(9, 0, 0)
+                .unwrap(),
+        );
+
+        let mut draft_profile = profile.clone();
+        draft_profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+        draft_profile.profile_versions = vec![draft.clone()];
+        let draft_preview = draft_profile.preview_obligations_for_year(2026);
+        assert!(draft_preview.form_codes.is_empty());
+        assert!(draft_preview.active_version_ids.is_empty());
+
+        let mut confirmed_profile = draft_profile;
+        confirmed_profile.profile_versions[0].status = TaxProfileVersionStatus::Confirmed;
+        let confirmed_preview = confirmed_profile.preview_obligations_for_year(2026);
+        assert!(
+            confirmed_preview
+                .form_codes
+                .iter()
+                .any(|code| code == "1701Q")
+        );
+        assert!(
+            confirmed_preview
+                .form_codes
+                .iter()
+                .any(|code| code == "2551Q")
+        );
+        assert_eq!(confirmed_preview.active_version_ids, vec![draft.id]);
     }
 }

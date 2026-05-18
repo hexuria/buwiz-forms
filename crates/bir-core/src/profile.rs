@@ -1,7 +1,7 @@
 //! Taxpayer profile management.
 
 use crate::naming::Tin;
-use chrono::{Duration, NaiveDate};
+use chrono::{Duration, NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -156,6 +156,8 @@ pub enum RegisteredTaxType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CorRegistrationFacts {
     #[serde(default)]
+    pub tin: Option<String>,
+    #[serde(default)]
     pub registration_date: Option<NaiveDate>,
     #[serde(default)]
     pub registered_name: String,
@@ -176,6 +178,18 @@ pub struct CorDocumentRef {
     pub id: String,
     pub file_name: String,
     pub stored_path: String,
+    #[serde(default)]
+    pub uploaded_at: Option<NaiveDateTime>,
+    #[serde(default)]
+    pub provider: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub document_type: Option<String>,
+    #[serde(default)]
+    pub extracted_form_codes: Vec<String>,
+    #[serde(default)]
+    pub extracted_deadline_rules: Vec<String>,
     #[serde(default)]
     pub ocr_text: Option<String>,
     #[serde(default)]
@@ -516,8 +530,7 @@ impl TaxpayerProfile {
 
         self.active_profile_versions_for_year(as_of_year)
             .into_iter()
-            .filter(|version| version.source != TaxProfileVersionSource::MigrationBackfill)
-            .last()
+            .rfind(|version| version.source != TaxProfileVersionSource::MigrationBackfill)
     }
 
     pub fn preview_obligations_for_year(
@@ -644,6 +657,7 @@ impl TaxProfileVersion {
             effective_until: None,
             needs_effective_date_review: effective_from.is_none(),
             cor: CorRegistrationFacts {
+                tin: Some(profile.tin.formatted()),
                 registration_date: effective_from,
                 registered_name: profile.full_name.clone(),
                 trade_name: None,
