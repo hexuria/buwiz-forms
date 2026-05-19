@@ -593,6 +593,7 @@ mod tests {
             taxpayer_type: TaxpayerType::Individual,
             is_vat_registered: false,
             business_start_date: None,
+            birth_date: None,
             is_archived: false,
             email_tracking_enabled: false,
             email_auth_method: Default::default(),

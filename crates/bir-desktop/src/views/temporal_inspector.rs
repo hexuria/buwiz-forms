@@ -125,6 +125,7 @@ impl TemporalInspectorView {
             taxpayer_type: tp_type.clone(),
             is_vat_registered: *sim_is_vat,
             business_start_date: None,
+            birth_date: None,
             tax_classification: classification.clone(),
             eopt_tier: None,
             is_bmbe: false,

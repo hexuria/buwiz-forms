@@ -678,6 +678,7 @@ mod tests {
             taxpayer_type: crate::profile::TaxpayerType::Individual,
             is_vat_registered: false,
             business_start_date: None,
+            birth_date: None,
             tax_classification: None,
             eopt_tier: None,
             is_bmbe: false,

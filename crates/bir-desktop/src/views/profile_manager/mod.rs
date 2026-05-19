@@ -69,6 +69,7 @@ pub struct ProfileManagerView {
     tel_input: Entity<InputState>,
     email_input: Entity<InputState>,
     business_start_input: Entity<DateInputState>,
+    birth_date_input: Entity<DateInputState>,
     is_vat_registered: bool,
     editing_id: Option<i64>,
     tin_duplicate_error: Option<String>,
@@ -293,6 +294,7 @@ impl ProfileManagerView {
             cx.new(|cx| InputState::new(window, cx).placeholder("Mobile or Telephone No."));
         let email_input = cx.new(|cx| InputState::new(window, cx).placeholder("Email Address"));
         let business_start_input = cx.new(|cx| DateInputState::new(window, cx));
+        let birth_date_input = cx.new(|cx| DateInputState::new(window, cx));
         let cor_preview_year_input = cx.new(|cx| {
             let mut input = InputState::new(window, cx).placeholder("Preview year");
             input.set_value(current_year.to_string(), window, cx);
@@ -499,6 +501,7 @@ impl ProfileManagerView {
             cx.subscribe(&cooperative_treatment_select, Self::on_combobox_event),
             cx.subscribe(&excise_select, Self::on_multi_select_event),
             cx.subscribe(&business_start_input, Self::on_date_event),
+            cx.subscribe(&birth_date_input, Self::on_date_event),
             cx.subscribe_in(&cor_preview_year_input, window, Self::on_input_event),
             cx.subscribe_in(
                 &setup_totp_state,
@@ -566,6 +569,7 @@ impl ProfileManagerView {
             tel_input,
             email_input,
             business_start_input,
+            birth_date_input,
             is_vat_registered: false,
             editing_id: None,
             tin_duplicate_error: None,
@@ -968,6 +972,9 @@ impl ProfileManagerView {
         self.business_start_input.update(cx, |input, cx| {
             input.set_date(profile.business_start_date, window, cx)
         });
+        self.birth_date_input.update(cx, |input, cx| {
+            input.set_date(profile.birth_date, window, cx)
+        });
 
         let rdo_value = self
             .rdo_options
@@ -1095,6 +1102,9 @@ impl ProfileManagerView {
         });
         self.business_start_input.update(cx, |input, cx| {
             input.set_date(profile.business_start_date, window, cx)
+        });
+        self.birth_date_input.update(cx, |input, cx| {
+            input.set_date(profile.birth_date, window, cx)
         });
 
         let rdo_value = self
@@ -1379,6 +1389,11 @@ impl ProfileManagerView {
             .to_string();
 
         let business_start_date = self.business_start_input.read(cx).date;
+        let birth_date = if taxpayer_type == TaxpayerType::Individual {
+            self.birth_date_input.read(cx).date
+        } else {
+            None
+        };
 
         let profile_pin_hash = if self.enable_profile_pin {
             let pin = self.profile_pin_input.read(cx).value().to_string();
@@ -1413,6 +1428,7 @@ impl ProfileManagerView {
             taxpayer_type,
             is_vat_registered,
             business_start_date,
+            birth_date,
             email_tracking_enabled: self.email_tracking_enabled,
 
             email_auth_method: self.email_auth_method.clone(),
@@ -1845,6 +1861,7 @@ impl ProfileManagerView {
                         this.sync_document_viewer(cx);
                         this.compliance_source_mode =
                             Self::derive_compliance_source_mode(&this.stored_profile_versions);
+                        this.save_profile(cx);
                         this.save_message = Some(ocr.status_message.clone());
                         this.pending_notification = Some((
                             NotificationType::Success,
@@ -1934,8 +1951,9 @@ impl ProfileManagerView {
         if let Some(path) = removed_path {
             let _ = std::fs::remove_file(path);
         }
+        self.save_profile(cx);
         self.save_message =
-            Some("COR evidence removed. Save the profile to persist the change.".to_string());
+            Some("COR evidence removed.".to_string());
         window.push_notification(
             Notification::success("COR evidence document removed.").title("OCR"),
             cx,
@@ -1962,57 +1980,9 @@ impl ProfileManagerView {
         };
         let version_clone = version.clone();
 
-        let mut profile = TaxpayerProfile {
-            id: self.editing_id,
-            full_name: String::new(),
-            tin: Tin {
-                segment1: String::new(),
-                segment2: String::new(),
-                segment3: String::new(),
-                branch: String::new(),
-            },
-            rdo_code: String::new(),
-            line_of_business: String::new(),
-            registered_address: String::new(),
-            zip_code: String::new(),
-            phone: String::new(),
-            email: String::new(),
-            default_form_type: String::new(),
-            taxpayer_type: TaxpayerType::Individual,
-            is_vat_registered: false,
-            business_start_date: None,
-            tax_classification: None,
-            eopt_tier: None,
-            is_bmbe: false,
-            is_gpp_partner: false,
-            is_create_msme: false,
-            is_expanded_withholding_agent: false,
-            atc_codes: vec![],
-            excise_tax_categories: vec![],
-            tax_elections: vec![],
-            has_employees: false,
-            is_dormant: false,
-            has_single_employer: false,
-            withholds_compensation: false,
-            withholds_expanded: false,
-            withholds_final: false,
-            is_top_withholding_agent: false,
-            is_government_withholding_entity: false,
-            registration_activity_status: Default::default(),
-            is_archived: false,
-            profile_pin_hash: None,
-            totp_secret: None,
-            email_tracking_enabled: false,
-            email_auth_method: Default::default(),
-            imap_email: None,
-            imap_host: None,
-            test_notification_enabled: false,
-            imap_app_password: None,
-            oauth_access_token: None,
-            oauth_refresh_token: None,
-            profile_versions: self.stored_profile_versions.clone(),
-            compliance_source_mode: ComplianceSourceMode::CorVersioned,
-        };
+        let mut profile = self.current_profile(cx);
+        profile.profile_versions = self.stored_profile_versions.clone();
+        profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
 
         if profile.set_profile_version_confirmed(version_id, effective_from) {
             self.compliance_source_mode = ComplianceSourceMode::CorVersioned;
@@ -2022,6 +1992,7 @@ impl ProfileManagerView {
             // the OCR-derived classifications and fields are persisted.
             let projected = profile.projection_for_version(&version_clone);
             self.sync_projection_to_ui(&projected, window, cx);
+            self.save_profile(cx);
 
             Ok(())
         } else {
@@ -2327,13 +2298,30 @@ impl ProfileManagerView {
             evidence.extracted_form_codes = extracted_forms;
         }
 
+        let version_clone = version.clone();
+        let mut profile = self.current_profile(cx);
+        profile.profile_versions = self.stored_profile_versions.clone();
+
+        if version_clone.status == bir_core::profile::TaxProfileVersionStatus::Confirmed {
+            let projected = profile.projection_for_version(&version_clone);
+            self.sync_projection_to_ui(&projected, window, cx);
+        }
+
+        self.save_profile(cx);
+
         self.save_message =
-            Some("COR version details updated. Save the profile to persist them.".to_string());
+            Some("COR version details updated and saved.".to_string());
         self.load_cor_version_editor(&version_id, window, cx)?;
         Ok(())
     }
 
-    fn toggle_cor_registered_tax_type(&mut self, version_id: &str, tax_type: RegisteredTaxType) {
+    fn toggle_cor_registered_tax_type(
+        &mut self,
+        version_id: &str,
+        tax_type: RegisteredTaxType,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(version) = self
             .stored_profile_versions
             .iter_mut()
@@ -2354,8 +2342,18 @@ impl ProfileManagerView {
             version.registered_tax_types.sort();
         }
         Self::sync_version_flags_from_registered_tax_types(version);
+
+        let version_clone = version.clone();
+        if version_clone.status == bir_core::profile::TaxProfileVersionStatus::Confirmed {
+            let mut profile = self.current_profile(cx);
+            profile.profile_versions = self.stored_profile_versions.clone();
+            let projected = profile.projection_for_version(&version_clone);
+            self.sync_projection_to_ui(&projected, window, cx);
+        }
+
+        self.save_profile(cx);
         self.save_message =
-            Some("Registered tax type updated. Save the profile to persist it.".to_string());
+            Some("Registered tax type updated and saved.".to_string());
     }
 
     fn sync_version_flags_from_registered_tax_types(
@@ -2529,13 +2527,14 @@ impl ProfileManagerView {
                 source_reference: Some(source_reference),
             });
         self.clear_cor_override_inputs(window, cx);
+        self.save_profile(cx);
         self.save_message = Some(format!(
-            "Profile obligation override for {form_code} added. Save the profile to persist it."
+            "Profile obligation override for {form_code} added and saved."
         ));
         Ok(())
     }
 
-    fn remove_cor_obligation_override(&mut self, version_id: &str, index: usize) {
+    fn remove_cor_obligation_override(&mut self, version_id: &str, index: usize, cx: &mut Context<Self>) {
         let Some(version) = self
             .stored_profile_versions
             .iter_mut()
@@ -2549,8 +2548,9 @@ impl ProfileManagerView {
             return;
         }
         version.obligation_overrides.remove(index);
+        self.save_profile(cx);
         self.save_message = Some(
-            "Profile obligation override removed. Save the profile to persist it.".to_string(),
+            "Profile obligation override removed.".to_string(),
         );
     }
 
@@ -2633,13 +2633,14 @@ impl ProfileManagerView {
                 },
             });
         self.clear_cor_override_inputs(window, cx);
+        self.save_profile(cx);
         self.save_message = Some(format!(
-            "Profile deadline override '{title}' added. Save the profile to persist it."
+            "Profile deadline override '{title}' added and saved."
         ));
         Ok(())
     }
 
-    fn remove_cor_deadline_override(&mut self, version_id: &str, index: usize) {
+    fn remove_cor_deadline_override(&mut self, version_id: &str, index: usize, cx: &mut Context<Self>) {
         let Some(version) = self
             .stored_profile_versions
             .iter_mut()
@@ -2653,11 +2654,12 @@ impl ProfileManagerView {
             return;
         }
         version.deadline_overrides.remove(index);
+        self.save_profile(cx);
         self.save_message =
-            Some("Profile deadline override removed. Save the profile to persist it.".to_string());
+            Some("Profile deadline override removed.".to_string());
     }
 
-    fn save_profile(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    fn save_profile(&mut self, cx: &mut Context<Self>) {
         let profile = self.current_profile(cx);
         self.errors = validate_profile(&profile);
 
@@ -2915,6 +2917,11 @@ impl Render for ProfileManagerView {
                 "Self-Employed / Professional" | "Mixed Income"
             );
 
+        let is_purely_compensation = is_individual && tax_class_val == "Purely Compensation";
+        if is_purely_compensation && self.active_tab == 1 {
+            self.active_tab = 0;
+        }
+
         let date_label = if is_individual {
             "Birth Date"
         } else {
@@ -2957,7 +2964,7 @@ impl Render for ProfileManagerView {
                     let is_modifier =
                         event.keystroke.modifiers.platform || event.keystroke.modifiers.control;
                     if is_enter && is_modifier {
-                        this.save_profile(_window, cx);
+                        this.save_profile(cx);
                         cx.stop_propagation();
                     }
                 }),
@@ -3041,33 +3048,35 @@ impl Render for ProfileManagerView {
                                                     }))
                                                     .child(div().text_sm().child("Tax Profile")),
                                             )
-                                            .child(
-                                                div()
-                                                    .id("tab_1")
-                                                    .px_4()
-                                                    .py_1p5()
-                                                    .rounded_md()
-                                                    .cursor_pointer()
-                                                    .when(self.active_tab == 1, |s| {
-                                                        s.bg(cx.theme().background)
-                                                            .shadow_sm()
-                                                            .text_color(cx.theme().foreground)
-                                                            .font_weight(FontWeight::SEMIBOLD)
-                                                    })
-                                                    .when(self.active_tab != 1, |s| {
-                                                        s.hover(|s| s.bg(cx.theme().muted))
-                                                            .text_color(cx.theme().muted_foreground)
-                                                            .font_weight(FontWeight::MEDIUM)
-                                                    })
-                                                    .on_click(cx.listener(|this, _, _, cx| {
-                                                        this.active_tab = 1;
-                                                        // Always show timeline first when switching to OCR tab
-                                                        this.ocr_selected_version_id = None;
-                                                        this.interactive_document_viewer = None;
-                                                        cx.notify();
-                                                    }))
-                                                    .child(div().text_sm().child("OCR")),
-                                            )
+                                            .when(!is_purely_compensation, |this| {
+                                                this.child(
+                                                    div()
+                                                        .id("tab_1")
+                                                        .px_4()
+                                                        .py_1p5()
+                                                        .rounded_md()
+                                                        .cursor_pointer()
+                                                        .when(self.active_tab == 1, |s| {
+                                                            s.bg(cx.theme().background)
+                                                                .shadow_sm()
+                                                                .text_color(cx.theme().foreground)
+                                                                .font_weight(FontWeight::SEMIBOLD)
+                                                        })
+                                                        .when(self.active_tab != 1, |s| {
+                                                            s.hover(|s| s.bg(cx.theme().muted))
+                                                                .text_color(cx.theme().muted_foreground)
+                                                                .font_weight(FontWeight::MEDIUM)
+                                                        })
+                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                            this.active_tab = 1;
+                                                            // Always show timeline first when switching to OCR tab
+                                                            this.ocr_selected_version_id = None;
+                                                            this.interactive_document_viewer = None;
+                                                            cx.notify();
+                                                        }))
+                                                        .child(div().text_sm().child("OCR")),
+                                                )
+                                            })
                                             .child(
                                                 div()
                                                     .id("tab_2")
@@ -3159,7 +3168,9 @@ impl Render for ProfileManagerView {
                                         date_label,
                                         cx,
                                     ))
-                                    .child(self.render_ocr_tab(cx))
+                                    .when(!is_purely_compensation, |this| {
+                                        this.child(self.render_ocr_tab(cx))
+                                    })
                                     .child(self.render_email_settings_tab(cx))
                             )
                             .child(self.render_security_tab(global_pins_enabled, cx))
@@ -3177,7 +3188,7 @@ impl Render for ProfileManagerView {
                                             gpui_component::button::Button::new("save_profile")
                                                 .label("Save Profile")
                                                 .on_click(cx.listener(|this, _ev, _window, cx| {
-                                                    this.save_profile(_window, cx);
+                                                    this.save_profile(cx);
                                                 })),
                                         )
                                         .child(

@@ -292,6 +292,8 @@ pub struct TaxpayerProfile {
     pub is_vat_registered: bool,
     #[serde(default)]
     pub business_start_date: Option<NaiveDate>,
+    #[serde(default)]
+    pub birth_date: Option<NaiveDate>,
 
     /// Refined classification that drives form applicability and ATC rules.
     /// Optional — existing profiles default to None until the user configures it.
@@ -545,9 +547,10 @@ impl TaxpayerProfile {
         for version in &mut self.profile_versions {
             if version.status == TaxProfileVersionStatus::Confirmed
                 && version.effective_until.is_none()
-                && version
-                    .effective_from
-                    .is_none_or(|start| start < new_effective_from)
+                && (version.source == TaxProfileVersionSource::MigrationBackfill
+                    || version
+                        .effective_from
+                        .is_none_or(|start| start < new_effective_from))
             {
                 version.effective_until = Some(close_at);
             }

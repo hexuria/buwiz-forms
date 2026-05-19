@@ -191,14 +191,24 @@ impl ProfileManagerView {
                     .child(Input::new(&self.email_input))
                     .child(self.field_error("email", cx)),
             )
-            .child(
-                // Date field (full width)
-                v_flex()
-                    .w_full()
-                    .child(Self::field_label(date_label, cx))
-                    .child(DateInput::new(&self.business_start_input))
-                    .child(self.field_error("business_start_date", cx)),
-            )
+            .when(is_individual, |this| {
+                this.child(
+                    v_flex()
+                        .w_full()
+                        .child(Self::field_label("Birth Date", cx))
+                        .child(DateInput::new(&self.birth_date_input))
+                        .child(self.field_error("birth_date", cx)),
+                )
+            })
+            .when(!is_purely_compensation, |this| {
+                this.child(
+                    v_flex()
+                        .w_full()
+                        .child(Self::field_label("Business Start Date", cx))
+                        .child(DateInput::new(&self.business_start_input))
+                        .child(self.field_error("business_start_date", cx)),
+                )
+            })
             // ── Registration & Status ──
             .child(
                 div()
@@ -705,6 +715,7 @@ impl ProfileManagerView {
         let document_id_for_open = first_document.map(|doc| doc.id.clone());
 
         let header = div()
+            .w_full()
             .flex()
             .flex_col()
             .gap_4()
@@ -713,6 +724,7 @@ impl ProfileManagerView {
             .border_color(cx.theme().border)
             .child(
                 div()
+                    .w_full()
                     .flex()
                     .gap_2()
                     .items_center()
@@ -733,52 +745,42 @@ impl ProfileManagerView {
             )
             .child(
                 div()
+                    .w_full()
                     .flex()
-                    .items_center()
-                    .justify_between()
+                    .flex_col()
+                    .gap_3()
                     .child(
+                        // Row 1: Title
                         div()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .flex()
-                                    .gap_3()
-                                    .items_center()
-                                    .child(
-                                        div()
-                                            .text_2xl()
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(cx.theme().foreground)
-                                            .child(document_name)
-                                    )
-                                    .child(
-                                        div()
-                                            .px_2()
-                                            .py_1()
-                                            .rounded_full()
-                                            .bg(bg_color)
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .font_weight(FontWeight::SEMIBOLD)
-                                                    .text_color(text_color)
-                                                    .child(status_label)
-                                            )
-                                    )
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(format!("Uploaded on {} • Processed by Gemini OCR", uploaded_at))
-                            )
+                            .w_full()
+                            .text_2xl()
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(cx.theme().foreground)
+                            .child(document_name)
                     )
                     .child(
+                        // Row 2: Badge + Commit to Profile Button
                         div()
+                            .w_full()
                             .flex()
-                            .gap_2()
+                            .flex_wrap()
+                            .items_center()
+                            .gap_4()
+                            .child(
+                                // Status Badge
+                                div()
+                                    .px_2()
+                                    .py_1()
+                                    .rounded_full()
+                                    .bg(bg_color)
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(text_color)
+                                            .child(status_label)
+                                    )
+                            )
                             .when(
                                 version.status != bir_core::profile::TaxProfileVersionStatus::Confirmed,
                                 |this| {
@@ -799,9 +801,17 @@ impl ProfileManagerView {
                                 }
                             )
                     )
+                    .child(
+                        // Row 3: Uploaded on
+                        div()
+                            .w_full()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(format!("Uploaded on {} • Processed by Gemini OCR", uploaded_at))
+                    )
             );
 
-        let left_col = div().flex().flex_col().flex_1().w_full().h_full().child(
+        let left_col = div().flex().flex_col().flex_1().w_full().h(px(600.)).child(
             div()
                 .flex_1()
                 .w_full()
@@ -1192,13 +1202,15 @@ impl ProfileManagerView {
                 ),
             );
 
-        div().flex().flex_col().gap_6().child(header).child(
+        div().flex().flex_col().gap_6().w_full().child(header).child(
             // Responsive 2-column layout using flex instead of grid
             div()
                 .flex()
+                .flex_wrap()
                 .gap_6()
-                .child(div().flex_1().min_w_0().child(left_col))
-                .child(div().flex_1().min_w_0().child(right_col)),
+                .w_full()
+                .child(div().flex_1().min_w(px(400.)).child(left_col))
+                .child(div().flex_1().min_w(px(400.)).child(right_col)),
         )
     }
     fn ocr_field(
@@ -1289,6 +1301,7 @@ impl ProfileManagerView {
             taxpayer_type: bir_core::profile::TaxpayerType::Individual,
             is_vat_registered: false,
             business_start_date: None,
+            birth_date: None,
             tax_classification: None,
             eopt_tier: None,
             is_bmbe: false,
@@ -1638,6 +1651,7 @@ impl ProfileManagerView {
             taxpayer_type: bir_core::profile::TaxpayerType::Individual,
             is_vat_registered: false,
             business_start_date: None,
+            birth_date: None,
             tax_classification: None,
             eopt_tier: None,
             is_bmbe: false,
@@ -2609,8 +2623,8 @@ impl ProfileManagerView {
             .border_1()
             .border_color(cx.theme().border)
             .when(checked, |this| this.bg(cx.theme().accent))
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.toggle_cor_registered_tax_type(&id, tax_type.clone());
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.toggle_cor_registered_tax_type(&id, tax_type.clone(), window, cx);
                 cx.notify();
             }))
             .child(
@@ -2677,7 +2691,7 @@ impl ProfileManagerView {
                             .small()
                             .on_click(cx.listener(
                                 move |this, _, _, cx| {
-                                    this.remove_cor_obligation_override(&version_id, index);
+                                    this.remove_cor_obligation_override(&version_id, index, cx);
                                     cx.notify();
                                 },
                             )),
@@ -2722,7 +2736,7 @@ impl ProfileManagerView {
                             .small()
                             .on_click(cx.listener(
                                 move |this, _, _, cx| {
-                                    this.remove_cor_deadline_override(&version_id, index);
+                                    this.remove_cor_deadline_override(&version_id, index, cx);
                                     cx.notify();
                                 },
                             )),

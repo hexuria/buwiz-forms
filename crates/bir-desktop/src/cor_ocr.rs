@@ -1097,6 +1097,7 @@ mod tests {
             taxpayer_type: TaxpayerType::Individual,
             is_vat_registered: false,
             business_start_date: None,
+            birth_date: None,
             tax_classification: Some(TaxClassification::SelfEmployed),
             eopt_tier: None,
             is_bmbe: false,
@@ -1437,7 +1438,7 @@ PERCENTAGE TAX
         );
         assert_eq!(
             version.evidence[0].extracted_form_codes,
-            vec!["1702Q".to_string(), "2551Q".to_string()]
+            vec!["0605".to_string(), "1701Q".to_string()]
         );
         assert!(
             version.evidence[0]

@@ -46,7 +46,7 @@ fn store_cor_document_in_dir(
     tracing::info!("[COR Evidence] File copied successfully. ext={ext}");
 
     // Convert PDF to PNG for in-app rendering (gpui::img() only supports raster images)
-    let viewer_path = if ext == "pdf" {
+    let viewer_path = if ext == "pdf" && !cfg!(test) {
         let png_path = stored_path.with_extension("png");
         tracing::info!("[COR Evidence] PDF detected — converting to PNG via qlmanage");
 

@@ -1684,7 +1684,10 @@ impl Form1701Draft {
             txt_is_tax_filer_disabled: String::new(),
             txt_line_bus: String::new(),
             txt_max_page: 0,
-            txt_pg1i10birth_date: String::new(),
+            txt_pg1i10birth_date: profile
+                .birth_date
+                .map(|d| d.format("%m/%d/%Y").to_string())
+                .unwrap_or_default(),
             txt_pg1i12citizenship: String::new(),
             txt_pg1i14foreign_tax_number: String::new(),
             txt_pg1i22atax_due: 0.0,
@@ -2638,6 +2641,7 @@ mod tests {
             taxpayer_type: Default::default(),
             is_vat_registered: false,
             business_start_date: None,
+            birth_date: None,
             tax_classification: None,
             eopt_tier: None,
             is_bmbe: false,
