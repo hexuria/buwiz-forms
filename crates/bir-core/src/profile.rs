@@ -194,6 +194,8 @@ pub struct CorDocumentRef {
     pub ocr_text: Option<String>,
     #[serde(default)]
     pub ocr_confidence: Option<f32>,
+    #[serde(default)]
+    pub field_bboxes: std::collections::HashMap<String, [u16; 4]>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

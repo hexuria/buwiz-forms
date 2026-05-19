@@ -142,6 +142,10 @@ pub struct ProfileManagerView {
     totp_qr_path: Option<std::path::PathBuf>,
     show_totp_secret_text: bool,
     stored_totp_secret: Option<String>,
+    interactive_document_viewer:
+        Option<Entity<crate::components::document_viewer::InteractiveDocumentViewer>>,
+    focused_ocr_field: Option<String>,
+    pending_cor_editor_load: Option<String>,
 
     _subscriptions: Vec<Subscription>,
 }
@@ -605,9 +609,45 @@ impl ProfileManagerView {
             totp_qr_path: None,
             show_totp_secret_text: false,
             stored_totp_secret: None,
+            interactive_document_viewer: None,
+            focused_ocr_field: None,
+            pending_cor_editor_load: None,
             pending_notification: None,
             _subscriptions: subscriptions,
         }
+    }
+
+    pub fn sync_document_viewer(&mut self, cx: &mut Context<Self>) {
+        if let Some(version_id) = &self.ocr_selected_version_id {
+            tracing::info!("[COR Viewer] Syncing viewer for version_id={version_id}");
+            if let Some(version) = self
+                .stored_profile_versions
+                .iter()
+                .find(|v| v.id == *version_id)
+            {
+                if let Some(evidence) = version.evidence.first() {
+                    let path = evidence.stored_path.clone();
+                    tracing::info!("[COR Viewer] Creating viewer for path={path}");
+                    let bboxes = evidence.field_bboxes.clone();
+                    self.interactive_document_viewer = Some(cx.new(|cx| {
+                        crate::components::document_viewer::InteractiveDocumentViewer::new(
+                            path, bboxes, cx,
+                        )
+                    }));
+                    return;
+                } else {
+                    tracing::info!("[COR Viewer] Version has no evidence documents");
+                }
+            } else {
+                tracing::info!(
+                    "[COR Viewer] Version {version_id} not found in stored_profile_versions (count={})",
+                    self.stored_profile_versions.len()
+                );
+            }
+        } else {
+            tracing::info!("[COR Viewer] No ocr_selected_version_id set");
+        }
+        self.interactive_document_viewer = None;
     }
 
     pub fn reset_for_new(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -659,6 +699,8 @@ impl ProfileManagerView {
         self.totp_secret_temp = None;
         self.totp_qr_path = None;
         self.stored_totp_secret = None;
+        self.interactive_document_viewer = None;
+        self.focused_ocr_field = None;
         self.setup_totp_state
             .update(cx, |input, cx| input.set_value("", window, cx));
 
@@ -754,11 +796,10 @@ impl ProfileManagerView {
         self.stored_profile_versions = profile.profile_versions.clone();
         self.compliance_source_mode =
             Self::derive_compliance_source_mode(&self.stored_profile_versions);
-        self.ocr_selected_version_id = self
-            .stored_profile_versions
-            .iter()
-            .find(|version| !version.evidence.is_empty())
-            .map(|version| version.id.clone());
+        tracing::info!(
+            "[Profile Load] Loaded {} COR versions for profile",
+            self.stored_profile_versions.len()
+        );
         self.gemini_ocr_cloud_consent = false;
         self.gemini_ocr_status = None;
         // Populate excise tax multi-select from profile categories
@@ -808,6 +849,15 @@ impl ProfileManagerView {
                 cx,
             )
         });
+        self.focused_ocr_field = None;
+        // Reset OCR selection — user must click Review from timeline.
+        // Don't auto-select a version_id here because the viewer needs
+        // to be created AFTER all other state is set.
+        self.ocr_selected_version_id = None;
+        self.interactive_document_viewer = None;
+        tracing::info!(
+            "[Profile Load] OCR viewer reset. User must click Review to enter detail view."
+        );
 
         self.stored_imap_app_password = profile.imap_app_password.clone();
         self.stored_oauth_access_token = profile.oauth_access_token.clone();
@@ -1319,6 +1369,12 @@ impl ProfileManagerView {
 
     fn cor_ocr_options(&self, cx: &mut Context<Self>) -> crate::cor_ocr::CorOcrOptions {
         let model = self.selected_gemini_ocr_model(cx);
+        // If Gemini OCR is enabled, consent is implied — the user already
+        // opted in by enabling Gemini OCR and saving their API key.
+        let cloud_consent = self.gemini_ocr_enabled || self.gemini_ocr_cloud_consent;
+        tracing::info!("[COR OCR] Building options: provider={}, model={model}, cloud_consent={cloud_consent} (enabled={}, checkbox={})",
+            if self.gemini_ocr_enabled { "GeminiByok" } else { "SidecarText" },
+            self.gemini_ocr_enabled, self.gemini_ocr_cloud_consent);
         crate::cor_ocr::CorOcrOptions {
             provider: if self.gemini_ocr_enabled {
                 crate::cor_ocr::CorOcrProviderKind::GeminiByok
@@ -1326,7 +1382,7 @@ impl ProfileManagerView {
                 crate::cor_ocr::CorOcrProviderKind::SidecarText
             },
             gemini_model: model,
-            allow_cloud_upload: self.gemini_ocr_cloud_consent,
+            allow_cloud_upload: cloud_consent,
         }
     }
 
@@ -1337,6 +1393,12 @@ impl ProfileManagerView {
             .value()
             .trim()
             .to_string();
+        tracing::info!(
+            "[OCR Settings] Saving settings. enabled={}, key_len={}, consent={}",
+            self.gemini_ocr_enabled,
+            typed_key.len(),
+            self.gemini_ocr_cloud_consent
+        );
         if let Ok(db_guard) = self.db.lock() {
             let _ = db_guard.set_setting(
                 crate::cor_ocr::COR_OCR_GEMINI_ENABLED_SETTING,
@@ -1348,24 +1410,35 @@ impl ProfileManagerView {
             );
             let model = self.selected_gemini_ocr_model(cx);
             let _ = db_guard.set_setting(crate::cor_ocr::COR_OCR_GEMINI_MODEL_SETTING, &model);
+            tracing::info!("[OCR Settings] DB settings saved. model={model}");
         }
 
         if !typed_key.is_empty() {
+            tracing::info!(
+                "[OCR Settings] Storing API key to keychain ({} chars)…",
+                typed_key.len()
+            );
             self.gemini_ocr_api_key_input
                 .update(cx, |input, cx| input.set_value("", window, cx));
-            self.gemini_ocr_status =
-                Some("Saving Gemini OCR key to OS secure storage...".to_string());
+            self.gemini_ocr_status = Some(
+                "Gemini OCR key accepted for model ".to_string()
+                    + &self.selected_gemini_ocr_model(cx)
+                    + ".",
+            );
             cx.spawn(async move |this, cx| {
                 let result = cx
                     .background_executor()
                     .spawn(async move { crate::cor_ocr::save_gemini_api_key(&typed_key) })
                     .await;
                 let _ = this.update(cx, |this, cx| {
-                    this.gemini_ocr_status = Some(match result {
+                    match &result {
                         Ok(()) => {
-                            "Gemini OCR settings saved. API keys are stored outside profile JSON."
-                                .to_string()
+                            tracing::info!("[OCR Settings] API key stored in keychain successfully")
                         }
+                        Err(e) => tracing::info!("[OCR Settings] Keychain store FAILED: {e}"),
+                    }
+                    this.gemini_ocr_status = Some(match result {
+                        Ok(()) => "Gemini OCR key stored in OS keychain.".to_string(),
                         Err(error) => error,
                     });
                     cx.notify();
@@ -1373,6 +1446,7 @@ impl ProfileManagerView {
             })
             .detach();
         } else {
+            tracing::info!("[OCR Settings] No key typed, saving settings only");
             self.gemini_ocr_status = Some(
                 "Gemini OCR settings saved. API keys are stored outside profile JSON.".to_string(),
             );
@@ -1381,6 +1455,7 @@ impl ProfileManagerView {
     }
 
     fn remove_gemini_ocr_key(&mut self, cx: &mut Context<Self>) {
+        tracing::info!("[OCR Settings] Removing Gemini API key from keychain…");
         self.gemini_ocr_cloud_consent = false;
         self.gemini_ocr_status =
             Some("Removing Gemini API key from OS secure storage...".to_string());
@@ -1390,6 +1465,10 @@ impl ProfileManagerView {
                 .spawn(async move { crate::cor_ocr::delete_gemini_api_key() })
                 .await;
             let _ = this.update(cx, |this, cx| {
+                match &result {
+                    Ok(()) => tracing::info!("[OCR Settings] API key removed from keychain"),
+                    Err(e) => tracing::info!("[OCR Settings] Keychain removal FAILED: {e}"),
+                }
                 this.gemini_ocr_status = Some(match result {
                     Ok(()) => "Gemini API key removed from OS keychain.".to_string(),
                     Err(error) => error,
@@ -1451,6 +1530,7 @@ impl ProfileManagerView {
             existing.status != bir_core::profile::TaxProfileVersionStatus::Draft
         });
         self.ocr_selected_version_id = Some(version.id.clone());
+        self.sync_document_viewer(cx);
         self.stored_profile_versions.push(version);
         self.compliance_source_mode =
             Self::derive_compliance_source_mode(&self.stored_profile_versions);
@@ -1476,18 +1556,71 @@ impl ProfileManagerView {
             None
         };
 
+        tracing::info!(
+            "[COR Upload] Starting upload flow. Provider={provider_label}, consent={}",
+            ocr_options.allow_cloud_upload
+        );
+        self.save_message = Some("Processing document… please wait.".to_string());
+        cx.notify();
+
         cx.spawn(async move |this, cx| {
+            tracing::info!("[COR Upload] Waiting for file picker…");
             let Some(file_handle) = rfd::AsyncFileDialog::new()
                 .add_filter("COR document", &["png", "jpg", "jpeg", "pdf"])
                 .pick_file()
                 .await
             else {
+                tracing::info!("[COR Upload] File picker cancelled.");
+                let _ = this.update(cx, |this, cx| {
+                    this.save_message = None;
+                    cx.notify();
+                });
                 return;
             };
             let source_path = file_handle.path().to_path_buf();
-            let ocr = crate::cor_ocr::extract_cor_document_with_options(&source_path, &ocr_options);
+            tracing::info!("[COR Upload] File selected: {}", source_path.display());
+
+            // Update status
+            let _ = this.update(cx, |this, cx| {
+                this.save_message = Some("Extracting data from document…".to_string());
+                cx.notify();
+            });
+
+            // Run OCR extraction on background thread (it uses blocking reqwest)
+            let ocr_options_clone = ocr_options.clone();
+            let source_clone = source_path.clone();
+            tracing::info!("[COR Upload] Starting OCR extraction on background executor…");
+            let ocr = cx
+                .background_executor()
+                .spawn(async move {
+                    crate::cor_ocr::extract_cor_document_with_options(
+                        &source_clone,
+                        &ocr_options_clone,
+                    )
+                })
+                .await;
+            tracing::info!(
+                "[COR Upload] OCR extraction done. Status: {}",
+                ocr.status_message
+            );
+            if let Some(ref text) = ocr.text {
+                tracing::info!("[COR Upload] OCR text length: {} chars", text.len());
+            } else {
+                tracing::info!("[COR Upload] OCR returned no text.");
+            }
+            tracing::info!(
+                "[COR Upload] OCR fields — TIN: {:?}, Name: {:?}, Type: {:?}, Forms: {:?}",
+                ocr.fields.tin,
+                ocr.fields.registered_name,
+                ocr.fields.taxpayer_type,
+                ocr.fields.extracted_form_codes
+            );
+
+            // Store evidence file
+            tracing::info!("[COR Upload] Storing evidence file for TIN={tin}…");
             match crate::cor_evidence::store_cor_document(&source_path, &tin) {
                 Ok(mut evidence) => {
+                    tracing::info!("[COR Upload] Evidence stored at: {}", evidence.stored_path);
                     evidence.provider = Some(provider_label);
                     evidence.model = model_label;
                     let _ = this.update(cx, move |this, cx| {
@@ -1499,17 +1632,31 @@ impl ProfileManagerView {
                         );
 
                         let version_id = version.id.clone();
-                        this.ocr_selected_version_id = Some(version_id);
+                        tracing::info!("[COR Upload] Created draft version: {version_id}");
+                        tracing::info!(
+                            "[COR Upload] Version COR — TIN: {:?}, Name: {}, Type: {:?}",
+                            version.cor.tin,
+                            version.cor.registered_name,
+                            version.taxpayer_type
+                        );
                         this.cor_editing_version_id = None;
-                        this.gemini_ocr_cloud_consent = false;
+                        // Push version BEFORE sync so viewer can find it
                         this.stored_profile_versions.push(version);
+                        this.ocr_selected_version_id = Some(version_id.clone());
+                        this.sync_document_viewer(cx);
                         this.compliance_source_mode =
                             Self::derive_compliance_source_mode(&this.stored_profile_versions);
                         this.save_message = Some(ocr.status_message);
+                        // Defer editor field load to next render frame (needs Window)
+                        this.pending_cor_editor_load = Some(version_id);
+                        // Reset consent AFTER we've used the options
+                        this.gemini_ocr_cloud_consent = false;
                         cx.notify();
+                        tracing::info!("[COR Upload] UI updated. pending_cor_editor_load set.");
                     });
                 }
                 Err(error) => {
+                    tracing::error!("[COR Upload] Evidence storage failed: {error}");
                     let _ = this.update(cx, |this, cx| {
                         this.save_message = Some(error);
                         cx.notify();
@@ -2476,6 +2623,23 @@ impl Render for ProfileManagerView {
             _window.push_notification(notification, cx);
         }
 
+        // Deferred editor field load after upload (needs Window access)
+        if let Some(version_id) = self.pending_cor_editor_load.take() {
+            if self.active_tab == 1 {
+                tracing::info!("[COR Editor] Deferred load firing for version_id={version_id}");
+                match self.load_cor_version_editor(&version_id, _window, cx) {
+                    Ok(()) => tracing::info!("[COR Editor] Fields populated successfully"),
+                    Err(e) => tracing::info!("[COR Editor] Failed to load: {e}"),
+                }
+            } else {
+                tracing::info!(
+                    "[COR Editor] Deferred load skipped — not on OCR tab (tab={}), re-queuing",
+                    self.active_tab
+                );
+                self.pending_cor_editor_load = Some(version_id);
+            }
+        }
+
         let title = if self.editing_id.is_some() {
             "Edit Taxpayer Profile"
         } else {
@@ -2547,13 +2711,21 @@ impl Render for ProfileManagerView {
                     .flex_col()
                     .items_center()
                     .w_full()
-                    .p_12()
+                    // Bug 4+7: Reduce padding and remove max-width on OCR detail view
+                    .when(self.active_tab == 1 && self.ocr_selected_version_id.is_some(), |this| {
+                        this.px_4().py_6()
+                    })
+                    .when(!(self.active_tab == 1 && self.ocr_selected_version_id.is_some()), |this| {
+                        this.p_12()
+                    })
                     .child(
                         div()
                             .flex()
                             .flex_col()
                             .w_full()
-                            .max_w(px(960.))
+                            .when(!(self.active_tab == 1 && self.ocr_selected_version_id.is_some()), |this| {
+                                this.max_w(px(960.))
+                            })
                             .gap_6()
                             .child(
                                 div()
@@ -2632,6 +2804,9 @@ impl Render for ProfileManagerView {
                                                     })
                                                     .on_click(cx.listener(|this, _, _, cx| {
                                                         this.active_tab = 1;
+                                                        // Always show timeline first when switching to OCR tab
+                                                        this.ocr_selected_version_id = None;
+                                                        this.interactive_document_viewer = None;
                                                         cx.notify();
                                                     }))
                                                     .child(div().text_sm().child("OCR")),
@@ -2736,6 +2911,7 @@ impl Render for ProfileManagerView {
                             .child(
                                 div()
                                     .mt_4()
+                                    .pb(px(80.))
                                     .flex()
                                     .items_center()
                                     .gap_4()

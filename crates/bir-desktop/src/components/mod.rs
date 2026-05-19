@@ -4,6 +4,7 @@ pub mod command_palette;
 pub mod compliance_calendar;
 pub mod currency_input;
 pub mod date_input;
+pub mod document_viewer;
 pub mod filter_bar;
 pub mod hotkey_recorder;
 pub mod multi_select;

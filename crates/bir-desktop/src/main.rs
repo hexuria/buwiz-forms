@@ -141,7 +141,7 @@ fn main() {
                 .parse()
                 .unwrap()
         } else {
-            "bir_desktop=error,bir_print=error,bir_core=error"
+            "bir_desktop=info,bir_print=error,bir_core=info"
                 .parse()
                 .unwrap()
         }

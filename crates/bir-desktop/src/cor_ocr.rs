@@ -66,6 +66,7 @@ pub(crate) struct CorOcrFields {
     pub extracted_form_codes: Vec<String>,
     pub deadline_rule_evidence: Vec<String>,
     pub filing_reminders: Vec<String>,
+    pub field_bboxes: std::collections::HashMap<String, [u16; 4]>,
 }
 
 #[derive(Debug, Clone)]
@@ -103,6 +104,9 @@ pub(crate) fn extract_cor_document_with_options(
         CorOcrProviderKind::NativeOcr => NativeOcrProvider.extract(source_path),
         CorOcrProviderKind::GeminiByok => {
             if !options.allow_cloud_upload {
+                tracing::info!(
+                    "[COR OCR] Gemini BYOK selected but cloud_upload consent is OFF — skipping API call"
+                );
                 return CorOcrResult {
                     text: None,
                     confidence: None,
@@ -130,6 +134,7 @@ pub(crate) fn create_draft_cor_version_from_ocr(
     evidence.document_type = ocr.fields.document_type.clone();
     evidence.extracted_form_codes = ocr.fields.extracted_form_codes.clone();
     evidence.extracted_deadline_rules = ocr.fields.deadline_rule_evidence.clone();
+    evidence.field_bboxes = ocr.fields.field_bboxes.clone();
     if evidence.uploaded_at.is_none() {
         evidence.uploaded_at = Some(now);
     }
@@ -210,24 +215,49 @@ fn sync_version_flags_from_registered_tax_types(version: &mut TaxProfileVersion)
 pub(crate) fn save_gemini_api_key(api_key: &str) -> Result<(), String> {
     let api_key = api_key.trim();
     if api_key.is_empty() {
+        tracing::info!("[Keychain] save_gemini_api_key called with empty key, skipping");
         return Ok(());
     }
+    tracing::info!(
+        "[Keychain] Saving API key ({} chars) to service={} user={}",
+        api_key.len(),
+        GEMINI_KEYCHAIN_SERVICE,
+        GEMINI_KEYCHAIN_USER
+    );
 
-    let entry = keyring::Entry::new(GEMINI_KEYCHAIN_SERVICE, GEMINI_KEYCHAIN_USER)
-        .map_err(|error| format!("Could not open OS keychain for Gemini API key: {error}"))?;
-    entry
-        .set_password(api_key)
-        .map_err(|error| format!("Could not store Gemini API key in OS keychain: {error}"))
+    let entry =
+        keyring::Entry::new(GEMINI_KEYCHAIN_SERVICE, GEMINI_KEYCHAIN_USER).map_err(|error| {
+            tracing::info!("[Keychain] Entry::new failed: {error}");
+            format!("Could not open OS keychain for Gemini API key: {error}")
+        })?;
+    entry.set_password(api_key).map_err(|error| {
+        tracing::info!("[Keychain] set_password failed: {error}");
+        format!("Could not store Gemini API key in OS keychain: {error}")
+    })
 }
 
 pub(crate) fn delete_gemini_api_key() -> Result<(), String> {
-    let entry = keyring::Entry::new(GEMINI_KEYCHAIN_SERVICE, GEMINI_KEYCHAIN_USER)
-        .map_err(|error| format!("Could not open OS keychain for Gemini API key: {error}"))?;
+    tracing::info!(
+        "[Keychain] Deleting API key from service={} user={}",
+        GEMINI_KEYCHAIN_SERVICE,
+        GEMINI_KEYCHAIN_USER
+    );
+    let entry =
+        keyring::Entry::new(GEMINI_KEYCHAIN_SERVICE, GEMINI_KEYCHAIN_USER).map_err(|error| {
+            tracing::info!("[Keychain] Entry::new failed: {error}");
+            format!("Could not open OS keychain for Gemini API key: {error}")
+        })?;
     match entry.delete_credential() {
-        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-        Err(error) => Err(format!(
-            "Could not remove Gemini API key from OS keychain: {error}"
-        )),
+        Ok(()) | Err(keyring::Error::NoEntry) => {
+            tracing::info!("[Keychain] API key deleted (or was not present)");
+            Ok(())
+        }
+        Err(error) => {
+            tracing::info!("[Keychain] delete_credential failed: {error}");
+            Err(format!(
+                "Could not remove Gemini API key from OS keychain: {error}"
+            ))
+        }
     }
 }
 
@@ -281,18 +311,42 @@ fn read_gemini_api_key() -> Result<Option<String>, String> {
     if let Ok(api_key) = std::env::var("GEMINI_API_KEY") {
         let api_key = api_key.trim().to_string();
         if !api_key.is_empty() {
+            tracing::info!(
+                "[Keychain] API key found from GEMINI_API_KEY env var ({} chars)",
+                api_key.len()
+            );
             return Ok(Some(api_key));
         }
     }
 
-    let entry = keyring::Entry::new(GEMINI_KEYCHAIN_SERVICE, GEMINI_KEYCHAIN_USER)
-        .map_err(|error| format!("Could not open OS keychain for Gemini API key: {error}"))?;
+    tracing::info!(
+        "[Keychain] Reading API key from keychain service={} user={}",
+        GEMINI_KEYCHAIN_SERVICE,
+        GEMINI_KEYCHAIN_USER
+    );
+    let entry =
+        keyring::Entry::new(GEMINI_KEYCHAIN_SERVICE, GEMINI_KEYCHAIN_USER).map_err(|error| {
+            tracing::info!("[Keychain] Entry::new failed: {error}");
+            format!("Could not open OS keychain for Gemini API key: {error}")
+        })?;
     match entry.get_password() {
-        Ok(api_key) if !api_key.trim().is_empty() => Ok(Some(api_key)),
-        Ok(_) | Err(keyring::Error::NoEntry) => Ok(None),
-        Err(error) => Err(format!(
-            "Could not read Gemini API key from OS keychain: {error}"
-        )),
+        Ok(api_key) if !api_key.trim().is_empty() => {
+            tracing::info!(
+                "[Keychain] API key read from keychain ({} chars)",
+                api_key.len()
+            );
+            Ok(Some(api_key))
+        }
+        Ok(_) | Err(keyring::Error::NoEntry) => {
+            tracing::info!("[Keychain] No API key found in keychain");
+            Ok(None)
+        }
+        Err(error) => {
+            tracing::info!("[Keychain] get_password failed: {error}");
+            Err(format!(
+                "Could not read Gemini API key from OS keychain: {error}"
+            ))
+        }
     }
 }
 
@@ -387,16 +441,27 @@ impl CorOcrProvider for GeminiByokProvider {
 
 impl GeminiByokProvider {
     fn extract_result(&self, source_path: &Path) -> Result<CorOcrResult, String> {
-        let api_key = read_gemini_api_key()?.ok_or_else(|| {
-            "No Gemini API key is configured. Add your own key first.".to_string()
-        })?;
+        tracing::info!("[Gemini OCR] Starting extraction with model={}", self.model);
+        let api_key = read_gemini_api_key()
+            .map_err(|e| {
+                tracing::info!("[Gemini OCR] Keychain read error: {e}");
+                e
+            })?
+            .ok_or_else(|| {
+                tracing::info!("[Gemini OCR] No API key found in keychain or env");
+                "No Gemini API key is configured. Add your own key first.".to_string()
+            })?;
+        tracing::info!("[Gemini OCR] API key resolved ({}… chars)", api_key.len());
         let bytes = std::fs::read(source_path)
             .map_err(|error| format!("Could not read COR document: {error}"))?;
         let mime_type = mime_type_for_path(source_path)?;
+        tracing::info!(
+            "[Gemini OCR] File read: {} bytes, mime={mime_type}",
+            bytes.len()
+        );
         let encoded = BASE64_STANDARD.encode(bytes);
 
-        // Gemini supports PDF document understanding directly, so this provider
-        // sends the original PDF/image bytes and does not rasterize PDFs first.
+        tracing::info!("[Gemini OCR] Sending request to Gemini API…");
         let response_text = call_gemini(
             &api_key,
             &self.model,
@@ -410,9 +475,26 @@ impl GeminiByokProvider {
                 }),
             ],
             cor_response_schema(),
-        )?;
-        let extraction = parse_gemini_cor_json(&response_text)?;
+        )
+        .map_err(|e| {
+            tracing::info!("[Gemini OCR] API call failed: {e}");
+            e
+        })?;
+        tracing::info!(
+            "[Gemini OCR] Response received: {} chars",
+            response_text.len()
+        );
+        let extraction = parse_gemini_cor_json(&response_text).map_err(|e| {
+            tracing::info!("[Gemini OCR] JSON parse failed: {e}");
+            e
+        })?;
         let fields = extraction.clone().into_fields();
+        tracing::info!(
+            "[Gemini OCR] Extraction complete — TIN: {:?}, Name: {:?}, Type: {:?}",
+            fields.tin,
+            fields.registered_name,
+            fields.taxpayer_type
+        );
         Ok(CorOcrResult {
             text: Some(response_text),
             confidence: extraction.confidence,
@@ -532,6 +614,7 @@ fn parse_cor_text(text: &str) -> CorOcrFields {
         extracted_form_codes,
         deadline_rule_evidence,
         filing_reminders: vec![],
+        field_bboxes: std::collections::HashMap::new(),
     }
 }
 
@@ -871,6 +954,8 @@ struct GeminiCorExtraction {
     deadline_rule_evidence: Vec<String>,
     #[serde(default)]
     filing_reminders: Vec<String>,
+    #[serde(default)]
+    field_bboxes: std::collections::HashMap<String, Vec<u16>>,
 }
 
 impl GeminiCorExtraction {
@@ -907,6 +992,17 @@ impl GeminiCorExtraction {
                 .into_iter()
                 .map(|value| value.trim().to_string())
                 .filter(|value| !value.is_empty())
+                .collect(),
+            field_bboxes: self
+                .field_bboxes
+                .into_iter()
+                .filter_map(|(key, coords)| {
+                    if coords.len() == 4 {
+                        Some((key, [coords[0], coords[1], coords[2], coords[3]]))
+                    } else {
+                        None
+                    }
+                })
                 .collect(),
         }
     }
@@ -1311,6 +1407,7 @@ PERCENTAGE TAX
                 extracted_form_codes: vec!["1702Q".to_string(), "2551Q".to_string()],
                 deadline_rule_evidence: vec!["1702Q - 60 days after quarter end".to_string()],
                 filing_reminders: vec!["1702Q - 60 days after quarter end".to_string()],
+                field_bboxes: std::collections::HashMap::new(),
                 ..Default::default()
             },
             status_message: "Gemini OCR extracted COR fields.".to_string(),

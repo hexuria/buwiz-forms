@@ -355,18 +355,26 @@ impl ProfileManagerView {
             return div().into_any_element();
         }
 
-        let preview_year_text = self
-            .cor_preview_year_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
-        let selected_year = preview_year_text
-            .parse::<u16>()
-            .ok()
-            .filter(|year| (1900..=2200).contains(year))
-            .unwrap_or_else(|| chrono::Local::now().year() as u16);
+        if self.ocr_selected_version_id.is_some() {
+            let preview_year_text = self
+                .cor_preview_year_input
+                .read(cx)
+                .value()
+                .trim()
+                .to_string();
+            let selected_year = preview_year_text
+                .parse::<u16>()
+                .ok()
+                .filter(|year| (1900..=2200).contains(year))
+                .unwrap_or_else(|| chrono::Local::now().year() as u16);
+            self.render_ocr_detail_view(selected_year, cx)
+                .into_any_element()
+        } else {
+            self.render_ocr_timeline_view(cx).into_any_element()
+        }
+    }
 
+    fn render_ocr_timeline_view(&self, cx: &Context<Self>) -> Div {
         let mut rows = div()
             .flex()
             .flex_col()
@@ -383,8 +391,7 @@ impl ProfileManagerView {
         } else {
             rows = rows.child(
                 div()
-                    .grid()
-                    .grid_cols(6)
+                    .flex()
                     .gap_2()
                     .px_3()
                     .py_2()
@@ -392,26 +399,26 @@ impl ProfileManagerView {
                     .text_xs()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(cx.theme().muted_foreground)
-                    .child("Document")
-                    .child("Uploaded")
-                    .child("Extracted Forms")
-                    .child("Status")
-                    .child("Deadlines / Rules")
-                    .child("Actions"),
+                    .child(div().w(px(240.)).flex_shrink_0().child("Document Name"))
+                    .child(div().flex_1().flex_basis(px(0.)).child("Upload Date"))
+                    .child(div().flex_1().flex_basis(px(0.)).child("Extracted Forms"))
+                    .child(div().flex_1().flex_basis(px(0.)).child("Status"))
+                    .child(div().flex_1().flex_basis(px(0.)).child("Deadlines / Rules"))
+                    .child(div().flex_1().flex_basis(px(0.)).child("Actions")),
             );
 
             for version in &self.stored_profile_versions {
                 let version_id = version.id.clone();
                 let version_id_for_review = version.id.clone();
-                let version_id_for_confirm = version.id.clone();
                 let version_id_for_archive = version.id.clone();
+                let version_id_for_delete = version.id.clone();
                 let first_document = version.evidence.first();
                 let document_name = first_document
                     .map(|document| document.file_name.clone())
                     .unwrap_or_else(|| version.label.clone());
                 let uploaded_at = first_document
                     .and_then(|document| document.uploaded_at)
-                    .map(|uploaded_at| uploaded_at.format("%Y-%m-%d %H:%M").to_string())
+                    .map(|uploaded_at| uploaded_at.format("%b %d, %Y %H:%M").to_string())
                     .unwrap_or_else(|| "Manual draft".to_string());
                 let extracted_forms = first_document
                     .map(|document| document.extracted_form_codes.join(", "))
@@ -441,158 +448,168 @@ impl ProfileManagerView {
                     })
                     .filter(|rules| !rules.trim().is_empty())
                     .unwrap_or_else(|| "No deadline text captured".to_string());
-                let status = Self::profile_version_status_label(&version.status);
+
+                let (status_label, bg_color, text_color) = match version.status {
+                    bir_core::profile::TaxProfileVersionStatus::Draft => (
+                        "Review Needed",
+                        gpui::rgba(0xfce8e8ff),
+                        gpui::rgba(0xcb2424ff),
+                    ),
+                    bir_core::profile::TaxProfileVersionStatus::Confirmed => {
+                        ("Completed", gpui::rgba(0xe8fce8ff), gpui::rgba(0x24cb24ff))
+                    }
+                    bir_core::profile::TaxProfileVersionStatus::Archived => {
+                        ("Archived", gpui::rgba(0xe0e0e0ff), gpui::rgba(0x606060ff))
+                    }
+                };
+
                 let is_selected = self.ocr_selected_version_id.as_deref() == Some(&version.id);
-                let document_for_open = first_document.map(|document| document.id.clone());
                 rows = rows.child(
                     div()
-                        .grid()
-                        .grid_cols(6)
+                        .flex()
                         .gap_2()
                         .px_3()
-                        .py_2()
+                        .py_3()
                         .border_t_1()
                         .border_color(cx.theme().border)
+                        .items_center()
                         .when(is_selected, |this| this.bg(cx.theme().accent))
                         .child(
                             div()
-                                .text_sm()
-                                .text_color(cx.theme().foreground)
-                                .child(document_name),
+                                .w(px(240.))
+                                .flex_shrink_0()
+                                .flex()
+                                .gap_2()
+                                .items_center()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(cx.theme().foreground)
+                                        .overflow_hidden()
+                                        .text_ellipsis()
+                                        .child(document_name),
+                                ),
                         )
                         .child(
                             div()
+                                .flex_1()
+                                .flex_basis(px(0.))
                                 .text_sm()
                                 .text_color(cx.theme().muted_foreground)
                                 .child(uploaded_at),
                         )
                         .child(
                             div()
+                                .flex_1()
+                                .flex_basis(px(0.))
                                 .text_sm()
-                                .text_color(cx.theme().muted_foreground)
+                                .text_color(cx.theme().foreground)
                                 .child(extracted_forms),
                         )
                         .child(
-                            div()
-                                .text_sm()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(cx.theme().foreground)
-                                .child(status),
+                            div().flex_1().flex_basis(px(0.)).flex().child(
+                                div().px_2().py_1().rounded_full().bg(bg_color).child(
+                                    div()
+                                        .text_xs()
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(text_color)
+                                        .child(status_label),
+                                ),
+                            ),
                         )
                         .child(
                             div()
+                                .flex_1()
+                                .flex_basis(px(0.))
                                 .text_sm()
                                 .text_color(cx.theme().muted_foreground)
+                                .overflow_hidden()
+                                .text_ellipsis()
                                 .child(rule_summary),
                         )
                         .child(
                             div()
+                                .flex_1()
+                                .flex_basis(px(0.))
                                 .flex()
                                 .gap_2()
                                 .child(
-                                    gpui_component::button::Button::new(format!(
-                                        "review_ocr_{version_id_for_review}"
-                                    ))
-                                    .label("View Data")
-                                    .small()
-                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                        this.ocr_selected_version_id =
-                                            Some(version_id_for_review.clone());
-                                        if let Err(message) = this.load_cor_version_editor(
-                                            &version_id_for_review,
-                                            window,
-                                            cx,
-                                        ) {
-                                            this.save_message = Some(message);
-                                        }
-                                        cx.notify();
-                                    })),
+                                    div()
+                                        .id(format!("action_{}", version_id_for_review))
+                                        .cursor_pointer()
+                                        .text_sm()
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(cx.theme().primary)
+                                        .hover(|this| this.text_color(cx.theme().primary_hover))
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            this.ocr_selected_version_id =
+                                                Some(version_id_for_review.clone());
+                                            this.sync_document_viewer(cx);
+                                            if let Err(message) = this.load_cor_version_editor(
+                                                &version_id_for_review,
+                                                window,
+                                                cx,
+                                            ) {
+                                                this.save_message = Some(message);
+                                            }
+                                            cx.notify();
+                                        }))
+                                        .child(
+                                            if version.status
+                                                == bir_core::profile::TaxProfileVersionStatus::Draft
+                                            {
+                                                "Review"
+                                            } else {
+                                                "View Data"
+                                            },
+                                        ),
                                 )
-                                .when(document_for_open.is_some(), |this| {
-                                    let version_id_for_open = version_id.clone();
-                                    let document_id_for_open =
-                                        document_for_open.clone().unwrap_or_default();
-                                    this.child(
-                                        gpui_component::button::Button::new(format!(
-                                            "open_ocr_{version_id_for_open}_{document_id_for_open}"
-                                        ))
-                                        .label("Open")
-                                        .small()
+                                .child(
+                                    div()
+                                        .id(format!("delete_{}", version_id_for_delete))
+                                        .cursor_pointer()
+                                        .text_sm()
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(gpui::Hsla::from(gpui::rgba(0xef4444ff)))
+                                        .hover(|this| {
+                                            this.text_color(gpui::Hsla::from(gpui::rgba(
+                                                0xdc2626ff,
+                                            )))
+                                        })
                                         .on_click(cx.listener(move |this, _, _, cx| {
-                                            this.open_cor_document(
-                                                &version_id_for_open,
-                                                &document_id_for_open,
+                                            // Delete evidence files from disk
+                                            if let Some(version) = this
+                                                .stored_profile_versions
+                                                .iter()
+                                                .find(|v| v.id == version_id_for_delete)
+                                            {
+                                                for evidence in &version.evidence {
+                                                    let _ =
+                                                        std::fs::remove_file(&evidence.stored_path);
+                                                }
+                                            }
+                                            this.stored_profile_versions
+                                                .retain(|v| v.id != version_id_for_delete);
+                                            // Clear selection if we deleted the active one
+                                            if this.ocr_selected_version_id.as_deref()
+                                                == Some(&version_id_for_delete)
+                                            {
+                                                this.ocr_selected_version_id = None;
+                                                this.interactive_document_viewer = None;
+                                            }
+                                            if this.cor_editing_version_id.as_deref()
+                                                == Some(&version_id_for_delete)
+                                            {
+                                                this.cor_editing_version_id = None;
+                                            }
+                                            this.save_message = Some(
+                                                "COR version deleted. Save the profile to persist."
+                                                    .into(),
                                             );
                                             cx.notify();
-                                        })),
-                                    )
-                                })
-                                .when(
-                                    version.status
-                                        != bir_core::profile::TaxProfileVersionStatus::Confirmed,
-                                    |this| {
-                                        this.child(
-                                            gpui_component::button::Button::new(format!(
-                                                "confirm_ocr_{version_id_for_confirm}"
-                                            ))
-                                            .label("Commit")
-                                            .small()
-                                            .on_click(cx.listener(move |this, _, _, cx| {
-                                                match this.confirm_cor_version(
-                                                    &version_id_for_confirm,
-                                                ) {
-                                                    Ok(()) => {
-                                                        this.save_message = Some(
-                                                            "COR version confirmed. Save the profile to persist it."
-                                                                .into(),
-                                                        );
-                                                        this.compliance_source_mode =
-                                                            Self::derive_compliance_source_mode(
-                                                                &this.stored_profile_versions,
-                                                            );
-                                                    }
-                                                    Err(message) => {
-                                                        this.save_message = Some(message)
-                                                    }
-                                                }
-                                                cx.notify();
-                                            })),
-                                        )
-                                    },
-                                )
-                                .when(
-                                    version.status
-                                        != bir_core::profile::TaxProfileVersionStatus::Archived,
-                                    |this| {
-                                        this.child(
-                                            gpui_component::button::Button::new(format!(
-                                                "archive_ocr_{version_id_for_archive}"
-                                            ))
-                                            .label("Archive")
-                                            .small()
-                                            .on_click(cx.listener(move |this, _, _, cx| {
-                                                if let Some(version) = this
-                                                    .stored_profile_versions
-                                                    .iter_mut()
-                                                    .find(|version| {
-                                                        version.id == version_id_for_archive
-                                                    })
-                                                {
-                                                    version.status =
-                                                        bir_core::profile::TaxProfileVersionStatus::Archived;
-                                                    this.compliance_source_mode =
-                                                        Self::derive_compliance_source_mode(
-                                                            &this.stored_profile_versions,
-                                                        );
-                                                    this.save_message = Some(
-                                                        "COR version archived. Save the profile to persist it."
-                                                            .into(),
-                                                    );
-                                                }
-                                                cx.notify();
-                                            })),
-                                        )
-                                    },
+                                        }))
+                                        .child("Delete"),
                                 ),
                         ),
                 );
@@ -602,94 +619,40 @@ impl ProfileManagerView {
         div()
             .flex()
             .flex_col()
-            .gap_5()
+            .gap_6()
+            .child(
+                div()
+                    .text_2xl()
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(cx.theme().foreground)
+                    .child("Taxpayer Profile - OCR Extraction Timeline"),
+            )
             .child(self.render_cor_ocr_settings(cx))
             .child(
                 div()
                     .flex()
                     .flex_col()
-                    .gap_3()
-                    .p_4()
-                    .rounded_lg()
+                    .items_center()
+                    .justify_center()
+                    .p_10()
+                    .gap_4()
+                    .rounded_xl()
                     .border_1()
                     .border_color(cx.theme().border)
-                    .bg(cx.theme().background)
-                    .child(
-                        div()
-                            .text_lg()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(cx.theme().foreground)
-                            .child("Upload COR Document"),
-                    )
+                    .bg(cx.theme().secondary)
                     .child(
                         div()
                             .text_sm()
                             .text_color(cx.theme().muted_foreground)
-                            .child(
-                                "Upload PDF, PNG, JPG, or JPEG. Gemini is used only when enabled and consented for this upload; otherwise the draft stays local/manual.",
-                            ),
+                            .child("Upload New Document (PDF, JPG, PNG) - Max 10MB"),
                     )
                     .child(
-                        div()
-                            .p_6()
-                            .rounded_lg()
-                            .border_1()
-                            .border_color(cx.theme().border)
-                            .bg(cx.theme().secondary)
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_4()
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(cx.theme().foreground)
-                                            .child("New evidence"),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child("OCR creates a draft only. Commit the reviewed COR before it affects deadlines."),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .flex()
-                                    .gap_2()
-                                    .child(
-                                        gpui_component::button::Button::new("ocr_upload_cor")
-                                            .label(if self.gemini_ocr_enabled {
-                                                "Extract with Gemini using my API key"
-                                            } else {
-                                                "Upload COR"
-                                            })
-                                            .on_click(cx.listener(|this, _, window, cx| {
-                                                this.upload_cor_document(window, cx);
-                                                cx.notify();
-                                            })),
-                                    )
-                                    .child(
-                                        gpui_component::button::Button::new(
-                                            "ocr_create_manual_cor",
-                                        )
-                                        .label("Create Draft From Profile")
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.sync_current_profile_to_cor_draft(cx);
-                                            this.save_message = Some(
-                                                "COR draft created from current profile fields. Review and commit it before saving."
-                                                    .into(),
-                                            );
-                                            cx.notify();
-                                        })),
-                                    ),
-                            ),
+                        gpui_component::button::Button::new("ocr_upload_cor_timeline")
+                            .label("Browse Files")
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.upload_cor_document(window, cx);
+                                cx.notify();
+                            })),
                     ),
             )
             .child(
@@ -699,15 +662,13 @@ impl ProfileManagerView {
                     .gap_3()
                     .child(
                         div()
-                            .text_lg()
+                            .text_xl()
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(cx.theme().foreground)
                             .child("OCR Upload History"),
                     )
                     .child(rows),
             )
-            .child(self.render_ocr_detail_view(selected_year, cx))
-            .into_any_element()
     }
 
     fn render_ocr_detail_view(&self, selected_year: u16, cx: &Context<Self>) -> Div {
@@ -725,140 +686,65 @@ impl ProfileManagerView {
             return div();
         };
 
-        let mut source_documents = div().flex().flex_col().gap_2();
-        if version.evidence.is_empty() {
-            source_documents = source_documents.child(
-                div()
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground)
-                    .child("No source document attached to this draft."),
-            );
-        } else {
-            for document in &version.evidence {
-                let version_id_for_open = version.id.clone();
-                let document_id_for_open = document.id.clone();
-                let version_id_for_remove = version.id.clone();
-                let document_id_for_remove = document.id.clone();
-                source_documents = source_documents.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap_3()
-                        .px_3()
-                        .py_2()
-                        .rounded_md()
-                        .border_1()
-                        .border_color(cx.theme().border)
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_1()
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .text_color(cx.theme().foreground)
-                                        .child(document.file_name.clone()),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(format!(
-                                            "{}{}",
-                                            document
-                                                .provider
-                                                .clone()
-                                                .unwrap_or_else(|| "Local/manual".to_string()),
-                                            document
-                                                .ocr_confidence
-                                                .map(|confidence| {
-                                                    format!(" - OCR {:.0}%", confidence * 100.0)
-                                                })
-                                                .unwrap_or_default()
-                                        )),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .gap_2()
-                                .child(
-                                    gpui_component::button::Button::new(format!(
-                                        "ocr_detail_open_{}_{}",
-                                        version.id, document.id
-                                    ))
-                                    .label("Open")
-                                    .small()
-                                    .on_click(cx.listener(
-                                        move |this, _, _, cx| {
-                                            this.open_cor_document(
-                                                &version_id_for_open,
-                                                &document_id_for_open,
-                                            );
-                                            cx.notify();
-                                        },
-                                    )),
-                                )
-                                .child(
-                                    gpui_component::button::Button::new(format!(
-                                        "ocr_detail_remove_{}_{}",
-                                        version.id, document.id
-                                    ))
-                                    .label("Remove")
-                                    .small()
-                                    .on_click(cx.listener(
-                                        move |this, _, _, cx| {
-                                            this.remove_cor_document(
-                                                &version_id_for_remove,
-                                                &document_id_for_remove,
-                                            );
-                                            cx.notify();
-                                        },
-                                    )),
-                                ),
-                        ),
-                );
-            }
-        }
-
-        let registered_tax_types = if version.registered_tax_types.is_empty() {
-            "No registered tax types captured.".to_string()
-        } else {
-            version
-                .registered_tax_types
-                .iter()
-                .map(Self::registered_tax_type_label)
-                .collect::<Vec<_>>()
-                .join(", ")
-        };
         let first_document = version.evidence.first();
-        let extracted_forms = first_document
-            .map(|document| document.extracted_form_codes.join(", "))
-            .filter(|forms| !forms.trim().is_empty())
-            .unwrap_or_else(|| "No form codes captured from OCR.".to_string());
-        let deadline_rules = first_document
-            .map(|document| document.extracted_deadline_rules.join(" | "))
-            .filter(|rules| !rules.trim().is_empty())
-            .unwrap_or_else(|| "No deadline or rule text captured from OCR.".to_string());
+        let document_name = first_document
+            .map(|document| document.file_name.clone())
+            .unwrap_or_else(|| version.label.clone());
+        let uploaded_at = first_document
+            .and_then(|document| document.uploaded_at)
+            .map(|uploaded_at| uploaded_at.format("%b %d, %Y at %H:%M").to_string())
+            .unwrap_or_else(|| "Manual draft".to_string());
 
-        div()
+        let (status_label, bg_color, text_color) = match version.status {
+            bir_core::profile::TaxProfileVersionStatus::Draft => (
+                "Extraction Completed",
+                gpui::rgba(0xe8fce8ff),
+                gpui::rgba(0x24cb24ff),
+            ),
+            bir_core::profile::TaxProfileVersionStatus::Confirmed => {
+                ("Committed", gpui::rgba(0xe8fce8ff), gpui::rgba(0x24cb24ff))
+            }
+            bir_core::profile::TaxProfileVersionStatus::Archived => {
+                ("Archived", gpui::rgba(0xe0e0e0ff), gpui::rgba(0x606060ff))
+            }
+        };
+
+        let version_id_for_confirm = version.id.clone();
+        let version_id_for_review = version.id.clone();
+        let document_id_for_open = first_document.map(|doc| doc.id.clone());
+
+        let header = div()
             .flex()
             .flex_col()
-            .gap_3()
-            .p_4()
-            .rounded_lg()
-            .border_1()
+            .gap_4()
+            .pb_4()
+            .border_b_1()
             .border_color(cx.theme().border)
-            .bg(cx.theme().background)
+            .child(
+                div()
+                    .flex()
+                    .gap_2()
+                    .items_center()
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(
+                        div()
+                            .id("back_to_timeline")
+                            .cursor_pointer()
+                            .hover(|this| this.text_color(cx.theme().foreground))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.ocr_selected_version_id = None;
+                                this.sync_document_viewer(cx);
+                                cx.notify();
+                            }))
+                            .child("← Back to Timeline")
+                    )
+            )
             .child(
                 div()
                     .flex()
                     .items_center()
                     .justify_between()
-                    .gap_3()
                     .child(
                         div()
                             .flex()
@@ -866,186 +752,499 @@ impl ProfileManagerView {
                             .gap_1()
                             .child(
                                 div()
-                                    .text_lg()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(cx.theme().foreground)
-                                    .child(version.label.clone()),
+                                    .flex()
+                                    .gap_3()
+                                    .items_center()
+                                    .child(
+                                        div()
+                                            .text_2xl()
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(cx.theme().foreground)
+                                            .child(document_name)
+                                    )
+                                    .child(
+                                        div()
+                                            .px_2()
+                                            .py_1()
+                                            .rounded_full()
+                                            .bg(bg_color)
+                                            .child(
+                                                div()
+                                                    .text_xs()
+                                                    .font_weight(FontWeight::SEMIBOLD)
+                                                    .text_color(text_color)
+                                                    .child(status_label)
+                                            )
+                                    )
                             )
                             .child(
                                 div()
                                     .text_sm()
                                     .text_color(cx.theme().muted_foreground)
-                                    .child(format!(
-                                        "{} - {}",
-                                        Self::profile_version_status_label(&version.status),
-                                        Self::profile_version_source_label(&version.source)
-                                    )),
-                            ),
+                                    .child(format!("Uploaded on {} • Processed by Gemini OCR", uploaded_at))
+                            )
                     )
                     .child(
                         div()
                             .flex()
                             .gap_2()
-                            .child(
-                                gpui_component::button::Button::new("ocr_edit_selected")
-                                    .label("Edit Extracted Data")
-                                    .small()
-                                    .on_click(cx.listener({
-                                        let version_id = version.id.clone();
-                                        move |this, _, window, cx| {
-                                            this.ocr_selected_version_id =
-                                                Some(version_id.clone());
-                                            if let Err(message) = this.load_cor_version_editor(
-                                                &version_id,
-                                                window,
-                                                cx,
-                                            ) {
-                                                this.save_message = Some(message);
-                                            }
-                                            cx.notify();
-                                        }
-                                    })),
-                            )
                             .when(
-                                version.status
-                                    != bir_core::profile::TaxProfileVersionStatus::Confirmed,
+                                version.status != bir_core::profile::TaxProfileVersionStatus::Confirmed,
                                 |this| {
-                                    let version_id = version.id.clone();
                                     this.child(
-                                        gpui_component::button::Button::new(
-                                            "ocr_commit_selected",
-                                        )
-                                        .label("Commit to Profile")
-                                        .small()
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            match this.confirm_cor_version(&version_id) {
-                                                Ok(()) => {
-                                                    this.save_message = Some(
-                                                        "COR version confirmed. Save the profile to persist it."
-                                                            .into(),
-                                                    );
-                                                    this.compliance_source_mode =
-                                                        Self::derive_compliance_source_mode(
-                                                            &this.stored_profile_versions,
-                                                        );
+                                        gpui_component::button::Button::new("ocr_commit_detail")
+                                            .label("Commit to Profile")
+                                            .on_click(cx.listener(move |this, _, _, cx| {
+                                                match this.confirm_cor_version(&version_id_for_confirm) {
+                                                    Ok(()) => {
+                                                        this.save_message = Some("COR version confirmed. Save the profile to persist it.".into());
+                                                        this.compliance_source_mode = Self::derive_compliance_source_mode(&this.stored_profile_versions);
+                                                    }
+                                                    Err(message) => this.save_message = Some(message),
                                                 }
-                                                Err(message) => this.save_message = Some(message),
-                                            }
-                                            cx.notify();
-                                        })),
+                                                cx.notify();
+                                            }))
                                     )
-                                },
-                            ),
-                    ),
+                                }
+                            )
+                    )
+            );
+
+        let left_col = div()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .p_4()
+            .rounded_lg()
+            .border_1()
+            .border_color(cx.theme().border)
+            .bg(cx.theme().background)
+            .child(
+                div().flex().justify_between().items_center().child(
+                    div()
+                        .text_lg()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(cx.theme().foreground)
+                        .child("Source Document Preview"),
+                ),
             )
             .child(
                 div()
-                    .grid()
-                    .grid_cols(2)
-                    .gap_4()
+                    .flex_1()
+                    .w_full()
+                    .min_h(px(600.))
+                    .bg(cx.theme().secondary)
+                    .rounded_md()
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .overflow_hidden()
+                    .child(
+                        if let Some(viewer) = self.interactive_document_viewer.as_ref() {
+                            viewer.clone().into_any_element()
+                        } else {
+                            div()
+                                .flex()
+                                .flex_col()
+                                .items_center()
+                                .gap_4()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child("Document preview not available in-app yet."),
+                                )
+                                .when(document_id_for_open.is_some(), |this| {
+                                    let doc_id = document_id_for_open.unwrap();
+                                    let ver_id = version_id_for_review.clone();
+                                    this.child(
+                                        gpui_component::button::Button::new("ocr_open_ext")
+                                            .label("Open Externally")
+                                            .on_click(cx.listener(move |this, _, _, cx| {
+                                                this.open_cor_document(&ver_id, &doc_id);
+                                                cx.notify();
+                                            })),
+                                    )
+                                })
+                                .into_any_element()
+                        },
+                    ),
+            );
+
+        let mut identified_forms = div().flex().flex_col().gap_3();
+        if let Some(first_doc) = version.evidence.first() {
+            if first_doc.extracted_form_codes.is_empty() {
+                identified_forms = identified_forms.child(
+                    div()
+                        .p_4()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(cx.theme().border)
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child("No specific tax obligations identified from this document."),
+                );
+            } else {
+                for form_code in &first_doc.extracted_form_codes {
+                    identified_forms = identified_forms.child(
+                        div()
+                            .flex()
+                            .justify_between()
+                            .items_center()
+                            .p_4()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(cx.theme().border)
+                            .bg(cx.theme().background)
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .gap_2()
+                                            .items_center()
+                                            .child(
+                                                div()
+                                                    .text_base()
+                                                    .font_weight(FontWeight::SEMIBOLD)
+                                                    .text_color(cx.theme().foreground)
+                                                    .child(format!("Form {}", form_code)),
+                                            )
+                                            .child(
+                                                div()
+                                                    .px_2()
+                                                    .py_0p5()
+                                                    .rounded_full()
+                                                    .bg(gpui::rgba(0xffe4e6ff))
+                                                    .child(
+                                                        div()
+                                                            .text_xs()
+                                                            .font_weight(FontWeight::BOLD)
+                                                            .text_color(gpui::rgba(0xbe123cff))
+                                                            .child("NEW"),
+                                                    ),
+                                            ),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child(format!(
+                                                "Extracted obligation for {}",
+                                                form_code
+                                            )),
+                                    ),
+                            ),
+                    );
+                }
+            }
+        }
+
+        // ── Right column: directly editable fields (no manual override toggle) ──
+        let right_col = div()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .p_4()
+            .rounded_lg()
+            .border_1()
+            .border_color(cx.theme().border)
+            .bg(cx.theme().background)
+            .child(
+                div()
+                    .text_lg()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(cx.theme().foreground)
+                    .child("Extracted Entity Data"),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(
+                        "Edit fields directly. Changes are kept in memory until you Save Profile.",
+                    ),
+            )
+            // Editable fields using the existing cor_*_input entities
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
                     .child(
                         div()
                             .flex()
-                            .flex_col()
-                            .gap_2()
+                            .gap_3()
                             .child(
                                 div()
-                                    .text_sm()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(cx.theme().foreground)
-                                    .child("Source Document"),
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("TIN", cx))
+                                    .child(Input::new(&self.cor_tin_input)),
                             )
-                            .child(source_documents),
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("RDO Code", cx))
+                                    .child(Input::new(&self.cor_rdo_code_input)),
+                            ),
                     )
                     .child(
                         div()
                             .flex()
                             .flex_col()
-                            .gap_2()
+                            .gap_1()
+                            .child(Self::field_label("Registered Name", cx))
+                            .child(Input::new(&self.cor_registered_name_input)),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(Self::field_label("Trade Name", cx))
+                            .child(Input::new(&self.cor_trade_name_input)),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(Self::field_label("Registered Address", cx))
+                            .child(Input::new(&self.cor_registered_address_input)),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .gap_3()
                             .child(
                                 div()
-                                    .text_sm()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(cx.theme().foreground)
-                                    .child("Extracted Entity Data"),
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("Line of Business Code", cx))
+                                    .child(Input::new(&self.cor_lob_code_input)),
                             )
                             .child(
                                 div()
-                                    .grid()
-                                    .grid_cols(2)
-                                    .gap_2()
-                                    .child(Self::ocr_field("TIN", version.cor.tin.as_deref(), cx))
-                                    .child(Self::ocr_field(
-                                        "RDO",
-                                        Some(version.cor.rdo_code.as_str()),
-                                        cx,
-                                    ))
-                                    .child(Self::ocr_field(
-                                        "Registration Date",
-                                        version
-                                            .cor
-                                            .registration_date
-                                            .map(|date| date.to_string())
-                                            .as_deref(),
-                                        cx,
-                                    ))
-                                    .child(Self::ocr_field(
-                                        "Registered Name",
-                                        Some(version.cor.registered_name.as_str()),
-                                        cx,
-                                    ))
-                                    .child(Self::ocr_field(
-                                        "Address",
-                                        Some(version.cor.registered_address.as_str()),
-                                        cx,
-                                    ))
-                                    .child(Self::ocr_field(
-                                        "Line of Business",
-                                        Some(version.cor.line_of_business_description.as_str()),
-                                        cx,
-                                    )),
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("Line of Business", cx))
+                                    .child(Input::new(&self.cor_lob_description_input)),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .gap_3()
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("Taxpayer Type", cx))
+                                    .child(Combobox::new(&self.cor_taxpayer_type_select)),
                             )
                             .child(
                                 div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(format!("Registered tax types: {registered_tax_types}")),
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("Tax Classification", cx))
+                                    .child(Combobox::new(&self.cor_tax_classification_select)),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .gap_3()
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("EOPT Tier", cx))
+                                    .child(Combobox::new(&self.cor_eopt_tier_select)),
                             )
                             .child(
                                 div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(format!("Extracted form codes: {extracted_forms}")),
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("Registration Status", cx))
+                                    .child(Combobox::new(&self.cor_registration_status_select)),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .gap_3()
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("Version Label", cx))
+                                    .child(Input::new(&self.cor_version_label_input)),
                             )
                             .child(
                                 div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(format!("Deadline/rule evidence: {deadline_rules}")),
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("Registration Date", cx))
+                                    .child(Input::new(&self.cor_registration_date_input)),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .gap_3()
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("Effective From", cx))
+                                    .child(Input::new(&self.cor_effective_from_input)),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("Effective Until", cx))
+                                    .child(Input::new(&self.cor_effective_until_input)),
                             ),
                     ),
             )
-            .when(self.cor_editing_version_id.as_deref() == Some(&version.id), |this| {
-                this.child(self.render_cor_version_editor(cx))
-            })
-            .child(self.render_ocr_preview(selected_year, Some(version.id.as_str()), cx))
-            .child(self.render_cor_override_editor(cx))
-    }
+            // Apply button to update in-memory version
+            .child(
+                div().flex().gap_2().child(
+                    gpui_component::button::Button::new("ocr_apply_fields")
+                        .label("Apply Changes")
+                        .small()
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            if let Err(message) = this.apply_cor_version_editor(window, cx) {
+                                this.save_message = Some(message);
+                            }
+                            cx.notify();
+                        })),
+                ),
+            );
 
-    fn ocr_field(label: &str, value: Option<&str>, cx: &Context<Self>) -> Div {
+        // Compact form summary (replaces the bloated render_ocr_preview + render_cor_override_editor)
+        let form_summary = if let Some(first_doc) = version.evidence.first() {
+            if first_doc.extracted_form_codes.is_empty() {
+                "No tax obligations identified from this document.".to_string()
+            } else {
+                format!(
+                    "Applicable forms: {}",
+                    first_doc.extracted_form_codes.join(", ")
+                )
+            }
+        } else {
+            "No evidence document attached.".to_string()
+        };
+
+        div()
+            .flex()
+            .flex_col()
+            .gap_6()
+            .child(header)
+            .child(
+                // Responsive 2-column layout using flex instead of grid
+                div()
+                    .flex()
+                    .gap_6()
+                    .child(div().flex_1().min_w_0().child(left_col))
+                    .child(div().flex_1().min_w_0().child(right_col)),
+            )
+            .child(
+                div()
+                    .p_3()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .bg(cx.theme().secondary)
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(form_summary),
+            )
+    }
+    fn ocr_field(
+        &self,
+        field_id: &'static str,
+        label: &str,
+        value: Option<&str>,
+        cx: &Context<Self>,
+    ) -> Div {
         let value = value
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .unwrap_or("Needs review");
+
+        let is_focused = self.focused_ocr_field.as_deref() == Some(field_id);
+
         div()
             .flex()
             .flex_col()
             .gap_1()
+            .cursor_pointer()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, _, window, cx| {
+                    cx.stop_propagation();
+                    this.focused_ocr_field = Some(field_id.to_string());
+                    if let Some(viewer) = &this.interactive_document_viewer {
+                        viewer.update(cx, |v, cx| {
+                            v.set_active_field(Some(field_id.to_string()), cx);
+                        });
+                    }
+                    cx.notify();
+                }),
+            )
             .child(
                 div()
                     .text_xs()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(cx.theme().muted_foreground)
+                    .when(is_focused, |this| this.text_color(cx.theme().primary))
+                    .when(!is_focused, |this| {
+                        this.text_color(cx.theme().muted_foreground)
+                    })
                     .child(label.to_string()),
             )
             .child(
@@ -1053,7 +1252,16 @@ impl ProfileManagerView {
                     .px_3()
                     .py_2()
                     .rounded_md()
-                    .bg(cx.theme().secondary)
+                    .when(is_focused, |this| {
+                        this.bg(cx.theme().primary.opacity(0.1))
+                            .border_1()
+                            .border_color(cx.theme().primary)
+                    })
+                    .when(!is_focused, |this| {
+                        this.bg(cx.theme().secondary)
+                            .border_1()
+                            .border_color(gpui::transparent_black())
+                    })
                     .text_sm()
                     .text_color(cx.theme().foreground)
                     .child(value.to_string()),
@@ -2161,14 +2369,6 @@ impl ProfileManagerView {
                                         .small()
                                         .on_click(cx.listener(|this, _, window, cx| {
                                             this.save_cor_ocr_settings(window, cx);
-                                        })),
-                                )
-                                .child(
-                                    gpui_component::button::Button::new("test_cor_ocr_settings")
-                                        .label("Test Key")
-                                        .small()
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.test_cor_ocr_settings(cx);
                                         })),
                                 )
                                 .child(
