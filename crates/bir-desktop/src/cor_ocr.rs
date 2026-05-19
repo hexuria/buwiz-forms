@@ -64,7 +64,6 @@ pub(crate) struct CorOcrFields {
     pub taxpayer_type: Option<TaxpayerType>,
     pub registered_tax_types: Vec<RegisteredTaxType>,
     pub extracted_form_codes: Vec<String>,
-    pub deadline_rule_evidence: Vec<String>,
     pub filing_reminders: Vec<String>,
     pub field_bboxes: std::collections::HashMap<String, [u16; 4]>,
 }
@@ -133,7 +132,6 @@ pub(crate) fn create_draft_cor_version_from_ocr(
     evidence.ocr_confidence = ocr.confidence;
     evidence.document_type = ocr.fields.document_type.clone();
     evidence.extracted_form_codes = ocr.fields.extracted_form_codes.clone();
-    evidence.extracted_deadline_rules = ocr.fields.deadline_rule_evidence.clone();
     evidence.field_bboxes = ocr.fields.field_bboxes.clone();
     if evidence.uploaded_at.is_none() {
         evidence.uploaded_at = Some(now);
@@ -183,9 +181,6 @@ pub(crate) fn create_draft_cor_version_from_ocr(
     }
     if !ocr.fields.filing_reminders.is_empty() {
         let reminders = ocr.fields.filing_reminders.join("\n");
-        if evidence.extracted_deadline_rules.is_empty() {
-            evidence.extracted_deadline_rules = ocr.fields.filing_reminders.clone();
-        }
         evidence.ocr_text = Some(match evidence.ocr_text.take() {
             Some(text) if !text.trim().is_empty() => {
                 format!("{text}\n\nFiling reminders detected:\n{reminders}")
@@ -597,7 +592,6 @@ fn parse_cor_text(text: &str) -> CorOcrFields {
     let (line_of_business_code, line_of_business_description) =
         split_line_of_business(line_of_business.as_deref());
     let extracted_form_codes = extract_form_codes_from_text(text);
-    let deadline_rule_evidence = extract_deadline_rule_evidence(text);
 
     CorOcrFields {
         document_type: detect_document_type(text),
@@ -612,7 +606,6 @@ fn parse_cor_text(text: &str) -> CorOcrFields {
         taxpayer_type: None,
         registered_tax_types: infer_tax_types_from_text(text),
         extracted_form_codes,
-        deadline_rule_evidence,
         filing_reminders: vec![],
         field_bboxes: std::collections::HashMap::new(),
     }
@@ -643,25 +636,6 @@ fn extract_form_codes_from_text(text: &str) -> Vec<String> {
     codes.sort();
     codes.dedup();
     codes
-}
-
-fn extract_deadline_rule_evidence(text: &str) -> Vec<String> {
-    text.lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .filter(|line| {
-            let normalized = normalize(line);
-            normalized.contains("DAY")
-                || normalized.contains("DAYS")
-                || normalized.contains("MONTH")
-                || normalized.contains("QUARTER")
-                || normalized.contains("ANNUAL")
-                || normalized.contains("DEADLINE")
-                || normalized.contains("REMINDER")
-        })
-        .take(12)
-        .map(str::to_string)
-        .collect()
 }
 
 fn extract_label_value(text: &str, labels: &[&str]) -> Option<String> {
@@ -789,7 +763,12 @@ fn normalize_model_id(model: &str) -> String {
 }
 
 fn cor_extraction_prompt() -> &'static str {
-    "You are extracting structured data from a Philippine BIR Certificate of Registration, Form 2303. Return JSON only. If a value is unreadable, use an empty string. Do not invent facts. Capture form codes and filing reminder/deadline text as evidence only; do not convert them into legal rules. The user must review the result before it affects compliance."
+    "You are extracting structured data from a Philippine BIR Certificate of Registration, Form 2303. \
+    Return JSON only. If a value is unreadable, use an empty string. Do not invent facts. \
+    For every extracted field, include a tightly fitted bounding box in `field_bboxes`. \
+    The bounding box must be an array of `[ymin, xmin, ymax, xmax]` normalized to 0-1000. \
+    It MUST accurately hug the edges of the text. \
+    For the `extracted_form_codes` array, create a separate bounding box object for each individual form code found on the document, using the exact form code string as the `field` name in `field_bboxes` (e.g. `{\"field\": \"0605\", \"box_2d\": [...]}`)."
 }
 
 fn cor_response_schema() -> serde_json::Value {
@@ -815,13 +794,23 @@ fn cor_response_schema() -> serde_json::Value {
                 "type": "array",
                 "items": { "type": "string" }
             },
-            "deadline_rule_evidence": {
-                "type": "array",
-                "items": { "type": "string" }
-            },
             "filing_reminders": {
                 "type": "array",
                 "items": { "type": "string" }
+            },
+            "field_bboxes": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "field": { "type": "string" },
+                        "box_2d": {
+                            "type": "array",
+                            "items": { "type": "number" }
+                        }
+                    },
+                    "required": ["field", "box_2d"]
+                }
             }
         },
         "required": [
@@ -838,8 +827,8 @@ fn cor_response_schema() -> serde_json::Value {
             "taxpayer_type",
             "registered_tax_types",
             "extracted_form_codes",
-            "deadline_rule_evidence",
-            "filing_reminders"
+            "filing_reminders",
+            "field_bboxes"
         ]
     })
 }
@@ -951,11 +940,15 @@ struct GeminiCorExtraction {
     #[serde(default)]
     extracted_form_codes: Vec<String>,
     #[serde(default)]
-    deadline_rule_evidence: Vec<String>,
-    #[serde(default)]
     filing_reminders: Vec<String>,
     #[serde(default)]
-    field_bboxes: std::collections::HashMap<String, Vec<u16>>,
+    field_bboxes: Vec<GeminiBoundingBox>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct GeminiBoundingBox {
+    field: String,
+    box_2d: Vec<u16>,
 }
 
 impl GeminiCorExtraction {
@@ -981,12 +974,6 @@ impl GeminiCorExtraction {
             taxpayer_type: parse_taxpayer_type(&self.taxpayer_type),
             registered_tax_types,
             extracted_form_codes: normalize_form_codes(self.extracted_form_codes),
-            deadline_rule_evidence: self
-                .deadline_rule_evidence
-                .into_iter()
-                .map(|value| value.trim().to_string())
-                .filter(|value| !value.is_empty())
-                .collect(),
             filing_reminders: self
                 .filing_reminders
                 .into_iter()
@@ -996,9 +983,17 @@ impl GeminiCorExtraction {
             field_bboxes: self
                 .field_bboxes
                 .into_iter()
-                .filter_map(|(key, coords)| {
-                    if coords.len() == 4 {
-                        Some((key, [coords[0], coords[1], coords[2], coords[3]]))
+                .filter_map(|bbox| {
+                    if bbox.box_2d.len() == 4 {
+                        Some((
+                            bbox.field,
+                            [
+                                bbox.box_2d[0],
+                                bbox.box_2d[1],
+                                bbox.box_2d[2],
+                                bbox.box_2d[3],
+                            ],
+                        ))
                     } else {
                         None
                     }
@@ -1146,7 +1141,7 @@ mod tests {
             model: None,
             document_type: None,
             extracted_form_codes: vec![],
-            extracted_deadline_rules: vec![],
+            field_bboxes: std::collections::HashMap::new(),
             ocr_text: None,
             ocr_confidence: None,
         }
@@ -1305,7 +1300,6 @@ PERCENTAGE TAX
           "taxpayer_type": "Corporation",
           "registered_tax_types": ["Income Tax", "Percentage Tax", "Withholding Tax - Expanded"],
           "extracted_form_codes": ["1702Q", "2551Q"],
-          "deadline_rule_evidence": ["1702Q - 60 days after quarter end"],
           "filing_reminders": ["1702Q - 60 days after quarter end"]
         }"#;
 
@@ -1335,7 +1329,6 @@ PERCENTAGE TAX
             fields.extracted_form_codes,
             vec!["1702Q".to_string(), "2551Q".to_string()]
         );
-        assert_eq!(fields.deadline_rule_evidence.len(), 1);
     }
 
     #[test]
@@ -1404,9 +1397,8 @@ PERCENTAGE TAX
                     RegisteredTaxType::WithholdingExpanded,
                     RegisteredTaxType::WithholdingFinal,
                 ],
-                extracted_form_codes: vec!["1702Q".to_string(), "2551Q".to_string()],
-                deadline_rule_evidence: vec!["1702Q - 60 days after quarter end".to_string()],
-                filing_reminders: vec!["1702Q - 60 days after quarter end".to_string()],
+                extracted_form_codes: vec!["0605".to_string(), "1701Q".to_string()],
+                filing_reminders: vec!["File on time".to_string()],
                 field_bboxes: std::collections::HashMap::new(),
                 ..Default::default()
             },

@@ -159,7 +159,6 @@ fn store_cor_document_in_dir(
         model: None,
         document_type: None,
         extracted_form_codes: vec![],
-        extracted_deadline_rules: vec![],
         ocr_text: None,
         ocr_confidence: None,
         field_bboxes: std::collections::HashMap::new(),

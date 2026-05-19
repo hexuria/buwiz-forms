@@ -67,6 +67,8 @@ pub struct MultiSelectState {
     drop_down: bool,
     /// Maximum visible items in the options area before scrolling.
     max_visible_items: usize,
+    /// If true, the trigger will only display the placeholder and never the selected chips.
+    hide_trigger_chips: bool,
     /// Subscriptions.
     _subscriptions: Vec<Subscription>,
 }
@@ -143,6 +145,7 @@ impl MultiSelectState {
             scroll_handle: ScrollHandle::new(),
             drop_down: false,
             max_visible_items: MAX_VISIBLE_ITEMS,
+            hide_trigger_chips: false,
             _subscriptions,
         }
     }
@@ -172,6 +175,13 @@ impl MultiSelectState {
     #[allow(dead_code)]
     pub fn max_visible_items(mut self, count: usize) -> Self {
         self.max_visible_items = count;
+        self
+    }
+
+    /// Hide the selected chips in the trigger area.
+    #[allow(dead_code)]
+    pub fn hide_trigger_chips(mut self, hide: bool) -> Self {
+        self.hide_trigger_chips = hide;
         self
     }
 
@@ -280,7 +290,7 @@ impl Render for MultiSelectState {
                 .all(|&i| self.is_selected(&self.options[i].id));
 
         // -- Build the trigger area (chips or placeholder) --
-        let trigger_content = if selected_count == 0 {
+        let trigger_content = if self.hide_trigger_chips || selected_count == 0 {
             // Placeholder
             h_flex()
                 .gap_1()

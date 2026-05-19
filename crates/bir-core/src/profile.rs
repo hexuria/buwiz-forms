@@ -189,8 +189,6 @@ pub struct CorDocumentRef {
     #[serde(default)]
     pub extracted_form_codes: Vec<String>,
     #[serde(default)]
-    pub extracted_deadline_rules: Vec<String>,
-    #[serde(default)]
     pub ocr_text: Option<String>,
     #[serde(default)]
     pub ocr_confidence: Option<f32>,

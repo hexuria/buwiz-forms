@@ -403,7 +403,6 @@ impl ProfileManagerView {
                     .child(div().flex_1().flex_basis(px(0.)).child("Upload Date"))
                     .child(div().flex_1().flex_basis(px(0.)).child("Extracted Forms"))
                     .child(div().flex_1().flex_basis(px(0.)).child("Status"))
-                    .child(div().flex_1().flex_basis(px(0.)).child("Deadlines / Rules"))
                     .child(div().flex_1().flex_basis(px(0.)).child("Actions")),
             );
 
@@ -436,18 +435,6 @@ impl ProfileManagerView {
                             forms.join(", ")
                         }
                     });
-                let rule_summary = first_document
-                    .map(|document| {
-                        document
-                            .extracted_deadline_rules
-                            .iter()
-                            .take(2)
-                            .cloned()
-                            .collect::<Vec<_>>()
-                            .join(" | ")
-                    })
-                    .filter(|rules| !rules.trim().is_empty())
-                    .unwrap_or_else(|| "No deadline text captured".to_string());
 
                 let (status_label, bg_color, text_color) = match version.status {
                     bir_core::profile::TaxProfileVersionStatus::Draft => (
@@ -505,6 +492,8 @@ impl ProfileManagerView {
                                 .flex_basis(px(0.))
                                 .text_sm()
                                 .text_color(cx.theme().foreground)
+                                .overflow_hidden()
+                                .text_ellipsis()
                                 .child(extracted_forms),
                         )
                         .child(
@@ -517,16 +506,6 @@ impl ProfileManagerView {
                                         .child(status_label),
                                 ),
                             ),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .flex_basis(px(0.))
-                                .text_sm()
-                                .text_color(cx.theme().muted_foreground)
-                                .overflow_hidden()
-                                .text_ellipsis()
-                                .child(rule_summary),
                         )
                         .child(
                             div()
@@ -646,14 +625,26 @@ impl ProfileManagerView {
                             .text_color(cx.theme().muted_foreground)
                             .child("Upload New Document (PDF, JPG, PNG) - Max 10MB"),
                     )
-                    .child(
-                        gpui_component::button::Button::new("ocr_upload_cor_timeline")
-                            .label("Browse Files")
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.upload_cor_document(window, cx);
-                                cx.notify();
-                            })),
-                    ),
+                    .when(self.is_uploading_cor, |this| {
+                        this.child(
+                            div().flex().items_center().gap_2().child(
+                                div()
+                                    .text_sm()
+                                    .text_color(cx.theme().primary)
+                                    .child("Uploading & Extracting..."),
+                            ),
+                        )
+                    })
+                    .when(!self.is_uploading_cor, |this| {
+                        this.child(
+                            gpui_component::button::Button::new("ocr_upload_cor_timeline")
+                                .label("Browse Files")
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.upload_cor_document(window, cx);
+                                    cx.notify();
+                                })),
+                        )
+                    }),
             )
             .child(
                 div()
@@ -794,8 +785,8 @@ impl ProfileManagerView {
                                     this.child(
                                         gpui_component::button::Button::new("ocr_commit_detail")
                                             .label("Commit to Profile")
-                                            .on_click(cx.listener(move |this, _, _, cx| {
-                                                match this.confirm_cor_version(&version_id_for_confirm) {
+                                            .on_click(cx.listener(move |this, _, window, cx| {
+                                                match this.confirm_cor_version(&version_id_for_confirm, window, cx) {
                                                     Ok(()) => {
                                                         this.save_message = Some("COR version confirmed. Save the profile to persist it.".into());
                                                         this.compliance_source_mode = Self::derive_compliance_source_mode(&this.stored_profile_versions);
@@ -810,68 +801,50 @@ impl ProfileManagerView {
                     )
             );
 
-        let left_col = div()
-            .flex()
-            .flex_col()
-            .gap_4()
-            .p_4()
-            .rounded_lg()
-            .border_1()
-            .border_color(cx.theme().border)
-            .bg(cx.theme().background)
-            .child(
-                div().flex().justify_between().items_center().child(
-                    div()
-                        .text_lg()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(cx.theme().foreground)
-                        .child("Source Document Preview"),
-                ),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .w_full()
-                    .min_h(px(600.))
-                    .bg(cx.theme().secondary)
-                    .rounded_md()
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .overflow_hidden()
-                    .child(
-                        if let Some(viewer) = self.interactive_document_viewer.as_ref() {
-                            viewer.clone().into_any_element()
-                        } else {
-                            div()
-                                .flex()
-                                .flex_col()
-                                .items_center()
-                                .gap_4()
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child("Document preview not available in-app yet."),
+        let left_col = div().flex().flex_col().flex_1().w_full().h_full().child(
+            div()
+                .flex_1()
+                .w_full()
+                .h_full()
+                .bg(cx.theme().secondary)
+                .rounded_md()
+                .border_1()
+                .border_color(cx.theme().border)
+                .flex()
+                .items_center()
+                .justify_center()
+                .overflow_hidden()
+                .child(
+                    if let Some(viewer) = self.interactive_document_viewer.as_ref() {
+                        viewer.clone().into_any_element()
+                    } else {
+                        div()
+                            .flex()
+                            .flex_col()
+                            .items_center()
+                            .gap_4()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("Document preview not available in-app yet."),
+                            )
+                            .when(document_id_for_open.is_some(), |this| {
+                                let doc_id = document_id_for_open.unwrap();
+                                let ver_id = version_id_for_review.clone();
+                                this.child(
+                                    gpui_component::button::Button::new("ocr_open_ext")
+                                        .label("Open Externally")
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.open_cor_document(&ver_id, &doc_id);
+                                            cx.notify();
+                                        })),
                                 )
-                                .when(document_id_for_open.is_some(), |this| {
-                                    let doc_id = document_id_for_open.unwrap();
-                                    let ver_id = version_id_for_review.clone();
-                                    this.child(
-                                        gpui_component::button::Button::new("ocr_open_ext")
-                                            .label("Open Externally")
-                                            .on_click(cx.listener(move |this, _, _, cx| {
-                                                this.open_cor_document(&ver_id, &doc_id);
-                                                cx.notify();
-                                            })),
-                                    )
-                                })
-                                .into_any_element()
-                        },
-                    ),
-            );
+                            })
+                            .into_any_element()
+                    },
+                ),
+        );
 
         let mut identified_forms = div().flex().flex_col().gap_3();
         if let Some(first_doc) = version.evidence.first() {
@@ -987,6 +960,12 @@ impl ProfileManagerView {
                                     .flex()
                                     .flex_col()
                                     .gap_1()
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|this, _, _, cx| {
+                                            this.focus_ocr_field("tin", cx);
+                                        }),
+                                    )
                                     .child(Self::field_label("TIN", cx))
                                     .child(Input::new(&self.cor_tin_input)),
                             )
@@ -997,6 +976,12 @@ impl ProfileManagerView {
                                     .flex()
                                     .flex_col()
                                     .gap_1()
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|this, _, _, cx| {
+                                            this.focus_ocr_field("rdo_code", cx);
+                                        }),
+                                    )
                                     .child(Self::field_label("RDO Code", cx))
                                     .child(Input::new(&self.cor_rdo_code_input)),
                             ),
@@ -1006,6 +991,12 @@ impl ProfileManagerView {
                             .flex()
                             .flex_col()
                             .gap_1()
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, _, _, cx| {
+                                    this.focus_ocr_field("registered_name", cx);
+                                }),
+                            )
                             .child(Self::field_label("Registered Name", cx))
                             .child(Input::new(&self.cor_registered_name_input)),
                     )
@@ -1014,6 +1005,12 @@ impl ProfileManagerView {
                             .flex()
                             .flex_col()
                             .gap_1()
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, _, _, cx| {
+                                    this.focus_ocr_field("trade_name", cx);
+                                }),
+                            )
                             .child(Self::field_label("Trade Name", cx))
                             .child(Input::new(&self.cor_trade_name_input)),
                     )
@@ -1022,6 +1019,12 @@ impl ProfileManagerView {
                             .flex()
                             .flex_col()
                             .gap_1()
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, _, _, cx| {
+                                    this.focus_ocr_field("registered_address", cx);
+                                }),
+                            )
                             .child(Self::field_label("Registered Address", cx))
                             .child(Input::new(&self.cor_registered_address_input)),
                     )
@@ -1036,6 +1039,12 @@ impl ProfileManagerView {
                                     .flex()
                                     .flex_col()
                                     .gap_1()
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|this, _, _, cx| {
+                                            this.focus_ocr_field("line_of_business_code", cx);
+                                        }),
+                                    )
                                     .child(Self::field_label("Line of Business Code", cx))
                                     .child(Input::new(&self.cor_lob_code_input)),
                             )
@@ -1046,6 +1055,12 @@ impl ProfileManagerView {
                                     .flex()
                                     .flex_col()
                                     .gap_1()
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|this, _, _, cx| {
+                                            this.focus_ocr_field("line_of_business_description", cx);
+                                        }),
+                                    )
                                     .child(Self::field_label("Line of Business", cx))
                                     .child(Input::new(&self.cor_lob_description_input)),
                             ),
@@ -1053,51 +1068,62 @@ impl ProfileManagerView {
                     .child(
                         div()
                             .flex()
-                            .gap_3()
+                            .flex_col()
+                            .gap_1()
+                            .child(Self::field_label("Extracted Applicable Forms", cx))
                             .child(
                                 div()
-                                    .flex_1()
-                                    .min_w_0()
                                     .flex()
                                     .flex_col()
-                                    .gap_1()
-                                    .child(Self::field_label("Taxpayer Type", cx))
-                                    .child(Combobox::new(&self.cor_taxpayer_type_select)),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child(Self::field_label("Tax Classification", cx))
-                                    .child(Combobox::new(&self.cor_tax_classification_select)),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child(Self::field_label("EOPT Tier", cx))
-                                    .child(Combobox::new(&self.cor_eopt_tier_select)),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child(Self::field_label("Registration Status", cx))
-                                    .child(Combobox::new(&self.cor_registration_status_select)),
+                                    .gap_2()
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_wrap()
+                                            .gap_2()
+                                            .children(self.cor_extracted_forms.iter().map(|form_code| {
+                                                let code = form_code.clone();
+                                                let code_for_close = form_code.clone();
+                                                div()
+                                                    .bg(cx.theme().secondary)
+                                                    .border_1()
+                                                    .border_color(cx.theme().border)
+                                                    .rounded_md()
+                                                    .px_2()
+                                                    .py_1()
+                                                    .child(
+                                                    div()
+                                                        .flex()
+                                                        .gap_2()
+                                                        .items_center()
+                                                        .child(
+                                                            div()
+                                                                .cursor_pointer()
+                                                                .on_mouse_down(MouseButton::Left, cx.listener(move |this, _, _, cx| {
+                                                                    this.focused_ocr_field = Some(code.clone());
+                                                                    if let Some(viewer) = &this.interactive_document_viewer {
+                                                                        viewer.update(cx, |viewer, cx| viewer.set_active_field(Some(code.clone()), cx));
+                                                                    }
+                                                                }))
+                                                                .child(form_code.clone())
+                                                        )
+                                                        .child(
+                                                            div()
+                                                                .cursor_pointer()
+                                                                .on_mouse_down(MouseButton::Left, cx.listener(move |this, _, _, cx| {
+                                                                    this.cor_extracted_forms.retain(|c| c != &code_for_close);
+                                                                    let forms = this.cor_extracted_forms.clone();
+                                                                    this.cor_extracted_forms_select.update(cx, |select, cx| {
+                                                                        select.set_selected_ids(forms, cx);
+                                                                    });
+                                                                    cx.notify();
+                                                                }))
+                                                                .child(Icon::new(IconName::Close).xsmall())
+                                                        )
+                                                )
+                                            }))
+                                    )
+                                    .child(MultiSelect::new(&self.cor_extracted_forms_select))
                             ),
                     )
                     .child(
@@ -1166,44 +1192,14 @@ impl ProfileManagerView {
                 ),
             );
 
-        // Compact form summary (replaces the bloated render_ocr_preview + render_cor_override_editor)
-        let form_summary = if let Some(first_doc) = version.evidence.first() {
-            if first_doc.extracted_form_codes.is_empty() {
-                "No tax obligations identified from this document.".to_string()
-            } else {
-                format!(
-                    "Applicable forms: {}",
-                    first_doc.extracted_form_codes.join(", ")
-                )
-            }
-        } else {
-            "No evidence document attached.".to_string()
-        };
-
-        div()
-            .flex()
-            .flex_col()
-            .gap_6()
-            .child(header)
-            .child(
-                // Responsive 2-column layout using flex instead of grid
-                div()
-                    .flex()
-                    .gap_6()
-                    .child(div().flex_1().min_w_0().child(left_col))
-                    .child(div().flex_1().min_w_0().child(right_col)),
-            )
-            .child(
-                div()
-                    .p_3()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .bg(cx.theme().secondary)
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(form_summary),
-            )
+        div().flex().flex_col().gap_6().child(header).child(
+            // Responsive 2-column layout using flex instead of grid
+            div()
+                .flex()
+                .gap_6()
+                .child(div().flex_1().min_w_0().child(left_col))
+                .child(div().flex_1().min_w_0().child(right_col)),
+        )
     }
     fn ocr_field(
         &self,
@@ -1855,10 +1851,12 @@ impl ProfileManagerView {
                                             ))
                                             .label("Remove")
                                             .small()
-                                            .on_click(cx.listener(move |this, _, _, cx| {
+                                            .on_click(cx.listener(move |this, _, window, cx| {
                                                 this.remove_cor_document(
                                                     &version_id_for_remove,
                                                     &document_id_for_remove,
+                                                    window,
+                                                    cx,
                                                 );
                                                 cx.notify();
                                             })),
@@ -1999,8 +1997,8 @@ impl ProfileManagerView {
                                             ))
                                             .label("Confirm")
                                             .small()
-                                            .on_click(cx.listener(move |this, _, _, cx| {
-                                                match this.confirm_cor_version(&id_for_confirm) {
+                                            .on_click(cx.listener(move |this, _, window, cx| {
+                                                match this.confirm_cor_version(&id_for_confirm, window, cx) {
                                                     Ok(()) => this.save_message =
                                                         Some("COR version confirmed. Save the profile to persist it.".into()),
                                                     Err(message) => this.save_message = Some(message),
@@ -2375,8 +2373,8 @@ impl ProfileManagerView {
                                     gpui_component::button::Button::new("remove_cor_ocr_key")
                                         .label("Remove Key")
                                         .small()
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.remove_gemini_ocr_key(cx);
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.remove_gemini_ocr_key(window, cx);
                                         })),
                                 ),
                         )

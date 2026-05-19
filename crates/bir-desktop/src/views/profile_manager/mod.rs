@@ -1,8 +1,10 @@
 use chrono::Datelike;
 use gpui::prelude::*;
 use gpui::*;
+use gpui_component::WindowExt;
 use gpui_component::button::ButtonVariants;
 use gpui_component::input::{Input, InputEvent, InputState, OtpInput, OtpState};
+use gpui_component::notification::{Notification, NotificationType};
 use gpui_component::*;
 use std::sync::{Arc, Mutex};
 
@@ -116,6 +118,8 @@ pub struct ProfileManagerView {
     cor_tax_classification_select: Entity<ComboboxState>,
     cor_eopt_tier_select: Entity<ComboboxState>,
     cor_registration_status_select: Entity<ComboboxState>,
+    cor_extracted_forms: Vec<String>,
+    cor_extracted_forms_select: Entity<MultiSelectState>,
     cor_obligation_form_input: Entity<InputState>,
     cor_obligation_reason_input: Entity<InputState>,
     cor_obligation_source_input: Entity<InputState>,
@@ -146,6 +150,7 @@ pub struct ProfileManagerView {
         Option<Entity<crate::components::document_viewer::InteractiveDocumentViewer>>,
     focused_ocr_field: Option<String>,
     pending_cor_editor_load: Option<String>,
+    is_uploading_cor: bool,
 
     _subscriptions: Vec<Subscription>,
 }
@@ -373,6 +378,16 @@ impl ProfileManagerView {
                 cx,
             )
         });
+        let cor_extracted_forms_select = cx.new(|cx| {
+            let mut options: Vec<_> = bir_core::forms::registry::FORM_REGISTRY
+                .iter()
+                .map(|f| MultiSelectOption::new(f.code, format!("{} - {}", f.code, f.title)))
+                .collect();
+            options.sort_by(|a, b| a.id.cmp(&b.id));
+            MultiSelectState::new(options, window, cx)
+                .placeholder("Add form code...")
+                .hide_trigger_chips(true)
+        });
         let cor_obligation_form_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Form code (e.g. 2551Q)"));
         let cor_obligation_reason_input =
@@ -514,6 +529,16 @@ impl ProfileManagerView {
             ),
         ];
 
+        cx.subscribe(
+            &cor_extracted_forms_select,
+            |this: &mut Self, _, event: &MultiSelectEvent, cx| {
+                this.cor_extracted_forms = event.selected.clone();
+                // We do not reset the input, MultiSelect handles its own state
+                cx.notify();
+            },
+        )
+        .detach();
+
         Self {
             db,
             tin_input,
@@ -585,6 +610,8 @@ impl ProfileManagerView {
             cor_tax_classification_select,
             cor_eopt_tier_select,
             cor_registration_status_select,
+            cor_extracted_forms: Vec::new(),
+            cor_extracted_forms_select,
             cor_obligation_form_input,
             cor_obligation_reason_input,
             cor_obligation_source_input,
@@ -612,6 +639,7 @@ impl ProfileManagerView {
             interactive_document_viewer: None,
             focused_ocr_field: None,
             pending_cor_editor_load: None,
+            is_uploading_cor: false,
             pending_notification: None,
             _subscriptions: subscriptions,
         }
@@ -648,6 +676,14 @@ impl ProfileManagerView {
             tracing::info!("[COR Viewer] No ocr_selected_version_id set");
         }
         self.interactive_document_viewer = None;
+    }
+
+    pub fn focus_ocr_field(&mut self, field_id: &str, cx: &mut Context<Self>) {
+        if let Some(viewer) = &self.interactive_document_viewer {
+            viewer.update(cx, |viewer, cx| {
+                viewer.set_active_field(Some(field_id.to_string()), cx);
+            });
+        }
     }
 
     pub fn reset_for_new(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -983,6 +1019,130 @@ impl ProfileManagerView {
         };
         self.cooperative_treatment_select.update(cx, |select, cx| {
             select.set_selected_value(coop_value, window, cx);
+        });
+
+        cx.notify();
+    }
+
+    /// Syncs the projected TaxpayerProfile fields back to the UI inputs without resetting
+    /// secondary state like OCR viewer, passwords, or tab selections. Used after "Commit to Profile".
+    pub fn sync_projection_to_ui(
+        &mut self,
+        profile: &TaxpayerProfile,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.is_vat_registered = profile.is_vat_registered;
+        self.withholds_compensation = profile.withholds_compensation;
+        self.withholds_expanded = profile.withholds_expanded;
+        self.withholds_final = profile.withholds_final;
+        self.is_top_withholding_agent = profile.is_top_withholding_agent;
+        self.is_government_withholding_entity = profile.is_government_withholding_entity;
+        self.has_single_employer = profile.has_single_employer;
+        self.is_gpp_partner = profile.is_gpp_partner;
+
+        let mut excise_ids = Vec::new();
+        for cat in &profile.excise_tax_categories {
+            match cat {
+                bir_core::profile::ExciseTaxCategory::Alcohol => {
+                    excise_ids.push("alcohol".to_string())
+                }
+                bir_core::profile::ExciseTaxCategory::AutomobilesAndNonEssential => {
+                    excise_ids.push("auto".to_string())
+                }
+                bir_core::profile::ExciseTaxCategory::Mineral => {
+                    excise_ids.push("mineral".to_string())
+                }
+                bir_core::profile::ExciseTaxCategory::Petroleum => {
+                    excise_ids.push("petroleum".to_string())
+                }
+                bir_core::profile::ExciseTaxCategory::Tobacco => {
+                    excise_ids.push("tobacco".to_string())
+                }
+                bir_core::profile::ExciseTaxCategory::SweetenedBeverages => {
+                    excise_ids.push("sweetened".to_string())
+                }
+                bir_core::profile::ExciseTaxCategory::CoalAndCoke => {
+                    excise_ids.push("coal".to_string())
+                }
+            }
+        }
+        self.excise_select.update(cx, |state, cx| {
+            state.set_selected_ids(excise_ids, cx);
+        });
+
+        self.tin_input
+            .update(cx, |tin, cx| tin.set_from_tin(&profile.tin, window, cx));
+        self.name_input.update(cx, |input, cx| {
+            input.set_value(profile.full_name.clone(), window, cx)
+        });
+        self.address_input.update(cx, |input, cx| {
+            input.set_value(profile.registered_address.clone(), window, cx)
+        });
+
+        let zip_val = self
+            .zip_options
+            .iter()
+            .find(|o| o.starts_with(&profile.zip_code))
+            .cloned()
+            .unwrap_or(profile.zip_code.clone());
+        self.zip_select.update(cx, |select, cx| {
+            select.set_selected_value(&zip_val, window, cx)
+        });
+
+        self.line_of_business.update(cx, |input, cx| {
+            input.set_value(profile.line_of_business.clone(), window, cx)
+        });
+        self.business_start_input.update(cx, |input, cx| {
+            input.set_date(profile.business_start_date, window, cx)
+        });
+
+        let rdo_value = self
+            .rdo_options
+            .iter()
+            .find(|o| o.starts_with(&profile.rdo_code))
+            .cloned()
+            .unwrap_or(profile.rdo_code.clone());
+        self.rdo_select.update(cx, |select, cx| {
+            select.set_selected_value(&rdo_value, window, cx)
+        });
+
+        let type_value = taxpayer_type_label(&profile.taxpayer_type).to_string();
+        self.type_select.update(cx, |select, cx| {
+            select.set_selected_value(&type_value, window, cx)
+        });
+
+        let tax_class_value = match profile.tax_classification {
+            Some(bir_core::profile::TaxClassification::PurelyCompensation) => "Purely Compensation",
+            Some(bir_core::profile::TaxClassification::SelfEmployed) => {
+                "Self-Employed / Professional"
+            }
+            Some(bir_core::profile::TaxClassification::MixedIncome) => "Mixed Income",
+            _ => "",
+        };
+        self.tax_classification_select.update(cx, |select, cx| {
+            select.set_selected_value(tax_class_value, window, cx)
+        });
+
+        let tier_value = match profile.eopt_tier {
+            Some(bir_core::profile::EoptTier::Micro) => "Micro",
+            Some(bir_core::profile::EoptTier::Small) => "Small",
+            Some(bir_core::profile::EoptTier::Medium) => "Medium",
+            Some(bir_core::profile::EoptTier::Large) => "Large",
+            None => "",
+        };
+        self.eopt_tier_select.update(cx, |select, cx| {
+            select.set_selected_value(tier_value, window, cx)
+        });
+
+        let coop_value = match profile.tax_classification {
+            Some(bir_core::profile::TaxClassification::CooperativeExempt) => "Exempt",
+            Some(bir_core::profile::TaxClassification::CooperativeTaxable) => "Taxable",
+            Some(bir_core::profile::TaxClassification::CooperativeMixed) => "Mixed",
+            _ => "",
+        };
+        self.cooperative_treatment_select.update(cx, |select, cx| {
+            select.set_selected_value(coop_value, window, cx)
         });
 
         cx.notify();
@@ -1372,9 +1532,16 @@ impl ProfileManagerView {
         // If Gemini OCR is enabled, consent is implied — the user already
         // opted in by enabling Gemini OCR and saving their API key.
         let cloud_consent = self.gemini_ocr_enabled || self.gemini_ocr_cloud_consent;
-        tracing::info!("[COR OCR] Building options: provider={}, model={model}, cloud_consent={cloud_consent} (enabled={}, checkbox={})",
-            if self.gemini_ocr_enabled { "GeminiByok" } else { "SidecarText" },
-            self.gemini_ocr_enabled, self.gemini_ocr_cloud_consent);
+        tracing::info!(
+            "[COR OCR] Building options: provider={}, model={model}, cloud_consent={cloud_consent} (enabled={}, checkbox={})",
+            if self.gemini_ocr_enabled {
+                "GeminiByok"
+            } else {
+                "SidecarText"
+            },
+            self.gemini_ocr_enabled,
+            self.gemini_ocr_cloud_consent
+        );
         crate::cor_ocr::CorOcrOptions {
             provider: if self.gemini_ocr_enabled {
                 crate::cor_ocr::CorOcrProviderKind::GeminiByok
@@ -1445,16 +1612,24 @@ impl ProfileManagerView {
                 });
             })
             .detach();
+            window.push_notification(
+                Notification::success("Gemini API key saved to OS keychain.").title("OCR Settings"),
+                cx,
+            );
         } else {
             tracing::info!("[OCR Settings] No key typed, saving settings only");
             self.gemini_ocr_status = Some(
                 "Gemini OCR settings saved. API keys are stored outside profile JSON.".to_string(),
             );
+            window.push_notification(
+                Notification::success("Gemini OCR settings saved.").title("OCR Settings"),
+                cx,
+            );
         }
         cx.notify();
     }
 
-    fn remove_gemini_ocr_key(&mut self, cx: &mut Context<Self>) {
+    fn remove_gemini_ocr_key(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         tracing::info!("[OCR Settings] Removing Gemini API key from keychain…");
         self.gemini_ocr_cloud_consent = false;
         self.gemini_ocr_status =
@@ -1477,10 +1652,14 @@ impl ProfileManagerView {
             });
         })
         .detach();
+        window.push_notification(
+            Notification::info("Gemini API key removed from OS keychain.").title("OCR Settings"),
+            cx,
+        );
         cx.notify();
     }
 
-    fn test_cor_ocr_settings(&mut self, cx: &mut Context<Self>) {
+    fn test_cor_ocr_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let typed_key = self
             .gemini_ocr_api_key_input
             .read(cx)
@@ -1495,6 +1674,10 @@ impl ProfileManagerView {
         let model = self.selected_gemini_ocr_model(cx);
         self.gemini_ocr_status =
             Some("Testing Gemini OCR key. This sends a tiny test request to Google.".to_string());
+        window.push_notification(
+            Notification::info("Testing Gemini API key...").title("OCR Settings"),
+            cx,
+        );
         cx.spawn(async move |this, cx| {
             let result =
                 cx.background_executor()
@@ -1503,9 +1686,23 @@ impl ProfileManagerView {
                     })
                     .await;
             let _ = this.update(cx, |this, cx| {
+                match &result {
+                    Ok(msg) => tracing::info!("[OCR Settings] API key verified: {msg}"),
+                    Err(e) => tracing::info!("[OCR Settings] API key verification FAILED: {e}"),
+                }
                 this.gemini_ocr_status = Some(match result {
-                    Ok(message) => message,
-                    Err(error) => error,
+                    Ok(message) => {
+                        this.pending_notification = Some((
+                            NotificationType::Success,
+                            message.clone().replace('\n', " "),
+                        ));
+                        message
+                    }
+                    Err(error) => {
+                        this.pending_notification =
+                            Some((NotificationType::Error, error.clone().replace('\n', " ")));
+                        error
+                    }
                 });
                 cx.notify();
             });
@@ -1561,6 +1758,7 @@ impl ProfileManagerView {
             ocr_options.allow_cloud_upload
         );
         self.save_message = Some("Processing document… please wait.".to_string());
+        self.is_uploading_cor = true;
         cx.notify();
 
         cx.spawn(async move |this, cx| {
@@ -1573,6 +1771,7 @@ impl ProfileManagerView {
                 tracing::info!("[COR Upload] File picker cancelled.");
                 let _ = this.update(cx, |this, cx| {
                     this.save_message = None;
+                    this.is_uploading_cor = false;
                     cx.notify();
                 });
                 return;
@@ -1646,11 +1845,16 @@ impl ProfileManagerView {
                         this.sync_document_viewer(cx);
                         this.compliance_source_mode =
                             Self::derive_compliance_source_mode(&this.stored_profile_versions);
-                        this.save_message = Some(ocr.status_message);
+                        this.save_message = Some(ocr.status_message.clone());
+                        this.pending_notification = Some((
+                            NotificationType::Success,
+                            ocr.status_message.replace('\n', " "),
+                        ));
                         // Defer editor field load to next render frame (needs Window)
                         this.pending_cor_editor_load = Some(version_id);
                         // Reset consent AFTER we've used the options
                         this.gemini_ocr_cloud_consent = false;
+                        this.is_uploading_cor = false;
                         cx.notify();
                         tracing::info!("[COR Upload] UI updated. pending_cor_editor_load set.");
                     });
@@ -1658,7 +1862,10 @@ impl ProfileManagerView {
                 Err(error) => {
                     tracing::error!("[COR Upload] Evidence storage failed: {error}");
                     let _ = this.update(cx, |this, cx| {
-                        this.save_message = Some(error);
+                        this.save_message = Some(error.clone());
+                        this.pending_notification =
+                            Some((NotificationType::Error, error.replace('\n', " ")));
+                        this.is_uploading_cor = false;
                         cx.notify();
                     });
                 }
@@ -1685,13 +1892,23 @@ impl ProfileManagerView {
         crate::platform::open_in_system(std::path::Path::new(&path));
     }
 
-    fn remove_cor_document(&mut self, version_id: &str, document_id: &str) {
+    fn remove_cor_document(
+        &mut self,
+        version_id: &str,
+        document_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(version) = self
             .stored_profile_versions
             .iter_mut()
             .find(|version| version.id == version_id)
         else {
             self.save_message = Some("COR version was not found.".to_string());
+            window.push_notification(
+                Notification::error("COR version was not found.").title("OCR"),
+                cx,
+            );
             return;
         };
 
@@ -1707,6 +1924,10 @@ impl ProfileManagerView {
 
         if version.evidence.len() == before {
             self.save_message = Some("COR evidence file was not found.".to_string());
+            window.push_notification(
+                Notification::error("COR evidence file was not found.").title("OCR"),
+                cx,
+            );
             return;
         }
 
@@ -1715,9 +1936,18 @@ impl ProfileManagerView {
         }
         self.save_message =
             Some("COR evidence removed. Save the profile to persist the change.".to_string());
+        window.push_notification(
+            Notification::success("COR evidence document removed.").title("OCR"),
+            cx,
+        );
     }
 
-    fn confirm_cor_version(&mut self, version_id: &str) -> Result<(), String> {
+    fn confirm_cor_version(
+        &mut self,
+        version_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
         let Some(version) = self
             .stored_profile_versions
             .iter()
@@ -1730,6 +1960,7 @@ impl ProfileManagerView {
                 "Set the Business Start Date before confirming this COR version.".to_string(),
             );
         };
+        let version_clone = version.clone();
 
         let mut profile = TaxpayerProfile {
             id: self.editing_id,
@@ -1786,6 +2017,12 @@ impl ProfileManagerView {
         if profile.set_profile_version_confirmed(version_id, effective_from) {
             self.compliance_source_mode = ComplianceSourceMode::CorVersioned;
             self.stored_profile_versions = profile.profile_versions.clone();
+
+            // Sync the projected profile to the UI inputs so that when the user clicks "Save Profile",
+            // the OCR-derived classifications and fields are persisted.
+            let projected = profile.projection_for_version(&version_clone);
+            self.sync_projection_to_ui(&projected, window, cx);
+
             Ok(())
         } else {
             Err("COR version was not found.".to_string())
@@ -1841,6 +2078,10 @@ impl ProfileManagerView {
         ] {
             input.update(cx, |input, cx| input.set_value("", window, cx));
         }
+        self.cor_extracted_forms.clear();
+        self.cor_extracted_forms_select.update(cx, |select, cx| {
+            select.set_selected_ids(vec![], cx);
+        });
         self.cor_taxpayer_type_select.update(cx, |state, cx| {
             state.set_selected_value("Individual", window, cx)
         });
@@ -1928,6 +2169,17 @@ impl ProfileManagerView {
         self.cor_lob_description_input.update(cx, |input, cx| {
             input.set_value(version.cor.line_of_business_description, window, cx)
         });
+
+        self.cor_extracted_forms = version
+            .evidence
+            .first()
+            .map(|e| e.extracted_form_codes.clone())
+            .unwrap_or_default();
+        let forms = self.cor_extracted_forms.clone();
+        self.cor_extracted_forms_select.update(cx, |select, cx| {
+            select.set_selected_ids(forms, cx);
+        });
+
         self.cor_taxpayer_type_select.update(cx, |state, cx| {
             state.set_selected_value(
                 Self::taxpayer_type_label(&version.taxpayer_type),
@@ -2069,6 +2321,11 @@ impl ProfileManagerView {
                 .read(cx)
                 .selected_value(cx),
         );
+
+        let extracted_forms = self.cor_extracted_forms.clone();
+        if let Some(evidence) = version.evidence.first_mut() {
+            evidence.extracted_form_codes = extracted_forms;
+        }
 
         self.save_message =
             Some("COR version details updated. Save the profile to persist them.".to_string());
@@ -2908,27 +3165,29 @@ impl Render for ProfileManagerView {
                             .child(self.render_security_tab(global_pins_enabled, cx))
                             .child(self.render_export_tab(cx))
 
-                            .child(
-                                div()
-                                    .mt_4()
-                                    .pb(px(80.))
-                                    .flex()
-                                    .items_center()
-                                    .gap_4()
-                                    .child(
-                                        gpui_component::button::Button::new("save_profile")
-                                            .label("Save Profile")
-                                            .on_click(cx.listener(|this, _ev, _window, cx| {
-                                                this.save_profile(_window, cx);
-                                            })),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child(self.save_message.clone().unwrap_or_default())
-                                    )
-                            )
+                            .when(self.active_tab != 1, |this| {
+                                this.child(
+                                    div()
+                                        .mt_4()
+                                        .pb(px(80.))
+                                        .flex()
+                                        .items_center()
+                                        .gap_4()
+                                        .child(
+                                            gpui_component::button::Button::new("save_profile")
+                                                .label("Save Profile")
+                                                .on_click(cx.listener(|this, _ev, _window, cx| {
+                                                    this.save_profile(_window, cx);
+                                                })),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child(self.save_message.clone().unwrap_or_default())
+                                        )
+                                )
+                            })
                     )
             )
             )
