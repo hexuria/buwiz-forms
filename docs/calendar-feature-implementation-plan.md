@@ -2,6 +2,11 @@
 
 Date: 2026-05-16
 
+> Historical implementation plan. The temporal engine referenced in some
+> problem statements was removed in June 2026. Current form identity lives in
+> `forms/registry.rs`, and profile applicability comes from the per-year Forms
+> Set plus confirmed COR/profile versions.
+
 Source audit: `docs/calendar-feature-audit.md`
 
 Scope: required fixes for the static BIR tax calendar migration before the calendar can be treated as a reliable compliance surface. This plan keeps the base rules static, but corrects date semantics, form identity, routing, profile filtering, event-based forms, overrides, schema cleanup, and regression coverage.
@@ -148,11 +153,11 @@ Acceptance criteria:
 Problems solved:
 
 - Calendar emits `1601-C`, `0619-E`, `1701-MS`, etc.
-- Registry, temporal engine, draft storage, and routing use `1601C`, `0619E`, `1701MS`, etc.
+- Registry, Forms Set storage, draft storage, and routing use `1601C`, `0619E`, `1701MS`, etc.
 
 Tasks:
 
-1. Add a small canonicalization helper in core, near the calendar rules or temporal form identity layer.
+1. Add a small canonicalization helper in core, near the form registry.
 2. Encode known display-to-canonical mappings:
    - `0619-E` -> `0619E`
    - `0619-F` -> `0619F`

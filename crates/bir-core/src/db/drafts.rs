@@ -19,162 +19,6 @@ fn filing_status_to_db(status: &FilingStatus) -> &'static str {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use rusqlite::Connection;
-    use serde::{Deserialize, Serialize};
-
-    #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-    struct TestDraft {
-        value: i32,
-    }
-
-    fn test_db() -> Database {
-        let conn = Connection::open_in_memory().unwrap();
-        super::super::migrations::migrate_database(&conn).unwrap();
-        Database { conn }
-    }
-
-    #[test]
-    fn period_key_upsert_updates_annual_draft_in_place() {
-        let db = test_db();
-        let period = FilingPeriod::Annual;
-        let first_id = db
-            .save_form_draft_v2(
-                "123456789000",
-                "1702MX",
-                2026,
-                &period,
-                &FilingStatus::Draft,
-                &TestDraft { value: 1 },
-            )
-            .unwrap();
-        let second_id = db
-            .save_form_draft_v2(
-                "123456789000",
-                "1702MX",
-                2026,
-                &period,
-                &FilingStatus::Draft,
-                &TestDraft { value: 2 },
-            )
-            .unwrap();
-
-        let count: i64 = db
-            .conn
-            .query_row(
-                "SELECT COUNT(*) FROM form_drafts
-                 WHERE tin = '123456789000' AND form_code = '1702MX' AND taxable_year = 2026",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        let loaded: TestDraft = db
-            .get_form_draft_v2("123456789000", "1702MX", 2026, &period)
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(first_id, second_id);
-        assert_eq!(count, 1);
-        assert_eq!(loaded, TestDraft { value: 2 });
-    }
-
-    #[test]
-    fn scaffold_forms_reject_queue_persistence() {
-        let db = test_db();
-        // Use a form that is still ExternalOrManualOnly (1700 is not implemented in-app)
-        let result = db.save_form_draft_v2(
-            "123456789000",
-            "1700",
-            2026,
-            &FilingPeriod::Annual,
-            &FilingStatus::Queued,
-            &TestDraft { value: 1 },
-        );
-
-        assert!(result.is_err());
-        let summaries = db.list_draft_summaries("123456789000", 2026).unwrap();
-        assert!(summaries.is_empty());
-        assert!(db.list_all_queued_submissions().unwrap().is_empty());
-    }
-
-    #[test]
-    fn annual_and_open_ended_progress_use_period_key_semantics() {
-        let db = test_db();
-        db.save_form_draft_v2(
-            "123456789000",
-            "1701",
-            2026,
-            &FilingPeriod::Annual,
-            &FilingStatus::Submitted,
-            &TestDraft { value: 1 },
-        )
-        .unwrap();
-        db.save_form_draft_v2(
-            "123456789000",
-            "0605",
-            2026,
-            &FilingPeriod::OpenEnded(1),
-            &FilingStatus::Submitted,
-            &TestDraft { value: 1 },
-        )
-        .unwrap();
-        db.save_form_draft_v2(
-            "123456789000",
-            "0605",
-            2026,
-            &FilingPeriod::OpenEnded(2),
-            &FilingStatus::Draft,
-            &TestDraft { value: 2 },
-        )
-        .unwrap();
-
-        let annual = db
-            .get_form_filing_progress("123456789000", "1701", 2026)
-            .unwrap();
-        let open_ended = db
-            .get_form_filing_progress("123456789000", "0605", 2026)
-            .unwrap();
-
-        assert_eq!(annual.annual_status, QuarterState::Submitted);
-        assert_eq!(open_ended.open_ended_count, 1);
-    }
-
-    #[test]
-    fn monthly_and_quarterly_summaries_follow_period_keys() {
-        let db = test_db();
-        db.save_form_draft_v2(
-            "123456789000",
-            "1601C",
-            2026,
-            &FilingPeriod::Monthly(12),
-            &FilingStatus::Queued,
-            &TestDraft { value: 1 },
-        )
-        .unwrap();
-        db.save_form_draft_v2(
-            "123456789000",
-            "2551Q",
-            2026,
-            &FilingPeriod::Quarterly(4),
-            &FilingStatus::Queued,
-            &TestDraft { value: 2 },
-        )
-        .unwrap();
-
-        let mut summaries = db.list_draft_summaries("123456789000", 2026).unwrap();
-        summaries.sort_by(|a, b| a.form_code.cmp(&b.form_code));
-
-        assert_eq!(summaries[0].form_code, "1601C");
-        assert_eq!(summaries[0].month, Some(12));
-        assert_eq!(summaries[0].quarter, None);
-        assert_eq!(summaries[1].form_code, "2551Q");
-        assert_eq!(summaries[1].quarter, Some(4));
-        assert_eq!(summaries[1].month, None);
-    }
-}
-
 fn filing_status_from_db(status: &str) -> FilingStatus {
     match status {
         "Confirmed" => FilingStatus::Confirmed,
@@ -690,7 +534,7 @@ impl Database {
         let mut summaries = Vec::new();
         for row in rows {
             let summary = row?;
-            if crate::temporal::can_queue_for_submission(&summary.form_code) {
+            if crate::forms::can_queue_for_submission(&summary.form_code) {
                 summaries.push(summary);
             }
         }
@@ -716,7 +560,7 @@ impl Database {
         draft: &T,
     ) -> Result<i64, DbError> {
         if matches!(status, FilingStatus::Queued)
-            && !crate::temporal::can_queue_for_submission(form_code)
+            && !crate::forms::can_queue_for_submission(form_code)
         {
             return Err(DbError::Other(format!(
                 "Form {form_code} is scaffold-only and cannot be queued for submission"
@@ -803,5 +647,161 @@ impl Database {
         } else {
             Ok(None)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+    struct TestDraft {
+        value: i32,
+    }
+
+    fn test_db() -> Database {
+        let conn = Connection::open_in_memory().unwrap();
+        super::super::migrations::migrate_database(&conn).unwrap();
+        Database { conn }
+    }
+
+    #[test]
+    fn period_key_upsert_updates_annual_draft_in_place() {
+        let db = test_db();
+        let period = FilingPeriod::Annual;
+        let first_id = db
+            .save_form_draft_v2(
+                "123456789000",
+                "1702MX",
+                2026,
+                &period,
+                &FilingStatus::Draft,
+                &TestDraft { value: 1 },
+            )
+            .unwrap();
+        let second_id = db
+            .save_form_draft_v2(
+                "123456789000",
+                "1702MX",
+                2026,
+                &period,
+                &FilingStatus::Draft,
+                &TestDraft { value: 2 },
+            )
+            .unwrap();
+
+        let count: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM form_drafts
+                 WHERE tin = '123456789000' AND form_code = '1702MX' AND taxable_year = 2026",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let loaded: TestDraft = db
+            .get_form_draft_v2("123456789000", "1702MX", 2026, &period)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(first_id, second_id);
+        assert_eq!(count, 1);
+        assert_eq!(loaded, TestDraft { value: 2 });
+    }
+
+    #[test]
+    fn scaffold_forms_reject_queue_persistence() {
+        let db = test_db();
+        // Use a form that is still ExternalOrManualOnly (1700 is not implemented in-app)
+        let result = db.save_form_draft_v2(
+            "123456789000",
+            "1700",
+            2026,
+            &FilingPeriod::Annual,
+            &FilingStatus::Queued,
+            &TestDraft { value: 1 },
+        );
+
+        assert!(result.is_err());
+        let summaries = db.list_draft_summaries("123456789000", 2026).unwrap();
+        assert!(summaries.is_empty());
+        assert!(db.list_all_queued_submissions().unwrap().is_empty());
+    }
+
+    #[test]
+    fn annual_and_open_ended_progress_use_period_key_semantics() {
+        let db = test_db();
+        db.save_form_draft_v2(
+            "123456789000",
+            "1701",
+            2026,
+            &FilingPeriod::Annual,
+            &FilingStatus::Submitted,
+            &TestDraft { value: 1 },
+        )
+        .unwrap();
+        db.save_form_draft_v2(
+            "123456789000",
+            "0605",
+            2026,
+            &FilingPeriod::OpenEnded(1),
+            &FilingStatus::Submitted,
+            &TestDraft { value: 1 },
+        )
+        .unwrap();
+        db.save_form_draft_v2(
+            "123456789000",
+            "0605",
+            2026,
+            &FilingPeriod::OpenEnded(2),
+            &FilingStatus::Draft,
+            &TestDraft { value: 2 },
+        )
+        .unwrap();
+
+        let annual = db
+            .get_form_filing_progress("123456789000", "1701", 2026)
+            .unwrap();
+        let open_ended = db
+            .get_form_filing_progress("123456789000", "0605", 2026)
+            .unwrap();
+
+        assert_eq!(annual.annual_status, QuarterState::Submitted);
+        assert_eq!(open_ended.open_ended_count, 1);
+    }
+
+    #[test]
+    fn monthly_and_quarterly_summaries_follow_period_keys() {
+        let db = test_db();
+        db.save_form_draft_v2(
+            "123456789000",
+            "1601C",
+            2026,
+            &FilingPeriod::Monthly(12),
+            &FilingStatus::Queued,
+            &TestDraft { value: 1 },
+        )
+        .unwrap();
+        db.save_form_draft_v2(
+            "123456789000",
+            "2551Q",
+            2026,
+            &FilingPeriod::Quarterly(4),
+            &FilingStatus::Queued,
+            &TestDraft { value: 2 },
+        )
+        .unwrap();
+
+        let mut summaries = db.list_draft_summaries("123456789000", 2026).unwrap();
+        summaries.sort_by(|a, b| a.form_code.cmp(&b.form_code));
+
+        assert_eq!(summaries[0].form_code, "1601C");
+        assert_eq!(summaries[0].month, Some(12));
+        assert_eq!(summaries[0].quarter, None);
+        assert_eq!(summaries[1].form_code, "2551Q");
+        assert_eq!(summaries[1].quarter, Some(4));
+        assert_eq!(summaries[1].month, None);
     }
 }

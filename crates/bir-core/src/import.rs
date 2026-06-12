@@ -367,6 +367,7 @@ mod tests {
             taxpayer_type: TaxpayerType::Individual,
             is_vat_registered: false,
             business_start_date: None,
+            birth_date: None,
             is_archived: false,
             email_tracking_enabled: false,
             email_auth_method: crate::profile::EmailAuthMethod::AppPassword,
@@ -378,6 +379,7 @@ mod tests {
             oauth_refresh_token: None,
             profile_versions: vec![],
             compliance_source_mode: Default::default(),
+            per_year_forms: Default::default(),
             profile_pin_hash: None,
             totp_secret: None,
             tax_classification: None,
@@ -460,6 +462,7 @@ mod tests {
             taxpayer_type: TaxpayerType::Individual,
             is_vat_registered: false,
             business_start_date: None,
+            birth_date: None,
             is_archived: false,
             email_tracking_enabled: false,
             email_auth_method: crate::profile::EmailAuthMethod::AppPassword,
@@ -471,6 +474,7 @@ mod tests {
             oauth_refresh_token: None,
             profile_versions: vec![],
             compliance_source_mode: Default::default(),
+            per_year_forms: Default::default(),
             profile_pin_hash: None,
             totp_secret: None,
             tax_classification: None,
@@ -560,6 +564,7 @@ mod tests {
             taxpayer_type: TaxpayerType::Individual,
             is_vat_registered: false,
             business_start_date: None,
+            birth_date: None,
             is_archived: false,
             email_tracking_enabled: false,
             email_auth_method: crate::profile::EmailAuthMethod::AppPassword,
@@ -571,6 +576,7 @@ mod tests {
             oauth_refresh_token: None,
             profile_versions: vec![],
             compliance_source_mode: Default::default(),
+            per_year_forms: Default::default(),
             profile_pin_hash: None,
             totp_secret: None,
             tax_classification: None,
@@ -671,6 +677,7 @@ mod tests {
             taxpayer_type: TaxpayerType::Individual,
             is_vat_registered: false,
             business_start_date: None,
+            birth_date: None,
             is_archived: false,
             email_tracking_enabled: false,
             email_auth_method: crate::profile::EmailAuthMethod::AppPassword,
@@ -682,6 +689,7 @@ mod tests {
             oauth_refresh_token: None,
             profile_versions: vec![],
             compliance_source_mode: Default::default(),
+            per_year_forms: Default::default(),
             profile_pin_hash: None,
             totp_secret: None,
             tax_classification: None,
@@ -742,7 +750,7 @@ mod tests {
         assert!((0, 0, 1) < (0, 1, 0));
         assert!((0, 1, 0) < (1, 0, 0));
         assert!((0, 0, 1) < (0, 2, 0));
-        assert!(!((0, 0, 1) < (0, 0, 1))); // equal, not less
+        assert!((0, 0, 1) >= (0, 0, 1));
         assert!((1, 0, 0) < (1, 0, 1));
     }
 }

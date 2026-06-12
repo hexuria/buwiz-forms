@@ -1,3 +1,4 @@
+use chrono::Datelike;
 use gpui::prelude::*;
 use gpui::*;
 use gpui_component::button::{Button, ButtonVariants};
@@ -23,6 +24,8 @@ pub struct FilterState {
     pub available_quarters: Vec<String>,
     pub available_months: Vec<String>,
     pub focus_handle: FocusHandle,
+    pub profile_registration_date: Option<chrono::NaiveDate>,
+    pub selected_year: u16,
 }
 
 #[allow(dead_code)]
@@ -86,6 +89,8 @@ impl FilterState {
                 "Dec".to_string(),
             ],
             focus_handle: cx.focus_handle(),
+            profile_registration_date: None,
+            selected_year: chrono::Local::now().date_naive().year() as u16,
         }
     }
 
@@ -104,22 +109,67 @@ impl FilterState {
         self.active_chips.iter().any(|c| c.group == "Annual")
     }
 
+    pub fn month_label_to_num(label: &str) -> Option<u32> {
+        match label {
+            "Jan" => Some(1),
+            "Feb" => Some(2),
+            "Mar" => Some(3),
+            "Apr" => Some(4),
+            "May" => Some(5),
+            "Jun" => Some(6),
+            "Jul" => Some(7),
+            "Aug" => Some(8),
+            "Sep" => Some(9),
+            "Oct" => Some(10),
+            "Nov" => Some(11),
+            "Dec" => Some(12),
+            _ => None,
+        }
+    }
+
     /// Update the available form types based on the active profile.
     pub fn update_for_profile(
         &mut self,
         profile: &bir_core::profile::TaxpayerProfile,
         year: u16,
+        available_form_types: Vec<String>,
         cx: &mut Context<Self>,
     ) {
-        let applicable_form_codes =
-            bir_core::integration::recurring_obligation_forms_for_profile_and_year(profile, year);
+        self.profile_registration_date = profile.business_start_date;
+        self.selected_year = year;
 
-        self.available_form_types = applicable_form_codes;
+        self.available_form_types = available_form_types;
 
-        // Prune chips that reference forms no longer applicable
+        // Prune chips that reference forms no longer applicable, or months/quarters before registration
         let before_len = self.active_chips.len();
-        self.active_chips
-            .retain(|c| c.group != "Form Type" || self.available_form_types.contains(&c.label));
+        self.active_chips.retain(|c| {
+            if c.group == "Form Type" {
+                return self.available_form_types.contains(&c.label);
+            }
+            if let Some(reg_d) = self.profile_registration_date {
+                use chrono::Datelike;
+                if self.selected_year == reg_d.year() as u16 {
+                    if c.group == "Quarter" {
+                        let q_num = c
+                            .label
+                            .strip_prefix('Q')
+                            .and_then(|n| n.parse::<u32>().ok())
+                            .unwrap_or(1);
+                        let reg_q = (reg_d.month() - 1) / 3 + 1;
+                        if q_num < reg_q {
+                            return false;
+                        }
+                    }
+                    if c.group == "Month" {
+                        let m_num = Self::month_label_to_num(&c.label).unwrap_or(1);
+                        if m_num < reg_d.month() {
+                            return false;
+                        }
+                    }
+                }
+            }
+            true
+        });
 
         if self.active_chips.len() != before_len {
             let query = self.input_state.read(cx).value().to_string();
@@ -405,6 +455,19 @@ impl FilterState {
                                     .iter()
                                     .any(|c| c.id == format!("quarter_{}", q));
                                 let q_clone = q.clone();
+                                let mut is_disabled = false;
+                                if let Some(reg_d) = state.profile_registration_date {
+                                    if state.selected_year == reg_d.year() as u16 {
+                                        let q_num = q
+                                            .strip_prefix('Q')
+                                            .and_then(|n| n.parse::<u32>().ok())
+                                            .unwrap_or(1);
+                                        let reg_q = (reg_d.month() - 1) / 3 + 1;
+                                        if q_num < reg_q {
+                                            is_disabled = true;
+                                        }
+                                    }
+                                }
                                 div()
                                     .id(format!("popover_q_{}", q))
                                     .flex_1()
@@ -413,38 +476,47 @@ impl FilterState {
                                     .py_1p5()
                                     .text_sm()
                                     .rounded_md()
-                                    .cursor_pointer()
-                                    .when(is_active, |s| {
-                                        s.bg(cx.theme().primary)
-                                            .text_color(cx.theme().primary_foreground)
-                                            .font_weight(FontWeight::BOLD)
+                                    .when(is_disabled, |s| {
+                                        s.text_color(cx.theme().border)
+                                            .bg(cx.theme().secondary.opacity(0.4))
                                     })
-                                    .when(!is_active, |s| {
-                                        s.bg(cx.theme().secondary)
-                                            .text_color(cx.theme().secondary_foreground)
-                                            .hover(|s| s.bg(cx.theme().accent))
-                                    })
-                                    .on_click({
-                                        let entity = entity.clone();
-                                        move |_, _, cx| {
-                                            entity.update(cx, |this, cx| {
-                                                if is_active {
-                                                    this.remove_chip(
-                                                        &format!("quarter_{}", q_clone),
-                                                        cx,
-                                                    );
-                                                } else {
-                                                    this.add_chip(
-                                                        FilterChip {
-                                                            id: format!("quarter_{}", q_clone),
-                                                            label: q_clone.clone(),
-                                                            group: "Quarter".to_string(),
-                                                        },
-                                                        cx,
-                                                    );
+                                    .when(!is_disabled, |s| {
+                                        s.cursor_pointer()
+                                            .when(is_active, |s| {
+                                                s.bg(cx.theme().primary)
+                                                    .text_color(cx.theme().primary_foreground)
+                                                    .font_weight(FontWeight::BOLD)
+                                            })
+                                            .when(!is_active, |s| {
+                                                s.bg(cx.theme().secondary)
+                                                    .text_color(cx.theme().secondary_foreground)
+                                                    .hover(|s| s.bg(cx.theme().accent))
+                                            })
+                                            .on_click({
+                                                let entity = entity.clone();
+                                                move |_, _, cx| {
+                                                    entity.update(cx, |this, cx| {
+                                                        if is_active {
+                                                            this.remove_chip(
+                                                                &format!("quarter_{}", q_clone),
+                                                                cx,
+                                                            );
+                                                        } else {
+                                                            this.add_chip(
+                                                                FilterChip {
+                                                                    id: format!(
+                                                                        "quarter_{}",
+                                                                        q_clone
+                                                                    ),
+                                                                    label: q_clone.clone(),
+                                                                    group: "Quarter".to_string(),
+                                                                },
+                                                                cx,
+                                                            );
+                                                        }
+                                                    });
                                                 }
-                                            });
-                                        }
+                                            })
                                     })
                                     .child(q)
                             })),
@@ -472,6 +544,15 @@ impl FilterState {
                                 let is_active =
                                     active_chips.iter().any(|c| c.id == format!("month_{}", m));
                                 let m_clone = m.clone();
+                                let mut is_disabled = false;
+                                if let Some(reg_d) = state.profile_registration_date {
+                                    if state.selected_year == reg_d.year() as u16 {
+                                        let m_num = Self::month_label_to_num(&m).unwrap_or(1);
+                                        if m_num < reg_d.month() {
+                                            is_disabled = true;
+                                        }
+                                    }
+                                }
                                 div()
                                     .id(format!("popover_m_{}", m))
                                     .w(px(60.))
@@ -480,38 +561,47 @@ impl FilterState {
                                     .py_1p5()
                                     .text_xs()
                                     .rounded_md()
-                                    .cursor_pointer()
-                                    .when(is_active, |s| {
-                                        s.bg(cx.theme().primary)
-                                            .text_color(cx.theme().primary_foreground)
-                                            .font_weight(FontWeight::BOLD)
+                                    .when(is_disabled, |s| {
+                                        s.text_color(cx.theme().border)
+                                            .bg(cx.theme().secondary.opacity(0.4))
                                     })
-                                    .when(!is_active, |s| {
-                                        s.bg(cx.theme().secondary)
-                                            .text_color(cx.theme().secondary_foreground)
-                                            .hover(|s| s.bg(cx.theme().accent))
-                                    })
-                                    .on_click({
-                                        let entity = entity.clone();
-                                        move |_, _, cx| {
-                                            entity.update(cx, |this, cx| {
-                                                if is_active {
-                                                    this.remove_chip(
-                                                        &format!("month_{}", m_clone),
-                                                        cx,
-                                                    );
-                                                } else {
-                                                    this.add_chip(
-                                                        FilterChip {
-                                                            id: format!("month_{}", m_clone),
-                                                            label: m_clone.clone(),
-                                                            group: "Month".to_string(),
-                                                        },
-                                                        cx,
-                                                    );
+                                    .when(!is_disabled, |s| {
+                                        s.cursor_pointer()
+                                            .when(is_active, |s| {
+                                                s.bg(cx.theme().primary)
+                                                    .text_color(cx.theme().primary_foreground)
+                                                    .font_weight(FontWeight::BOLD)
+                                            })
+                                            .when(!is_active, |s| {
+                                                s.bg(cx.theme().secondary)
+                                                    .text_color(cx.theme().secondary_foreground)
+                                                    .hover(|s| s.bg(cx.theme().accent))
+                                            })
+                                            .on_click({
+                                                let entity = entity.clone();
+                                                move |_, _, cx| {
+                                                    entity.update(cx, |this, cx| {
+                                                        if is_active {
+                                                            this.remove_chip(
+                                                                &format!("month_{}", m_clone),
+                                                                cx,
+                                                            );
+                                                        } else {
+                                                            this.add_chip(
+                                                                FilterChip {
+                                                                    id: format!(
+                                                                        "month_{}",
+                                                                        m_clone
+                                                                    ),
+                                                                    label: m_clone.clone(),
+                                                                    group: "Month".to_string(),
+                                                                },
+                                                                cx,
+                                                            );
+                                                        }
+                                                    });
                                                 }
-                                            });
-                                        }
+                                            })
                                     })
                                     .child(m)
                             })),

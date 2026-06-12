@@ -4,12 +4,16 @@ This backlog covers PDFs now organized under `/Users/uriah/Downloads/forms`.
 It is intentionally separate from the six priority forms so the app does not
 present downloaded source material as implemented filing support.
 
+> Updated for the June 2026 Forms Set refactor: applicability belongs to
+> confirmed COR/profile Forms Sets and registry filters. The work below is
+> limited to typed draft, rendering, and filing support.
+
 ## Withholding
 
 - `0619E`, `0619F`, `1600-PTv2018`, `1600-VTv2018`, `1601-FQ`, `1601EQv2019`,
   `1602Qv2019`, `1603Qv2018`, `1604Cv2018`, `1604Fv2018`, `1606v2018`,
   `1621v2019`, `2316v2021`
-- Next action: align temporal form codes and modern variants before generating
+- Next action: align registry form codes and modern variants before generating
   typed drafts. `0619F`, `1601FQ`, and `1604F` are especially important because
   they close gaps in final withholding flows.
 
@@ -22,8 +26,8 @@ present downloaded source material as implemented filing support.
 ## Annual and Quarterly Income Tax
 
 - `1701Av2018`, `1701MSv2024`, `1702EXv2018`, `1702Qv2018`
-- Next action: add temporal eligibility and exclusive-group behavior before
-  exposing them in the dashboard as app-supported drafts.
+- Next action: complete typed draft/print support. Applicability and annual ITR
+  conflicts are already handled by the Forms Set resolver.
 
 ## One-Time, Capital Gains, DST, and Informational
 
@@ -35,4 +39,4 @@ present downloaded source material as implemented filing support.
 
 - `2200Cv2018`, `2200Mv2018`
 - Next action: do not start typed implementation until excise taxpayer facts and
-  product-specific triggers exist in the temporal engine.
+  product-specific Forms Set filters exist.

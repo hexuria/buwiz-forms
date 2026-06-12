@@ -102,7 +102,7 @@ After generating code for any form, these files must be updated:
    - Add variant to `FormDraft` enum
    - Implement `form_code()`, `status()`, `validate()` match arms
 
-2. **`crates/bir-core/src/temporal/support_level.rs`**
+2. **`crates/bir-core/src/forms/support_level.rs`**
    - Add form code to `FILEABLE_FORM_CODES`
    - Add entry to `fileable_form_type_id()`
 

@@ -75,6 +75,35 @@ fn create_test_profile(tin_str: &str) -> TaxpayerProfile {
 }
 
 #[test]
+fn closest_prior_forms_year_returns_latest_active_unconfigured_year() {
+    let mut profile = create_test_profile("010558054000");
+    profile.per_year_forms.insert(
+        2023,
+        PerYearFormsSet::from_codes(2023, ["1701"], FormSetSource::Manual),
+    );
+    profile.per_year_forms.insert(
+        2025,
+        PerYearFormsSet::from_codes(2025, ["1701Q"], FormSetSource::Manual),
+    );
+
+    assert_eq!(profile.closest_prior_forms_year(2026), Some(2025));
+}
+
+#[test]
+fn closest_prior_forms_year_is_hidden_when_destination_has_entries() {
+    let mut profile = create_test_profile("010558054000");
+    profile.per_year_forms.insert(
+        2025,
+        PerYearFormsSet::from_codes(2025, ["1701"], FormSetSource::Manual),
+    );
+    let mut destination = PerYearFormsSet::from_codes(2026, ["1701Q"], FormSetSource::Manual);
+    destination.entries[0].active = false;
+    profile.per_year_forms.insert(2026, destination);
+
+    assert_eq!(profile.closest_prior_forms_year(2026), None);
+}
+
+#[test]
 fn test_per_year_forms_as_single_source_of_truth() {
     temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
         let temp_file = NamedTempFile::new().unwrap();
@@ -438,7 +467,7 @@ fn test_obligation_filtering_individual_vs_corporate_and_vat() {
         let saved_vat_corp = db.save_profile(vat_corp).unwrap();
         let resolved_vat_corp = resolve_profile_obligations_for_year(&saved_vat_corp, 2026);
 
-        // VAT Corp should have 2550Q/2550M but NOT 2551Q (percentage tax)
+        // VAT Corp should have quarterly VAT but not percentage tax.
         assert!(resolved_vat_corp.form_codes.contains(&"2550Q".to_string()));
         assert!(!resolved_vat_corp.form_codes.contains(&"2551Q".to_string()));
     });

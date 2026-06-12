@@ -63,9 +63,3 @@ tokio = { workspace = true, features = ["test-util"] }
 [features]
 mas_build = []
 erp-integration = []
-
-[build-dependencies]
-toml = "0.8"
-serde = { workspace = true }
-serde_json = { workspace = true }
-sha2 = { workspace = true }

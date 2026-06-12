@@ -426,6 +426,28 @@ impl TaxpayerProfile {
         self.per_year_forms.get(&year)
     }
 
+    /// Returns the closest earlier year with at least one active form, but only
+    /// when the destination year has not been configured yet.
+    pub fn closest_prior_forms_year(&self, year: u16) -> Option<u16> {
+        if self
+            .per_year_forms
+            .get(&year)
+            .is_some_and(|set| !set.entries.is_empty())
+        {
+            return None;
+        }
+
+        self.per_year_forms
+            .range(..year)
+            .rev()
+            .find_map(|(prior_year, set)| {
+                set.entries
+                    .iter()
+                    .any(|entry| entry.active)
+                    .then_some(*prior_year)
+            })
+    }
+
     pub fn active_form_codes_for_year(&self, year: u16) -> Vec<String> {
         use crate::forms::FormSetSource;
         use std::collections::BTreeSet;

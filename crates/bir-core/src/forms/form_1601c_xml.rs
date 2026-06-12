@@ -334,6 +334,7 @@ mod tests {
             oauth_refresh_token: None,
             profile_versions: vec![],
             compliance_source_mode: Default::default(),
+            per_year_forms: Default::default(),
             tax_classification: None,
             eopt_tier: None,
             is_bmbe: false,
@@ -357,6 +358,7 @@ mod tests {
         };
 
         let mut draft = Form1601CDraft::new_from_profile(&profile, 2026, 5);
+        draft.auto_compute_penalties = false;
         draft.tax_14_total_compensation = 100_000.0;
         draft.tax_17_13th_month_pay = 20_000.0;
         draft.tax_25_total_taxes_withheld = 15_000.0;

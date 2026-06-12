@@ -1060,6 +1060,12 @@ pub(crate) fn registered_tax_types_allow_form(version: &TaxProfileVersion, code:
         if !tax_types.contains(&RegisteredTaxType::IncomeTax) {
             return false;
         }
+        // Generic 1702 is retained for exact COR evidence and explicit manual
+        // includes. Broad tax-type fallback must choose the classification-
+        // specific annual return instead of inventing both 1702 and 1702RT.
+        if code == "1702" {
+            return false;
+        }
         match version.taxpayer_type {
             crate::profile::TaxpayerType::Individual
             | crate::profile::TaxpayerType::Estate

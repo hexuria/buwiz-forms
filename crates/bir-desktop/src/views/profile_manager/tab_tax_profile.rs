@@ -385,41 +385,114 @@ impl ProfileManagerView {
     }
 
     fn render_ocr_timeline_view(&self, cx: &Context<Self>) -> Div {
-        let mut rows = div()
+        // ── Sub-tab bar ─────────────────────────────────────────────────────
+        let sub_tab_bar = div()
             .flex()
-            .flex_col()
-            .border_1()
-            .border_color(cx.theme().border);
-        if self.stored_profile_versions.is_empty() {
-            rows = rows.child(
+            .items_center()
+            .gap_1()
+            .p_1()
+            .rounded_lg()
+            .bg(cx.theme().secondary)
+            .child(
                 div()
-                    .p_4()
+                    .id("cor_sub_tab_0")
+                    .px_4()
+                    .py_1p5()
+                    .rounded_md()
+                    .cursor_pointer()
                     .text_sm()
-                    .text_color(cx.theme().muted_foreground)
-                    .child("No COR uploads or manual drafts yet."),
-            );
-        } else {
-            rows = rows.child(
+                    .when(self.cor_sub_tab == 0, |s| {
+                        s.bg(cx.theme().background)
+                            .shadow_sm()
+                            .text_color(cx.theme().foreground)
+                            .font_weight(FontWeight::SEMIBOLD)
+                    })
+                    .when(self.cor_sub_tab != 0, |s| {
+                        s.hover(|s| s.bg(cx.theme().muted))
+                            .text_color(cx.theme().muted_foreground)
+                            .font_weight(FontWeight::MEDIUM)
+                    })
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.cor_sub_tab = 0;
+                        cx.notify();
+                    }))
+                    .child("Uploads"),
+            )
+            .child(
                 div()
-                    .flex()
-                    .gap_2()
-                    .px_3()
-                    .py_2()
-                    .bg(cx.theme().secondary)
-                    .text_xs()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(cx.theme().muted_foreground)
-                    .child(div().w(px(240.)).flex_shrink_0().child("Document Name"))
-                    .child(div().flex_1().flex_basis(px(0.)).child("Upload Date"))
-                    .child(div().flex_1().flex_basis(px(0.)).child("Extracted Forms"))
-                    .child(div().flex_1().flex_basis(px(0.)).child("Status"))
-                    .child(div().flex_1().flex_basis(px(0.)).child("Actions")),
+                    .id("cor_sub_tab_1")
+                    .px_4()
+                    .py_1p5()
+                    .rounded_md()
+                    .cursor_pointer()
+                    .text_sm()
+                    .when(self.cor_sub_tab == 1, |s| {
+                        s.bg(cx.theme().background)
+                            .shadow_sm()
+                            .text_color(cx.theme().foreground)
+                            .font_weight(FontWeight::SEMIBOLD)
+                    })
+                    .when(self.cor_sub_tab != 1, |s| {
+                        s.hover(|s| s.bg(cx.theme().muted))
+                            .text_color(cx.theme().muted_foreground)
+                            .font_weight(FontWeight::MEDIUM)
+                    })
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.cor_sub_tab = 1;
+                        cx.notify();
+                    }))
+                    .child("OCR Settings"),
             );
 
+        // ── Sub-tab 1: OCR Settings ─────────────────────────────────────────
+        if self.cor_sub_tab == 1 {
+            return div()
+                .flex()
+                .flex_col()
+                .gap_6()
+                .child(
+                    div()
+                        .text_2xl()
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(cx.theme().foreground)
+                        .child("COR — Gemini OCR Settings"),
+                )
+                .child(sub_tab_bar)
+                .child(self.render_cor_ocr_settings(cx));
+        }
+
+        // ── Sub-tab 0: Uploads (Card View) ──────────────────────────────────
+        let mut cards = div().flex().flex_col().gap_3();
+
+        if self.stored_profile_versions.is_empty() {
+            cards = cards.child(
+                div()
+                    .p_6()
+                    .rounded_lg()
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .bg(cx.theme().secondary.opacity(0.5))
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("No COR uploads or manual drafts yet."),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("Use \"Add +\" to create a manual COR draft."),
+                    ),
+            );
+        } else {
             for version in &self.stored_profile_versions {
-                let version_id = version.id.clone();
                 let version_id_for_review = version.id.clone();
-                let version_id_for_archive = version.id.clone();
                 let version_id_for_delete = version.id.clone();
                 let first_document = version.evidence.first();
                 let document_name = first_document
@@ -429,21 +502,19 @@ impl ProfileManagerView {
                     .and_then(|document| document.uploaded_at)
                     .map(|uploaded_at| uploaded_at.format("%b %d, %Y %H:%M").to_string())
                     .unwrap_or_else(|| "Manual draft".to_string());
-                let extracted_forms = first_document
-                    .map(|document| document.extracted_form_codes.join(", "))
-                    .filter(|forms| !forms.trim().is_empty())
+
+                let extracted_forms: Vec<String> = first_document
+                    .map(|document| document.extracted_form_codes.clone())
+                    .filter(|forms| !forms.is_empty())
                     .unwrap_or_else(|| {
                         let mut forms = version
                             .registered_tax_types
                             .iter()
                             .map(Self::registered_tax_type_label)
+                            .map(|s| s.to_string())
                             .collect::<Vec<_>>();
-                        if forms.is_empty() {
-                            "No forms captured".to_string()
-                        } else {
-                            forms.sort();
-                            forms.join(", ")
-                        }
+                        forms.sort();
+                        forms
                     });
 
                 let (status_label, bg_color, text_color) = match version.status {
@@ -460,69 +531,116 @@ impl ProfileManagerView {
                     }
                 };
 
-                let is_selected = self.ocr_selected_version_id.as_deref() == Some(&version.id);
-                rows = rows.child(
+                let action_label =
+                    if version.status == bir_core::profile::TaxProfileVersionStatus::Draft {
+                        "Review"
+                    } else {
+                        "View Data"
+                    };
+
+                // Form tag chips
+                let form_chips = div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_1()
+                    .children(extracted_forms.iter().map(|form_code| {
+                        div()
+                            .px_2()
+                            .py(px(2.))
+                            .rounded_md()
+                            .bg(cx.theme().secondary)
+                            .border_1()
+                            .border_color(cx.theme().border)
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(cx.theme().foreground)
+                                    .child(form_code.clone()),
+                            )
+                    }))
+                    .when(extracted_forms.is_empty(), |this| {
+                        this.child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child("No forms captured"),
+                        )
+                    });
+
+                cards = cards.child(
                     div()
                         .flex()
+                        .flex_col()
                         .gap_2()
-                        .px_3()
-                        .py_3()
-                        .border_t_1()
+                        .p_4()
+                        .rounded_lg()
+                        .border_1()
                         .border_color(cx.theme().border)
-                        .items_center()
-                        .when(is_selected, |this| this.bg(cx.theme().accent))
+                        .bg(cx.theme().background)
+                        .hover(|s| s.bg(cx.theme().accent))
+                        // Row 1: Document name + status badge
                         .child(
                             div()
-                                .w(px(240.))
-                                .flex_shrink_0()
                                 .flex()
-                                .gap_2()
                                 .items_center()
+                                .justify_between()
+                                .gap_2()
                                 .child(
                                     div()
-                                        .text_sm()
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .text_color(cx.theme().foreground)
-                                        .overflow_hidden()
-                                        .text_ellipsis()
-                                        .child(document_name),
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .min_w_0()
+                                        .child(
+                                            Icon::new(IconName::File)
+                                                .small()
+                                                .text_color(cx.theme().muted_foreground),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::SEMIBOLD)
+                                                .text_color(cx.theme().foreground)
+                                                .overflow_hidden()
+                                                .text_ellipsis()
+                                                .child(document_name),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .flex_shrink_0()
+                                        .px_2()
+                                        .py_1()
+                                        .rounded_full()
+                                        .bg(bg_color)
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .font_weight(FontWeight::SEMIBOLD)
+                                                .text_color(text_color)
+                                                .child(status_label),
+                                        ),
                                 ),
                         )
+                        // Row 2: Upload date
                         .child(
                             div()
-                                .flex_1()
-                                .flex_basis(px(0.))
-                                .text_sm()
+                                .text_xs()
                                 .text_color(cx.theme().muted_foreground)
                                 .child(uploaded_at),
                         )
+                        // Row 3: Extracted forms chips
+                        .child(form_chips)
+                        // Row 4: Actions
                         .child(
                             div()
-                                .flex_1()
-                                .flex_basis(px(0.))
-                                .text_sm()
-                                .text_color(cx.theme().foreground)
-                                .overflow_hidden()
-                                .text_ellipsis()
-                                .child(extracted_forms),
-                        )
-                        .child(
-                            div().flex_1().flex_basis(px(0.)).flex().child(
-                                div().px_2().py_1().rounded_full().bg(bg_color).child(
-                                    div()
-                                        .text_xs()
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .text_color(text_color)
-                                        .child(status_label),
-                                ),
-                            ),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .flex_basis(px(0.))
                                 .flex()
-                                .gap_2()
+                                .justify_end()
+                                .gap_3()
+                                .pt_1()
+                                .border_t_1()
+                                .border_color(cx.theme().border)
                                 .child(
                                     div()
                                         .id(format!("action_{}", version_id_for_review))
@@ -544,15 +662,7 @@ impl ProfileManagerView {
                                             }
                                             cx.notify();
                                         }))
-                                        .child(
-                                            if version.status
-                                                == bir_core::profile::TaxProfileVersionStatus::Draft
-                                            {
-                                                "Review"
-                                            } else {
-                                                "View Data"
-                                            },
-                                        ),
+                                        .child(action_label),
                                 )
                                 .child(
                                     div()
@@ -614,48 +724,9 @@ impl ProfileManagerView {
                     .text_2xl()
                     .font_weight(FontWeight::BOLD)
                     .text_color(cx.theme().foreground)
-                    .child("Taxpayer Profile - OCR Extraction Timeline"),
+                    .child("COR — Upload / Manual Timeline"),
             )
-            .child(self.render_cor_ocr_settings(cx))
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .p_10()
-                    .gap_4()
-                    .rounded_xl()
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .bg(cx.theme().secondary)
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("Upload New Document (PDF, JPG, PNG) - Max 10MB"),
-                    )
-                    .when(self.is_uploading_cor, |this| {
-                        this.child(
-                            div().flex().items_center().gap_2().child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().primary)
-                                    .child("Uploading & Extracting..."),
-                            ),
-                        )
-                    })
-                    .when(!self.is_uploading_cor, |this| {
-                        this.child(
-                            gpui_component::button::Button::new("ocr_upload_cor_timeline")
-                                .label("Browse Files")
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.upload_cor_document(window, cx);
-                                    cx.notify();
-                                })),
-                        )
-                    }),
-            )
+            .child(sub_tab_bar)
             .child(
                 div()
                     .flex()
@@ -663,12 +734,30 @@ impl ProfileManagerView {
                     .gap_3()
                     .child(
                         div()
-                            .text_xl()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(cx.theme().foreground)
-                            .child("OCR Upload History"),
+                            .flex()
+                            .justify_between()
+                            .items_center()
+                            .child(
+                                div()
+                                    .text_xl()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(cx.theme().foreground)
+                                    .child("COR Upload History"),
+                            )
+                            .child(
+                                gpui_component::button::Button::new("add_manual_cor_btn")
+                                    .label("Add +")
+                                    .small()
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.sync_current_profile_to_cor_draft(window, cx);
+                                        this.save_message = Some(
+                                            "COR draft created from current profile fields. Review and confirm it before saving.".into(),
+                                        );
+                                        cx.notify();
+                                    })),
+                            ),
                     )
-                    .child(rows),
+                    .child(cards),
             )
     }
 
@@ -811,11 +900,12 @@ impl ProfileManagerView {
                     )
             );
 
-        let left_col = div().flex().flex_col().flex_1().w_full().h(px(600.)).child(
+        let left_col = div().flex().flex_col().flex_1().w_full().h_full().child(
             div()
                 .flex_1()
                 .w_full()
                 .h_full()
+                .min_h(px(600.))
                 .bg(cx.theme().secondary)
                 .rounded_md()
                 .border_1()
@@ -832,23 +922,50 @@ impl ProfileManagerView {
                             .flex()
                             .flex_col()
                             .items_center()
+                            .justify_center()
                             .gap_4()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("Document preview not available in-app yet."),
-                            )
+                            .when(document_id_for_open.is_none(), |this| {
+                                let ver_id = version_id_for_review.clone();
+                                this.child(
+                                    div().flex().flex_col().items_center().gap_3().child(
+                                        gpui_component::button::Button::new("ocr_center_upload")
+                                            .label("Upload COR")
+                                            .on_click(cx.listener(move |this, _, window, cx| {
+                                                this.upload_cor_document(
+                                                    Some(ver_id.clone()),
+                                                    window,
+                                                    cx,
+                                                );
+                                                cx.notify();
+                                            })),
+                                    ),
+                                )
+                            })
                             .when(document_id_for_open.is_some(), |this| {
                                 let doc_id = document_id_for_open.unwrap();
                                 let ver_id = version_id_for_review.clone();
                                 this.child(
-                                    gpui_component::button::Button::new("ocr_open_ext")
-                                        .label("Open Externally")
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            this.open_cor_document(&ver_id, &doc_id);
-                                            cx.notify();
-                                        })),
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .items_center()
+                                        .gap_4()
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child(
+                                                    "Document preview not available in-app yet.",
+                                                ),
+                                        )
+                                        .child(
+                                            gpui_component::button::Button::new("ocr_open_ext")
+                                                .label("Open Externally")
+                                                .on_click(cx.listener(move |this, _, _, cx| {
+                                                    this.open_cor_document(&ver_id, &doc_id);
+                                                    cx.notify();
+                                                })),
+                                        ),
                                 )
                             })
                             .into_any_element()
@@ -962,11 +1079,10 @@ impl ProfileManagerView {
                     .child(
                         div()
                             .flex()
+                            .flex_col()
                             .gap_3()
                             .child(
                                 div()
-                                    .flex_1()
-                                    .min_w_0()
                                     .flex()
                                     .flex_col()
                                     .gap_1()
@@ -977,12 +1093,10 @@ impl ProfileManagerView {
                                         }),
                                     )
                                     .child(Self::field_label("TIN", cx))
-                                    .child(Input::new(&self.cor_tin_input)),
+                                    .child(self.cor_tin_input.clone().into_any_element()),
                             )
                             .child(
                                 div()
-                                    .flex_1()
-                                    .min_w_0()
                                     .flex()
                                     .flex_col()
                                     .gap_1()
@@ -993,7 +1107,7 @@ impl ProfileManagerView {
                                         }),
                                     )
                                     .child(Self::field_label("RDO Code", cx))
-                                    .child(Input::new(&self.cor_rdo_code_input)),
+                                    .child(Combobox::new(&self.cor_rdo_select)),
                             ),
                     )
                     .child(
@@ -1157,6 +1271,12 @@ impl ProfileManagerView {
                                     .flex()
                                     .flex_col()
                                     .gap_1()
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|this, _, _, cx| {
+                                            this.focus_ocr_field("registration_date", cx);
+                                        }),
+                                    )
                                     .child(Self::field_label("Registration Date", cx))
                                     .child(Input::new(&self.cor_registration_date_input)),
                             ),
@@ -1185,6 +1305,122 @@ impl ProfileManagerView {
                                     .child(Self::field_label("Effective Until", cx))
                                     .child(Input::new(&self.cor_effective_until_input)),
                             ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_3()
+                            .pt_3()
+                            .border_t_1()
+                            .border_color(cx.theme().border)
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(cx.theme().foreground)
+                                    .child("Tax Classification & Status"),
+                            )
+                            .child(
+                                div()
+                                    .grid()
+                                    .grid_cols(2)
+                                    .gap_3()
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .gap_1()
+                                            .child(Self::field_label("Taxpayer Type", cx))
+                                            .child(Combobox::new(&self.cor_taxpayer_type_select)),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .gap_1()
+                                            .child(Self::field_label("Tax Classification", cx))
+                                            .child(Combobox::new(&self.cor_tax_classification_select)),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .gap_1()
+                                            .child(Self::field_label("EOPT Tier", cx))
+                                            .child(Combobox::new(&self.cor_eopt_tier_select)),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .gap_1()
+                                            .child(Self::field_label("Registration Status", cx))
+                                            .child(Combobox::new(&self.cor_registration_status_select)),
+                                    ),
+                            )
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_2()
+                            .pt_3()
+                            .border_t_1()
+                            .border_color(cx.theme().border)
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(cx.theme().foreground)
+                                    .child("Registered Tax Types"),
+                            )
+                            .child(
+                                div()
+                                    .grid()
+                                    .grid_cols(2)
+                                    .gap_2()
+                                    .child(self.render_registered_tax_type_toggle(
+                                        &version.id,
+                                        bir_core::profile::RegisteredTaxType::IncomeTax,
+                                        cx,
+                                    ))
+                                    .child(self.render_registered_tax_type_toggle(
+                                        &version.id,
+                                        bir_core::profile::RegisteredTaxType::ValueAddedTax,
+                                        cx,
+                                    ))
+                                    .child(self.render_registered_tax_type_toggle(
+                                        &version.id,
+                                        bir_core::profile::RegisteredTaxType::PercentageTax,
+                                        cx,
+                                    ))
+                                    .child(self.render_registered_tax_type_toggle(
+                                        &version.id,
+                                        bir_core::profile::RegisteredTaxType::RegistrationFee,
+                                        cx,
+                                    ))
+                                    .child(self.render_registered_tax_type_toggle(
+                                        &version.id,
+                                        bir_core::profile::RegisteredTaxType::WithholdingExpanded,
+                                        cx,
+                                    ))
+                                    .child(self.render_registered_tax_type_toggle(
+                                        &version.id,
+                                        bir_core::profile::RegisteredTaxType::WithholdingCompensation,
+                                        cx,
+                                    ))
+                                    .child(self.render_registered_tax_type_toggle(
+                                        &version.id,
+                                        bir_core::profile::RegisteredTaxType::WithholdingFinal,
+                                        cx,
+                                    ))
+                                    .child(self.render_registered_tax_type_toggle(
+                                        &version.id,
+                                        bir_core::profile::RegisteredTaxType::ExciseTax,
+                                        cx,
+                                    )),
+                            )
                     ),
             )
             // Apply button to update in-memory version
@@ -1202,16 +1438,22 @@ impl ProfileManagerView {
                 ),
             );
 
-        div().flex().flex_col().gap_6().w_full().child(header).child(
-            // Responsive 2-column layout using flex instead of grid
-            div()
-                .flex()
-                .flex_wrap()
-                .gap_6()
-                .w_full()
-                .child(div().flex_1().min_w(px(400.)).child(left_col))
-                .child(div().flex_1().min_w(px(400.)).child(right_col)),
-        )
+        div()
+            .flex()
+            .flex_col()
+            .gap_6()
+            .w_full()
+            .child(header)
+            .child(
+                // Responsive 2-column layout using flex instead of grid
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_6()
+                    .w_full()
+                    .child(div().flex_1().min_w(px(400.)).h_full().child(left_col))
+                    .child(div().flex_1().min_w(px(400.)).child(right_col)),
+            )
     }
     fn ocr_field(
         &self,
@@ -1333,6 +1575,7 @@ impl ProfileManagerView {
             oauth_refresh_token: None,
             profile_versions: self.stored_profile_versions.clone(),
             compliance_source_mode: bir_core::profile::ComplianceSourceMode::CorVersioned,
+            per_year_forms: std::collections::BTreeMap::new(),
         };
 
         let draft_preview_label = draft_version_id.and_then(|version_id| {
@@ -1525,97 +1768,6 @@ impl ProfileManagerView {
             })
     }
 
-    fn render_compliance_source_section(&self, cx: &Context<Self>) -> Div {
-        let is_smart = self.compliance_source_mode
-            == bir_core::profile::ComplianceSourceMode::TemporalSuggestion;
-        let is_cor =
-            self.compliance_source_mode == bir_core::profile::ComplianceSourceMode::CorVersioned;
-
-        div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .p_4()
-            .rounded_lg()
-            .border_1()
-            .border_color(cx.theme().border)
-            .bg(cx.theme().secondary)
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(cx.theme().foreground)
-                    .child("Compliance Source"),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(
-                        div()
-                            .id("compliance_source_smart")
-                            .flex_1()
-                            .px_3()
-                            .py_2()
-                            .rounded_md()
-                            .cursor_pointer()
-                            .text_sm()
-                            .when(is_smart, |s| {
-                                s.bg(cx.theme().primary)
-                                    .text_color(cx.theme().primary_foreground)
-                                    .font_weight(FontWeight::BOLD)
-                            })
-                            .when(!is_smart, |s| {
-                                s.bg(cx.theme().background)
-                                    .text_color(cx.theme().foreground)
-                                    .hover(|s| s.bg(cx.theme().accent))
-                            })
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.compliance_source_mode =
-                                    bir_core::profile::ComplianceSourceMode::TemporalSuggestion;
-                                cx.notify();
-                            }))
-                            .child("Use Smart Suggestions"),
-                    )
-                    .child(
-                        div()
-                            .id("compliance_source_cor")
-                            .flex_1()
-                            .px_3()
-                            .py_2()
-                            .rounded_md()
-                            .cursor_pointer()
-                            .text_sm()
-                            .when(is_cor, |s| {
-                                s.bg(cx.theme().primary)
-                                    .text_color(cx.theme().primary_foreground)
-                                    .font_weight(FontWeight::BOLD)
-                            })
-                            .when(!is_cor, |s| {
-                                s.bg(cx.theme().background)
-                                    .text_color(cx.theme().foreground)
-                                    .hover(|s| s.bg(cx.theme().accent))
-                            })
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.compliance_source_mode =
-                                    bir_core::profile::ComplianceSourceMode::CorVersioned;
-                                cx.notify();
-                            }))
-                            .child("Manage COR Timeline"),
-                    ),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(if is_smart {
-                        "Dashboard compliance is generated from the current flat profile and temporal tax rules."
-                    } else {
-                        "Confirmed COR/manual versions become the authority for dashboard forms and deadlines."
-                    }),
-            )
-    }
-
     fn render_cor_timeline_section(&self, cx: &Context<Self>) -> Div {
         let preview_year_text = self
             .cor_preview_year_input
@@ -1683,6 +1835,7 @@ impl ProfileManagerView {
             oauth_refresh_token: None,
             profile_versions: self.stored_profile_versions.clone(),
             compliance_source_mode: bir_core::profile::ComplianceSourceMode::CorVersioned,
+            per_year_forms: std::collections::BTreeMap::new(),
         };
         preview_profile.profile_versions = self.stored_profile_versions.clone();
         let draft_preview = self
@@ -2093,7 +2246,7 @@ impl ProfileManagerView {
                                     })
                                     .small()
                                     .on_click(cx.listener(|this, _, window, cx| {
-                                        this.upload_cor_document(window, cx);
+                                        this.upload_cor_document(None, window, cx);
                                         cx.notify();
                                     })),
                             )
@@ -2101,8 +2254,8 @@ impl ProfileManagerView {
                                 gpui_component::button::Button::new("sync_cor_from_profile")
                                     .label("Create Draft From Profile")
                                     .small()
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.sync_current_profile_to_cor_draft(cx);
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.sync_current_profile_to_cor_draft(window, cx);
                                         this.save_message = Some(
                                             "COR draft created from current profile fields. Review and confirm it before saving.".into(),
                                         );
@@ -2277,6 +2430,7 @@ impl ProfileManagerView {
             .child(
                 div()
                     .flex()
+                    .flex_wrap()
                     .items_center()
                     .justify_between()
                     .gap_3()
@@ -2285,6 +2439,8 @@ impl ProfileManagerView {
                             .flex()
                             .flex_col()
                             .gap_1()
+                            .flex_1()
+                            .min_w(px(200.))
                             .child(
                                 div()
                                     .text_sm()
@@ -2301,12 +2457,14 @@ impl ProfileManagerView {
                                     ),
                             ),
                     )
-                    .child(Self::render_checkbox(
-                        "gemini_ocr_enabled_toggle",
-                        "Enable Gemini OCR",
-                        self.gemini_ocr_enabled,
-                        cx,
-                    )),
+                    .child(
+                        div().flex_shrink_0().child(Self::render_checkbox(
+                            "gemini_ocr_enabled_toggle",
+                            "Enable Gemini OCR",
+                            self.gemini_ocr_enabled,
+                            cx,
+                        )),
+                    ),
             )
             .when(self.gemini_ocr_enabled, |this| {
                 this.child(
@@ -2453,20 +2611,127 @@ impl ProfileManagerView {
             )
             .child(
                 div()
-                    .grid()
-                    .grid_cols(2)
-                    .gap_2()
-                    .child(Input::new(&self.cor_version_label_input))
-                    .child(Input::new(&self.cor_tin_input))
-                    .child(Input::new(&self.cor_registration_date_input))
-                    .child(Input::new(&self.cor_effective_from_input))
-                    .child(Input::new(&self.cor_effective_until_input))
-                    .child(Input::new(&self.cor_registered_name_input))
-                    .child(Input::new(&self.cor_trade_name_input))
-                    .child(Input::new(&self.cor_rdo_code_input))
-                    .child(Input::new(&self.cor_registered_address_input))
-                    .child(Input::new(&self.cor_lob_code_input))
-                    .child(Input::new(&self.cor_lob_description_input)),
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(
+                        div()
+                            .grid()
+                            .grid_cols(2)
+                            .gap_2()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("Version Label", cx))
+                                    .child(Input::new(&self.cor_version_label_input)),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("Registration Date", cx))
+                                    .child(Input::new(&self.cor_registration_date_input)),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(Self::field_label("TIN", cx))
+                            .child(self.cor_tin_input.clone().into_any_element()),
+                    )
+                    .child(
+                        div()
+                            .grid()
+                            .grid_cols(2)
+                            .gap_2()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("Effective From", cx))
+                                    .child(Input::new(&self.cor_effective_from_input)),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("Effective Until", cx))
+                                    .child(Input::new(&self.cor_effective_until_input)),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .grid()
+                            .grid_cols(2)
+                            .gap_2()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("Registered Name", cx))
+                                    .child(Input::new(&self.cor_registered_name_input)),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("Trade Name", cx))
+                                    .child(Input::new(&self.cor_trade_name_input)),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .grid()
+                            .grid_cols(2)
+                            .gap_2()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("RDO Code", cx))
+                                    .child(Combobox::new(&self.cor_rdo_select)),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("Registered Address", cx))
+                                    .child(Input::new(&self.cor_registered_address_input)),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .grid()
+                            .grid_cols(2)
+                            .gap_2()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("Line of Business Code", cx))
+                                    .child(Input::new(&self.cor_lob_code_input)),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(Self::field_label("Line of Business Description", cx))
+                                    .child(Input::new(&self.cor_lob_description_input)),
+                            ),
+                    ),
             )
             .child(
                 div()
@@ -3168,5 +3433,734 @@ impl ProfileManagerView {
                     .text_color(cx.theme().foreground)
                     .child(label),
             )
+    }
+
+    fn seed_default_forms(
+        &self,
+        year: u16,
+        cx: &Context<Self>,
+    ) -> bir_core::forms::PerYearFormsSet {
+        let taxpayer_profile = self.current_profile(cx);
+        let default_codes = taxpayer_profile.applicable_forms_for_year(year);
+        bir_core::forms::PerYearFormsSet::from_codes(
+            year,
+            default_codes,
+            bir_core::forms::FormSetSource::Manual,
+        )
+    }
+
+    fn toggle_form_obligation(&mut self, code: String, cx: &mut Context<Self>) {
+        let year = self.forms_editor_year;
+        let mut set = self
+            .stored_per_year_forms
+            .get(&year)
+            .cloned()
+            .unwrap_or_else(|| self.seed_default_forms(year, cx));
+
+        if let Some(entry) = set.entries.iter_mut().find(|e| e.form_code == code) {
+            entry.active = !entry.active;
+        } else {
+            let mut new_entry = bir_core::forms::FormSetEntry::from_code(
+                code,
+                bir_core::forms::FormSetSource::Manual,
+            );
+            new_entry.active = true;
+            set.entries.push(new_entry);
+        }
+        self.stored_per_year_forms.insert(year, set);
+        cx.notify();
+    }
+
+    fn add_custom_form(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
+        let code = self
+            .forms_editor_new_code_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_uppercase();
+        if code.is_empty() {
+            return;
+        }
+
+        let reason = self
+            .forms_editor_new_reason_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+        let reason_opt = if reason.is_empty() {
+            None
+        } else {
+            Some(reason)
+        };
+
+        let freq_str = self
+            .forms_editor_new_frequency_select
+            .read(cx)
+            .selected_value(cx);
+        let frequency = match freq_str.as_str() {
+            "Monthly" => bir_core::forms::FilingFrequency::Monthly,
+            "Quarterly" => bir_core::forms::FilingFrequency::Quarterly,
+            "Annual" => bir_core::forms::FilingFrequency::Annual,
+            _ => bir_core::forms::FilingFrequency::OpenEnded,
+        };
+
+        let year = self.forms_editor_year;
+        let mut set = self
+            .stored_per_year_forms
+            .get(&year)
+            .cloned()
+            .unwrap_or_else(|| self.seed_default_forms(year, cx));
+
+        if !set.entries.iter().any(|e| e.form_code == code) {
+            set.entries.push(bir_core::forms::FormSetEntry {
+                form_code: code.clone(),
+                frequency,
+                active: true,
+                source: bir_core::forms::FormSetSource::Manual,
+                custom: true,
+                reason: reason_opt,
+            });
+            self.stored_per_year_forms.insert(year, set);
+
+            // Reset inputs
+            self.forms_editor_new_code_input
+                .update(cx, |input, cx| input.set_value("", window, cx));
+            self.forms_editor_new_reason_input
+                .update(cx, |input, cx| input.set_value("", window, cx));
+            self.forms_editor_new_frequency_select
+                .update(cx, |select, cx| select.set_selected_value("", window, cx));
+        }
+        cx.notify();
+    }
+
+    fn delete_custom_form(&mut self, code: String, cx: &mut Context<Self>) {
+        let year = self.forms_editor_year;
+        if let Some(set) = self.stored_per_year_forms.get_mut(&year) {
+            set.entries.retain(|e| !(e.form_code == code && e.custom));
+        }
+        if self.forms_editor_selected_code.as_ref() == Some(&code) {
+            self.forms_editor_selected_code = None;
+        }
+        cx.notify();
+    }
+
+    pub(super) fn render_active_forms_tab(&self, cx: &Context<Self>) -> gpui::AnyElement {
+        if self.active_tab != 5 || self.editing_id.is_none() {
+            return div().into_any_element();
+        }
+
+        let selected_year = self.forms_editor_year;
+        let taxpayer_profile = self.current_profile(cx);
+
+        let forms_set = self
+            .stored_per_year_forms
+            .get(&selected_year)
+            .cloned()
+            .unwrap_or_else(|| {
+                let default_codes = taxpayer_profile.applicable_forms_for_year(selected_year);
+                bir_core::forms::PerYearFormsSet::from_codes(
+                    selected_year,
+                    default_codes,
+                    bir_core::forms::FormSetSource::Manual,
+                )
+            });
+
+        // Gap R4 UI: compute annual ITR conflicts for this year's form set
+        let itr_conflicts = bir_core::integration::check_annual_itr_conflicts(&forms_set.entries);
+
+        div()
+            .flex()
+            .gap_4()
+            .w_full()
+            .h_full()
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .w(gpui::relative(0.75))
+                    .gap_3()
+                    .child(self.render_forms_editor_header(cx))
+                    // Conflict warning banner (only rendered when there are conflicts)
+                    .when(!itr_conflicts.is_empty(), |this| {
+                        let conflict_msg = itr_conflicts
+                            .iter()
+                            .map(|i| i.message.clone())
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        this.child(
+                            div()
+                                .flex()
+                                .items_start()
+                                .gap_2()
+                                .px_3()
+                                .py_2()
+                                .rounded_md()
+                                .bg(gpui::Hsla::from(gpui::rgba(0xfef3c720)))
+                                .border_1()
+                                .border_color(gpui::Hsla::from(gpui::rgba(0xd97706a0)))
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::BOLD)
+                                        .text_color(gpui::Hsla::from(gpui::rgba(0xd97706ff)))
+                                        .child("⚠"),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(gpui::Hsla::from(gpui::rgba(0x92400eff)))
+                                        .child(conflict_msg),
+                                ),
+                        )
+                    })
+                    .child(self.render_custom_form_creator(cx))
+                    .child(self.render_obligations_table(&forms_set, cx)),
+            )
+            .child(
+                div()
+                    .w(gpui::relative(0.25))
+                    .border_l_1()
+                    .border_color(cx.theme().border)
+                    .pl_4()
+                    .child(self.render_obligation_details(&forms_set, cx)),
+            )
+            .into_any_element()
+    }
+
+    fn render_forms_editor_header(&self, cx: &Context<Self>) -> gpui::AnyElement {
+        let selected_year = self.forms_editor_year;
+        let prior_year = self
+            .current_profile(cx)
+            .closest_prior_forms_year(selected_year);
+
+        div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .w_full()
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .font_weight(FontWeight::BOLD)
+                            .text_lg()
+                            .child("Active Forms Configuration"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(
+                                "Select a tax year to manage the authoritative filing obligations.",
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .when_some(prior_year, |this, prior_year| {
+                        this.child(
+                            gpui_component::button::Button::new("copy_prior_year_btn")
+                                .label(format!("Copy from {}", prior_year))
+                                .small()
+                                .ghost()
+                                .on_click(cx.listener(move |this, _ev, _window, cx| {
+                                    // Collect active entries from prior year
+                                    let source_entries: Vec<bir_core::forms::FormSetEntry> = {
+                                        let from_local = this
+                                            .stored_per_year_forms
+                                            .get(&prior_year)
+                                            .map(|s| s.entries.clone());
+                                        let from_profile = this
+                                            .current_profile(cx)
+                                            .per_year_forms
+                                            .get(&prior_year)
+                                            .map(|s| s.entries.clone());
+                                        from_local.or(from_profile).unwrap_or_default()
+                                    };
+
+                                    // Only copy active entries; re-tag them as Manual
+                                    let to_copy: Vec<bir_core::forms::FormSetEntry> =
+                                        source_entries
+                                            .into_iter()
+                                            .filter(|e| e.active)
+                                            .map(|mut e| {
+                                                e.source = bir_core::forms::FormSetSource::Manual;
+                                                e.reason =
+                                                    Some(format!("Copied from {}", prior_year));
+                                                e
+                                            })
+                                            .collect();
+
+                                    if to_copy.is_empty() {
+                                        return;
+                                    }
+
+                                    // Merge into current year's set (skip duplicates)
+                                    let dest = this
+                                        .stored_per_year_forms
+                                        .entry(selected_year)
+                                        .or_insert_with(|| {
+                                            bir_core::forms::PerYearFormsSet::new(selected_year)
+                                        });
+                                    for entry in to_copy {
+                                        let already_present = dest
+                                            .entries
+                                            .iter()
+                                            .any(|e| e.form_code == entry.form_code);
+                                        if !already_present {
+                                            dest.entries.push(entry);
+                                        }
+                                    }
+                                    cx.notify();
+                                })),
+                        )
+                    })
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("Year:"),
+                    )
+                    .child(
+                        div()
+                            .w(px(100.))
+                            .child(Combobox::new(&self.forms_editor_year_select)),
+                    ),
+            )
+            .into_any()
+    }
+
+    fn render_custom_form_creator(&self, cx: &Context<Self>) -> gpui::AnyElement {
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .p_3()
+            .border_1()
+            .border_color(cx.theme().border)
+            .rounded_lg()
+            .bg(cx.theme().muted)
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(cx.theme().foreground)
+                    .child("Add Custom Obligation"),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(div().flex_grow().child(gpui_component::input::Input::new(
+                        &self.forms_editor_new_code_input,
+                    )))
+                    .child(
+                        div()
+                            .w(px(180.))
+                            .child(Combobox::new(&self.forms_editor_new_frequency_select)),
+                    )
+                    .child(div().flex_grow().child(gpui_component::input::Input::new(
+                        &self.forms_editor_new_reason_input,
+                    )))
+                    .child(
+                        gpui_component::button::Button::new("add_custom_form_btn")
+                            .label("Add")
+                            .on_click(cx.listener(|this, _ev, window, cx| {
+                                this.add_custom_form(window, cx);
+                            })),
+                    ),
+            )
+            .into_any()
+    }
+
+    fn render_obligations_table(
+        &self,
+        forms_set: &bir_core::forms::PerYearFormsSet,
+        cx: &Context<Self>,
+    ) -> gpui::AnyElement {
+        let header_style = |cx: &Context<Self>| {
+            div()
+                .text_xs()
+                .font_weight(FontWeight::BOLD)
+                .text_color(cx.theme().muted_foreground)
+                .py_2()
+                .px_3()
+                .bg(cx.theme().muted)
+        };
+
+        let mut rows = vec![];
+
+        for entry in &forms_set.entries {
+            let code = entry.form_code.clone();
+            let description = bir_core::forms::registry::find_form(&code)
+                .map(|f| f.title)
+                .unwrap_or("Custom Obligation");
+
+            let frequency_str = match entry.frequency {
+                bir_core::forms::FilingFrequency::Monthly => "Monthly",
+                bir_core::forms::FilingFrequency::Quarterly => "Quarterly",
+                bir_core::forms::FilingFrequency::Annual => "Annual",
+                bir_core::forms::FilingFrequency::OpenEnded => "Open Ended / Event",
+            };
+
+            let source_str = match entry.source {
+                bir_core::forms::FormSetSource::Manual => "Manual",
+                bir_core::forms::FormSetSource::CorAi => "COR AI",
+                bir_core::forms::FormSetSource::MigrationBackfill => "Migration",
+            };
+
+            let is_selected = self.forms_editor_selected_code.as_ref() == Some(&code);
+            let active = entry.active;
+
+            let checkbox_elem = div()
+                .id(format!("checkbox_{}", code))
+                .w_4()
+                .h_4()
+                .rounded_sm()
+                .border_1()
+                .border_color(cx.theme().border)
+                .bg(if active {
+                    cx.theme().primary
+                } else {
+                    cx.theme().background
+                })
+                .flex()
+                .items_center()
+                .justify_center()
+                .cursor_pointer()
+                .on_click(cx.listener({
+                    let code = code.clone();
+                    move |this, _, _, cx| {
+                        this.toggle_form_obligation(code.clone(), cx);
+                    }
+                }))
+                .child(if active {
+                    div()
+                        .text_xs()
+                        .text_color(cx.theme().primary_foreground)
+                        .child("✓")
+                } else {
+                    div()
+                });
+
+            let row_elem =
+                div()
+                    .id(format!("row_{}", code))
+                    .flex()
+                    .items_center()
+                    .w_full()
+                    .py_2()
+                    .border_b_1()
+                    .border_color(cx.theme().border)
+                    .cursor_pointer()
+                    .when(is_selected, |this| this.bg(cx.theme().muted))
+                    .on_click(cx.listener({
+                        let code = code.clone();
+                        move |this, _, window, cx| {
+                            this.forms_editor_selected_code = Some(code.clone());
+                            let val = if let Some(set) =
+                                this.stored_per_year_forms.get(&this.forms_editor_year)
+                            {
+                                if let Some(e) = set.entries.iter().find(|e| e.form_code == code) {
+                                    e.reason.clone().unwrap_or_default()
+                                } else {
+                                    "".to_string()
+                                }
+                            } else {
+                                "".to_string()
+                            };
+                            this.forms_editor_active_note_input
+                                .update(cx, |input, cx| input.set_value(&val, window, cx));
+                            cx.notify();
+                        }
+                    }))
+                    .child(
+                        div()
+                            .w(px(50.))
+                            .flex()
+                            .justify_center()
+                            .child(checkbox_elem),
+                    )
+                    .child(
+                        div()
+                            .w(px(100.))
+                            .px_3()
+                            .text_sm()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(cx.theme().foreground)
+                            .child(code.clone()),
+                    )
+                    .child(
+                        div()
+                            .flex_grow()
+                            .px_3()
+                            .text_sm()
+                            .text_color(cx.theme().foreground)
+                            .child(description),
+                    )
+                    .child(
+                        div()
+                            .w(px(120.))
+                            .px_3()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(frequency_str),
+                    )
+                    .child(
+                        div()
+                            .w(px(100.))
+                            .px_3()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(source_str),
+                    )
+                    .child(div().w(px(80.)).px_3().child(if entry.custom {
+                        div()
+                            .px_1p5()
+                            .py_0p5()
+                            .rounded_full()
+                            .bg(gpui::rgba(0xf59e0b15))
+                            .border_1()
+                            .border_color(gpui::rgba(0xf59e0b33))
+                            .flex()
+                            .justify_center()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(gpui::rgb(0xd97706))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .child("Custom"),
+                            )
+                    } else {
+                        div()
+                    }))
+                    .child(div().w(px(80.)).px_3().flex().justify_center().child(
+                        if entry.custom {
+                            div()
+                                .id(format!("delete_{}", code))
+                                .cursor_pointer()
+                                .on_click(cx.listener({
+                                    let code = code.clone();
+                                    move |this, _, _, cx| {
+                                        this.delete_custom_form(code.clone(), cx);
+                                    }
+                                }))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(gpui::rgb(0xef4444))
+                                        .child("Delete"),
+                                )
+                                .into_any()
+                        } else {
+                            div().into_any()
+                        },
+                    ));
+
+            rows.push(row_elem);
+        }
+
+        let table_body = if rows.is_empty() {
+            div()
+                .flex()
+                .justify_center()
+                .py_8()
+                .text_sm()
+                .text_color(cx.theme().muted_foreground)
+                .child("No filing obligations configured for this year.")
+        } else {
+            div().flex().flex_col().children(rows)
+        };
+
+        div()
+            .flex()
+            .flex_col()
+            .border_1()
+            .border_color(cx.theme().border)
+            .rounded_lg()
+            .overflow_hidden()
+            .child(
+                div()
+                    .flex()
+                    .w_full()
+                    .child(
+                        header_style(cx)
+                            .w(px(50.))
+                            .flex()
+                            .justify_center()
+                            .child(div()),
+                    )
+                    .child(header_style(cx).w(px(100.)).child("Code"))
+                    .child(header_style(cx).flex_grow().child("Description"))
+                    .child(header_style(cx).w(px(120.)).child("Frequency"))
+                    .child(header_style(cx).w(px(100.)).child("Source"))
+                    .child(header_style(cx).w(px(80.)).child("Custom"))
+                    .child(
+                        header_style(cx)
+                            .w(px(80.))
+                            .flex()
+                            .justify_center()
+                            .child("Actions"),
+                    ),
+            )
+            .child(table_body)
+            .into_any()
+    }
+
+    fn render_obligation_details(
+        &self,
+        forms_set: &bir_core::forms::PerYearFormsSet,
+        cx: &Context<Self>,
+    ) -> gpui::AnyElement {
+        let Some(selected_code) = &self.forms_editor_selected_code else {
+            return div()
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .h_full()
+                .py_12()
+                .gap_2()
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child("Select an obligation to view details."),
+                )
+                .into_any();
+        };
+
+        let Some(entry) = forms_set.entry(selected_code) else {
+            return div()
+                .text_sm()
+                .text_color(cx.theme().muted_foreground)
+                .child("Selected form obligation not found.")
+                .into_any();
+        };
+
+        let title = bir_core::forms::registry::find_form(selected_code)
+            .map(|f| f.title)
+            .unwrap_or("Custom Obligation");
+
+        let category = bir_core::forms::registry::find_form(selected_code)
+            .map(|f| f.category.to_string())
+            .unwrap_or_else(|| "Custom".to_string());
+
+        let frequency_str = match entry.frequency {
+            bir_core::forms::FilingFrequency::Monthly => "Monthly",
+            bir_core::forms::FilingFrequency::Quarterly => "Quarterly",
+            bir_core::forms::FilingFrequency::Annual => "Annual",
+            bir_core::forms::FilingFrequency::OpenEnded => "Open Ended / Event",
+        };
+
+        div()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(cx.theme().muted_foreground)
+                            .child(category.to_uppercase()),
+                    )
+                    .child(
+                        div()
+                            .text_lg()
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(cx.theme().foreground)
+                            .child(format!("Form {}", selected_code)),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().foreground)
+                            .child(title),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex()
+                            .justify_between()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("Frequency"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(cx.theme().foreground)
+                                    .child(frequency_str),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .justify_between()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("Source"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(cx.theme().foreground)
+                                    .child(match entry.source {
+                                        bir_core::forms::FormSetSource::Manual => "Manual",
+                                        bir_core::forms::FormSetSource::CorAi => "COR AI",
+                                        bir_core::forms::FormSetSource::MigrationBackfill => {
+                                            "Migration"
+                                        }
+                                    }),
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(cx.theme().foreground)
+                            .child("Reason / Note"),
+                    )
+                    .child(div().w_full().child(gpui_component::input::Input::new(
+                        &self.forms_editor_active_note_input,
+                    )))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("Changes are saved automatically to your profile draft."),
+                    ),
+            )
+            .into_any()
     }
 }

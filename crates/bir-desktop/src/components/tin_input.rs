@@ -163,6 +163,17 @@ impl TinInput {
         cx.notify();
     }
 
+    pub fn set_text_value(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let clean = text.replace("-", "");
+        let tin = bir_core::naming::Tin {
+            segment1: clean.get(0..3).unwrap_or("").to_string(),
+            segment2: clean.get(3..6).unwrap_or("").to_string(),
+            segment3: clean.get(6..9).unwrap_or("").to_string(),
+            branch: clean.get(9..).unwrap_or("").to_string(),
+        };
+        self.set_from_tin(&tin, window, cx);
+    }
+
     pub fn clear(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         for i in 0..4 {
             self.inputs[i].update(cx, |input, cx| {

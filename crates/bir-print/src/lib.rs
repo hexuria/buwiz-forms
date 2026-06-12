@@ -1260,6 +1260,7 @@ mod tests {
             taxpayer_type: TaxpayerType::Corporation,
             is_vat_registered: false,
             business_start_date: None,
+            birth_date: None,
             email_tracking_enabled: false,
             email_auth_method: Default::default(),
             imap_email: None,
@@ -1292,6 +1293,7 @@ mod tests {
             is_archived: false,
             profile_pin_hash: None,
             totp_secret: None,
+            per_year_forms: Default::default(),
         };
         let mut draft = Form2551QDraft::new_from_profile(&profile, 2026, 1);
         draft.schedule_1[0].taxable_amount = 10_000.0;

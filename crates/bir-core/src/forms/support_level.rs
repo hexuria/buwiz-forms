@@ -1,7 +1,8 @@
-//! Form Support Level — separates legal eligibility from app implementation status.
+//! Form Support Level — whether the app can actually draft/file a given form.
 //!
-//! The engine determines whether a form is legally applicable. This module
-//! tracks whether the app can actually draft/file that form in-app.
+//! This is static, per-form-code metadata (independent of any tax-rules engine):
+//! some BIR forms have a fully implemented in-app view and submission path, while
+//! others can only be filed manually / via the official eBIRForms client.
 
 use serde::{Deserialize, Serialize};
 

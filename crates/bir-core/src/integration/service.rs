@@ -253,6 +253,7 @@ mod tests {
             taxpayer_type: TaxpayerType::Individual,
             is_vat_registered: false,
             business_start_date: None,
+            birth_date: None,
             tax_classification: None,
             eopt_tier: None,
             is_bmbe: false,
@@ -284,6 +285,7 @@ mod tests {
             oauth_refresh_token: None,
             profile_versions: vec![],
             compliance_source_mode: Default::default(),
+            per_year_forms: Default::default(),
         };
 
         db.save_profile(profile).unwrap();

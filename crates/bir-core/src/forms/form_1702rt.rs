@@ -1134,6 +1134,7 @@ mod tests {
             oauth_refresh_token: None,
             profile_versions: vec![],
             compliance_source_mode: Default::default(),
+            per_year_forms: Default::default(),
         };
         Form1702RTDraft::new_from_profile(&profile, 2025, 12)
     }

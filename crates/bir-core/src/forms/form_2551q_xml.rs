@@ -236,6 +236,7 @@ mod tests {
             oauth_refresh_token: None,
             profile_versions: vec![],
             compliance_source_mode: Default::default(),
+            per_year_forms: Default::default(),
             tax_classification: None,
             eopt_tier: None,
             is_bmbe: false,

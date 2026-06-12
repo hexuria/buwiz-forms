@@ -20,20 +20,16 @@ const SELF_EMPLOYED_NON_VAT: &[&str] = &["1701", "1701Q", "2551Q", "1701A"];
 const SELF_EMPLOYED_NON_VAT_MICRO_SMALL: &[&str] = &["1701MS", "1701", "1701Q", "2551Q", "1701A"];
 const SELF_EMPLOYED_NON_VAT_8_PERCENT: &[&str] = &["1701A", "1701Q", "1701"];
 const SELF_EMPLOYED_NON_VAT_MICRO_SMALL_8_PERCENT: &[&str] = &["1701MS", "1701A", "1701Q", "1701"];
-const SELF_EMPLOYED_VAT: &[&str] = &["1701", "1701Q", "2550DS", "2550Q", "1701A", "2550M"];
-const SELF_EMPLOYED_VAT_MICRO_SMALL: &[&str] = &[
-    "1701MS", "1701", "1701Q", "2550DS", "2550Q", "1701A", "2550M",
-];
-const SELF_EMPLOYED_VAT_8_PERCENT: &[&str] =
-    &["1701A", "1701Q", "2550DS", "2550Q", "1701", "2550M"];
-const SELF_EMPLOYED_VAT_MICRO_SMALL_8_PERCENT: &[&str] = &[
-    "1701MS", "1701A", "1701Q", "2550DS", "2550Q", "1701", "2550M",
-];
+const SELF_EMPLOYED_VAT: &[&str] = &["1701", "1701Q", "2550Q", "1701A"];
+const SELF_EMPLOYED_VAT_MICRO_SMALL: &[&str] = &["1701MS", "1701", "1701Q", "2550Q", "1701A"];
+const SELF_EMPLOYED_VAT_8_PERCENT: &[&str] = &["1701A", "1701Q", "2550Q", "1701"];
+const SELF_EMPLOYED_VAT_MICRO_SMALL_8_PERCENT: &[&str] =
+    &["1701MS", "1701A", "1701Q", "2550Q", "1701"];
 const MIXED_NON_VAT: &[&str] = &["1701", "1701Q", "2551Q"];
 const MIXED_NON_VAT_8_PERCENT: &[&str] = &["1701", "1701Q"];
-const MIXED_VAT: &[&str] = &["1701", "1701Q", "2550DS", "2550Q", "2550M"];
+const MIXED_VAT: &[&str] = &["1701", "1701Q", "2550Q"];
 const COMPENSATION_WITHHOLDING: &[&str] = &["0620", "1600", "1601C", "1604CF", "2316"];
-const EXPANDED_WITHHOLDING: &[&str] = &["0619E", "1601EQ", "1604E", "1606", "1621"];
+const EXPANDED_WITHHOLDING: &[&str] = &["0619E", "1601EQ", "1604E"];
 const FINAL_WITHHOLDING: &[&str] = &["0619F", "1600WP", "1601F", "1601FQ", "1602", "1603"];
 
 fn base_profile(
@@ -89,12 +85,16 @@ fn base_profile(
         oauth_access_token: None,
         oauth_refresh_token: None,
         profile_versions: vec![],
+        birth_date: None,
         compliance_source_mode: Default::default(),
+        per_year_forms: Default::default(),
     }
 }
 
 fn forms_for(profile: &TaxpayerProfile) -> BTreeSet<String> {
-    recurring_obligation_forms_for_profile_and_year(profile, TAXABLE_YEAR)
+    let mut p = profile.clone();
+    p.ensure_profile_version_ledger();
+    recurring_obligation_forms_for_profile_and_year(&p, TAXABLE_YEAR)
         .into_iter()
         .collect()
 }
@@ -307,11 +307,7 @@ fn dashboard_profile_matrix_base_forms_for_2026() {
     );
     let mut corp_vat = corp_non_vat.clone();
     corp_vat.is_vat_registered = true;
-    assert_forms(
-        "corporation vat",
-        &corp_vat,
-        &["1702Q", "1702RT", "2550DS", "2550Q", "2550M"],
-    );
+    assert_forms("corporation vat", &corp_vat, &["1702Q", "1702RT", "2550Q"]);
 
     let partnership_non_vat = base_profile(TaxpayerType::Partnership, None);
     assert_forms(
@@ -324,7 +320,7 @@ fn dashboard_profile_matrix_base_forms_for_2026() {
     assert_forms(
         "partnership vat",
         &partnership_vat,
-        &["1702Q", "1702RT", "2550DS", "2550Q", "2550M"],
+        &["1702Q", "1702RT", "2550Q"],
     );
 
     assert_forms(
@@ -521,8 +517,6 @@ fn dashboard_profile_matrix_excise_modifiers() {
         (ExciseTaxCategory::Mineral, "2200M"),
         (ExciseTaxCategory::Petroleum, "2200P"),
         (ExciseTaxCategory::Tobacco, "2200T"),
-        (ExciseTaxCategory::SweetenedBeverages, "2200S"),
-        (ExciseTaxCategory::CoalAndCoke, "2200C"),
     ];
 
     for (category, form_code) in &cases {
@@ -541,8 +535,7 @@ fn dashboard_profile_matrix_excise_modifiers() {
         "all excise categories",
         &all_excise,
         &[
-            "1701", "1701Q", "2200A", "2200AN", "2200C", "2200M", "2200P", "2200S", "2200T",
-            "2551Q", "1701A",
+            "1701", "1701Q", "2200A", "2200AN", "2200M", "2200P", "2200T", "2551Q", "1701A",
         ],
     );
 }
@@ -592,36 +585,11 @@ fn versioned_cor_uses_the_profile_active_for_the_selected_year() {
 }
 
 #[test]
-fn temporal_suggestion_mode_ignores_stored_cor_versions() {
-    let mut profile = self_employed_profile(false, None, false);
-    let vat_cor = confirmed_version(
-        &profile,
-        "cor-vat",
-        "VAT COR",
-        Some((2026, 1, 1)),
-        None,
-        vec![
-            RegisteredTaxType::IncomeTax,
-            RegisteredTaxType::ValueAddedTax,
-            RegisteredTaxType::RegistrationFee,
-        ],
-        true,
-    );
-    profile.profile_versions = vec![vat_cor];
-    profile.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
-
-    let forms = forms_for(&profile);
-
-    assert!(forms.contains("2551Q"));
-    assert!(!forms.contains("2550Q"));
-}
-
-#[test]
 fn cor_versioned_mode_requires_confirmed_versions() {
     let mut profile = self_employed_profile(false, None, false);
     profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
 
-    assert!(forms_for(&profile).is_empty());
+    assert!(recurring_obligation_forms_for_profile_and_year(&profile, TAXABLE_YEAR).is_empty());
     assert!(
         validate_profile(&profile)
             .iter()

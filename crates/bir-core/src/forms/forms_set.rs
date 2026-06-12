@@ -2,11 +2,11 @@
 //! taxpayer files in a given taxable year.
 //!
 //! This replaces the rule-based temporal suggestion engine. A Forms Set is established
-//! once per taxable year, either from a Certificate of Registration (COR + AI extraction
-//! → [`FormSetSource::CorAi`]) or by manual selection ([`FormSetSource::Manual`]). It is
-//! persisted in the `per_year_forms` table (see `db::profiles`) and read by the dashboard
-//! and deadline resolver. Different years may hold different sets (e.g. a new COR for a
-//! new year, or a backdated set for an earlier year).
+//! once per taxable year, either from exact form codes extracted from a reviewed
+//! Certificate of Registration (COR), from the registered-tax-type fallback when the COR
+//! has no exact form list, or by manual selection ([`FormSetSource::Manual`]). It is
+//! persisted in the `per_year_forms` table and read by the dashboard and deadline
+//! resolver. Different years may hold different sets.
 
 use crate::forms::registry::{FilingFrequency, find_form};
 use serde::{Deserialize, Serialize};
@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 pub enum FormSetSource {
     /// Hand-picked by the user.
     Manual,
-    /// Proposed from COR registered tax types (AI-assisted extraction), then confirmed.
+    /// Proposed from reviewed COR evidence, then confirmed.
     CorAi,
     /// Seeded by the one-time migration backfill from existing profile versions.
     MigrationBackfill,

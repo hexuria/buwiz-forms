@@ -40,6 +40,9 @@ let migrations = [
 ### Current schema notes
 
 - v6 is a static tax-calendar marker only. Fresh databases should not create the removed calendar CRUD tables (`tax_calendars`, `tax_forms`, `tax_deadline_rules`, `tax_deadline_overrides`, `resolved_tax_deadlines`).
+- **v7 (Per-year Forms Set Table)**: Introduces the `per_year_forms` table, which serves as the user-owned, authoritative list of active tax forms for a given profile and taxable year, replacing the legacy rule-based temporal engine.
+- **v8 (Per-year Forms Backfill)**: Performs a Rust-side data migration to populate the `per_year_forms` table for existing profile versions based on their registered tax types and obligation overrides.
+- **v9 (Per-year Forms Heal)**: Re-runs the forms backfill to apply taxpayer type, VAT, deprecation, and other filters using `obligation_allowed_for_version_and_profile`, while preserving user-added custom forms and manual deactivations (active=0).
 - Official recurring calendar rules live in `crates/bir-core/src/calendar_rules.rs`.
 - Deadline adjustment is handled by the core `BusinessDayCalendar`: weekends are
   known by default, while holidays, local holidays, special non-working days,

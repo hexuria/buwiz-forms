@@ -431,7 +431,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         ],
         requires_vat: Some(true),
         requires_employees: false,
-        is_deprecated: false, // Optional per RMC 52-2023; temporal engine handles era transitions
+        is_deprecated: false, // Optional per RMC 52-2023; year-aware filtering handles the transition
     },
     FormDefinition {
         code: "2550Q",
@@ -718,8 +718,8 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         frequency: FilingFrequency::OpenEnded,
         taxpayer_types: &[
             TaxpayerType::Individual,
-            TaxpayerType::Corporation,
-            TaxpayerType::Partnership,
+            TaxpayerType::Estate,
+            TaxpayerType::Trust,
         ],
         requires_vat: None,
         requires_employees: false,
@@ -825,6 +825,22 @@ mod tests {
         assert_eq!(
             find_form("2550M").and_then(FormDefinition::deprecation_year),
             Some(2023)
+        );
+    }
+
+    #[test]
+    fn estate_tax_form_applies_to_individual_estate_and_trust() {
+        let taxpayer_types = &find_form("1801")
+            .expect("1801 should be registered")
+            .taxpayer_types;
+
+        assert_eq!(
+            *taxpayer_types,
+            &[
+                TaxpayerType::Individual,
+                TaxpayerType::Estate,
+                TaxpayerType::Trust,
+            ]
         );
     }
 }

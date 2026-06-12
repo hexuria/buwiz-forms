@@ -115,7 +115,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
     for summary in summaries
         .into_iter()
         .filter(|s| s.status == FilingStatus::Queued)
-        .filter(|s| crate::temporal::can_queue_for_submission(&s.form_code))
+        .filter(|s| crate::forms::can_queue_for_submission(&s.form_code))
     {
         let job_key = format!(
             "form:{}:{}:{}:{}",
@@ -176,7 +176,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                 );
 
                 let form_type =
-                    crate::temporal::fileable_form_type_id("2551Q").unwrap_or("2551Qv2018");
+                    crate::forms::fileable_form_type_id("2551Q").unwrap_or("2551Qv2018");
                 let filename = draft.default_submission_filename();
                 let xml_payload = draft.to_bir_xml_payload();
                 let encrypted = match crate::crypto::compress_and_encrypt(
@@ -240,7 +240,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                 );
 
                 let form_type =
-                    crate::temporal::fileable_form_type_id("1601C").unwrap_or("1601Cv2018");
+                    crate::forms::fileable_form_type_id("1601C").unwrap_or("1601Cv2018");
                 let filename = draft.default_submission_filename();
                 let xml_payload = draft.to_bir_xml_payload();
                 let encrypted = match crate::crypto::compress_and_encrypt(

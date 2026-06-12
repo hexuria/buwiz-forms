@@ -31,6 +31,7 @@ fn test_full_form_lifecycle() {
             taxpayer_type: bir_core::profile::TaxpayerType::Individual,
             is_vat_registered: false,
             business_start_date: None,
+            birth_date: None,
             tax_classification: None,
             eopt_tier: None,
             is_bmbe: false,
@@ -62,6 +63,7 @@ fn test_full_form_lifecycle() {
             oauth_refresh_token: None,
             profile_versions: vec![],
             compliance_source_mode: Default::default(),
+            per_year_forms: Default::default(),
         };
         let saved_profile = db.save_profile(profile).expect("Failed to save profile");
 

@@ -21,6 +21,4 @@ pub mod pdf_layout_editor_view;
 pub mod pdf_viewer;
 pub mod profile_manager;
 pub mod settings;
-#[cfg(debug_assertions)]
-pub mod temporal_inspector;
 pub mod typst_calibration_view;
