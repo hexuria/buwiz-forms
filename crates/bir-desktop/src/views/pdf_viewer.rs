@@ -336,11 +336,6 @@ impl Render for PdfViewerView {
                     window.remove_window();
                 }),
             )
-            .on_action(
-                cx.listener(|_, _: &crate::global_actions::QuitApplication, window, _| {
-                    window.remove_window();
-                }),
-            )
             .child(
                 div()
                     .flex()

@@ -123,9 +123,6 @@ impl Render for EmailConfirmationView {
             .on_action(cx.listener(|_, _: &crate::global_actions::CloseWindow, window, _| {
                 window.remove_window();
             }))
-            .on_action(cx.listener(|_, _: &crate::global_actions::QuitApplication, window, _| {
-                window.remove_window();
-            }))
             .child(
                 div()
                     .flex()

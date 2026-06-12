@@ -51,7 +51,7 @@ robius-authentication = { version = "0.1.1", features = ["async"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.5.2"
 objc2-foundation = "0.2.2"
-objc2-app-kit = { version = "0.2.2", features = ["NSApplication", "NSResponder", "NSRunningApplication", "NSWindow"] }
+objc2-app-kit = { version = "0.2.2", features = ["NSApplication", "NSMenu", "NSResponder", "NSRunningApplication", "NSWindow"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.62.2", features = [

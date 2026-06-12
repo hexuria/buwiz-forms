@@ -8,6 +8,163 @@ use gpui::*;
 /// macOS enforces this natively via the application bundle, so this is a no-op.
 pub fn enforce_single_instance() {}
 
+/// Install the standard macOS application menus before opening the main window.
+///
+/// GPUI does not create a native `NSApplication.mainMenu` unless `set_menus`
+/// is called. Without it, the application name appears in the macOS menu bar
+/// but highlights without opening a menu.
+pub fn install_app_menu(cx: &mut App) {
+    use crate::global_actions::*;
+
+    cx.on_action(|_: &AboutApplication, _| show_standard_about_panel())
+        .on_action(|_: &HideApplication, cx| cx.hide())
+        .on_action(|_: &HideOthers, cx| cx.hide_other_apps())
+        .on_action(|_: &ShowAllApplications, cx| cx.unhide_other_apps())
+        .on_action(|_: &QuitApplication, cx| cx.quit())
+        .on_action(|_: &BringAllToFront, _| bring_all_windows_to_front())
+        .on_action(|_: &OpenSupportEmail, cx| {
+            cx.open_url("mailto:support@goldcoders.dev?subject=eBIRForms%20Support%20Request");
+        })
+        .on_action(|_: &OpenCompanyWebsite, cx| {
+            cx.open_url("https://goldcoders.dev");
+        });
+
+    cx.set_menus(app_menus());
+    log_native_menu_installation();
+}
+
+/// Keep Settings enabled in the native application menu and forward it to the
+/// existing in-app Settings page.
+///
+/// GPUI validates native menu items against application-level handlers. The
+/// view-level handler remains useful for keyboard dispatch, but is not always
+/// visible while AppKit is validating the application menu.
+pub fn register_settings_menu_action(
+    main_window: AnyWindowHandle,
+    app_state: Entity<crate::app::AppState>,
+    cx: &mut App,
+) {
+    use crate::{app::ActiveView, global_actions::OpenSettings};
+
+    cx.on_action(move |_: &OpenSettings, cx| {
+        let app_state = app_state.clone();
+        if let Err(error) = main_window.update(cx, move |_, window, cx| {
+            app_state.update(cx, |state, cx| {
+                state.request_admin_access(ActiveView::Settings, window, cx);
+            });
+        }) {
+            tracing::warn!(%error, "Could not open Settings from the macOS application menu");
+        }
+    });
+}
+
+fn app_menus() -> Vec<Menu> {
+    use crate::global_actions::*;
+
+    vec![
+        Menu::new("eBIRForms").items([
+            MenuItem::action("About eBIRForms", AboutApplication),
+            MenuItem::separator(),
+            MenuItem::action("Settings...", OpenSettings),
+            MenuItem::separator(),
+            MenuItem::os_submenu("Services", SystemMenuType::Services),
+            MenuItem::separator(),
+            MenuItem::action("Hide eBIRForms", HideApplication),
+            MenuItem::action("Hide Others", HideOthers),
+            MenuItem::action("Show All", ShowAllApplications),
+            MenuItem::separator(),
+            MenuItem::action("Quit eBIRForms", QuitApplication),
+        ]),
+        Menu::new("File").items([
+            MenuItem::action("New Profile", CreateProfile),
+            MenuItem::separator(),
+            MenuItem::action("Close Window", CloseWindow),
+        ]),
+        Menu::new("Edit").items([
+            MenuItem::os_action("Undo", gpui_component::input::Undo, OsAction::Undo),
+            MenuItem::os_action("Redo", gpui_component::input::Redo, OsAction::Redo),
+            MenuItem::separator(),
+            MenuItem::os_action("Cut", gpui_component::input::Cut, OsAction::Cut),
+            MenuItem::os_action("Copy", gpui_component::input::Copy, OsAction::Copy),
+            MenuItem::os_action("Paste", gpui_component::input::Paste, OsAction::Paste),
+            MenuItem::action("Delete", gpui_component::input::Delete),
+            MenuItem::separator(),
+            MenuItem::action("Find", FocusSearch),
+            MenuItem::os_action(
+                "Select All",
+                gpui_component::input::SelectAll,
+                OsAction::SelectAll,
+            ),
+        ]),
+        Menu::new("View").items([
+            MenuItem::action("Toggle Sidebar", ToggleSidebar),
+            MenuItem::action("Toggle Compact Sidebar", ToggleSidebarMini),
+            MenuItem::action("Toggle Theme", ToggleTheme),
+            MenuItem::separator(),
+            MenuItem::action("Command Palette...", OpenCommandPalette),
+            MenuItem::separator(),
+            MenuItem::action("Enter Full Screen", ToggleFullScreen),
+        ]),
+        Menu::new("Window").items([
+            MenuItem::action("Minimize", MinimizeWindow),
+            MenuItem::action("Zoom", ZoomWindow),
+            MenuItem::separator(),
+            MenuItem::action("Bring All to Front", BringAllToFront),
+        ]),
+        Menu::new("Help").items([
+            MenuItem::action("Contact Support...", OpenSupportEmail),
+            MenuItem::action("Goldcoders Website", OpenCompanyWebsite),
+        ]),
+    ]
+}
+
+fn show_standard_about_panel() {
+    use objc2_app_kit::NSApplication;
+    use objc2_foundation::MainThreadMarker;
+
+    // SAFETY: GPUI invokes global action handlers on the application main thread.
+    let mtm = unsafe { MainThreadMarker::new_unchecked() };
+    let app = NSApplication::sharedApplication(mtm);
+    unsafe { app.orderFrontStandardAboutPanel(None) };
+}
+
+fn bring_all_windows_to_front() {
+    use objc2_app_kit::NSApplication;
+    use objc2_foundation::MainThreadMarker;
+
+    // SAFETY: GPUI invokes global action handlers on the application main thread.
+    let mtm = unsafe { MainThreadMarker::new_unchecked() };
+    let app = NSApplication::sharedApplication(mtm);
+    unsafe { app.arrangeInFront(None) };
+}
+
+fn log_native_menu_installation() {
+    use objc2_app_kit::NSApplication;
+    use objc2_foundation::MainThreadMarker;
+
+    // SAFETY: Menu installation and this verification run synchronously on the
+    // GPUI application thread.
+    let mtm = unsafe { MainThreadMarker::new_unchecked() };
+    let app = NSApplication::sharedApplication(mtm);
+    let top_level_menu_count = unsafe {
+        app.mainMenu()
+            .map(|menu| menu.numberOfItems())
+            .unwrap_or_default()
+    };
+
+    if top_level_menu_count >= 6 {
+        tracing::info!(
+            top_level_menu_count,
+            "Native macOS application menu installed"
+        );
+    } else {
+        tracing::error!(
+            top_level_menu_count,
+            "Native macOS application menu installation is incomplete"
+        );
+    }
+}
+
 // ── Keybindings ──────────────────────────────────────────────────────────────
 
 /// Register global keybindings using the macOS `cmd` modifier.

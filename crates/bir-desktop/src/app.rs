@@ -709,6 +709,10 @@ impl AppState {
                 DashboardEvent::LogoutProfile(_tin) => {
                     this.logout(cx);
                 }
+                DashboardEvent::OpenProfileManager => {
+                    this.active_view = ActiveView::ProfileManager;
+                    cx.notify();
+                }
             },
         )
         .detach();
@@ -1023,7 +1027,7 @@ impl AppState {
         let quarter = *quarter;
 
         // Guard: only open in-app form views for implemented forms
-        if !bir_core::temporal::form_support_level(form_code).is_fileable_in_app() {
+        if !bir_core::forms::form_support_level(form_code).is_fileable_in_app() {
             tracing::warn!(
                 form_code,
                 "Attempted to file unsupported form — manual filing required"
@@ -1590,6 +1594,7 @@ impl Render for AppState {
             .on_action(cx.listener(Self::handle_hide_others))
             .on_action(cx.listener(Self::handle_close_window))
             .on_action(cx.listener(Self::handle_minimize_window))
+            .on_action(cx.listener(Self::handle_zoom_window))
             .on_action(cx.listener(Self::handle_toggle_fullscreen))
             .child(
                 div()

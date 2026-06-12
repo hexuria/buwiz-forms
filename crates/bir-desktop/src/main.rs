@@ -38,12 +38,18 @@ pub mod global_actions {
             OpenSettings,
             OpenCommandPalette,
             OpenGlobalDashboard,
+            AboutApplication,
             QuitApplication,
             HideApplication,
             HideOthers,
+            ShowAllApplications,
             CloseWindow,
             MinimizeWindow,
+            ZoomWindow,
             ToggleFullScreen,
+            BringAllToFront,
+            OpenSupportEmail,
+            OpenCompanyWebsite,
             ZoomIn,
             ZoomOut,
             ResetZoom,
@@ -184,6 +190,8 @@ fn main() {
 
         gpui_component::init(cx);
         crate::platform::bind_global_keys(cx);
+        #[cfg(target_os = "macos")]
+        crate::platform::install_app_menu(cx);
 
         let bounds =
             gpui::Bounds::centered(None, gpui::size(gpui::px(1024.0), gpui::px(768.0)), cx);
@@ -369,6 +377,12 @@ fn main() {
                 .detach();
 
                 let view = cx.new(|cx| app::AppState::new(db, profiles, window, cx));
+                #[cfg(target_os = "macos")]
+                crate::platform::register_settings_menu_action(
+                    window.window_handle(),
+                    view.clone(),
+                    cx,
+                );
                 cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
             });
         })

@@ -210,19 +210,18 @@ impl AppState {
         &mut self,
         _action: &QuitApplication,
         _window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) {
-        // Phase 4: Hijack Global Quit Request -> Hide and Persist
-        crate::platform::hide_from_dock();
+        cx.quit();
     }
 
     pub(crate) fn handle_hide_application(
         &mut self,
         _action: &HideApplication,
         _window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) {
-        crate::platform::hide_from_dock();
+        cx.hide();
     }
 
     pub(crate) fn handle_hide_others(
@@ -237,10 +236,10 @@ impl AppState {
     pub(crate) fn handle_close_window(
         &mut self,
         _action: &CloseWindow,
-        window: &mut Window,
+        _window: &mut Window,
         _cx: &mut Context<Self>,
     ) {
-        window.remove_window();
+        crate::platform::hide_from_dock();
     }
 
     pub(crate) fn handle_minimize_window(
@@ -250,6 +249,15 @@ impl AppState {
         _cx: &mut Context<Self>,
     ) {
         window.minimize_window();
+    }
+
+    pub(crate) fn handle_zoom_window(
+        &mut self,
+        _action: &ZoomWindow,
+        window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) {
+        window.zoom_window();
     }
 
     pub(crate) fn handle_toggle_fullscreen(
