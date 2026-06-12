@@ -101,17 +101,19 @@ pub struct ProfileManagerView {
     stored_tax_elections: Vec<bir_core::profile::TaxElectionHistory>,
     stored_profile_versions: Vec<bir_core::profile::TaxProfileVersion>,
     compliance_source_mode: ComplianceSourceMode,
+    cor_sub_tab: usize,
     ocr_selected_version_id: Option<String>,
     cor_editing_version_id: Option<String>,
     cor_preview_year_input: Entity<InputState>,
     cor_version_label_input: Entity<InputState>,
     cor_effective_from_input: Entity<InputState>,
     cor_effective_until_input: Entity<InputState>,
-    cor_tin_input: Entity<InputState>,
+    cor_tin_input: Entity<TinInput>,
     cor_registration_date_input: Entity<InputState>,
     cor_registered_name_input: Entity<InputState>,
     cor_trade_name_input: Entity<InputState>,
     cor_rdo_code_input: Entity<InputState>,
+    cor_rdo_select: Entity<ComboboxState>,
     cor_registered_address_input: Entity<InputState>,
     cor_lob_code_input: Entity<InputState>,
     cor_lob_description_input: Entity<InputState>,
@@ -152,6 +154,15 @@ pub struct ProfileManagerView {
     focused_ocr_field: Option<String>,
     pending_cor_editor_load: Option<String>,
     is_uploading_cor: bool,
+
+    pub stored_per_year_forms: std::collections::BTreeMap<u16, bir_core::forms::PerYearFormsSet>,
+    pub forms_editor_year: u16,
+    pub forms_editor_year_select: Entity<ComboboxState>,
+    pub forms_editor_new_code_input: Entity<InputState>,
+    pub forms_editor_new_reason_input: Entity<InputState>,
+    pub forms_editor_new_frequency_select: Entity<ComboboxState>,
+    pub forms_editor_selected_code: Option<String>,
+    pub forms_editor_active_note_input: Entity<InputState>,
 
     _subscriptions: Vec<Subscription>,
 }
@@ -306,7 +317,8 @@ impl ProfileManagerView {
             cx.new(|cx| InputState::new(window, cx).placeholder("Effective from YYYY-MM-DD"));
         let cor_effective_until_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Effective until YYYY-MM-DD"));
-        let cor_tin_input = cx.new(|cx| InputState::new(window, cx).placeholder("COR TIN"));
+        let cor_tin_input = cx.new(|cx| TinInput::new(window, cx));
+        let cor_rdo_select = cx.new(|cx| ComboboxState::new(rdo_options.clone(), 5, window, cx));
         let cor_registration_date_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Registration date YYYY-MM-DD"));
         let cor_registered_name_input =
@@ -486,6 +498,33 @@ impl ProfileManagerView {
             state
         });
 
+        let forms_editor_year = current_year as u16;
+        let forms_editor_year_select = cx.new(|cx| {
+            let years = (2018..=2026).map(|y| y.to_string()).collect::<Vec<_>>();
+            let mut state = ComboboxState::new(years, 5, window, cx);
+            state.set_selected_value(&current_year.to_string(), window, cx);
+            state
+        });
+        let forms_editor_new_code_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Form code"));
+        let forms_editor_new_reason_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Reason / note"));
+        let forms_editor_new_frequency_select = cx.new(|cx| {
+            ComboboxState::new(
+                vec![
+                    "Monthly".to_string(),
+                    "Quarterly".to_string(),
+                    "Annual".to_string(),
+                    "Open Ended / Event".to_string(),
+                ],
+                4,
+                window,
+                cx,
+            )
+        });
+        let forms_editor_active_note_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Edit note / reason"));
+
         let subscriptions = vec![
             cx.subscribe(&tin_input, Self::on_tin_event),
             cx.subscribe_in(&name_input, window, Self::on_input_event),
@@ -538,6 +577,49 @@ impl ProfileManagerView {
                 this.cor_extracted_forms = event.selected.clone();
                 // We do not reset the input, MultiSelect handles its own state
                 cx.notify();
+            },
+        )
+        .detach();
+
+        cx.subscribe(
+            &forms_editor_year_select,
+            |this: &mut Self, _, event: &ComboboxEvent, cx| {
+                if let Some(val) = event.selected.as_ref() {
+                    if let Ok(year) = val.parse::<u16>() {
+                        this.forms_editor_year = year;
+                        this.forms_editor_selected_code = None; // Reset detail view
+                        cx.notify();
+                    }
+                }
+            },
+        )
+        .detach();
+
+        cx.subscribe_in(
+            &forms_editor_active_note_input,
+            window,
+            |this: &mut Self, _entity, event: &InputEvent, window, cx| {
+                if let InputEvent::Change = event {
+                    let val = this
+                        .forms_editor_active_note_input
+                        .read(cx)
+                        .value()
+                        .to_string();
+                    if let Some(code) = &this.forms_editor_selected_code {
+                        let year = this.forms_editor_year;
+                        if let Some(set) = this.stored_per_year_forms.get_mut(&year) {
+                            if let Some(entry) =
+                                set.entries.iter_mut().find(|e| e.form_code == *code)
+                            {
+                                entry.reason = if val.trim().is_empty() {
+                                    None
+                                } else {
+                                    Some(val)
+                                };
+                            }
+                        }
+                    }
+                }
             },
         )
         .detach();
@@ -596,6 +678,7 @@ impl ProfileManagerView {
             stored_tax_elections: vec![],
             stored_profile_versions: vec![],
             compliance_source_mode: ComplianceSourceMode::TemporalSuggestion,
+            cor_sub_tab: 0,
             ocr_selected_version_id: None,
             cor_editing_version_id: None,
             cor_preview_year_input,
@@ -607,6 +690,7 @@ impl ProfileManagerView {
             cor_registered_name_input,
             cor_trade_name_input,
             cor_rdo_code_input,
+            cor_rdo_select,
             cor_registered_address_input,
             cor_lob_code_input,
             cor_lob_description_input,
@@ -645,6 +729,14 @@ impl ProfileManagerView {
             pending_cor_editor_load: None,
             is_uploading_cor: false,
             pending_notification: None,
+            stored_per_year_forms: std::collections::BTreeMap::new(),
+            forms_editor_year,
+            forms_editor_year_select,
+            forms_editor_new_code_input,
+            forms_editor_new_reason_input,
+            forms_editor_new_frequency_select,
+            forms_editor_selected_code: None,
+            forms_editor_active_note_input,
             _subscriptions: subscriptions,
         }
     }
@@ -741,6 +833,23 @@ impl ProfileManagerView {
         self.stored_totp_secret = None;
         self.interactive_document_viewer = None;
         self.focused_ocr_field = None;
+        self.stored_per_year_forms.clear();
+        self.forms_editor_selected_code = None;
+        let current_year = chrono::Local::now().date_naive().year();
+        self.forms_editor_year = current_year as u16;
+        self.forms_editor_year_select.update(cx, |select, cx| {
+            select.set_selected_value(&current_year.to_string(), window, cx);
+        });
+        self.forms_editor_new_code_input
+            .update(cx, |input, cx| input.set_value("", window, cx));
+        self.forms_editor_new_reason_input
+            .update(cx, |input, cx| input.set_value("", window, cx));
+        self.forms_editor_new_frequency_select
+            .update(cx, |select, cx| {
+                select.set_selected_value("", window, cx);
+            });
+        self.forms_editor_active_note_input
+            .update(cx, |input, cx| input.set_value("", window, cx));
         self.setup_totp_state
             .update(cx, |input, cx| input.set_value("", window, cx));
 
@@ -1028,6 +1137,13 @@ impl ProfileManagerView {
             select.set_selected_value(coop_value, window, cx);
         });
 
+        self.stored_per_year_forms = profile.per_year_forms.clone();
+        let select_val = self.forms_editor_year_select.read(cx).selected_value(cx);
+        if let Ok(y) = select_val.parse::<u16>() {
+            self.forms_editor_year = y;
+        }
+        self.forms_editor_selected_code = None;
+
         cx.notify();
     }
 
@@ -1258,6 +1374,12 @@ impl ProfileManagerView {
             } else if state == self.zip_select {
                 field_to_validate = Some("zip_code");
                 value = val.split(" - ").next().unwrap_or("").trim().to_string();
+            } else if state == self.forms_editor_year_select {
+                if let Ok(year) = val.parse::<u16>() {
+                    self.forms_editor_year = year;
+                    self.forms_editor_selected_code = None; // Reset detail view
+                    cx.notify();
+                }
             }
 
             if let Some(field) = field_to_validate {
@@ -1299,7 +1421,7 @@ impl ProfileManagerView {
         }
     }
 
-    fn current_profile(&self, cx: &mut Context<Self>) -> TaxpayerProfile {
+    fn current_profile(&self, cx: &Context<Self>) -> TaxpayerProfile {
         let tin_val = self.tin_input.read(cx).formatted_value(cx);
         let tin_clean = tin_val.replace("-", "");
         let tin = Tin {
@@ -1524,6 +1646,7 @@ impl ProfileManagerView {
             compliance_source_mode: Self::derive_compliance_source_mode(
                 &self.stored_profile_versions,
             ),
+            per_year_forms: self.stored_per_year_forms.clone(),
         }
     }
 
@@ -1727,7 +1850,7 @@ impl ProfileManagerView {
         cx.notify();
     }
 
-    fn sync_current_profile_to_cor_draft(&mut self, cx: &mut Context<Self>) {
+    fn sync_current_profile_to_cor_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let mut profile = self.current_profile(cx);
         profile.profile_versions.clear();
         profile.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
@@ -1743,13 +1866,22 @@ impl ProfileManagerView {
             existing.status != bir_core::profile::TaxProfileVersionStatus::Draft
         });
         self.ocr_selected_version_id = Some(version.id.clone());
-        self.sync_document_viewer(cx);
-        self.stored_profile_versions.push(version);
+        self.stored_profile_versions.push(version.clone());
         self.compliance_source_mode =
             Self::derive_compliance_source_mode(&self.stored_profile_versions);
+        self.active_tab = 1;
+        self.sync_document_viewer(cx);
+        if let Err(e) = self.load_cor_version_editor(&version.id, window, cx) {
+            self.save_message = Some(e);
+        }
     }
 
-    fn upload_cor_document(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    fn upload_cor_document(
+        &mut self,
+        target_version_id: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let mut profile = self.current_profile(cx);
         profile.profile_versions.clear();
         profile.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
@@ -1770,13 +1902,15 @@ impl ProfileManagerView {
         };
 
         tracing::info!(
-            "[COR Upload] Starting upload flow. Provider={provider_label}, consent={}",
-            ocr_options.allow_cloud_upload
+            "[COR Upload] Starting upload flow. Provider={provider_label}, consent={}, target_version_id={:?}",
+            ocr_options.allow_cloud_upload,
+            target_version_id
         );
         self.save_message = Some("Processing document… please wait.".to_string());
         self.is_uploading_cor = true;
         cx.notify();
 
+        let target_ver_id = target_version_id.clone();
         cx.spawn(async move |this, cx| {
             tracing::info!("[COR Upload] Waiting for file picker…");
             let Some(file_handle) = rfd::AsyncFileDialog::new()
@@ -1846,18 +1980,28 @@ impl ProfileManagerView {
                             chrono::Local::now().naive_local(),
                         );
 
-                        let version_id = version.id.clone();
-                        tracing::info!("[COR Upload] Created draft version: {version_id}");
-                        tracing::info!(
-                            "[COR Upload] Version COR — TIN: {:?}, Name: {}, Type: {:?}",
-                            version.cor.tin,
-                            version.cor.registered_name,
-                            version.taxpayer_type
-                        );
+                        let final_ver_id = if let Some(ref ver_id) = target_ver_id {
+                            let mut new_ver = version;
+                            new_ver.id = ver_id.clone();
+                            if let Some(existing) = this
+                                .stored_profile_versions
+                                .iter_mut()
+                                .find(|v| &v.id == ver_id)
+                            {
+                                new_ver.label = existing.label.clone();
+                                *existing = new_ver;
+                            } else {
+                                this.stored_profile_versions.push(new_ver);
+                            }
+                            ver_id.clone()
+                        } else {
+                            let version_id = version.id.clone();
+                            this.stored_profile_versions.push(version);
+                            version_id
+                        };
+
                         this.cor_editing_version_id = None;
-                        // Push version BEFORE sync so viewer can find it
-                        this.stored_profile_versions.push(version);
-                        this.ocr_selected_version_id = Some(version_id.clone());
+                        this.ocr_selected_version_id = Some(final_ver_id.clone());
                         this.sync_document_viewer(cx);
                         this.compliance_source_mode =
                             Self::derive_compliance_source_mode(&this.stored_profile_versions);
@@ -1868,7 +2012,7 @@ impl ProfileManagerView {
                             ocr.status_message.replace('\n', " "),
                         ));
                         // Defer editor field load to next render frame (needs Window)
-                        this.pending_cor_editor_load = Some(version_id);
+                        this.pending_cor_editor_load = Some(final_ver_id);
                         // Reset consent AFTER we've used the options
                         this.gemini_ocr_cloud_consent = false;
                         this.is_uploading_cor = false;
@@ -1952,8 +2096,7 @@ impl ProfileManagerView {
             let _ = std::fs::remove_file(path);
         }
         self.save_profile(cx);
-        self.save_message =
-            Some("COR evidence removed.".to_string());
+        self.save_message = Some("COR evidence removed.".to_string());
         window.push_notification(
             Notification::success("COR evidence document removed.").title("OCR"),
             cx,
@@ -1992,6 +2135,27 @@ impl ProfileManagerView {
             // the OCR-derived classifications and fields are persisted.
             let projected = profile.projection_for_version(&version_clone);
             self.sync_projection_to_ui(&projected, window, cx);
+
+            use chrono::Datelike as _;
+            let year = effective_from.year() as u16;
+            let confirmed_version = profile
+                .profile_versions
+                .iter()
+                .find(|version| version.id == version_id)
+                .ok_or_else(|| "Confirmed COR version was not found.".to_string())?;
+            let form_codes = bir_core::integration::registered_form_codes_for_version(
+                &profile,
+                confirmed_version,
+                year,
+            );
+            let forms_set = bir_core::forms::PerYearFormsSet::from_codes(
+                year,
+                form_codes,
+                bir_core::forms::FormSetSource::CorAi,
+            );
+            self.stored_per_year_forms.insert(year, forms_set);
+            profile.per_year_forms = self.stored_per_year_forms.clone();
+
             self.save_profile(cx);
 
             Ok(())
@@ -2038,7 +2202,6 @@ impl ProfileManagerView {
             &self.cor_version_label_input,
             &self.cor_effective_from_input,
             &self.cor_effective_until_input,
-            &self.cor_tin_input,
             &self.cor_registration_date_input,
             &self.cor_registered_name_input,
             &self.cor_trade_name_input,
@@ -2049,6 +2212,11 @@ impl ProfileManagerView {
         ] {
             input.update(cx, |input, cx| input.set_value("", window, cx));
         }
+        self.cor_tin_input
+            .update(cx, |input, cx| input.clear(window, cx));
+        self.cor_rdo_select.update(cx, |select, cx| {
+            select.set_selected_value("", window, cx);
+        });
         self.cor_extracted_forms.clear();
         self.cor_extracted_forms_select.update(cx, |select, cx| {
             select.set_selected_ids(vec![], cx);
@@ -2105,7 +2273,7 @@ impl ProfileManagerView {
             )
         });
         self.cor_tin_input.update(cx, |input, cx| {
-            input.set_value(version.cor.tin.unwrap_or_default(), window, cx)
+            input.set_text_value(&version.cor.tin.clone().unwrap_or_default(), window, cx);
         });
         self.cor_registration_date_input.update(cx, |input, cx| {
             input.set_value(
@@ -2125,7 +2293,16 @@ impl ProfileManagerView {
             input.set_value(version.cor.trade_name.unwrap_or_default(), window, cx)
         });
         self.cor_rdo_code_input.update(cx, |input, cx| {
-            input.set_value(version.cor.rdo_code, window, cx)
+            input.set_value(version.cor.rdo_code.clone(), window, cx)
+        });
+        let rdo_value = self
+            .rdo_options
+            .iter()
+            .find(|option| option.starts_with(&version.cor.rdo_code))
+            .cloned()
+            .unwrap_or(version.cor.rdo_code.clone());
+        self.cor_rdo_select.update(cx, |select, cx| {
+            select.set_selected_value(&rdo_value, window, cx);
         });
         self.cor_registered_address_input.update(cx, |input, cx| {
             input.set_value(version.cor.registered_address, window, cx)
@@ -2239,7 +2416,7 @@ impl ProfileManagerView {
         version.effective_until = effective_until;
         version.needs_effective_date_review = version.effective_from.is_none();
         version.cor.tin = {
-            let value = self.cor_tin_input.read(cx).value().trim().to_string();
+            let value = self.cor_tin_input.read(cx).value(cx).trim().to_string();
             if value.is_empty() { None } else { Some(value) }
         };
         version.cor.registration_date = registration_date;
@@ -2258,7 +2435,10 @@ impl ProfileManagerView {
                 .to_string();
             if value.is_empty() { None } else { Some(value) }
         };
-        version.cor.rdo_code = self.cor_rdo_code_input.read(cx).value().trim().to_string();
+        version.cor.rdo_code = {
+            let val = self.cor_rdo_select.read(cx).selected_value(cx);
+            val.split(" - ").next().unwrap_or("").trim().to_string()
+        };
         version.cor.registered_address = self
             .cor_registered_address_input
             .read(cx)
@@ -2294,7 +2474,24 @@ impl ProfileManagerView {
         );
 
         let extracted_forms = self.cor_extracted_forms.clone();
-        if let Some(evidence) = version.evidence.first_mut() {
+        if version.evidence.is_empty() {
+            version.evidence.push(bir_core::profile::CorDocumentRef {
+                id: format!(
+                    "manual-evidence-{}",
+                    chrono::Local::now().timestamp_millis()
+                ),
+                file_name: "manual_entry".to_string(),
+                stored_path: "manual_entry".to_string(),
+                uploaded_at: Some(chrono::Local::now().naive_local()),
+                provider: Some("Manual".to_string()),
+                model: None,
+                document_type: Some("COR Form 2303".to_string()),
+                extracted_form_codes: extracted_forms,
+                ocr_text: None,
+                ocr_confidence: None,
+                field_bboxes: std::collections::HashMap::new(),
+            });
+        } else if let Some(evidence) = version.evidence.first_mut() {
             evidence.extracted_form_codes = extracted_forms;
         }
 
@@ -2309,8 +2506,7 @@ impl ProfileManagerView {
 
         self.save_profile(cx);
 
-        self.save_message =
-            Some("COR version details updated and saved.".to_string());
+        self.save_message = Some("COR version details updated and saved.".to_string());
         self.load_cor_version_editor(&version_id, window, cx)?;
         Ok(())
     }
@@ -2352,8 +2548,7 @@ impl ProfileManagerView {
         }
 
         self.save_profile(cx);
-        self.save_message =
-            Some("Registered tax type updated and saved.".to_string());
+        self.save_message = Some("Registered tax type updated and saved.".to_string());
     }
 
     fn sync_version_flags_from_registered_tax_types(
@@ -2534,7 +2729,12 @@ impl ProfileManagerView {
         Ok(())
     }
 
-    fn remove_cor_obligation_override(&mut self, version_id: &str, index: usize, cx: &mut Context<Self>) {
+    fn remove_cor_obligation_override(
+        &mut self,
+        version_id: &str,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) {
         let Some(version) = self
             .stored_profile_versions
             .iter_mut()
@@ -2549,9 +2749,7 @@ impl ProfileManagerView {
         }
         version.obligation_overrides.remove(index);
         self.save_profile(cx);
-        self.save_message = Some(
-            "Profile obligation override removed.".to_string(),
-        );
+        self.save_message = Some("Profile obligation override removed.".to_string());
     }
 
     fn add_cor_deadline_override(
@@ -2640,7 +2838,12 @@ impl ProfileManagerView {
         Ok(())
     }
 
-    fn remove_cor_deadline_override(&mut self, version_id: &str, index: usize, cx: &mut Context<Self>) {
+    fn remove_cor_deadline_override(
+        &mut self,
+        version_id: &str,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) {
         let Some(version) = self
             .stored_profile_versions
             .iter_mut()
@@ -2655,8 +2858,7 @@ impl ProfileManagerView {
         }
         version.deadline_overrides.remove(index);
         self.save_profile(cx);
-        self.save_message =
-            Some("Profile deadline override removed.".to_string());
+        self.save_message = Some("Profile deadline override removed.".to_string());
     }
 
     fn save_profile(&mut self, cx: &mut Context<Self>) {
@@ -3074,7 +3276,7 @@ impl Render for ProfileManagerView {
                                                             this.interactive_document_viewer = None;
                                                             cx.notify();
                                                         }))
-                                                        .child(div().text_sm().child("OCR")),
+                                                        .child(div().text_sm().child("COR")),
                                                 )
                                             })
                                             .child(
@@ -3152,6 +3354,30 @@ impl Render for ProfileManagerView {
                                                         }))
                                                         .child(div().text_sm().child("Export")),
                                                 )
+                                                .child(
+                                                    div()
+                                                        .id("tab_5")
+                                                        .px_4()
+                                                        .py_1p5()
+                                                        .rounded_md()
+                                                        .cursor_pointer()
+                                                        .when(self.active_tab == 5, |s| {
+                                                            s.bg(cx.theme().background)
+                                                                .shadow_sm()
+                                                                .text_color(cx.theme().foreground)
+                                                                .font_weight(FontWeight::SEMIBOLD)
+                                                        })
+                                                        .when(self.active_tab != 5, |s| {
+                                                            s.hover(|s| s.bg(cx.theme().muted))
+                                                                .text_color(cx.theme().muted_foreground)
+                                                                .font_weight(FontWeight::MEDIUM)
+                                                        })
+                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                            this.active_tab = 5;
+                                                            cx.notify();
+                                                        }))
+                                                        .child(div().text_sm().child("Active Forms")),
+                                                )
                                             }),
                                     ),
                             )
@@ -3172,10 +3398,10 @@ impl Render for ProfileManagerView {
                                         this.child(self.render_ocr_tab(cx))
                                     })
                                     .child(self.render_email_settings_tab(cx))
+                                    .child(self.render_security_tab(global_pins_enabled, cx))
+                                    .child(self.render_export_tab(cx))
+                                    .child(self.render_active_forms_tab(cx))
                             )
-                            .child(self.render_security_tab(global_pins_enabled, cx))
-                            .child(self.render_export_tab(cx))
-
                             .when(self.active_tab != 1, |this| {
                                 this.child(
                                     div()

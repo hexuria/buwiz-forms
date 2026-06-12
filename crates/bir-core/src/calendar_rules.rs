@@ -486,6 +486,24 @@ impl DeadlineResolver {
         Self::sort_deadlines(all_deadlines)
     }
 
+    /// Resolve the deadlines for a taxable year, restricted to a user-owned
+    /// Forms Set (`form_codes`). This is the deadline source for the dashboard
+    /// in the per-year Forms Set model: only the forms the taxpayer actually
+    /// files produce deadlines. Form codes not backed by an official calendar
+    /// rule (e.g. user-added custom forms) simply yield no deadlines.
+    pub fn deadlines_for_forms(
+        form_codes: &[String],
+        taxable_year: i32,
+        overrides: &[DeadlineOverride],
+    ) -> Vec<ResolvedTaxDeadline> {
+        let wanted: std::collections::BTreeSet<&str> =
+            form_codes.iter().map(|code| code.as_str()).collect();
+        Self::resolve_taxable_year_with_overrides(taxable_year, overrides)
+            .into_iter()
+            .filter(|deadline| wanted.contains(deadline.form_code.as_str()))
+            .collect()
+    }
+
     pub fn resolve_deadline_calendar_year(calendar_year: i32) -> Vec<ResolvedTaxDeadline> {
         Self::resolve_deadline_calendar_year_with_overrides(calendar_year, &[])
     }
@@ -681,7 +699,8 @@ impl DeadlineResolver {
             },
             OfficialRule {
                 form_nos: vec![
-                    "1700", "1701", "1701A", "1701-MS", "1702-EX", "1702-MX", "1702-RT", "1707-A",
+                    "1700", "1701", "1701A", "1701-MS", "1702", "1702-EX", "1702-MX", "1702-RT",
+                    "1707-A",
                 ],
                 form_name: "Annual Income Tax Return",
                 frequency: Frequency::Annual,
@@ -711,7 +730,8 @@ impl DeadlineResolver {
             OfficialRule {
                 form_nos: vec![
                     "2552", "1600-WP", "1706", "1707", "1800", "1801", "0605", "0611-A", "0613",
-                    "2200-A", "2200-AN", "2200-M", "2200P", "2200-S", "2200-T", "2553", "2000",
+                    "1905", "2200-A", "2200-AN", "2200-M", "2200P", "2200-S", "2200-T", "2553",
+                    "2000",
                 ],
                 form_name: "As Needed / Special / Event-Based",
                 frequency: Frequency::AsNeeded,
@@ -995,7 +1015,7 @@ pub fn canonical_form_code(display_form_no: &str) -> &'static str {
         "1601-C" => "1601C",
         "1601-EQ" => "1601EQ",
         "1601-FQ" => "1601FQ",
-        "1604-C" | "1604-F" => "1604CF",
+        "1604-C" | "1604-F" | "1604C" | "1604F" | "1604CF" => "1604CF",
         "1604-E" => "1604E",
         "1701-MS" => "1701MS",
         "1702-EX" => "1702EX",
@@ -1024,11 +1044,13 @@ pub fn canonical_form_code(display_form_no: &str) -> &'static str {
             "1701" => "1701",
             "1701A" => "1701A",
             "1701Q" => "1701Q",
+            "1702" => "1702",
             "1702Q" => "1702Q",
             "1706" => "1706",
             "1707" => "1707",
             "1800" => "1800",
             "1801" => "1801",
+            "1905" => "1905",
             "2000" => "2000",
             "2200P" => "2200P",
             "2316" => "2316",

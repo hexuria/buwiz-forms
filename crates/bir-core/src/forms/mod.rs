@@ -12,17 +12,23 @@ pub mod form_1702rt;
 pub mod form_2307;
 pub mod form_2550q;
 pub mod form_2551q;
+pub mod forms_set;
 pub mod registry;
+pub mod support_level;
 
 pub use atc::{ATC_TABLE_2551Q, AtcEntry, find_atc};
 pub use form_1601c::Form1601CDraft;
 pub use form_1701q::Form1701QDraft;
 pub use form_2551q::{Form2551QDraft, Schedule1Row};
+pub use forms_set::{FormCardData, FormSetEntry, FormSetSource, PerYearFormsSet};
 #[allow(deprecated)]
 // re-exporting deprecated forms_for_taxpayer / forms_for_profile for backward compat only
 pub use registry::{
     FORM_REGISTRY, FilingFrequency, FormDefinition, find_form, forms_for_profile,
     forms_for_taxpayer,
+};
+pub use support_level::{
+    FormSupportLevel, can_queue_for_submission, fileable_form_type_id, form_support_level,
 };
 
 pub mod form_0605_xml;

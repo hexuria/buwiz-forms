@@ -7,8 +7,7 @@
 //! - `dashboard.rs` — filters `FormArtifact` lists using `FilingFrequency`
 //!
 //! The eligibility helper functions (`forms_for_taxpayer`, `forms_for_profile`) are
-//! **deprecated** — use `TemporalEngine::evaluate_with_context()` or
-//! `integration::applicable_forms_for_profile_and_year()` instead.
+//! **deprecated** — use `integration::applicable_forms_for_profile_and_year()` instead.
 
 use crate::profile::TaxpayerType;
 
@@ -41,6 +40,28 @@ pub struct FormDefinition {
     pub is_deprecated: bool,
 }
 
+impl FormDefinition {
+    pub fn deprecation_year(&self) -> Option<u16> {
+        if self.code == "1704" {
+            return Some(2021);
+        }
+        // Monthly VAT declarations stopped being a required recurring filing
+        // beginning in 2023. Keep the definition for historical returns, but
+        // do not place it in current-year obligation sets.
+        if self.code == "2550M" {
+            return Some(2023);
+        }
+        if self.is_deprecated {
+            match self.code {
+                "1601E" | "2551M" => Some(2018),
+                _ => Some(2018),
+            }
+        } else {
+            None
+        }
+    }
+}
+
 pub const FORM_REGISTRY: &[FormDefinition] = &[
     // ═══════════════════════════════════════════
     // Payment
@@ -54,6 +75,23 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
             TaxpayerType::Individual,
             TaxpayerType::Corporation,
             TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: false,
+        is_deprecated: false,
+    },
+    FormDefinition {
+        code: "1905",
+        title: "Application for Registration Information Update / Correction / Cancellation",
+        category: "Registration",
+        frequency: FilingFrequency::OpenEnded,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+            TaxpayerType::Cooperative,
+            TaxpayerType::Estate,
+            TaxpayerType::Trust,
         ],
         requires_vat: None,
         requires_employees: false,
@@ -133,6 +171,34 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         is_deprecated: false,
     },
     FormDefinition {
+        code: "0619F",
+        title: "Monthly Remittance Form for Final Income Taxes Withheld",
+        category: "Withholding Tax",
+        frequency: FilingFrequency::Monthly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: true,
+        is_deprecated: false,
+    },
+    FormDefinition {
+        code: "1601FQ",
+        title: "Quarterly Remittance Return of Final Income Taxes Withheld",
+        category: "Withholding Tax",
+        frequency: FilingFrequency::Quarterly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: true,
+        is_deprecated: false,
+    },
+    FormDefinition {
         code: "1602",
         title: "Monthly Remittance Return of Final Income Taxes Withheld",
         category: "Withholding Tax",
@@ -177,6 +243,34 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
     FormDefinition {
         code: "1604E",
         title: "Annual Information Return of Creditable Income Taxes Withheld",
+        category: "Withholding Tax",
+        frequency: FilingFrequency::Annual,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: true,
+        is_deprecated: false,
+    },
+    FormDefinition {
+        code: "0620",
+        title: "Monthly Remittance Form of Tax Withheld on the Amount Withdrawn from the Decedent's Deposit Account",
+        category: "Withholding Tax",
+        frequency: FilingFrequency::Monthly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: true,
+        is_deprecated: false,
+    },
+    FormDefinition {
+        code: "2316",
+        title: "Certificate of Compensation Payment / Tax Withheld",
         category: "Withholding Tax",
         frequency: FilingFrequency::Annual,
         taxpayer_types: &[
@@ -504,6 +598,34 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         is_deprecated: false,
     },
     FormDefinition {
+        code: "2200C",
+        title: "Excise Tax Return for Coal and Coke",
+        category: "Excise Tax",
+        frequency: FilingFrequency::Monthly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: false,
+        is_deprecated: false,
+    },
+    FormDefinition {
+        code: "2200S",
+        title: "Excise Tax Return for Sweetened Beverages",
+        category: "Excise Tax",
+        frequency: FilingFrequency::Monthly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: false,
+        is_deprecated: false,
+    },
+    FormDefinition {
         code: "0619E",
         title: "Monthly Remittance Form for Creditable Income Taxes Withheld (Expanded)",
         category: "Withholding Tax",
@@ -541,17 +663,78 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         requires_employees: false,
         is_deprecated: false,
     },
+    // ═══════════════════════════════════════════
+    // Capital Gains Tax
+    // ═══════════════════════════════════════════
+    FormDefinition {
+        code: "1706",
+        title: "Capital Gains Tax Return (Real Properties)",
+        category: "Capital Gains Tax",
+        frequency: FilingFrequency::OpenEnded,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: false,
+        is_deprecated: false,
+    },
+    FormDefinition {
+        code: "1707A",
+        title: "Annual Capital Gains Tax Return (Shares of Stock Not Traded)",
+        category: "Capital Gains Tax",
+        frequency: FilingFrequency::OpenEnded,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: false,
+        is_deprecated: false,
+    },
+    // ═══════════════════════════════════════════
+    // Estate and Donor's Tax
+    // ═══════════════════════════════════════════
+    FormDefinition {
+        code: "1800",
+        title: "Donor's Tax Return",
+        category: "Estate and Donor's Tax",
+        frequency: FilingFrequency::OpenEnded,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: false,
+        is_deprecated: false,
+    },
+    FormDefinition {
+        code: "1801",
+        title: "Estate Tax Return",
+        category: "Estate and Donor's Tax",
+        frequency: FilingFrequency::OpenEnded,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: false,
+        is_deprecated: false,
+    },
 ];
 
 /// Returns forms available to a given taxpayer type.
 ///
 /// # Deprecated
 /// This function performs a static registry lookup and is not era-aware.
-/// Use [`crate::integration::applicable_forms_for_profile_and_year`] or
-/// [`crate::temporal::TemporalEngine`] instead.
+/// Use [`crate::integration::applicable_forms_for_profile_and_year`] instead.
 #[deprecated(
     since = "0.1.0",
-    note = "Use integration::applicable_forms_for_profile_and_year() or TemporalEngine instead"
+    note = "Use integration::applicable_forms_for_profile_and_year() instead"
 )]
 pub fn forms_for_taxpayer(taxpayer_type: &TaxpayerType) -> Vec<&'static FormDefinition> {
     FORM_REGISTRY
@@ -562,18 +745,38 @@ pub fn forms_for_taxpayer(taxpayer_type: &TaxpayerType) -> Vec<&'static FormDefi
 
 /// Find a single form definition by code.
 pub fn find_form(code: &str) -> Option<&'static FormDefinition> {
-    FORM_REGISTRY.iter().find(|f| f.code == code)
+    let canonical = canonical_form_code(code);
+    FORM_REGISTRY.iter().find(|f| f.code == canonical)
+}
+
+/// Normalize display variants and COR OCR output to the registry's canonical code.
+pub fn canonical_form_code(code: &str) -> String {
+    let normalized = code.trim().to_ascii_uppercase();
+    let compact = normalized
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .collect::<String>();
+
+    match compact.as_str() {
+        "1600VT" | "1600PT" => "1600".to_string(),
+        "1602Q" => "1602".to_string(),
+        "1603Q" => "1603".to_string(),
+        "1604C" | "1604F" | "1604CF" => "1604CF".to_string(),
+        "1707" | "1707A" => "1707A".to_string(),
+        "2000OT" => "2000".to_string(),
+        other if FORM_REGISTRY.iter().any(|form| form.code == other) => other.to_string(),
+        _ => normalized,
+    }
 }
 
 /// Returns forms filtered by taxpayer type, VAT status, and employee status.
 ///
 /// # Deprecated
 /// This function performs a static registry lookup and is not era-aware.
-/// Use [`crate::integration::applicable_forms_for_profile_and_year`] or
-/// [`crate::temporal::TemporalEngine`] instead.
+/// Use [`crate::integration::applicable_forms_for_profile_and_year`] instead.
 #[deprecated(
     since = "0.1.0",
-    note = "Use integration::applicable_forms_for_profile_and_year() or TemporalEngine instead"
+    note = "Use integration::applicable_forms_for_profile_and_year() instead"
 )]
 pub fn forms_for_profile(
     taxpayer_type: &TaxpayerType,
@@ -591,4 +794,37 @@ pub fn forms_for_profile(
                 && (!f.requires_employees || has_employees)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn canonical_form_code_normalizes_cor_variants() {
+        assert_eq!(canonical_form_code("1604C"), "1604CF");
+        assert_eq!(canonical_form_code("1604-C"), "1604CF");
+        assert_eq!(canonical_form_code("0619-E"), "0619E");
+        assert_eq!(canonical_form_code("CUSTOM_FORM"), "CUSTOM_FORM");
+    }
+
+    #[test]
+    fn registry_contains_open_ended_registration_forms() {
+        assert_eq!(
+            find_form("0605").map(|form| &form.frequency),
+            Some(&FilingFrequency::OpenEnded)
+        );
+        assert_eq!(
+            find_form("1905").map(|form| &form.frequency),
+            Some(&FilingFrequency::OpenEnded)
+        );
+    }
+
+    #[test]
+    fn monthly_vat_is_not_a_required_2023_onward_obligation() {
+        assert_eq!(
+            find_form("2550M").and_then(FormDefinition::deprecation_year),
+            Some(2023)
+        );
+    }
 }

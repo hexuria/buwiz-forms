@@ -13,6 +13,7 @@
 //! - `notices` — BIR notices, announcements, deadlines, penalties
 
 mod drafts;
+mod forms_set;
 mod jobs;
 mod migrations;
 mod notices;
@@ -352,7 +353,7 @@ impl Database {
     ///
     /// The CLI uses the same Keychain Services storage as the `keyring` crate, so existing
     /// keys created by either method are fully interchangeable.
-    #[cfg(target_os = "macos")]
+    #[cfg(all(target_os = "macos", not(test)))]
     fn get_or_create_master_key_macos() -> Result<String, DbError> {
         use tracing::info;
 
@@ -671,6 +672,7 @@ mod tests {
             oauth_refresh_token: None,
             profile_versions: vec![],
             compliance_source_mode: Default::default(),
+            per_year_forms: Default::default(),
             zip_code: "1103".into(),
             phone: "0999".into(),
             email: "miley@example.com".into(),

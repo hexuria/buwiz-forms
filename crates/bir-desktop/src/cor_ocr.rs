@@ -12,11 +12,12 @@ use serde_json::json;
 
 const GEMINI_KEYCHAIN_SERVICE: &str = "dev.goldcoders.bir.gemini_ocr";
 const GEMINI_KEYCHAIN_USER: &str = "gemini_api_key";
-pub(crate) const DEFAULT_GEMINI_MODEL: &str = "gemini-3.1-flash-lite";
+pub(crate) const DEFAULT_GEMINI_MODEL: &str = "gemini-3.5-flash";
 pub(crate) const COR_OCR_GEMINI_ENABLED_SETTING: &str = "cor_ocr_gemini_enabled";
 pub(crate) const COR_OCR_GEMINI_MODEL_SETTING: &str = "cor_ocr_gemini_model";
 
 pub(crate) const SUPPORTED_GEMINI_MODELS: &[&str] = &[
+    "gemini-3.5-flash",
     "gemini-3.1-flash-lite",
     "gemini-3.1-flash-lite-preview",
     "gemini-3.1-pro-preview",
@@ -145,7 +146,10 @@ pub(crate) fn create_draft_cor_version_from_ocr(
     version.needs_effective_date_review = version.effective_from.is_none();
 
     if let Some(tin) = ocr.fields.tin {
-        version.cor.tin = Some(tin);
+        let trimmed = tin.trim();
+        if !trimmed.is_empty() {
+            version.cor.tin = Some(trimmed.to_string());
+        }
     }
     if let Some(registration_date) = ocr.fields.registration_date {
         version.cor.registration_date = Some(registration_date);
@@ -155,22 +159,40 @@ pub(crate) fn create_draft_cor_version_from_ocr(
         }
     }
     if let Some(registered_name) = ocr.fields.registered_name {
-        version.cor.registered_name = registered_name;
+        let trimmed = registered_name.trim();
+        if !trimmed.is_empty() {
+            version.cor.registered_name = trimmed.to_string();
+        }
     }
     if let Some(trade_name) = ocr.fields.trade_name {
-        version.cor.trade_name = Some(trade_name);
+        let trimmed = trade_name.trim();
+        if !trimmed.is_empty() {
+            version.cor.trade_name = Some(trimmed.to_string());
+        }
     }
     if let Some(rdo_code) = ocr.fields.rdo_code {
-        version.cor.rdo_code = rdo_code;
+        let trimmed = rdo_code.trim();
+        if !trimmed.is_empty() {
+            version.cor.rdo_code = trimmed.to_string();
+        }
     }
     if let Some(registered_address) = ocr.fields.registered_address {
-        version.cor.registered_address = registered_address;
+        let trimmed = registered_address.trim();
+        if !trimmed.is_empty() {
+            version.cor.registered_address = trimmed.to_string();
+        }
     }
     if let Some(line_of_business_code) = ocr.fields.line_of_business_code {
-        version.cor.line_of_business_code = Some(line_of_business_code);
+        let trimmed = line_of_business_code.trim();
+        if !trimmed.is_empty() {
+            version.cor.line_of_business_code = Some(trimmed.to_string());
+        }
     }
     if let Some(line_of_business_description) = ocr.fields.line_of_business_description {
-        version.cor.line_of_business_description = line_of_business_description;
+        let trimmed = line_of_business_description.trim();
+        if !trimmed.is_empty() {
+            version.cor.line_of_business_description = trimmed.to_string();
+        }
     }
     if let Some(taxpayer_type) = ocr.fields.taxpayer_type {
         version.taxpayer_type = taxpayer_type;
@@ -765,6 +787,7 @@ fn normalize_model_id(model: &str) -> String {
 fn cor_extraction_prompt() -> &'static str {
     "You are extracting structured data from a Philippine BIR Certificate of Registration, Form 2303. \
     Return JSON only. If a value is unreadable, use an empty string. Do not invent facts. \
+    In the `registered_tax_types` array, make sure to extract all registered tax types listed in the \"Tax Type\" column/section on the document (such as INCOME TAX, VALUE ADDED TAX, PERCENTAGE TAX, REGISTRATION FEE, WITHHOLDING TAX - EXPANDED, WITHHOLDING TAX - COMPENSATION, WITHHOLDING TAX - FINAL, EXCISE TAX). Do not omit any registered tax types that are listed on the document. \
     For every extracted field, include a tightly fitted bounding box in `field_bboxes`. \
     The bounding box must be an array of `[ymin, xmin, ymax, xmax]` normalized to 0-1000. \
     It MUST accurately hug the edges of the text. \
@@ -1012,10 +1035,12 @@ fn normalize_form_codes(codes: Vec<String>) -> Vec<String> {
                 .map(str::trim)
                 .filter(|code| !code.is_empty())
                 .map(|code| {
-                    code.chars()
+                    let cleaned = code
+                        .chars()
                         .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '-')
                         .collect::<String>()
-                        .to_ascii_uppercase()
+                        .to_ascii_uppercase();
+                    bir_core::forms::registry::canonical_form_code(&cleaned)
                 })
                 .collect::<Vec<_>>()
         })
@@ -1129,6 +1154,7 @@ mod tests {
             registration_activity_status: RegistrationActivityStatus::Active,
             profile_versions: vec![],
             compliance_source_mode: ComplianceSourceMode::TemporalSuggestion,
+            per_year_forms: Default::default(),
         }
     }
 
@@ -1401,7 +1427,6 @@ PERCENTAGE TAX
                 extracted_form_codes: vec!["0605".to_string(), "1701Q".to_string()],
                 filing_reminders: vec!["File on time".to_string()],
                 field_bboxes: std::collections::HashMap::new(),
-                ..Default::default()
             },
             status_message: "Gemini OCR extracted COR fields.".to_string(),
         };

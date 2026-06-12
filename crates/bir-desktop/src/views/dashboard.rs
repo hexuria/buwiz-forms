@@ -1,10 +1,9 @@
 use bir_core::calendar_rules::{DeadlinePeriod, DeadlineResolver, ResolvedTaxDeadline};
 use bir_core::db::{BirNotice, Database, NoticeSourceKind};
 use bir_core::forms::registry::FilingFrequency;
-use bir_core::forms::{FormFilingProgress, QuarterState};
+use bir_core::forms::{FormFilingProgress, QuarterState, form_support_level};
 use bir_core::profile::TaxpayerProfile;
-use bir_core::temporal::support_level::form_support_level;
-use chrono::{Datelike, Local};
+use chrono::{Datelike, Local, NaiveDate};
 use gpui::*;
 use gpui_component::*;
 use std::sync::{Arc, Mutex};
@@ -22,6 +21,7 @@ pub enum DashboardEvent {
     },
     Reload,
     LogoutProfile(String),
+    OpenProfileManager,
 }
 
 impl EventEmitter<DashboardEvent> for DashboardView {}
@@ -41,204 +41,6 @@ fn tax_form_grid_columns(window_width: f32, sidebar_width: f32) -> usize {
         2
     } else {
         1
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use bir_core::calendar_rules::{DeadlineKind, DeadlineStatus};
-    use bir_core::forms::{FilingStatus, FormDraftSummary};
-    use chrono::NaiveDate;
-    use std::collections::HashMap;
-
-    fn quarterly_deadline(
-        form_code: &str,
-        taxable_year: i32,
-        quarter: u8,
-        final_deadline: NaiveDate,
-    ) -> ResolvedTaxDeadline {
-        ResolvedTaxDeadline {
-            form_code: form_code.to_string(),
-            display_form_no: form_code.to_string(),
-            form_name: "Quarterly test deadline".to_string(),
-            period: DeadlinePeriod::Quarterly {
-                taxable_year,
-                quarter,
-            },
-            period_start: None,
-            period_end: None,
-            deadline: DeadlineKind::Dated {
-                original_deadline: final_deadline,
-                final_deadline,
-            },
-            status: DeadlineStatus::Normal,
-            description: "test".to_string(),
-            source_reference: None,
-        }
-    }
-
-    fn summary(form_code: &str, quarter: Option<u8>, month: Option<u8>) -> FormDraftSummary {
-        FormDraftSummary {
-            id: 1,
-            tin: "123456789000".to_string(),
-            form_code: form_code.to_string(),
-            taxable_year: 2026,
-            quarter,
-            month,
-            status: FilingStatus::Draft,
-            updated_at: "2026-05-16T00:00:00Z".to_string(),
-        }
-    }
-
-    #[::core::prelude::v1::test]
-    fn calendar_filter_uses_taxable_period_when_filter_is_explicit() {
-        let q1_due_in_may = quarterly_deadline(
-            "1701Q",
-            2026,
-            1,
-            NaiveDate::from_ymd_opt(2026, 5, 15).unwrap(),
-        );
-
-        assert!(DashboardView::deadline_matches_filters(
-            &q1_due_in_may,
-            &[],
-            &[1],
-            false,
-            true,
-            5,
-        ));
-        assert!(DashboardView::deadline_matches_filters(
-            &q1_due_in_may,
-            &[1],
-            &[],
-            false,
-            true,
-            5,
-        ));
-        assert!(DashboardView::deadline_matches_filters(
-            &q1_due_in_may,
-            &[3],
-            &[],
-            false,
-            true,
-            5,
-        ));
-        assert!(!DashboardView::deadline_matches_filters(
-            &q1_due_in_may,
-            &[4],
-            &[],
-            false,
-            true,
-            5,
-        ));
-        assert!(!DashboardView::deadline_matches_filters(
-            &q1_due_in_may,
-            &[5],
-            &[],
-            false,
-            true,
-            5,
-        ));
-    }
-
-    #[::core::prelude::v1::test]
-    fn default_calendar_filter_still_uses_current_deadline_month() {
-        let q1_due_in_may = quarterly_deadline(
-            "1701Q",
-            2026,
-            1,
-            NaiveDate::from_ymd_opt(2026, 5, 15).unwrap(),
-        );
-
-        assert!(DashboardView::deadline_matches_filters(
-            &q1_due_in_may,
-            &[],
-            &[],
-            false,
-            false,
-            5,
-        ));
-        assert!(!DashboardView::deadline_matches_filters(
-            &q1_due_in_may,
-            &[],
-            &[],
-            false,
-            false,
-            4,
-        ));
-    }
-
-    #[::core::prelude::v1::test]
-    fn only_paid_quarterly_deadline_is_satisfied() {
-        let deadline = quarterly_deadline(
-            "2551Q",
-            2026,
-            1,
-            NaiveDate::from_ymd_opt(2026, 4, 27).unwrap(),
-        );
-        let mut progress = FormFilingProgress::new_empty("2551Q", 2026);
-        progress.quarters[0] = QuarterState::Paid;
-
-        let mut by_year = HashMap::new();
-        by_year.insert(2026, progress);
-        let mut progress_by_code = HashMap::new();
-        progress_by_code.insert("2551Q".to_string(), by_year);
-
-        assert!(DashboardView::deadline_is_satisfied(
-            &deadline,
-            &progress_by_code
-        ));
-
-        for state in [QuarterState::Submitted, QuarterState::Confirmed] {
-            let mut progress = FormFilingProgress::new_empty("2551Q", 2026);
-            progress.quarters[0] = state;
-
-            let mut by_year = HashMap::new();
-            by_year.insert(2026, progress);
-            let mut progress_by_code = HashMap::new();
-            progress_by_code.insert("2551Q".to_string(), by_year);
-
-            assert!(!DashboardView::deadline_is_satisfied(
-                &deadline,
-                &progress_by_code
-            ));
-        }
-    }
-
-    #[::core::prelude::v1::test]
-    fn actionable_summaries_use_taxable_period_filters() {
-        let q1_summary = summary("1701Q", Some(1), None);
-        let q2_summary = summary("1701Q", Some(2), None);
-
-        assert!(DashboardView::summary_matches_period_filters(
-            &q1_summary,
-            &[],
-            &[1],
-            false,
-            true,
-        ));
-        assert!(DashboardView::summary_matches_period_filters(
-            &q1_summary,
-            &[1],
-            &[],
-            false,
-            true,
-        ));
-        assert!(!DashboardView::summary_matches_period_filters(
-            &q1_summary,
-            &[5],
-            &[],
-            false,
-            true,
-        ));
-        assert!(!DashboardView::summary_matches_period_filters(
-            &q2_summary,
-            &[],
-            &[1],
-            false,
-            true,
-        ));
     }
 }
 
@@ -273,6 +75,8 @@ pub struct DashboardView {
     actionable_forms: Vec<(String, bir_core::forms::FormDraftSummary)>,
     upcoming_deadlines_list:
         Entity<crate::components::upcoming_deadlines_list::UpcomingDeadlinesList>,
+    /// Consistency issues from the last resolve_profile_obligations_for_year call
+    consistency_issues: Vec<bir_core::integration::ProfileConsistencyIssue>,
 }
 
 impl DashboardView {
@@ -291,10 +95,7 @@ impl DashboardView {
             |this: &mut Self, _, event: &SmartDateFilterEvent, cx| {
                 this.selected_year = event.year;
                 if let Some(profile) = this.active_profile.clone() {
-                    this.reload_filing_progress(&profile);
-                    this.filter_state.update(cx, |state, cx| {
-                        state.update_for_profile(&profile, event.year as u16, cx);
-                    });
+                    this.reload_filing_progress(&profile, cx);
                 }
                 cx.notify();
             },
@@ -314,7 +115,7 @@ impl DashboardView {
             |this: &mut Self, _bus, event: &crate::events::AppEvent, cx| match event {
                 crate::events::AppEvent::DatabaseChanged => {
                     if let Some(profile) = this.active_profile.clone() {
-                        this.reload_filing_progress(&profile);
+                        this.reload_filing_progress(&profile, cx);
                         cx.notify();
                     }
                 }
@@ -357,30 +158,39 @@ impl DashboardView {
             deadlines: Vec::new(),
             actionable_forms: Vec::new(),
             upcoming_deadlines_list,
+            consistency_issues: Vec::new(),
         }
     }
 
     pub fn set_profile(&mut self, profile: TaxpayerProfile, cx: &mut Context<Self>) {
-        let year = self.selected_year as u16;
-        self.filter_state.update(cx, |state, cx| {
-            state.update_for_profile(&profile, year, cx);
+        let min_year = if let Some(start_date) = &profile.business_start_date {
+            use chrono::Datelike;
+            start_date.year()
+        } else {
+            1997
+        };
+        self.smart_date_filter.update(cx, |filter, cx| {
+            filter.set_min_year(min_year, cx);
         });
-        self.reload_filing_progress(&profile);
-        self.active_profile = Some(profile);
+
+        self.active_profile = Some(profile.clone());
+        self.reload_filing_progress(&profile, cx);
         cx.notify();
     }
 
     /// Query the DB for all form progress for this profile in the selected year.
-    fn reload_filing_progress(&mut self, profile: &TaxpayerProfile) {
+    fn reload_filing_progress(&mut self, profile: &TaxpayerProfile, cx: &mut Context<Self>) {
         self.filing_progress.clear();
         self.actionable_forms.clear();
         self.deadlines.clear();
 
         if let Ok(db) = self.db.lock() {
             let year = self.selected_year as u16;
-            let applicable_codes =
-                bir_core::integration::resolve_profile_obligations_for_year(profile, year)
-                    .form_codes;
+            let obligations =
+                bir_core::integration::resolve_profile_obligations_for_year(profile, year);
+            let recurring_codes = obligations.form_codes;
+            let applicable_codes = profile.active_form_codes_for_year(year);
+            self.consistency_issues = obligations.consistency_report.issues;
 
             for code in applicable_codes.clone() {
                 let mut year_progress = std::collections::HashMap::new();
@@ -414,13 +224,49 @@ impl DashboardView {
                 profile, year,
             ));
             let deadlines_for_year =
-                DeadlineResolver::resolve_taxable_year_with_overrides(year as i32, &overrides);
+                DeadlineResolver::deadlines_for_forms(&recurring_codes, year as i32, &overrides);
             self.deadlines = deadlines_for_year
                 .into_iter()
                 .filter(|deadline| {
                     bir_core::integration::deadline_applies_to_profile(profile, deadline)
                 })
                 .collect();
+
+            // Calculate filtered available forms to sync with filter bar popover
+            let mut available_codes = applicable_codes.clone();
+            let monthly_quarterly_pairs: &[(&str, &str)] =
+                &[("2550M", "2550Q"), ("2551M", "2551Q")];
+            available_codes.retain(|code| {
+                if let Some((_monthly, quarterly)) =
+                    monthly_quarterly_pairs.iter().find(|(m, _)| m == code)
+                {
+                    if let Some(q_progress) = self
+                        .filing_progress
+                        .get(*quarterly)
+                        .and_then(|y| y.get(&year))
+                    {
+                        let quarterly_has_filing = q_progress.quarters.iter().any(|q| {
+                            matches!(
+                                q,
+                                QuarterState::Draft
+                                    | QuarterState::Queued
+                                    | QuarterState::Submitted
+                                    | QuarterState::Confirmed
+                                    | QuarterState::Paid
+                            )
+                        });
+                        if quarterly_has_filing {
+                            return false;
+                        }
+                    }
+                }
+                true
+            });
+
+            // Push to filter state
+            self.filter_state.update(cx, |state, cx| {
+                state.update_for_profile(profile, year, available_codes, cx);
+            });
         }
     }
 
@@ -548,6 +394,53 @@ impl DashboardView {
         include_annual
     }
 
+    fn deadline_matches_summary(
+        deadline: &ResolvedTaxDeadline,
+        summary: &bir_core::forms::FormDraftSummary,
+    ) -> bool {
+        if deadline.form_code != summary.form_code {
+            return false;
+        }
+
+        match deadline.period {
+            DeadlinePeriod::Monthly {
+                taxable_year,
+                month,
+            } => taxable_year == i32::from(summary.taxable_year) && summary.month == Some(month),
+            DeadlinePeriod::Quarterly {
+                taxable_year,
+                quarter,
+            } => {
+                taxable_year == i32::from(summary.taxable_year) && summary.quarter == Some(quarter)
+            }
+            DeadlinePeriod::Annual { taxable_year } => {
+                taxable_year == i32::from(summary.taxable_year)
+                    && summary.month.is_none()
+                    && summary.quarter.is_none()
+            }
+            DeadlinePeriod::EventBased => false,
+        }
+    }
+
+    fn deadline_for_summary<'a>(
+        deadlines: &'a [ResolvedTaxDeadline],
+        summary: &bir_core::forms::FormDraftSummary,
+    ) -> Option<&'a ResolvedTaxDeadline> {
+        deadlines
+            .iter()
+            .find(|deadline| Self::deadline_matches_summary(deadline, summary))
+    }
+
+    fn summary_is_overdue(
+        deadlines: &[ResolvedTaxDeadline],
+        summary: &bir_core::forms::FormDraftSummary,
+        today: NaiveDate,
+    ) -> bool {
+        Self::deadline_for_summary(deadlines, summary)
+            .and_then(ResolvedTaxDeadline::final_deadline_date)
+            .is_some_and(|deadline| deadline < today)
+    }
+
     fn paid_state(state: &QuarterState) -> bool {
         matches!(state, QuarterState::Paid)
     }
@@ -606,9 +499,7 @@ impl Render for DashboardView {
         let year = self.selected_year as u16;
 
         let mut available_forms =
-            bir_core::integration::recurring_obligation_decisions_for_profile_and_year(
-                profile, year,
-            );
+            bir_core::integration::applicable_form_decisions_for_profile_and_year(profile, year);
 
         // ━━━ Monthly/Quarterly filing exclusion ━━━
         // If the user has already filed ANY quarterly return for a form category,
@@ -1231,32 +1122,89 @@ impl Render for DashboardView {
         }
 
         let forms_ui = if cards_rendered == 0 {
-            div()
-                .flex()
-                .flex_col()
-                .items_center()
-                .justify_center()
-                .w_full()
-                .py_24()
-                .gap_4()
-                .child(
-                    Icon::new(IconName::Search)
-                        .size(px(48.))
-                        .text_color(cx.theme().muted_foreground),
-                )
-                .child(
-                    div()
-                        .text_xl()
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(cx.theme().foreground)
-                        .child("No forms match your filters"),
-                )
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(cx.theme().muted_foreground)
-                        .child("Try adjusting your form type filters or year selection."),
-                )
+            // Determine WHY there are no forms: unconfigured profile vs. active filters
+            let per_year_is_empty = profile
+                .per_year_forms
+                .get(&year)
+                .is_none_or(|s| s.entries.is_empty());
+            let no_active_filters =
+                !has_period_filter && filter_chips.is_empty() && query.is_empty();
+
+            if per_year_is_empty && no_active_filters {
+                // Gap R1 nudge: profile has no form configuration for this year
+                div()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .w_full()
+                    .py_24()
+                    .gap_4()
+                    .child(
+                        Icon::new(IconName::File)
+                            .size(px(48.))
+                            .text_color(cx.theme().muted_foreground),
+                    )
+                    .child(
+                        div()
+                            .text_xl()
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(cx.theme().foreground)
+                            .child(format!("No forms configured for {}", year)),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(
+                                "This profile has no active filing obligations set up for this year.",
+                            ),
+                    )
+                    .child(
+                        div()
+                            .id("cta_open_profile_manager")
+                            .px_4()
+                            .py_2()
+                            .rounded_lg()
+                            .bg(cx.theme().primary)
+                            .text_color(cx.theme().primary_foreground)
+                            .text_sm()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .cursor_pointer()
+                            .hover(|s| s.opacity(0.85))
+                            .on_click(cx.listener(|_this, _ev, _window, cx| {
+                                cx.emit(DashboardEvent::OpenProfileManager);
+                            }))
+                            .child("Set up forms for this year"),
+                    )
+            } else {
+                div()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .w_full()
+                    .py_24()
+                    .gap_4()
+                    .child(
+                        Icon::new(IconName::Search)
+                            .size(px(48.))
+                            .text_color(cx.theme().muted_foreground),
+                    )
+                    .child(
+                        div()
+                            .text_xl()
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(cx.theme().foreground)
+                            .child("No forms match your filters"),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("Try adjusting your form type filters or year selection."),
+                    )
+            }
         } else {
             forms_ui
         };
@@ -1291,13 +1239,13 @@ impl Render for DashboardView {
             .filter(|d| d.final_deadline_date().is_some_and(|date| date >= today))
             .cloned()
             .collect();
-        let overdue_deadlines: Vec<_> = all_matching_deadlines
+        let mut overdue_deadlines: Vec<_> = all_matching_deadlines
             .iter()
             .filter(|d| d.final_deadline_date().is_some_and(|date| date < today))
             .cloned()
             .collect();
 
-        let matching_actionable_forms: Vec<_> = self
+        let period_matching_actionable_forms: Vec<_> = self
             .actionable_forms
             .iter()
             .filter(|(_, summary)| {
@@ -1310,6 +1258,29 @@ impl Render for DashboardView {
                 )
             })
             .collect();
+        let matching_actionable_forms: Vec<_> = period_matching_actionable_forms
+            .into_iter()
+            .filter(|(_, summary)| !Self::summary_is_overdue(&self.deadlines, summary, today))
+            .collect();
+
+        // A past-due draft remains overdue even when the default calendar view
+        // is focused on the current due month. Include its exact deadline in
+        // the Overdue column and remove it from Action Required.
+        for (_, summary) in &self.actionable_forms {
+            if !Self::summary_is_overdue(&self.deadlines, summary, today) {
+                continue;
+            }
+            let Some(deadline) = Self::deadline_for_summary(&self.deadlines, summary) else {
+                continue;
+            };
+            let already_present = overdue_deadlines.iter().any(|existing| {
+                existing.form_code == deadline.form_code && existing.period == deadline.period
+            });
+            if !already_present {
+                overdue_deadlines.push(deadline.clone());
+            }
+        }
+        overdue_deadlines.sort_by_key(ResolvedTaxDeadline::final_deadline_date);
 
         self.upcoming_deadlines_list.update(cx, |list, _| {
             list.set_data(upcoming_deadlines, vec![]);
@@ -1800,8 +1771,53 @@ impl Render for DashboardView {
                             .child(action_col)
                             .child(overdue_col),
                     )
+                    .into_any_element()
             }
-            ProfileTab::Forms => forms_ui,
+            ProfileTab::Forms => {
+                // Render consistency warnings (e.g., ITR conflicts) above the form grid
+                let warnings: Vec<_> = self
+                    .consistency_issues
+                    .iter()
+                    .filter(|i| {
+                        matches!(
+                            i.severity,
+                            bir_core::integration::ProfileConsistencySeverity::Warning
+                        )
+                    })
+                    .collect();
+
+                if warnings.is_empty() {
+                    forms_ui.into_any_element()
+                } else {
+                    let mut warnings_banner = div().flex().flex_col().gap_2().mb_4();
+                    for issue in &warnings {
+                        warnings_banner = warnings_banner.child(
+                            div()
+                                .flex()
+                                .items_start()
+                                .gap_2()
+                                .p_3()
+                                .rounded_lg()
+                                .bg(gpui::rgba(0xfef3c715))
+                                .border_1()
+                                .border_color(gpui::rgba(0xf59e0b40))
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(gpui::rgb(0x92400e))
+                                        .child(format!("\u{26a0} {}", issue.message)),
+                                ),
+                        );
+                    }
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_4()
+                        .child(warnings_banner)
+                        .child(forms_ui)
+                        .into_any_element()
+                }
+            }
         };
 
         // Build subtitle with active period filters
@@ -1945,7 +1961,7 @@ impl Render for DashboardView {
 impl DashboardView {
     /// Build the common card shell (header + title). Caller appends progress + action sections.
     fn build_card(
-        form_def: &bir_core::temporal::FormDecision,
+        form_def: &bir_core::forms::FormCardData,
         _year: u16,
         card_width: f32,
         cx: &Context<Self>,
@@ -2049,5 +2065,263 @@ impl DashboardView {
             12 => Some("December".into()),
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bir_core::calendar_rules::{DeadlineKind, DeadlineStatus};
+    use bir_core::forms::{FilingStatus, FormDraftSummary};
+    use chrono::NaiveDate;
+    use std::collections::HashMap;
+
+    fn quarterly_deadline(
+        form_code: &str,
+        taxable_year: i32,
+        quarter: u8,
+        final_deadline: NaiveDate,
+    ) -> ResolvedTaxDeadline {
+        ResolvedTaxDeadline {
+            form_code: form_code.to_string(),
+            display_form_no: form_code.to_string(),
+            form_name: "Quarterly test deadline".to_string(),
+            period: DeadlinePeriod::Quarterly {
+                taxable_year,
+                quarter,
+            },
+            period_start: None,
+            period_end: None,
+            deadline: DeadlineKind::Dated {
+                original_deadline: final_deadline,
+                final_deadline,
+            },
+            status: DeadlineStatus::Normal,
+            description: "test".to_string(),
+            source_reference: None,
+        }
+    }
+
+    fn monthly_deadline(
+        form_code: &str,
+        taxable_year: i32,
+        month: u8,
+        final_deadline: NaiveDate,
+    ) -> ResolvedTaxDeadline {
+        ResolvedTaxDeadline {
+            form_code: form_code.to_string(),
+            display_form_no: form_code.to_string(),
+            form_name: "Monthly test deadline".to_string(),
+            period: DeadlinePeriod::Monthly {
+                taxable_year,
+                month,
+            },
+            period_start: None,
+            period_end: None,
+            deadline: DeadlineKind::Dated {
+                original_deadline: final_deadline,
+                final_deadline,
+            },
+            status: DeadlineStatus::Normal,
+            description: "test".to_string(),
+            source_reference: None,
+        }
+    }
+
+    fn summary(form_code: &str, quarter: Option<u8>, month: Option<u8>) -> FormDraftSummary {
+        FormDraftSummary {
+            id: 1,
+            tin: "123456789000".to_string(),
+            form_code: form_code.to_string(),
+            taxable_year: 2026,
+            quarter,
+            month,
+            status: FilingStatus::Draft,
+            updated_at: "2026-05-16T00:00:00Z".to_string(),
+        }
+    }
+
+    #[::core::prelude::v1::test]
+    fn calendar_filter_uses_taxable_period_when_filter_is_explicit() {
+        let q1_due_in_may = quarterly_deadline(
+            "1701Q",
+            2026,
+            1,
+            NaiveDate::from_ymd_opt(2026, 5, 15).unwrap(),
+        );
+
+        assert!(DashboardView::deadline_matches_filters(
+            &q1_due_in_may,
+            &[],
+            &[1],
+            false,
+            true,
+            5,
+        ));
+        assert!(DashboardView::deadline_matches_filters(
+            &q1_due_in_may,
+            &[1],
+            &[],
+            false,
+            true,
+            5,
+        ));
+        assert!(DashboardView::deadline_matches_filters(
+            &q1_due_in_may,
+            &[3],
+            &[],
+            false,
+            true,
+            5,
+        ));
+        assert!(!DashboardView::deadline_matches_filters(
+            &q1_due_in_may,
+            &[4],
+            &[],
+            false,
+            true,
+            5,
+        ));
+        assert!(!DashboardView::deadline_matches_filters(
+            &q1_due_in_may,
+            &[5],
+            &[],
+            false,
+            true,
+            5,
+        ));
+    }
+
+    #[::core::prelude::v1::test]
+    fn default_calendar_filter_still_uses_current_deadline_month() {
+        let q1_due_in_may = quarterly_deadline(
+            "1701Q",
+            2026,
+            1,
+            NaiveDate::from_ymd_opt(2026, 5, 15).unwrap(),
+        );
+
+        assert!(DashboardView::deadline_matches_filters(
+            &q1_due_in_may,
+            &[],
+            &[],
+            false,
+            false,
+            5,
+        ));
+        assert!(!DashboardView::deadline_matches_filters(
+            &q1_due_in_may,
+            &[],
+            &[],
+            false,
+            false,
+            4,
+        ));
+    }
+
+    #[::core::prelude::v1::test]
+    fn past_due_draft_is_classified_as_overdue_for_its_exact_period() {
+        let january_deadline = monthly_deadline(
+            "0619E",
+            2026,
+            1,
+            NaiveDate::from_ymd_opt(2026, 2, 10).unwrap(),
+        );
+        let january_draft = summary("0619E", None, Some(1));
+
+        assert!(DashboardView::summary_is_overdue(
+            &[january_deadline],
+            &january_draft,
+            NaiveDate::from_ymd_opt(2026, 6, 12).unwrap(),
+        ));
+    }
+
+    #[::core::prelude::v1::test]
+    fn draft_does_not_match_another_months_deadline() {
+        let may_deadline = monthly_deadline(
+            "0619E",
+            2026,
+            5,
+            NaiveDate::from_ymd_opt(2026, 6, 10).unwrap(),
+        );
+        let january_draft = summary("0619E", None, Some(1));
+
+        assert!(!DashboardView::summary_is_overdue(
+            &[may_deadline],
+            &january_draft,
+            NaiveDate::from_ymd_opt(2026, 6, 12).unwrap(),
+        ));
+    }
+
+    #[::core::prelude::v1::test]
+    fn only_paid_quarterly_deadline_is_satisfied() {
+        let deadline = quarterly_deadline(
+            "2551Q",
+            2026,
+            1,
+            NaiveDate::from_ymd_opt(2026, 4, 27).unwrap(),
+        );
+        let mut progress = FormFilingProgress::new_empty("2551Q", 2026);
+        progress.quarters[0] = QuarterState::Paid;
+
+        let mut by_year = HashMap::new();
+        by_year.insert(2026, progress);
+        let mut progress_by_code = HashMap::new();
+        progress_by_code.insert("2551Q".to_string(), by_year);
+
+        assert!(DashboardView::deadline_is_satisfied(
+            &deadline,
+            &progress_by_code
+        ));
+
+        for state in [QuarterState::Submitted, QuarterState::Confirmed] {
+            let mut progress = FormFilingProgress::new_empty("2551Q", 2026);
+            progress.quarters[0] = state;
+
+            let mut by_year = HashMap::new();
+            by_year.insert(2026, progress);
+            let mut progress_by_code = HashMap::new();
+            progress_by_code.insert("2551Q".to_string(), by_year);
+
+            assert!(!DashboardView::deadline_is_satisfied(
+                &deadline,
+                &progress_by_code
+            ));
+        }
+    }
+
+    #[::core::prelude::v1::test]
+    fn actionable_summaries_use_taxable_period_filters() {
+        let q1_summary = summary("1701Q", Some(1), None);
+        let q2_summary = summary("1701Q", Some(2), None);
+
+        assert!(DashboardView::summary_matches_period_filters(
+            &q1_summary,
+            &[],
+            &[1],
+            false,
+            true,
+        ));
+        assert!(DashboardView::summary_matches_period_filters(
+            &q1_summary,
+            &[1],
+            &[],
+            false,
+            true,
+        ));
+        assert!(!DashboardView::summary_matches_period_filters(
+            &q1_summary,
+            &[5],
+            &[],
+            false,
+            true,
+        ));
+        assert!(!DashboardView::summary_matches_period_filters(
+            &q2_summary,
+            &[],
+            &[1],
+            false,
+            true,
+        ));
     }
 }

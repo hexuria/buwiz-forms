@@ -49,10 +49,12 @@ pub use service::{
 pub use validation::{
     PayloadValidationError, ProfileConsistencyIssue, ProfileConsistencyReport,
     ProfileConsistencySeverity, ResolvedProfileObligations, all_form_codes,
-    applicable_forms_for_profile, applicable_forms_for_profile_and_year,
-    deadline_applies_to_profile, evaluate_forms_for_year, profile_deadline_overrides_for_year,
+    applicable_form_decisions_for_profile_and_year, applicable_forms_for_profile,
+    applicable_forms_for_profile_and_year, check_annual_itr_conflicts, deadline_applies_to_profile,
+    evaluate_forms_for_year, profile_deadline_overrides_for_year,
     recurring_obligation_decisions_for_profile_and_year,
-    recurring_obligation_forms_for_profile_and_year, resolve_profile_obligations_for_year,
+    recurring_obligation_forms_for_profile_and_year, registered_form_codes_for_version,
+    resolve_profile_obligations_for_year,
     resolve_profile_obligations_for_year_with_global_overrides, validate_form_applicability,
     validate_payload,
 };

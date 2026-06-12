@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::db::DbError;
 
-const CURRENT_MIGRATION_VERSION: i32 = 6;
+const CURRENT_MIGRATION_VERSION: i32 = 9;
 
 pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
     let mut version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
@@ -193,6 +193,32 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         // `tax_deadline_overrides`, `resolved_tax_deadlines`). Existing
         // databases keep those legacy tables untouched.
         "SELECT 1; -- v6 marker: static tax calendar rules",
+        // v7: Per-year Forms Set — the user-owned, authoritative list of which forms a
+        // taxpayer files in a given taxable year (replaces the temporal suggestion engine).
+        // Populated from a COR (AI-assisted) or manually; read by the dashboard + deadlines.
+        "
+        CREATE TABLE IF NOT EXISTS per_year_forms (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tin TEXT NOT NULL,
+            taxable_year INTEGER NOT NULL,
+            form_code TEXT NOT NULL,
+            frequency TEXT NOT NULL,
+            active INTEGER NOT NULL DEFAULT 1,
+            source TEXT NOT NULL,
+            custom INTEGER NOT NULL DEFAULT 0,
+            reason TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(tin, taxable_year, form_code)
+        );
+        CREATE INDEX IF NOT EXISTS idx_per_year_forms_tin_year
+            ON per_year_forms(tin, taxable_year);
+        ",
+        "SELECT 1; -- v8 marker: per-year forms backfill (Rust-side)",
+        // v9: Re-run per-year forms backfill with correct obligation_allowed filtering.
+        // v8 only checked registered_tax_types_allow_form, missing taxpayer_type,
+        // VAT, deprecation, and other checks from obligation_allowed_for_version_and_profile.
+        "SELECT 1; -- v9 marker: per-year forms heal (Rust-side)",
     ];
 
     while version < CURRENT_MIGRATION_VERSION {
@@ -211,6 +237,16 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
             // v5: Backfill period_key from existing quarter column.
             if version == 5 {
                 migrate_v5_backfill_period_key(conn)?;
+            }
+
+            // v8: Backfill per-year forms from profile versions.
+            if version == 8 {
+                migrate_v8_per_year_forms_backfill(conn)?;
+            }
+
+            // v9: Heal per-year forms with correct obligation filtering.
+            if version == 9 {
+                migrate_v9_per_year_forms_heal(conn)?;
             }
         } else {
             break;
@@ -433,14 +469,367 @@ fn migrate_v5_backfill_period_key(conn: &Connection) -> Result<(), DbError> {
     Ok(())
 }
 
+fn migrate_v8_per_year_forms_backfill(conn: &Connection) -> Result<(), DbError> {
+    use crate::forms::forms_set::{FormSetEntry, FormSetSource};
+    use crate::forms::registry::{FORM_REGISTRY, FilingFrequency, find_form};
+    use crate::profile::{ManualObligationOverrideAction, TaxpayerProfile};
+    use chrono::Datelike as _;
+
+    fn frequency_to_str_local(f: &FilingFrequency) -> &'static str {
+        match f {
+            FilingFrequency::Quarterly => "quarterly",
+            FilingFrequency::Annual => "annual",
+            FilingFrequency::Monthly => "monthly",
+            FilingFrequency::OpenEnded => "open_ended",
+        }
+    }
+
+    let rows: Vec<(i64, String)> = {
+        let mut stmt = conn.prepare("SELECT id, data_json FROM profiles")?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(DbError::Sqlite)?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(DbError::Sqlite)?
+    };
+
+    let mut backfilled_count = 0;
+
+    for (id, data_json) in rows {
+        let profile: TaxpayerProfile = match serde_json::from_str(&data_json) {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::warn!(
+                    "v8 migration: failed to deserialize profile id={}: {}",
+                    id,
+                    e
+                );
+                continue;
+            }
+        };
+
+        let tin = profile.tin.full();
+        let versions = profile.confirmed_profile_versions();
+        let mut years = std::collections::BTreeSet::new();
+        let current_year = chrono::Utc::now().year() as u16;
+        for v in &versions {
+            let start_year = v
+                .effective_from
+                .map(|d| d.year() as u16)
+                .or_else(|| profile.business_start_date.map(|d| d.year() as u16))
+                .unwrap_or(2018);
+            let end_year = v
+                .effective_until
+                .map(|d| d.year() as u16)
+                .unwrap_or(current_year);
+            let end_year = end_year.max(current_year);
+            for y in start_year..=end_year {
+                years.insert(y);
+            }
+        }
+
+        for year in years {
+            let active_versions = profile.active_profile_versions_for_year(year);
+            if let Some(version) = active_versions.last() {
+                let mut entries = Vec::new();
+                for def in FORM_REGISTRY {
+                    if crate::integration::validation::registered_tax_types_allow_form(
+                        version, def.code,
+                    ) && crate::integration::validation::obligation_allowed_for_version_and_profile(
+                        def, version, &profile, year,
+                    ) {
+                        entries.push(FormSetEntry {
+                            form_code: def.code.to_string(),
+                            frequency: def.frequency.clone(),
+                            active: true,
+                            source: FormSetSource::MigrationBackfill,
+                            custom: false,
+                            reason: None,
+                        });
+                    }
+                }
+
+                for r in &version.obligation_overrides {
+                    if let Some(existing) = entries.iter_mut().find(|e| e.form_code == r.form_code)
+                    {
+                        match r.action {
+                            ManualObligationOverrideAction::Include => {
+                                existing.active = true;
+                                existing.reason = Some(r.reason.clone());
+                            }
+                            ManualObligationOverrideAction::Exclude => {
+                                existing.active = false;
+                                existing.reason = Some(r.reason.clone());
+                            }
+                        }
+                    } else {
+                        let custom = find_form(&r.form_code).is_none();
+                        let frequency = find_form(&r.form_code)
+                            .map(|d| d.frequency.clone())
+                            .unwrap_or(FilingFrequency::OpenEnded);
+                        entries.push(FormSetEntry {
+                            form_code: r.form_code.clone(),
+                            frequency,
+                            active: match r.action {
+                                ManualObligationOverrideAction::Include => true,
+                                ManualObligationOverrideAction::Exclude => false,
+                            },
+                            source: FormSetSource::MigrationBackfill,
+                            custom,
+                            reason: Some(r.reason.clone()),
+                        });
+                    }
+                }
+
+                conn.execute(
+                    "DELETE FROM per_year_forms WHERE tin = ?1 AND taxable_year = ?2",
+                    rusqlite::params![tin, year],
+                )
+                .map_err(DbError::Sqlite)?;
+
+                for entry in entries {
+                    conn.execute(
+                        "INSERT INTO per_year_forms
+                         (tin, taxable_year, form_code, frequency, active, source, custom, reason)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                        rusqlite::params![
+                            tin,
+                            year,
+                            entry.form_code,
+                            frequency_to_str_local(&entry.frequency),
+                            entry.active as i64,
+                            entry.source.as_str(),
+                            entry.custom as i64,
+                            entry.reason,
+                        ],
+                    )
+                    .map_err(DbError::Sqlite)?;
+                    backfilled_count += 1;
+                }
+            }
+        }
+    }
+
+    if backfilled_count > 0 {
+        info!(
+            "v8 migration: backfilled {} forms in per_year_forms",
+            backfilled_count
+        );
+    }
+
+    Ok(())
+}
+
+/// v9 data migration: heal per_year_forms rows that were backfilled by v8 without
+/// the `obligation_allowed_for_version_and_profile` check. This re-runs the same
+/// logic as v8 but with both `registered_tax_types_allow_form` AND
+/// `obligation_allowed_for_version_and_profile`, ensuring taxpayer_type, VAT,
+/// deprecation, and other filters are applied. Existing manual overrides and
+/// custom forms are preserved.
+fn migrate_v9_per_year_forms_heal(conn: &Connection) -> Result<(), DbError> {
+    use crate::forms::forms_set::{FormSetEntry, FormSetSource};
+    use crate::forms::registry::{FORM_REGISTRY, FilingFrequency, find_form};
+    use crate::profile::{ManualObligationOverrideAction, TaxpayerProfile};
+    use chrono::Datelike as _;
+
+    fn frequency_to_str_local(f: &FilingFrequency) -> &'static str {
+        match f {
+            FilingFrequency::Quarterly => "quarterly",
+            FilingFrequency::Annual => "annual",
+            FilingFrequency::Monthly => "monthly",
+            FilingFrequency::OpenEnded => "open_ended",
+        }
+    }
+
+    let rows: Vec<(i64, String)> = {
+        let mut stmt = conn.prepare("SELECT id, data_json FROM profiles")?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(DbError::Sqlite)?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(DbError::Sqlite)?
+    };
+
+    let mut healed_count = 0;
+
+    for (_id, data_json) in rows {
+        let profile: TaxpayerProfile = match serde_json::from_str(&data_json) {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::warn!("v9 migration: failed to deserialize profile: {}", e);
+                continue;
+            }
+        };
+
+        let tin = profile.tin.full();
+        let versions = profile.confirmed_profile_versions();
+        let mut years = std::collections::BTreeSet::new();
+        let current_year = chrono::Utc::now().year() as u16;
+        for v in &versions {
+            let start_year = v
+                .effective_from
+                .map(|d| d.year() as u16)
+                .or_else(|| profile.business_start_date.map(|d| d.year() as u16))
+                .unwrap_or(2018);
+            let end_year = v
+                .effective_until
+                .map(|d| d.year() as u16)
+                .unwrap_or(current_year);
+            let end_year = end_year.max(current_year);
+            for y in start_year..=end_year {
+                years.insert(y);
+            }
+        }
+
+        for year in years {
+            let active_versions = profile.active_profile_versions_for_year(year);
+            if let Some(version) = active_versions.last() {
+                let mut entries = Vec::new();
+                for def in FORM_REGISTRY {
+                    if crate::integration::validation::registered_tax_types_allow_form(
+                        version, def.code,
+                    ) && crate::integration::validation::obligation_allowed_for_version_and_profile(
+                        def, version, &profile, year,
+                    ) {
+                        entries.push(FormSetEntry {
+                            form_code: def.code.to_string(),
+                            frequency: def.frequency.clone(),
+                            active: true,
+                            source: FormSetSource::MigrationBackfill,
+                            custom: false,
+                            reason: None,
+                        });
+                    }
+                }
+
+                for r in &version.obligation_overrides {
+                    if let Some(existing) = entries.iter_mut().find(|e| e.form_code == r.form_code)
+                    {
+                        match r.action {
+                            ManualObligationOverrideAction::Include => {
+                                existing.active = true;
+                                existing.reason = Some(r.reason.clone());
+                            }
+                            ManualObligationOverrideAction::Exclude => {
+                                existing.active = false;
+                                existing.reason = Some(r.reason.clone());
+                            }
+                        }
+                    } else {
+                        let custom = find_form(&r.form_code).is_none();
+                        let frequency = find_form(&r.form_code)
+                            .map(|d| d.frequency.clone())
+                            .unwrap_or(FilingFrequency::OpenEnded);
+                        entries.push(FormSetEntry {
+                            form_code: r.form_code.clone(),
+                            frequency,
+                            active: match r.action {
+                                ManualObligationOverrideAction::Include => true,
+                                ManualObligationOverrideAction::Exclude => false,
+                            },
+                            source: FormSetSource::MigrationBackfill,
+                            custom,
+                            reason: Some(r.reason.clone()),
+                        });
+                    }
+                }
+
+                // Also preserve any user-added custom forms and manually deactivated standard forms from existing data
+                let existing_preserved: Vec<(String, String, bool, String, Option<String>, bool)> = {
+                    let mut stmt = conn.prepare(
+                        "SELECT form_code, frequency, active, source, reason, custom FROM per_year_forms \
+                         WHERE tin = ?1 AND taxable_year = ?2 AND (custom = 1 OR active = 0)",
+                    )?;
+                    let rows = stmt
+                        .query_map(rusqlite::params![tin, year], |row| {
+                            Ok((
+                                row.get::<_, String>(0)?,
+                                row.get::<_, String>(1)?,
+                                row.get::<_, bool>(2)?,
+                                row.get::<_, String>(3)?,
+                                row.get::<_, Option<String>>(4)?,
+                                row.get::<_, bool>(5)?,
+                            ))
+                        })
+                        .map_err(DbError::Sqlite)?;
+                    rows.collect::<Result<Vec<_>, _>>()
+                        .map_err(DbError::Sqlite)?
+                };
+
+                for (code, freq_str, active, source_str, reason, custom) in existing_preserved {
+                    if let Some(existing) = entries.iter_mut().find(|e| e.form_code == code) {
+                        if !active {
+                            existing.active = false;
+                            existing.reason = reason;
+                        }
+                    } else {
+                        let frequency = match freq_str.as_str() {
+                            "monthly" => FilingFrequency::Monthly,
+                            "quarterly" => FilingFrequency::Quarterly,
+                            "annual" => FilingFrequency::Annual,
+                            _ => FilingFrequency::OpenEnded,
+                        };
+                        entries.push(FormSetEntry {
+                            form_code: code,
+                            frequency,
+                            active,
+                            source: FormSetSource::from_str_lossy(&source_str),
+                            custom,
+                            reason,
+                        });
+                    }
+                }
+
+                conn.execute(
+                    "DELETE FROM per_year_forms WHERE tin = ?1 AND taxable_year = ?2",
+                    rusqlite::params![tin, year],
+                )
+                .map_err(DbError::Sqlite)?;
+
+                for entry in entries {
+                    conn.execute(
+                        "INSERT INTO per_year_forms
+                         (tin, taxable_year, form_code, frequency, active, source, custom, reason)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                        rusqlite::params![
+                            tin,
+                            year,
+                            entry.form_code,
+                            frequency_to_str_local(&entry.frequency),
+                            entry.active as i64,
+                            entry.source.as_str(),
+                            entry.custom as i64,
+                            entry.reason,
+                        ],
+                    )
+                    .map_err(DbError::Sqlite)?;
+                    healed_count += 1;
+                }
+            }
+        }
+    }
+
+    if healed_count > 0 {
+        info!(
+            "v9 migration: healed {} forms in per_year_forms with correct obligation filtering",
+            healed_count
+        );
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     /// Helper: opens an unencrypted in-memory SQLite connection for testing.
     fn test_conn() -> Connection {
-        let conn = Connection::open_in_memory().unwrap();
-        conn
+        Connection::open_in_memory().unwrap()
     }
 
     #[test]
@@ -467,6 +856,7 @@ mod tests {
             "settings",
             "bir_notices",
             "data_providers",
+            "per_year_forms",
         ];
         for table in tables {
             let exists: bool = conn
@@ -733,5 +1123,361 @@ mod tests {
             updated_profile.email_tracking_enabled,
             "email_tracking_enabled should have been set to true"
         );
+    }
+
+    #[test]
+    fn test_v8_migration_backfills_per_year_forms() {
+        let conn = test_conn();
+
+        // Initialize schema as if it is at v7
+        conn.execute_batch(
+            "CREATE TABLE profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tin TEXT UNIQUE NOT NULL,
+                data_json TEXT NOT NULL
+            );
+            CREATE TABLE per_year_forms (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tin TEXT NOT NULL,
+                taxable_year INTEGER NOT NULL,
+                form_code TEXT NOT NULL,
+                frequency TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1,
+                source TEXT NOT NULL,
+                custom INTEGER NOT NULL DEFAULT 0,
+                reason TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(tin, taxable_year, form_code)
+            );",
+        )
+        .unwrap();
+        conn.pragma_update(None, "user_version", 7i32).unwrap();
+
+        // Let's create a TaxpayerProfile with one confirmed version active in 2026.
+        let profile_json = serde_json::json!({
+            "id": 1,
+            "full_name": "Test Taxpayer",
+            "tin": { "segment1": "123", "segment2": "456", "segment3": "789", "branch": "000" },
+            "rdo_code": "039",
+            "line_of_business": "Consulting",
+            "registered_address": "QC",
+            "zip_code": "1100",
+            "phone": "09156837000",
+            "email": "test@example.com",
+            "default_form_type": "2551Q",
+            "taxpayer_type": "Individual",
+            "is_vat_registered": false,
+            "compliance_source_mode": "CorVersioned",
+            "profile_versions": [
+                {
+                    "id": "v1",
+                    "label": "Version 1",
+                    "status": "Confirmed",
+                    "source": "ManualCor",
+                    "effective_from": "2026-01-01",
+                    "effective_until": null,
+                    "cor": {},
+                    "registered_tax_types": ["IncomeTax", "PercentageTax"],
+                    "taxpayer_type": "Individual",
+                    "is_vat_registered": false,
+                    "obligation_overrides": [
+                        {
+                            "form_code": "1701",
+                            "action": "Include",
+                            "reason": "Required manual include"
+                        },
+                        {
+                            "form_code": "2551Q",
+                            "action": "Exclude",
+                            "reason": "Not filing monthly/quarterly percentage tax"
+                        }
+                    ]
+                }
+            ]
+        })
+        .to_string();
+
+        conn.execute(
+            "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
+            rusqlite::params!["123-456-789-000", profile_json],
+        )
+        .unwrap();
+
+        // Run the v8 migration
+        migrate_database(&conn).unwrap();
+
+        // Check if user_version is 9 (v8 backfill + v9 heal)
+        let v: i32 = conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(v, 9);
+
+        // Check that per_year_forms has been backfilled
+        let mut stmt = conn.prepare(
+            "SELECT form_code, active, reason FROM per_year_forms WHERE tin = '123456789000' AND taxable_year = 2026"
+        ).unwrap();
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)? != 0,
+                    row.get::<_, Option<String>>(2)?,
+                ))
+            })
+            .unwrap();
+
+        let mut results = std::collections::HashMap::new();
+        for r in rows {
+            let (form, active, reason) = r.unwrap();
+            results.insert(form, (active, reason));
+        }
+
+        // According to our logic:
+        // - "1701" is an override to Include, so it should be active = true.
+        // - "2551Q" is an override to Exclude, so it should be active = false.
+        assert!(results.contains_key("1701"));
+        assert!(results.get("1701").unwrap().0);
+        assert_eq!(
+            results.get("1701").unwrap().1.as_deref(),
+            Some("Required manual include")
+        );
+
+        assert!(results.contains_key("2551Q"));
+        assert!(!results.get("2551Q").unwrap().0);
+        assert_eq!(
+            results.get("2551Q").unwrap().1.as_deref(),
+            Some("Not filing monthly/quarterly percentage tax")
+        );
+    }
+
+    #[test]
+    fn test_v9_migration_preserves_deactivated_standard_forms() {
+        let conn = test_conn();
+
+        // Initialize schema as if it is at v7
+        conn.execute_batch(
+            "CREATE TABLE profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tin TEXT UNIQUE NOT NULL,
+                data_json TEXT NOT NULL
+            );
+            CREATE TABLE per_year_forms (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tin TEXT NOT NULL,
+                taxable_year INTEGER NOT NULL,
+                form_code TEXT NOT NULL,
+                frequency TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1,
+                source TEXT NOT NULL,
+                custom INTEGER NOT NULL DEFAULT 0,
+                reason TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(tin, taxable_year, form_code)
+            );",
+        )
+        .unwrap();
+        conn.pragma_update(None, "user_version", 8i32).unwrap();
+
+        // Store standard form 2550Q with active = 0 and custom = 0 for year 2026
+        conn.execute(
+            "INSERT INTO per_year_forms (tin, taxable_year, form_code, frequency, active, source, custom, reason)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            rusqlite::params![
+                "123456789000",
+                2026,
+                "2550Q",
+                "quarterly",
+                0, // active = 0
+                "migration_backfill",
+                0, // custom = 0
+                "Manually deactivated standard form"
+            ],
+        )
+        .unwrap();
+
+        // Insert a profile version for 2026 where 2550Q is normally active/suggested
+        // e.g. a VAT registered profile
+        let profile_json = serde_json::json!({
+            "id": 1,
+            "full_name": "VAT Taxpayer",
+            "tin": { "segment1": "123", "segment2": "456", "segment3": "789", "branch": "000" },
+            "rdo_code": "039",
+            "line_of_business": "Consulting",
+            "registered_address": "QC",
+            "zip_code": "1100",
+            "phone": "09156837000",
+            "email": "test@example.com",
+            "default_form_type": "2550Q",
+            "taxpayer_type": "Individual",
+            "is_vat_registered": true,
+            "compliance_source_mode": "CorVersioned",
+            "profile_versions": [
+                {
+                    "id": "v1",
+                    "label": "Version 1",
+                    "status": "Confirmed",
+                    "source": "ManualCor",
+                    "effective_from": "2026-01-01",
+                    "effective_until": null,
+                    "cor": {},
+                    "registered_tax_types": ["IncomeTax", "ValueAddedTax"],
+                    "taxpayer_type": "Individual",
+                    "is_vat_registered": true,
+                    "obligation_overrides": []
+                }
+            ]
+        })
+        .to_string();
+
+        conn.execute(
+            "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
+            rusqlite::params!["123-456-789-000", profile_json],
+        )
+        .unwrap();
+
+        // Run the v9 migration (will upgrade from v7 -> v8 -> v9)
+        migrate_database(&conn).unwrap();
+
+        // Check if user_version is 9
+        let v: i32 = conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(v, 9);
+
+        // Assert that after migration v9, 2550Q is preserved and active is still false (0)
+        let mut stmt = conn.prepare(
+            "SELECT form_code, active, custom, reason FROM per_year_forms WHERE tin = '123456789000' AND taxable_year = 2026 AND form_code = '2550Q'"
+        ).unwrap();
+        let mut rows = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, bool>(1)?,
+                    row.get::<_, bool>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                ))
+            })
+            .unwrap();
+
+        let (form, active, custom, reason) = rows.next().unwrap().unwrap();
+        assert_eq!(form, "2550Q");
+        assert!(!active);
+        assert!(!custom);
+        assert_eq!(
+            reason.as_deref(),
+            Some("Manually deactivated standard form")
+        );
+    }
+
+    #[test]
+    fn test_v9_migration_preserves_custom_forms() {
+        let conn = test_conn();
+
+        // Initialize schema as if it is at v7
+        conn.execute_batch(
+            "CREATE TABLE profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tin TEXT UNIQUE NOT NULL,
+                data_json TEXT NOT NULL
+            );
+            CREATE TABLE per_year_forms (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tin TEXT NOT NULL,
+                taxable_year INTEGER NOT NULL,
+                form_code TEXT NOT NULL,
+                frequency TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1,
+                source TEXT NOT NULL,
+                custom INTEGER NOT NULL DEFAULT 0,
+                reason TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(tin, taxable_year, form_code)
+            );",
+        )
+        .unwrap();
+        conn.pragma_update(None, "user_version", 8i32).unwrap();
+
+        // Store custom form "9999" with active = 1 and custom = 1 for year 2026
+        conn.execute(
+            "INSERT INTO per_year_forms (tin, taxable_year, form_code, frequency, active, source, custom, reason)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            rusqlite::params![
+                "123456789000",
+                2026,
+                "9999",
+                "open_ended",
+                1, // active = 1
+                "user",
+                1, // custom = 1
+                "My custom tax form"
+            ],
+        )
+        .unwrap();
+
+        // Insert a profile version for 2026 where standard forms are suggested
+        let profile_json = serde_json::json!({
+            "id": 1,
+            "full_name": "VAT Taxpayer",
+            "tin": { "segment1": "123", "segment2": "456", "segment3": "789", "branch": "000" },
+            "rdo_code": "039",
+            "line_of_business": "Consulting",
+            "registered_address": "QC",
+            "zip_code": "1100",
+            "phone": "09156837000",
+            "email": "test@example.com",
+            "default_form_type": "2550Q",
+            "taxpayer_type": "Individual",
+            "is_vat_registered": true,
+            "compliance_source_mode": "CorVersioned",
+            "profile_versions": [
+                {
+                    "id": "v1",
+                    "label": "Version 1",
+                    "status": "Confirmed",
+                    "source": "ManualCor",
+                    "effective_from": "2026-01-01",
+                    "effective_until": null,
+                    "cor": {},
+                    "registered_tax_types": ["IncomeTax", "ValueAddedTax"],
+                    "taxpayer_type": "Individual",
+                    "is_vat_registered": true,
+                    "obligation_overrides": []
+                }
+            ]
+        })
+        .to_string();
+
+        conn.execute(
+            "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
+            rusqlite::params!["123-456-789-000", profile_json],
+        )
+        .unwrap();
+
+        // Run the v9 migration
+        migrate_database(&conn).unwrap();
+
+        // Assert that after migration v9, custom form "9999" is preserved and active is true, custom is true
+        let mut stmt = conn.prepare(
+            "SELECT form_code, active, custom, reason FROM per_year_forms WHERE tin = '123456789000' AND taxable_year = 2026 AND form_code = '9999'"
+        ).unwrap();
+        let mut rows = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, bool>(1)?,
+                    row.get::<_, bool>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                ))
+            })
+            .unwrap();
+
+        let (form, active, custom, reason) = rows.next().unwrap().unwrap();
+        assert_eq!(form, "9999");
+        assert!(active);
+        assert!(custom);
+        assert_eq!(reason.as_deref(), Some("My custom tax form"));
     }
 }

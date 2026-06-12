@@ -128,8 +128,8 @@ pub enum TaxProfileVersionStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum ComplianceSourceMode {
-    #[default]
     TemporalSuggestion,
+    #[default]
     CorVersioned,
 }
 
@@ -415,9 +415,110 @@ pub struct TaxpayerProfile {
     /// confirmed COR/manual version ledger.
     #[serde(default)]
     pub compliance_source_mode: ComplianceSourceMode,
+
+    /// Per-year Forms Set. SKIP serialization since it is stored in a separate DB table.
+    #[serde(skip, default)]
+    pub per_year_forms: std::collections::BTreeMap<u16, crate::forms::PerYearFormsSet>,
 }
 
 impl TaxpayerProfile {
+    pub fn forms_set_for_year(&self, year: u16) -> Option<&crate::forms::PerYearFormsSet> {
+        self.per_year_forms.get(&year)
+    }
+
+    pub fn active_form_codes_for_year(&self, year: u16) -> Vec<String> {
+        use crate::forms::FormSetSource;
+        use std::collections::BTreeSet;
+
+        let active_versions = self.active_profile_versions_for_year(year);
+        let confirmed = self.confirmed_profile_versions();
+        if active_versions.is_empty()
+            && confirmed.is_empty()
+            && self.compliance_source_mode == ComplianceSourceMode::CorVersioned
+        {
+            return vec![];
+        }
+
+        let versions = if active_versions.is_empty() {
+            confirmed
+                .last()
+                .cloned()
+                .map(|version| vec![version])
+                .unwrap_or_else(|| vec![TaxProfileVersion::from_profile_backfill(self)])
+        } else {
+            active_versions
+        };
+
+        let has_exact_cor_codes = versions.iter().any(|version| {
+            version
+                .evidence
+                .iter()
+                .any(|document| !document.extracted_form_codes.is_empty())
+        });
+
+        let mut codes = BTreeSet::new();
+        if has_exact_cor_codes || !self.per_year_forms.contains_key(&year) {
+            for version in &versions {
+                codes.extend(
+                    crate::integration::validation::registered_form_codes_for_version(
+                        self, version, year,
+                    ),
+                );
+            }
+        } else if let Some(set) = self.per_year_forms.get(&year) {
+            codes.extend(
+                set.entries
+                    .iter()
+                    .filter(|entry| entry.active)
+                    .map(|entry| crate::forms::registry::canonical_form_code(&entry.form_code)),
+            );
+        }
+
+        if let Some(set) = self.per_year_forms.get(&year) {
+            for entry in &set.entries {
+                let code = crate::forms::registry::canonical_form_code(&entry.form_code);
+                if !entry.active {
+                    codes.remove(&code);
+                    continue;
+                }
+
+                // A confirmed COR's exact form list replaces stale broad CorAi
+                // expansion. Explicit manual additions remain authoritative.
+                if has_exact_cor_codes && entry.source == FormSetSource::Manual {
+                    codes.insert(code);
+                }
+            }
+        }
+
+        codes.retain(|code| {
+            crate::forms::registry::find_form(code)
+                .map(|def| {
+                    versions.iter().any(|version| {
+                        crate::integration::validation::obligation_allowed_for_version_and_profile(
+                            def, version, self, year,
+                        )
+                    })
+                })
+                .unwrap_or(true)
+        });
+
+        for version in &versions {
+            for override_rule in &version.obligation_overrides {
+                let code = crate::forms::registry::canonical_form_code(&override_rule.form_code);
+                match override_rule.action {
+                    ManualObligationOverrideAction::Include => {
+                        codes.insert(code);
+                    }
+                    ManualObligationOverrideAction::Exclude => {
+                        codes.remove(&code);
+                    }
+                }
+            }
+        }
+
+        codes.into_iter().collect()
+    }
+
     /// Returns the effective TaxClassification for the rule engine.
     ///
     /// For Individual taxpayers, this returns the user-selected classification.
@@ -439,7 +540,7 @@ impl TaxpayerProfile {
                                 | TaxClassification::CooperativeMixed
                         ) =>
                     {
-                        self.tax_classification.clone()
+                        Some(c.clone())
                     }
                     _ => Some(TaxClassification::CooperativeTaxable),
                 }
@@ -461,7 +562,9 @@ impl TaxpayerProfile {
         self.email_tracking_enabled
     }
 
-    /// Returns BIR form codes applicable to this taxpayer based on their
+    /// Returns BIR form codes applicable to this taxpayer.
+    ///
+    /// This resolves the taxpayer's dynamic forms list based on tax
     /// classification, VAT status, and employee status.
     ///
     /// Uses the current year. Prefer `applicable_forms_for_year(year)` when
@@ -476,9 +579,7 @@ impl TaxpayerProfile {
     }
 
     pub fn ensure_profile_version_ledger(&mut self) {
-        if self.compliance_source_mode == ComplianceSourceMode::CorVersioned
-            && self.profile_versions.is_empty()
-        {
+        if self.profile_versions.is_empty() {
             self.profile_versions
                 .push(TaxProfileVersion::from_profile_backfill(self));
         }
@@ -489,16 +590,19 @@ impl TaxpayerProfile {
     }
 
     pub fn confirmed_profile_versions(&self) -> Vec<TaxProfileVersion> {
-        if self.compliance_source_mode == ComplianceSourceMode::TemporalSuggestion {
-            return vec![TaxProfileVersion::from_profile_backfill(self)];
-        }
-
         let mut versions: Vec<_> = self
             .profile_versions
             .iter()
             .filter(|version| version.status == TaxProfileVersionStatus::Confirmed)
             .cloned()
             .collect();
+
+        if versions.is_empty() {
+            if self.compliance_source_mode == ComplianceSourceMode::CorVersioned {
+                return vec![];
+            }
+            return vec![TaxProfileVersion::from_profile_backfill(self)];
+        }
 
         versions.sort_by(|a, b| {
             a.effective_from
@@ -526,10 +630,6 @@ impl TaxpayerProfile {
     }
 
     pub fn current_cor_version(&self, as_of_year: u16) -> Option<TaxProfileVersion> {
-        if self.compliance_source_mode != ComplianceSourceMode::CorVersioned {
-            return None;
-        }
-
         self.active_profile_versions_for_year(as_of_year)
             .into_iter()
             .rfind(|version| version.source != TaxProfileVersionSource::MigrationBackfill)
@@ -603,7 +703,7 @@ impl TaxpayerProfile {
         projected.excise_tax_categories = version.excise_tax_categories.clone();
         projected.registration_activity_status = version.registration_activity_status.clone();
         projected.profile_versions = Vec::new();
-        projected.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
+        projected.compliance_source_mode = ComplianceSourceMode::CorVersioned;
         projected
     }
 
