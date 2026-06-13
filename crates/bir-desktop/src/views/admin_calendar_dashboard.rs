@@ -251,6 +251,7 @@ impl AdminCalendarDashboard {
             .flex()
             .flex_col()
             .gap_4()
+            .pb(px(96.))
             .child(
                 div()
                     .flex()
@@ -340,6 +341,7 @@ impl AdminCalendarDashboard {
             .flex()
             .flex_col()
             .gap_4()
+            .pb(px(96.))
             .child(
                 div()
                     .text_xl()
@@ -405,7 +407,7 @@ impl AdminCalendarDashboard {
     }
 
     fn render_overrides_tab(&self, window: &mut Window, cx: &mut Context<'_, Self>) -> Div {
-        let mut container = div().flex().flex_col().gap_4();
+        let mut container = div().flex().flex_col().gap_4().pb(px(96.));
 
         container = container.child(
             div()
