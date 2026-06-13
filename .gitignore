@@ -51,6 +51,8 @@ Desktop.ini
 
 # AI Agent Artifacts & Scratchpads
 .scratch/
+.agents/
+.antigravitycli/
 
 # Runtime logs — never commit these
 *.log

@@ -155,21 +155,23 @@ pub fn start_oauth_flow() -> Result<(String, String, String), anyhow::Error> {
     // 1. Generate PKCE verifier + challenge
     let verifier = generate_pkce_verifier();
     let challenge = generate_pkce_challenge(&verifier);
+    let state = generate_pkce_verifier();
 
     // 2. Start local HTTP listener on a random port
-    let (port, rx) = oauth_server::start_callback_server()?;
+    let (port, rx) = oauth_server::start_callback_server(state.clone())?;
     let redirect_uri = format!("http://127.0.0.1:{}", port);
 
     let client_id = get_google_client_id()?;
 
     // 3. Build the authorization URL
     let auth_url = format!(
-        "{}?client_id={}&redirect_uri={}&response_type=code&scope={}&code_challenge={}&code_challenge_method=S256&access_type=offline&prompt=consent",
+        "{}?client_id={}&redirect_uri={}&response_type=code&scope={}&code_challenge={}&code_challenge_method=S256&state={}&access_type=offline&prompt=consent",
         AUTH_URL,
         urlencoding::encode(&client_id),
         urlencoding::encode(&redirect_uri),
         urlencoding::encode(GMAIL_SCOPE),
         urlencoding::encode(&challenge),
+        urlencoding::encode(&state),
     );
 
     // 4. Open the browser
@@ -184,7 +186,8 @@ pub fn start_oauth_flow() -> Result<(String, String, String), anyhow::Error> {
     // 5. Wait for the callback (blocks until user approves or timeout)
     let code = rx
         .recv()
-        .map_err(|_| anyhow::anyhow!("OAuth callback timed out or was cancelled"))?;
+        .map_err(|_| anyhow::anyhow!("OAuth callback timed out or was cancelled"))?
+        .map_err(anyhow::Error::msg)?;
 
     // 6. Exchange the code for tokens
     let (access_token, refresh_token) = exchange_code_for_tokens(&code, &verifier, &redirect_uri)?;

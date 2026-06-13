@@ -469,38 +469,51 @@ impl AppState {
                                                                                     };
                                                                                     let export_dir = export_handle.path().to_path_buf();
 
-                                                                                    let success = this.update(cx, |this, cx| {
-                                                                                        if let Ok(db) = this.db.lock() {
-                                                                                            if let Err(e) = bir_core::export_profile_data(&db, &tin, &export_dir) {
-                                                                                                println!("Export failed: {}", e);
-                                                                                            } else {
-                                                                                                let _ = db.delete_profile(&tin);
-                                                                                                this.profiles.retain(|p| p.tin.full() != tin);
+                                                                                    let deletion_result = this.update(cx, |this, cx| {
+                                                                                        let db = this.db.lock().map_err(|_| "Database lock poisoned".to_string())?;
+                                                                                        bir_core::export_profile_data(&db, &tin, &export_dir)
+                                                                                            .map_err(|error| format!("Profile export failed: {error}"))?;
+                                                                                        db.delete_profile(&tin)
+                                                                                            .map_err(|error| format!("Profile deletion failed: {error}"))?;
+                                                                                        drop(db);
 
-                                                                                                if !this.profiles.iter().any(|p| p.is_archived) {
-                                                                                                    this.show_archived = false;
-                                                                                                }
-
-                                                                                                if this.active_profile_tin.as_ref() == Some(&tin) {
-                                                                                                    this.active_profile_tin = None;
-                                                                                                    this.active_view = ActiveView::ProfileManager;
-                                                                                                }
-                                                                                                if this.expanded_profile_tin.as_ref() == Some(&tin) {
-                                                                                                    this.expanded_profile_tin = None;
-                                                                                                }
-                                                                                                cx.notify();
-                                                                                                return true;
-                                                                                            }
+                                                                                        this.profiles.retain(|p| p.tin.full() != tin);
+                                                                                        if !this.profiles.iter().any(|p| p.is_archived) {
+                                                                                            this.show_archived = false;
                                                                                         }
-                                                                                        false
+                                                                                        if this.active_profile_tin.as_ref() == Some(&tin) {
+                                                                                            this.active_profile_tin = None;
+                                                                                            this.active_view = ActiveView::ProfileManager;
+                                                                                        }
+                                                                                        if this.expanded_profile_tin.as_ref() == Some(&tin) {
+                                                                                            this.expanded_profile_tin = None;
+                                                                                        }
+                                                                                        cx.notify();
+                                                                                        Ok::<(), String>(())
                                                                                     });
 
-                                                                                    if let Ok(true) = success {
-                                                                                        rfd::AsyncMessageDialog::new()
-                                                                                            .set_title("Profile Exported & Deleted")
-                                                                                            .set_description(format!("Saved to {}", export_dir.display()))
-                                                                                            .show()
-                                                                                            .await;
+                                                                                    match deletion_result {
+                                                                                        Ok(Ok(())) => {
+                                                                                            rfd::AsyncMessageDialog::new()
+                                                                                                .set_title("Profile Exported & Deleted")
+                                                                                                .set_description(format!("Saved to {}", export_dir.display()))
+                                                                                                .show()
+                                                                                                .await;
+                                                                                        }
+                                                                                        Ok(Err(error)) => {
+                                                                                            rfd::AsyncMessageDialog::new()
+                                                                                                .set_title("Profile Was Not Deleted")
+                                                                                                .set_description(error)
+                                                                                                .show()
+                                                                                                .await;
+                                                                                        }
+                                                                                        Err(error) => {
+                                                                                            rfd::AsyncMessageDialog::new()
+                                                                                                .set_title("Profile Was Not Deleted")
+                                                                                                .set_description(error.to_string())
+                                                                                                .show()
+                                                                                                .await;
+                                                                                        }
                                                                                     }
                                                                                 }
                                                                             }).detach();

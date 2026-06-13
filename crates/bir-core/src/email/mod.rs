@@ -7,7 +7,7 @@
 mod auth_oauth;
 mod auth_password;
 mod fetcher;
-mod oauth_server;
+pub(crate) mod oauth_server;
 
 pub use auth_oauth::{GoogleOAuthAuth, get_oauth_email, start_oauth_flow};
 pub use auth_password::AppPasswordAuth;

@@ -1,11 +1,38 @@
 //! Profile repository — CRUD for TaxpayerProfile.
 
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
 
 use super::{Database, DbError};
 use crate::profile::TaxpayerProfile;
 
 impl Database {
+    fn migrate_profile_tin_references(
+        conn: &rusqlite::Connection,
+        old_tin: &str,
+        new_tin: &str,
+    ) -> Result<(), DbError> {
+        if old_tin == new_tin {
+            return Ok(());
+        }
+
+        for (table, column) in [
+            ("penalties_cache", "tin"),
+            ("submissions", "tin"),
+            ("form_drafts", "tin"),
+            ("submission_receipts", "tin"),
+            ("data_providers", "profile_tin"),
+            ("per_year_forms", "tin"),
+            ("profile_calendar_events", "profile_tin"),
+            ("profile_calendar_links", "profile_tin"),
+        ] {
+            conn.execute(
+                &format!("UPDATE {table} SET {column} = ?1 WHERE {column} = ?2"),
+                params![new_tin, old_tin],
+            )?;
+        }
+        Ok(())
+    }
+
     fn execute_save_per_year_forms(
         conn: &rusqlite::Connection,
         tin: &str,
@@ -52,10 +79,24 @@ impl Database {
     pub fn save_profile(&self, mut profile: TaxpayerProfile) -> Result<TaxpayerProfile, DbError> {
         profile.ensure_profile_version_ledger();
         let tin = profile.tin.full();
+        let previous_tin = profile
+            .id
+            .map(|id| {
+                self.conn
+                    .query_row(
+                        "SELECT tin FROM profiles WHERE id = ?1",
+                        params![id],
+                        |row| row.get::<_, String>(0),
+                    )
+                    .optional()
+            })
+            .transpose()?
+            .flatten();
+        let lookup_tin = previous_tin.as_deref().unwrap_or(&tin);
 
         // Query old confirmed IDs BEFORE starting transaction and doing any inserts/updates
         let old_confirmed_ids: std::collections::HashSet<String> = self
-            .get_profile(&tin)?
+            .get_profile(lookup_tin)?
             .map(|p| {
                 p.confirmed_profile_versions()
                     .iter()
@@ -65,6 +106,7 @@ impl Database {
             .unwrap_or_default();
 
         let tx = self.conn.unchecked_transaction()?;
+        tx.execute_batch("PRAGMA defer_foreign_keys = ON;")?;
 
         let json_data = serde_json::to_string(&profile)?;
 
@@ -91,6 +133,9 @@ impl Database {
                 params![tin, json_data],
             )?;
             profile.id = Some(tx.last_insert_rowid());
+        }
+        if let Some(previous_tin) = previous_tin.as_deref() {
+            Self::migrate_profile_tin_references(&tx, previous_tin, &tin)?;
         }
 
         for (year, set) in &profile.per_year_forms {
@@ -204,6 +249,7 @@ impl Database {
         }
 
         tx.commit()?;
+        let _ = self.request_google_calendar_sync();
         Ok(profile)
     }
 
@@ -257,8 +303,29 @@ impl Database {
 
     /// Delete a profile by TIN.
     pub fn delete_profile(&self, tin: &str) -> Result<(), DbError> {
-        self.conn
-            .execute("DELETE FROM profiles WHERE tin = ?1", params![tin])?;
+        if self.get_profile_calendar_link(tin)?.is_some() {
+            return Err(DbError::Other(
+                "Delete or unlink the profile's Google Calendar before deleting the profile"
+                    .to_string(),
+            ));
+        }
+        let tx = self.conn.unchecked_transaction()?;
+        for (table, column) in [
+            ("penalties_cache", "tin"),
+            ("submissions", "tin"),
+            ("form_drafts", "tin"),
+            ("submission_receipts", "tin"),
+            ("data_providers", "profile_tin"),
+            ("per_year_forms", "tin"),
+            ("profile_calendar_events", "profile_tin"),
+        ] {
+            tx.execute(
+                &format!("DELETE FROM {table} WHERE {column} = ?1"),
+                params![tin],
+            )?;
+        }
+        tx.execute("DELETE FROM profiles WHERE tin = ?1", params![tin])?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -272,5 +339,58 @@ impl Database {
         }
         profile.per_year_forms = per_year_forms;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::ProfileCalendarLink;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn tin_reference_migration_moves_calendar_and_forms_records() {
+        let file = NamedTempFile::new().unwrap();
+        let db = Database::open(file.path()).unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO profiles (tin, data_json) VALUES (?1, '{}')",
+                ["123456789000"],
+            )
+            .unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO per_year_forms
+                    (tin, taxable_year, form_code, frequency, active, source, custom)
+                 VALUES (?1, 2026, '0619E', 'monthly', 1, 'manual', 0)",
+                ["123456789000"],
+            )
+            .unwrap();
+        db.save_profile_calendar_link(&ProfileCalendarLink {
+            profile_tin: "123456789000".into(),
+            google_calendar_id: "calendar@example.com".into(),
+            calendar_name: "Test Calendar".into(),
+            enabled: true,
+            last_synced_at: None,
+            last_error: None,
+        })
+        .unwrap();
+
+        let tx = db.conn.unchecked_transaction().unwrap();
+        tx.execute_batch("PRAGMA defer_foreign_keys = ON;").unwrap();
+        tx.execute(
+            "UPDATE profiles SET tin = ?1 WHERE tin = ?2",
+            params!["987654321000", "123456789000"],
+        )
+        .unwrap();
+        Database::migrate_profile_tin_references(&tx, "123456789000", "987654321000").unwrap();
+        tx.commit().unwrap();
+
+        assert!(
+            db.get_profile_calendar_link("987654321000")
+                .unwrap()
+                .is_some()
+        );
+        assert!(db.has_per_year_forms("987654321000", 2026).unwrap());
     }
 }

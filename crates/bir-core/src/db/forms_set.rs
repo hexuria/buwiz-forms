@@ -93,6 +93,7 @@ impl Database {
             )?;
         }
         tx.commit()?;
+        let _ = self.request_google_calendar_sync();
         Ok(())
     }
 
@@ -132,6 +133,7 @@ impl Database {
             "DELETE FROM per_year_forms WHERE tin = ?1 AND taxable_year = ?2",
             params![tin, year],
         )?;
+        let _ = self.request_google_calendar_sync();
         Ok(())
     }
 }

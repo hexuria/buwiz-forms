@@ -28,6 +28,7 @@ use bir_core::validation::{ValidationError, validate_profile};
 // ─── Tab sub-modules ──────────────────────────────────────────────────────────
 // Each file holds one `impl ProfileManagerView` block rendering that tab's UI.
 // Imports from this module are re-exported via `use super::*` in each sub-module.
+mod tab_calendar;
 mod tab_email_settings;
 mod tab_export;
 mod tab_security;
@@ -163,6 +164,8 @@ pub struct ProfileManagerView {
     pub forms_editor_new_frequency_select: Entity<ComboboxState>,
     pub forms_editor_selected_code: Option<String>,
     pub forms_editor_active_note_input: Entity<InputState>,
+    calendar_name_input: Entity<InputState>,
+    calendar_action_message: Option<(bool, String)>,
 
     _subscriptions: Vec<Subscription>,
 }
@@ -293,6 +296,8 @@ impl ProfileManagerView {
 
         let line_of_business =
             cx.new(|cx| InputState::new(window, cx).placeholder("e.g. SOFTWARE DEVELOPMENT"));
+        let calendar_name_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Google calendar name"));
         let name_input = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder("Taxpayer's Name (Last Name, First Name, Middle Name)")
@@ -737,6 +742,8 @@ impl ProfileManagerView {
             forms_editor_new_frequency_select,
             forms_editor_selected_code: None,
             forms_editor_active_note_input,
+            calendar_name_input,
+            calendar_action_message: None,
             _subscriptions: subscriptions,
         }
     }
@@ -850,6 +857,9 @@ impl ProfileManagerView {
             });
         self.forms_editor_active_note_input
             .update(cx, |input, cx| input.set_value("", window, cx));
+        self.calendar_name_input
+            .update(cx, |input, cx| input.set_value("", window, cx));
+        self.calendar_action_message = None;
         self.setup_totp_state
             .update(cx, |input, cx| input.set_value("", window, cx));
 
@@ -1138,6 +1148,20 @@ impl ProfileManagerView {
         });
 
         self.stored_per_year_forms = profile.per_year_forms.clone();
+        let calendar_name = if let Ok(db) = self.db.lock() {
+            db.get_profile_calendar_link(&profile.tin.full())
+                .ok()
+                .flatten()
+                .map(|link| link.calendar_name)
+                .unwrap_or_else(|| {
+                    bir_core::google_calendar::default_profile_calendar_name(&profile)
+                })
+        } else {
+            bir_core::google_calendar::default_profile_calendar_name(&profile)
+        };
+        self.calendar_name_input
+            .update(cx, |input, cx| input.set_value(calendar_name, window, cx));
+        self.calendar_action_message = None;
         let select_val = self.forms_editor_year_select.read(cx).selected_value(cx);
         if let Ok(y) = select_val.parse::<u16>() {
             self.forms_editor_year = y;
@@ -3378,6 +3402,30 @@ impl Render for ProfileManagerView {
                                                         }))
                                                         .child(div().text_sm().child("Active Forms")),
                                                 )
+                                                .child(
+                                                    div()
+                                                        .id("tab_6")
+                                                        .px_4()
+                                                        .py_1p5()
+                                                        .rounded_md()
+                                                        .cursor_pointer()
+                                                        .when(self.active_tab == 6, |s| {
+                                                            s.bg(cx.theme().background)
+                                                                .shadow_sm()
+                                                                .text_color(cx.theme().foreground)
+                                                                .font_weight(FontWeight::SEMIBOLD)
+                                                        })
+                                                        .when(self.active_tab != 6, |s| {
+                                                            s.hover(|s| s.bg(cx.theme().muted))
+                                                                .text_color(cx.theme().muted_foreground)
+                                                                .font_weight(FontWeight::MEDIUM)
+                                                        })
+                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                            this.active_tab = 6;
+                                                            cx.notify();
+                                                        }))
+                                                        .child(div().text_sm().child("Calendar")),
+                                                )
                                             }),
                                     ),
                             )
@@ -3401,8 +3449,9 @@ impl Render for ProfileManagerView {
                                     .child(self.render_security_tab(global_pins_enabled, cx))
                                     .child(self.render_export_tab(cx))
                                     .child(self.render_active_forms_tab(cx))
+                                    .child(self.render_calendar_tab(cx))
                             )
-                            .when(self.active_tab != 1, |this| {
+                            .when(self.active_tab != 1 && self.active_tab != 6, |this| {
                                 this.child(
                                     div()
                                         .mt_4()

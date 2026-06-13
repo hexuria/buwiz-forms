@@ -25,6 +25,7 @@ pub mod email_fetcher; // legacy — kept for backward compat, delegates to `ema
 pub mod export;
 pub mod form;
 pub mod forms;
+pub mod google_calendar;
 pub mod import;
 pub mod integration;
 pub mod ipc;

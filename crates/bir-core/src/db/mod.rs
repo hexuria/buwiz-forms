@@ -14,6 +14,7 @@
 
 mod drafts;
 mod forms_set;
+mod google_calendar;
 mod jobs;
 mod migrations;
 mod notices;
@@ -29,6 +30,8 @@ use tracing::info;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+
+pub use google_calendar::{CalendarEventLink, ProfileCalendarLink};
 
 // =========================================================================
 // Data types
@@ -540,6 +543,8 @@ impl Database {
              DELETE FROM announcements;
              DELETE FROM bir_notices;
              DELETE FROM penalties_cache;
+             DELETE FROM profile_calendar_events;
+             DELETE FROM profile_calendar_links;
              DELETE FROM profiles;
              DELETE FROM submissions;
              DELETE FROM form_drafts;
@@ -605,7 +610,8 @@ impl Database {
         overrides: &[crate::calendar_rules::DeadlineOverride],
     ) -> Result<(), DbError> {
         let json = serde_json::to_string(overrides).map_err(|e| DbError::Other(e.to_string()))?;
-        self.set_setting("deadline_overrides", &json)
+        self.set_setting("deadline_overrides", &json)?;
+        self.request_google_calendar_sync()
     }
 }
 

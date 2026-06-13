@@ -1,7 +1,7 @@
 //! Lightweight local HTTP server for receiving OAuth2 callbacks.
 //!
 //! Starts on a random available port, waits for a single request from
-//! Google's redirect, extracts the `code` parameter, and shuts down.
+//! Google's redirect, validates its `state`, extracts the `code`, and shuts down.
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -10,12 +10,14 @@ use tracing::info;
 
 /// Start a single-shot HTTP server on a random port.
 ///
-/// Returns `(port, receiver)` where `receiver` will yield the authorization code
-/// once Google redirects the browser back.
-pub fn start_callback_server() -> Result<(u16, mpsc::Receiver<String>), anyhow::Error> {
+/// Returns `(port, receiver)` where `receiver` yields the authorization code
+/// after Google redirects with the expected OAuth state.
+pub fn start_callback_server(
+    expected_state: String,
+) -> Result<(u16, mpsc::Receiver<Result<String, String>>), anyhow::Error> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
     let port = listener.local_addr()?.port();
-    let (tx, rx) = mpsc::channel::<String>();
+    let (tx, rx) = mpsc::channel::<Result<String, String>>();
 
     info!("OAuth callback server listening on 127.0.0.1:{}", port);
 
@@ -31,8 +33,10 @@ pub fn start_callback_server() -> Result<(u16, mpsc::Receiver<String>), anyhow::
             let n = stream.read(&mut buf).unwrap_or(0);
             let request = String::from_utf8_lossy(&buf[..n]);
 
-            // Extract the `code` query parameter from GET /?code=...&scope=...
-            if let Some(code) = extract_code(&request) {
+            let callback = extract_callback(&request);
+            if let Some((code, state)) = callback
+                && state == expected_state
+            {
                 // Send a friendly HTML response
                 let html = r#"<!DOCTYPE html>
 <html lang="en">
@@ -140,15 +144,18 @@ pub fn start_callback_server() -> Result<(u16, mpsc::Receiver<String>), anyhow::
                 );
                 let _ = stream.write_all(response.as_bytes());
                 let _ = stream.flush();
-                let _ = tx.send(code);
+                let _ = tx.send(Ok(code));
             } else {
-                let body = "Missing authorization code.";
+                let body = "Invalid OAuth callback. Return to eBIRForms and try again.";
                 let response = format!(
                     "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                     body.len(),
                     body
                 );
                 let _ = stream.write_all(response.as_bytes());
+                let _ = tx.send(Err(
+                    "OAuth callback state was missing or did not match".to_string()
+                ));
             }
         }
 
@@ -158,20 +165,46 @@ pub fn start_callback_server() -> Result<(u16, mpsc::Receiver<String>), anyhow::
     Ok((port, rx))
 }
 
-/// Parse the `code` query parameter from an HTTP GET request line.
-fn extract_code(request: &str) -> Option<String> {
-    // GET /?code=XXXX&scope=...  HTTP/1.1
+/// Parse the `code` and `state` query parameters from an HTTP GET request line.
+fn extract_callback(request: &str) -> Option<(String, String)> {
     let first_line = request.lines().next()?;
     let path = first_line.split_whitespace().nth(1)?;
     let query = path.split('?').nth(1)?;
+    let mut code = None;
+    let mut state = None;
 
     for pair in query.split('&') {
-        let mut kv = pair.splitn(2, '=');
-        if kv.next()? == "code" {
-            return kv
-                .next()
-                .map(|v| urlencoding::decode(v).unwrap_or_default().into_owned());
+        let Some((key, value)) = pair.split_once('=') else {
+            continue;
+        };
+        let value = urlencoding::decode(value).ok()?.into_owned();
+        match key {
+            "code" => code = Some(value),
+            "state" => state = Some(value),
+            _ => {}
         }
     }
-    None
+    Some((code?, state?))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_callback_returns_decoded_code_and_state() {
+        let request = "GET /?code=a%2Fb&state=expected%20state&scope=x HTTP/1.1\r\n";
+
+        assert_eq!(
+            extract_callback(request),
+            Some(("a/b".to_string(), "expected state".to_string()))
+        );
+    }
+
+    #[test]
+    fn extract_callback_rejects_missing_state() {
+        let request = "GET /?code=authorization-code HTTP/1.1\r\n";
+
+        assert_eq!(extract_callback(request), None);
+    }
 }

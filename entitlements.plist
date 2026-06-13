@@ -9,6 +9,9 @@
     <!-- Network access (IMAP, FTP, HTTP) -->
     <key>com.apple.security.network.client</key>
     <true/>
+    <!-- Localhost listener used for Google OAuth desktop callbacks -->
+    <key>com.apple.security.network.server</key>
+    <true/>
 
     <!-- Application Identifiers for TestFlight/App Store -->
     <key>com.apple.application-identifier</key>

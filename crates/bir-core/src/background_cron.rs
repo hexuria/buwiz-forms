@@ -91,10 +91,97 @@ pub async fn run_queue_tick(db: Arc<Mutex<Database>>) {
     // Task C: Generic Job Queue (Custom Cron & One-off commands)
     process_generic_jobs(db.clone()).await;
 
+    process_google_calendar_sync(db.clone()).await;
+
     // Signal the desktop app that the database was modified.
     // On macOS: instant via NSDistributedNotificationCenter.
     // On Linux/Windows: no-op (desktop uses PRAGMA data_version polling).
     crate::ipc::post_db_changed();
+}
+
+async fn process_google_calendar_sync(db: Arc<Mutex<Database>>) {
+    const SIX_HOURS: i64 = 6 * 60 * 60;
+    let should_sync = {
+        let db = match db.lock() {
+            Ok(db) => db,
+            Err(_) => return,
+        };
+        let connected = db
+            .get_setting("google_calendar_connected_email")
+            .ok()
+            .flatten()
+            .is_some_and(|email| !email.trim().is_empty());
+        let has_links = db
+            .list_profile_calendar_links()
+            .is_ok_and(|links| !links.is_empty());
+        if !connected {
+            return;
+        }
+        if !has_links {
+            let _ = db.set_setting("google_calendar_sync_requested", "false");
+            return;
+        }
+        let requested = db
+            .get_setting("google_calendar_sync_requested")
+            .ok()
+            .flatten()
+            .as_deref()
+            == Some("true");
+        let last_sync = db
+            .get_setting("google_calendar_last_sync_unix")
+            .ok()
+            .flatten()
+            .and_then(|value| value.parse::<i64>().ok())
+            .unwrap_or(0);
+        requested || Utc::now().timestamp().saturating_sub(last_sync) >= SIX_HOURS
+    };
+    if !should_sync || !crate::google_calendar::google_calendar_configuration().configured {
+        return;
+    }
+
+    let db_for_sync = db.clone();
+    let results = match tokio::task::spawn_blocking(move || {
+        crate::google_calendar::sync_all_profile_calendars(db_for_sync)
+    })
+    .await
+    {
+        Ok(results) => results,
+        Err(error) => {
+            warn!("Google Calendar background sync task failed: {error}");
+            return;
+        }
+    };
+    if results.is_empty() {
+        if let Ok(db) = db.lock() {
+            let _ = db.set_setting(
+                "google_calendar_last_sync_unix",
+                &Utc::now().timestamp().to_string(),
+            );
+            let _ = db.set_setting("google_calendar_sync_requested", "false");
+        }
+        return;
+    }
+    for (tin, result) in &results {
+        match result {
+            Ok(report) => info!(
+                "Google Calendar sync for {}: {} inserted, {} updated, {} deleted",
+                tin, report.inserted, report.updated, report.deleted
+            ),
+            Err(error) => warn!("Google Calendar sync failed for {}: {}", tin, error),
+        }
+    }
+    let all_succeeded = results.iter().all(|(_, result)| result.is_ok());
+    if let Ok(db) = db.lock() {
+        if !all_succeeded {
+            let _ = db.set_setting("google_calendar_sync_requested", "true");
+            return;
+        }
+        let _ = db.set_setting(
+            "google_calendar_last_sync_unix",
+            &Utc::now().timestamp().to_string(),
+        );
+        let _ = db.set_setting("google_calendar_sync_requested", "false");
+    }
 }
 
 async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Database>>) {

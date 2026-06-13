@@ -237,6 +237,7 @@ impl Database {
         )?;
 
         let id = self.conn.last_insert_rowid();
+        let _ = self.request_google_calendar_sync();
         Ok(id)
     }
 
@@ -271,6 +272,7 @@ impl Database {
                AND taxable_year = ?2 AND quarter = ?3",
             params![tin, year as i64, quarter as i64],
         )?;
+        let _ = self.request_google_calendar_sync();
         Ok(())
     }
 
@@ -305,6 +307,7 @@ impl Database {
         )?;
 
         let id = self.conn.last_insert_rowid();
+        let _ = self.request_google_calendar_sync();
         Ok(id)
     }
 
@@ -386,6 +389,7 @@ impl Database {
             params![tin, form_code, year as i64, &period_key],
             |row| row.get::<_, i64>(0),
         )?;
+        let _ = self.request_google_calendar_sync();
         Ok(id)
     }
 

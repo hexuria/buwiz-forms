@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::db::DbError;
 
-const CURRENT_MIGRATION_VERSION: i32 = 9;
+const CURRENT_MIGRATION_VERSION: i32 = 10;
 
 pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
     let mut version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
@@ -219,6 +219,35 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         // v8 only checked registered_tax_types_allow_form, missing taxpayer_type,
         // VAT, deprecation, and other checks from obligation_allowed_for_version_and_profile.
         "SELECT 1; -- v9 marker: per-year forms heal (Rust-side)",
+        // v10: Google Calendar links and managed event mappings.
+        "
+        CREATE TABLE IF NOT EXISTS profile_calendar_links (
+            profile_tin TEXT PRIMARY KEY,
+            google_calendar_id TEXT NOT NULL,
+            calendar_name TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            last_synced_at TEXT,
+            last_error TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (profile_tin) REFERENCES profiles(tin) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS profile_calendar_events (
+            profile_tin TEXT NOT NULL,
+            obligation_key TEXT NOT NULL,
+            google_event_id TEXT NOT NULL,
+            content_hash TEXT NOT NULL,
+            taxable_year INTEGER NOT NULL,
+            form_code TEXT NOT NULL,
+            period_label TEXT NOT NULL,
+            last_synced_at TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (profile_tin, obligation_key),
+            FOREIGN KEY (profile_tin) REFERENCES profiles(tin) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_profile_calendar_events_tin
+            ON profile_calendar_events(profile_tin);
+        ",
     ];
 
     while version < CURRENT_MIGRATION_VERSION {
@@ -857,6 +886,8 @@ mod tests {
             "bir_notices",
             "data_providers",
             "per_year_forms",
+            "profile_calendar_links",
+            "profile_calendar_events",
         ];
         for table in tables {
             let exists: bool = conn
@@ -1207,11 +1238,11 @@ mod tests {
         // Run the v8 migration
         migrate_database(&conn).unwrap();
 
-        // Check if user_version is 9 (v8 backfill + v9 heal)
+        // Check if user_version reaches the current schema.
         let v: i32 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 9);
+        assert_eq!(v, 10);
 
         // Check that per_year_forms has been backfilled
         let mut stmt = conn.prepare(
@@ -1340,11 +1371,11 @@ mod tests {
         // Run the v9 migration (will upgrade from v7 -> v8 -> v9)
         migrate_database(&conn).unwrap();
 
-        // Check if user_version is 9
+        // Check if user_version reaches the current schema.
         let v: i32 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 9);
+        assert_eq!(v, 10);
 
         // Assert that after migration v9, 2550Q is preserved and active is still false (0)
         let mut stmt = conn.prepare(

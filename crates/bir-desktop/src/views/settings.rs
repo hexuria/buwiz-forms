@@ -3,6 +3,7 @@ use crate::components::otp_paste::paste_otp_value;
 use bir_core::db::Database;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
+use gpui_component::button::ButtonVariants;
 use gpui_component::input::{InputEvent, OtpInput, OtpState};
 use gpui_component::switch::Switch;
 use gpui_component::*;
@@ -28,6 +29,9 @@ pub struct SettingsView {
     hide_tax_profiles: bool,
     enable_profile_pins: bool,
     hotkey_recorder: Entity<HotkeyRecorder>,
+    google_calendar_configured: bool,
+    google_calendar_email: Option<String>,
+    google_calendar_message: Option<(bool, String)>,
 }
 
 impl SettingsView {
@@ -86,6 +90,11 @@ impl SettingsView {
         });
 
         let hotkey_recorder = cx.new(|cx| HotkeyRecorder::new(global_hotkey, window, cx));
+        let calendar_connection = db
+            .lock()
+            .ok()
+            .map(|db| bir_core::google_calendar::google_calendar_connection_from_db(&db))
+            .unwrap_or_else(bir_core::google_calendar::google_calendar_configuration);
 
         let view = Self {
             db: db.clone(),
@@ -101,6 +110,9 @@ impl SettingsView {
             hide_tax_profiles,
             enable_profile_pins,
             hotkey_recorder: hotkey_recorder.clone(),
+            google_calendar_configured: calendar_connection.configured,
+            google_calendar_email: calendar_connection.connected_email,
+            google_calendar_message: None,
         };
 
         cx.subscribe_in(
@@ -181,6 +193,189 @@ impl SettingsView {
 
         view
     }
+
+    fn render_google_calendar_settings(&self, cx: &Context<'_, Self>) -> impl IntoElement {
+        let connected = self.google_calendar_email.is_some();
+        div()
+            .flex()
+            .flex_col()
+            .flex_shrink_0()
+            .bg(cx.theme().background)
+            .border_1()
+            .border_color(cx.theme().border)
+            .rounded_xl()
+            .p_6()
+            .gap_4()
+            .child(
+                div()
+                    .flex()
+                    .justify_between()
+                    .items_start()
+                    .gap_4()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .child("Google Calendar"),
+                            )
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(
+                                        "Connect one Google account, then create a separate filing calendar for each tax profile.",
+                                    ),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(if connected {
+                                cx.theme().success
+                            } else {
+                                cx.theme().muted_foreground
+                            })
+                            .child(
+                                self.google_calendar_email
+                                    .clone()
+                                    .unwrap_or_else(|| "Not connected".to_string()),
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(
+                        "eBIRForms requests access only to calendars it creates. Deadline events use email reminders 7 days and 1 day before filing.",
+                    ),
+            )
+            .when(!self.google_calendar_configured, |this| {
+                this.child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().danger)
+                        .child(
+                            "Google OAuth is not configured in this build. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, then rebuild the app.",
+                        ),
+                )
+            })
+            .when_some(self.google_calendar_message.clone(), |this, message| {
+                this.child(
+                    div()
+                        .text_sm()
+                        .text_color(if message.0 {
+                            cx.theme().success
+                        } else {
+                            cx.theme().danger
+                        })
+                        .child(message.1),
+                )
+            })
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .child(
+                        gpui_component::button::Button::new("connect_google_calendar")
+                            .label(if connected {
+                                "Reconnect Google"
+                            } else {
+                                "Connect Google"
+                            })
+                            .disabled(!self.google_calendar_configured)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.google_calendar_message =
+                                    Some((true, "Waiting for Google authorization...".into()));
+                                cx.notify();
+                                let db = this.db.clone();
+                                cx.spawn(async move |this, cx| {
+                                    let (tx, rx) = tokio::sync::oneshot::channel();
+                                    std::thread::spawn(move || {
+                                        let result =
+                                            bir_core::google_calendar::connect_google_calendar_account(db);
+                                        let _ = tx.send(result);
+                                    });
+                                    let result = rx.await.unwrap_or_else(|_| {
+                                        Err(anyhow::anyhow!("Google OAuth worker stopped"))
+                                    });
+                                    let _ = this.update(cx, |this, cx| {
+                                        match result {
+                                            Ok(email) => {
+                                                this.google_calendar_email = Some(email.clone());
+                                                this.google_calendar_message = Some((
+                                                    true,
+                                                    format!("Connected Google Calendar as {email}."),
+                                                ));
+                                            }
+                                            Err(error) => {
+                                                this.google_calendar_message = Some((
+                                                    false,
+                                                    format!("Connection failed: {error}"),
+                                                ));
+                                            }
+                                        }
+                                        cx.notify();
+                                    });
+                                })
+                                .detach();
+                            })),
+                    )
+                    .when(connected, |this| {
+                        this.child(
+                            gpui_component::button::Button::new("disconnect_google_calendar")
+                                .label("Disconnect")
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    let db = this.db.clone();
+                                    cx.spawn(async move |this, cx| {
+                                        let result = std::thread::spawn(move || {
+                                            bir_core::google_calendar::disconnect_google_calendar_account(db)
+                                        })
+                                        .join()
+                                        .unwrap_or_else(|_| {
+                                            Err(anyhow::anyhow!("Disconnect worker stopped"))
+                                        });
+                                        let _ = this.update(cx, |this, cx| {
+                                            match result {
+                                                Ok(()) => {
+                                                    this.google_calendar_email = None;
+                                                    this.google_calendar_message = Some((
+                                                        true,
+                                                        "Disconnected. Existing Google calendars were preserved."
+                                                            .into(),
+                                                    ));
+                                                }
+                                                Err(error) => {
+                                                    this.google_calendar_message = Some((
+                                                        false,
+                                                        format!("Disconnect failed: {error}"),
+                                                    ));
+                                                }
+                                            }
+                                            cx.notify();
+                                        });
+                                    })
+                                    .detach();
+                                })),
+                        )
+                    })
+                    .child(
+                        gpui_component::button::Button::new("google_calendar_setup_docs")
+                            .label("Setup Guide")
+                            .ghost()
+                            .on_click(|_, _, _| {
+                                let _ = open::that(
+                                    "https://github.com/codeitlikemiley/ebirforms/blob/main/docs/google-calendar-integration.md",
+                                );
+                            }),
+                    ),
+            )
+    }
 }
 
 impl Render for SettingsView {
@@ -223,8 +418,9 @@ impl Render for SettingsView {
                         div()
                             .text_color(cx.theme().muted_foreground)
                             .child("Configure security, privacy, and global application preferences."),
-                    ),
-            )
+                            ),
+                    )
+                    .child(self.render_google_calendar_settings(cx))
             .child(
                 div()
                     .flex()
