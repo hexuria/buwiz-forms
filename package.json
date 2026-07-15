@@ -1,0 +1,27 @@
+{
+  "name": "ebirforms-web",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "audit:forms:migration": "node scripts/run_python.mjs scripts/audit_html_form_migration.py",
+    "build:forms": "npm run build --workspace @ebirforms/form-preview",
+    "dev:calibration": "npm run dev --workspace @ebirforms/form-calibration",
+    "build:calibration": "npm run build --workspace @ebirforms/form-calibration",
+    "contracts:rust": "cargo run -q --locked -p bir-print --bin generate_render_contract",
+    "contracts:types": "json2ts -i packages/form-contracts/schema/render-envelope-v1.schema.json -o packages/form-contracts/src/generated.ts --bannerComment '/* Generated from Rust RenderEnvelopeV1. Do not edit directly. */'",
+    "contracts:generate": "npm run contracts:rust && npm run contracts:types",
+    "contracts:check": "npm run contracts:generate && node scripts/check-generated-contracts.mjs",
+    "references:generate": "cargo run -q --locked -p bir-print --bin generate_render_contract -- --visual-references",
+    "test:forms": "npm run test --workspace @ebirforms/form-renderer",
+    "test:forms:visual": "playwright test --config packages/form-renderer/playwright.config.ts",
+    "typecheck:forms": "npm run typecheck --workspaces --if-present",
+    "verify:forms:offline": "node scripts/run_python.mjs scripts/verify_offline_form_renderer.py assets/form-renderer"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.58.2",
+    "@types/pngjs": "6.0.5",
+    "json-schema-to-typescript": "^15.0.4",
+    "pixelmatch": "7.1.0",
+    "pngjs": "7.0.0"
+  }
+}

@@ -1,0 +1,55 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  color: #eef2ff;
+  background: #11131a;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+
+.calibration-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+}
+
+.calibration-toolbar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  padding: 24px;
+  border-right: 1px solid #303441;
+  background: #171a22;
+}
+
+.calibration-toolbar h1 { margin: 0 0 8px; font-size: 22px; }
+.calibration-toolbar p { margin: 0 0 24px; color: #aeb5c6; line-height: 1.45; }
+.calibration-toolbar label { display: grid; gap: 8px; margin: 18px 0; font-size: 13px; }
+.calibration-toolbar input { width: 100%; }
+.calibration-toolbar dl { margin-top: 28px; color: #aeb5c6; }
+.calibration-toolbar dt { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.calibration-toolbar dd { margin: 4px 0 16px; color: #fff; }
+
+.mode-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.mode-switch button {
+  padding: 9px 10px;
+  border: 1px solid #3b4050;
+  border-radius: 6px;
+  color: #d8deef;
+  background: #222632;
+}
+.mode-switch button[data-active="true"] { border-color: #79a7ff; background: #24457d; }
+
+.calibration-canvas { min-width: 0; overflow: auto; padding: 32px; }
+.calibration-stage { position: relative; width: max-content; margin: 0 auto; }
+.calibration-stage .form-document { gap: 0; padding: 0; }
+.calibration-stage .preview-validation { display: none; }
+.reference-layer {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 612pt;
+  height: 936pt;
+  object-fit: fill;
+  pointer-events: none;
+}
+.calibration-stage[data-mode="difference"] .reference-layer { mix-blend-mode: difference; }

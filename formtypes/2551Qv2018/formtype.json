@@ -735,6 +735,531 @@
       }
     },
     {
+      "key": "drpATC2",
+      "kind": "char",
+      "page": 2,
+      "x": 37.666015625,
+      "y": 180.99739583333334,
+      "size": 8.5,
+      "char_count": 5,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 69.880859375,
+        "height": 16.6796875,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCAmt2",
+      "kind": "dec",
+      "page": 2,
+      "x": 108.478515625,
+      "y": 180.87434895833334,
+      "cell_w": 14.0,
+      "int_cells": 11,
+      "dec_x": 437.0,
+      "char_count": 12,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 169.5362548828125,
+        "height": 17.619384765625,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCAmt2",
+      "kind": "dec",
+      "page": 2,
+      "x": 292.0339660644531,
+      "y": 180.34453328450522,
+      "cell_w": 14.0,
+      "int_cells": 11,
+      "dec_x": 437.0,
+      "char_count": 2,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 28.05499267578125,
+        "height": 17.377365112304688,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCRate2",
+      "kind": "int",
+      "page": 2,
+      "x": 320.65625,
+      "y": 180.95833333333334,
+      "size": 8.5,
+      "char_count": 2,
+      "direction": "rtl",
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 27.458984375,
+        "height": 16.65625,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCDue2",
+      "kind": "dec",
+      "page": 2,
+      "x": 363.47265625,
+      "y": 180.88020833333334,
+      "cell_w": 10.5,
+      "int_cells": 7,
+      "dec_x": 586.0,
+      "char_count": 12,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 169.455078125,
+        "height": 17.330078125,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCDue2",
+      "kind": "dec",
+      "page": 2,
+      "x": 546.84765625,
+      "y": 180.97981770833334,
+      "cell_w": 10.5,
+      "int_cells": 7,
+      "dec_x": 586.0,
+      "char_count": 2,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 28.55078125,
+        "height": 16.9296875,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "drpATC3",
+      "kind": "char",
+      "page": 2,
+      "x": 37.666015625,
+      "y": 199.15494791666666,
+      "size": 8.5,
+      "char_count": 5,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 69.880859375,
+        "height": 16.6796875,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCAmt3",
+      "kind": "dec",
+      "page": 2,
+      "x": 108.478515625,
+      "y": 199.03190104166666,
+      "cell_w": 14.0,
+      "int_cells": 11,
+      "dec_x": 437.0,
+      "char_count": 12,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 169.5362548828125,
+        "height": 17.619384765625,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCAmt3",
+      "kind": "dec",
+      "page": 2,
+      "x": 292.0339660644531,
+      "y": 198.50208593783853,
+      "cell_w": 14.0,
+      "int_cells": 11,
+      "dec_x": 437.0,
+      "char_count": 2,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 28.05499267578125,
+        "height": 17.377365112304688,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCRate3",
+      "kind": "int",
+      "page": 2,
+      "x": 320.65625,
+      "y": 199.11588541666666,
+      "size": 8.5,
+      "char_count": 2,
+      "direction": "rtl",
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 27.458984375,
+        "height": 16.65625,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCDue3",
+      "kind": "dec",
+      "page": 2,
+      "x": 363.47265625,
+      "y": 199.03776041666666,
+      "cell_w": 10.5,
+      "int_cells": 7,
+      "dec_x": 586.0,
+      "char_count": 12,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 169.455078125,
+        "height": 17.330078125,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCDue3",
+      "kind": "dec",
+      "page": 2,
+      "x": 546.84765625,
+      "y": 199.13736979166666,
+      "cell_w": 10.5,
+      "int_cells": 7,
+      "dec_x": 586.0,
+      "char_count": 2,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 28.55078125,
+        "height": 16.9296875,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "drpATC4",
+      "kind": "char",
+      "page": 2,
+      "x": 37.666015625,
+      "y": 217.3125,
+      "size": 8.5,
+      "char_count": 5,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 69.880859375,
+        "height": 16.6796875,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCAmt4",
+      "kind": "dec",
+      "page": 2,
+      "x": 108.478515625,
+      "y": 217.189453125,
+      "cell_w": 14.0,
+      "int_cells": 11,
+      "dec_x": 437.0,
+      "char_count": 12,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 169.5362548828125,
+        "height": 17.619384765625,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCAmt4",
+      "kind": "dec",
+      "page": 2,
+      "x": 292.0339660644531,
+      "y": 216.65963859117188,
+      "cell_w": 14.0,
+      "int_cells": 11,
+      "dec_x": 437.0,
+      "char_count": 2,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 28.05499267578125,
+        "height": 17.377365112304688,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCRate4",
+      "kind": "int",
+      "page": 2,
+      "x": 320.65625,
+      "y": 217.2734375,
+      "size": 8.5,
+      "char_count": 2,
+      "direction": "rtl",
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 27.458984375,
+        "height": 16.65625,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCDue4",
+      "kind": "dec",
+      "page": 2,
+      "x": 363.47265625,
+      "y": 217.1953125,
+      "cell_w": 10.5,
+      "int_cells": 7,
+      "dec_x": 586.0,
+      "char_count": 12,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 169.455078125,
+        "height": 17.330078125,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCDue4",
+      "kind": "dec",
+      "page": 2,
+      "x": 546.84765625,
+      "y": 217.294921875,
+      "cell_w": 10.5,
+      "int_cells": 7,
+      "dec_x": 586.0,
+      "char_count": 2,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 28.55078125,
+        "height": 16.9296875,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "drpATC5",
+      "kind": "char",
+      "page": 2,
+      "x": 37.666015625,
+      "y": 235.47005208333334,
+      "size": 8.5,
+      "char_count": 5,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 69.880859375,
+        "height": 16.6796875,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCAmt5",
+      "kind": "dec",
+      "page": 2,
+      "x": 108.478515625,
+      "y": 235.34700520833334,
+      "cell_w": 14.0,
+      "int_cells": 11,
+      "dec_x": 437.0,
+      "char_count": 12,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 169.5362548828125,
+        "height": 17.619384765625,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCAmt5",
+      "kind": "dec",
+      "page": 2,
+      "x": 292.0339660644531,
+      "y": 234.81719067450522,
+      "cell_w": 14.0,
+      "int_cells": 11,
+      "dec_x": 437.0,
+      "char_count": 2,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 28.05499267578125,
+        "height": 17.377365112304688,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCRate5",
+      "kind": "int",
+      "page": 2,
+      "x": 320.65625,
+      "y": 235.43098958333334,
+      "size": 8.5,
+      "char_count": 2,
+      "direction": "rtl",
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 27.458984375,
+        "height": 16.65625,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCDue5",
+      "kind": "dec",
+      "page": 2,
+      "x": 363.47265625,
+      "y": 235.35286458333334,
+      "cell_w": 10.5,
+      "int_cells": 7,
+      "dec_x": 586.0,
+      "char_count": 12,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 169.455078125,
+        "height": 17.330078125,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCDue5",
+      "kind": "dec",
+      "page": 2,
+      "x": 546.84765625,
+      "y": 235.45247395833334,
+      "cell_w": 10.5,
+      "int_cells": 7,
+      "dec_x": 586.0,
+      "char_count": 2,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 28.55078125,
+        "height": 16.9296875,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "drpATC6",
+      "kind": "char",
+      "page": 2,
+      "x": 37.666015625,
+      "y": 253.62760416666666,
+      "size": 8.5,
+      "char_count": 5,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 69.880859375,
+        "height": 16.6796875,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCAmt6",
+      "kind": "dec",
+      "page": 2,
+      "x": 108.478515625,
+      "y": 253.50455729166666,
+      "cell_w": 14.0,
+      "int_cells": 11,
+      "dec_x": 437.0,
+      "char_count": 12,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 169.5362548828125,
+        "height": 17.619384765625,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCAmt6",
+      "kind": "dec",
+      "page": 2,
+      "x": 292.0339660644531,
+      "y": 252.97474275783853,
+      "cell_w": 14.0,
+      "int_cells": 11,
+      "dec_x": 437.0,
+      "char_count": 2,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 28.05499267578125,
+        "height": 17.377365112304688,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCRate6",
+      "kind": "int",
+      "page": 2,
+      "x": 320.65625,
+      "y": 253.58854166666666,
+      "size": 8.5,
+      "char_count": 2,
+      "direction": "rtl",
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 27.458984375,
+        "height": 16.65625,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCDue6",
+      "kind": "dec",
+      "page": 2,
+      "x": 363.47265625,
+      "y": 253.51041666666666,
+      "cell_w": 10.5,
+      "int_cells": 7,
+      "dec_x": 586.0,
+      "char_count": 12,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 169.455078125,
+        "height": 17.330078125,
+        "font_size": 8.5
+      }
+    },
+    {
+      "key": "txtATCDue6",
+      "kind": "dec",
+      "page": 2,
+      "x": 546.84765625,
+      "y": 253.61002604166666,
+      "cell_w": 10.5,
+      "int_cells": 7,
+      "dec_x": 586.0,
+      "char_count": 2,
+      "optional": false,
+      "widget": {
+        "type": "text",
+        "width": 28.55078125,
+        "height": 16.9296875,
+        "font_size": 8.5
+      }
+    },
+    {
       "key": "txtTotalSched1",
       "kind": "dec",
       "page": 2,

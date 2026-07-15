@@ -48,6 +48,7 @@ Desktop.ini
 # Generated PDF files
 *.pdf
 *.lock
+!/Cargo.lock
 
 # AI Agent Artifacts & Scratchpads
 .scratch/
@@ -79,6 +80,8 @@ test_windows.rs
 
 # Node JS
 node_modules/
+/assets/form-renderer/
+/test-results/form-renderer/
 
 # Stow directory (managed separately)
 .stow/

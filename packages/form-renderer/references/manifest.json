@@ -1,0 +1,47 @@
+{
+  "calibration_only": true,
+  "dpi": 144,
+  "forms": [
+    {
+      "code": "2551Q",
+      "fixture": "packages/form-contracts/fixtures/2551q-6-rows.json",
+      "fixture_sha256": "f3d49ddab5cdd7c1d889a7b2cbd519babf7556c186702f0232b9f18257f7a5b7",
+      "form_id": "2551Qv2018",
+      "formtype": "formtypes/2551Qv2018/formtype.json",
+      "formtype_sha256": "1e6beb14024a1335c22d8e0506af8dbb0b56084d8c877c7bf1e2e4efa35728f5",
+      "metadata": "formtypes/2551Qv2018/metadata.json",
+      "metadata_sha256": "c71547d2ff917a30480c75dc76de2461ca7b51c22c3a08381cd06b316822eadb",
+      "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/2551Q%20Jan%202018%20ENCS%20final%20rev%203_copy.pdf",
+      "official_source_sha256": "1f270ecf66d778836a14697863e420ff65d5ed0a5576a6cf58b97c9a8e8c9b24",
+      "page_count": 2,
+      "page_height_pt": 936.0,
+      "page_width_pt": 612.0,
+      "pages": [
+        {
+          "page": 1,
+          "reference_height_px": 1872,
+          "reference_png": "packages/form-renderer/references/2551q-2018-page-1.png",
+          "reference_png_sha256": "c78f0724e2f320f1b306408008e9085ed36397c4e1add66bf5e77c322a3485ea",
+          "reference_width_px": 1224,
+          "source_svg": "formtypes/2551Qv2018/pages/page1.svg",
+          "source_svg_sha256": "e62c392a3962ba4c2c31ffcb4b77a7798140473a2af99abf95173680536db599"
+        },
+        {
+          "page": 2,
+          "reference_height_px": 1872,
+          "reference_png": "packages/form-renderer/references/2551q-2018-page-2.png",
+          "reference_png_sha256": "d6ab5afbf6b3f4cbac7c69a01df231eaf6dcf7fde587e78c02ee20e3f2508d1a",
+          "reference_width_px": 1224,
+          "source_svg": "formtypes/2551Qv2018/pages/page2.svg",
+          "source_svg_sha256": "377ec4cee07cbff674686926aa0d402ec068b9a70fe3e8dbfc9802e90902f47a"
+        }
+      ],
+      "revision": "2018",
+      "template": "formtypes/2551Qv2018/template.typ",
+      "template_sha256": "a9f30daa3e328d1b5828ace4a37e26d73f9303c7ddc18273d378348f4297864d"
+    }
+  ],
+  "generator": "cargo run -p bir-print --bin generate_render_contract -- --visual-references",
+  "runtime_background_allowed": false,
+  "schema_version": 1
+}
