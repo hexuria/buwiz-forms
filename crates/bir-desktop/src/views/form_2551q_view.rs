@@ -16,9 +16,15 @@ use std::sync::{Arc, Mutex};
 
 use bir_core::db::Database;
 use bir_core::forms::FilingStatus;
-use bir_core::forms::form_2551q::{Form2551QDraft, Schedule1Row};
+use bir_core::forms::form_2551q::{
+    Form2551QDraft, Item13Election, OverpaymentDisposition, Schedule1Row, TaxPeriodBasis,
+};
 use bir_core::parse_bir_receipt_email;
 use bir_core::validation::{validate_email, validate_ph_phone, validate_zip};
+use bir_print::html::RenderEnvelope;
+use bir_print::html_support::{
+    LegacyPreviewDecision, bundled_html_renderer_support, legacy_2551q_preview_decision,
+};
 use bir_print::render_2551q_print;
 
 use super::email_confirmation_view::EmailConfirmationView;
@@ -51,6 +57,9 @@ pub struct Form2551QView {
     is_amended: bool,
     original_return_filed_and_paid_on_time: bool,
     tax_relief: bool,
+    year_end_month_input: Entity<InputState>,
+    attached_sheets_input: Entity<InputState>,
+    tax_relief_specification_input: Entity<InputState>,
 
     // Schedule 1 row inputs (parallel to draft.schedule_1)
     row_inputs: Vec<ScheduleRowInputs>,
@@ -59,6 +68,7 @@ pub struct Form2551QView {
     creditable_withheld_input: Entity<InputState>,
     tax_paid_previous_input: Entity<InputState>,
     other_tax_credit_input: Entity<InputState>,
+    other_tax_credit_description_input: Entity<InputState>,
     receipt_input: Entity<InputState>,
 
     validation_errors: Vec<(String, String)>,
@@ -111,6 +121,30 @@ impl Form2551QView {
         let other_tax_credit_input = cx.new(|cx| InputState::new(window, cx).placeholder("0.00"));
         other_tax_credit_input.update(cx, |input, cx| {
             input.set_value(other_credit_str, window, cx);
+        });
+
+        let year_end_month_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Month number (1-12)"));
+        year_end_month_input.update(cx, |input, cx| {
+            input.set_value(draft.year_end_month.to_string(), window, cx);
+        });
+
+        let attached_sheets_input = cx.new(|cx| InputState::new(window, cx).placeholder("0-99"));
+        attached_sheets_input.update(cx, |input, cx| {
+            input.set_value(draft.number_of_attached_sheets.to_string(), window, cx);
+        });
+
+        let tax_relief_specification_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Special law or treaty details"));
+        tax_relief_specification_input.update(cx, |input, cx| {
+            input.set_value(draft.tax_relief_specification.clone(), window, cx);
+        });
+
+        let other_tax_credit_description_input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder("Describe the Item 17 credit/payment")
+        });
+        other_tax_credit_description_input.update(cx, |input, cx| {
+            input.set_value(draft.other_tax_credit_description.clone(), window, cx);
         });
 
         let receipt_input = cx.new(|cx| {
@@ -205,9 +239,74 @@ impl Form2551QView {
             },
         );
 
+        let sub4 = cx.subscribe_in(
+            &year_end_month_input,
+            window,
+            |this: &mut Self, _, event: &InputEvent, _, cx| match event {
+                InputEvent::Change => {
+                    this.is_validated = false;
+                    this.sync_from_inputs(cx);
+                }
+                InputEvent::Focus => {
+                    this.suppressed_sections.insert("filing_period");
+                    cx.notify();
+                }
+                _ => {}
+            },
+        );
+        let sub5 = cx.subscribe_in(
+            &attached_sheets_input,
+            window,
+            |this: &mut Self, _, event: &InputEvent, _, cx| match event {
+                InputEvent::Change => {
+                    this.is_validated = false;
+                    this.sync_from_inputs(cx);
+                }
+                InputEvent::Focus => {
+                    this.suppressed_sections.insert("filing_period");
+                    cx.notify();
+                }
+                _ => {}
+            },
+        );
+        let sub6 = cx.subscribe_in(
+            &tax_relief_specification_input,
+            window,
+            |this: &mut Self, _, event: &InputEvent, _, cx| match event {
+                InputEvent::Change => {
+                    this.is_validated = false;
+                    this.sync_from_inputs(cx);
+                }
+                InputEvent::Focus => {
+                    this.suppressed_sections.insert("filing_period");
+                    cx.notify();
+                }
+                _ => {}
+            },
+        );
+        let sub7 = cx.subscribe_in(
+            &other_tax_credit_description_input,
+            window,
+            |this: &mut Self, _, event: &InputEvent, _, cx| match event {
+                InputEvent::Change => {
+                    this.is_validated = false;
+                    this.sync_from_inputs(cx);
+                }
+                InputEvent::Focus => {
+                    this.suppressed_sections.insert("tax_computation");
+                    cx.notify();
+                }
+                _ => {}
+            },
+        );
+
         subscriptions.push(sub1);
         subscriptions.push(sub2);
         subscriptions.push(sub3);
+        subscriptions.push(sub4);
+        subscriptions.push(sub5);
+        subscriptions.push(sub6);
+        subscriptions.push(sub7);
 
         let bus = cx.global::<crate::events::GlobalEventBus>().0.clone();
         let sub_bus = cx.subscribe(
@@ -219,7 +318,9 @@ impl Form2551QView {
                     let quarter = this.draft.quarter;
                     if let Ok(db_guard) = this.db.lock()
                         && let Ok(Some(updated)) = db_guard.get_2551q_draft(&tin, year, quarter)
-                        && this.draft.status != updated.status
+                        && (this.draft.status != updated.status
+                            || this.draft.submission_claim_token != updated.submission_claim_token
+                            || this.draft.last_error != updated.last_error)
                     {
                         this.draft = updated;
                         // Refresh cached email tracking status
@@ -259,10 +360,14 @@ impl Form2551QView {
             is_amended,
             original_return_filed_and_paid_on_time,
             tax_relief,
+            year_end_month_input,
+            attached_sheets_input,
+            tax_relief_specification_input,
             row_inputs,
             creditable_withheld_input,
             tax_paid_previous_input,
             other_tax_credit_input,
+            other_tax_credit_description_input,
             receipt_input,
             validation_errors: Vec::new(),
             suppressed_sections: HashSet::new(),
@@ -292,6 +397,29 @@ impl Form2551QView {
             false
         };
         self.draft.tax_relief = self.tax_relief;
+        self.draft.year_end_month =
+            if matches!(self.draft.tax_period_basis, TaxPeriodBasis::Calendar) {
+                12
+            } else {
+                self.year_end_month_input
+                    .read(cx)
+                    .value()
+                    .trim()
+                    .parse::<u8>()
+                    .unwrap_or(0)
+            };
+        self.draft.number_of_attached_sheets = self
+            .attached_sheets_input
+            .read(cx)
+            .value()
+            .trim()
+            .parse::<u16>()
+            .unwrap_or(0);
+        self.draft.tax_relief_specification = self
+            .tax_relief_specification_input
+            .read(cx)
+            .value()
+            .to_string();
 
         // Sync schedule rows
         for (i, row_state) in self.row_inputs.iter().enumerate() {
@@ -323,13 +451,17 @@ impl Form2551QView {
             .value()
             .parse::<f64>()
             .unwrap_or(0.0);
+        self.draft.other_tax_credit_description = self
+            .other_tax_credit_description_input
+            .read(cx)
+            .value()
+            .to_string();
 
         self.draft.recompute(None);
-        tracing::debug!(
-            total_tax_due = self.draft.total_tax_due,
-            total_payable = self.draft.total_amount_payable,
-            "sync_from_inputs: recomputed draft"
-        );
+        if self.draft.total_amount_payable >= 0.0 {
+            self.draft.overpayment_disposition = OverpaymentDisposition::None;
+        }
+        tracing::debug!("sync_from_inputs: recomputed draft");
         self.validation_errors = self.validate_for_submit(cx);
         cx.notify();
     }
@@ -366,9 +498,7 @@ impl Form2551QView {
         if let Ok(db) = self.db.lock() {
             let _ = db.save_2551q_draft(&self.draft);
             tracing::info!(
-                tin = %self.draft.tin,
-                name = %self.draft.taxpayer_name,
-                total = self.draft.total_amount_payable,
+                draft_id = ?self.draft.id,
                 status = ?self.draft.status,
                 "Form saved to database"
             );
@@ -395,13 +525,33 @@ impl Form2551QView {
         }
 
         self.status_message = Some("Queuing for background submission...".to_string());
-        self.draft.status = FilingStatus::Queued;
-        self.draft.submission_attempts = 0;
-        self.draft.next_retry_at = Some(chrono::Utc::now().to_rfc3339());
-        self.draft.last_error = None;
+        let draft_before_queue = self.draft.clone();
+        if let Err(errors) = self.draft.transition_to_queued() {
+            self.validation_errors = errors;
+            self.status_message = Some("Fix validation errors before submitting".to_string());
+            cx.notify();
+            return;
+        }
 
-        if let Ok(db) = self.db.lock() {
-            let _ = db.save_2551q_draft(&self.draft);
+        let persistence_result = match self.db.lock() {
+            Ok(db) => db
+                .save_queued_2551q_draft_and_election(&self.draft)
+                .map(|_| ())
+                .map_err(|_| "database_write"),
+            Err(_) => Err("database_lock"),
+        };
+        if let Err(error_category) = persistence_result {
+            tracing::error!(error_category, "Failed to persist queued 2551Q draft");
+            self.draft = draft_before_queue;
+            self.validation_errors.push((
+                "submission".to_string(),
+                "The form could not be queued because its draft and annual election were not saved"
+                    .to_string(),
+            ));
+            self.status_message =
+                Some("Could not queue form. No submission was started.".to_string());
+            cx.notify();
+            return;
         }
 
         bir_core::background_cron::wake();
@@ -442,14 +592,67 @@ impl Form2551QView {
         if matches!(self.draft.status, FilingStatus::Paid) {
             return; // Guard: cannot revert a Paid form
         }
+        if self.draft.submission_claim_token.is_some() {
+            use gpui_component::WindowExt;
+            self.status_message = Some(
+                "Submission outcome is pending and requires support-assisted reconciliation."
+                    .to_string(),
+            );
+            window.push_notification(
+                gpui_component::notification::Notification::new()
+                    .message(
+                        "Do not retry this return. Keep any BIR confirmation or receipt and contact support for manual reconciliation."
+                            .to_string(),
+                    )
+                    .with_type(gpui_component::notification::NotificationType::Warning)
+                    .autohide(false),
+                cx,
+            );
+            cx.notify();
+            return;
+        }
+        let before_revert = self.draft.clone();
         self.draft.revert_to_draft();
+        let persistence_result = match self.db.lock() {
+            Ok(db) => db
+                .save_2551q_draft(&self.draft)
+                .map(|_| ())
+                .map_err(|_| "database_write"),
+            Err(_) => Err("database_lock"),
+        };
+        use gpui_component::WindowExt;
+        if let Err(error_category) = persistence_result {
+            tracing::warn!(error_category, "2551Q queue cancellation was rejected");
+            self.draft = match self.db.lock() {
+                Ok(db) => db
+                    .get_2551q_draft(
+                        &before_revert.tin,
+                        before_revert.taxable_year,
+                        before_revert.quarter,
+                    )
+                    .ok()
+                    .flatten()
+                    .unwrap_or(before_revert),
+                Err(_) => before_revert,
+            };
+            self.status_message =
+                Some("Submission has already started and can no longer be canceled.".to_string());
+            window.push_notification(
+                gpui_component::notification::Notification::new()
+                    .message(
+                        "Submission has already started. The queued return was not canceled."
+                            .to_string(),
+                    )
+                    .with_type(gpui_component::notification::NotificationType::Warning)
+                    .autohide(true),
+                cx,
+            );
+            cx.notify();
+            return;
+        }
         self.is_validated = false;
         self.validation_errors.clear();
         self.status_message = None;
-        if let Ok(db) = self.db.lock() {
-            let _ = db.save_2551q_draft(&self.draft);
-        }
-        use gpui_component::WindowExt;
         window.push_notification(
             gpui_component::notification::Notification::new()
                 .message("Form reverted to Draft. You may edit and resubmit.".to_string())
@@ -557,6 +760,26 @@ impl Form2551QView {
         use bir_core::forms::FormValidator;
         let mut errors = FormValidator::validate(&self.draft);
 
+        if matches!(self.draft.tax_period_basis, TaxPeriodBasis::Fiscal) {
+            let month = self.year_end_month_input.read(cx).value();
+            if month.trim().parse::<u8>().is_err()
+                && !errors.iter().any(|(field, _)| field == "year_end_month")
+            {
+                errors.push((
+                    "year_end_month".to_string(),
+                    "Fiscal year-end month must be a whole number from 1 to 12".to_string(),
+                ));
+            }
+        }
+
+        let attached_sheets = self.attached_sheets_input.read(cx).value();
+        if attached_sheets.trim().is_empty() || attached_sheets.trim().parse::<u16>().is_err() {
+            errors.push((
+                "number_of_attached_sheets".to_string(),
+                "Number of attached sheets must be a whole number from 0 to 99".to_string(),
+            ));
+        }
+
         for (i, row_state) in self.row_inputs.iter().enumerate() {
             let val_str = row_state.taxable_amount.read(cx).value();
             if val_str.trim().is_empty() {
@@ -603,6 +826,17 @@ impl Form2551QView {
             }
         }
 
+        let other_credit = self.other_tax_credit_input.read(cx).value();
+        if !other_credit.trim().is_empty() {
+            match other_credit.trim().parse::<f64>() {
+                Ok(value) if value >= 0.0 => {}
+                _ => errors.push((
+                    "other_tax_credit".to_string(),
+                    "Other tax credit/payment must be a non-negative number".to_string(),
+                )),
+            }
+        }
+
         errors
     }
 
@@ -640,16 +874,10 @@ impl Form2551QView {
         cx.notify();
     }
 
-    fn preview_pdf(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_generating_pdf {
-            return;
-        }
-        self.is_generating_pdf = true;
-        cx.notify();
-
+    fn preview_draft_snapshot(&self) -> Form2551QDraft {
         // Draft mode: use current in-memory state so latest edits + profile sync are reflected.
         // Non-draft mode: reload from DB to render the persisted/submitted state (data integrity).
-        let render_draft = if matches!(self.draft.status, FilingStatus::Draft) {
+        if matches!(self.draft.status, FilingStatus::Draft) {
             self.draft.clone()
         } else if let Ok(db) = self.db.lock() {
             db.get_2551q_draft(&self.draft.tin, self.draft.taxable_year, self.draft.quarter)
@@ -661,12 +889,191 @@ impl Form2551QView {
                 })
         } else {
             self.draft.clone()
+        }
+    }
+
+    fn block_unsafe_legacy_preview(
+        &mut self,
+        row_count: usize,
+        reason: Option<&str>,
+        cx: &mut Context<Self>,
+    ) {
+        let failure_context = reason
+            .map(|reason| format!(" Experimental HTML preview failed: {reason}."))
+            .unwrap_or_default();
+        let message = format!(
+            "This draft has {row_count} Schedule 1 rows, but the legacy 2551Q preview can safely render only six.{failure_context} No legacy preview was opened because it would omit rows."
+        );
+        tracing::warn!(
+            row_count,
+            renderer_failure = reason.is_some(),
+            reason_bytes = reason.map_or(0, str::len),
+            "blocked truncating legacy 2551Q preview"
+        );
+        self.is_generating_pdf = false;
+        self.status_message = Some(message.clone());
+        cx.emit(Form2551QEvent::PushNotification(
+            "error".to_string(),
+            "Preview blocked to protect form data".to_string(),
+            message,
+        ));
+        cx.notify();
+    }
+
+    fn preview_pdf(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        if self.is_generating_pdf {
+            return;
+        }
+
+        let render_draft = self.preview_draft_snapshot();
+        match legacy_2551q_preview_decision(render_draft.schedule_1.len()) {
+            LegacyPreviewDecision::Render => self.open_legacy_preview(render_draft, cx),
+            LegacyPreviewDecision::BlockScheduleOverflow { row_count, .. } => {
+                self.block_unsafe_legacy_preview(row_count, None, cx);
+            }
+        }
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    fn preview_html_experimental(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        if self.is_generating_pdf {
+            return;
+        }
+
+        let render_draft = self.preview_draft_snapshot();
+        let support = bundled_html_renderer_support("2551Q", "2018");
+        if !support.permits_experimental_preview() {
+            self.fallback_from_experimental_html(
+                render_draft,
+                "the support manifest has html_enabled set to false".to_string(),
+                cx,
+            );
+            return;
+        }
+
+        self.is_generating_pdf = true;
+        cx.notify();
+
+        let envelope = RenderEnvelope::from(&render_draft);
+        let prepared = match super::html_form_preview::prepare_html_form_preview(&envelope) {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                self.fallback_from_experimental_html(render_draft, error.to_string(), cx);
+                return;
+            }
         };
 
+        let preview_entity = Arc::new(Mutex::new(None));
+        let preview_entity_for_window = preview_entity.clone();
+        let options = WindowOptions {
+            window_bounds: Some(WindowBounds::centered(size(px(1200.), px(900.)), cx)),
+            titlebar: Some(TitlebarOptions {
+                title: Some("Experimental HTML Preview — Not Release Ready".into()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let open_result = cx.open_window(options, move |window, cx| {
+            let entity = cx
+                .new(|cx| super::html_form_preview::HtmlFormPreviewView::new(prepared, window, cx));
+            if let Ok(mut slot) = preview_entity_for_window.lock() {
+                *slot = Some(entity.clone());
+            }
+            entity
+        });
+
+        match open_result {
+            Ok(_) => {
+                let entity = preview_entity.lock().ok().and_then(|mut slot| slot.take());
+                let Some(entity) = entity else {
+                    self.fallback_from_experimental_html(
+                        render_draft,
+                        "the preview window opened without a renderer host".to_string(),
+                        cx,
+                    );
+                    return;
+                };
+
+                let fallback_draft = render_draft.clone();
+                self._subscriptions
+                    .push(cx.subscribe(&entity, move |this, _, event, cx| {
+                        let super::html_form_preview::HtmlFormPreviewEvent::LegacyFallbackRequested(
+                            reason,
+                        ) = event;
+                        this.fallback_from_experimental_html(
+                            fallback_draft.clone(),
+                            reason.clone(),
+                            cx,
+                        );
+                    }));
+                self.is_generating_pdf = false;
+                self.status_message = Some(
+                    "Experimental HTML preview opened; legacy remains the normal print path."
+                        .to_string(),
+                );
+                cx.notify();
+            }
+            Err(error) => {
+                self.fallback_from_experimental_html(
+                    render_draft,
+                    format!("the preview window could not be opened: {error}"),
+                    cx,
+                );
+            }
+        }
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    fn preview_html_experimental(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        let render_draft = self.preview_draft_snapshot();
+        self.fallback_from_experimental_html(
+            render_draft,
+            "the experimental native HTML host is unavailable on this platform".to_string(),
+            cx,
+        );
+    }
+
+    fn fallback_from_experimental_html(
+        &mut self,
+        render_draft: Form2551QDraft,
+        reason: String,
+        cx: &mut Context<Self>,
+    ) {
+        tracing::warn!(
+            reason_bytes = reason.len(),
+            "experimental HTML preview failed; considering legacy fallback"
+        );
+        self.is_generating_pdf = false;
+        match legacy_2551q_preview_decision(render_draft.schedule_1.len()) {
+            LegacyPreviewDecision::Render => {
+                cx.emit(Form2551QEvent::PushNotification(
+                    "warning".to_string(),
+                    "Using legacy print preview".to_string(),
+                    format!("Experimental HTML preview was unavailable: {reason}"),
+                ));
+                self.open_legacy_preview(render_draft, cx);
+            }
+            LegacyPreviewDecision::BlockScheduleOverflow { row_count, .. } => {
+                self.block_unsafe_legacy_preview(row_count, Some(&reason), cx);
+            }
+        }
+    }
+
+    fn open_legacy_preview(&mut self, render_draft: Form2551QDraft, cx: &mut Context<Self>) {
+        if let LegacyPreviewDecision::BlockScheduleOverflow { row_count, .. } =
+            legacy_2551q_preview_decision(render_draft.schedule_1.len())
+        {
+            self.block_unsafe_legacy_preview(row_count, None, cx);
+            return;
+        }
+
+        self.is_generating_pdf = true;
+        cx.notify();
+
         tracing::info!(
-            name = %render_draft.taxpayer_name,
-            total = render_draft.total_amount_payable,
+            draft_id = ?render_draft.id,
             status = ?render_draft.status,
+            schedule_rows = render_draft.schedule_1.len(),
             "Rendering PDF from saved draft"
         );
 
@@ -739,13 +1146,19 @@ impl Form2551QView {
                                         )
                                     })
                                 }) {
-                                    tracing::error!("PDF viewer failed to open: {err}");
+                                    tracing::error!(
+                                        error_bytes = err.to_string().len(),
+                                        "PDF viewer failed to open"
+                                    );
                                 } else {
                                     tracing::info!("PDF viewer opened");
                                 }
                             }
                             Err(err) => {
-                                tracing::error!("PDF generation failed: {err}");
+                                tracing::error!(
+                                    error_bytes = err.to_string().len(),
+                                    "PDF generation failed"
+                                );
                             }
                         }
                     });
@@ -861,7 +1274,7 @@ impl Form2551QView {
                     });
                 }
                 Err(e) => {
-                    tracing::warn!("Failed to copy receipt: {e}");
+                    tracing::warn!(error_bytes = e.to_string().len(), "Failed to copy receipt");
                 }
             }
         })
@@ -897,7 +1310,15 @@ impl Form2551QView {
         self.validation_errors
             .iter()
             .any(|(f, _)| match section_id {
-                "filing_period" => f == "taxable_year" || f == "quarter",
+                "filing_period" => {
+                    f == "taxable_year"
+                        || f == "quarter"
+                        || f == "tax_period_basis"
+                        || f == "year_end_month"
+                        || f == "number_of_attached_sheets"
+                        || f == "tax_relief_specification"
+                        || f == "item_13_election"
+                }
                 "background_info" => {
                     f == "tin"
                         || f == "rdo_code"
@@ -908,7 +1329,13 @@ impl Form2551QView {
                         || f == "email"
                 }
                 "schedule_1" => f == "schedule_1" || f.starts_with("schedule_1_row_"),
-                "tax_computation" => f == "creditable_withheld" || f == "tax_paid_previous",
+                "tax_computation" => {
+                    f == "creditable_withheld"
+                        || f == "tax_paid_previous"
+                        || f == "other_tax_credit"
+                        || f == "other_tax_credit_description"
+                        || f == "overpayment_disposition"
+                }
                 _ => false,
             })
     }
@@ -1020,6 +1447,10 @@ impl Render for Form2551QView {
         let total_due = self.draft.total_tax_due;
         let tax_payable = self.draft.tax_payable;
         let is_editable = self.is_editable();
+        let is_calendar = matches!(self.draft.tax_period_basis, TaxPeriodBasis::Calendar);
+        let item_13_election = self.draft.item_13_election;
+        let overpayment_disposition = self.draft.overpayment_disposition;
+        let submission_claim_active = self.draft.submission_claim_token.is_some();
 
         let title_block = <Self as FormViewTrait>::render_header(self, cx);
 
@@ -1039,192 +1470,454 @@ impl Render for Form2551QView {
             div().into_any_element()
         };
 
+        let submission_claim_banner = if submission_claim_active {
+            div()
+                .px_4()
+                .py_3()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .bg(cx.theme().warning.opacity(0.1))
+                .rounded_lg()
+                .border_1()
+                .border_color(cx.theme().warning.opacity(0.35))
+                .text_color(cx.theme().foreground)
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(cx.theme().warning)
+                        .child(
+                            "Submission outcome pending — support-assisted reconciliation required",
+                        ),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .child("Do not submit this return again. Keep any BIR confirmation or receipt and contact support; the app will not retry or release this claim automatically."),
+                )
+                .into_any_element()
+        } else {
+            div().into_any_element()
+        };
+
         // Accordion wrapper macro/helper logic inline
         // filing_period content
-        let filing_period_content = div()
+        let tax_period_basis_controls = div()
             .flex()
-            .flex_wrap()
-            .gap_x_8()
-            .gap_y_4()
-            .items_center()
-            .child(
-                Self::readonly_field(
-                    "Taxable Year",
-                    &self.draft.taxable_year.to_string(),
-                    self.get_error("taxable_year"),
-                    cx,
-                )
-                .w(px(120.)),
-            )
-            .child(
-                Self::readonly_field(
-                    "Quarter",
-                    &format!("Q{}", self.quarter),
-                    self.get_error("quarter"),
-                    cx,
-                )
-                .w(px(80.)),
-            )
+            .flex_col()
+            .gap_2()
+            .child(Self::field_label("1. Taxable-period basis", cx))
             .child(
                 div()
                     .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(Self::field_label("Options", cx))
+                    .flex_wrap()
+                    .gap_5()
                     .child(
                         div()
+                            .id("tax_period_calendar")
                             .flex()
-                            .flex_wrap()
-                            .gap_x_6()
-                            .gap_y_3()
+                            .items_center()
+                            .gap_2()
+                            .when(is_editable, |el| el.cursor_pointer())
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                if !this.is_editable() {
+                                    return;
+                                }
+                                this.draft.tax_period_basis = TaxPeriodBasis::Calendar;
+                                this.draft.year_end_month = 12;
+                                this.year_end_month_input.update(cx, |input, cx| {
+                                    input.set_value("12", window, cx);
+                                });
+                                this.is_validated = false;
+                                this.sync_from_inputs(cx);
+                            }))
                             .child(
                                 div()
-                                    .id("amended_toggle")
-                                    .flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .when(is_editable, |el| el.cursor_pointer())
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        if !this.is_editable() {
-                                            return;
-                                        }
-                                        this.is_amended = !this.is_amended;
-                                        if !this.is_amended {
-                                            this.draft.tax_paid_previous = 0.0;
-                                            this.original_return_filed_and_paid_on_time = false;
-                                        }
-                                        this.is_validated = false;
-                                        this.sync_from_inputs(cx);
-                                    }))
-                                    .child(
-                                        div()
-                                            .w_4()
-                                            .h_4()
-                                            .rounded_sm()
-                                            .border_1()
-                                            .border_color(cx.theme().border)
-                                            .bg(if is_amended {
-                                                cx.theme().primary
-                                            } else {
-                                                cx.theme().background
-                                            })
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .child(if is_amended {
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(cx.theme().primary_foreground)
-                                                    .child("✓")
-                                            } else {
-                                                div()
-                                            }),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(cx.theme().foreground)
-                                            .child("Amended Return"),
-                                    ),
+                                    .w_4()
+                                    .h_4()
+                                    .rounded_full()
+                                    .border_1()
+                                    .border_color(cx.theme().border)
+                                    .bg(if is_calendar {
+                                        cx.theme().primary
+                                    } else {
+                                        cx.theme().background
+                                    }),
                             )
-                            .when(is_amended, |options| {
-                                options.child(
-                                    div()
-                                        .id("original_on_time_toggle")
-                                        .flex()
-                                        .items_center()
-                                        .gap_2()
-                                        .when(is_editable, |el| el.cursor_pointer())
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            if !this.is_editable() {
-                                                return;
-                                            }
-                                            this.original_return_filed_and_paid_on_time =
-                                                !this.original_return_filed_and_paid_on_time;
-                                            this.is_validated = false;
-                                            this.sync_from_inputs(cx);
-                                        }))
-                                        .child(
-                                            div()
-                                                .w_4()
-                                                .h_4()
-                                                .rounded_sm()
-                                                .border_1()
-                                                .border_color(cx.theme().border)
-                                                .bg(if original_return_filed_and_paid_on_time {
-                                                    cx.theme().primary
-                                                } else {
-                                                    cx.theme().background
-                                                })
-                                                .flex()
-                                                .items_center()
-                                                .justify_center()
-                                                .child(if original_return_filed_and_paid_on_time {
-                                                    div()
-                                                        .text_xs()
-                                                        .text_color(cx.theme().primary_foreground)
-                                                        .child("✓")
-                                                } else {
-                                                    div()
-                                                }),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_sm()
-                                                .text_color(cx.theme().foreground)
-                                                .child("Original Return Filed/Paid On Time"),
-                                        ),
-                                )
-                            })
+                            .child(div().text_sm().child("Calendar")),
+                    )
+                    .child(
+                        div()
+                            .id("tax_period_fiscal")
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .when(is_editable, |el| el.cursor_pointer())
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if !this.is_editable() {
+                                    return;
+                                }
+                                this.draft.tax_period_basis = TaxPeriodBasis::Fiscal;
+                                this.is_validated = false;
+                                this.sync_from_inputs(cx);
+                            }))
                             .child(
                                 div()
-                                    .id("tax_relief_toggle")
-                                    .flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .when(is_editable, |el| el.cursor_pointer())
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        if !this.is_editable() {
-                                            return;
-                                        }
-                                        this.tax_relief = !this.tax_relief;
-                                        this.draft.tax_relief = this.tax_relief;
-                                        this.is_validated = false;
-                                        cx.notify();
-                                    }))
-                                    .child(
-                                        div()
-                                            .w_4()
-                                            .h_4()
-                                            .rounded_sm()
-                                            .border_1()
-                                            .border_color(cx.theme().border)
-                                            .bg(if self.tax_relief {
-                                                cx.theme().primary
-                                            } else {
-                                                cx.theme().background
-                                            })
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .child(if self.tax_relief {
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(cx.theme().primary_foreground)
-                                                    .child("✓")
-                                            } else {
-                                                div()
-                                            }),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(cx.theme().foreground)
-                                            .child("Tax Relief"),
-                                    ),
-                            ),
+                                    .w_4()
+                                    .h_4()
+                                    .rounded_full()
+                                    .border_1()
+                                    .border_color(cx.theme().border)
+                                    .bg(if !is_calendar {
+                                        cx.theme().primary
+                                    } else {
+                                        cx.theme().background
+                                    }),
+                            )
+                            .child(div().text_sm().child("Fiscal")),
                     ),
             );
+
+        let year_end_month_field = div()
+            .w(px(200.))
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(Self::field_label("2. Year-end month", cx))
+            .child(
+                div()
+                    .bg(cx.theme().background)
+                    .border_1()
+                    .rounded_md()
+                    .border_color(if self.get_error("year_end_month").is_some() {
+                        cx.theme().danger
+                    } else {
+                        cx.theme().border
+                    })
+                    .px_2()
+                    .py_1()
+                    .child(
+                        Input::new(&self.year_end_month_input)
+                            .disabled(!is_editable || is_calendar)
+                            .appearance(false),
+                    ),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(if is_calendar {
+                        "Calendar filing fixes the year-end month at December (12)."
+                    } else {
+                        "Enter the fiscal year-end month as 1 through 12."
+                    }),
+            )
+            .when_some(self.get_error("year_end_month").cloned(), |field, error| {
+                field.child(div().text_xs().text_color(cx.theme().danger).child(error))
+            });
+
+        let attached_sheets_field = div()
+            .w(px(200.))
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(Self::field_label("5. Number of attached sheets", cx))
+            .child(
+                div()
+                    .bg(cx.theme().background)
+                    .border_1()
+                    .rounded_md()
+                    .border_color(if self.get_error("number_of_attached_sheets").is_some() {
+                        cx.theme().danger
+                    } else {
+                        cx.theme().border
+                    })
+                    .px_2()
+                    .py_1()
+                    .child(
+                        Input::new(&self.attached_sheets_input)
+                            .disabled(!is_editable)
+                            .appearance(false),
+                    ),
+            )
+            .when_some(
+                self.get_error("number_of_attached_sheets").cloned(),
+                |field, error| {
+                    field.child(div().text_xs().text_color(cx.theme().danger).child(error))
+                },
+            );
+
+        let return_options = div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(Self::field_label("Return options", cx))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_x_6()
+                    .gap_y_3()
+                    .child(
+                        div()
+                            .id("amended_toggle")
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .when(is_editable, |el| el.cursor_pointer())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if !this.is_editable() {
+                                    return;
+                                }
+                                this.is_amended = !this.is_amended;
+                                if !this.is_amended {
+                                    this.draft.tax_paid_previous = 0.0;
+                                    this.original_return_filed_and_paid_on_time = false;
+                                }
+                                this.is_validated = false;
+                                this.sync_from_inputs(cx);
+                            }))
+                            .child(
+                                div()
+                                    .w_4()
+                                    .h_4()
+                                    .rounded_sm()
+                                    .border_1()
+                                    .border_color(cx.theme().border)
+                                    .bg(if is_amended {
+                                        cx.theme().primary
+                                    } else {
+                                        cx.theme().background
+                                    })
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .child(if is_amended {
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().primary_foreground)
+                                            .child("✓")
+                                    } else {
+                                        div()
+                                    }),
+                            )
+                            .child(div().text_sm().child("Amended Return")),
+                    )
+                    .when(is_amended, |options| {
+                        options.child(
+                            div()
+                                .id("original_on_time_toggle")
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .when(is_editable, |el| el.cursor_pointer())
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    if !this.is_editable() {
+                                        return;
+                                    }
+                                    this.original_return_filed_and_paid_on_time =
+                                        !this.original_return_filed_and_paid_on_time;
+                                    this.is_validated = false;
+                                    this.sync_from_inputs(cx);
+                                }))
+                                .child(
+                                    div()
+                                        .w_4()
+                                        .h_4()
+                                        .rounded_sm()
+                                        .border_1()
+                                        .border_color(cx.theme().border)
+                                        .bg(if original_return_filed_and_paid_on_time {
+                                            cx.theme().primary
+                                        } else {
+                                            cx.theme().background
+                                        })
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .child(if original_return_filed_and_paid_on_time {
+                                            div()
+                                                .text_xs()
+                                                .text_color(cx.theme().primary_foreground)
+                                                .child("✓")
+                                        } else {
+                                            div()
+                                        }),
+                                )
+                                .child(div().text_sm().child("Original Return Filed/Paid On Time")),
+                        )
+                    })
+                    .child(
+                        div()
+                            .id("tax_relief_toggle")
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .when(is_editable, |el| el.cursor_pointer())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if !this.is_editable() {
+                                    return;
+                                }
+                                this.tax_relief = !this.tax_relief;
+                                this.is_validated = false;
+                                this.sync_from_inputs(cx);
+                            }))
+                            .child(
+                                div()
+                                    .w_4()
+                                    .h_4()
+                                    .rounded_sm()
+                                    .border_1()
+                                    .border_color(cx.theme().border)
+                                    .bg(if self.tax_relief {
+                                        cx.theme().primary
+                                    } else {
+                                        cx.theme().background
+                                    })
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .child(if self.tax_relief {
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().primary_foreground)
+                                            .child("✓")
+                                    } else {
+                                        div()
+                                    }),
+                            )
+                            .child(div().text_sm().child("Tax Relief")),
+                    ),
+            );
+
+        let item_13_controls = div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(Self::field_label("13. Income-tax-rate election", cx))
+            .child(
+                div().flex().flex_wrap().gap_5().children(
+                    [
+                        (
+                            "item13_not_applicable",
+                            "Not applicable",
+                            Item13Election::NotApplicable,
+                        ),
+                        ("item13_graduated", "Graduated", Item13Election::Graduated),
+                        ("item13_eight_percent", "8%", Item13Election::EightPercent),
+                    ]
+                    .into_iter()
+                    .map(|(id, label, election)| {
+                        let selected = item_13_election == election;
+                        div()
+                            .id(id)
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .when(is_editable, |el| el.cursor_pointer())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if !this.is_editable() {
+                                    return;
+                                }
+                                this.draft.item_13_election = election;
+                                this.is_validated = false;
+                                this.sync_from_inputs(cx);
+                            }))
+                            .child(
+                                div()
+                                    .w_4()
+                                    .h_4()
+                                    .rounded_full()
+                                    .border_1()
+                                    .border_color(cx.theme().border)
+                                    .bg(if selected {
+                                        cx.theme().primary
+                                    } else {
+                                        cx.theme().background
+                                    }),
+                            )
+                            .child(div().text_sm().child(label))
+                    }),
+                ),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(
+                        "This legal election is stored exactly as selected and is never inferred.",
+                    ),
+            );
+
+        let tax_relief_specification_field = div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(Self::field_label("12A. Tax-relief specification", cx))
+            .child(
+                div()
+                    .bg(cx.theme().background)
+                    .border_1()
+                    .rounded_md()
+                    .border_color(if self.get_error("tax_relief_specification").is_some() {
+                        cx.theme().danger
+                    } else {
+                        cx.theme().border
+                    })
+                    .px_2()
+                    .py_1()
+                    .child(
+                        Input::new(&self.tax_relief_specification_input)
+                            .disabled(!is_editable)
+                            .appearance(false),
+                    ),
+            )
+            .when_some(
+                self.get_error("tax_relief_specification").cloned(),
+                |field, error| {
+                    field.child(div().text_xs().text_color(cx.theme().danger).child(error))
+                },
+            );
+
+        let filing_period_content = div()
+            .flex()
+            .flex_col()
+            .gap_5()
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_x_8()
+                    .gap_y_4()
+                    .items_start()
+                    .child(
+                        Self::readonly_field(
+                            "Taxable Year",
+                            &self.draft.taxable_year.to_string(),
+                            self.get_error("taxable_year"),
+                            cx,
+                        )
+                        .w(px(120.)),
+                    )
+                    .child(
+                        Self::readonly_field(
+                            "Quarter",
+                            &format!("Q{}", self.quarter),
+                            self.get_error("quarter"),
+                            cx,
+                        )
+                        .w(px(80.)),
+                    )
+                    .child(tax_period_basis_controls)
+                    .child(year_end_month_field)
+                    .child(attached_sheets_field),
+            )
+            .child(return_options)
+            .when(self.tax_relief, |content| {
+                content.child(tax_relief_specification_field)
+            })
+            .child(item_13_controls);
 
         // background_info content
         let background_info_content = crate::components::form_parts::taxpayer_info_section(
@@ -1298,6 +1991,116 @@ impl Render for Form2551QView {
             },
             cx,
         );
+
+        let other_tax_credit_description_field = div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(Self::field_label(
+                "17. Specify the other tax credit/payment",
+                cx,
+            ))
+            .child(
+                div()
+                    .bg(cx.theme().background)
+                    .border_1()
+                    .rounded_md()
+                    .border_color(
+                        if self.get_error("other_tax_credit_description").is_some() {
+                            cx.theme().danger
+                        } else {
+                            cx.theme().border
+                        },
+                    )
+                    .px_2()
+                    .py_1()
+                    .child(
+                        Input::new(&self.other_tax_credit_description_input)
+                            .disabled(!is_editable)
+                            .appearance(false),
+                    ),
+            )
+            .when_some(
+                self.get_error("other_tax_credit_description").cloned(),
+                |field, error| {
+                    field.child(div().text_xs().text_color(cx.theme().danger).child(error))
+                },
+            );
+
+        let overpayment_disposition_controls = div()
+            .mt_2()
+            .p_4()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .rounded_lg()
+            .border_1()
+            .border_color(if self.get_error("overpayment_disposition").is_some() {
+                cx.theme().danger
+            } else {
+                cx.theme().border
+            })
+            .child(Self::field_label("Item 24 overpayment disposition", cx))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child("Select exactly one disposition for this overpayment."),
+            )
+            .child(
+                div().flex().flex_wrap().gap_5().children(
+                    [
+                        (
+                            "overpayment_refund",
+                            "To be refunded",
+                            OverpaymentDisposition::Refund,
+                        ),
+                        (
+                            "overpayment_tax_credit_certificate",
+                            "To be issued a Tax Credit Certificate",
+                            OverpaymentDisposition::TaxCreditCertificate,
+                        ),
+                    ]
+                    .into_iter()
+                    .map(|(id, label, disposition)| {
+                        let selected = overpayment_disposition == disposition;
+                        div()
+                            .id(id)
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .when(is_editable, |el| el.cursor_pointer())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if !this.is_editable() {
+                                    return;
+                                }
+                                this.draft.overpayment_disposition = disposition;
+                                this.is_validated = false;
+                                this.sync_from_inputs(cx);
+                            }))
+                            .child(
+                                div()
+                                    .w_4()
+                                    .h_4()
+                                    .rounded_full()
+                                    .border_1()
+                                    .border_color(cx.theme().border)
+                                    .bg(if selected {
+                                        cx.theme().primary
+                                    } else {
+                                        cx.theme().background
+                                    }),
+                            )
+                            .child(div().text_sm().child(label))
+                    }),
+                ),
+            )
+            .when_some(
+                self.get_error("overpayment_disposition").cloned(),
+                |field, error| {
+                    field.child(div().text_xs().text_color(cx.theme().danger).child(error))
+                },
+            );
 
         // tax_computation content
         let tax_computation_content = div()
@@ -1373,7 +2176,11 @@ impl Render for Form2551QView {
                         .bg(cx.theme().background)
                         .border_1()
                         .rounded_md()
-                        .border_color(cx.theme().border)
+                        .border_color(if self.get_error("other_tax_credit").is_some() {
+                            cx.theme().danger
+                        } else {
+                            cx.theme().border
+                        })
                         .px_2()
                         .py_1()
                         .child(
@@ -1382,12 +2189,13 @@ impl Render for Form2551QView {
                                 .appearance(false),
                         )
                         .into_any_element(),
-                    error_message: None,
+                    error_message: self.get_error("other_tax_credit"),
                     locked_message: None,
                     is_mobile,
                 },
                 cx,
             ))
+            .child(other_tax_credit_description_field)
             .child(crate::components::form_parts::computation_row_readonly(
                 "18. Total Tax Credits/Payments (Sum of Items 15 to 17)",
                 self.draft.total_tax_credits,
@@ -1417,7 +2225,10 @@ impl Render for Form2551QView {
                         self.draft.total_amount_payable,
                         cx,
                     )),
-            );
+            )
+            .when(self.draft.total_amount_payable < 0.0, |content| {
+                content.child(overpayment_disposition_controls)
+            });
 
         // Actions moved to toolbar
 
@@ -1425,7 +2236,25 @@ impl Render for Form2551QView {
 
         let is_filing_period_valid = is_submitted
             || ((1900..=9999).contains(&self.draft.taxable_year)
-                && (1..=4).contains(&self.quarter));
+                && (1..=4).contains(&self.quarter)
+                && (1..=12).contains(&self.draft.year_end_month)
+                && (!is_calendar || self.draft.year_end_month == 12)
+                && self
+                    .attached_sheets_input
+                    .read(cx)
+                    .value()
+                    .trim()
+                    .parse::<u16>()
+                    .map(|count| count <= 99)
+                    .unwrap_or(false)
+                && (!self.tax_relief
+                    || !self
+                        .tax_relief_specification_input
+                        .read(cx)
+                        .value()
+                        .trim()
+                        .is_empty())
+                && !matches!(self.draft.item_13_election, Item13Election::Unanswered));
 
         let is_background_info_valid = is_submitted
             || (!self.draft.tin.trim().is_empty()
@@ -1456,7 +2285,36 @@ impl Render for Form2551QView {
             } else {
                 true
             };
-            cw_valid && tp_valid
+            let other_credit = self.other_tax_credit_input.read(cx).value();
+            let other_credit_valid = other_credit.trim().is_empty()
+                || other_credit
+                    .trim()
+                    .parse::<f64>()
+                    .map(|amount| amount >= 0.0)
+                    .unwrap_or(false);
+            let other_credit_description_valid = self.draft.other_tax_credit <= 0.0
+                || !self
+                    .other_tax_credit_description_input
+                    .read(cx)
+                    .value()
+                    .trim()
+                    .is_empty();
+            let overpayment_disposition_valid = if self.draft.total_amount_payable < 0.0 {
+                !matches!(
+                    self.draft.overpayment_disposition,
+                    OverpaymentDisposition::None
+                )
+            } else {
+                matches!(
+                    self.draft.overpayment_disposition,
+                    OverpaymentDisposition::None
+                )
+            };
+            cw_valid
+                && tp_valid
+                && other_credit_valid
+                && other_credit_description_valid
+                && overpayment_disposition_valid
         };
 
         let form_content = div()
@@ -1470,6 +2328,7 @@ impl Render for Form2551QView {
             .gap_8()
             .child(title_block)
             .child(carry_banner)
+            .child(submission_claim_banner)
             .child(crate::components::form_parts::form_accordion(
                 "acc_filing_period",
                 "FILING PERIOD",
@@ -1600,14 +2459,23 @@ impl Render for Form2551QView {
                                 );
                             }
                             FilingStatus::Queued => {
-                                toolbar = toolbar.child(
-                                    gpui_component::button::Button::new("cancel_queue_btn")
-                                        .label("Cancel Submission Queue")
-                                        .ghost()
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.revert_to_draft(window, cx);
-                                        }))
-                                );
+                                if submission_claim_active {
+                                    toolbar = toolbar.child(
+                                        div()
+                                            .text_sm()
+                                            .text_color(cx.theme().warning)
+                                            .child("Contact support — reconciliation required"),
+                                    );
+                                } else {
+                                    toolbar = toolbar.child(
+                                        gpui_component::button::Button::new("cancel_queue_btn")
+                                            .label("Cancel Submission Queue")
+                                            .ghost()
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.revert_to_draft(window, cx);
+                                            })),
+                                    );
+                                }
                             }
                             FilingStatus::Submitted => {
                                 let is_email_tracking_active = self.is_email_tracking_active;
@@ -1673,6 +2541,25 @@ impl Render for Form2551QView {
                                 );
                             }
                             FilingStatus::Paid => {}
+                        }
+
+                        // Development-only calibration entry point. The normal Print Preview
+                        // button continues to use the legacy Typst/PDF renderer until the
+                        // manifest's independent `release_ready` evidence gate passes.
+                        #[cfg(any(debug_assertions, feature = "dev-tools"))]
+                        if bundled_html_renderer_support("2551Q", "2018")
+                            .permits_experimental_preview()
+                        {
+                            toolbar = toolbar.child(
+                                gpui_component::button::Button::new(
+                                    "experimental_html_preview_btn",
+                                )
+                                .label("Experimental HTML Preview")
+                                .outline()
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.preview_html_experimental(window, cx);
+                                })),
+                            );
                         }
 
                         // View Receipt — opens receipt file in system viewer (Preview.app).

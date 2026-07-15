@@ -14,6 +14,7 @@ pub mod form_1702rt_view;
 pub mod form_2550q_view;
 pub mod form_2551q_view;
 pub mod global_dashboard;
+pub mod html_form_preview;
 pub mod import_export;
 pub mod lock_screen;
 #[cfg(feature = "layout-editor")]

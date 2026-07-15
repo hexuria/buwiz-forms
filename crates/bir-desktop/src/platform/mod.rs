@@ -17,33 +17,72 @@ mod linux;
 #[cfg(target_os = "linux")]
 pub use linux::*;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+fn resource_candidates(current_exe: &Path, name: &str) -> Vec<PathBuf> {
+    let Some(parent) = current_exe.parent() else {
+        return Vec::new();
+    };
+
+    let mut candidates = vec![
+        // Linux release / Windows install / local run if assets were copied.
+        parent.join(name),
+        // macOS .app bundle (Resources is a sibling of MacOS).
+        parent.join("../Resources").join(name),
+    ];
+
+    // Cargo can place the executable either directly in target/{debug,release}
+    // or one level deeper (for example target/<triple>/{debug,release}). Keep
+    // both workspace-root fallbacks so both layouts work without relying on CWD.
+    candidates.push(parent.join("../..").join(name));
+    candidates.push(parent.join("../../..").join(name));
+
+    // Distribution packages install immutable application resources here.
+    // Check this after Cargo layouts so a developer run cannot silently pick
+    // stale resources from an older system installation.
+    #[cfg(target_os = "linux")]
+    candidates.push(PathBuf::from("/usr/share/ebirforms").join(name));
+    candidates
+}
 
 /// Dynamically locates application resources across local dev, macOS bundles, and Linux tarballs.
 pub fn find_resource_dir(name: &str) -> PathBuf {
     let current_exe = std::env::current_exe().unwrap_or_default();
-    if let Some(parent) = current_exe.parent() {
-        // 1. Next to executable (Linux release / Windows install / local run if copied)
-        let local = parent.join(name);
-        if local.exists() {
-            return local;
-        }
-
-        // 2. macOS .app bundle (Resources is sibling to MacOS)
-        let macos_bundle = parent.join("../Resources").join(name);
-        if macos_bundle.exists() {
-            return macos_bundle.canonicalize().unwrap_or(macos_bundle);
-        }
-
-        // 3. Cargo workspace root (fallback for `cargo run` where exe is in target/debug/ or target/release/)
-        let cargo_workspace = parent.join("../../..").join(name);
-        if cargo_workspace.exists() {
-            return cargo_workspace.canonicalize().unwrap_or(cargo_workspace);
+    for candidate in resource_candidates(&current_exe, name) {
+        if candidate.exists() {
+            return candidate.canonicalize().unwrap_or(candidate);
         }
     }
 
     // Fallback to CWD
     std::env::current_dir().unwrap_or_default().join(name)
+}
+
+#[cfg(test)]
+mod resource_tests {
+    use super::*;
+
+    #[test]
+    fn cargo_resource_candidates_cover_host_and_target_triple_layouts() {
+        let host_candidates =
+            resource_candidates(Path::new("/workspace/target/debug/ebirforms"), "assets");
+        assert!(host_candidates.contains(&PathBuf::from("/workspace/target/debug/../../assets")));
+
+        let target_triple_candidates = resource_candidates(
+            Path::new("/workspace/target/x86_64-unknown-linux-gnu/debug/ebirforms"),
+            "assets",
+        );
+        assert!(target_triple_candidates.contains(&PathBuf::from(
+            "/workspace/target/x86_64-unknown-linux-gnu/debug/../../../assets"
+        )));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_resource_candidates_include_distribution_share_directory() {
+        let candidates = resource_candidates(Path::new("/usr/bin/ebirforms"), "assets");
+        assert!(candidates.contains(&PathBuf::from("/usr/share/ebirforms/assets")));
+    }
 }
 
 // Re-export common functions

@@ -26,6 +26,7 @@ gpui-component = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
+thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 reqwest = { workspace = true }
@@ -47,6 +48,10 @@ global-hotkey = "0.8"
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 robius-authentication = { version = "0.1.1", features = ["async"] }
+gpui-wry = { git = "https://github.com/longbridge/gpui-component", rev = "be0f5488a7050f14ed90081f68f450b07761ce93" }
+wry = { version = "0.53.3", package = "lb-wry" }
+raw-window-handle = { version = "0.6", features = ["std"] }
+url = "2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.5.2"
@@ -64,6 +69,7 @@ windows = { version = "0.62.2", features = [
 
 [package.metadata.deb]
 name = "ebirforms"
+maintainer = "Goldcoders Corp <support@goldcoders.dev>"
 priority = "optional"
 section = "utils"
 depends = "$auto, libvulkan1, libxkbcommon0, libwayland-client0, fontconfig, libfreetype6"
@@ -72,6 +78,7 @@ Supports form preparation, validation, submission via FTP, email confirmation
 tracking, and PDF generation for BIR Form 2551Q and related forms."""
 assets = [
     ["target/release/bir", "usr/bin/ebirforms", "755"],
+    ["../../target/pinned-typst/linux/typst", "usr/lib/ebirforms/typst", "755"],
     ["../../assets/**/*", "usr/share/ebirforms/assets/", "644"],
     ["../../formtypes/**/*", "usr/share/ebirforms/formtypes/", "644"],
 ]
