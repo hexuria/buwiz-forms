@@ -1,10 +1,90 @@
 # Print Preview Parity Rebuild Plan
 
-Status: Proposed  
+Status: In progress; safety and semantic slices implemented, promotion blocked
 Date: 2026-07-15  
 First production target: BIR Form 2551Q, January 2018 ENCS  
 Reference implementation donor: commit 5b57aff on codex/html-renderer-form-refactor  
 Clean integration base: local main at d07d4ce
+
+## Execution checkpoint (2026-07-15)
+
+The donor is archived, the clean parity branch is active, and normal Print
+Preview still uses the legacy renderer. The branch now contains a 2551Q-only
+Rust render contract, deterministic fixture matrix, semantic two-page HTML
+document, Rust-owned continuation subtotal, 12-row continuation pages,
+calibration/visual tooling, source-bundle offline and migration audits, and an
+explicitly labelled development-only native host with local-only loading and
+fail-closed geometry checks.
+
+Rust now owns the return's taxpayer-type and annual-election snapshots, exact
+Item 13 applicability/election matrix, exact calendar-quarter import bounds,
+cent-precise monetary inputs, finite non-negative penalties, the canonical
+22-entry January 2018 ATC registry, and a queue-time SHA-256 binding over every
+submission field and calculation input. A queued initial-quarter 8% election
+(Q1 for an existing taxpayer, or the business-commencement quarter for a new
+registrant) is committed atomically with the draft and recorded in the
+taxpayer's annual election ledger; conflicting elections roll the transaction
+back. Before network/XML submission, the queued return is rebound to the
+current profile, recomputed,
+and compared with the reviewed fingerprint. Any changed field, annual
+election, rate, credit split, or automatic penalty returns the filing to Draft.
+The 8% rule blocks only PT010/Section 116 amounts and preserves independently
+taxable ATCs such as PT040.
+
+Immediately before FTP submission, the worker takes an atomic SQLite claim on
+the exact reviewed queue generation. Any process crash or transport error after
+that boundary is an unknown outcome: the durable claim is never lease-expired,
+canceled, overwritten, or automatically retried because BIR may already have
+received the return. The desktop removes the cancel action and shows a
+support-assisted reconciliation warning. There is intentionally no in-app
+claim-release workflow in this slice; reconciliation against authoritative BIR
+confirmation or receipt data remains an operational gap.
+
+The native host now uses a nonpersistent WebView, blocks workers, WebRTC, media
+and device APIs, emits restrictive response headers, waits for fonts, and
+requires a fresh nonce-bound measurement of the explicit print-mode CSS before
+system print. Script printing, browser print shortcuts, and context menus are
+blocked; unvalidated print media renders no form tree. On Windows, where Wry's
+print helper itself calls `window.print()`, a per-preview UUID and nonce grant
+one immutable wrapper invocation only after the validated host action. Linux
+resource lookup includes the installed `/usr/share/ebirforms` layout. Static offline verification
+rejects unauthorized raster payloads by magic bytes, requires complete bundle
+reachability, and disallows data images. Migration evidence and public release
+workflows now fail closed: positive visual/platform/rollback claims have no
+trusted producer until attested CI and packaged drivers exist, dirty-source
+visual runs are diagnostic-only, releases retest the exact tagged SHA, and
+unsigned macOS/Windows artifacts cannot be published.
+
+Public packaging is intentionally narrower than the set of developer packaging
+commands. GitHub releases publish the notarized DMG, Debian package and Linux
+tarball, and Authenticode-signed Windows Setup EXE and MSI. They do not build,
+sign, or upload MSIX. `just msix` produces a Store-only candidate and is not a
+release path. Store promotion remains blocked until correctly sized manifest
+artwork and packaged MSVC runtime behavior pass independent Windows
+certification. A local `just sign-dev` signature is only for sideload testing
+and cannot satisfy that promotion gate. Release preflight also requires tracked
+Cargo/npm lockfiles and an exact `vMAJOR.MINOR.PATCH` tag matching the Cargo
+workspace version.
+
+Final integrated Chromium comparison at 1224 x 1872 pixels. The relaxed run
+passes 3/3 to collect evidence, but both pages fail the independent 1% release
+ceiling:
+
+| Page | Donor baseline | Current branch | Release ceiling |
+| --- | ---: | ---: | ---: |
+| 2551Q page 1 | approximately 31.29% | 11.942157561030111% (273,634/2,291,328) | 1% |
+| 2551Q page 2 | approximately 19.07% | 9.670461845706944% (221,582/2,291,328) | 1% |
+
+The strict gate is red by design. The semantic document still uses a
+placeholder government seal and synthetic barcode treatment, and typography
+and spacing remain above the visual ceiling. The native host can request the
+system print dialog experimentally, but producer-bound packaged macOS/Windows
+print evidence does not exist and direct HTML PDF export is not implemented.
+An authorized seal, production barcode, licensed deterministic font,
+declaration-side taxpayer-type mapping, remaining signatory/payment fields,
+and the separate promotion change are also incomplete. Every
+completion/promotion flag remains false; `html_enabled` only exposes the
+explicit development action.
 
 ## 1. Executive Decision
 
@@ -36,24 +116,24 @@ the replacement is demonstrably better.
 
 ## 2. Why This Plan Exists
 
-The current HTML renderer is structurally incomplete rather than merely
+The donor HTML renderer was structurally incomplete rather than merely
 uncalibrated.
 
 Measured against the committed canonical references:
 
-| Form and page | Current changed pixels | Release threshold |
+| Form and page | Donor changed pixels | Release threshold |
 | --- | ---: | ---: |
 | 2551Q page 1 | approximately 31.29% | at most 1% |
 | 2551Q page 2 | approximately 19.07% | at most 1% |
 | 1601C page 1 | approximately 31.44% | at most 1% |
 
-The current 2551Q component uses generic stacked rows and a universal 62/38
-label/value split. It omits official fields and legal blocks, uses a synthetic
-barcode, has no form-specific geometry, and does not reproduce the official
-page-two schedule.
+The donor's 2551Q component used generic stacked rows and a universal 62/38
+label/value split. It omitted official fields and legal blocks, used a
+synthetic barcode, had no form-specific geometry, and did not reproduce the
+official page-two schedule.
 
-The branch also mixes renderer work with thousands of lines of unrelated form
-models, XML, persistence, carry-over, support-level, and scaffold changes.
+That donor branch also mixed renderer work with thousands of lines of unrelated
+form models, XML, persistence, carry-over, support-level, and scaffold changes.
 Those changes make the branch difficult to review, bisect, roll back, and
 release safely.
 
@@ -72,21 +152,21 @@ The valuable work in 5b57aff is the renderer foundation:
 
 The plan preserves those ideas while reducing scope to one complete form.
 
-### Current code anchors
+### Current code anchors and integration status
 
-| Concern | Current anchor | Planned treatment |
+| Concern | Current anchor | Integration status |
 | --- | --- | --- |
-| Generic 2551Q document | packages/form-renderer/src/forms/Form2551Q.tsx | Replace with explicit page components |
-| Universal row geometry | packages/form-renderer/src/components.tsx and print.css | Retain only low-level primitives |
-| Rust render adapter | crates/bir-print/src/html.rs | Reduce initial scope and complete 2551Q fields |
-| Native WebView host | crates/bir-desktop/src/views/html_form_preview.rs | Transplant only after host/export audit |
-| Runtime selection | crates/bir-desktop/src/views/form_2551q_view.rs | Gate normal HTML traffic on release_ready |
+| Form-specific 2551Q document | packages/form-renderer/src/forms/Form2551Q.tsx | Explicit official Page 1/Page 2 and continuation regions implemented; visual calibration remains |
+| Shared renderer primitives | packages/form-renderer/src/components.tsx and print.css | Used only for low-level page, comb, checkbox, and amount behavior; form geometry remains 2551Q-specific |
+| Rust render adapter | crates/bir-print/src/html.rs | Owned 2551Q values, validation messages, schedule rows, and continuation subtotal mapped; unowned legal fields remain explicit gaps |
+| Native WebView host | crates/bir-desktop/src/views/html_form_preview.rs | Local-only experimental preview and system-print dispatch implemented with fail-closed readiness/fallback; direct PDF and platform proof remain open |
+| Runtime selection | crates/bir-desktop/src/views/form_2551q_view.rs | Legacy remains normal traffic; explicit HTML action is development-only while `release_ready` is false |
 | Accurate legacy path | crates/bir-print/src/lib.rs and pdf_viewer.rs | Preserve as production default/fallback |
-| Dynamic anchors | formtypes/2551Qv2018/formtype.json | Reconcile and generate owned field anchors |
-| Extracted geometry | formtypes/2551Qv2018/form_structure.json | Normalize at development time |
-| Golden comparison | packages/form-renderer/visual/form-parity.spec.ts | Fix evidence collection, then retain |
-| Migration truth | packages/form-specs/form-migration-status.json | Start conservative; promote with evidence |
-| Evidence truth | packages/form-specs/form-release-evidence.json | Require strict, hashed platform evidence |
+| Dynamic anchors | formtypes/2551Qv2018/formtype.json | Legacy Schedule 1 rows 2-6 reconciled for deterministic calibration; not used as an HTML runtime background |
+| Extracted geometry | formtypes/2551Qv2018/form_structure.json | Development-time normalized input only; runtime output is semantic HTML/CSS |
+| Golden comparison | packages/form-renderer/visual/form-parity.spec.ts | Per-page diagnostics retained even when the aggregate strict run fails |
+| Migration truth | packages/form-specs/form-migration-status.json | Conservative flags audited; all completion/promotion gates remain false |
+| Evidence truth | packages/form-specs/form-release-evidence.json | Still empty for strict visual, native platform, and packaged-offline promotion evidence |
 
 ## 3. Non-Negotiable Architecture
 
@@ -94,13 +174,16 @@ The plan preserves those ideas while reducing scope to one complete form.
 
 - bir-core owns draft state, calculations, validation, carry-over, persistence,
   XML, submission, and queue eligibility.
-- bir-print converts a validated Rust draft into RenderEnvelopeV1.
+- bir-print maps Rust-owned draft values, derived amounts, schedules, and
+  validation results into RenderEnvelopeV1.
 - React receives a read-only envelope. It owns only document layout,
   pagination, preview rendering, and print styling.
 - React must never recalculate tax, infer filing eligibility, or write to the
   database.
 - Preview, system print, and direct PDF export must use the same React document
-  tree and print stylesheet.
+  tree and print stylesheet. The current slice proves preview and experimental
+  system-print dispatch from that tree; direct HTML PDF export remains a
+  release blocker rather than silently falling back to a second HTML layout.
 
 ### 3.2 Runtime artwork
 
