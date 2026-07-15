@@ -6,7 +6,7 @@ First production target: BIR Form 2551Q, January 2018 ENCS
 Reference implementation donor: commit 5b57aff on codex/html-renderer-form-refactor  
 Clean integration base: local main at d07d4ce
 
-## Execution checkpoint (2026-07-15)
+## Execution checkpoint (2026-07-16)
 
 The donor is archived, the clean parity branch is active, and normal Print
 Preview still uses the legacy renderer. The branch now contains a 2551Q-only
@@ -14,7 +14,12 @@ Rust render contract, deterministic fixture matrix, semantic two-page HTML
 document, Rust-owned continuation subtotal, 12-row continuation pages,
 calibration/visual tooling, source-bundle offline and migration audits, and an
 explicitly labelled development-only native host with local-only loading and
-fail-closed geometry checks.
+fail-closed geometry checks. The 2551Q editor now exposes the bounded Item 5
+input, the Rust-owned Item 13 election controls, and searchable Add/Remove
+controls for six unique canonical Schedule 1 ATCs. The document renders Items 5
+and 13 in their official Page 1 regions, uses reviewed discrete seal and
+page-specific barcode crops, and switches long legal text from official combs
+to one unclipped plain-text box without changing the field rectangle.
 
 Rust now owns the return's taxpayer-type and annual-election snapshots, exact
 Item 13 applicability/election matrix, exact calendar-quarter import bounds,
@@ -49,8 +54,10 @@ print helper itself calls `window.print()`, a per-preview UUID and nonce grant
 one immutable wrapper invocation only after the validated host action. Linux
 resource lookup includes the installed `/usr/share/ebirforms` layout. Static offline verification
 rejects unauthorized raster payloads by magic bytes, requires complete bundle
-reachability, and disallows data images. Migration evidence and public release
-workflows now fail closed: positive visual/platform/rollback claims have no
+reachability, and permits only the three reviewed embedded data-image hashes
+for the 2551Q seal and page-specific barcodes; unknown data images and all
+standalone runtime rasters remain forbidden. Migration evidence and public
+release workflows now fail closed: positive visual/platform/rollback claims have no
 trusted producer until attested CI and packaged drivers exist, dirty-source
 visual runs are diagnostic-only, releases retest the exact tagged SHA, and
 unsigned macOS/Windows artifacts cannot be published.
@@ -72,17 +79,17 @@ but both pages fail the independent 1% release ceiling:
 
 | Page | Donor baseline | Current branch | Release ceiling |
 | --- | ---: | ---: | ---: |
-| 2551Q page 1 | approximately 31.29% | 11.942157561030111% (273,634/2,291,328) | 1% |
-| 2551Q page 2 | approximately 19.07% | 9.670461845706944% (221,582/2,291,328) | 1% |
+| 2551Q page 1 | approximately 31.29% | 11.814720546338194% (270,714/2,291,328) | 1% |
+| 2551Q page 2 | approximately 19.07% | 9.642094017094017% (220,932/2,291,328) | 1% |
 
-The strict gate is red by design. The semantic document still uses a
-placeholder government seal and synthetic barcode treatment, and typography
-and spacing remain above the visual ceiling. The native host can request the
+The strict gate remains red. The semantic document now embeds only the reviewed
+official-source government-seal crop and distinct Page 1/Page 2 static barcode
+crops; no full-page reference artwork is loaded at runtime. Typography, spacing,
+and fine geometry remain above the visual ceiling. The native host can request the
 system print dialog experimentally, but producer-bound packaged macOS/Windows
 print evidence does not exist and direct HTML PDF export is not implemented.
-An authorized seal, production barcode, licensed deterministic font,
-declaration-side taxpayer-type mapping, remaining signatory/payment fields,
-and the separate promotion change are also incomplete. Every
+A licensed deterministic font, declaration-side taxpayer-type mapping,
+remaining signatory/payment fields, and the separate promotion change are also incomplete. Every
 completion/promotion flag remains false; `html_enabled` only exposes the
 explicit development action.
 
@@ -157,11 +164,12 @@ The plan preserves those ideas while reducing scope to one complete form.
 | Concern | Current anchor | Integration status |
 | --- | --- | --- |
 | Form-specific 2551Q document | packages/form-renderer/src/forms/Form2551Q.tsx | Explicit official Page 1/Page 2 and continuation regions implemented; visual calibration remains |
-| Shared renderer primitives | packages/form-renderer/src/components.tsx and print.css | Used only for low-level page, comb, checkbox, and amount behavior; form geometry remains 2551Q-specific |
+| Shared renderer primitives | packages/form-renderer/src/components.tsx and print.css | Used only for low-level page, comb, adaptive comb-to-plain overflow, checkbox, and amount behavior; form geometry remains 2551Q-specific |
 | Rust render adapter | crates/bir-print/src/html.rs | Owned 2551Q values, validation messages, schedule rows, and continuation subtotal mapped; unowned legal fields remain explicit gaps |
 | Native WebView host | crates/bir-desktop/src/views/html_form_preview.rs | Local-only experimental preview and system-print dispatch implemented with fail-closed readiness/fallback; direct PDF and platform proof remain open |
 | Runtime selection | crates/bir-desktop/src/views/form_2551q_view.rs | Legacy remains normal traffic; explicit HTML action is development-only while `release_ready` is false |
-| Accurate legacy path | crates/bir-print/src/lib.rs and pdf_viewer.rs | Preserve as production default/fallback |
+| 2551Q editor | crates/bir-desktop/src/views/form_2551q_view.rs | Items 5 and 13 are editable; Schedule 1 has a canonical searchable ATC selector, Add/Remove actions, a six-line counter, and a six-line direct-edit cap |
+| Accurate legacy path | crates/bir-print/src/lib.rs and pdf_viewer.rs | Preserve as production default/fallback; preflight and the public 2551Q print entry point fail closed when fixed legacy fields would truncate or omit data |
 | Dynamic anchors | formtypes/2551Qv2018/formtype.json | Legacy Schedule 1 rows 2-6 reconciled for deterministic calibration; not used as an HTML runtime background |
 | Extracted geometry | formtypes/2551Qv2018/form_structure.json | Development-time normalized input only; runtime output is semantic HTML/CSS |
 | Golden comparison | packages/form-renderer/visual/form-parity.spec.ts | Per-page diagnostics retained even when the aggregate strict run fails |
@@ -194,6 +202,10 @@ The plan preserves those ideas while reducing scope to one complete form.
 - Discrete assets such as an authorized seal, a deterministic barcode, or a
   licensed font may be bundled separately when their provenance and hashes are
   recorded.
+- The current 2551Q bundle embeds only three reviewed data-image assets: the
+  government seal and the page-specific static barcodes recorded in the visual
+  reference manifest. The offline verifier rejects any unreviewed embedded
+  image and every standalone runtime raster.
 - Raw extraction output must not be shipped as a disguised snapshot. Extracted
   geometry must be normalized into semantic regions, rules, labels, cells, and
   field anchors.
@@ -635,8 +647,11 @@ Tasks:
 - Record the fixed coordinate system and rounding policy.
 - Add source-hash drift checks.
 - Add a deterministic font asset or an explicitly tested font stack.
-- Determine the authorized source for the government seal.
-- Implement the required deterministic barcode rather than a decorative stripe.
+- Record and embed the government seal from the pinned official reference
+  (**complete for 2551Q**, with source crop and decoded hash in the manifest).
+- Implement page-specific deterministic static form barcodes rather than a
+  decorative stripe (**complete for 2551Q**, with separate Page 1/Page 2
+  provenance and hashes).
 
 Exit criteria:
 
@@ -672,6 +687,9 @@ Implementation rules:
 - Do not stretch the page or independently scale X and Y.
 - Use exact official grey fills, border weights, and row heights.
 - Prevent every text block from overflowing its assigned rectangle.
+- Keep the official comb dividers while a text value fits; when it does not,
+  replace that comb with one plain-text box in the same rectangle rather than
+  truncating the value or widening the form.
 - Keep value text selectable.
 
 Calibration sequence:

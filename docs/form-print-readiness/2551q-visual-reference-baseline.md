@@ -44,7 +44,10 @@ never accepted automatically.
 | `packages/form-contracts/src/generated/2551q-atc-reference.json` | `ccc2056a6151ae8be17f4af2d2718d93c8c7065afe65c9156c9ffef75338ff3f` |
 | `packages/form-renderer/references/2551q-2018-page-1.png` | `c78f0724e2f320f1b306408008e9085ed36397c4e1add66bf5e77c322a3485ea` |
 | `packages/form-renderer/references/2551q-2018-page-2.png` | `d6ab5afbf6b3f4cbac7c69a01df231eaf6dcf7fde587e78c02ee20e3f2508d1a` |
-| `packages/form-renderer/references/manifest.json` | `f2cbe0632aa9efe2e6abda483bdf8523887d76f5012c3ceeb0c5f3814c1dda17` |
+| `packages/form-renderer/references/manifest.json` | `b88e39b5ee2c7cedd27a87dcd2645b08e02fb6813aa4e6f2e1c713cc8d7e8baf` |
+| Discrete government-seal crop | `d532deb6eff07393f0dd2360526805bbcf2680c727baedbb4510ed63c58fb3f4` |
+| Discrete page 1 barcode crop | `ddb2025f8630575db15d43b855511f50821b25bc5fa05f767b2439bd9bc45279` |
+| Discrete page 2 barcode crop | `dd1e8dd49782640a51fb7a69bae6662ca595f73384c371d9344a1448e3530e77` |
 
 Official source URL:
 
@@ -56,6 +59,16 @@ The source PDF hash above is the pinned extraction provenance recorded in
 `metadata.json`; this command does not download the PDF. The checker directly
 hashes the locally owned SVG pages, Typst overlay, form layout, fixture, and
 reference PNGs.
+
+## Discrete runtime artwork provenance
+
+The semantic renderer embeds three reviewed, official-reference-derived PNGs:
+the Page 1 government seal and a distinct static form barcode for each official
+page. The manifest records each source page, pixel crop, image treatment, and
+decoded SHA-256. The offline verifier accepts only those three embedded hashes
+and rejects unknown data images and every standalone runtime raster file. The
+full official pages remain calibration-only and are never used as runtime
+backgrounds.
 
 ## Legacy row-coverage correction
 
@@ -84,6 +97,22 @@ The verified local toolchain used Typst `0.13.1` on macOS arm64. Generator wall
 time is diagnostic only and is not a promotion gate; page bytes, hashes,
 dimensions, and count are the deterministic gate.
 
+## Adaptive long-text treatment
+
+Taxpayer name, registered address, contact number, email address, and Item 12A
+retain their official character combs while the value fits. A longer legal
+value replaces the comb dividers with one non-truncating plain-text box sized to
+the same official field rectangle; Rust retains larger defensive rendering
+limits to prevent unbounded document content. TIN, RDO, ZIP, and monetary combs
+remain exact fixed-capacity fields.
+
+This adaptive treatment belongs to the semantic HTML renderer. The default
+legacy snapshot renderer cannot reproduce it, so its public Rust entry point and
+desktop preview preflight reject any draft that it would truncate or omit. The
+guard includes the tighter repeated taxpayer-name field on Page 2 and non-empty
+Item 12A/Item 17 specification text. No legacy PDF is emitted with partial form
+data.
+
 ## Final integrated semantic-renderer diagnostic
 
 The integrated owned layout was captured with Chromium on macOS arm64 at the
@@ -93,8 +122,8 @@ ceiling and remains nonzero.
 
 | Page | Changed pixels | Changed percent | Strict result |
 | --- | ---: | ---: | --- |
-| 1 | 273,634 of 2,291,328 | 11.942157561030111% | Fail |
-| 2 | 221,582 of 2,291,328 | 9.670461845706944% | Fail |
+| 1 | 270,714 of 2,291,328 | 11.814720546338194% | Fail |
+| 2 | 220,932 of 2,291,328 | 9.642094017094017% | Fail |
 
 Commands:
 
@@ -114,7 +143,7 @@ attested. Reporter-shaped JSON and re-encoded reference pixels cannot promote
 
 The second command must remain nonzero until both page percentages are at most
 1%. These diagnostic numbers do not populate `form-release-evidence.json` and
-do not authorize release routing. The remaining visible differences include the
-placeholder government seal, synthetic barcode treatment, and
-typography/spacing calibration; none may be hidden with a full-page runtime
-background.
+do not authorize release routing. The discrete official-source seal and
+page-specific barcodes are now present. Typography, spacing, and fine geometry
+calibration remain above the strict ceiling; none may be hidden with a full-page
+runtime background.
