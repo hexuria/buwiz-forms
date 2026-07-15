@@ -88,35 +88,20 @@ for (const parityCase of cases) {
     const pages = page.locator(".form-page");
     await expect(pages).toHaveCount(parityCase.references.length);
 
-    const compactName = pages.nth(1).locator('[data-overflow-mode="compact"]');
-    await expect(compactName).toHaveCount(1);
-    await expect(compactName.locator(".compact-comb-text")).toHaveAttribute(
+    const plainName = pages.nth(1).locator('[data-overflow-mode="plain"]');
+    await expect(plainName).toHaveCount(1);
+    await expect(plainName).toHaveAttribute(
       "aria-label",
       "RENDERER FIXTURE CORPORATION"
     );
-    const compactGeometry = await compactName.evaluate((element) => {
-        const boundary = element.getBoundingClientRect();
-        const characters = element.querySelectorAll(".compact-comb-text > span");
-        return {
-          clientWidth: element.clientWidth,
-          clientHeight: element.clientHeight,
-          scrollWidth: element.scrollWidth,
-          scrollHeight: element.scrollHeight,
-          outsideCharacters: [...characters].filter((character) => {
-            const rect = character.getBoundingClientRect();
-            return !(
-              rect.left >= boundary.left - 0.5 &&
-              rect.right <= boundary.right + 0.5 &&
-              rect.top >= boundary.top - 0.5 &&
-              rect.bottom <= boundary.bottom + 0.5
-            );
-          }).length
-        };
-      });
-    expect(compactGeometry.scrollWidth).toBeLessThanOrEqual(
-      compactGeometry.clientWidth + 1
-    );
-    expect(compactGeometry.outsideCharacters).toBe(0);
+    const plainGeometry = await plainName.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      clientHeight: element.clientHeight,
+      scrollWidth: element.scrollWidth,
+      scrollHeight: element.scrollHeight
+    }));
+    expect(plainGeometry.scrollWidth).toBeLessThanOrEqual(plainGeometry.clientWidth + 1);
+    expect(plainGeometry.scrollHeight).toBeLessThanOrEqual(plainGeometry.clientHeight + 1);
 
     const realRowKeys = await page
       .locator("[data-row-key]")

@@ -11,6 +11,7 @@ use crate::profile::{IncomeTaxElection, TaxpayerProfile, TaxpayerType};
 use chrono::Datelike;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::collections::HashSet;
 
 fn default_true() -> bool {
     true
@@ -934,10 +935,10 @@ impl FormValidator for Form2551QDraft {
                 "tax_relief_specification".to_string(),
                 "Tax-relief specification is required when tax relief is selected".to_string(),
             ));
-        } else if self.tax_relief_specification.chars().count() > 26 {
+        } else if self.tax_relief_specification.chars().count() > 160 {
             errors.push((
                 "tax_relief_specification".to_string(),
-                "Tax-relief specification must fit the official 26-character Item 12A field"
+                "Tax-relief specification exceeds the 160-character rendering safety limit"
                     .to_string(),
             ));
         }
@@ -1073,25 +1074,28 @@ impl FormValidator for Form2551QDraft {
             ));
         }
 
+        // These are defensive document-rendering limits, not official comb-cell
+        // limits. The HTML renderer uses the official cells while a value fits,
+        // then switches to a single unclipped text box for longer legal values.
         for (field, label, value, capacity) in [
             (
                 "taxpayer_name",
                 "Taxpayer name",
                 self.taxpayer_name.as_str(),
-                40,
+                160,
             ),
             (
                 "registered_address",
                 "Registered address",
                 self.registered_address.as_str(),
-                71,
+                320,
             ),
-            ("email", "Email address", self.email.as_str(), 28),
+            ("email", "Email address", self.email.as_str(), 254),
         ] {
             if value.chars().count() > capacity {
                 errors.push((
                     field.to_string(),
-                    format!("{label} must fit the official {capacity}-character print field"),
+                    format!("{label} exceeds the {capacity}-character rendering safety limit"),
                 ));
             }
         }
@@ -1101,10 +1105,10 @@ impl FormValidator for Form2551QDraft {
             .chars()
             .filter(|character| character.is_ascii_digit())
             .count();
-        if contact_digits > 12 {
+        if contact_digits > 32 {
             errors.push((
                 "contact_number".to_string(),
-                "Contact number must fit the official 12-digit print field".to_string(),
+                "Contact number exceeds the 32-digit rendering safety limit".to_string(),
             ));
         }
 
@@ -1121,8 +1125,20 @@ impl FormValidator for Form2551QDraft {
                     .to_string(),
             ));
         }
+        let mut seen_atc_codes = HashSet::new();
         for (i, row) in self.schedule_1.iter().enumerate() {
             let field = format!("schedule_1_row_{}", i + 1);
+            let normalized_atc = row.atc.trim().to_ascii_uppercase();
+            if !normalized_atc.is_empty() && !seen_atc_codes.insert(normalized_atc.clone()) {
+                errors.push((
+                    field.clone(),
+                    format!(
+                        "Schedule 1 row {} repeats ATC {}; combine taxable amounts into one ATC line",
+                        i + 1,
+                        normalized_atc
+                    ),
+                ));
+            }
             if !row.taxable_amount.is_finite() || row.taxable_amount < 0.0 {
                 errors.push((
                     field.clone(),
@@ -1718,14 +1734,37 @@ mod tests {
     }
 
     #[test]
-    fn validation_enforces_official_character_cell_capacities() {
+    fn validation_accepts_values_that_use_adaptive_print_text_boxes() {
         let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
         draft.tax_relief = true;
         draft.tax_relief_specification = "X".repeat(27);
         draft.taxpayer_name = "N".repeat(41);
         draft.registered_address = "A".repeat(72);
         draft.email = "abcdefghijklmnopqrst@example.com".to_string();
-        draft.contact_number = "0912345678901".to_string();
+
+        let errors = draft.validate();
+        for field in [
+            "tax_relief_specification",
+            "taxpayer_name",
+            "registered_address",
+            "email",
+        ] {
+            assert!(
+                errors.iter().all(|(error_field, _)| error_field != field),
+                "adaptive print text must accept {field}: {errors:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn validation_enforces_document_rendering_safety_limits() {
+        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+        draft.tax_relief = true;
+        draft.tax_relief_specification = "X".repeat(161);
+        draft.taxpayer_name = "N".repeat(161);
+        draft.registered_address = "A".repeat(321);
+        draft.email = format!("{}@example.com", "e".repeat(244));
+        draft.contact_number = "9".repeat(33);
 
         let errors = draft.validate();
         for field in [
@@ -1737,10 +1776,9 @@ mod tests {
         ] {
             assert!(
                 errors.iter().any(|(error_field, message)| {
-                    error_field == field
-                        && (message.contains("official") || message.contains("print field"))
+                    error_field == field && message.contains("safety limit")
                 }),
-                "expected an official print-capacity error for {field}: {errors:?}"
+                "expected a rendering safety error for {field}: {errors:?}"
             );
         }
     }
@@ -2719,7 +2757,10 @@ mod tests {
     #[test]
     fn validation_accepts_six_schedule_rows_supported_by_xml() {
         let mut draft = make_draft(100_000.0, 0.0, 2099, 1);
-        draft.schedule_1 = vec![Schedule1Row::default_pt010(); 6];
+        draft.schedule_1 = ["PT010", "PT040", "PT060", "PT090", "PT140", "PT180"]
+            .into_iter()
+            .map(|code| Schedule1Row::new(code).expect("test ATC must be canonical"))
+            .collect();
 
         let errors = draft.validate();
 
@@ -2727,6 +2768,20 @@ mod tests {
             errors.iter().all(|(field, _)| field != "schedule_1"),
             "unexpected schedule validation errors: {errors:?}"
         );
+    }
+
+    #[test]
+    fn validation_rejects_duplicate_schedule_atcs() {
+        let mut draft = make_draft(100_000.0, 0.0, 2099, 1);
+        draft.schedule_1 = vec![Schedule1Row::default_pt010(), Schedule1Row::default_pt010()];
+
+        let errors = draft.validate();
+
+        assert!(errors.iter().any(|(field, message)| {
+            field == "schedule_1_row_2"
+                && message.contains("repeats ATC PT010")
+                && message.contains("combine taxable amounts")
+        }));
     }
 
     #[test]

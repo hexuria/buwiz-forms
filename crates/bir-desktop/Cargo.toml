@@ -67,6 +67,9 @@ windows = { version = "0.62.2", features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 
+[dev-dependencies]
+gpui = { workspace = true, features = ["test-support"] }
+
 [package.metadata.deb]
 name = "ebirforms"
 maintainer = "Goldcoders Corp <support@goldcoders.dev>"

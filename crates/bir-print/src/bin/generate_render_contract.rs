@@ -527,6 +527,32 @@ fn build_visual_reference_manifest(
             "page_width_pt": PAGE_WIDTH_PT,
             "page_height_pt": PAGE_HEIGHT_PT,
             "page_count": PAGE_COUNT,
+            "runtime_discrete_assets": [
+                {
+                    "asset": "government_seal",
+                    "crop_box_px": [485, 42, 540, 100],
+                    "derived_png_sha256": "d532deb6eff07393f0dd2360526805bbcf2680c727baedbb4510ed63c58fb3f4",
+                    "embedded_in": "packages/form-renderer/src/forms/official2551QAssets.ts",
+                    "source_page": 1,
+                    "treatment": "16-color grayscale quantization"
+                },
+                {
+                    "asset": "static_form_barcode_page_1",
+                    "crop_box_px": [845, 111, 1170, 212],
+                    "derived_png_sha256": "ddb2025f8630575db15d43b855511f50821b25bc5fa05f767b2439bd9bc45279",
+                    "embedded_in": "packages/form-renderer/src/forms/official2551QAssets.ts",
+                    "source_page": 1,
+                    "treatment": "monochrome threshold at 180"
+                },
+                {
+                    "asset": "static_form_barcode_page_2",
+                    "crop_box_px": [845, 90, 1170, 195],
+                    "derived_png_sha256": "dd1e8dd49782640a51fb7a69bae6662ca595f73384c371d9344a1448e3530e77",
+                    "embedded_in": "packages/form-renderer/src/forms/official2551QAssets.ts",
+                    "source_page": 2,
+                    "treatment": "monochrome threshold at 180"
+                }
+            ],
             "pages": pages
         }]
     }))

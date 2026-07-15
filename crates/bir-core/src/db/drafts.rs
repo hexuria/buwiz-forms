@@ -1028,7 +1028,7 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::forms::form_2551q::Item13Election;
+    use crate::forms::form_2551q::{Item13Election, Schedule1Row};
     use crate::profile::{IncomeTaxElection, TaxElectionHistory, TaxpayerProfile};
     use rusqlite::Connection;
     use serde::{Deserialize, Serialize};
@@ -1091,6 +1091,56 @@ mod tests {
             .transition_to_queued()
             .expect("a Q1 graduated election should queue");
         draft
+    }
+
+    #[test]
+    fn save_and_reopen_2551q_preserves_six_distinct_schedule_rows() {
+        let db = test_db();
+        let profile = test_profile();
+        let mut draft = Form2551QDraft::new_from_profile(&profile, 2026, 1);
+        draft.schedule_1 = ["PT010", "PT040", "PT060", "PT090", "PT140", "PT180"]
+            .into_iter()
+            .enumerate()
+            .map(|(index, code)| {
+                let mut row = Schedule1Row::new(code).expect("test ATC must be canonical");
+                row.taxable_amount = (index as f64 + 1.0) * 1_000.0;
+                row
+            })
+            .collect();
+        draft.recompute(None);
+
+        db.save_2551q_draft(&draft)
+            .expect("six-row draft should save");
+        let reopened = db
+            .get_2551q_draft(&draft.tin, draft.taxable_year, draft.quarter)
+            .expect("saved draft lookup should succeed")
+            .expect("saved draft should exist");
+
+        assert_eq!(
+            reopened
+                .schedule_1
+                .iter()
+                .map(|row| row.atc.as_str())
+                .collect::<Vec<_>>(),
+            vec!["PT010", "PT040", "PT060", "PT090", "PT140", "PT180"]
+        );
+        assert_eq!(
+            reopened
+                .schedule_1
+                .iter()
+                .map(|row| row.taxable_amount)
+                .collect::<Vec<_>>(),
+            vec![1_000.0, 2_000.0, 3_000.0, 4_000.0, 5_000.0, 6_000.0]
+        );
+        assert_eq!(
+            reopened
+                .schedule_1
+                .iter()
+                .map(|row| row.tax_due)
+                .collect::<Vec<_>>(),
+            vec![30.0, 60.0, 60.0, 400.0, 900.0, 1_800.0]
+        );
+        assert_eq!(reopened.total_tax_due, 3_250.0);
     }
 
     #[test]

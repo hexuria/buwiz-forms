@@ -49,6 +49,18 @@ describe("2551Q runtime render contract", () => {
     }
   });
 
+  it("keeps official header Item 5 and background Item 13 in the rendered form", () => {
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, {
+        envelope: structuredClone(item13Fixture) as RenderEnvelope
+      })
+    );
+
+    expect(markup).toContain('<div class="option-label"><b>5</b> Number of Sheet/s</div>');
+    expect(markup).toContain('<div class="income-rate-field"><b>13</b>');
+    expect(markup).toContain('8% income tax rate on gross sales/receipts/others');
+  });
+
   it("rejects a missing required legal field instead of defaulting it", () => {
     const envelope = validEnvelope();
     delete envelope.fields.is_amended;
@@ -74,22 +86,38 @@ describe("2551Q runtime render contract", () => {
     expect(() => assertRenderEnvelope(nonFinite)).toThrow("expected finite number");
   });
 
-  it("fails closed on official print-field capacity overflow", () => {
+  it("accepts values that overflow official combs and renders plain text boxes", () => {
+    const envelope = validEnvelope();
+    envelope.taxpayer.name = "N".repeat(41);
+    envelope.taxpayer.registered_address = "A".repeat(72);
+    envelope.taxpayer.contact_number = "1".repeat(13);
+    envelope.taxpayer.email = "E".repeat(29);
+    envelope.fields.tax_relief_specification.value = "R".repeat(27);
+
+    expect(() => assertRenderEnvelope(envelope)).not.toThrow();
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: envelope as RenderEnvelope })
+    );
+    expect(markup.match(/data-overflow-mode="plain"/g)?.length).toBeGreaterThanOrEqual(6);
+    expect(markup).toContain(`aria-label="${"A".repeat(72)}"`);
+  });
+
+  it("fails closed beyond defensive document-rendering limits", () => {
     for (const [path, mutate] of [
       ["taxpayer.name", (value: Record<string, any>) => {
-        value.taxpayer.name = "N".repeat(41);
+        value.taxpayer.name = "N".repeat(161);
       }],
       ["taxpayer.registered_address", (value: Record<string, any>) => {
-        value.taxpayer.registered_address = "A".repeat(72);
+        value.taxpayer.registered_address = "A".repeat(321);
       }],
       ["taxpayer.contact_number", (value: Record<string, any>) => {
-        value.taxpayer.contact_number = "1".repeat(13);
+        value.taxpayer.contact_number = "1".repeat(33);
       }],
       ["taxpayer.email", (value: Record<string, any>) => {
-        value.taxpayer.email = "E".repeat(29);
+        value.taxpayer.email = "E".repeat(255);
       }],
       ["tax_relief_specification", (value: Record<string, any>) => {
-        value.fields.tax_relief_specification.value = "R".repeat(27);
+        value.fields.tax_relief_specification.value = "R".repeat(161);
       }]
     ] as const) {
       const envelope = validEnvelope();

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { combCharacters, formatMoneyParts } from "../src/components";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import {
+  AdaptiveCombValue,
+  combCharacters,
+  formatMoneyParts
+} from "../src/components";
 
 describe("official comb formatting", () => {
   it("right-aligns without truncating low-order characters", () => {
@@ -10,6 +16,17 @@ describe("official comb formatting", () => {
     expect(() => combCharacters("123456", 5, "right")).toThrow(
       "requires 6 cells"
     );
+  });
+
+  it("uses a single plain text box when readable text exceeds the comb", () => {
+    const value = "REGISTERED NAME LONGER THAN THE OFFICIAL CELLS";
+    const markup = renderToStaticMarkup(
+      createElement(AdaptiveCombValue, { value, cells: 20 })
+    );
+
+    expect(markup).toContain('data-overflow-mode="plain"');
+    expect(markup).toContain(`aria-label="${value}"`);
+    expect(markup).not.toContain('class="comb-value"');
   });
 
   it("formats money without locale grouping characters", () => {

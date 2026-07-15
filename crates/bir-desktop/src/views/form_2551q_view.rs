@@ -10,22 +10,23 @@ use gpui::*;
 use gpui_component::button::ButtonVariants;
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::scroll::ScrollableElement as _;
+use gpui_component::select::{SearchableVec, Select, SelectEvent, SelectItem, SelectState};
 use gpui_component::*;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 use bir_core::db::Database;
-use bir_core::forms::FilingStatus;
 use bir_core::forms::form_2551q::{
     Form2551QDraft, Item13Election, OverpaymentDisposition, Schedule1Row, TaxPeriodBasis,
 };
+use bir_core::forms::{ATC_TABLE_2551Q, FilingStatus};
 use bir_core::parse_bir_receipt_email;
 use bir_core::validation::{validate_email, validate_ph_phone, validate_zip};
 use bir_print::html::RenderEnvelope;
 use bir_print::html_support::{
     LegacyPreviewDecision, bundled_html_renderer_support, legacy_2551q_preview_decision,
 };
-use bir_print::render_2551q_print;
+use bir_print::{Legacy2551QPrintIssue, legacy_2551q_print_issue, render_2551q_print};
 
 use super::email_confirmation_view::EmailConfirmationView;
 use super::pdf_viewer::PdfViewerView;
@@ -43,6 +44,58 @@ impl EventEmitter<Form2551QEvent> for Form2551QView {}
 
 struct ScheduleRowInputs {
     taxable_amount: Entity<InputState>,
+    _subscription: Subscription,
+}
+
+#[derive(Clone)]
+struct AtcOption {
+    code: String,
+    description: String,
+    rate: f64,
+}
+
+impl SelectItem for AtcOption {
+    type Value = String;
+
+    fn title(&self) -> SharedString {
+        format!(
+            "{} — {} ({:.1}%)",
+            self.code,
+            self.description,
+            self.rate * 100.0
+        )
+        .into()
+    }
+
+    fn value(&self) -> &Self::Value {
+        &self.code
+    }
+
+    fn matches(&self, query: &str) -> bool {
+        let query = query.trim().to_ascii_lowercase();
+        self.code.to_ascii_lowercase().contains(&query)
+            || self.description.to_ascii_lowercase().contains(&query)
+    }
+}
+
+const MAX_EDITABLE_SCHEDULE_1_ROWS: usize = 6;
+
+fn available_atc_options(rows: &[Schedule1Row]) -> SearchableVec<AtcOption> {
+    let used_codes = rows
+        .iter()
+        .map(|row| row.atc.trim().to_ascii_uppercase())
+        .collect::<HashSet<_>>();
+    SearchableVec::new(
+        ATC_TABLE_2551Q
+            .iter()
+            .filter(|entry| !used_codes.contains(entry.code))
+            .map(|entry| AtcOption {
+                code: entry.code.to_string(),
+                description: entry.description.to_string(),
+                rate: entry.rate,
+            })
+            .collect::<Vec<_>>(),
+    )
 }
 
 pub struct Form2551QView {
@@ -63,6 +116,7 @@ pub struct Form2551QView {
 
     // Schedule 1 row inputs (parallel to draft.schedule_1)
     row_inputs: Vec<ScheduleRowInputs>,
+    atc_select: Entity<SelectState<SearchableVec<AtcOption>>>,
 
     // Part II inputs
     creditable_withheld_input: Entity<InputState>,
@@ -86,6 +140,38 @@ pub struct Form2551QView {
 }
 
 impl Form2551QView {
+    fn new_schedule_row_inputs(
+        value: Option<f64>,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) -> ScheduleRowInputs {
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder("0.00"));
+        if let Some(value) = value {
+            input.update(cx, |input, cx| {
+                input.set_value(format!("{value:.2}"), window, cx);
+            });
+        }
+        let subscription = cx.subscribe_in(
+            &input,
+            window,
+            |this: &mut Self, _, event: &InputEvent, _, cx| match event {
+                InputEvent::Change => {
+                    this.is_validated = false;
+                    this.sync_from_inputs(cx);
+                }
+                InputEvent::Focus => {
+                    this.suppressed_sections.insert("schedule_1");
+                    cx.notify();
+                }
+                _ => {}
+            },
+        );
+        ScheduleRowInputs {
+            taxable_amount: input,
+            _subscription: subscription,
+        }
+    }
+
     pub fn new(
         draft: Form2551QDraft,
         db: Arc<Mutex<Database>>,
@@ -157,40 +243,29 @@ impl Form2551QView {
         let original_return_filed_and_paid_on_time = draft.original_return_filed_and_paid_on_time;
         let tax_relief = draft.tax_relief;
 
-        let mut row_inputs = Vec::new();
+        let row_inputs = draft
+            .schedule_1
+            .iter()
+            .map(|row| {
+                Self::new_schedule_row_inputs(
+                    (row.taxable_amount >= 0.0).then_some(row.taxable_amount),
+                    window,
+                    cx,
+                )
+            })
+            .collect::<Vec<_>>();
+        let atc_select = cx.new(|cx| {
+            SelectState::new(available_atc_options(&draft.schedule_1), None, window, cx)
+                .searchable(true)
+        });
         let mut subscriptions = Vec::new();
-
-        for row in draft.schedule_1.iter() {
-            let amt_str = if row.taxable_amount >= 0.0 {
-                format!("{:.2}", row.taxable_amount)
-            } else {
-                String::new()
-            };
-            let input = cx.new(|cx| InputState::new(window, cx).placeholder("0.00"));
-            input.update(cx, |input, cx| {
-                input.set_value(amt_str, window, cx);
-            });
-
-            subscriptions.push(cx.subscribe_in(
-                &input,
-                window,
-                |this: &mut Self, _, event: &InputEvent, _, cx| match event {
-                    InputEvent::Change => {
-                        this.is_validated = false;
-                        this.sync_from_inputs(cx);
-                    }
-                    InputEvent::Focus => {
-                        this.suppressed_sections.insert("schedule_1");
-                        cx.notify();
-                    }
-                    _ => {}
-                },
-            ));
-
-            row_inputs.push(ScheduleRowInputs {
-                taxable_amount: input,
-            });
-        }
+        subscriptions.push(cx.subscribe_in(
+            &atc_select,
+            window,
+            |_: &mut Self, _, _: &SelectEvent<SearchableVec<AtcOption>>, _, cx| {
+                cx.notify();
+            },
+        ));
 
         // Subscribe to creditable withheld changes
         let sub1 = cx.subscribe_in(
@@ -364,6 +439,7 @@ impl Form2551QView {
             attached_sheets_input,
             tax_relief_specification_input,
             row_inputs,
+            atc_select,
             creditable_withheld_input,
             tax_paid_previous_input,
             other_tax_credit_input,
@@ -467,30 +543,60 @@ impl Form2551QView {
     }
 
     fn add_schedule_row(&mut self, atc_code: &str, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(row) = Schedule1Row::new(atc_code) {
-            self.draft.schedule_1.push(row);
-            let input = cx.new(|cx| InputState::new(window, cx).placeholder("0.00"));
-            self._subscriptions.push(cx.subscribe_in(
-                &input,
-                window,
-                |this: &mut Self, _, event: &InputEvent, _, cx| match event {
-                    InputEvent::Change => {
-                        this.is_validated = false;
-                        this.sync_from_inputs(cx);
-                    }
-                    InputEvent::Focus => {
-                        this.suppressed_sections.insert("schedule_1");
-                        cx.notify();
-                    }
-                    _ => {}
-                },
-            ));
-
-            self.row_inputs.push(ScheduleRowInputs {
-                taxable_amount: input,
-            });
-            cx.notify();
+        if !self.is_editable()
+            || self.draft.schedule_1.len() >= MAX_EDITABLE_SCHEDULE_1_ROWS
+            || self
+                .draft
+                .schedule_1
+                .iter()
+                .any(|row| row.atc.trim().eq_ignore_ascii_case(atc_code))
+        {
+            return;
         }
+
+        self.sync_from_inputs(cx);
+        let Some(row) = Schedule1Row::new(atc_code) else {
+            return;
+        };
+        self.draft.schedule_1.push(row);
+        self.row_inputs
+            .push(Self::new_schedule_row_inputs(None, window, cx));
+        self.finish_schedule_rows_mutation(window, cx);
+    }
+
+    fn remove_schedule_row(
+        &mut self,
+        row_index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.is_editable()
+            || self.draft.schedule_1.len() <= 1
+            || row_index >= self.draft.schedule_1.len()
+        {
+            return;
+        }
+
+        self.sync_from_inputs(cx);
+        self.draft.schedule_1.remove(row_index);
+        // The amount input owns its subscription. Removing the parallel input
+        // therefore drops the obsolete listener instead of retaining a stale
+        // row subscription until the entire form view closes.
+        self.row_inputs.remove(row_index);
+        self.finish_schedule_rows_mutation(window, cx);
+    }
+
+    fn finish_schedule_rows_mutation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.draft.recompute(None);
+        let options = available_atc_options(&self.draft.schedule_1);
+        self.atc_select.update(cx, |select, cx| {
+            select.set_items(options, window, cx);
+            select.set_selected_index(None, window, cx);
+        });
+        self.is_validated = false;
+        self.suppressed_sections.insert("schedule_1");
+        self.validation_errors = self.validate_for_submit(cx);
+        cx.notify();
     }
 
     fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -920,6 +1026,41 @@ impl Form2551QView {
         cx.notify();
     }
 
+    fn block_unsafe_legacy_field_preview(
+        &mut self,
+        issue: Legacy2551QPrintIssue,
+        reason: Option<&str>,
+        cx: &mut Context<Self>,
+    ) {
+        let failure_context = reason
+            .map(|reason| format!(" Experimental HTML preview failed: {reason}."))
+            .unwrap_or_default();
+        let (field, issue_kind) = match &issue {
+            Legacy2551QPrintIssue::FieldOverflow { field, .. } => (*field, "overflow"),
+            Legacy2551QPrintIssue::UnsupportedNonEmptyField { field, .. } => {
+                (*field, "unsupported")
+            }
+        };
+        let message = format!(
+            "The legacy preview was blocked because {issue}. Use Experimental HTML Preview to preserve the complete form value.{failure_context} No legacy preview was opened."
+        );
+        tracing::warn!(
+            field,
+            issue_kind,
+            renderer_failure = reason.is_some(),
+            reason_bytes = reason.map_or(0, str::len),
+            "blocked truncating legacy 2551Q field"
+        );
+        self.is_generating_pdf = false;
+        self.status_message = Some(message.clone());
+        cx.emit(Form2551QEvent::PushNotification(
+            "error".to_string(),
+            "Preview blocked to protect form data".to_string(),
+            message,
+        ));
+        cx.notify();
+    }
+
     fn preview_pdf(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         if self.is_generating_pdf {
             return;
@@ -1046,6 +1187,10 @@ impl Form2551QView {
         self.is_generating_pdf = false;
         match legacy_2551q_preview_decision(render_draft.schedule_1.len()) {
             LegacyPreviewDecision::Render => {
+                if let Some(issue) = legacy_2551q_print_issue(&render_draft) {
+                    self.block_unsafe_legacy_field_preview(issue, Some(&reason), cx);
+                    return;
+                }
                 cx.emit(Form2551QEvent::PushNotification(
                     "warning".to_string(),
                     "Using legacy print preview".to_string(),
@@ -1064,6 +1209,10 @@ impl Form2551QView {
             legacy_2551q_preview_decision(render_draft.schedule_1.len())
         {
             self.block_unsafe_legacy_preview(row_count, None, cx);
+            return;
+        }
+        if let Some(issue) = legacy_2551q_print_issue(&render_draft) {
+            self.block_unsafe_legacy_field_preview(issue, None, cx);
             return;
         }
 
@@ -1150,6 +1299,14 @@ impl Form2551QView {
                                         error_bytes = err.to_string().len(),
                                         "PDF viewer failed to open"
                                     );
+                                    let message = "The legacy form was generated, but its preview window could not be opened. Please try again."
+                                        .to_string();
+                                    this.status_message = Some(message.clone());
+                                    cx.emit(Form2551QEvent::PushNotification(
+                                        "error".to_string(),
+                                        "Legacy preview could not open".to_string(),
+                                        message,
+                                    ));
                                 } else {
                                     tracing::info!("PDF viewer opened");
                                 }
@@ -1159,6 +1316,14 @@ impl Form2551QView {
                                     error_bytes = err.to_string().len(),
                                     "PDF generation failed"
                                 );
+                                let message = "The legacy print preview could not be generated. Check that the bundled form resources are available, then try again."
+                                    .to_string();
+                                this.status_message = Some(message.clone());
+                                cx.emit(Form2551QEvent::PushNotification(
+                                    "error".to_string(),
+                                    "Legacy preview generation failed".to_string(),
+                                    message,
+                                ));
                             }
                         }
                     });
@@ -1940,7 +2105,60 @@ impl Render for Form2551QView {
             cx,
         );
 
-        // schedule_one content
+        // Schedule 1 stores only real ATC lines. The print renderer pads the
+        // official page to six visual slots, while this editor lets the user
+        // add up to the six rows verified by the XML submission contract.
+        let schedule_row_count = self.draft.schedule_1.len();
+        let has_selected_atc = self.atc_select.read(cx).selected_value().is_some();
+        let can_add_schedule_row =
+            is_editable && schedule_row_count < MAX_EDITABLE_SCHEDULE_1_ROWS && has_selected_atc;
+        let schedule_row_counter = if schedule_row_count <= MAX_EDITABLE_SCHEDULE_1_ROWS {
+            format!(
+                "{} of {} lines",
+                schedule_row_count, MAX_EDITABLE_SCHEDULE_1_ROWS
+            )
+        } else {
+            format!(
+                "{} lines loaded · submission supports {}",
+                schedule_row_count, MAX_EDITABLE_SCHEDULE_1_ROWS
+            )
+        };
+        let schedule_controls = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_3()
+            .when(is_editable, |controls| {
+                controls
+                    .child(
+                        div().min_w(px(280.)).flex_1().child(
+                            Select::new(&self.atc_select)
+                                .placeholder("Choose an ATC code")
+                                .search_placeholder("Search ATC code or description")
+                                .disabled(schedule_row_count >= MAX_EDITABLE_SCHEDULE_1_ROWS),
+                        ),
+                    )
+                    .child(
+                        gpui_component::button::Button::new("add_schedule_1_row")
+                            .label("Add ATC Line")
+                            .outline()
+                            .disabled(!can_add_schedule_row)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                let selected_atc =
+                                    this.atc_select.read(cx).selected_value().cloned();
+                                if let Some(atc_code) = selected_atc {
+                                    this.add_schedule_row(&atc_code, window, cx);
+                                }
+                            })),
+                    )
+            })
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(schedule_row_counter),
+            );
+
         let schedule_rows = self
             .draft
             .schedule_1
@@ -1970,6 +2188,16 @@ impl Render for Form2551QView {
                 } else {
                     div().child("—").into_any_element()
                 };
+                let action_component = (is_editable && schedule_row_count > 1).then(|| {
+                    gpui_component::button::Button::new(format!("remove_schedule_1_row_{}", i + 1))
+                        .label("Remove")
+                        .small()
+                        .outline()
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.remove_schedule_row(i, window, cx);
+                        }))
+                        .into_any_element()
+                });
                 crate::components::form_parts::ScheduleRowProps {
                     atc: row.atc.clone(),
                     description: row.atc_description.clone(),
@@ -1978,19 +2206,25 @@ impl Render for Form2551QView {
                     tax_due: row.tax_due,
                     error_message: self.get_error(&err_id),
                     input_component,
+                    action_component,
                 }
             })
             .collect::<Vec<_>>();
 
-        let schedule_one_content = crate::components::form_parts::atc_schedule_table(
-            crate::components::form_parts::AtcScheduleTableProps {
-                title: "",
-                amount_col_label: "TAXABLE AMOUNT (₱)",
-                is_mobile,
-                rows: schedule_rows,
-            },
-            cx,
-        );
+        let schedule_one_content = div()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .child(schedule_controls)
+            .child(crate::components::form_parts::atc_schedule_table(
+                crate::components::form_parts::AtcScheduleTableProps {
+                    title: "",
+                    amount_col_label: "TAXABLE AMOUNT (₱)",
+                    is_mobile,
+                    rows: schedule_rows,
+                },
+                cx,
+            ));
 
         let other_tax_credit_description_field = div()
             .flex()

@@ -6,6 +6,7 @@ import {
 } from "@ebirforms/form-contracts";
 import { getFormSpec } from "@ebirforms/form-specs";
 import {
+  AdaptiveCombValue,
   CheckChoice,
   CombValue,
   FolioPage,
@@ -14,6 +15,11 @@ import {
 } from "../components";
 import { paginateSchedule, type SchedulePage } from "../pagination";
 import { bool, cellDecimal, cellText, decimal, integer, text } from "../values";
+import {
+  OFFICIAL_2551Q_BARCODE,
+  OFFICIAL_2551Q_PAGE_TWO_BARCODE,
+  OFFICIAL_2551Q_SEAL
+} from "./official2551QAssets";
 
 type AtcReferenceRow =
   | {
@@ -159,8 +165,7 @@ function PageTwoMasthead({ pageNumber }: { pageNumber: number }) {
         <strong>Quarterly Percentage Tax Return</strong>
       </div>
       <div className="page-two-barcode" aria-label={barcodeText}>
-        <span aria-hidden="true" />
-        <small>{barcodeText}</small>
+        <img src={OFFICIAL_2551Q_PAGE_TWO_BARCODE} alt="" aria-hidden="true" />
       </div>
     </header>
   );
@@ -172,11 +177,7 @@ function PageTwoIdentity({ envelope }: { envelope: RenderEnvelope }) {
     14,
     "taxpayer.tin"
   );
-  const taxpayerName = requireOfficialCellCapacity(
-    envelope.taxpayer.name.toUpperCase(),
-    40,
-    "taxpayer.name on Schedule 1"
-  );
+  const taxpayerName = envelope.taxpayer.name.toUpperCase();
 
   return (
     <section className="page-two-identity" aria-label="Taxpayer identity repeated on Schedule 1">
@@ -185,38 +186,8 @@ function PageTwoIdentity({ envelope }: { envelope: RenderEnvelope }) {
         Taxpayer’s Last Name <em>(if Individual)</em> / Registered Name <em>(if Non-Individual)</em>
       </div>
       <CombValue value={tin} cells={14} />
-      {Array.from(taxpayerName).length <= 26 ? (
-        <CombValue value={taxpayerName} cells={26} />
-      ) : (
-        <CompactCombText value={taxpayerName} cells={26} />
-      )}
+      <AdaptiveCombValue value={taxpayerName} cells={26} />
     </section>
-  );
-}
-
-function CompactCombText({ value, cells }: { value: string; cells: number }) {
-  const characters = Array.from(value);
-  const compactFontSize = Math.max(4, 7 * cells / characters.length);
-  return (
-    <span
-      className="compact-comb-value"
-      data-cell-capacity={cells}
-      data-overflow-mode="compact"
-    >
-      <CombValue value="" cells={cells} />
-      <span
-        className="compact-comb-text"
-        aria-label={value}
-        style={{
-          fontSize: `${compactFontSize}pt`,
-          gridTemplateColumns: `repeat(${characters.length}, minmax(0, 1fr))`
-        }}
-      >
-        {characters.map((character, index) => (
-          <span key={`${index}-${character}`}>{character}</span>
-        ))}
-      </span>
-    </span>
   );
 }
 
@@ -445,7 +416,11 @@ function OfficialPageOne({ envelope }: { envelope: RenderEnvelope }) {
         <div className="bir-use-only">For BIR<br />Use Only</div>
         <div className="bcs-item">BCS/<br />Item</div>
         <div className="government-wordmark">
-          <span className="government-seal" aria-label="Bureau of Internal Revenue seal placeholder">BIR</span>
+          <img
+            className="government-seal"
+            src={OFFICIAL_2551Q_SEAL}
+            alt="Bureau of Internal Revenue seal"
+          />
           <strong>Republic of the Philippines<br />Department of Finance<br />Bureau of Internal Revenue</strong>
         </div>
       </header>
@@ -462,8 +437,7 @@ function OfficialPageOne({ envelope }: { envelope: RenderEnvelope }) {
           <em>Enter all required information in CAPITAL LETTERS using BLACK ink. Mark applicable<br />boxes with an “X”.&nbsp; Two copies MUST be filed with the BIR and one held by the Taxpayer.</em>
         </div>
         <div className="official-barcode" aria-label="2551Q 01/18ENCS P1">
-          <span aria-hidden="true" />
-          <small>2551Q 01/18ENCS P1</small>
+          <img src={OFFICIAL_2551Q_BARCODE} alt="" aria-hidden="true" />
         </div>
       </header>
 
@@ -523,22 +497,12 @@ function BackgroundInformation({
     14,
     "taxpayer.tin"
   ).padEnd(14);
-  const taxpayerName = requireOfficialCellCapacity(
-    envelope.taxpayer.name.toUpperCase(),
-    40,
-    "taxpayer.name"
-  );
-  const address = requireOfficialCellCapacity(
-    envelope.taxpayer.registered_address.toUpperCase(),
-    71,
-    "taxpayer.registered_address"
-  );
-  const [addressLineOne, addressLineTwo] = splitOfficialCombRows(
-    address,
-    40,
-    31,
-    "taxpayer.registered_address"
-  );
+  const taxpayerName = envelope.taxpayer.name.toUpperCase();
+  const address = envelope.taxpayer.registered_address.toUpperCase();
+  const addressFitsOfficialComb = Array.from(address).length <= 71;
+  const [addressLineOne, addressLineTwo] = addressFitsOfficialComb
+    ? splitOfficialCombRows(address, 40, 31, "taxpayer.registered_address")
+    : [address, ""];
 
   return (
     <section className="official-part background-information">
@@ -557,13 +521,25 @@ function BackgroundInformation({
       </div>
       <div className="full-width-field name-field">
         <div className="field-label"><b>8</b> Taxpayer’s Name <em>(Last Name, First Name, Middle Name for Individual OR Registered Name for Non-Individual)</em></div>
-        <CombValue value={taxpayerName} cells={40} />
+        <AdaptiveCombValue value={taxpayerName} cells={40} />
       </div>
       <div className="full-width-field address-field">
         <div className="field-label"><b>9</b> Registered Address <em>(Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)</em></div>
-        <CombValue value={addressLineOne} cells={40} />
+        {addressFitsOfficialComb ? (
+          <CombValue value={addressLineOne} cells={40} />
+        ) : (
+          <AdaptiveCombValue
+            value={addressLineOne}
+            cells={71}
+            className="address-overflow-value"
+          />
+        )}
         <div className="address-continuation">
-          <CombValue value={addressLineTwo} cells={31} />
+          {addressFitsOfficialComb ? (
+            <CombValue value={addressLineTwo} cells={31} />
+          ) : (
+            <span className="adaptive-address-spacer" aria-hidden="true" />
+          )}
           <div className="zip-label"><b>9A</b> ZIP Code</div>
           <CombValue value={envelope.taxpayer.zip_code} cells={4} align="right" />
         </div>
@@ -571,8 +547,8 @@ function BackgroundInformation({
       <div className="contact-email-field">
         <div className="field-label"><b>10</b> Contact Number <em>(Landline/Cellphone No.)</em></div>
         <div className="field-label"><b>11</b> Email Address</div>
-        <CombValue value={envelope.taxpayer.contact_number.replace(/\D/g, "")} cells={12} />
-        <CombValue value={envelope.taxpayer.email.toUpperCase()} cells={28} />
+        <AdaptiveCombValue value={envelope.taxpayer.contact_number.replace(/\D/g, "")} cells={12} />
+        <AdaptiveCombValue value={envelope.taxpayer.email.toUpperCase()} cells={28} />
       </div>
       <div className="tax-relief-field">
         <div className="field-label"><b>12</b> Are you availing of tax relief under<br />Special Law or International Tax Treaty?</div>
@@ -581,7 +557,7 @@ function BackgroundInformation({
           <CheckChoice checked={!bool(envelope, "tax_relief")} label="No" />
         </div>
         <div className="tax-relief-spec"><b>12A</b> If yes, specify</div>
-        <CombValue value={text(envelope, "tax_relief_specification").toUpperCase()} cells={26} />
+        <AdaptiveCombValue value={text(envelope, "tax_relief_specification").toUpperCase()} cells={26} />
       </div>
       <div className="income-rate-field">
         <b>13</b>

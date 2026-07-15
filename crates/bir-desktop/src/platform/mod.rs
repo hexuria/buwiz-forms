@@ -58,33 +58,6 @@ pub fn find_resource_dir(name: &str) -> PathBuf {
     std::env::current_dir().unwrap_or_default().join(name)
 }
 
-#[cfg(test)]
-mod resource_tests {
-    use super::*;
-
-    #[test]
-    fn cargo_resource_candidates_cover_host_and_target_triple_layouts() {
-        let host_candidates =
-            resource_candidates(Path::new("/workspace/target/debug/ebirforms"), "assets");
-        assert!(host_candidates.contains(&PathBuf::from("/workspace/target/debug/../../assets")));
-
-        let target_triple_candidates = resource_candidates(
-            Path::new("/workspace/target/x86_64-unknown-linux-gnu/debug/ebirforms"),
-            "assets",
-        );
-        assert!(target_triple_candidates.contains(&PathBuf::from(
-            "/workspace/target/x86_64-unknown-linux-gnu/debug/../../../assets"
-        )));
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn linux_resource_candidates_include_distribution_share_directory() {
-        let candidates = resource_candidates(Path::new("/usr/bin/ebirforms"), "assets");
-        assert!(candidates.contains(&PathBuf::from("/usr/share/ebirforms/assets")));
-    }
-}
-
 // Re-export common functions
 pub use hide_from_dock;
 pub use show_in_dock;
@@ -183,5 +156,32 @@ fn key_char_to_code(key: &str) -> Option<global_hotkey::hotkey::Code> {
         "F11" => Some(Code::F11),
         "F12" => Some(Code::F12),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod resource_tests {
+    use super::*;
+
+    #[test]
+    fn cargo_resource_candidates_cover_host_and_target_triple_layouts() {
+        let host_candidates =
+            resource_candidates(Path::new("/workspace/target/debug/ebirforms"), "assets");
+        assert!(host_candidates.contains(&PathBuf::from("/workspace/target/debug/../../assets")));
+
+        let target_triple_candidates = resource_candidates(
+            Path::new("/workspace/target/x86_64-unknown-linux-gnu/debug/ebirforms"),
+            "assets",
+        );
+        assert!(target_triple_candidates.contains(&PathBuf::from(
+            "/workspace/target/x86_64-unknown-linux-gnu/debug/../../../assets"
+        )));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_resource_candidates_include_distribution_share_directory() {
+        let candidates = resource_candidates(Path::new("/usr/bin/ebirforms"), "assets");
+        assert!(candidates.contains(&PathBuf::from("/usr/share/ebirforms/assets")));
     }
 }

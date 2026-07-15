@@ -499,6 +499,7 @@ pub struct ScheduleRowProps<'a> {
     pub tax_due: f64,
     pub error_message: Option<&'a String>,
     pub input_component: AnyElement,
+    pub action_component: Option<AnyElement>,
 }
 
 pub struct AtcScheduleTableProps<'a> {
@@ -514,6 +515,7 @@ pub fn atc_schedule_table<V: 'static>(
     cx: &Context<V>,
 ) -> gpui::Div {
     let mut container = div().flex().flex_col().gap_4();
+    let show_actions = props.rows.iter().any(|row| row.action_component.is_some());
 
     if !props.title.is_empty() {
         container = container.child(
@@ -572,11 +574,31 @@ pub fn atc_schedule_table<V: 'static>(
                         .font_weight(FontWeight::BOLD)
                         .text_color(cx.theme().muted_foreground)
                         .child("TAX DUE (₱)"),
-                ),
+                )
+                .when(show_actions, |header| {
+                    header.child(
+                        div()
+                            .w(px(72.))
+                            .text_xs()
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(cx.theme().muted_foreground)
+                            .child("ACTION"),
+                    )
+                }),
         );
     }
 
     for row in props.rows {
+        let ScheduleRowProps {
+            atc,
+            description,
+            amount_label,
+            rate,
+            tax_due,
+            error_message,
+            input_component,
+            action_component,
+        } = row;
         let row_content = if props.is_mobile {
             div()
                 .flex()
@@ -593,13 +615,13 @@ pub fn atc_schedule_table<V: 'static>(
                                 .text_sm()
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(cx.theme().primary)
-                                .child(row.atc.to_string()),
+                                .child(atc),
                         )
                         .child(
                             div()
                                 .text_xs()
                                 .text_color(cx.theme().foreground)
-                                .child(row.description.to_string()),
+                                .child(description),
                         ),
                 )
                 .child(
@@ -612,9 +634,9 @@ pub fn atc_schedule_table<V: 'static>(
                                 .text_xs()
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(cx.theme().muted_foreground)
-                                .child(row.amount_label.to_string()),
+                                .child(amount_label),
                         )
-                        .child(div().w_full().child(row.input_component)),
+                        .child(div().w_full().child(input_component)),
                 )
                 .child(
                     div()
@@ -632,7 +654,7 @@ pub fn atc_schedule_table<V: 'static>(
                             div()
                                 .text_sm()
                                 .text_color(cx.theme().muted_foreground)
-                                .child(row.rate.to_string()),
+                                .child(rate),
                         ),
                 )
                 .child(
@@ -652,9 +674,12 @@ pub fn atc_schedule_table<V: 'static>(
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(cx.theme().primary)
                                 .text_sm()
-                                .child(format!("{:.2}", row.tax_due)),
+                                .child(format!("{tax_due:.2}")),
                         ),
                 )
+                .when_some(action_component, |row, action| {
+                    row.child(div().flex().justify_end().child(action))
+                })
         } else {
             div()
                 .flex()
@@ -667,22 +692,22 @@ pub fn atc_schedule_table<V: 'static>(
                         .text_sm()
                         .font_weight(FontWeight::BOLD)
                         .text_color(cx.theme().primary)
-                        .child(row.atc.to_string()),
+                        .child(atc),
                 )
                 .child(
                     div()
                         .flex_1()
                         .text_xs()
                         .text_color(cx.theme().foreground)
-                        .child(row.description.to_string()),
+                        .child(description),
                 )
-                .child(div().w(px(140.)).child(row.input_component))
+                .child(div().w(px(140.)).child(input_component))
                 .child(
                     div()
                         .w(px(50.))
                         .text_sm()
                         .text_color(cx.theme().muted_foreground)
-                        .child(row.rate.to_string()),
+                        .child(rate),
                 )
                 .child(
                     div()
@@ -690,8 +715,11 @@ pub fn atc_schedule_table<V: 'static>(
                         .font_weight(FontWeight::BOLD)
                         .text_color(cx.theme().primary)
                         .text_sm()
-                        .child(format!("{:.2}", row.tax_due)),
+                        .child(format!("{tax_due:.2}")),
                 )
+                .when_some(action_component, |row, action| {
+                    row.child(div().w(px(72.)).child(action))
+                })
         };
 
         let mut item = div()
@@ -701,7 +729,7 @@ pub fn atc_schedule_table<V: 'static>(
             .border_color(cx.theme().border)
             .child(row_content);
 
-        if let Some(err_msg) = row.error_message {
+        if let Some(err_msg) = error_message {
             item = item.child(
                 div()
                     .text_xs()

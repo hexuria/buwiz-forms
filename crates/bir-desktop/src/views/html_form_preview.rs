@@ -44,7 +44,7 @@ const RENDERER_WEBVIEW_IS_INCOGNITO: bool = true;
 const RENDERER_CONTENT_SECURITY_POLICY: &str = concat!(
     "default-src 'self'; ",
     "connect-src 'none'; ",
-    "img-src 'self'; ",
+    "img-src 'self' data:; ",
     "font-src 'self'; ",
     "style-src 'self' 'unsafe-inline'; ",
     "script-src 'self' ebirforms: http://ebirforms.localhost; ",
@@ -73,6 +73,18 @@ const RENDERER_PERMISSIONS_POLICY: &str = concat!(
 #[derive(Debug, Clone)]
 pub enum HtmlFormPreviewEvent {
     LegacyFallbackRequested(String),
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn emit_legacy_fallback_then_close<T>(reason: String, window: &mut Window, cx: &mut Context<T>)
+where
+    T: EventEmitter<HtmlFormPreviewEvent> + 'static,
+{
+    cx.emit(HtmlFormPreviewEvent::LegacyFallbackRequested(reason));
+    // `Context::emit` is dispatched at the end of GPUI's current effect cycle.
+    // Removing this window synchronously drops the emitter before its parent
+    // can receive the fallback event, so close it only after that event runs.
+    cx.defer_in(window, |_, window, _| window.remove_window());
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -852,8 +864,7 @@ impl HtmlFormPreviewView {
         cx: &mut Context<Self>,
     ) {
         self.status = reason.clone();
-        cx.emit(HtmlFormPreviewEvent::LegacyFallbackRequested(reason));
-        window.remove_window();
+        emit_legacy_fallback_then_close(reason, window, cx);
         cx.notify();
     }
 }
@@ -1085,6 +1096,60 @@ mod tests {
     use super::*;
 
     #[cfg(any(target_os = "macos", target_os = "windows"))]
+    struct FallbackTestEmitter;
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    impl EventEmitter<HtmlFormPreviewEvent> for FallbackTestEmitter {}
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    impl Render for FallbackTestEmitter {
+        fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+            div()
+        }
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    struct FallbackTestObserver {
+        _subscription: gpui::Subscription,
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[gpui::test]
+    fn legacy_fallback_event_is_delivered_before_the_preview_window_closes(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let preview_window = cx.add_window(|_, _| FallbackTestEmitter);
+        let emitter = preview_window
+            .root(cx)
+            .expect("fallback test preview has a root emitter");
+        let event_delivered = Arc::new(AtomicBool::new(false));
+        let delivered_for_subscription = event_delivered.clone();
+        let _observer = cx.new(|cx| {
+            let subscription =
+                cx.subscribe(&emitter, move |_, _, event: &HtmlFormPreviewEvent, _| {
+                    let HtmlFormPreviewEvent::LegacyFallbackRequested(reason) = event;
+                    assert_eq!(reason, "manual fallback");
+                    delivered_for_subscription.store(true, Ordering::SeqCst);
+                });
+            FallbackTestObserver {
+                _subscription: subscription,
+            }
+        });
+
+        preview_window
+            .update(cx, |_, window, cx| {
+                emit_legacy_fallback_then_close("manual fallback".to_string(), window, cx);
+            })
+            .expect("fallback test preview remains open for the event update");
+        cx.run_until_parked();
+
+        assert!(event_delivered.load(Ordering::SeqCst));
+        assert!(preview_window.root(cx).is_err());
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     fn assert_renderer_security_headers(response: &wry::http::Response<Cow<'static, [u8]>>) {
         let csp = response
             .headers()
@@ -1094,7 +1159,8 @@ mod tests {
         assert!(csp.contains("worker-src 'none'"));
         assert!(csp.contains("child-src 'none'"));
         assert!(csp.contains("frame-ancestors 'none'"));
-        assert!(!csp.contains("data:"));
+        assert!(csp.contains("img-src 'self' data:"));
+        assert!(!csp.contains("script-src 'self' data:"));
         let permissions_policy = response
             .headers()
             .get("permissions-policy")
@@ -1165,7 +1231,7 @@ mod tests {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     #[test]
     fn native_print_requires_a_nonce_bound_renderer_preflight() {
-        assert!(RENDERER_WEBVIEW_IS_INCOGNITO);
+        assert!(std::hint::black_box(RENDERER_WEBVIEW_IS_INCOGNITO));
         let script = native_print_preflight_script(42);
         assert!(script.contains("prepareEbirFormForNativePrint"));
         assert!(script.contains("(42)"));

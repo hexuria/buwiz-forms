@@ -116,19 +116,19 @@ export function assertRenderEnvelope(value: unknown): asserts value is RenderEnv
     stringAt(taxpayer[key], `envelope.taxpayer.${key}`);
   }
 
-  // These are renderer safety capacities, not silent truncation rules. Values
-  // that cannot fit the official fixed cells must fail at the untrusted
-  // WebView boundary before React starts laying out a printable return.
+  // Fixed identifier fields remain exact. Human-readable profile fields have
+  // larger defensive limits because the renderer switches from official comb
+  // cells to an unclipped plain-text box when their values do not fit.
   maximumCharactersAt(
     stringAt(taxpayer.tin, "envelope.taxpayer.tin").replace(/\D/g, ""),
     14,
     "envelope.taxpayer.tin"
   );
-  maximumCharactersAt(taxpayer.name, 40, "envelope.taxpayer.name");
+  maximumCharactersAt(taxpayer.name, 160, "envelope.taxpayer.name");
   maximumCharactersAt(taxpayer.rdo_code, 3, "envelope.taxpayer.rdo_code");
   maximumCharactersAt(
     taxpayer.registered_address,
-    71,
+    320,
     "envelope.taxpayer.registered_address"
   );
   maximumCharactersAt(taxpayer.zip_code, 4, "envelope.taxpayer.zip_code");
@@ -144,10 +144,10 @@ export function assertRenderEnvelope(value: unknown): asserts value is RenderEnv
   }
   maximumCharactersAt(
     contactNumber.replace(/\D/g, ""),
-    12,
+    32,
     "envelope.taxpayer.contact_number"
   );
-  maximumCharactersAt(taxpayer.email, 28, "envelope.taxpayer.email");
+  maximumCharactersAt(taxpayer.email, 254, "envelope.taxpayer.email");
 
   const period = objectAt(envelope.period, "envelope.period");
   integerAt(period.taxable_year, "envelope.period.taxable_year");
@@ -230,7 +230,7 @@ function assert2551QEnvelope(fields: JsonObject, schedules: unknown[], period: J
 
   maximumCharactersAt(
     renderText(fields.tax_relief_specification),
-    26,
+    160,
     "envelope.fields.tax_relief_specification.value"
   );
 

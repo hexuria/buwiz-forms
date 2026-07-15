@@ -106,6 +106,96 @@ pub enum PrintError {
     EmbeddedUnavailable(String),
     #[error("preview export failed: {0}")]
     Preview(String),
+    #[error("legacy 2551Q preview would omit form data: {0}")]
+    UnsafeLegacy2551Q(Legacy2551QPrintIssue),
+}
+
+/// A field that the snapshot-based 2551Q renderer cannot reproduce without
+/// dropping data. The semantic HTML renderer has adaptive text boxes for these
+/// cases, but the legacy path must fail closed until it can do the same.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Legacy2551QPrintIssue {
+    FieldOverflow {
+        field: &'static str,
+        label: &'static str,
+        character_count: usize,
+        capacity: usize,
+    },
+    UnsupportedNonEmptyField {
+        field: &'static str,
+        label: &'static str,
+    },
+}
+
+impl std::fmt::Display for Legacy2551QPrintIssue {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::FieldOverflow {
+                label,
+                character_count,
+                capacity,
+                ..
+            } => write!(
+                formatter,
+                "{label} has {character_count} characters, but the legacy form has capacity for {capacity}"
+            ),
+            Self::UnsupportedNonEmptyField { label, .. } => {
+                write!(formatter, "the legacy form does not render {label}")
+            }
+        }
+    }
+}
+
+/// Return the first field that would be truncated or omitted by the legacy
+/// snapshot-overlay renderer. Page 2 has the tightest taxpayer-name field, so
+/// its 26-character capacity governs the repeated name on both pages.
+pub fn legacy_2551q_print_issue(draft: &Form2551QDraft) -> Option<Legacy2551QPrintIssue> {
+    for (field, label, value, capacity) in [
+        (
+            "taxpayer_name",
+            "the taxpayer name",
+            draft.taxpayer_name.as_str(),
+            26,
+        ),
+        (
+            "registered_address",
+            "the registered address",
+            draft.registered_address.as_str(),
+            71,
+        ),
+        (
+            "contact_number",
+            "the contact number",
+            draft.contact_number.as_str(),
+            12,
+        ),
+        ("email", "the email address", draft.email.as_str(), 28),
+    ] {
+        let character_count = value.chars().count();
+        if character_count > capacity {
+            return Some(Legacy2551QPrintIssue::FieldOverflow {
+                field,
+                label,
+                character_count,
+                capacity,
+            });
+        }
+    }
+
+    if draft.tax_relief && !draft.tax_relief_specification.trim().is_empty() {
+        return Some(Legacy2551QPrintIssue::UnsupportedNonEmptyField {
+            field: "tax_relief_specification",
+            label: "Item 12A tax-relief specification text",
+        });
+    }
+    if !draft.other_tax_credit_description.trim().is_empty() {
+        return Some(Legacy2551QPrintIssue::UnsupportedNonEmptyField {
+            field: "other_tax_credit_description",
+            label: "Item 17 other-credit specification text",
+        });
+    }
+
+    None
 }
 
 pub trait TypstCompiler {
@@ -185,6 +275,9 @@ pub fn render_2551q_flat(
     output_dir: impl Into<PathBuf>,
     formtypes_dir: Option<PathBuf>,
 ) -> Result<PrintResult, PrintError> {
+    if let Some(issue) = legacy_2551q_print_issue(draft) {
+        return Err(PrintError::UnsafeLegacy2551Q(issue));
+    }
     let mut req = PrintRequest::new(FORM_2551Q_ID, draft.to_bir_field_map(), output_dir);
     if let Some(dir) = formtypes_dir {
         req = req.with_formtypes_dir(dir);
@@ -610,6 +703,26 @@ fn normalize_decimal_value(value: &str) -> String {
     }
 }
 
+fn byte_index_after_chars(value: &str, character_count: usize) -> usize {
+    value
+        .char_indices()
+        .nth(character_count)
+        .map_or(value.len(), |(index, _)| index)
+}
+
+fn text_field_consumed_bytes(value: &str, capacity: usize) -> usize {
+    if capacity >= value.chars().count() {
+        return value.len();
+    }
+
+    let boundary = byte_index_after_chars(value, capacity);
+    let slice = &value[..boundary];
+    match slice.rfind(' ') {
+        Some(position) if position > 0 => position + 1,
+        _ => boundary,
+    }
+}
+
 /// Calculate how many characters a field consumes from the input string.
 fn consumed_chars(field: &FormField, value: &str, box_idx: usize) -> usize {
     if value.is_empty() {
@@ -632,22 +745,14 @@ fn consumed_chars(field: &FormField, value: &str, box_idx: usize) -> usize {
         }
         FieldKind::Int => {
             let capacity = field.char_capacity().unwrap_or(value.len());
-            value.len().min(capacity)
+            byte_index_after_chars(value, capacity)
         }
         FieldKind::Char => {
             let capacity = field.char_capacity().unwrap_or(value.len());
             if field.cell_w.is_some() {
-                value.len().min(capacity)
+                byte_index_after_chars(value, capacity)
             } else {
-                if capacity >= value.len() {
-                    value.len()
-                } else {
-                    let slice = &value[..capacity];
-                    match slice.rfind(' ') {
-                        Some(pos) if pos > 0 => pos + 1,
-                        _ => capacity,
-                    }
-                }
+                text_field_consumed_bytes(value, capacity)
             }
         }
     }
@@ -699,10 +804,11 @@ fn render_field_spanning(
                 }
             } else {
                 // Render as text
-                let chunk = if capacity >= value.len() {
+                let chunk = if capacity >= value.chars().count() {
                     value.to_string()
                 } else {
-                    let slice = &value[..capacity];
+                    let boundary = byte_index_after_chars(value, capacity);
+                    let slice = &value[..boundary];
                     match slice.rfind(' ') {
                         Some(pos) if pos > 0 => slice[..pos].to_string(),
                         _ => slice.to_string(),
@@ -1401,6 +1507,69 @@ mod tests {
         assert!(typst.contains("#set page(width: 612pt, height: 936pt, margin: 0pt)"));
         assert!(typst.contains("pages/page1.svg"));
         assert!(typst.contains("pages/page2.svg"));
+    }
+
+    #[test]
+    fn legacy_2551q_preview_fails_closed_before_truncating_text() {
+        let mut draft = sample_draft();
+        draft.taxpayer_name = "N".repeat(27);
+
+        assert_eq!(
+            legacy_2551q_print_issue(&draft),
+            Some(Legacy2551QPrintIssue::FieldOverflow {
+                field: "taxpayer_name",
+                label: "the taxpayer name",
+                character_count: 27,
+                capacity: 26,
+            })
+        );
+
+        let output = tempfile::tempdir().expect("temp dir");
+        let error = render_2551q_print(&draft, output.path(), None)
+            .expect_err("legacy renderer must not truncate a repeated taxpayer name");
+        assert!(matches!(error, PrintError::UnsafeLegacy2551Q(_)));
+    }
+
+    #[test]
+    fn legacy_2551q_preview_rejects_fields_missing_from_the_snapshot_overlay() {
+        let mut tax_relief = sample_draft();
+        tax_relief.tax_relief = true;
+        tax_relief.tax_relief_specification = "Special Law 123".to_string();
+        assert!(matches!(
+            legacy_2551q_print_issue(&tax_relief),
+            Some(Legacy2551QPrintIssue::UnsupportedNonEmptyField {
+                field: "tax_relief_specification",
+                ..
+            })
+        ));
+
+        let mut other_credit = sample_draft();
+        other_credit.other_tax_credit_description = "Validated prior payment".to_string();
+        assert!(matches!(
+            legacy_2551q_print_issue(&other_credit),
+            Some(Legacy2551QPrintIssue::UnsupportedNonEmptyField {
+                field: "other_tax_credit_description",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn legacy_text_spanning_uses_unicode_character_boundaries() {
+        let layout = load_formtype(FORM_2551Q_ID).expect("formtype should load");
+        let field = layout
+            .fields
+            .iter()
+            .find(|field| field.key == "frm2551Qv2018:txtPg2TaxpayerName")
+            .expect("page-two taxpayer name field");
+        let value = "Ñ".repeat(26);
+
+        let rendered = render_field_spanning(field, &value, 0)
+            .expect("unicode field should render")
+            .expect("unicode field should produce Typst");
+
+        assert!(rendered.contains(&value));
+        assert_eq!(consumed_chars(field, &value, 0), value.len());
     }
 
     #[test]

@@ -18,7 +18,7 @@ SPEC.loader.exec_module(verifier)
 
 
 CSP = (
-    "default-src 'self'; connect-src 'none'; img-src 'self'; "
+    "default-src 'self'; connect-src 'none'; img-src 'self' data:; "
     "font-src 'self'; style-src 'self' 'unsafe-inline'; "
     "script-src 'self' ebirforms: http://ebirforms.localhost; "
     "object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; "
@@ -73,6 +73,7 @@ class VerifyOfflineFormRendererTests(unittest.TestCase):
         self.assertEqual(first["scope"], "static_source_bundle_inspection")
         self.assertTrue(first["policy"]["complete_bundle_reachability_required"])
         self.assertFalse(first["policy"]["runtime_raster_assets_allowed"])
+        self.assertTrue(first["policy"]["embedded_data_images_allowed"])
         self.assertEqual(
             [item["path"] for item in first["files"]],
             [
@@ -266,6 +267,50 @@ class VerifyOfflineFormRendererTests(unittest.TestCase):
                 errors,
                 f"forbidden embedded data-image runtime artwork in {relative}",
             )
+
+    def test_accepts_only_a_reviewed_embedded_discrete_image(self) -> None:
+        self.write_valid_bundle()
+        payload = b"reviewed-discrete-artwork"
+        digest = hashlib.sha256(payload).hexdigest()
+        original = verifier.AUTHORIZED_EMBEDDED_IMAGE_SHA256
+        verifier.AUTHORIZED_EMBEDDED_IMAGE_SHA256 = original | {digest}
+        self.addCleanup(
+            lambda: setattr(verifier, "AUTHORIZED_EMBEDDED_IMAGE_SHA256", original)
+        )
+        import base64
+
+        encoded = base64.b64encode(payload).decode("ascii")
+        (self.assets / "app.js").write_text(
+            f'const artwork="data:image/png;base64,{encoded}";\n',
+            encoding="utf-8",
+        )
+
+        self.assertEqual(verifier.verify_renderer(self.root), [])
+
+    def test_reviewed_image_cannot_mask_an_unreviewed_data_uri(self) -> None:
+        self.write_valid_bundle()
+        payload = b"reviewed-discrete-artwork"
+        digest = hashlib.sha256(payload).hexdigest()
+        original = verifier.AUTHORIZED_EMBEDDED_IMAGE_SHA256
+        verifier.AUTHORIZED_EMBEDDED_IMAGE_SHA256 = original | {digest}
+        self.addCleanup(
+            lambda: setattr(verifier, "AUTHORIZED_EMBEDDED_IMAGE_SHA256", original)
+        )
+        import base64
+
+        encoded = base64.b64encode(payload).decode("ascii")
+        (self.assets / "app.js").write_text(
+            f'const artwork="data:image/png;base64,{encoded}";\n'
+            'const hidden="data:image/svg+xml,%3Csvg%3E";\n',
+            encoding="utf-8",
+        )
+
+        errors = verifier.verify_renderer(self.root)
+
+        self.assert_has_error(
+            errors,
+            "only reviewed base64 image payloads are allowed",
+        )
 
     def test_rejects_html_entity_encoded_data_image_reference(self) -> None:
         self.write_valid_bundle()

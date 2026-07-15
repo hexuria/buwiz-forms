@@ -108,6 +108,36 @@ export function CombValue({
   );
 }
 
+export function AdaptiveCombValue({
+  value,
+  cells,
+  align = "left",
+  className = ""
+}: {
+  value: string;
+  cells: number;
+  align?: "left" | "right";
+  className?: string;
+}) {
+  const characters = Array.from(value);
+  if (characters.length <= cells) {
+    return <CombValue value={value} cells={cells} align={align} />;
+  }
+
+  const fontSize = Math.max(4, Math.min(7.2, 7.2 * cells / characters.length));
+  return (
+    <span
+      className={`adaptive-plain-value ${className}`.trim()}
+      data-cell-capacity={cells}
+      data-overflow-mode="plain"
+      aria-label={value}
+      style={{ fontSize: `${fontSize}pt` }}
+    >
+      {value}
+    </span>
+  );
+}
+
 export function combCharacters(
   value: string,
   cells: number,

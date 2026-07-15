@@ -9,6 +9,8 @@ packaged-runtime promotion gate.
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import hashlib
 import json
 import re
@@ -60,7 +62,7 @@ ALLOWED_RUNTIME_SUFFIXES = {
 REQUIRED_CSP_DIRECTIVES = {
     "default-src": {"'self'"},
     "connect-src": {"'none'"},
-    "img-src": {"'self'"},
+    "img-src": {"'self'", "data:"},
     "font-src": {"'self'"},
     "style-src": {"'self'", "'unsafe-inline'"},
     "script-src": {"'self'", "ebirforms:", "http://ebirforms.localhost"},
@@ -104,11 +106,23 @@ RASTER_SUFFIXES = {
     ".bmp",
     ".ico",
 }
-# Runtime raster assets are not needed by the semantic 2551Q renderer.  Keep
-# this allowlist empty until each owned image is reviewed and pinned here.
+# Full-page/runtime raster files remain forbidden. These three reviewed hashes
+# are discrete embedded 2551Q artwork only: the government seal and the static
+# page-specific form barcodes recorded in the visual-reference manifest.
 AUTHORIZED_RUNTIME_RASTER_SHA256: frozenset[str] = frozenset()
+AUTHORIZED_EMBEDDED_IMAGE_SHA256: frozenset[str] = frozenset(
+    {
+        "d532deb6eff07393f0dd2360526805bbcf2680c727baedbb4510ed63c58fb3f4",
+        "ddb2025f8630575db15d43b855511f50821b25bc5fa05f767b2439bd9bc45279",
+        "dd1e8dd49782640a51fb7a69bae6662ca595f73384c371d9344a1448e3530e77",
+    }
+)
 EMBEDDED_IMAGE_DATA = re.compile(
     rb"data\s*:\s*image(?:/|%2f)",
+    re.IGNORECASE,
+)
+EMBEDDED_BASE64_IMAGE = re.compile(
+    rb"data:image/[a-z0-9.+-]+;base64,([a-z0-9+/=]+)",
     re.IGNORECASE,
 )
 
@@ -341,10 +355,31 @@ def _scan_forbidden_runtime_sources(root: Path, files: list[Path]) -> list[str]:
             errors.append(f"forbidden runtime artwork {relative}: {reason}")
 
         payload = raw_payload.lower()
-        if EMBEDDED_IMAGE_DATA.search(raw_payload):
-            errors.append(
-                f"forbidden embedded data-image runtime artwork in {relative}"
-            )
+        # Validate every data-image marker independently. Looking only for any
+        # base64 match would let an authorized image mask a second unsupported
+        # data URI in the same bundle file.
+        for marker in EMBEDDED_IMAGE_DATA.finditer(raw_payload):
+            match = EMBEDDED_BASE64_IMAGE.match(raw_payload, marker.start())
+            if match is None:
+                errors.append(
+                    f"forbidden embedded data-image runtime artwork in {relative}: "
+                    "only reviewed base64 image payloads are allowed"
+                )
+                continue
+            try:
+                decoded = base64.b64decode(match.group(1), validate=True)
+            except (ValueError, binascii.Error):
+                errors.append(
+                    f"forbidden embedded data-image runtime artwork in {relative}: "
+                    "invalid base64 payload"
+                )
+                continue
+            embedded_digest = hashlib.sha256(decoded).hexdigest()
+            if embedded_digest not in AUTHORIZED_EMBEDDED_IMAGE_SHA256:
+                errors.append(
+                    f"forbidden embedded data-image runtime artwork in {relative}: "
+                    f"unreviewed payload sha256 {embedded_digest}"
+                )
         for marker in sorted(DEV_ONLY_SAMPLE_MARKERS):
             if marker in payload:
                 errors.append(
@@ -540,7 +575,10 @@ def build_evidence(renderer_dir: Path, errors: list[str]) -> dict:
             "external_document_references_allowed": False,
             "connect_src": ["'none'"],
             "full_page_reference_artwork_allowed": False,
-            "embedded_data_images_allowed": False,
+            "embedded_data_images_allowed": True,
+            "embedded_image_sha256_allowlist": sorted(
+                AUTHORIZED_EMBEDDED_IMAGE_SHA256
+            ),
             "runtime_raster_assets_allowed": False,
             "runtime_raster_sha256_allowlist": sorted(
                 AUTHORIZED_RUNTIME_RASTER_SHA256
