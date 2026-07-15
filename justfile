@@ -45,24 +45,24 @@ help:
     @just --list
 
 # Run the app locally for development (with dev-tools + layout-editor)
-run:
-    cargo run --bin bir --features dev-tools,layout-editor
+run: build-form-renderer
+    cargo run --locked --bin bir --features dev-tools,layout-editor
 
 # Run code formatting, linting, and type checking
 [unix]
 check:
     cargo fmt --all
-    cargo check --workspace
-    cargo clippy --workspace -- -D warnings
+    cargo check --locked --workspace
+    cargo clippy --locked --workspace -- -D warnings
 
 [windows]
 check:
     #!pwsh -NoProfile
     cargo fmt --all
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    cargo check --workspace
+    cargo check --locked --workspace
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    cargo clippy --workspace -- -D warnings
+    cargo clippy --locked --workspace -- -D warnings
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Check for vulnerability advisories (requires: cargo install cargo-audit)
@@ -121,7 +121,42 @@ unused:
 
 # Run all unit and integration tests
 test:
-    cargo test --workspace
+    cargo test --locked --workspace
+
+# Build the tracked-contract, local-only HTML renderer before any package copies
+# the assets directory. The generated bundle stays ignored, so clean packages
+# cannot accidentally reuse stale developer output.
+build-form-renderer:
+    npm ci
+    npm run contracts:check
+    npm run audit:forms:migration
+    npm run build:forms
+    npm run verify:forms:offline
+
+# Package the exact, checksum-verified Typst release used by legacy preview.
+# macOS needs a universal helper because the application binary is universal.
+_prepare-pinned-typst-mac:
+    rm -rf target/pinned-typst/macos
+    node scripts/run_python.mjs scripts/fetch_pinned_typst.py --target aarch64-apple-darwin --output target/pinned-typst/macos/aarch64/typst
+    node scripts/run_python.mjs scripts/fetch_pinned_typst.py --target x86_64-apple-darwin --output target/pinned-typst/macos/x86_64/typst
+    mkdir -p target/pinned-typst/macos/universal
+    lipo -create target/pinned-typst/macos/aarch64/typst target/pinned-typst/macos/x86_64/typst -output target/pinned-typst/macos/universal/typst
+    chmod +x target/pinned-typst/macos/universal/typst
+    @test "$(target/pinned-typst/macos/universal/typst --version | awk '{print $2}')" = "0.13.1"
+    @lipo -archs target/pinned-typst/macos/universal/typst | grep -q arm64
+    @lipo -archs target/pinned-typst/macos/universal/typst | grep -q x86_64
+
+_prepare-pinned-typst-windows:
+    #!pwsh -NoProfile
+    $ErrorActionPreference = 'Stop'
+    node scripts/run_python.mjs scripts/fetch_pinned_typst.py --target x86_64-pc-windows-msvc --output target/pinned-typst/windows/typst.exe
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    $version = & "target/pinned-typst/windows/typst.exe" --version
+    if ($version -notmatch '^typst 0\.13\.1(?:\s|$)') { throw "Unexpected Typst version: $version" }
+
+_prepare-pinned-typst-linux:
+    node scripts/run_python.mjs scripts/fetch_pinned_typst.py --target x86_64-unknown-linux-musl --output target/pinned-typst/linux/typst
+    @test "$(target/pinned-typst/linux/typst --version | awk '{print $2}')" = "0.13.1"
 
 # Install a built package (auto-detects available artifacts)
 # Usage: just install [format]
@@ -273,7 +308,7 @@ app *args="": bump-build
     fi
 
 # Build the Inno Setup executable installer (Windows only)
-exe *args="":
+exe *args="": build-form-renderer _prepare-pinned-typst-windows
     #!pwsh -NoProfile
     $ErrorActionPreference = 'Stop'
     
@@ -285,9 +320,9 @@ exe *args="":
     
     if ($features.Count -gt 0) {
         $featureList = $features -join ','
-        cargo build --release --target {{WIN_TARGET}} --features $featureList
+        cargo build --locked --release --target {{WIN_TARGET}} --features $featureList
     } else {
-        cargo build --release --target {{WIN_TARGET}}
+        cargo build --locked --release --target {{WIN_TARGET}}
     }
     if ($LASTEXITCODE -ne 0) {
         Write-Error "❌ cargo build failed (exit code $LASTEXITCODE). Aborting EXE packaging."
@@ -296,15 +331,6 @@ exe *args="":
     
     $VERSION = "{{VERSION}}"
     
-    # Bundle Typst binary
-    $TYPST_URL = "https://github.com/typst/typst/releases/latest/download/typst-x86_64-pc-windows-msvc.zip"
-    $TYPST_ZIP = "target/typst.zip"
-    if (-not (Test-Path "target/typst-temp/typst-x86_64-pc-windows-msvc/typst.exe")) {
-        Write-Host "Downloading typst for bundling..."
-        Invoke-WebRequest -Uri $TYPST_URL -OutFile $TYPST_ZIP
-        Expand-Archive -Path $TYPST_ZIP -DestinationPath "target/typst-temp" -Force
-    }
-
     $ISCC = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
     if (Test-Path $ISCC) {
         Write-Host "Building installer with Inno Setup..."
@@ -315,10 +341,15 @@ exe *args="":
         exit 1
     }
 
-# Build the MSIX package for the Microsoft Store (Windows only)
-msix *args="":
+# Build a Store-only MSIX candidate (Windows only).
+# This artifact is intentionally excluded from public GitHub releases. Store
+# promotion remains blocked until the manifest artwork dimensions and packaged
+# MSVC runtime behavior pass their separate Windows certification checks.
+msix *args="": build-form-renderer _prepare-pinned-typst-windows
     #!pwsh -NoProfile
     $ErrorActionPreference = 'Stop'
+    Write-Warning "STORE-ONLY MSIX candidate; not a public GitHub release artifact"
+    Write-Warning "BLOCKED: certify manifest artwork and packaged MSVC runtime behavior before Store submission"
     
     $features = @()
     foreach ($arg in '{{args}}'.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)) {
@@ -328,9 +359,9 @@ msix *args="":
     
     if ($features.Count -gt 0) {
         $featureList = $features -join ','
-        cargo build --release --target {{WIN_TARGET}} --features $featureList
+        cargo build --locked --release --target {{WIN_TARGET}} --features $featureList
     } else {
-        cargo build --release --target {{WIN_TARGET}}
+        cargo build --locked --release --target {{WIN_TARGET}}
     }
     if ($LASTEXITCODE -ne 0) {
         Write-Error "❌ cargo build failed (exit code $LASTEXITCODE). Aborting MSIX packaging."
@@ -345,8 +376,9 @@ msix *args="":
     New-Item -ItemType Directory -Force -Path $MSIX_DIR | Out-Null
     Copy-Item "target/{{WIN_TARGET}}/release/bir.exe" "$MSIX_DIR\"
 
-    # OpenSSL is statically compiled (vendored), so no need to package DLLs.
-    # We still package the MSVC runtime dependency DLLs just in case, though the AppxManifest PackageDependency handles it for the Store.
+    # OpenSSL is statically compiled (vendored), so no OpenSSL DLL is needed.
+    # These runner-local MSVC DLL copies are diagnostic only. They do not close
+    # the Store runtime-certification blocker documented above.
     $vcr = "$env:WINDIR\System32\vcruntime140.dll"
     if (Test-Path $vcr) { Copy-Item $vcr "$MSIX_DIR\" }
     $msvcp = "$env:WINDIR\System32\msvcp140.dll"
@@ -355,13 +387,7 @@ msix *args="":
     Copy-Item "assets" "$MSIX_DIR\assets" -Recurse
     if (Test-Path "formtypes") { Copy-Item "formtypes" "$MSIX_DIR\formtypes" -Recurse }
 
-    # Bundle Typst binary
-    $TYPST_URL = "https://github.com/typst/typst/releases/latest/download/typst-x86_64-pc-windows-msvc.zip"
-    $TYPST_ZIP = "target/typst.zip"
-    Write-Host "Downloading typst for bundling..."
-    Invoke-WebRequest -Uri $TYPST_URL -OutFile $TYPST_ZIP
-    Expand-Archive -Path $TYPST_ZIP -DestinationPath "target/typst-temp" -Force
-    Copy-Item "target/typst-temp/typst-x86_64-pc-windows-msvc/typst.exe" "$MSIX_DIR\"
+    Copy-Item "target/pinned-typst/windows/typst.exe" "$MSIX_DIR\"
     
     # Use the shared BUILD_NUMBER from the justfile (synced with App Store Connect via bump-build).
     # This ensures macOS and Windows builds share the same build counter.
@@ -398,7 +424,8 @@ msix *args="":
         Write-Warning "⚠️ MakeAppx.exe not found. Install Windows SDK to build MSIX."
     }
 
-# Sign the MSIX package with a local development certificate for local testing
+# Sign the Store-identity MSIX with a local development certificate for
+# sideload testing only. This does not make it a public release artifact.
 sign-dev:
     #!pwsh -NoProfile
     $ErrorActionPreference = 'Stop'
@@ -497,7 +524,7 @@ clean:
 
 # --- Hidden OS-specific packaging tasks ---
 
-_package-mac args="":
+_package-mac args="": build-form-renderer _prepare-pinned-typst-mac
     #!/usr/bin/env bash
     set -e
     FEATURES=""
@@ -510,9 +537,9 @@ _package-mac args="":
     FEATURES_FLAG=""
     if [ -n "$FEATURES" ]; then FEATURES_FLAG="--features $FEATURES"; fi
     echo "Building for ARM64..."
-    cargo build --release --target {{MAC_ARM_TARGET}} $FEATURES_FLAG
+    cargo build --locked --release --target {{MAC_ARM_TARGET}} $FEATURES_FLAG
     echo "Building for x86_64..."
-    cargo build --release --target {{MAC_X86_TARGET}} $FEATURES_FLAG
+    cargo build --locked --release --target {{MAC_X86_TARGET}} $FEATURES_FLAG
     mkdir -p {{RELEASE_DIR}}
     echo "Creating universal binary (lipo)..."
     lipo -create target/{{MAC_ARM_TARGET}}/release/bir target/{{MAC_X86_TARGET}}/release/bir -output {{RELEASE_DIR}}/bir
@@ -520,7 +547,7 @@ _package-mac args="":
     rm -rf "{{MAC_APP}}"
     mkdir -p "{{MAC_APP}}/Contents/MacOS" "{{MAC_APP}}/Contents/Resources"
     cp {{RELEASE_DIR}}/bir "{{MAC_APP}}/Contents/MacOS/"
-    if command -v typst >/dev/null 2>&1; then cp $(which typst) "{{MAC_APP}}/Contents/MacOS/"; fi
+    cp target/pinned-typst/macos/universal/typst "{{MAC_APP}}/Contents/MacOS/"
     cp -R assets "{{MAC_APP}}/Contents/Resources/"
     rm -rf "{{MAC_APP}}/Contents/Resources/assets/macos"
     cp assets/AppIcon.icns "{{MAC_APP}}/Contents/Resources/"
@@ -538,11 +565,33 @@ _package-mac args="":
     fi
     touch "{{MAC_APP}}"
     
-    echo "Ad-hoc codesigning executables..."
+    echo "Ad-hoc codesigning direct-download executables..."
     if [ -f "{{MAC_APP}}/Contents/MacOS/typst" ]; then
         codesign --force --options runtime --entitlements assets/macos/typst.entitlements.dev.plist --sign "-" "{{MAC_APP}}/Contents/MacOS/typst"
     fi
+    # Sign the outer application last so the nested Typst signature is sealed
+    # without being rewritten by recursive signing.
     codesign --force --options runtime --entitlements entitlements.dev.plist --sign "-" "{{MAC_APP}}"
+
+    if [ -f "{{MAC_APP}}/Contents/MacOS/typst" ]; then
+        TYPST_ENTITLEMENTS="$(mktemp)"
+        trap 'rm -f "$TYPST_ENTITLEMENTS"' EXIT
+        codesign --verify --strict --verbose=2 "{{MAC_APP}}/Contents/MacOS/typst"
+        codesign --display --xml --entitlements "$TYPST_ENTITLEMENTS" "{{MAC_APP}}/Contents/MacOS/typst"
+        plutil -lint "$TYPST_ENTITLEMENTS"
+        if /usr/libexec/PlistBuddy -c "Print :com.apple.security.app-sandbox" "$TYPST_ENTITLEMENTS" >/dev/null 2>&1; then
+            echo "Direct-download Typst helper must not be sandboxed" >&2
+            exit 1
+        fi
+        if /usr/libexec/PlistBuddy -c "Print :com.apple.security.inherit" "$TYPST_ENTITLEMENTS" >/dev/null 2>&1; then
+            echo "Direct-download Typst helper must not inherit sandbox entitlements" >&2
+            exit 1
+        fi
+        test "$("{{MAC_APP}}/Contents/MacOS/typst" --version | awk '{print $2}')" = "0.13.1"
+        rm -f "$TYPST_ENTITLEMENTS"
+        trap - EXIT
+    fi
+    codesign --verify --strict --verbose=2 "{{MAC_APP}}"
 
     echo "✅ {{MAC_APP}} created and codesigned"
     
@@ -555,7 +604,7 @@ _package-mac args="":
         cd {{RELEASE_DIR}} && zip -r "{{APP_NAME}}-macOS-{{VERSION}}.zip" "{{APP_NAME}}.app"; \
     fi
 
-_package-mac-appstore args="":
+_package-mac-appstore args="": build-form-renderer _prepare-pinned-typst-mac
     #!/usr/bin/env bash
     set -e
     CERT="${CODESIGN_IDENTITY:--}"
@@ -571,9 +620,9 @@ _package-mac-appstore args="":
     FEATURES_FLAG="--features $FEATURES"
     
     echo "Building for ARM64..."
-    cargo build --release --target {{MAC_ARM_TARGET}} $FEATURES_FLAG
+    cargo build --locked --release --target {{MAC_ARM_TARGET}} $FEATURES_FLAG
     echo "Building for x86_64..."
-    cargo build --release --target {{MAC_X86_TARGET}} $FEATURES_FLAG
+    cargo build --locked --release --target {{MAC_X86_TARGET}} $FEATURES_FLAG
     
     mkdir -p {{RELEASE_DIR}}
     echo "Creating universal binary (lipo)..."
@@ -583,8 +632,7 @@ _package-mac-appstore args="":
     rm -rf "{{MAC_APP}}"
     mkdir -p "{{MAC_APP}}/Contents/MacOS" "{{MAC_APP}}/Contents/Resources"
     cp {{RELEASE_DIR}}/bir "{{MAC_APP}}/Contents/MacOS/"
-    
-    if command -v typst >/dev/null 2>&1; then cp $(which typst) "{{MAC_APP}}/Contents/MacOS/"; fi
+    cp target/pinned-typst/macos/universal/typst "{{MAC_APP}}/Contents/MacOS/"
     cp -R assets "{{MAC_APP}}/Contents/Resources/"
     rm -rf "{{MAC_APP}}/Contents/Resources/assets/macos"
     cp assets/AppIcon.icns "{{MAC_APP}}/Contents/Resources/"
@@ -646,7 +694,7 @@ _package-mac-appstore args="":
 
 # NOTE: _package-win was removed — use 'just exe' or 'just msix' instead.
 
-_package-linux args="":
+_package-linux args="": build-form-renderer _prepare-pinned-typst-linux
     #!/usr/bin/env bash
     set -e
     FEATURES=""
@@ -658,16 +706,16 @@ _package-linux args="":
     done
     FEATURES_FLAG=""
     if [ -n "$FEATURES" ]; then FEATURES_FLAG="--features $FEATURES"; fi
-    cargo build --release --target {{LINUX_TARGET}} $FEATURES_FLAG
+    cargo build --locked --release --target {{LINUX_TARGET}} $FEATURES_FLAG
     mkdir -p {{RELEASE_DIR}}
     if command -v cargo-deb >/dev/null 2>&1; then \
-        cargo deb -p bir-desktop --no-build --target {{LINUX_TARGET}} -o {{RELEASE_DIR}}/{{APP_NAME}}-Linux-x64-{{VERSION}}.deb; \
+        cargo deb --locked -p bir-desktop --no-build --target {{LINUX_TARGET}} -o {{RELEASE_DIR}}/{{APP_NAME}}-Linux-x64-{{VERSION}}.deb; \
         echo "✅ .deb: {{RELEASE_DIR}}/{{APP_NAME}}-Linux-x64-{{VERSION}}.deb"; \
     else \
         echo "⚠️ cargo-deb not found. Falling back to tarball..."; \
         mkdir -p {{RELEASE_DIR}}/{{APP_NAME}}-Linux-{{VERSION}}; \
         cp target/{{LINUX_TARGET}}/release/bir {{RELEASE_DIR}}/{{APP_NAME}}-Linux-{{VERSION}}/; \
-        if command -v typst >/dev/null 2>&1; then cp $(which typst) {{RELEASE_DIR}}/{{APP_NAME}}-Linux-{{VERSION}}/; fi; \
+        cp target/pinned-typst/linux/typst {{RELEASE_DIR}}/{{APP_NAME}}-Linux-{{VERSION}}/; \
         cp -R assets {{RELEASE_DIR}}/{{APP_NAME}}-Linux-{{VERSION}}/; \
         cp -R formtypes {{RELEASE_DIR}}/{{APP_NAME}}-Linux-{{VERSION}}/; \
         if [ "$DEV_MODE" = "true" ] || [ "$DEVELOPER_MODE" = "true" ]; then \

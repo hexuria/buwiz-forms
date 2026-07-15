@@ -21,7 +21,7 @@ WizardStyle=modern
 
 [Files]
 Source: "target\x86_64-pc-windows-msvc\release\bir.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "target\typst-temp\typst-x86_64-pc-windows-msvc\typst.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "target\pinned-typst\windows\typst.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "formtypes\*"; DestDir: "{app}\formtypes"; Flags: ignoreversion recursesubdirs createallsubdirs
 
@@ -34,4 +34,3 @@ Name: "desktopicon"; Description: "Create a &desktop icon"; GroupDescription: "A
 
 [Run]
 Filename: "{win}\explorer.exe"; Parameters: """{app}\bir.exe"""; Description: "Launch eBIRForms"; Flags: nowait postinstall skipifsilent
-

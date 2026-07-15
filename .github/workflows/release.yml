@@ -15,11 +15,139 @@ env:
   GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
 
 jobs:
+  # The public release jobs may consume only this exact, tested tag commit.
+  # A successful branch workflow is not accepted as a substitute because the
+  # tag may point at a different SHA.
+  preflight:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact tagged SHA, version, and lockfiles
+        shell: bash
+        run: |
+          test "$GITHUB_REF_TYPE" = "tag"
+          test "$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{commit}")" = "$GITHUB_SHA"
+          test "$(git tag --points-at "$GITHUB_SHA" --list "$GITHUB_REF_NAME")" = "$GITHUB_REF_NAME"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          git ls-files --error-unmatch Cargo.lock package-lock.json
+
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must use exact vMAJOR.MINOR.PATCH syntax: $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          CARGO_VERSION="$(awk -F '"' '
+            /^\[workspace\.package\]$/ { in_workspace_package = 1; next }
+            in_workspace_package && /^\[/ { exit }
+            in_workspace_package && /^version[[:space:]]*=/ { print $2; exit }
+          ' Cargo.toml)"
+          if [ -z "$CARGO_VERSION" ] || [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
+            echo "Release tag version $TAG_VERSION does not match Cargo workspace version $CARGO_VERSION" >&2
+            exit 1
+          fi
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            libx11-dev \
+            libxcb1-dev \
+            libxcb-render0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev \
+            libwayland-dev \
+            libwayland-client0 \
+            libasound2-dev \
+            libudev-dev \
+            libvulkan-dev \
+            libfontconfig1-dev \
+            libfreetype-dev \
+            libssl-dev \
+            libpolkit-gobject-1-dev \
+            mesa-vulkan-drivers
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install renderer and browser dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Install pinned Typst
+        run: |
+          python3 scripts/fetch_pinned_typst.py \
+            --target x86_64-unknown-linux-musl \
+            --output target/pinned-typst/release-preflight/typst
+          echo "$PWD/target/pinned-typst/release-preflight" >> "$GITHUB_PATH"
+
+      - name: Verify Rust workspace
+        run: |
+          cargo fmt --all -- --check
+          cargo check --locked --workspace
+          cargo clippy --locked --workspace -- -D warnings
+          cargo test --locked --workspace
+
+      - name: Verify renderer contracts, tests, and offline bundle
+        run: |
+          npm run contracts:check
+          cargo run -q --locked -p bir-print --bin generate_render_contract -- --check-visual-references
+          npm run typecheck:forms
+          npm run test:forms
+          python3 -m unittest discover -s scripts/tests -v
+          npm run audit:forms:migration
+          npm run build:forms
+          npm run verify:forms:offline
+
+      - name: Verify renderer geometry on the tagged source
+        env:
+          FORM_VISUAL_MAX_CHANGED_PERCENT: '100'
+        run: npm run test:forms:visual
+
   # ── macOS Universal ───────────────────────────────────────────────────────
   build-macos:
+    needs: preflight
     runs-on: macos-14  # M1 runner — can build both arm64 and x86_64
     steps:
       - uses: actions/checkout@v4
+
+      - name: Require macOS signing and notarization inputs
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          for name in APPLE_CERTIFICATE_P12 APPLE_CERTIFICATE_PASSWORD APPLE_TEAM_ID APPLE_ID APPLE_APP_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "Missing required macOS release secret: $name" >&2
+              exit 1
+            fi
+          done
 
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -29,11 +157,48 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Build local HTML renderer
+        run: |
+          npm ci
+          npm run contracts:check
+          npm run audit:forms:migration
+          npm run build:forms
+          npm run verify:forms:offline
+
       - name: Build ARM64
-        run: cargo build --release --target aarch64-apple-darwin
+        run: cargo build --locked --release --target aarch64-apple-darwin
 
       - name: Build x86_64
-        run: cargo build --release --target x86_64-apple-darwin
+        run: cargo build --locked --release --target x86_64-apple-darwin
+
+      - name: Prepare pinned universal Typst
+        run: |
+          python3 scripts/fetch_pinned_typst.py \
+            --target aarch64-apple-darwin \
+            --output target/pinned-typst/macos/aarch64/typst
+          python3 scripts/fetch_pinned_typst.py \
+            --target x86_64-apple-darwin \
+            --output target/pinned-typst/macos/x86_64/typst
+          mkdir -p target/pinned-typst/macos/universal
+          lipo -create \
+            target/pinned-typst/macos/aarch64/typst \
+            target/pinned-typst/macos/x86_64/typst \
+            -output target/pinned-typst/macos/universal/typst
+          chmod +x target/pinned-typst/macos/universal/typst
+          test "$(target/pinned-typst/macos/universal/typst --version | awk '{print $2}')" = "0.13.1"
+          lipo -archs target/pinned-typst/macos/universal/typst | grep -q arm64
+          lipo -archs target/pinned-typst/macos/universal/typst | grep -q x86_64
 
       - name: Create Universal Binary
         run: |
@@ -51,7 +216,10 @@ jobs:
           mkdir -p "$APP/Contents/Resources"
 
           cp target/release-artifacts/bir "$APP/Contents/MacOS/"
+          cp target/pinned-typst/macos/universal/typst "$APP/Contents/MacOS/"
           cp -R assets "$APP/Contents/Resources/"
+          rm -rf "$APP/Contents/Resources/assets/macos"
+          cp assets/AppIcon.icns "$APP/Contents/Resources/"
           cp -R formtypes "$APP/Contents/Resources/"
 
           cp assets/macos/Info.plist "$APP/Contents/Info.plist"
@@ -64,7 +232,6 @@ jobs:
           sed -i '' "s/APP_NAME_PLACEHOLDER/${{ env.APP_NAME }}/g" "$APP/Contents/Info.plist"
 
       - name: Codesign
-        if: env.APPLE_CERTIFICATE_P12 != ''
         env:
           APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -82,13 +249,66 @@ jobs:
           security import $RUNNER_TEMP/certificate.p12 -P "$APPLE_CERTIFICATE_PASSWORD" \
             -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
           security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
 
-          # Sign the .app bundle
+          IDENTITIES="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH")"
+          IDENTITY_COUNT="$(printf '%s\n' "$IDENTITIES" | awk '/"Developer ID Application:/ { count++ } END { print count + 0 }')"
+          if [ "$IDENTITY_COUNT" -ne 1 ]; then
+            echo "Expected exactly one imported Developer ID Application identity" >&2
+            printf '%s\n' "$IDENTITIES" >&2
+            exit 1
+          fi
+          IDENTITY_LINE="$(printf '%s\n' "$IDENTITIES" | awk '/"Developer ID Application:/ { print; exit }')"
+          case "$IDENTITY_LINE" in
+            *"($APPLE_TEAM_ID)"*) ;;
+            *)
+              echo "Imported Developer ID identity does not belong to team $APPLE_TEAM_ID" >&2
+              printf '%s\n' "$IDENTITY_LINE" >&2
+              exit 1
+              ;;
+          esac
+          SIGNING_IDENTITY="$(printf '%s\n' "$IDENTITY_LINE" | awk '{ print $2 }')"
+
+          # Sign the nested helper before sealing the .app bundle.
           APP="target/release-artifacts/${{ env.APP_NAME }}.app"
-          codesign --deep --force --options runtime \
-            --sign "Developer ID Application: Goldcoders Corp ($APPLE_TEAM_ID)" \
+          TYPST="$APP/Contents/MacOS/typst"
+          codesign --force --options runtime \
+            --keychain "$KEYCHAIN_PATH" \
+            --sign "$SIGNING_IDENTITY" \
+            --entitlements assets/macos/typst.entitlements.dev.plist \
+            "$TYPST"
+          # Sign the outer application last. Do not use --deep: it can replace
+          # the nested helper's deliberately separate entitlement signature.
+          codesign --force --options runtime \
+            --keychain "$KEYCHAIN_PATH" \
+            --sign "$SIGNING_IDENTITY" \
             --entitlements assets/macos/entitlements.mac.plist \
             "$APP"
+
+          # Verify the final nested signature, version, and non-sandboxed
+          # entitlement set after the outer application has been sealed.
+          codesign --verify --strict --verbose=2 "$TYPST"
+          TYPST_ENTITLEMENTS="$RUNNER_TEMP/typst-signed-entitlements.plist"
+          codesign --display --xml --entitlements "$TYPST_ENTITLEMENTS" "$TYPST"
+          plutil -lint "$TYPST_ENTITLEMENTS"
+          if /usr/libexec/PlistBuddy -c \
+            "Print :com.apple.security.app-sandbox" \
+            "$TYPST_ENTITLEMENTS" >/dev/null 2>&1; then
+            echo "Direct-download Typst helper must not be sandboxed" >&2
+            exit 1
+          fi
+          if /usr/libexec/PlistBuddy -c \
+            "Print :com.apple.security.inherit" \
+            "$TYPST_ENTITLEMENTS" >/dev/null 2>&1; then
+            echo "Direct-download Typst helper must not inherit sandbox entitlements" >&2
+            exit 1
+          fi
+          test "$("$TYPST" --version | awk '{print $2}')" = "0.13.1"
+          codesign --verify --strict --verbose=2 "$APP"
 
       - name: Create DMG
         run: |
@@ -113,7 +333,6 @@ jobs:
           fi
 
       - name: Notarize DMG
-        if: env.APPLE_ID != ''
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
@@ -130,33 +349,49 @@ jobs:
 
           xcrun stapler staple "$DMG"
 
-      - name: Fallback to ZIP (if no DMG)
+      - name: Verify signed and notarized macOS artifact
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          APP="target/release-artifacts/${{ env.APP_NAME }}.app"
           DMG="target/release-artifacts/${{ env.APP_NAME }}-macOS-universal-${VERSION}.dmg"
-          if [ ! -f "$DMG" ]; then
-            cd target/release-artifacts
-            zip -r "${{ env.APP_NAME }}-macOS-universal-${VERSION}.zip" "${{ env.APP_NAME }}.app"
-          fi
+          test -f "$DMG"
+          codesign --verify --strict --verbose=2 "$APP"
+          codesign --verify --strict --verbose=2 "$APP/Contents/MacOS/typst"
+          xcrun stapler validate "$DMG"
+          spctl --assess --type execute --verbose=2 "$APP"
 
       - name: Upload macOS Artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos-release
-          path: |
-            target/release-artifacts/*.dmg
-            target/release-artifacts/*.zip
+          if-no-files-found: error
+          path: target/release-artifacts/*.dmg
 
   # ── Windows ──────────────────────────────────────────────────────────────
   build-windows:
+    needs: preflight
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
+      - name: Require Windows signing inputs
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PFX: ${{ secrets.WINDOWS_CERTIFICATE_PFX }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PFX)) {
+            throw "Missing required Windows release secret: WINDOWS_CERTIFICATE_PFX"
+          }
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) {
+            throw "Missing required Windows release secret: WINDOWS_CERTIFICATE_PASSWORD"
+          }
+
       - name: Install Windows Dependencies
         shell: pwsh
         run: |
-          choco install openssl innosetup wixtoolset -y
+          choco install openssl innosetup -y
+          choco install wixtoolset --version=3.11.2 -y
           $openssl_dir = ""
           if (Test-Path "C:\Program Files\OpenSSL\include") {
               $openssl_dir = "C:\Program Files\OpenSSL"
@@ -180,6 +415,29 @@ jobs:
               Write-Warning "Could not find *crypto*.lib inside $openssl_dir"
           }
 
+      - name: Prepare Windows signing certificate
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PFX: ${{ secrets.WINDOWS_CERTIFICATE_PFX }}
+        run: |
+          $certificate = Join-Path $env:RUNNER_TEMP "windows-release-signing.pfx"
+          try {
+            [IO.File]::WriteAllBytes(
+              $certificate,
+              [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX)
+            )
+          } catch {
+            throw "WINDOWS_CERTIFICATE_PFX is not valid base64: $($_.Exception.Message)"
+          }
+          $sdk = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\10.*" |
+            Sort-Object Name -Descending |
+            Select-Object -First 1
+          if (-not $sdk) { throw "Windows SDK signing tools were not found" }
+          $signtool = Join-Path $sdk.FullName "x64\signtool.exe"
+          if (-not (Test-Path $signtool)) { throw "signtool.exe was not found" }
+          "WINDOWS_CERTIFICATE_PATH=$certificate" >> $env:GITHUB_ENV
+          "WINDOWS_SIGNTOOL=$signtool" >> $env:GITHUB_ENV
+
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -188,27 +446,70 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Build
-        run: cargo build --release --target x86_64-pc-windows-msvc
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
 
-      - name: Download Typst
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Build local HTML renderer
+        run: |
+          npm ci
+          npm run contracts:check
+          npm run audit:forms:migration
+          npm run build:forms
+          npm run verify:forms:offline
+
+      - name: Build
+        run: cargo build --locked --release --target x86_64-pc-windows-msvc
+
+      - name: Prepare pinned Typst
         shell: pwsh
         run: |
-          $TYPST_URL = "https://github.com/typst/typst/releases/latest/download/typst-x86_64-pc-windows-msvc.zip"
-          Invoke-WebRequest -Uri $TYPST_URL -OutFile "target/typst.zip"
-          Expand-Archive -Path "target/typst.zip" -DestinationPath "target/typst-temp" -Force
+          python scripts/fetch_pinned_typst.py `
+            --target x86_64-pc-windows-msvc `
+            --output target/pinned-typst/windows/typst.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $version = & "target/pinned-typst/windows/typst.exe" --version
+          if ($version -notmatch '^typst 0\.13\.1(?:\s|$)') {
+            throw "Unexpected Typst version: $version"
+          }
 
-      - name: Package (.zip)
+      - name: Sign and verify Windows executable payloads
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $payloads = @(
+            "target/x86_64-pc-windows-msvc/release/bir.exe",
+            "target/pinned-typst/windows/typst.exe"
+          )
+          foreach ($payload in $payloads) {
+            & $env:WINDOWS_SIGNTOOL sign /fd SHA256 /td SHA256 `
+              /tr http://timestamp.digicert.com `
+              /f $env:WINDOWS_CERTIFICATE_PATH `
+              /p $env:WINDOWS_CERTIFICATE_PASSWORD `
+              $payload
+            if ($LASTEXITCODE -ne 0) { throw "Signing failed: $payload" }
+            & $env:WINDOWS_SIGNTOOL verify /pa /all /v $payload
+            if ($LASTEXITCODE -ne 0) { throw "Signature verification failed: $payload" }
+          }
+
+      - name: Stage signed Windows payload
         shell: pwsh
         run: |
           $VERSION = "${{ github.ref_name }}".TrimStart('v')
           $PKG = "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}"
           New-Item -ItemType Directory -Force -Path $PKG
           Copy-Item "target/x86_64-pc-windows-msvc/release/bir.exe" "$PKG/"
-          Copy-Item "target/typst-temp/typst-x86_64-pc-windows-msvc/typst.exe" "$PKG/"
+          Copy-Item "target/pinned-typst/windows/typst.exe" "$PKG/"
           Copy-Item -Recurse "assets" "$PKG/"
           Copy-Item -Recurse "formtypes" "$PKG/"
-          Compress-Archive -Path "$PKG" -DestinationPath "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}.zip"
 
       - name: Create EXE Installer
         shell: pwsh
@@ -224,56 +525,51 @@ jobs:
           $PKG = "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}"
           $env:PATH += ";C:\Program Files (x86)\WiX Toolset v3.11\bin"
           
-          heat.exe dir "$PKG" -dr INSTALLDIR -cg HarvestedComponents -gg -g1 -sf -srd -var "var.SourceDir" -out harvest.wxs
-          candle.exe installer.wxs harvest.wxs -dSourceDir="$PKG" -dVersion="$VERSION" -ext WixUIExtension
-          light.exe installer.wixobj harvest.wixobj -out "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}.msi" -ext WixUIExtension -sval
+          heat.exe dir "$PKG" -dr INSTALLDIR -cg HarvestedComponents -ag -g1 -sf -srd -var "var.SourceDir" -out harvest.wxs
+          candle.exe installer.wxs harvest.wxs -arch x64 -dSourceDir="$PKG" -dVersion="$VERSION" -ext WixUIExtension
+          light.exe installer.wixobj harvest.wixobj -out "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}.msi" -ext WixUIExtension
 
-      - name: Create MSIX Package
+      - name: Sign and verify Windows release artifacts
         shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
-          $VERSION = "${{ github.ref_name }}".TrimStart('v')
-          $PKG = "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}"
-          $MSIX_DIR = "target/release-artifacts/msix-staging"
-          
-          # Stage MSIX layout
-          New-Item -ItemType Directory -Force -Path $MSIX_DIR
-          Copy-Item "$PKG\*" "$MSIX_DIR\" -Recurse
-          
-          # Copy and stamp manifest
-          # Extract BUILD_NUMBER from justfile (single source of truth, synced with App Store Connect)
-          $BUILD_NUMBER = (Select-String -Path justfile -Pattern '^BUILD_NUMBER' | ForEach-Object { $_ -replace '.*"(\d+)".*', '$1' })
-          if (-not $BUILD_NUMBER) { $BUILD_NUMBER = '0' }
-          # Microsoft Store requires: Major.Minor.Build.0 (Revision must be 0)
-          $vParts = $VERSION.Split('.')
-          $MSIX_VERSION = "$($vParts[0]).$($vParts[1]).$BUILD_NUMBER.0"
-          Copy-Item "assets\windows\AppxManifest.xml" "$MSIX_DIR\AppxManifest.xml"
-          (Get-Content "$MSIX_DIR\AppxManifest.xml") `
-            -replace 'MSIX_VERSION_PLACEHOLDER', $MSIX_VERSION | `
-            Set-Content "$MSIX_DIR\AppxManifest.xml"
-          Write-Host "Stamped MSIX manifest: $MSIX_VERSION"
-          
-          # Build MSIX (unsigned — Microsoft Store will sign on submission)
-          $SDK_DIR = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\10.*" | Sort-Object Name -Descending | Select-Object -First 1
-          $MAKEAPPX = "$($SDK_DIR.FullName)\x64\MakeAppx.exe"
-          if (Test-Path $MAKEAPPX) {
-            & $MAKEAPPX pack /d "$MSIX_DIR" /p "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}.msix" /o
-            Write-Host "✅ MSIX package created"
-          } else {
-            Write-Warning "⚠️ MakeAppx.exe not found — skipping MSIX"
+          $msix = @(Get-ChildItem "target/release-artifacts/*.msix" -ErrorAction SilentlyContinue)
+          if ($msix.Count -ne 0) {
+            throw "Public GitHub releases must not contain MSIX artifacts; use the Store-only just msix workflow"
+          }
+          $artifacts = @(
+            Get-ChildItem "target/release-artifacts/*-Setup.exe"
+            Get-ChildItem "target/release-artifacts/*.msi"
+          )
+          if ($artifacts.Count -ne 2) {
+            throw "Expected exactly one EXE and one MSI public release artifact"
+          }
+          foreach ($artifact in $artifacts) {
+            & $env:WINDOWS_SIGNTOOL sign /fd SHA256 /td SHA256 `
+              /tr http://timestamp.digicert.com `
+              /f $env:WINDOWS_CERTIFICATE_PATH `
+              /p $env:WINDOWS_CERTIFICATE_PASSWORD `
+              $artifact.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Signing failed: $($artifact.FullName)" }
+            & $env:WINDOWS_SIGNTOOL verify /pa /all /v $artifact.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "Signature verification failed: $($artifact.FullName)"
+            }
           }
 
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-release
+          if-no-files-found: error
           path: |
-            target/release-artifacts/*.zip
             target/release-artifacts/*-Setup.exe
             target/release-artifacts/*.msi
-            target/release-artifacts/*.msix
 
   # ── Linux ────────────────────────────────────────────────────────────────
   build-linux:
+    needs: preflight
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -309,16 +605,43 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Build local HTML renderer
+        run: |
+          npm ci
+          npm run contracts:check
+          npm run audit:forms:migration
+          npm run build:forms
+          npm run verify:forms:offline
+
       - name: Build
-        run: cargo build --release --target x86_64-unknown-linux-gnu
+        run: cargo build --locked --release --target x86_64-unknown-linux-gnu
+
+      - name: Prepare pinned Typst
+        run: |
+          python3 scripts/fetch_pinned_typst.py \
+            --target x86_64-unknown-linux-musl \
+            --output target/pinned-typst/linux/typst
+          test "$(target/pinned-typst/linux/typst --version | awk '{print $2}')" = "0.13.1"
 
       - name: Install cargo-deb
-        run: cargo install cargo-deb
+        run: cargo install --locked cargo-deb --version 3.7.0
 
       - name: Create .deb Package
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          cargo deb -p bir-desktop --no-build --target x86_64-unknown-linux-gnu \
+          mkdir -p target/release-artifacts
+          cargo deb --locked -p bir-desktop --no-build --target x86_64-unknown-linux-gnu \
             -o "target/release-artifacts/${{ env.APP_NAME }}-Linux-x64-${VERSION}.deb"
 
       - name: Create Tarball Fallback
@@ -327,6 +650,7 @@ jobs:
           PKG="target/release-artifacts/${{ env.APP_NAME }}-Linux-x64-${VERSION}"
           mkdir -p "$PKG"
           cp target/x86_64-unknown-linux-gnu/release/bir "$PKG/"
+          cp target/pinned-typst/linux/typst "$PKG/"
           cp -R assets "$PKG/"
           cp -R formtypes "$PKG/"
           cd target/release-artifacts
@@ -337,13 +661,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: linux-release
+          if-no-files-found: error
           path: |
             target/release-artifacts/*.deb
             target/release-artifacts/*.tar.gz
 
   # ── Create GitHub Release ───────────────────────────────────────────────
   release:
-    needs: [build-macos, build-windows, build-linux]
+    needs: [preflight, build-macos, build-windows, build-linux]
     runs-on: ubuntu-latest
     steps:
       - name: Download All Artifacts
@@ -359,9 +684,7 @@ jobs:
           generate_release_notes: true
           files: |
             artifacts/**/*.dmg
-            artifacts/**/*.zip
             artifacts/**/*.deb
             artifacts/**/*.tar.gz
             artifacts/**/*-Setup.exe
             artifacts/**/*.msi
-            artifacts/**/*.msix

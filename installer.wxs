@@ -22,7 +22,7 @@
         </Directory>
 
         <DirectoryRef Id="ApplicationProgramsFolder">
-            <Component Id="ApplicationShortcut" Guid="f6e5d4c3-21a7-4e62-9721-e8a5f36b9c17">
+            <Component Id="ApplicationShortcut" Guid="f6e5d4c3-21a7-4e62-9721-e8a5f36b9c17" Win64="yes">
                 <Shortcut Id="ApplicationStartMenuShortcut" 
                           Name="eBIRForms" 
                           Description="eBIRForms Desktop Application"
@@ -35,7 +35,7 @@
                           Target="[INSTALLDIR]bir.exe"
                           WorkingDirectory="INSTALLDIR"/>
                 <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall"/>
-                <RegistryValue Root="HKCU" Key="Software\GoldCoders\eBIRForms" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
+                <RegistryValue Root="HKLM" Key="Software\GoldCoders\eBIRForms" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
             </Component>
         </DirectoryRef>
 
