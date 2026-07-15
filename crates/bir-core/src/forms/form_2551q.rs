@@ -14,6 +14,42 @@ fn default_true() -> bool {
     true
 }
 
+fn default_year_end_month() -> u8 {
+    12
+}
+
+/// Taxable-period basis selected in Item 1 of Form 2551Q.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TaxPeriodBasis {
+    #[default]
+    Calendar,
+    Fiscal,
+}
+
+/// Income-tax-rate election printed in Item 13 of Form 2551Q.
+///
+/// `NotApplicable` is intentionally the backward-compatible default. Rust must
+/// not infer a legal election from a taxpayer profile or from renderer layout.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Item13Election {
+    #[default]
+    NotApplicable,
+    Graduated,
+    EightPercent,
+}
+
+/// Requested disposition when Item 24 is an overpayment.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum OverpaymentDisposition {
+    #[default]
+    None,
+    Refund,
+    TaxCreditCertificate,
+}
+
 /// One row in Schedule 1 — a single ATC category with its taxable amount.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Schedule1Row {
@@ -63,13 +99,25 @@ pub struct Form2551QDraft {
     pub tin: String,
     pub taxable_year: u16,
     pub quarter: u8, // 1–4
+    #[serde(default)]
+    pub tax_period_basis: TaxPeriodBasis,
+    /// Month in which the taxable year ends (1–12). Calendar filers use 12.
+    #[serde(default = "default_year_end_month")]
+    pub year_end_month: u8,
     pub eopt_tier: Option<crate::profile::EoptTier>,
 
     // === Header Options ===
     pub is_amended: bool,
     #[serde(default)]
     pub original_return_filed_and_paid_on_time: bool,
+    /// Number entered in Item 5 (maximum two printed digits).
+    #[serde(default)]
+    pub number_of_attached_sheets: u16,
     pub tax_relief: bool,
+    #[serde(default)]
+    pub tax_relief_specification: String,
+    #[serde(default)]
+    pub item_13_election: Item13Election,
 
     // === Part I — pre-filled from profile, read-only in UI ===
     pub rdo_code: String,
@@ -92,6 +140,9 @@ pub struct Form2551QDraft {
     /// Line 17: Other Tax Credit/Payment — user-entered
     #[serde(default)]
     pub other_tax_credit: f64,
+    /// Line 17 `(specify)` description paired with `other_tax_credit`.
+    #[serde(default)]
+    pub other_tax_credit_description: String,
     /// Line 18: Total Tax Credits/Payments = sum of Lines 15, 16, 17
     #[serde(default)]
     pub total_tax_credits: f64,
@@ -112,6 +163,8 @@ pub struct Form2551QDraft {
     pub total_penalties: f64,
     #[serde(default)]
     pub total_amount_payable: f64,
+    #[serde(default)]
+    pub overpayment_disposition: OverpaymentDisposition,
 
     // === Status & Audit ===
     pub status: FilingStatus,
@@ -153,10 +206,15 @@ impl Form2551QDraft {
             tin: profile.tin.full(),
             taxable_year: year,
             quarter,
+            tax_period_basis: TaxPeriodBasis::Calendar,
+            year_end_month: 12,
             eopt_tier: profile.eopt_tier.clone(),
             is_amended: false,
             original_return_filed_and_paid_on_time: false,
+            number_of_attached_sheets: 0,
             tax_relief: false,
+            tax_relief_specification: String::new(),
+            item_13_election: Item13Election::NotApplicable,
             rdo_code: profile.rdo_code.clone(),
             taxpayer_name: profile.full_name.clone(),
             registered_address: profile.registered_address.clone(),
@@ -168,6 +226,7 @@ impl Form2551QDraft {
             creditable_tax_withheld: 0.0,
             tax_paid_previous: 0.0,
             other_tax_credit: 0.0,
+            other_tax_credit_description: String::new(),
             total_tax_credits: 0.0,
             tax_payable: 0.0,
             auto_compute_penalties: true,
@@ -176,6 +235,7 @@ impl Form2551QDraft {
             compromise: 0.0,
             total_penalties: 0.0,
             total_amount_payable: 0.0,
+            overpayment_disposition: OverpaymentDisposition::None,
             status: FilingStatus::Draft,
             created_at: now.clone(),
             updated_at: now,
@@ -249,21 +309,7 @@ impl Form2551QDraft {
         // We pass max(tax_payable, 0) as basic_tax_due so surcharge/interest
         // are computed on the positive amount only. Line 19 itself stays unclamped.
         if self.auto_compute_penalties && matches!(self.status, FilingStatus::Draft) {
-            let deadline_month = match self.quarter {
-                1 => 4,
-                2 => 7,
-                3 => 10,
-                _ => 1,
-            };
-            let deadline_year = if self.quarter == 4 {
-                self.taxable_year + 1
-            } else {
-                self.taxable_year
-            };
-
-            if let Some(deadline) =
-                chrono::NaiveDate::from_ymd_opt(deadline_year as i32, deadline_month, 25)
-            {
+            if let Some(deadline) = self.filing_deadline() {
                 let today = chrono::Local::now().date_naive();
 
                 let config = PenaltyConfig::default_rules();
@@ -297,7 +343,10 @@ impl Form2551QDraft {
                     form_code: "2551Qv2018".to_string(),
                     tax_type: PenaltyProfile::StandardFiling,
                     taxpayer_class,
-                    taxable_period: format!("Q{} {}", self.quarter, self.taxable_year),
+                    taxable_period: format!(
+                        "Q{} year ended {:02}/{}",
+                        self.quarter, self.year_end_month, self.taxable_year
+                    ),
                     is_amended_return: self.is_amended,
                     original_was_on_time: self.original_return_filed_and_paid_on_time,
                     is_fraud_or_willful_neglect: is_fraud,
@@ -333,7 +382,36 @@ impl Form2551QDraft {
     }
 
     pub fn period_code(&self) -> String {
-        format!("12{}Q{}", self.taxable_year, self.quarter)
+        format!(
+            "{:02}{}Q{}",
+            self.year_end_month, self.taxable_year, self.quarter
+        )
+    }
+
+    /// Filing deadline for the selected fiscal quarter.
+    ///
+    /// `taxable_year` is the year in which the selected taxable year ends. A
+    /// fiscal year ending in June 2026 therefore places Q1/Q2 in calendar 2025
+    /// and Q3/Q4 in calendar 2026.
+    fn filing_deadline(&self) -> Option<chrono::NaiveDate> {
+        if !(1..=12).contains(&self.year_end_month) || !(1..=4).contains(&self.quarter) {
+            return None;
+        }
+
+        let quarter_end_month =
+            ((u16::from(self.year_end_month) - 1 + u16::from(self.quarter) * 3) % 12 + 1) as u8;
+        let mut quarter_end_year = i32::from(self.taxable_year);
+        if quarter_end_month > self.year_end_month {
+            quarter_end_year -= 1;
+        }
+
+        let (deadline_year, deadline_month) = if quarter_end_month == 12 {
+            (quarter_end_year + 1, 1)
+        } else {
+            (quarter_end_year, u32::from(quarter_end_month) + 1)
+        };
+
+        chrono::NaiveDate::from_ymd_opt(deadline_year, deadline_month, 25)
     }
 
     pub fn default_submission_filename(&self) -> String {
@@ -480,6 +558,34 @@ impl FormValidator for Form2551QDraft {
             errors.push(("quarter".to_string(), "Quarter is required".to_string()));
         }
 
+        if !(1..=12).contains(&self.year_end_month) {
+            errors.push((
+                "year_end_month".to_string(),
+                "Year-end month must be between 1 and 12".to_string(),
+            ));
+        } else if matches!(self.tax_period_basis, TaxPeriodBasis::Calendar)
+            && self.year_end_month != 12
+        {
+            errors.push((
+                "year_end_month".to_string(),
+                "Calendar filers must use December as the year-end month".to_string(),
+            ));
+        }
+
+        if self.number_of_attached_sheets > 99 {
+            errors.push((
+                "number_of_attached_sheets".to_string(),
+                "Number of attached sheets must fit the two-digit Item 5 field".to_string(),
+            ));
+        }
+
+        if self.tax_relief && self.tax_relief_specification.trim().is_empty() {
+            errors.push((
+                "tax_relief_specification".to_string(),
+                "Tax-relief specification is required when tax relief is selected".to_string(),
+            ));
+        }
+
         for (key, label, value) in [
             ("tin", "TIN", self.tin.as_str()),
             ("rdo_code", "RDO Code", self.rdo_code.as_str()),
@@ -537,6 +643,13 @@ impl FormValidator for Form2551QDraft {
                 "Schedule 1 requires at least one ATC row".to_string(),
             ));
         }
+        if self.schedule_1.len() > 6 {
+            errors.push((
+                "schedule_1".to_string(),
+                "BIR Form 2551Q XML accepts at most six Schedule 1 rows; additional rows remain printable but cannot be submitted until the official attachment protocol is verified"
+                    .to_string(),
+            ));
+        }
         for (i, row) in self.schedule_1.iter().enumerate() {
             if row.taxable_amount < 0.0 {
                 errors.push((
@@ -560,6 +673,30 @@ impl FormValidator for Form2551QDraft {
             errors.push((
                 "tax_paid_previous".to_string(),
                 "Tax paid in return previously filed must be non-negative".to_string(),
+            ));
+        }
+
+        if self.other_tax_credit > 0.0 && self.other_tax_credit_description.trim().is_empty() {
+            errors.push((
+                "other_tax_credit_description".to_string(),
+                "Item 17 description is required when an other tax credit/payment is entered"
+                    .to_string(),
+            ));
+        }
+
+        if self.total_amount_payable < 0.0 {
+            if matches!(self.overpayment_disposition, OverpaymentDisposition::None) {
+                errors.push((
+                    "overpayment_disposition".to_string(),
+                    "Choose exactly one overpayment disposition: refund or tax credit certificate"
+                        .to_string(),
+                ));
+            }
+        } else if !matches!(self.overpayment_disposition, OverpaymentDisposition::None) {
+            errors.push((
+                "overpayment_disposition".to_string(),
+                "Overpayment disposition is only allowed when Item 24 is an overpayment"
+                    .to_string(),
             ));
         }
 
@@ -642,6 +779,154 @@ mod tests {
         draft.creditable_tax_withheld = creditable_withheld;
         draft.recompute(None);
         draft
+    }
+
+    #[test]
+    fn new_draft_uses_safe_explicit_print_defaults() {
+        let draft = Form2551QDraft::new_from_profile(&test_profile(), 2026, 2);
+
+        assert_eq!(draft.tax_period_basis, TaxPeriodBasis::Calendar);
+        assert_eq!(draft.year_end_month, 12);
+        assert_eq!(draft.number_of_attached_sheets, 0);
+        assert!(draft.tax_relief_specification.is_empty());
+        assert_eq!(draft.item_13_election, Item13Election::NotApplicable);
+        assert!(draft.other_tax_credit_description.is_empty());
+        assert_eq!(draft.overpayment_disposition, OverpaymentDisposition::None);
+        assert_eq!(draft.period_code(), "122026Q2");
+    }
+
+    #[test]
+    fn pre_contract_json_deserializes_with_safe_defaults() {
+        let draft = Form2551QDraft::new_from_profile(&test_profile(), 2026, 2);
+        let mut value = serde_json::to_value(draft).expect("draft must serialize");
+        let object = value.as_object_mut().expect("draft must be an object");
+        for key in [
+            "tax_period_basis",
+            "year_end_month",
+            "number_of_attached_sheets",
+            "tax_relief_specification",
+            "item_13_election",
+            "other_tax_credit_description",
+            "overpayment_disposition",
+        ] {
+            object.remove(key);
+        }
+
+        let restored: Form2551QDraft =
+            serde_json::from_value(value).expect("older draft JSON must remain readable");
+
+        assert_eq!(restored.tax_period_basis, TaxPeriodBasis::Calendar);
+        assert_eq!(restored.year_end_month, 12);
+        assert_eq!(restored.number_of_attached_sheets, 0);
+        assert_eq!(restored.item_13_election, Item13Election::NotApplicable);
+        assert_eq!(
+            restored.overpayment_disposition,
+            OverpaymentDisposition::None
+        );
+    }
+
+    #[test]
+    fn fiscal_year_end_drives_period_code_and_quarter_deadline() {
+        let mut draft = Form2551QDraft::new_from_profile(&test_profile(), 2026, 1);
+        draft.tax_period_basis = TaxPeriodBasis::Fiscal;
+        draft.year_end_month = 6;
+
+        assert_eq!(draft.period_code(), "062026Q1");
+        assert_eq!(
+            draft.filing_deadline(),
+            chrono::NaiveDate::from_ymd_opt(2025, 10, 25)
+        );
+
+        draft.quarter = 4;
+        assert_eq!(
+            draft.filing_deadline(),
+            chrono::NaiveDate::from_ymd_opt(2026, 7, 25)
+        );
+    }
+
+    #[test]
+    fn validation_requires_conditional_descriptions() {
+        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+        draft.tax_relief = true;
+        draft.other_tax_credit = 10.0;
+        draft.recompute(None);
+
+        let errors = draft.validate();
+        assert!(
+            errors
+                .iter()
+                .any(|(field, _)| field == "tax_relief_specification")
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|(field, _)| field == "other_tax_credit_description")
+        );
+
+        draft.tax_relief_specification = "Special law".to_string();
+        draft.other_tax_credit_description = "Prior payment".to_string();
+        let errors = draft.validate();
+        assert!(
+            errors
+                .iter()
+                .all(|(field, _)| field != "tax_relief_specification"
+                    && field != "other_tax_credit_description")
+        );
+    }
+
+    #[test]
+    fn validation_enforces_overpayment_disposition_at_queue_boundary() {
+        let mut draft = make_draft(50_000.0, 4_000.0, 2099, 1);
+        assert!(draft.total_amount_payable < 0.0);
+
+        let errors = draft
+            .transition_to_queued()
+            .expect_err("overpayment without a disposition must not queue");
+        assert!(
+            errors
+                .iter()
+                .any(|(field, _)| field == "overpayment_disposition")
+        );
+
+        draft.overpayment_disposition = OverpaymentDisposition::TaxCreditCertificate;
+        draft
+            .transition_to_queued()
+            .expect("one overpayment disposition should satisfy the queue gate");
+    }
+
+    #[test]
+    fn validation_forbids_disposition_without_an_overpayment() {
+        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+        assert!(draft.total_amount_payable > 0.0);
+        draft.overpayment_disposition = OverpaymentDisposition::Refund;
+
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "overpayment_disposition")
+        );
+    }
+
+    #[test]
+    fn validation_bounds_period_and_attached_sheet_fields() {
+        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+        draft.year_end_month = 6;
+        draft.number_of_attached_sheets = 100;
+
+        let errors = draft.validate();
+        assert!(errors.iter().any(|(field, _)| field == "year_end_month"));
+        assert!(
+            errors
+                .iter()
+                .any(|(field, _)| field == "number_of_attached_sheets")
+        );
+
+        draft.tax_period_basis = TaxPeriodBasis::Fiscal;
+        draft.number_of_attached_sheets = 99;
+        let errors = draft.validate();
+        assert!(errors.iter().all(|(field, _)|
+            field != "year_end_month" && field != "number_of_attached_sheets"));
     }
 
     #[test]
@@ -748,6 +1033,33 @@ mod tests {
         assert_eq!(draft.schedule_1[1].tax_due, 10000.0);
         // Line 14: 3000 + 10000 = 13000
         assert_eq!(draft.total_tax_due, 13000.0);
+    }
+
+    #[test]
+    fn validation_accepts_six_schedule_rows_supported_by_xml() {
+        let mut draft = make_draft(100_000.0, 0.0, 2099, 1);
+        draft.schedule_1 = vec![Schedule1Row::default_pt010(); 6];
+
+        let errors = draft.validate();
+
+        assert!(
+            errors.iter().all(|(field, _)| field != "schedule_1"),
+            "unexpected schedule validation errors: {errors:?}"
+        );
+    }
+
+    #[test]
+    fn validation_rejects_schedule_rows_beyond_verified_xml_capacity() {
+        let mut draft = make_draft(100_000.0, 0.0, 2099, 1);
+        draft.schedule_1 = vec![Schedule1Row::default_pt010(); 7];
+
+        let errors = draft.validate();
+
+        assert!(
+            errors
+                .iter()
+                .any(|(field, message)| field == "schedule_1" && message.contains("at most six"))
+        );
     }
 
     #[test]

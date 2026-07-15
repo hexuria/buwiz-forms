@@ -1,4 +1,4 @@
-use super::form_2551q::Form2551QDraft;
+use super::form_2551q::{Form2551QDraft, Item13Election, OverpaymentDisposition, TaxPeriodBasis};
 use chrono::Local;
 use std::collections::BTreeMap;
 
@@ -17,13 +17,25 @@ impl Form2551QDraft {
         insert(&mut fields, "txtDateExpiry", "");
         insert(&mut fields, "txtTaxAgentNo", "");
 
-        insert(&mut fields, "frm2551Qv2018:forThe_1", "true");
-        insert(&mut fields, "frm2551Qv2018:forThe_2", "false");
-        insert(&mut fields, "frm2551Qv2018:rtnMonth", "12");
+        insert_bool(
+            &mut fields,
+            "frm2551Qv2018:forThe_1",
+            matches!(self.tax_period_basis, TaxPeriodBasis::Calendar),
+        );
+        insert_bool(
+            &mut fields,
+            "frm2551Qv2018:forThe_2",
+            matches!(self.tax_period_basis, TaxPeriodBasis::Fiscal),
+        );
+        insert(
+            &mut fields,
+            "frm2551Qv2018:rtnMonth",
+            self.year_end_month.to_string(),
+        );
         insert(
             &mut fields,
             "__year_ended",
-            format!("12{}", self.taxable_year),
+            format!("{:02}{}", self.year_end_month, self.taxable_year),
         );
         insert(
             &mut fields,
@@ -42,10 +54,30 @@ impl Form2551QDraft {
         insert_bool(&mut fields, "frm2551Qv2018:amendedRtn_2", !self.is_amended);
         insert_bool(&mut fields, "frm2551Qv2018:taxTreaty_1", self.tax_relief);
         insert_bool(&mut fields, "frm2551Qv2018:taxTreaty_2", !self.tax_relief);
-        insert(&mut fields, "frm2551Qv2018:txtTaxReliefSpecify", "");
-        insert(&mut fields, "frm2551Qv2018:taxRate1", "true");
-        insert(&mut fields, "frm2551Qv2018:taxRate2", "false");
-        insert(&mut fields, "frm2551Qv2018:txtSheets", "0");
+        insert(
+            &mut fields,
+            "frm2551Qv2018:txtTaxReliefSpecify",
+            if self.tax_relief {
+                self.tax_relief_specification.clone()
+            } else {
+                String::new()
+            },
+        );
+        insert_bool(
+            &mut fields,
+            "frm2551Qv2018:taxRate1",
+            matches!(self.item_13_election, Item13Election::Graduated),
+        );
+        insert_bool(
+            &mut fields,
+            "frm2551Qv2018:taxRate2",
+            matches!(self.item_13_election, Item13Election::EightPercent),
+        );
+        insert(
+            &mut fields,
+            "frm2551Qv2018:txtSheets",
+            self.number_of_attached_sheets.to_string(),
+        );
 
         insert(&mut fields, "frm2551Qv2018:txtTIN1", tin1.clone());
         insert(&mut fields, "frm2551Qv2018:txtTIN2", tin2.clone());
@@ -81,7 +113,11 @@ impl Form2551QDraft {
             self.creditable_tax_withheld,
         );
         insert_money(&mut fields, "frm2551Qv2018:txt16", self.tax_paid_previous);
-        insert(&mut fields, "frm2551Qv2018:txt17Specify", "");
+        insert(
+            &mut fields,
+            "frm2551Qv2018:txt17Specify",
+            self.other_tax_credit_description.clone(),
+        );
         insert_money(&mut fields, "frm2551Qv2018:txt17", self.other_tax_credit);
         insert_money(&mut fields, "frm2551Qv2018:txt18", self.total_tax_credits);
         insert_money(&mut fields, "frm2551Qv2018:txt19", self.tax_payable);
@@ -95,8 +131,19 @@ impl Form2551QDraft {
             self.total_amount_payable,
         );
         insert_money(&mut fields, "txtTotalSched1", self.total_tax_due);
-        insert(&mut fields, "frm2551Qv2018:overPayment1", "false");
-        insert(&mut fields, "frm2551Qv2018:overPayment2", "false");
+        insert_bool(
+            &mut fields,
+            "frm2551Qv2018:overPayment1",
+            matches!(self.overpayment_disposition, OverpaymentDisposition::Refund),
+        );
+        insert_bool(
+            &mut fields,
+            "frm2551Qv2018:overPayment2",
+            matches!(
+                self.overpayment_disposition,
+                OverpaymentDisposition::TaxCreditCertificate
+            ),
+        );
 
         for i in 0..6 {
             let row = self.schedule_1.get(i);
@@ -296,6 +343,67 @@ mod tests {
         assert_eq!(fields["frm2551Qv2018:txtTIN2"], "708");
         assert_eq!(fields["frm2551Qv2018:txtTIN3"], "015");
         assert_eq!(fields["frm2551Qv2018:txtBranchCode"], "00000");
+        assert_eq!(fields["frm2551Qv2018:forThe_1"], "true");
+        assert_eq!(fields["frm2551Qv2018:forThe_2"], "false");
+        assert_eq!(fields["frm2551Qv2018:rtnMonth"], "12");
+        assert_eq!(fields["__year_ended"], "122026");
+        assert_eq!(fields["frm2551Qv2018:txtSheets"], "0");
+
+        // A backward-compatible default must not invent the taxpayer's legal
+        // Item 13 or overpayment elections.
+        assert_eq!(fields["frm2551Qv2018:taxRate1"], "false");
+        assert_eq!(fields["frm2551Qv2018:taxRate2"], "false");
+        assert_eq!(fields["frm2551Qv2018:overPayment1"], "false");
+        assert_eq!(fields["frm2551Qv2018:overPayment2"], "false");
+    }
+
+    #[test]
+    fn field_map_serializes_explicit_filing_and_legal_values() {
+        let mut draft = sample_draft();
+        draft.tax_period_basis = TaxPeriodBasis::Fiscal;
+        draft.year_end_month = 6;
+        draft.number_of_attached_sheets = 3;
+        draft.tax_relief = true;
+        draft.tax_relief_specification = "Special Law 123".to_string();
+        draft.item_13_election = Item13Election::EightPercent;
+        draft.other_tax_credit_description = "Prior quarter adjustment".to_string();
+        draft.overpayment_disposition = OverpaymentDisposition::Refund;
+
+        let fields = draft.to_bir_field_map();
+
+        assert_eq!(fields["frm2551Qv2018:forThe_1"], "false");
+        assert_eq!(fields["frm2551Qv2018:forThe_2"], "true");
+        assert_eq!(fields["frm2551Qv2018:rtnMonth"], "6");
+        assert_eq!(fields["__year_ended"], "062026");
+        assert_eq!(fields["frm2551Qv2018:txtSheets"], "3");
+        assert_eq!(fields["frm2551Qv2018:taxTreaty_1"], "true");
+        assert_eq!(fields["frm2551Qv2018:taxTreaty_2"], "false");
+        assert_eq!(
+            fields["frm2551Qv2018:txtTaxReliefSpecify"],
+            "Special Law 123"
+        );
+        assert_eq!(fields["frm2551Qv2018:taxRate1"], "false");
+        assert_eq!(fields["frm2551Qv2018:taxRate2"], "true");
+        assert_eq!(
+            fields["frm2551Qv2018:txt17Specify"],
+            "Prior quarter adjustment"
+        );
+        assert_eq!(fields["frm2551Qv2018:overPayment1"], "true");
+        assert_eq!(fields["frm2551Qv2018:overPayment2"], "false");
+    }
+
+    #[test]
+    fn field_map_maps_each_single_choice_without_overlap() {
+        let mut draft = sample_draft();
+        draft.item_13_election = Item13Election::Graduated;
+        draft.overpayment_disposition = OverpaymentDisposition::TaxCreditCertificate;
+
+        let fields = draft.to_bir_field_map();
+
+        assert_eq!(fields["frm2551Qv2018:taxRate1"], "true");
+        assert_eq!(fields["frm2551Qv2018:taxRate2"], "false");
+        assert_eq!(fields["frm2551Qv2018:overPayment1"], "false");
+        assert_eq!(fields["frm2551Qv2018:overPayment2"], "true");
     }
 
     #[test]
