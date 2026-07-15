@@ -27,6 +27,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Install Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
     - name: Install Rust Toolchain
       uses: dtolnay/rust-toolchain@stable
       with:
@@ -36,17 +41,9 @@ jobs:
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
 
-    - name: Install macOS Dependencies
-      if: runner.os == 'macOS'
-      run: brew install typst
-
     - name: Install Linux Dependencies
       if: runner.os == 'Linux'
       run: |
-        wget https://github.com/typst/typst/releases/latest/download/typst-x86_64-unknown-linux-musl.tar.xz
-        tar -xf typst-x86_64-unknown-linux-musl.tar.xz
-        sudo mv typst-*/typst /usr/local/bin/
-        
         sudo apt-get update
         sudo apt-get install -y \
           pkg-config \
@@ -72,7 +69,7 @@ jobs:
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        choco install openssl typst -y
+        choco install openssl -y
         $openssl_dir = ""
         if (Test-Path "C:\Program Files\OpenSSL\include") {
             $openssl_dir = "C:\Program Files\OpenSSL"
@@ -93,17 +90,105 @@ jobs:
                 Copy-Item $lib_file.FullName "$($lib_file.DirectoryName)\libcrypto.lib"
             }
         } else {
-            Write-Warning "Could not find *crypto*.lib inside $openssl_dir"
+          Write-Warning "Could not find *crypto*.lib inside $openssl_dir"
         }
+
+    - name: Install pinned Typst (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        python3 scripts/fetch_pinned_typst.py \
+          --target aarch64-apple-darwin \
+          --output target/pinned-typst/ci/typst
+        echo "$PWD/target/pinned-typst/ci" >> "$GITHUB_PATH"
+
+    - name: Install pinned Typst (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        python3 scripts/fetch_pinned_typst.py \
+          --target x86_64-unknown-linux-musl \
+          --output target/pinned-typst/ci/typst
+        echo "$PWD/target/pinned-typst/ci" >> "$GITHUB_PATH"
+
+    - name: Install pinned Typst (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        python scripts/fetch_pinned_typst.py `
+          --target x86_64-pc-windows-msvc `
+          --output target/pinned-typst/ci/typst.exe
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        (Resolve-Path "target/pinned-typst/ci").Path >> $env:GITHUB_PATH
 
     - name: Format
       run: cargo fmt --all -- --check
 
     - name: Check
-      run: cargo check --workspace --target ${{ matrix.target }}
+      run: cargo check --locked --workspace --target ${{ matrix.target }}
 
     - name: Clippy
-      run: cargo clippy --workspace --target ${{ matrix.target }} -- -D warnings
+      run: cargo clippy --locked --workspace --target ${{ matrix.target }} -- -D warnings
 
     - name: Test
-      run: cargo test --workspace --target ${{ matrix.target }}
+      run: cargo test --locked --workspace --target ${{ matrix.target }}
+
+  renderer:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust Toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2
+
+    - name: Install Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+        cache: npm
+
+    - name: Install Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Install renderer dependencies
+      run: |
+        npm ci
+        npx playwright install --with-deps chromium
+
+    - name: Check generated contracts and official references
+      run: |
+        npm run contracts:check
+        cargo run -q --locked -p bir-print --bin generate_render_contract -- --check-visual-references
+
+    - name: Typecheck and unit test renderer
+      run: |
+        npm run typecheck:forms
+        npm run test:forms
+        python3 -m unittest discover -s scripts/tests -v
+
+    - name: Build and audit offline renderer
+      run: |
+        npm run audit:forms:migration
+        npm run build:forms
+        npm run verify:forms:offline
+
+    - name: Run visual geometry diagnostics
+      env:
+        FORM_VISUAL_MAX_CHANGED_PERCENT: '100'
+      run: npm run test:forms:visual
+
+    - name: Run strict visual parity diagnostic (<= 1%)
+      continue-on-error: true
+      env:
+        FORM_VISUAL_MAX_CHANGED_PERCENT: '1'
+      run: npm run test:forms:visual
+
+    - name: Upload visual diagnostics
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: renderer-visual-diagnostics
+        path: test-results/form-renderer
