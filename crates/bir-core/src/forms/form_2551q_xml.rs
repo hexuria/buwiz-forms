@@ -1,5 +1,5 @@
 use super::form_2551q::{Form2551QDraft, Item13Election, OverpaymentDisposition, TaxPeriodBasis};
-use chrono::Local;
+use super::{AtcRateResolution, resolve_2551q_atc_rate};
 use std::collections::BTreeMap;
 
 impl Form2551QDraft {
@@ -112,7 +112,15 @@ impl Form2551QDraft {
             "frm2551Qv2018:txt15",
             self.creditable_tax_withheld,
         );
-        insert_money(&mut fields, "frm2551Qv2018:txt16", self.tax_paid_previous);
+        insert_money(
+            &mut fields,
+            "frm2551Qv2018:txt16",
+            if self.is_amended {
+                self.tax_paid_previous
+            } else {
+                0.0
+            },
+        );
         insert(
             &mut fields,
             "frm2551Qv2018:txt17Specify",
@@ -153,12 +161,22 @@ impl Form2551QDraft {
                 .unwrap_or_else(|| "0.00".to_string());
             let atc_rate = row
                 .map(|r| {
-                    let pct = r.tax_rate * 100.0;
-                    if (pct - pct.round()).abs() < f64::EPSILON {
-                        format!("{}", pct as u32)
-                    } else {
-                        format!("{}", pct)
-                    }
+                    // Validation permits only a negligible float tolerance,
+                    // but XML must still emit the exact registry-owned rate.
+                    let canonical_rate = match resolve_2551q_atc_rate(
+                        r.atc.trim(),
+                        self.taxable_year,
+                        self.quarter,
+                        self.year_end_month,
+                    ) {
+                        Some(AtcRateResolution::Single(rate)) => rate,
+                        // Unknown ATCs and split periods are rejected by
+                        // `to_bir_xml_payload` validation. Keep the persisted
+                        // value here so this infallible field-map helper never
+                        // invents a different rate for an invalid draft.
+                        _ => r.tax_rate,
+                    };
+                    format_rate_percent(canonical_rate)
                 })
                 .unwrap_or_else(|| "0".to_string());
             let atc_due = row
@@ -187,15 +205,20 @@ impl Form2551QDraft {
             insert(&mut fields, &format!("frm2551Qv2018:txt{}", field), "");
         }
 
-        let now = Local::now();
-        let dynamic_date = now.format("%m/%d/%Y %H:%M:%S").to_string();
-        insert(&mut fields, "txtDateIssue", dynamic_date);
+        // This field is legal tax-agent metadata, not the XML render time.
+        // Keep it blank until the draft owns an explicit issue date.
+        insert(&mut fields, "txtDateIssue", "");
 
         fields
     }
 
-    pub fn to_bir_xml_payload(&self) -> String {
-        crate::bir_xml::generate_bir_xml(&self.to_bir_field_map())
+    pub fn to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
+        let errors = <Self as super::FormValidator>::validate(self);
+        if errors.is_empty() {
+            Ok(crate::bir_xml::generate_bir_xml(&self.to_bir_field_map()))
+        } else {
+            Err(errors)
+        }
     }
 }
 
@@ -245,9 +268,22 @@ fn format_money(value: f64) -> String {
     format!("{:.2}", value)
 }
 
+fn format_rate_percent(rate: f64) -> String {
+    let mut value = format!("{:.8}", rate * 100.0);
+    while value.contains('.') && value.ends_with('0') {
+        value.pop();
+    }
+    if value.ends_with('.') {
+        value.pop();
+    }
+    value
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::forms::ATC_TABLE_2551Q;
+    use crate::forms::form_2551q::Schedule1Row;
     use crate::naming::Tin;
     use crate::profile::{TaxpayerProfile, TaxpayerType};
 
@@ -270,7 +306,7 @@ mod tests {
             default_form_type: "2551Qv2018".into(),
             taxpayer_type: TaxpayerType::Individual,
             is_vat_registered: false,
-            business_start_date: None,
+            business_start_date: chrono::NaiveDate::from_ymd_opt(2010, 1, 1),
             birth_date: None,
             is_archived: false,
             email_tracking_enabled: false,
@@ -307,6 +343,7 @@ mod tests {
         };
         let mut draft = Form2551QDraft::new_from_profile(&profile, 2026, 1);
         draft.tin = "261708015000".to_string();
+        draft.item_13_election = Item13Election::Graduated;
         draft.schedule_1[0].taxable_amount = 10_000.0;
         draft.creditable_tax_withheld = 12.5;
         draft.recompute(None);
@@ -349,12 +386,13 @@ mod tests {
         assert_eq!(fields["__year_ended"], "122026");
         assert_eq!(fields["frm2551Qv2018:txtSheets"], "0");
 
-        // A backward-compatible default must not invent the taxpayer's legal
-        // Item 13 or overpayment elections.
-        assert_eq!(fields["frm2551Qv2018:taxRate1"], "false");
+        // This Individual Q1 PT010 return explicitly selects the graduated
+        // election; no overpayment disposition is selected for a positive balance.
+        assert_eq!(fields["frm2551Qv2018:taxRate1"], "true");
         assert_eq!(fields["frm2551Qv2018:taxRate2"], "false");
         assert_eq!(fields["frm2551Qv2018:overPayment1"], "false");
         assert_eq!(fields["frm2551Qv2018:overPayment2"], "false");
+        assert_eq!(fields["txtDateIssue"], "");
     }
 
     #[test]
@@ -407,11 +445,173 @@ mod tests {
     }
 
     #[test]
+    fn field_map_never_prints_item_16_on_a_non_amended_return() {
+        let mut draft = sample_draft();
+        draft.is_amended = false;
+        draft.tax_paid_previous = 500.0;
+        assert_eq!(draft.to_bir_field_map()["frm2551Qv2018:txt16"], "0.00");
+
+        draft.is_amended = true;
+        assert_eq!(draft.to_bir_field_map()["frm2551Qv2018:txt16"], "500.00");
+    }
+
+    #[test]
     fn xml_export_uses_canonical_field_map() {
-        let xml = sample_draft().to_bir_xml_payload();
+        let xml = sample_draft()
+            .to_bir_xml_payload()
+            .expect("the valid sample draft should serialize");
 
         assert!(xml.contains("frm2551Qv2018:txt18="));
         assert!(xml.contains("frm2551Qv2018:txtPg2TaxpayerName="));
         assert!(xml.contains("txtTotalSched1="));
+    }
+
+    #[test]
+    fn xml_export_rejects_stale_or_tampered_derived_amounts() {
+        for field in [
+            "total_tax_due",
+            "total_tax_credits",
+            "tax_payable",
+            "total_penalties",
+            "total_amount_payable",
+        ] {
+            let mut draft = sample_draft();
+            match field {
+                "total_tax_due" => draft.total_tax_due += 1.0,
+                "total_tax_credits" => draft.total_tax_credits += 1.0,
+                "tax_payable" => draft.tax_payable += 1.0,
+                "total_penalties" => draft.total_penalties += 1.0,
+                "total_amount_payable" => draft.total_amount_payable += 1.0,
+                _ => unreachable!(),
+            }
+
+            let errors = draft
+                .to_bir_xml_payload()
+                .expect_err("inconsistent derived amounts must not produce XML");
+            assert!(
+                errors.iter().any(|(error_field, _)| error_field == field),
+                "expected {field} invariant error; got {errors:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn field_map_emits_the_registry_owned_atc_rate() {
+        let mut draft = sample_draft();
+        draft.schedule_1[0].tax_rate = 0.030_000_000_000_5;
+
+        assert_eq!(draft.to_bir_field_map()["txtATCRate1"], "3");
+        draft
+            .to_bir_xml_payload()
+            .expect("a tolerated binary float delta must serialize canonically");
+    }
+
+    #[test]
+    fn every_registry_rate_serializes_as_a_canonical_decimal() {
+        for entry in ATC_TABLE_2551Q {
+            let mut draft = sample_draft();
+            let mut row = Schedule1Row::new(entry.code).expect("registry entry must resolve");
+            row.taxable_amount = 10_000.0;
+            draft.schedule_1 = vec![row];
+            draft.item_13_election = if entry.code == "PT010" {
+                Item13Election::Graduated
+            } else {
+                Item13Election::NotApplicable
+            };
+            draft.recompute(None);
+
+            let fields = draft.to_bir_field_map();
+            assert_eq!(
+                fields["txtATCRate1"],
+                format!("{:.0}", entry.rate * 100.0),
+                "{} must not expose a binary floating-point artifact",
+                entry.code
+            );
+            draft.to_bir_xml_payload().unwrap_or_else(|errors| {
+                panic!("{} failed XML validation: {errors:?}", entry.code)
+            });
+        }
+    }
+
+    #[test]
+    fn field_map_emits_the_period_owned_temporary_pt010_rate() {
+        let mut draft = sample_draft();
+        draft.taxable_year = 2021;
+        draft.quarter = 3;
+        draft.item_13_election = Item13Election::NotApplicable;
+        draft.recompute(None);
+
+        assert_eq!(draft.schedule_1[0].tax_rate, 0.01);
+        assert_eq!(draft.to_bir_field_map()["txtATCRate1"], "1");
+        draft
+            .to_bir_xml_payload()
+            .expect("the temporary statutory rate must serialize canonically");
+    }
+
+    #[test]
+    fn xml_export_enforces_item_13_applicability_before_serializing_boxes() {
+        let mut draft = sample_draft();
+        draft.quarter = 2;
+
+        let errors = draft
+            .to_bir_xml_payload()
+            .expect_err("a later-quarter graduated election must not serialize");
+        assert!(errors.iter().any(|(field, _)| field == "item_13_election"));
+
+        draft.item_13_election = Item13Election::NotApplicable;
+        let fields = draft.to_bir_field_map();
+        assert_eq!(fields["frm2551Qv2018:taxRate1"], "false");
+        assert_eq!(fields["frm2551Qv2018:taxRate2"], "false");
+        draft.recompute(None);
+        draft
+            .to_bir_xml_payload()
+            .expect("a later-quarter NotApplicable election should serialize");
+    }
+
+    #[test]
+    fn xml_export_rejects_negative_or_non_finite_manual_penalties() {
+        let cases = [
+            ("surcharge", -1.0),
+            ("interest", -1.0),
+            ("compromise", -1.0),
+            ("surcharge", f64::NAN),
+            ("interest", f64::INFINITY),
+            ("compromise", f64::NEG_INFINITY),
+        ];
+
+        for (field, value) in cases {
+            let mut draft = sample_draft();
+            draft.auto_compute_penalties = false;
+            match field {
+                "surcharge" => draft.surcharge = value,
+                "interest" => draft.interest = value,
+                "compromise" => draft.compromise = value,
+                _ => unreachable!("test case uses a known penalty field"),
+            }
+
+            let errors = draft
+                .to_bir_xml_payload()
+                .expect_err("invalid manual penalties must not produce XML");
+
+            assert!(
+                errors.iter().any(|(error_field, _)| error_field == field),
+                "expected {field} to be rejected for {value:?}; got {errors:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn xml_export_rejects_a_coherently_tampered_automatic_penalty_chain() {
+        let mut draft = sample_draft();
+        draft.surcharge += 100.0;
+        draft.total_penalties += 100.0;
+        draft.total_amount_payable += 100.0;
+
+        let errors = draft
+            .to_bir_xml_payload()
+            .expect_err("automatic penalties must be recalculated at the XML boundary");
+        assert!(errors.iter().any(|(field, message)| {
+            field == "surcharge" && message.contains("automatic surcharge")
+        }));
     }
 }

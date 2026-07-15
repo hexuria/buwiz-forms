@@ -1,13 +1,27 @@
 //! Form drafts repository — save, load, and list tax form drafts.
 
-use rusqlite::params;
+use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
 
 use super::{Database, DbError};
-use crate::forms::form_2551q::Form2551QDraft;
+use crate::forms::form_2551q::{
+    AnnualIncomeTaxElection, Form2551QDraft, Item13Election, annual_income_tax_election,
+};
 use crate::forms::{
     FilingFrequency, FilingPeriod, FilingStatus, FormDraftSummary, FormFilingProgress,
     QuarterState, find_form,
 };
+
+pub(crate) enum Claim2551QSubmissionResult {
+    Claimed {
+        draft: Form2551QDraft,
+        token: String,
+    },
+    Rejected {
+        draft: Form2551QDraft,
+        errors: Vec<(String, String)>,
+    },
+    Superseded,
+}
 
 fn filing_status_to_db(status: &FilingStatus) -> &'static str {
     match status {
@@ -212,12 +226,36 @@ impl Database {
     /// Save or update a Form 2551Q draft.
     /// Uses UPSERT on (tin, form_code, taxable_year, quarter).
     pub fn save_2551q_draft(&self, draft: &Form2551QDraft) -> Result<i64, DbError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let existing_json = tx
+            .query_row(
+                "SELECT data_json FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '2551Q'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![
+                    &draft.tin,
+                    i64::from(draft.taxable_year),
+                    i64::from(draft.quarter)
+                ],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        if let Some(existing_json) = existing_json {
+            let existing: Form2551QDraft = serde_json::from_str(&existing_json)?;
+            if existing.submission_claim_token.is_some() {
+                return Err(DbError::Other(
+                    "2551Q submission has already crossed the network claim boundary and cannot be replaced by a generic draft write"
+                        .to_string(),
+                ));
+            }
+        }
+
         let json = serde_json::to_string(draft)?;
         let status = filing_status_to_db(&draft.status);
-        let quarter = draft.quarter as i64;
+        let quarter = i64::from(draft.quarter);
         let period_key = FilingPeriod::Quarterly(draft.quarter).to_period_key();
 
-        self.conn.execute(
+        tx.execute(
             "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
              ON CONFLICT(tin, form_code, taxable_year, quarter)
@@ -226,9 +264,9 @@ impl Database {
                            period_key = excluded.period_key,
                            updated_at = datetime('now')",
             params![
-                draft.tin,
+                &draft.tin,
                 "2551Q",
-                draft.taxable_year as i64,
+                i64::from(draft.taxable_year),
                 quarter,
                 period_key,
                 status,
@@ -236,7 +274,340 @@ impl Database {
             ],
         )?;
 
-        let id = self.conn.last_insert_rowid();
+        let id = tx.query_row(
+            "SELECT id FROM form_drafts
+             WHERE tin = ?1 AND form_code = '2551Q'
+               AND taxable_year = ?2 AND quarter = ?3",
+            params![&draft.tin, i64::from(draft.taxable_year), quarter],
+            |row| row.get::<_, i64>(0),
+        )?;
+        tx.commit()?;
+        let _ = self.request_google_calendar_sync();
+        Ok(id)
+    }
+
+    /// Atomically persist a queued 2551Q draft and the initial-quarter Item 13
+    /// election it makes.
+    ///
+    /// An 8% election on either an existing taxpayer's Q1 return or a new
+    /// registrant's first return is part of the taxpayer's annual income-tax
+    /// regime. A queued return must not become visible without the corresponding
+    /// profile ledger entry. Conflicting same-year profile elections fail the
+    /// entire transaction and leave both the profile and draft unchanged.
+    pub fn save_queued_2551q_draft_and_election(
+        &self,
+        draft: &Form2551QDraft,
+    ) -> Result<i64, DbError> {
+        if !matches!(draft.status, FilingStatus::Queued) {
+            return Err(DbError::Other(
+                "Only a queued 2551Q draft can be saved through the submission path".to_string(),
+            ));
+        }
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        use crate::profile::{IncomeTaxElection, TaxElectionHistory, TaxpayerProfile};
+
+        let existing_json = tx
+            .query_row(
+                "SELECT data_json FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '2551Q'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![
+                    &draft.tin,
+                    i64::from(draft.taxable_year),
+                    i64::from(draft.quarter)
+                ],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        if let Some(existing_json) = existing_json {
+            let existing: Form2551QDraft = serde_json::from_str(&existing_json)?;
+            if existing.submission_claim_token.is_some() {
+                return Err(DbError::Other(
+                    "2551Q submission has already crossed the network claim boundary and cannot be requeued"
+                        .to_string(),
+                ));
+            }
+        }
+
+        // Every queued return is bound to the authoritative profile, even if
+        // Item 13 does not create an 8% ledger entry. Read it inside this
+        // transaction so profile synchronization, election persistence, and
+        // the draft UPSERT either all commit or all roll back.
+        let profile_json = tx
+            .query_row(
+                "SELECT data_json FROM profiles WHERE tin = ?1",
+                params![&draft.tin],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?
+            .ok_or_else(|| {
+                DbError::Other(format!(
+                    "Cannot queue 2551Q because taxpayer profile {} does not exist",
+                    draft.tin
+                ))
+            })?;
+        let mut profile: TaxpayerProfile = serde_json::from_str(&profile_json)?;
+        let current_annual_election = annual_income_tax_election(&profile, draft.taxable_year);
+        if current_annual_election == AnnualIncomeTaxElection::Conflicting {
+            return Err(DbError::Other(format!(
+                "Taxpayer profile records conflicting income-tax elections for {}",
+                draft.taxable_year
+            )));
+        }
+
+        let requests_eight_percent = draft.item_13_election == Item13Election::EightPercent;
+        if requests_eight_percent && current_annual_election == AnnualIncomeTaxElection::Graduated {
+            return Err(DbError::Other(format!(
+                "Taxpayer profile already records a conflicting income-tax election for {}",
+                draft.taxable_year
+            )));
+        }
+
+        let mut profile_changed = false;
+        if requests_eight_percent && current_annual_election == AnnualIncomeTaxElection::Unrecorded
+        {
+            // Keep the new election in this transaction's in-memory profile
+            // until the fully synchronized queued draft validates. An invalid
+            // or stale draft therefore cannot leave a partial ledger write.
+            profile.tax_elections.push(TaxElectionHistory {
+                taxable_year: draft.taxable_year,
+                election: IncomeTaxElection::EightPercent,
+                elected_at: chrono::Utc::now().naive_utc(),
+                source_form: "2551Qv2018".to_string(),
+            });
+            profile_changed = true;
+        }
+
+        let mut verified = draft.clone();
+        verified.sync_with_profile(&profile);
+        if let Err(validation_errors) = verified.revalidate_queued_before_submission() {
+            let summary = validation_errors
+                .iter()
+                .map(|(field, message)| format!("{field}: {message}"))
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(DbError::Other(format!(
+                "Queued 2551Q draft failed current-profile and queue-fingerprint validation: {summary}"
+            )));
+        }
+
+        if profile_changed {
+            let updated_profile_json = serde_json::to_string(&profile)?;
+            let updated = tx.execute(
+                "UPDATE profiles SET data_json = ?1 WHERE tin = ?2",
+                params![updated_profile_json, &draft.tin],
+            )?;
+            if updated != 1 {
+                return Err(DbError::Other(format!(
+                    "Expected one taxpayer profile for TIN {}, updated {updated}",
+                    draft.tin
+                )));
+            }
+        }
+
+        let json = serde_json::to_string(&verified)?;
+        let status = filing_status_to_db(&verified.status);
+        let quarter = i64::from(verified.quarter);
+        let period_key = FilingPeriod::Quarterly(verified.quarter).to_period_key();
+
+        tx.execute(
+            "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             ON CONFLICT(tin, form_code, taxable_year, quarter)
+             DO UPDATE SET status = excluded.status,
+                           data_json = excluded.data_json,
+                           period_key = excluded.period_key,
+                           updated_at = datetime('now')",
+            params![
+                &verified.tin,
+                "2551Q",
+                i64::from(verified.taxable_year),
+                quarter,
+                &period_key,
+                status,
+                json
+            ],
+        )?;
+
+        let id = tx.query_row(
+            "SELECT id FROM form_drafts
+             WHERE tin = ?1 AND form_code = '2551Q'
+               AND taxable_year = ?2 AND quarter = ?3",
+            params![&verified.tin, i64::from(verified.taxable_year), quarter],
+            |row| row.get::<_, i64>(0),
+        )?;
+        tx.commit()?;
+
+        let _ = self.request_google_calendar_sync();
+        Ok(id)
+    }
+
+    /// Atomically claim the exact queue generation that was revalidated by the
+    /// background worker. Once claimed, generic draft writes (including a stale
+    /// UI cancel/requeue) are rejected until the worker finishes the claim.
+    ///
+    /// A claim deliberately has no lease expiry. A process crash anywhere after
+    /// this transaction and before the result is finalized leaves an unknown
+    /// network outcome: BIR may or may not have received the return. Automatically
+    /// clearing or retrying that claim could file a duplicate return, so an
+    /// abandoned claim remains fail-closed until a person reconciles it against
+    /// the BIR confirmation or receipt.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn claim_queued_2551q_submission(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        quarter: u8,
+        expected_fingerprint: &Option<String>,
+        expected_next_retry_at: &Option<String>,
+        expected_submission_attempts: u32,
+    ) -> Result<Claim2551QSubmissionResult, DbError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((raw_json, db_status)) = tx
+            .query_row(
+                "SELECT data_json, status FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '2551Q'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![tin, i64::from(taxable_year), i64::from(quarter)],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()?
+        else {
+            return Ok(Claim2551QSubmissionResult::Superseded);
+        };
+        let mut draft: Form2551QDraft = serde_json::from_str(&raw_json)?;
+        if db_status != "Queued"
+            || !matches!(draft.status, FilingStatus::Queued)
+            || draft.submission_claim_token.is_some()
+            || &draft.queued_submission_fingerprint != expected_fingerprint
+            || &draft.next_retry_at != expected_next_retry_at
+            || draft.submission_attempts != expected_submission_attempts
+        {
+            return Ok(Claim2551QSubmissionResult::Superseded);
+        }
+
+        let profile_json = tx
+            .query_row(
+                "SELECT data_json FROM profiles WHERE tin = ?1",
+                params![tin],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?
+            .ok_or_else(|| {
+                DbError::Other(format!(
+                    "Cannot claim 2551Q submission because taxpayer profile {tin} does not exist"
+                ))
+            })?;
+        let profile: crate::profile::TaxpayerProfile = serde_json::from_str(&profile_json)?;
+        draft.sync_with_profile(&profile);
+        if let Err(errors) = draft.revalidate_queued_before_submission() {
+            return Ok(Claim2551QSubmissionResult::Rejected { draft, errors });
+        }
+
+        let token = uuid::Uuid::new_v4().to_string();
+        draft.submission_claim_token = Some(token.clone());
+        draft.submission_claimed_at = Some(chrono::Utc::now().to_rfc3339());
+        draft.last_error = Some(
+            "Submission outcome pending. Automatic retry is disabled; keep any BIR confirmation or receipt and contact support for manual reconciliation before taking another submission action."
+                .to_string(),
+        );
+        let claimed_json = serde_json::to_string(&draft)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts
+             SET data_json = ?1, updated_at = datetime('now')
+             WHERE tin = ?2 AND form_code = '2551Q'
+               AND taxable_year = ?3 AND quarter = ?4
+               AND status = 'Queued' AND data_json = ?5",
+            params![
+                claimed_json,
+                tin,
+                i64::from(taxable_year),
+                i64::from(quarter),
+                raw_json
+            ],
+        )?;
+        if updated != 1 {
+            return Ok(Claim2551QSubmissionResult::Superseded);
+        }
+        tx.commit()?;
+        Ok(Claim2551QSubmissionResult::Claimed { draft, token })
+    }
+
+    /// Finish a claimed network attempt with either Submitted, a queued retry,
+    /// or Draft after the retry limit. Only the worker holding `claim_token`
+    /// may clear and replace the claimed row.
+    pub(crate) fn finish_claimed_2551q_submission(
+        &self,
+        draft: &Form2551QDraft,
+        claim_token: &str,
+    ) -> Result<i64, DbError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((raw_json, db_status)) = tx
+            .query_row(
+                "SELECT data_json, status FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '2551Q'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![
+                    &draft.tin,
+                    i64::from(draft.taxable_year),
+                    i64::from(draft.quarter)
+                ],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()?
+        else {
+            return Err(DbError::Other(
+                "Claimed 2551Q draft disappeared before the network attempt finished".to_string(),
+            ));
+        };
+        let existing: Form2551QDraft = serde_json::from_str(&raw_json)?;
+        if db_status != "Queued" || existing.submission_claim_token.as_deref() != Some(claim_token)
+        {
+            return Err(DbError::Other(
+                "2551Q submission claim no longer belongs to this worker".to_string(),
+            ));
+        }
+
+        let mut finished = draft.clone();
+        finished.submission_claim_token = None;
+        finished.submission_claimed_at = None;
+        let json = serde_json::to_string(&finished)?;
+        let status = filing_status_to_db(&finished.status);
+        let period_key = FilingPeriod::Quarterly(finished.quarter).to_period_key();
+        let updated = tx.execute(
+            "UPDATE form_drafts
+             SET status = ?1, data_json = ?2, period_key = ?3,
+                 updated_at = datetime('now')
+             WHERE tin = ?4 AND form_code = '2551Q'
+               AND taxable_year = ?5 AND quarter = ?6
+               AND status = 'Queued' AND data_json = ?7",
+            params![
+                status,
+                json,
+                period_key,
+                &finished.tin,
+                i64::from(finished.taxable_year),
+                i64::from(finished.quarter),
+                raw_json
+            ],
+        )?;
+        if updated != 1 {
+            return Err(DbError::Other(
+                "2551Q submission claim changed before completion".to_string(),
+            ));
+        }
+        let id = tx.query_row(
+            "SELECT id FROM form_drafts
+             WHERE tin = ?1 AND form_code = '2551Q'
+               AND taxable_year = ?2 AND quarter = ?3",
+            params![
+                &finished.tin,
+                i64::from(finished.taxable_year),
+                i64::from(finished.quarter)
+            ],
+            |row| row.get::<_, i64>(0),
+        )?;
+        tx.commit()?;
         let _ = self.request_google_calendar_sync();
         Ok(id)
     }
@@ -657,6 +1028,8 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::forms::form_2551q::Item13Election;
+    use crate::profile::{IncomeTaxElection, TaxElectionHistory, TaxpayerProfile};
     use rusqlite::Connection;
     use serde::{Deserialize, Serialize};
 
@@ -669,6 +1042,408 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         super::super::migrations::migrate_database(&conn).unwrap();
         Database { conn }
+    }
+
+    fn test_profile() -> TaxpayerProfile {
+        serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Test Taxpayer",
+            "tin": {
+                "segment1": "123",
+                "segment2": "456",
+                "segment3": "789",
+                "branch": "000"
+            },
+            "rdo_code": "018",
+            "line_of_business": "Retail",
+            "registered_address": "Manila",
+            "zip_code": "1000",
+            "phone": "09123456789",
+            "email": "test@example.com",
+            "default_form_type": "2551Qv2018",
+            "taxpayer_type": "Individual"
+        }))
+        .unwrap()
+    }
+
+    fn insert_test_profile(db: &Database, profile: &TaxpayerProfile) {
+        db.conn
+            .execute(
+                "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
+                params![profile.tin.full(), serde_json::to_string(profile).unwrap()],
+            )
+            .unwrap();
+    }
+
+    fn queued_eight_percent_draft(profile: &TaxpayerProfile) -> Form2551QDraft {
+        let mut draft = Form2551QDraft::new_from_profile(profile, 2026, 1);
+        draft.item_13_election = Item13Election::EightPercent;
+        draft
+            .transition_to_queued()
+            .expect("a NIL PT010 Q1 8% election should queue");
+        draft
+    }
+
+    fn queued_graduated_draft(profile: &TaxpayerProfile) -> Form2551QDraft {
+        let mut draft = Form2551QDraft::new_from_profile(profile, 2026, 1);
+        draft.item_13_election = Item13Election::Graduated;
+        draft
+            .transition_to_queued()
+            .expect("a Q1 graduated election should queue");
+        draft
+    }
+
+    #[test]
+    fn queued_q1_eight_percent_draft_atomically_records_annual_election() {
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        let draft = queued_eight_percent_draft(&profile);
+
+        let first_id = db.save_queued_2551q_draft_and_election(&draft).unwrap();
+        let second_id = db.save_queued_2551q_draft_and_election(&draft).unwrap();
+
+        let saved_profile = db.get_profile(&draft.tin).unwrap().unwrap();
+        let elections = saved_profile
+            .tax_elections
+            .iter()
+            .filter(|entry| entry.taxable_year == 2026)
+            .collect::<Vec<_>>();
+        let saved_draft = db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().unwrap();
+
+        assert_eq!(first_id, second_id);
+        assert_eq!(elections.len(), 1);
+        assert_eq!(elections[0].election, IncomeTaxElection::EightPercent);
+        assert_eq!(elections[0].source_form, "2551Qv2018");
+        assert_eq!(saved_draft.status, FilingStatus::Queued);
+    }
+
+    #[test]
+    fn queued_new_registrant_initial_quarter_records_eight_percent_election() {
+        let db = test_db();
+        let mut profile = test_profile();
+        profile.business_start_date = chrono::NaiveDate::from_ymd_opt(2026, 8, 15);
+        insert_test_profile(&db, &profile);
+
+        let mut draft = Form2551QDraft::new_from_profile(&profile, 2026, 3);
+        assert_eq!(draft.item_13_is_applicable(), Some(true));
+        draft.item_13_election = Item13Election::EightPercent;
+        draft
+            .transition_to_queued()
+            .expect("a new registrant's NIL PT010 initial return should queue");
+
+        db.save_queued_2551q_draft_and_election(&draft)
+            .expect("the draft and annual election should commit atomically");
+
+        let saved_profile = db.get_profile(&draft.tin).unwrap().unwrap();
+        assert!(saved_profile.tax_elections.iter().any(|entry| {
+            entry.taxable_year == 2026 && entry.election == IncomeTaxElection::EightPercent
+        }));
+        assert_eq!(
+            db.get_2551q_draft(&draft.tin, 2026, 3)
+                .unwrap()
+                .unwrap()
+                .status,
+            FilingStatus::Queued
+        );
+    }
+
+    #[test]
+    fn queued_graduated_return_requires_and_revalidates_current_profile() {
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        let draft = queued_graduated_draft(&profile);
+
+        db.save_queued_2551q_draft_and_election(&draft)
+            .expect("an unchanged current profile should accept the queued draft");
+
+        let saved_profile = db.get_profile(&draft.tin).unwrap().unwrap();
+        assert!(saved_profile.tax_elections.is_empty());
+        assert_eq!(
+            db.get_2551q_draft(&draft.tin, 2026, 1)
+                .unwrap()
+                .unwrap()
+                .status,
+            FilingStatus::Queued
+        );
+    }
+
+    #[test]
+    fn missing_current_profile_rejects_every_queued_election() {
+        let profile = test_profile();
+        for draft in [
+            queued_graduated_draft(&profile),
+            queued_eight_percent_draft(&profile),
+        ] {
+            let db = test_db();
+            let error = db.save_queued_2551q_draft_and_election(&draft).unwrap_err();
+            assert!(error.to_string().contains("profile"));
+            assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_none());
+        }
+    }
+
+    #[test]
+    fn stale_profile_derived_inputs_reject_without_partial_election_write() {
+        // Taxpayer type changed after review: the stale Individual draft must
+        // not append an 8% election to the now-Corporation profile.
+        let db = test_db();
+        let reviewed_profile = test_profile();
+        let draft = queued_eight_percent_draft(&reviewed_profile);
+        let mut current_profile = reviewed_profile.clone();
+        current_profile.taxpayer_type = crate::profile::TaxpayerType::Corporation;
+        insert_test_profile(&db, &current_profile);
+
+        assert!(db.save_queued_2551q_draft_and_election(&draft).is_err());
+        let saved_profile = db.get_profile(&draft.tin).unwrap().unwrap();
+        assert!(saved_profile.tax_elections.is_empty());
+        assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_none());
+
+        // EOPT tier is calculation-relevant and fingerprinted. A change after
+        // review must likewise reject a generic graduated draft.
+        let db = test_db();
+        let mut reviewed_profile = test_profile();
+        reviewed_profile.eopt_tier = Some(crate::profile::EoptTier::Medium);
+        let draft = queued_graduated_draft(&reviewed_profile);
+        let mut current_profile = reviewed_profile;
+        current_profile.eopt_tier = Some(crate::profile::EoptTier::Micro);
+        insert_test_profile(&db, &current_profile);
+
+        assert!(db.save_queued_2551q_draft_and_election(&draft).is_err());
+        assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_none());
+    }
+
+    #[test]
+    fn network_claim_blocks_stale_cancel_and_finishes_by_token() {
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        let queued = queued_graduated_draft(&profile);
+        db.save_queued_2551q_draft_and_election(&queued)
+            .expect("queued draft should persist before claiming");
+
+        let (mut claimed, token) = match db
+            .claim_queued_2551q_submission(
+                &queued.tin,
+                queued.taxable_year,
+                queued.quarter,
+                &queued.queued_submission_fingerprint,
+                &queued.next_retry_at,
+                queued.submission_attempts,
+            )
+            .unwrap()
+        {
+            Claim2551QSubmissionResult::Claimed { draft, token } => (draft, token),
+            _ => panic!("the exact queued generation should be claimed"),
+        };
+        assert_eq!(
+            claimed.submission_claim_token.as_deref(),
+            Some(token.as_str())
+        );
+
+        let mut stale_cancel = queued.clone();
+        stale_cancel.revert_to_draft();
+        assert!(db.save_2551q_draft(&stale_cancel).is_err());
+        let still_claimed = db
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            still_claimed.submission_claim_token.as_deref(),
+            Some(token.as_str())
+        );
+
+        claimed.transition_to_submitted("queued.xml".to_string());
+        db.finish_claimed_2551q_submission(&claimed, &token)
+            .expect("only the claim owner should finish the attempt");
+        let submitted = db
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(submitted.status, FilingStatus::Submitted);
+        assert!(submitted.submission_claim_token.is_none());
+        assert!(submitted.submission_claimed_at.is_none());
+    }
+
+    #[test]
+    fn abandoned_network_claim_stays_fail_closed_for_manual_reconciliation() {
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        let queued = queued_graduated_draft(&profile);
+        db.save_queued_2551q_draft_and_election(&queued)
+            .expect("queued draft should persist before claiming");
+
+        let token = match db
+            .claim_queued_2551q_submission(
+                &queued.tin,
+                queued.taxable_year,
+                queued.quarter,
+                &queued.queued_submission_fingerprint,
+                &queued.next_retry_at,
+                queued.submission_attempts,
+            )
+            .unwrap()
+        {
+            Claim2551QSubmissionResult::Claimed { token, .. } => token,
+            _ => panic!("the exact queued generation should be claimed"),
+        };
+
+        // Simulate a process crash by abandoning the claim without calling the
+        // completion method. There is no time-based reclamation because the
+        // transport outcome is unknowable and an automatic retry could duplicate
+        // a filing that BIR already received.
+        let abandoned = db
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(abandoned.status, FilingStatus::Queued);
+        assert_eq!(
+            abandoned.submission_claim_token.as_deref(),
+            Some(token.as_str())
+        );
+        assert!(abandoned.submission_claimed_at.is_some());
+        assert!(
+            abandoned
+                .last_error
+                .as_deref()
+                .is_some_and(|message| message.contains("Automatic retry is disabled"))
+        );
+        assert!(
+            abandoned
+                .last_error
+                .as_deref()
+                .is_some_and(|message| message.contains("contact support"))
+        );
+
+        assert!(matches!(
+            db.claim_queued_2551q_submission(
+                &queued.tin,
+                queued.taxable_year,
+                queued.quarter,
+                &queued.queued_submission_fingerprint,
+                &queued.next_retry_at,
+                queued.submission_attempts,
+            )
+            .unwrap(),
+            Claim2551QSubmissionResult::Superseded
+        ));
+
+        let mut stale_cancel = queued;
+        stale_cancel.revert_to_draft();
+        assert!(db.save_2551q_draft(&stale_cancel).is_err());
+    }
+
+    #[test]
+    fn network_claim_is_a_queue_revision_cas_and_revalidates_profile() {
+        let db = test_db();
+        let mut profile = test_profile();
+        profile.eopt_tier = Some(crate::profile::EoptTier::Medium);
+        insert_test_profile(&db, &profile);
+        let queued = queued_graduated_draft(&profile);
+        db.save_queued_2551q_draft_and_election(&queued)
+            .expect("queued draft should persist before claiming");
+
+        assert!(matches!(
+            db.claim_queued_2551q_submission(
+                &queued.tin,
+                queued.taxable_year,
+                queued.quarter,
+                &queued.queued_submission_fingerprint,
+                &Some("different queue generation".to_string()),
+                queued.submission_attempts,
+            )
+            .unwrap(),
+            Claim2551QSubmissionResult::Superseded
+        ));
+
+        profile.eopt_tier = Some(crate::profile::EoptTier::Micro);
+        db.conn
+            .execute(
+                "UPDATE profiles SET data_json = ?1 WHERE tin = ?2",
+                params![serde_json::to_string(&profile).unwrap(), &queued.tin],
+            )
+            .unwrap();
+        match db
+            .claim_queued_2551q_submission(
+                &queued.tin,
+                queued.taxable_year,
+                queued.quarter,
+                &queued.queued_submission_fingerprint,
+                &queued.next_retry_at,
+                queued.submission_attempts,
+            )
+            .unwrap()
+        {
+            Claim2551QSubmissionResult::Rejected { draft, errors } => {
+                assert_eq!(draft.status, FilingStatus::Draft);
+                assert!(
+                    errors
+                        .iter()
+                        .any(|(field, _)| field == "queued_submission_fingerprint")
+                );
+            }
+            _ => panic!("a changed current profile must not be claimed"),
+        }
+        assert!(
+            db.get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+                .unwrap()
+                .unwrap()
+                .submission_claim_token
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn conflicting_annual_election_rejects_queued_draft_without_changes() {
+        let db = test_db();
+        let mut profile = test_profile();
+        profile.tax_elections.push(TaxElectionHistory {
+            taxable_year: 2026,
+            election: IncomeTaxElection::GraduatedOsd,
+            elected_at: chrono::Utc::now().naive_utc(),
+            source_form: "1701Q".to_string(),
+        });
+        insert_test_profile(&db, &profile);
+        let draft = queued_eight_percent_draft(&test_profile());
+
+        let error = db.save_queued_2551q_draft_and_election(&draft).unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains("conflicting income-tax election")
+        );
+        assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_none());
+        let saved_profile = db.get_profile(&draft.tin).unwrap().unwrap();
+        assert_eq!(saved_profile.tax_elections.len(), 1);
+        assert_eq!(
+            saved_profile.tax_elections[0].election,
+            IncomeTaxElection::GraduatedOsd
+        );
+    }
+
+    #[test]
+    fn draft_write_failure_rolls_back_new_profile_election() {
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        db.conn
+            .execute_batch(
+                "CREATE TRIGGER reject_2551q_draft
+                 BEFORE INSERT ON form_drafts
+                 WHEN NEW.form_code = '2551Q'
+                 BEGIN
+                     SELECT RAISE(ABORT, 'forced draft failure');
+                 END;",
+            )
+            .unwrap();
+        let draft = queued_eight_percent_draft(&profile);
+
+        assert!(db.save_queued_2551q_draft_and_election(&draft).is_err());
+        assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_none());
+        let saved_profile = db.get_profile(&draft.tin).unwrap().unwrap();
+        assert!(saved_profile.tax_elections.is_empty());
     }
 
     #[test]

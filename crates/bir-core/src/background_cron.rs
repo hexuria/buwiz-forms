@@ -1,5 +1,6 @@
-use crate::db::Database;
+use crate::db::{Claim2551QSubmissionResult, Database};
 use crate::forms::FilingStatus;
+use crate::forms::form_2551q::Form2551QDraft;
 use crate::profile::TaxpayerProfile;
 use chrono::{Datelike, Utc};
 use std::collections::HashSet;
@@ -184,6 +185,70 @@ async fn process_google_calendar_sync(db: Arc<Mutex<Database>>) {
     }
 }
 
+/// Identity of one user-reviewed queue generation. The form fingerprint binds
+/// submission fields; retry timestamp and attempt count distinguish a later
+/// cancel/requeue of otherwise identical content.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Queued2551QRevision {
+    fingerprint: Option<String>,
+    next_retry_at: Option<String>,
+    submission_attempts: u32,
+}
+
+enum Queued2551QPreparation {
+    Ready {
+        draft: Form2551QDraft,
+        revision: Queued2551QRevision,
+    },
+    Rejected {
+        draft: Form2551QDraft,
+        errors: Vec<(String, String)>,
+    },
+    /// The row was canceled, replaced, or requeued after this job was spawned.
+    Superseded,
+}
+
+fn queued_2551q_revision(draft: &Form2551QDraft) -> Option<Queued2551QRevision> {
+    (matches!(draft.status, FilingStatus::Queued) && draft.submission_claim_token.is_none()).then(
+        || Queued2551QRevision {
+            fingerprint: draft.queued_submission_fingerprint.clone(),
+            next_retry_at: draft.next_retry_at.clone(),
+            submission_attempts: draft.submission_attempts,
+        },
+    )
+}
+
+/// Pure submission-boundary preparation used both after a job is spawned and
+/// immediately before network I/O. The caller loads the draft and profile under
+/// one database lock, so this helper never validates against the tick's stale
+/// bulk profile snapshot.
+fn prepare_queued_2551q(
+    mut draft: Form2551QDraft,
+    profile: &TaxpayerProfile,
+    expected_revision: Option<&Queued2551QRevision>,
+) -> Queued2551QPreparation {
+    let Some(revision) = queued_2551q_revision(&draft) else {
+        return Queued2551QPreparation::Superseded;
+    };
+    if expected_revision.is_some_and(|expected| expected != &revision) {
+        return Queued2551QPreparation::Superseded;
+    }
+
+    draft.sync_with_profile(profile);
+    match draft.revalidate_queued_before_submission() {
+        Ok(()) => Queued2551QPreparation::Ready { draft, revision },
+        Err(errors) => Queued2551QPreparation::Rejected { draft, errors },
+    }
+}
+
+fn validation_reason(errors: &[(String, String)]) -> String {
+    errors
+        .iter()
+        .map(|(field, message)| format!("{field}: {message}"))
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
 async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Database>>) {
     let current_year = Utc::now().naive_utc().date().year() as u16;
 
@@ -234,20 +299,56 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
             };
 
             if summary.form_code == "2551Q" {
-                let mut draft = {
+                let (loaded_draft, current_profile) = {
                     let db_guard = match db_clone.lock() {
                         Ok(g) => g,
                         Err(_) => return,
                     };
-                    match db_guard.get_2551q_draft(
-                        &profile_clone.tin.full(),
+                    let current_profile = match db_guard.get_profile(&profile_clone.tin.full()) {
+                        Ok(Some(profile)) => profile,
+                        _ => return,
+                    };
+                    let draft = match db_guard.get_2551q_draft(
+                        &current_profile.tin.full(),
                         summary.taxable_year,
                         summary.quarter.unwrap_or(0),
                     ) {
-                        Ok(Some(d)) => d,
+                        Ok(Some(draft)) => draft,
                         _ => return,
-                    }
+                    };
+                    (draft, current_profile)
                 };
+
+                if loaded_draft.submission_claim_token.is_some() {
+                    // A prior process may have crashed before or after BIR
+                    // received the upload. Never lease-expire or retry this
+                    // unknown outcome: doing so could create a duplicate filing.
+                    warn!(
+                        "Cron: Form {} has an unresolved submission outcome; automatic retry is disabled and support-assisted manual reconciliation is required",
+                        loaded_draft.period_code()
+                    );
+                    crate::ipc::post_db_changed();
+                    return;
+                }
+
+                let (mut draft, queue_revision) =
+                    match prepare_queued_2551q(loaded_draft, &current_profile, None) {
+                        Queued2551QPreparation::Ready { draft, revision } => (draft, revision),
+                        Queued2551QPreparation::Rejected { draft, errors } => {
+                            let reason = validation_reason(&errors);
+                            warn!(
+                                "Cron: Refusing invalid queued form {} before XML generation: {}",
+                                draft.period_code(),
+                                reason
+                            );
+                            if let Ok(db_guard) = db_clone.lock() {
+                                let _ = db_guard.save_2551q_draft(&draft);
+                            }
+                            crate::ipc::post_db_changed();
+                            return;
+                        }
+                        Queued2551QPreparation::Superseded => return,
+                    };
 
                 if let Some(next_retry) = &draft.next_retry_at
                     && let Ok(next_time) = chrono::DateTime::parse_from_rfc3339(next_retry)
@@ -259,13 +360,36 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                 info!(
                     "Cron: Attempting to submit queued form {} for {}",
                     draft.period_code(),
-                    profile_clone.tin.full()
+                    current_profile.tin.full()
                 );
 
                 let form_type =
                     crate::forms::fileable_form_type_id("2551Q").unwrap_or("2551Qv2018");
                 let filename = draft.default_submission_filename();
-                let xml_payload = draft.to_bir_xml_payload();
+                let xml_payload = match draft.to_bir_xml_payload() {
+                    Ok(payload) => payload,
+                    Err(errors) => {
+                        let reason = errors
+                            .iter()
+                            .map(|(field, message)| format!("{field}: {message}"))
+                            .collect::<Vec<_>>()
+                            .join("; ");
+                        warn!(
+                            "Cron: Refusing invalid form {} at XML generation boundary: {}",
+                            draft.period_code(),
+                            reason
+                        );
+                        draft.revert_to_draft();
+                        draft.last_error = Some(format!(
+                            "Submission blocked at XML generation boundary: {reason}"
+                        ));
+                        if let Ok(db_guard) = db_clone.lock() {
+                            let _ = db_guard.save_2551q_draft(&draft);
+                        }
+                        crate::ipc::post_db_changed();
+                        return;
+                    }
+                };
                 let encrypted = match crate::crypto::compress_and_encrypt(
                     xml_payload.as_bytes(),
                     crate::crypto::BIR_IAF_PASSPHRASE,
@@ -273,6 +397,66 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                     Ok(enc) => enc,
                     Err(e) => {
                         fail_draft_2551q(&mut draft, db_clone.clone(), e.to_string());
+                        return;
+                    }
+                };
+
+                // Atomically claim the exact queue generation immediately
+                // before the irreversible network boundary. Generic UI writes
+                // reject this token, so cancel/requeue cannot win after claim.
+                let claim_result = {
+                    let db_guard = match db_clone.lock() {
+                        Ok(guard) => guard,
+                        Err(_) => return,
+                    };
+                    db_guard.claim_queued_2551q_submission(
+                        &draft.tin,
+                        draft.taxable_year,
+                        draft.quarter,
+                        &queue_revision.fingerprint,
+                        &queue_revision.next_retry_at,
+                        queue_revision.submission_attempts,
+                    )
+                };
+                let claim_token = match claim_result {
+                    Ok(Claim2551QSubmissionResult::Claimed {
+                        draft: claimed_draft,
+                        token,
+                    }) => {
+                        draft = claimed_draft;
+                        // Let an open form window replace its stale Queued copy
+                        // with the claimed row before the network call returns.
+                        crate::ipc::post_db_changed();
+                        token
+                    }
+                    Ok(Claim2551QSubmissionResult::Rejected {
+                        draft: rejected_draft,
+                        errors,
+                    }) => {
+                        let reason = validation_reason(&errors);
+                        warn!(
+                            "Cron: Submission claim rejected form {}: {}",
+                            rejected_draft.period_code(),
+                            reason
+                        );
+                        if let Ok(db_guard) = db_clone.lock() {
+                            let _ = db_guard.save_2551q_draft(&rejected_draft);
+                        }
+                        crate::ipc::post_db_changed();
+                        return;
+                    }
+                    Ok(Claim2551QSubmissionResult::Superseded) => {
+                        info!(
+                            "Cron: Submission job for {} was canceled or superseded before network I/O",
+                            draft.period_code()
+                        );
+                        return;
+                    }
+                    Err(_) => {
+                        warn!(
+                            "Cron: Could not claim queued form {} because the database claim failed",
+                            draft.period_code()
+                        );
                         return;
                     }
                 };
@@ -291,11 +475,31 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                         );
                         draft.transition_to_submitted(filename.clone());
                         if let Ok(db_guard) = db_clone.lock() {
-                            let _ = db_guard.save_2551q_draft(&draft);
-                            schedule_email_poll(&profile_clone, "2551Q", &db_guard);
+                            match db_guard.finish_claimed_2551q_submission(&draft, &claim_token) {
+                                Ok(_) => schedule_email_poll(&current_profile, "2551Q", &db_guard),
+                                Err(error) => warn!(
+                                    "Cron: Form {} was transmitted but its submission claim could not be finalized: {}",
+                                    draft.period_code(),
+                                    error
+                                ),
+                            }
                         }
                     }
-                    Err(e) => fail_draft_2551q(&mut draft, db_clone.clone(), e.to_string()),
+                    Err(error) => {
+                        let error_category = match error {
+                            crate::transport::TransportError::Ftp(_) => "ftp",
+                            crate::transport::TransportError::Io(_) => "io",
+                            crate::transport::TransportError::Rejected => "rejected",
+                        };
+                        // Once `submit_iaf` has started, an error does not prove
+                        // that BIR received no bytes. Keep the durable claim just
+                        // like a process crash: retrying could duplicate a return.
+                        warn!(
+                            error_category,
+                            "Cron: Submission transport ended after the network claim; outcome is unknown and support-assisted manual reconciliation is required"
+                        );
+                        crate::ipc::post_db_changed();
+                    }
                 }
             } else if summary.form_code == "1601C" {
                 let mut draft = {
@@ -443,7 +647,14 @@ fn fail_draft_2551q(
     }
 
     if let Ok(db_guard) = db.lock() {
-        let _ = db_guard.save_2551q_draft(draft);
+        let result = db_guard.save_2551q_draft(draft);
+        if let Err(error) = result {
+            warn!(
+                "Cron: Failed to persist submission failure for {}: {}",
+                draft.period_code(),
+                error
+            );
+        }
     }
 }
 
@@ -701,7 +912,40 @@ impl Drop for JobCleanup {
 mod tests {
     use super::*;
     use crate::db::Database;
+    use crate::forms::form_2551q::Item13Election;
+    use crate::profile::{EoptTier, TaxpayerProfile};
     use tempfile::NamedTempFile;
+
+    fn test_profile() -> TaxpayerProfile {
+        serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Queue Guard Taxpayer",
+            "tin": {
+                "segment1": "123",
+                "segment2": "456",
+                "segment3": "789",
+                "branch": "000"
+            },
+            "rdo_code": "018",
+            "line_of_business": "Retail",
+            "registered_address": "Manila",
+            "zip_code": "1000",
+            "phone": "09123456789",
+            "email": "guard@example.com",
+            "default_form_type": "2551Qv2018",
+            "taxpayer_type": "Individual"
+        }))
+        .unwrap()
+    }
+
+    fn queued_draft(profile: &TaxpayerProfile) -> Form2551QDraft {
+        let mut draft = Form2551QDraft::new_from_profile(profile, 2099, 1);
+        draft.item_13_election = Item13Election::Graduated;
+        draft
+            .transition_to_queued()
+            .expect("the reviewed draft should queue");
+        draft
+    }
 
     #[tokio::test]
     async fn test_run_queue_tick_does_not_panic() {
@@ -715,5 +959,66 @@ mod tests {
 
         // Just run the tick on an empty database. Should not panic.
         run_queue_tick(db.clone()).await;
+    }
+
+    #[test]
+    fn submission_preparation_uses_current_profile_and_rejects_changes() {
+        let mut reviewed_profile = test_profile();
+        reviewed_profile.eopt_tier = Some(EoptTier::Medium);
+        let draft = queued_draft(&reviewed_profile);
+
+        let mut current_profile = reviewed_profile;
+        current_profile.eopt_tier = Some(EoptTier::Micro);
+        let prepared = prepare_queued_2551q(draft, &current_profile, None);
+
+        match prepared {
+            Queued2551QPreparation::Rejected { draft, errors } => {
+                assert_eq!(draft.status, FilingStatus::Draft);
+                assert!(
+                    errors
+                        .iter()
+                        .any(|(field, _)| field == "queued_submission_fingerprint")
+                );
+            }
+            _ => panic!("a changed current profile must reject the queued return"),
+        }
+    }
+
+    #[test]
+    fn submission_revision_rejects_cancel_and_identical_requeue() {
+        let profile = test_profile();
+        let draft = queued_draft(&profile);
+        let revision = match prepare_queued_2551q(draft.clone(), &profile, None) {
+            Queued2551QPreparation::Ready { revision, .. } => revision,
+            _ => panic!("the unchanged queued return must prepare"),
+        };
+
+        let mut canceled = draft.clone();
+        canceled.revert_to_draft();
+        assert!(matches!(
+            prepare_queued_2551q(canceled, &profile, Some(&revision)),
+            Queued2551QPreparation::Superseded
+        ));
+
+        let mut requeued = draft;
+        requeued.next_retry_at = Some("2099-01-01T00:00:00Z".to_string());
+        assert!(matches!(
+            prepare_queued_2551q(requeued, &profile, Some(&revision)),
+            Queued2551QPreparation::Superseded
+        ));
+    }
+
+    #[test]
+    fn unresolved_submission_claim_is_never_eligible_for_automatic_retry() {
+        let profile = test_profile();
+        let mut draft = queued_draft(&profile);
+        draft.submission_claim_token = Some("abandoned-network-claim".to_string());
+        draft.submission_claimed_at = Some("2099-01-01T00:00:00Z".to_string());
+
+        assert!(queued_2551q_revision(&draft).is_none());
+        assert!(matches!(
+            prepare_queued_2551q(draft, &profile, None),
+            Queued2551QPreparation::Superseded
+        ));
     }
 }

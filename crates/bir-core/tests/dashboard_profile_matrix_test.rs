@@ -985,6 +985,37 @@ fn cor_consistency_report_explains_8_percent_percentage_tax_suppression() {
 }
 
 #[test]
+fn eight_percent_election_preserves_non_pt010_percentage_tax_obligation() {
+    let mut profile = self_employed_profile(false, None, true);
+    profile.atc_codes = vec!["PT010".into(), "PT040".into()];
+    let version = confirmed_version(
+        &profile,
+        "cor-2026",
+        "2026 COR",
+        Some((2026, 1, 1)),
+        None,
+        vec![
+            RegisteredTaxType::IncomeTax,
+            RegisteredTaxType::PercentageTax,
+        ],
+        false,
+    );
+    profile.profile_versions = vec![version];
+    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+
+    let preview = profile.preview_obligations_for_year(2026);
+
+    assert!(preview.form_codes.iter().any(|code| code == "2551Q"));
+    assert!(
+        preview
+            .consistency_report
+            .issues
+            .iter()
+            .all(|issue| issue.code != "PERCENTAGE_TAX_SUPPRESSED_BY_8_PERCENT")
+    );
+}
+
+#[test]
 fn cor_consistency_report_flags_cor_tin_mismatch() {
     let mut profile = self_employed_profile(false, None, false);
     let mut version = confirmed_version(

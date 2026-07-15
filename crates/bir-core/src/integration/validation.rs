@@ -8,6 +8,7 @@
 use crate::calendar_rules::{
     DeadlineOverride, DeadlinePeriod, DeadlineResolver, ResolvedTaxDeadline, canonical_form_code,
 };
+use crate::forms::atc::find_atc;
 use crate::forms::registry::FilingFrequency;
 use crate::integration::models::UniversalTaxPayload;
 use crate::profile::{
@@ -103,6 +104,11 @@ impl PayloadValidationError {
 /// Validate a payload's structural integrity (independent of any profile).
 pub fn validate_payload(payload: &UniversalTaxPayload) -> Vec<PayloadValidationError> {
     let mut errors = Vec::new();
+    let valid_money = |value: f64| {
+        value.is_finite()
+            && value >= 0.0
+            && ((value * 100.0) - (value * 100.0).round()).abs() < 1e-7
+    };
 
     // TIN format
     let tin_len = payload.tin.len();
@@ -148,10 +154,10 @@ pub fn validate_payload(payload: &UniversalTaxPayload) -> Vec<PayloadValidationE
 
     // Income source validation
     for (i, source) in payload.income_sources.iter().enumerate() {
-        if source.gross_amount < 0.0 {
+        if !valid_money(source.gross_amount) {
             errors.push(PayloadValidationError::new(
                 format!("income_sources[{i}].gross_amount"),
-                "Gross amount must be non-negative",
+                "Gross amount must be finite, non-negative, and have at most two decimal places",
             ));
         }
         if let Some(rate) = source.tax_rate_override
@@ -164,10 +170,17 @@ pub fn validate_payload(payload: &UniversalTaxPayload) -> Vec<PayloadValidationE
         }
     }
 
-    if payload.creditable_withholdings < 0.0 {
+    if !valid_money(payload.creditable_withholdings) {
         errors.push(PayloadValidationError::new(
             "creditable_withholdings",
-            "Creditable withholdings must be non-negative",
+            "Creditable withholdings must be finite, non-negative, and have at most two decimal places",
+        ));
+    }
+
+    if !valid_money(payload.previous_tax_paid) {
+        errors.push(PayloadValidationError::new(
+            "previous_tax_paid",
+            "Previous tax paid must be finite, non-negative, and have at most two decimal places",
         ));
     }
 
@@ -697,8 +710,17 @@ pub fn obligation_allowed_for_version_and_profile(
         }
     }
 
-    // 8. 8% Income Tax election suppresses Percentage Tax (2551Q, 2551M)
-    if (def.code == "2551Q" || def.code == "2551M") && profile.has_8_percent_election(year) {
+    // 8. An 8% income-tax election replaces only Section 116 percentage tax.
+    // Suppress a PT010-only obligation, but preserve 2551Q/2551M when the
+    // profile owns another registered percentage-tax ATC (for example PT040).
+    // The form-specific schedule validator separately enforces NIL PT010.
+    if matches!(def.code, "2551Q" | "2551M")
+        && profile.has_8_percent_election(year)
+        && !profile.atc_codes.iter().any(|code| {
+            let code = code.trim();
+            code != "PT010" && find_atc(code).is_some()
+        })
+    {
         return false;
     }
 
@@ -841,8 +863,33 @@ fn recurring_obligation_codes_for_version(
         }
     }
 
+    if projected.has_8_percent_election(year)
+        && !projected.atc_codes.iter().any(|code| {
+            let code = code.trim();
+            code != "PT010" && find_atc(code).is_some()
+        })
+        && !gated.contains("2551Q")
+        && (version.registered_tax_types.is_empty()
+            || version
+                .registered_tax_types
+                .contains(&RegisteredTaxType::PercentageTax))
+    {
+        report.push_detailed(
+            ProfileConsistencySeverity::Info,
+            "PERCENTAGE_TAX_SUPPRESSED_BY_8_PERCENT",
+            "The annual 8% income-tax election suppresses the PT010-only percentage-tax obligation; no independently taxable non-PT010 ATC is registered for this profile.",
+            Some(version.id.clone()),
+            Some("2551Q".into()),
+            Some("Income tax election + TTCE".into()),
+            Some(
+                "Verify the income tax election ledger and registered ATCs. Add the official non-PT010 ATC if another percentage-tax activity remains liable."
+                    .into(),
+            ),
+        );
+    }
+
     if has_cor_gate {
-        report_missing_ttce_categories(projected, version, year, &gated, report);
+        report_missing_ttce_categories(version, &gated, report);
     }
 
     for override_rule in &version.obligation_overrides {
@@ -968,9 +1015,7 @@ fn report_obligations_without_calendar_rules(
 }
 
 fn report_missing_ttce_categories(
-    projected: &TaxpayerProfile,
     version: &TaxProfileVersion,
-    year: u16,
     codes: &BTreeSet<String>,
     report: &mut ProfileConsistencyReport,
 ) {
@@ -1020,26 +1065,13 @@ fn report_missing_ttce_categories(
         if version.registered_tax_types.contains(tax_type)
             && !forms.iter().any(|code| codes.contains(*code))
         {
-            let (severity, code, message, source, fix_hint) = if tax_type
-                == &RegisteredTaxType::PercentageTax
-                && projected.has_8_percent_election(year)
-            {
-                (
-                    ProfileConsistencySeverity::Info,
-                    "PERCENTAGE_TAX_SUPPRESSED_BY_8_PERCENT",
-                    "COR/profile version registers percentage tax, but this taxable year has an 8% income tax election so TTCE suppresses percentage tax forms.",
-                    "Income tax election + TTCE",
-                    "If the 8% election is wrong for this year, update the income tax election ledger; otherwise this suppression is expected.",
-                )
-            } else {
-                (
-                    ProfileConsistencySeverity::NeedsReview,
-                    "COR_TAX_TYPE_WITHOUT_TTCE_FORM",
-                    *message,
-                    "COR/profile version",
-                    "Verify the registered tax type, then add a sourced manual include only if the COR obligation is correct and TTCE is missing support.",
-                )
-            };
+            let (severity, code, message, source, fix_hint) = (
+                ProfileConsistencySeverity::NeedsReview,
+                "COR_TAX_TYPE_WITHOUT_TTCE_FORM",
+                *message,
+                "COR/profile version",
+                "Verify the registered tax type, then add a sourced manual include only if the COR obligation is correct and TTCE is missing support.",
+            );
 
             report.push_detailed(
                 severity,

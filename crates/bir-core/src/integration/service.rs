@@ -303,7 +303,8 @@ mod tests {
                 {
                     "category": "BusinessNonVat",
                     "gross_amount": 500000.0,
-                    "is_vat_exempt": true
+                    "is_vat_exempt": true,
+                    "atc_code_override": "PT010"
                 }
             ],
             "creditable_withholdings": 15000.0,
@@ -432,7 +433,11 @@ mod tests {
             "target_form": "2551Q",
             "period_start": "2026-04-01",
             "period_end": "2026-06-30",
-            "income_sources": [{ "category": "BusinessNonVat", "gross_amount": 200000.0 }]
+            "income_sources": [{
+                "category": "BusinessNonVat",
+                "gross_amount": 200000.0,
+                "atc_code_override": "PT010"
+            }]
         }"#;
 
         std::fs::write(dir.path().join("q1.json"), q1_json).unwrap();

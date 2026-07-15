@@ -3,10 +3,11 @@
 //! Each BIR form has a dedicated mapper that understands how to convert
 //! generalized financial data into the specific form's data model.
 
-use crate::forms::atc::find_atc;
-use crate::forms::form_2551q::{Form2551QDraft, Schedule1Row};
+use crate::forms::atc::{AtcRateResolution, find_atc, resolve_2551q_atc_rate};
+use crate::forms::form_2551q::{Form2551QDraft, Item13Election, Schedule1Row};
 use crate::integration::models::{IncomeCategory, IncomeSource, UniversalTaxPayload};
 use crate::profile::TaxpayerProfile;
+use chrono::{Datelike, NaiveDate};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -15,7 +16,7 @@ pub enum MapperError {
     NoApplicableForm,
     #[error("Missing required field: {0}")]
     MissingField(String),
-    #[error("Invalid period: could not derive quarter from period_end")]
+    #[error("Invalid period: Form 2551Q imports must cover one exact calendar quarter")]
     InvalidPeriod,
     #[error("ATC code not found: {0}")]
     AtcNotFound(String),
@@ -64,72 +65,126 @@ pub trait FormMapper {
 /// Mapper for BIR Form 2551Q — Quarterly Percentage Tax Return.
 ///
 /// Maps `UniversalTaxPayload` income sources to Schedule 1 ATC rows,
-/// applies creditable withholdings, and triggers auto-computation of
-/// tax due, penalties, and total amount payable.
+/// applies the official January 2018 ATC registry rates and creditable
+/// withholdings, and triggers auto-computation of tax due, penalties, and total
+/// amount payable.
 pub struct Mapper2551Q;
 
 impl Mapper2551Q {
-    /// Determines the ATC code for an income source based on the category
-    /// and taxpayer profile.
-    fn resolve_atc_code(source: &IncomeSource) -> &'static str {
-        // If the source has an explicit override, validate and use it
-        if let Some(ref override_code) = source.atc_code_override
-            && find_atc(override_code).is_some()
-        {
-            // We can't return a reference to a String field, so we match
-            // against known codes. For unknown overrides, fall through.
-            return match override_code.as_str() {
-                "PT010" => "PT010",
-                "PT040" => "PT040",
-                "PT050" => "PT050",
-                "PT060" => "PT060",
-                "PT070" => "PT070",
-                "PT080" => "PT080",
-                "PT090" => "PT090",
-                "PT100" => "PT100",
-                "PT110" => "PT110",
-                "PT120" => "PT120",
-                "PT130" => "PT130",
-                "PT140" => "PT140",
-                "PT150" => "PT150",
-                "PT160" => "PT160",
-                _ => "PT010", // Unknown override — fall back to default
-            };
+    fn calendar_quarter_period(payload: &UniversalTaxPayload) -> Result<(u16, u8), MapperError> {
+        let quarter = payload.quarter().ok_or(MapperError::InvalidPeriod)?;
+        let calendar_year = payload.period_end.year();
+        let taxable_year = u16::try_from(calendar_year).map_err(|_| MapperError::InvalidPeriod)?;
+        let (start_month, end_month, end_day) = match quarter {
+            1 => (1, 3, 31),
+            2 => (4, 6, 30),
+            3 => (7, 9, 30),
+            4 => (10, 12, 31),
+            _ => return Err(MapperError::InvalidPeriod),
+        };
+        let expected_start = NaiveDate::from_ymd_opt(calendar_year, start_month, 1)
+            .ok_or(MapperError::InvalidPeriod)?;
+        let expected_end = NaiveDate::from_ymd_opt(calendar_year, end_month, end_day)
+            .ok_or(MapperError::InvalidPeriod)?;
+        if payload.period_start != expected_start || payload.period_end != expected_end {
+            return Err(MapperError::InvalidPeriod);
+        }
+        Ok((taxable_year, quarter))
+    }
+
+    /// Resolve an explicit official ATC. Universal income categories are not
+    /// legal evidence that a source belongs to PT010 (or any other 2551Q ATC),
+    /// so imports without a code fail closed for user classification.
+    fn resolve_atc_code(
+        source: &IncomeSource,
+        source_index: usize,
+    ) -> Result<&'static str, MapperError> {
+        if let Some(override_code) = &source.atc_code_override {
+            return find_atc(override_code)
+                .map(|entry| entry.code)
+                .ok_or_else(|| MapperError::AtcNotFound(override_code.clone()));
         }
 
-        // Auto-detect based on income category
-        match source.category {
-            IncomeCategory::BusinessNonVat => "PT010",
-            IncomeCategory::ProfessionalServices => "PT010",
-            IncomeCategory::PassiveIncome => "PT080", // Bank/financial intermediary rate
-            IncomeCategory::CapitalGains => "PT140",  // Stock transactions
-            IncomeCategory::Other(_) => "PT010",      // Default to Sec. 116
-            // These categories don't typically map to percentage tax forms,
-            // but we provide a sensible default rather than failing.
-            IncomeCategory::Compensation => "PT010",
-            IncomeCategory::BusinessVat => "PT010",
-        }
+        Err(MapperError::MissingField(format!(
+            "income_sources[{source_index}].atc_code_override (an official 2551Q ATC is required)"
+        )))
     }
 
     /// Creates Schedule 1 rows from the payload's income sources.
-    fn build_schedule_rows(sources: &[IncomeSource]) -> Result<Vec<Schedule1Row>, MapperError> {
+    fn build_schedule_rows(
+        sources: &[IncomeSource],
+        taxable_year: u16,
+        quarter: u8,
+        year_end_month: u8,
+    ) -> Result<Vec<Schedule1Row>, MapperError> {
         if sources.is_empty() {
             // Default to an empty PT010 row so the draft is valid
-            return Ok(vec![Schedule1Row::default_pt010()]);
+            let mut row = Schedule1Row::default_pt010();
+            match resolve_2551q_atc_rate("PT010", taxable_year, quarter, year_end_month) {
+                Some(AtcRateResolution::Single(rate)) => row.tax_rate = rate,
+                Some(AtcRateResolution::RequiresPeriodSplit) => {
+                    return Err(MapperError::ValidationFailed(vec![(
+                        "tax_period".to_string(),
+                        "PT010 receipts span a July statutory rate boundary and must be split before mapping"
+                            .to_string(),
+                    )]));
+                }
+                None => unreachable!("PT010 is part of the official 2551Q ATC registry"),
+            }
+            row.recompute();
+            return Ok(vec![row]);
         }
 
         let mut rows = Vec::with_capacity(sources.len());
 
-        for source in sources {
-            let atc_code = Self::resolve_atc_code(source);
+        for (index, source) in sources.iter().enumerate() {
+            if !source.gross_amount.is_finite()
+                || source.gross_amount < 0.0
+                || ((source.gross_amount * 100.0) - (source.gross_amount * 100.0).round()).abs()
+                    >= 1e-7
+            {
+                return Err(MapperError::ValidationFailed(vec![(
+                    format!("income_sources[{index}].gross_amount"),
+                    "Gross amount must be finite, non-negative, and have at most two decimal places"
+                        .to_string(),
+                )]));
+            }
+            let atc_code = Self::resolve_atc_code(source, index)?;
             let mut row = Schedule1Row::new(atc_code)
                 .ok_or_else(|| MapperError::AtcNotFound(atc_code.to_string()))?;
 
-            row.taxable_amount = source.gross_amount;
+            let expected_rate = match resolve_2551q_atc_rate(
+                atc_code,
+                taxable_year,
+                quarter,
+                year_end_month,
+            ) {
+                Some(AtcRateResolution::Single(rate)) => rate,
+                Some(AtcRateResolution::RequiresPeriodSplit) => {
+                    return Err(MapperError::ValidationFailed(vec![(
+                        format!("income_sources[{index}].gross_amount"),
+                        "PT010 receipts span a July statutory rate boundary and must be split before mapping"
+                            .to_string(),
+                    )]));
+                }
+                None => unreachable!("resolved ATC code must remain registered"),
+            };
 
-            // Apply tax rate override if provided
-            if let Some(rate) = source.tax_rate_override {
-                row.tax_rate = rate;
+            row.taxable_amount = source.gross_amount;
+            row.tax_rate = expected_rate;
+
+            // Form 2551Q rates are fixed by ATC. A universal-payload override
+            // may repeat the official rate, but may not replace it.
+            if let Some(rate) = source.tax_rate_override
+                && (!rate.is_finite() || (rate - expected_rate).abs() > 1e-12)
+            {
+                return Err(MapperError::ValidationFailed(vec![(
+                    format!("income_sources[{index}].tax_rate_override"),
+                    format!(
+                        "Tax rate override for {atc_code} must match the official rate of {:.2}%",
+                        expected_rate * 100.0
+                    ),
+                )]));
             }
 
             row.recompute();
@@ -164,8 +219,23 @@ impl FormMapper for Mapper2551Q {
         }
 
         // Derive period
-        let year = payload.taxable_year();
-        let quarter = payload.quarter().ok_or(MapperError::InvalidPeriod)?;
+        let (year, quarter) = Self::calendar_quarter_period(payload)?;
+
+        for (field, value) in [
+            ("creditable_withholdings", payload.creditable_withholdings),
+            ("previous_tax_paid", payload.previous_tax_paid),
+        ] {
+            if !value.is_finite()
+                || value < 0.0
+                || ((value * 100.0) - (value * 100.0).round()).abs() >= 1e-7
+            {
+                return Err(MapperError::ValidationFailed(vec![(
+                    field.to_string(),
+                    "Amount must be finite, non-negative, and have at most two decimal places"
+                        .to_string(),
+                )]));
+            }
+        }
 
         // Create draft from profile (pre-fills RDO, name, address, etc.)
         let mut draft = Form2551QDraft::new_from_profile(profile, year, quarter);
@@ -179,13 +249,48 @@ impl FormMapper for Mapper2551Q {
         }
 
         // Build Schedule 1 from income sources
-        draft.schedule_1 = Self::build_schedule_rows(&payload.income_sources)?;
+        draft.schedule_1 = Self::build_schedule_rows(
+            &payload.income_sources,
+            year,
+            quarter,
+            draft.year_end_month,
+        )?;
+        if draft.item_13_is_applicable() == Some(false) {
+            draft.item_13_election = Item13Election::NotApplicable;
+        }
+
+        if profile.has_8_percent_election(year)
+            && draft.schedule_1.iter().any(|row| {
+                row.atc == "PT010"
+                    && (row.taxable_amount.abs() >= 0.005 || row.tax_due.abs() >= 0.005)
+            })
+        {
+            return Err(MapperError::ValidationFailed(vec![(
+                "income_sources".to_string(),
+                "PT010 must be NIL for a taxable year covered by the profile's 8% income-tax election"
+                    .to_string(),
+            )]));
+        }
 
         // Trigger full recomputation (tax due, penalties, totals)
-        let expected_sales = payload
-            .metadata
-            .get("expected_sales")
-            .and_then(|v| v.parse::<f64>().ok());
+        let expected_sales = match payload.metadata.get("expected_sales") {
+            Some(value) => {
+                let parsed = value.parse::<f64>().map_err(|_| {
+                    MapperError::ValidationFailed(vec![(
+                        "metadata.expected_sales".to_string(),
+                        "Expected sales must be a finite non-negative number".to_string(),
+                    )])
+                })?;
+                if !parsed.is_finite() || parsed < 0.0 {
+                    return Err(MapperError::ValidationFailed(vec![(
+                        "metadata.expected_sales".to_string(),
+                        "Expected sales must be a finite non-negative number".to_string(),
+                    )]));
+                }
+                Some(parsed)
+            }
+            None => None,
+        };
 
         draft.recompute(expected_sales);
 
@@ -206,15 +311,15 @@ pub fn resolve_mappers(payload: &UniversalTaxPayload) -> Vec<Box<dyn FormMapper>
             // Future: "1701Q" => mappers.push(Box::new(Mapper1701Q)),
         } // Unknown form — returns empty, caller handles the error
     } else {
-        // Auto-detect: check if any income sources are percentage-tax eligible
+        // Auto-detect only a plausible 2551Q candidate. Categories such as
+        // passive income, capital gains, and professional services are legally
+        // ambiguous without an explicit official 2551Q ATC; they must not
+        // silently opt a payload into PT010.
         let has_percentage_tax_income = payload.income_sources.iter().any(|s| {
-            matches!(
-                s.category,
-                IncomeCategory::BusinessNonVat
-                    | IncomeCategory::ProfessionalServices
-                    | IncomeCategory::PassiveIncome
-                    | IncomeCategory::CapitalGains
-            )
+            matches!(s.category, IncomeCategory::BusinessNonVat)
+                || s.atc_code_override
+                    .as_deref()
+                    .is_some_and(|code| find_atc(code).is_some())
         });
 
         if has_percentage_tax_income {
@@ -234,8 +339,8 @@ pub fn resolve_mappers(payload: &UniversalTaxPayload) -> Vec<Box<dyn FormMapper>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::forms::ATC_TABLE_2551Q;
     use crate::naming::Tin;
-    use chrono::NaiveDate;
 
     fn test_profile() -> TaxpayerProfile {
         TaxpayerProfile {
@@ -304,7 +409,7 @@ mod tests {
                 category: IncomeCategory::BusinessNonVat,
                 gross_amount: 500_000.0,
                 is_vat_exempt: true,
-                atc_code_override: None,
+                atc_code_override: Some("PT010".to_string()),
                 tax_rate_override: None,
             }],
             creditable_withholdings: 15_000.0,
@@ -391,14 +496,14 @@ mod tests {
                 category: IncomeCategory::BusinessNonVat,
                 gross_amount: 300_000.0,
                 is_vat_exempt: true,
-                atc_code_override: None,
+                atc_code_override: Some("PT010".to_string()),
                 tax_rate_override: None,
             },
             IncomeSource {
                 category: IncomeCategory::ProfessionalServices,
                 gross_amount: 200_000.0,
                 is_vat_exempt: false,
-                atc_code_override: None,
+                atc_code_override: Some("PT010".to_string()),
                 tax_rate_override: None,
             },
         ];
@@ -424,7 +529,7 @@ mod tests {
             category: IncomeCategory::BusinessNonVat,
             gross_amount: 100_000.0,
             is_vat_exempt: true,
-            atc_code_override: Some("PT070".to_string()), // Gas/water utility at 2%
+            atc_code_override: Some("PT060".to_string()), // Gas/water utility at 2%
             tax_rate_override: None,
         }];
 
@@ -432,11 +537,284 @@ mod tests {
 
         match result {
             FormDraftOutput::Form2551Q(draft) => {
-                assert_eq!(draft.schedule_1[0].atc, "PT070");
+                assert_eq!(draft.schedule_1[0].atc, "PT060");
                 assert_eq!(draft.schedule_1[0].tax_rate, 0.02);
                 assert_eq!(draft.schedule_1[0].tax_due, 2_000.0); // 100k * 2%
             }
         }
+    }
+
+    #[test]
+    fn mapper_uses_the_period_specific_pt010_rate() {
+        let mapper = Mapper2551Q;
+        let profile = test_profile();
+        let mut payload = test_payload();
+        payload.period_start = NaiveDate::from_ymd_opt(2021, 7, 1).unwrap();
+        payload.period_end = NaiveDate::from_ymd_opt(2021, 9, 30).unwrap();
+        payload.income_sources[0].gross_amount = 100_000.0;
+        payload.income_sources[0].tax_rate_override = Some(0.01);
+
+        let FormDraftOutput::Form2551Q(draft) = mapper
+            .map(&payload, &profile)
+            .expect("Q3 2021 PT010 must use the temporary statutory rate");
+        assert_eq!(draft.taxable_year, 2021);
+        assert_eq!(draft.quarter, 3);
+        assert_eq!(draft.schedule_1[0].tax_rate, 0.01);
+        assert_eq!(draft.schedule_1[0].tax_due, 1_000.0);
+
+        payload.income_sources[0].tax_rate_override = Some(0.03);
+        assert!(matches!(
+            mapper.map(&payload, &profile),
+            Err(MapperError::ValidationFailed(errors))
+                if errors.iter().any(|(field, _)| field.ends_with("tax_rate_override"))
+        ));
+    }
+
+    #[test]
+    fn mapper_requires_one_exact_calendar_quarter() {
+        let mapper = Mapper2551Q;
+        let profile = test_profile();
+        for (start, end) in [
+            ((2026, 1, 2), (2026, 3, 31)),
+            ((2026, 1, 1), (2026, 3, 30)),
+            ((2026, 1, 1), (2026, 6, 30)),
+            ((2020, 6, 1), (2020, 9, 30)),
+        ] {
+            let mut payload = test_payload();
+            payload.period_start = NaiveDate::from_ymd_opt(start.0, start.1, start.2).unwrap();
+            payload.period_end = NaiveDate::from_ymd_opt(end.0, end.1, end.2).unwrap();
+
+            assert!(
+                matches!(
+                    mapper.map(&payload, &profile),
+                    Err(MapperError::InvalidPeriod)
+                ),
+                "{start:?} through {end:?} must not be mapped as one 2551Q quarter"
+            );
+        }
+    }
+
+    #[test]
+    fn mapper_rejects_sub_cent_input_amounts() {
+        let mapper = Mapper2551Q;
+        let profile = test_profile();
+
+        let mut gross = test_payload();
+        gross.income_sources[0].gross_amount = 100.004;
+        assert!(matches!(
+            mapper.map(&gross, &profile),
+            Err(MapperError::ValidationFailed(errors))
+                if errors.iter().any(|(field, _)| field.ends_with("gross_amount"))
+        ));
+
+        for field in ["creditable_withholdings", "previous_tax_paid"] {
+            let mut payload = test_payload();
+            payload.is_amended = true;
+            if field == "creditable_withholdings" {
+                payload.creditable_withholdings = 0.004;
+            } else {
+                payload.previous_tax_paid = 0.004;
+            }
+            assert!(matches!(
+                mapper.map(&payload, &profile),
+                Err(MapperError::ValidationFailed(errors))
+                    if errors.iter().any(|(error_field, _)| error_field == field)
+            ));
+        }
+    }
+
+    #[test]
+    fn mapper_parses_expected_sales_strictly_and_persists_the_basis() {
+        let mapper = Mapper2551Q;
+        let profile = test_profile();
+        for value in ["100,000", "NaN", "-1"] {
+            let mut payload = test_payload();
+            payload
+                .metadata
+                .insert("expected_sales".into(), value.into());
+            assert!(matches!(
+                mapper.map(&payload, &profile),
+                Err(MapperError::ValidationFailed(errors))
+                    if errors.iter().any(|(field, _)| field == "metadata.expected_sales")
+            ));
+        }
+
+        let mut payload = test_payload();
+        payload
+            .metadata
+            .insert("expected_sales".into(), "750000.25".into());
+        let FormDraftOutput::Form2551Q(draft) = mapper
+            .map(&payload, &profile)
+            .expect("a finite non-negative expected-sales basis must map");
+        assert_eq!(draft.expected_sales_for_penalties, Some(750_000.25));
+        let persisted = serde_json::to_string(&draft).expect("mapped draft must serialize");
+        let restored: Form2551QDraft =
+            serde_json::from_str(&persisted).expect("mapped draft must deserialize");
+        assert_eq!(restored.expected_sales_for_penalties, Some(750_000.25));
+    }
+
+    #[test]
+    fn mapper_blocks_only_positive_pt010_for_an_eight_percent_year() {
+        let mapper = Mapper2551Q;
+        let mut profile = test_profile();
+        profile
+            .tax_elections
+            .push(crate::profile::TaxElectionHistory {
+                taxable_year: 2026,
+                election: crate::profile::IncomeTaxElection::EightPercent,
+                elected_at: chrono::NaiveDateTime::default(),
+                source_form: "2551Qv2018".into(),
+            });
+
+        let mut pt010 = test_payload();
+        pt010.target_form = None;
+        assert!(matches!(
+            mapper.map(&pt010, &profile),
+            Err(MapperError::ValidationFailed(errors))
+                if errors.iter().any(|(_, message)| message.contains("PT010 must be NIL"))
+        ));
+
+        let mut pt040 = test_payload();
+        pt040.target_form = None;
+        pt040.income_sources[0].atc_code_override = Some("PT040".into());
+        let FormDraftOutput::Form2551Q(other_activity) = mapper
+            .map(&pt040, &profile)
+            .expect("the 8% election must not erase unrelated PT040 liability");
+        assert_eq!(other_activity.schedule_1[0].atc, "PT040");
+        assert_eq!(
+            other_activity.item_13_election,
+            Item13Election::NotApplicable
+        );
+
+        let mut mixed = test_payload();
+        mixed.target_form = None;
+        mixed.income_sources = vec![
+            IncomeSource {
+                category: IncomeCategory::BusinessNonVat,
+                gross_amount: 0.0,
+                is_vat_exempt: true,
+                atc_code_override: Some("PT010".into()),
+                tax_rate_override: None,
+            },
+            IncomeSource {
+                category: IncomeCategory::BusinessNonVat,
+                gross_amount: 100_000.0,
+                is_vat_exempt: true,
+                atc_code_override: Some("PT040".into()),
+                tax_rate_override: None,
+            },
+        ];
+        let FormDraftOutput::Form2551Q(mixed_activity) = mapper
+            .map(&mixed, &profile)
+            .expect("NIL PT010 plus taxable PT040 must remain mappable");
+        assert_eq!(
+            mixed_activity.item_13_election,
+            Item13Election::EightPercent
+        );
+        assert_eq!(mixed_activity.schedule_1[0].tax_due, 0.0);
+        assert_eq!(mixed_activity.schedule_1[1].tax_due, 3_000.0);
+    }
+
+    #[test]
+    fn mapper_rejects_a_fiscal_pt010_quarter_that_crosses_a_rate_boundary() {
+        let source = IncomeSource {
+            category: IncomeCategory::BusinessNonVat,
+            gross_amount: 10_000.0,
+            is_vat_exempt: true,
+            atc_code_override: Some("PT010".to_string()),
+            tax_rate_override: None,
+        };
+
+        assert!(matches!(
+            Mapper2551Q::build_schedule_rows(&[source], 2020, 4, 8),
+            Err(MapperError::ValidationFailed(errors))
+                if errors.iter().any(|(_, message)| message.contains("must be split"))
+        ));
+    }
+
+    #[test]
+    fn mapper_round_trips_all_official_2551q_atcs_and_rates() {
+        for entry in ATC_TABLE_2551Q {
+            let source = IncomeSource {
+                category: IncomeCategory::BusinessNonVat,
+                gross_amount: 10_000.0,
+                is_vat_exempt: true,
+                atc_code_override: Some(entry.code.to_string()),
+                tax_rate_override: Some(entry.rate),
+            };
+
+            let rows = Mapper2551Q::build_schedule_rows(&[source], 2026, 1, 12)
+                .expect("official registry ATC must map");
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].atc, entry.code);
+            assert_eq!(rows[0].atc_description, entry.description);
+            assert!((rows[0].tax_rate - entry.rate).abs() < f64::EPSILON);
+            assert_eq!(
+                rows[0].tax_due,
+                (10_000.0 * entry.rate * 100.0).round() / 100.0
+            );
+        }
+    }
+
+    #[test]
+    fn mapper_rejects_retired_invented_and_unknown_atc_overrides() {
+        for atc in [
+            "PT011", "PT019", "PT050", "PT080", "PT100", "PT110", "PT999",
+        ] {
+            let source = IncomeSource {
+                category: IncomeCategory::BusinessNonVat,
+                gross_amount: 10_000.0,
+                is_vat_exempt: true,
+                atc_code_override: Some(atc.to_string()),
+                tax_rate_override: None,
+            };
+
+            assert!(matches!(
+                Mapper2551Q::build_schedule_rows(&[source], 2026, 1, 12),
+                Err(MapperError::AtcNotFound(code)) if code == atc
+            ));
+        }
+    }
+
+    #[test]
+    fn mapper_rejects_income_sources_without_an_explicit_atc() {
+        for category in [
+            IncomeCategory::BusinessNonVat,
+            IncomeCategory::ProfessionalServices,
+            IncomeCategory::PassiveIncome,
+            IncomeCategory::CapitalGains,
+        ] {
+            let source = IncomeSource {
+                category,
+                gross_amount: 10_000.0,
+                is_vat_exempt: true,
+                atc_code_override: None,
+                tax_rate_override: None,
+            };
+
+            assert!(matches!(
+                Mapper2551Q::build_schedule_rows(&[source], 2026, 1, 12),
+                Err(MapperError::MissingField(field))
+                    if field == "income_sources[0].atc_code_override (an official 2551Q ATC is required)"
+            ));
+        }
+    }
+
+    #[test]
+    fn mapper_rejects_a_tax_rate_override_that_differs_from_the_registry() {
+        let source = IncomeSource {
+            category: IncomeCategory::BusinessNonVat,
+            gross_amount: 10_000.0,
+            is_vat_exempt: true,
+            atc_code_override: Some("PT060".to_string()),
+            tax_rate_override: Some(0.03),
+        };
+
+        assert!(matches!(
+            Mapper2551Q::build_schedule_rows(&[source], 2026, 1, 12),
+            Err(MapperError::ValidationFailed(errors))
+                if errors.iter().any(|(field, _)| field.ends_with("tax_rate_override"))
+        ));
     }
 
     #[test]
@@ -455,6 +833,22 @@ mod tests {
         let mappers = resolve_mappers(&payload);
         assert_eq!(mappers.len(), 1);
         assert_eq!(mappers[0].target_form_code(), "2551Q");
+    }
+
+    #[test]
+    fn ambiguous_categories_without_atcs_do_not_auto_select_2551q() {
+        for category in [
+            IncomeCategory::ProfessionalServices,
+            IncomeCategory::PassiveIncome,
+            IncomeCategory::CapitalGains,
+        ] {
+            let mut payload = test_payload();
+            payload.target_form = None;
+            payload.income_sources[0].category = category;
+            payload.income_sources[0].atc_code_override = None;
+
+            assert!(resolve_mappers(&payload).is_empty());
+        }
     }
 
     #[test]

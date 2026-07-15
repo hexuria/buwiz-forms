@@ -16,7 +16,7 @@ pub mod forms_set;
 pub mod registry;
 pub mod support_level;
 
-pub use atc::{ATC_TABLE_2551Q, AtcEntry, find_atc};
+pub use atc::{ATC_TABLE_2551Q, AtcEntry, AtcRateResolution, find_atc, resolve_2551q_atc_rate};
 pub use form_1601c::Form1601CDraft;
 pub use form_1701q::Form1701QDraft;
 pub use form_2551q::{Form2551QDraft, Schedule1Row};
