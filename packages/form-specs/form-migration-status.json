@@ -1,0 +1,24 @@
+{
+  "schema_version": 2,
+  "forms": [
+    {
+      "code": "2551Q",
+      "form_id": "2551Qv2018",
+      "revision": "2018",
+      "support_level": "ImplementedInApp",
+      "html_enabled": true,
+      "contract_complete": false,
+      "typed_model_complete": false,
+      "xml_complete": false,
+      "formula_evidence_complete": false,
+      "layout_calibrated": false,
+      "validation_complete": false,
+      "carry_over_complete": false,
+      "pagination_complete": false,
+      "visual_parity_complete": false,
+      "native_print_export_verified": false,
+      "packaged_offline_verified": false,
+      "release_ready": false
+    }
+  ]
+}

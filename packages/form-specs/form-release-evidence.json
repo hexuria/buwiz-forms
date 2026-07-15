@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "forms": {
+    "2551Q:2018": {
+      "references_manifest": "packages/form-renderer/references/manifest.json",
+      "visual_parity": null,
+      "native_print_export": {
+        "macos": null,
+        "windows": null
+      },
+      "packaged_offline": {
+        "macos": null,
+        "windows": null
+      }
+    }
+  }
+}

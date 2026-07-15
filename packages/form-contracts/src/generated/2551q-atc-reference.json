@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "form_code": "2551Q",
+  "revision": "2018",
+  "entries": [
+    {
+      "code": "PT010",
+      "description": "Persons exempt from VAT under Sec. 109(BB) [Sec. 116]",
+      "rate": 0.03
+    },
+    {
+      "code": "PT040",
+      "description": "Domestic carriers and keepers of garages [Sec. 117]",
+      "rate": 0.03
+    },
+    {
+      "code": "PT041",
+      "description": "International Carriers [Sec. 118]",
+      "rate": 0.03
+    },
+    {
+      "code": "PT060",
+      "description": "Franchises on gas and water utilities [Sec. 119]",
+      "rate": 0.02
+    },
+    {
+      "code": "PT070",
+      "description": "Franchises on radio/TV broadcasting companies whose annual gross receipts do not exceed P10 M [Sec. 119]",
+      "rate": 0.03
+    },
+    {
+      "code": "PT090",
+      "description": "Overseas dispatch, message or conversation originating from the Philippines [Sec. 120]",
+      "rate": 0.1
+    },
+    {
+      "code": "PT140",
+      "description": "Cockpits [Sec. 125]",
+      "rate": 0.18
+    },
+    {
+      "code": "PT150",
+      "description": "Tax on amusement places, such as cabarets, night and day clubs, videoke bars, karaoke bars, karaoke television, karaoke boxes, music lounges and other similar establishments [Sec. 125]",
+      "rate": 0.18
+    },
+    {
+      "code": "PT160",
+      "description": "Boxing Exhibition [Sec. 125]",
+      "rate": 0.1
+    },
+    {
+      "code": "PT170",
+      "description": "Professional Basketball Games [Sec. 125]",
+      "rate": 0.15
+    },
+    {
+      "code": "PT180",
+      "description": "Jai-alai and Race Tracks [Sec. 125]",
+      "rate": 0.3
+    },
+    {
+      "code": "PT105",
+      "description": "- Maturity period is five (5) years or less",
+      "rate": 0.05
+    },
+    {
+      "code": "PT101",
+      "description": "- Maturity period is more than five (5) years",
+      "rate": 0.01
+    },
+    {
+      "code": "PT102",
+      "description": "2) On dividends and equity shares and net income of subsidiaries",
+      "rate": 0.0
+    },
+    {
+      "code": "PT103",
+      "description": "3) On royalties, rentals of property, real or personal, profits from exchange and all other gross income",
+      "rate": 0.07
+    },
+    {
+      "code": "PT104",
+      "description": "4) On net trading gains within the taxable year on foreign currency, debt securities, derivatives and other financial instruments",
+      "rate": 0.07
+    },
+    {
+      "code": "PT113",
+      "description": "- Maturity period is five (5) years or less",
+      "rate": 0.05
+    },
+    {
+      "code": "PT114",
+      "description": "- Maturity period is more than five (5) years",
+      "rate": 0.01
+    },
+    {
+      "code": "PT115",
+      "description": "2) From all other items treated as gross income under the code",
+      "rate": 0.05
+    },
+    {
+      "code": "PT120",
+      "description": "Life Insurance Premiums [Sec. 123]",
+      "rate": 0.02
+    },
+    {
+      "code": "PT130",
+      "description": "1) Insurance Agents",
+      "rate": 0.04
+    },
+    {
+      "code": "PT132",
+      "description": "2) Owners of property obtaining insurance directly with foreign insurance companies",
+      "rate": 0.05
+    }
+  ]
+}

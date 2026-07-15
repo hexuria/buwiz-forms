@@ -51,9 +51,9 @@ dotenvy = "0.15.7"
 keyring = { version = "3" }
 
 # GPUI (Desktop)
-gpui = { git = "https://github.com/codeitlikemiley/zed", branch = "feat/macos-app-store-feature-gate" }
-gpui_platform = { git = "https://github.com/codeitlikemiley/zed", branch = "feat/macos-app-store-feature-gate", features = ["font-kit"] }
-gpui-component = { git = "https://github.com/longbridge/gpui-component" }
+gpui = { git = "https://github.com/codeitlikemiley/zed", rev = "da25af078f613bf52b515eded9175a1b397bbc5e" }
+gpui_platform = { git = "https://github.com/codeitlikemiley/zed", rev = "da25af078f613bf52b515eded9175a1b397bbc5e", features = ["font-kit"] }
+gpui-component = { git = "https://github.com/longbridge/gpui-component", rev = "be0f5488a7050f14ed90081f68f450b07761ce93" }
 
 [profile.release]
 lto = true
@@ -65,5 +65,5 @@ opt-level = "z"
 # Redirect gpui-component's transitive dependency on upstream zed to our fork.
 # Without this, Cargo would pull two incompatible versions of gpui.
 [patch."https://github.com/zed-industries/zed"]
-gpui = { git = "https://github.com/codeitlikemiley/zed", branch = "feat/macos-app-store-feature-gate" }
-gpui_platform = { git = "https://github.com/codeitlikemiley/zed", branch = "feat/macos-app-store-feature-gate" }
+gpui = { git = "https://github.com/codeitlikemiley/zed", rev = "da25af078f613bf52b515eded9175a1b397bbc5e" }
+gpui_platform = { git = "https://github.com/codeitlikemiley/zed", rev = "da25af078f613bf52b515eded9175a1b397bbc5e" }

@@ -1,5 +1,9 @@
+#![recursion_limit = "256"]
+
 pub mod editable;
 pub mod formtype;
+pub mod html;
+pub mod html_support;
 
 use bir_core::forms::form_2551q::Form2551QDraft;
 use formtype::{Direction, FieldKind, FormField, FormType};
@@ -139,6 +143,13 @@ fn get_typst_binary() -> std::ffi::OsString {
             if bundled_typst.exists() {
                 return bundled_typst.into_os_string();
             }
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let packaged_typst = Path::new("/usr/lib/ebirforms/typst");
+        if packaged_typst.exists() {
+            return packaged_typst.as_os_str().to_os_string();
         }
     }
     std::ffi::OsString::from("typst")
@@ -1237,6 +1248,7 @@ fn wrap_lines(lines: &[String], max_chars: usize) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bir_core::forms::form_2551q::Item13Election;
     use bir_core::naming::Tin;
     use bir_core::profile::{TaxpayerProfile, TaxpayerType};
 
@@ -1296,6 +1308,7 @@ mod tests {
             per_year_forms: Default::default(),
         };
         let mut draft = Form2551QDraft::new_from_profile(&profile, 2026, 1);
+        draft.item_13_election = Item13Election::NotApplicable;
         draft.schedule_1[0].taxable_amount = 10_000.0;
         draft.creditable_tax_withheld = 25.0;
         draft.recompute(None);
