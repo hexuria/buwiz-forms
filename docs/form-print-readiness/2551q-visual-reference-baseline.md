@@ -87,7 +87,7 @@ dimensions, and count are the deterministic gate.
 ## Final integrated semantic-renderer diagnostic
 
 The integrated owned layout was captured with Chromium on macOS arm64 at the
-pinned 144 DPI dimensions. The relaxed run passed 3/3 and exists only to
+pinned 144 DPI dimensions. The relaxed run passed 5/5 and exists only to
 collect all geometry and page metrics; the strict run uses the required 1%
 ceiling and remains nonzero.
 

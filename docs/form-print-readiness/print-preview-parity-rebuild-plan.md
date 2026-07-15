@@ -67,8 +67,8 @@ Cargo/npm lockfiles and an exact `vMAJOR.MINOR.PATCH` tag matching the Cargo
 workspace version.
 
 Final integrated Chromium comparison at 1224 x 1872 pixels. The relaxed run
-passes 3/3 to collect evidence, but both pages fail the independent 1% release
-ceiling:
+passes 5/5 to collect diagnostics. The strict run passes the other four tests
+but both pages fail the independent 1% release ceiling:
 
 | Page | Donor baseline | Current branch | Release ceiling |
 | --- | ---: | ---: | ---: |
