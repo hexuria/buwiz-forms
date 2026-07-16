@@ -9,7 +9,7 @@ use bir_print::html_output::{
     discard_pdf_export_temp, finalize_pdf_export,
 };
 use bir_print::html_support::{
-    RendererGeometryReport, RendererPageRect, RendererReadinessDecision,
+    HtmlRendererSupport, RendererGeometryReport, RendererPageRect, RendererReadinessDecision,
     bundled_html_renderer_support, renderer_host_plan, renderer_readiness_decision,
     validate_renderer_geometry,
 };
@@ -242,6 +242,10 @@ fn renderer_readiness_timed_out(
 pub enum HtmlPreviewError {
     #[error("HTML preview is disabled for {code}:{revision}")]
     Disabled { code: String, revision: String },
+    #[error(
+        "HTML preview for {code}:{revision} is not release-certified; use a developer build for experimental calibration"
+    )]
+    NotReleaseCertified { code: String, revision: String },
     #[error("HTML renderer bundle was not found at {0}")]
     AssetsNotFound(PathBuf),
     #[error("HTML renderer entry point was not found at {0}")]
@@ -274,6 +278,12 @@ pub(crate) fn prepare_html_form_preview(
     let support = bundled_html_renderer_support(&envelope.form.code, &envelope.form.version);
     if !support.permits_preview() {
         return Err(HtmlPreviewError::Disabled {
+            code: envelope.form.code.clone(),
+            revision: envelope.form.version.clone(),
+        });
+    }
+    if !html_preview_route_permitted(support, cfg!(feature = "dev-tools")) {
+        return Err(HtmlPreviewError::NotReleaseCertified {
             code: envelope.form.code.clone(),
             revision: envelope.form.version.clone(),
         });
@@ -322,6 +332,14 @@ pub(crate) fn prepare_html_form_preview(
         pdf_expectation,
         default_pdf_name,
     })
+}
+
+fn html_preview_route_permitted(support: HtmlRendererSupport, allow_experimental: bool) -> bool {
+    if allow_experimental {
+        support.permits_preview()
+    } else {
+        support.permits_release_routing()
+    }
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
@@ -2071,6 +2089,36 @@ pub fn prepare_html_form_preview(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn production_preview_rejects_uncertified_routes() {
+        let experimental = HtmlRendererSupport {
+            html_enabled: true,
+            release_ready: false,
+        };
+
+        assert!(!html_preview_route_permitted(experimental, false));
+    }
+
+    #[test]
+    fn developer_preview_accepts_experimental_routes() {
+        let experimental = HtmlRendererSupport {
+            html_enabled: true,
+            release_ready: false,
+        };
+
+        assert!(html_preview_route_permitted(experimental, true));
+    }
+
+    #[test]
+    fn production_preview_accepts_certified_html_only_routes() {
+        let certified = HtmlRendererSupport {
+            html_enabled: true,
+            release_ready: true,
+        };
+
+        assert!(html_preview_route_permitted(certified, false));
+    }
 
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     fn validated_page_rect(y: f64) -> RendererPageRect {
