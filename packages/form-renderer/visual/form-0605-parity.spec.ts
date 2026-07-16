@@ -132,6 +132,46 @@ test("0605 1999 keeps the native seal and live official masthead typography with
   await expect(pages.nth(1).locator("img")).toHaveCount(0);
 });
 
+test("0605 1999 preserves the official page-two ATC category bands and merged petroleum row", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/0605-normal.json"));
+  const table = page.locator(".atc-table-0605");
+  await expect(table.locator("tbody tr")).toHaveCount(25);
+
+  const mergedStart = table.locator(".atc-merged-start-0605");
+  const mergedEnd = table.locator(".atc-merged-end-0605");
+  await expect(mergedStart).toHaveCount(2);
+  await expect(mergedEnd).toHaveCount(2);
+  await expect(mergedStart.nth(0)).toHaveText("XP010, XP020 &");
+  await expect(mergedStart.nth(1)).toHaveText("Basetocks, Lubes and");
+  await expect(mergedEnd.nth(0)).toHaveText("XP190");
+  await expect(mergedEnd.nth(1)).toHaveText("Greases");
+  expect(await mergedStart.evaluateAll((cells) =>
+    cells.map((cell) => getComputedStyle(cell).borderBottomColor)
+  )).toEqual(Array(2).fill("rgba(0, 0, 0, 0)"));
+  expect(await mergedEnd.evaluateAll((cells) =>
+    cells.map((cell) => getComputedStyle(cell).borderTopColor)
+  )).toEqual(Array(2).fill("rgba(0, 0, 0, 0)"));
+  await expect(table.locator("tbody tr").nth(12).locator("td").nth(4)).toHaveText("XP040");
+  await expect(table.locator("tbody tr").nth(23).locator("td").nth(4)).toHaveText("XM051");
+
+  const categoryCells = table.locator(".atc-category-0605");
+  await expect(categoryCells).toHaveCount(9);
+  expect(await categoryCells.allTextContents()).toEqual([
+    "Sweetened Products",
+    "Invasive Cosmetic Products",
+    "Tobacco Products",
+    "Miscellaneous Products/Articles",
+    "Mineral Products",
+    "Tobacco Inspection Fees",
+    "Excise Tax on Goods",
+    "Alcohol Products",
+    "Petroleum Products"
+  ]);
+  expect(await categoryCells.evaluateAll((cells) =>
+    cells.map((cell) => getComputedStyle(cell).backgroundColor)
+  )).toEqual(Array(9).fill("rgb(191, 191, 191)"));
+});
+
 test("0605 1999 matches the complete pinned official pages", async ({ page }, testInfo) => {
   const fixture = readFixture("packages/form-contracts/fixtures/0605-normal.json");
   await renderEnvelope(page, fixture);

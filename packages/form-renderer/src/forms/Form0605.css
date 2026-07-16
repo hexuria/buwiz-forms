@@ -640,8 +640,17 @@
 }
 .reference-tables-0605 th {
   height: 13.5pt;
-  background: #c8c8c8;
+  background: #bfbfbf;
   font-size: 4.6pt;
+}
+.atc-table-0605 .atc-category-0605 {
+  background: #bfbfbf;
+}
+.atc-table-0605 .atc-merged-start-0605 {
+  border-bottom-color: transparent;
+}
+.atc-table-0605 .atc-merged-end-0605 {
+  border-top-color: transparent;
 }
 .atc-table-0605 th:nth-child(1), .atc-table-0605 td:nth-child(1) { width: 57pt; }
 .atc-table-0605 th:nth-child(2), .atc-table-0605 td:nth-child(2) { width: 143pt; }
@@ -656,7 +665,7 @@
   place-items: center;
   border: 2pt solid #111;
   border-top: 0;
-  background: #c8c8c8;
+  background: #bfbfbf;
   font-size: 7pt;
   font-weight: 400;
 }

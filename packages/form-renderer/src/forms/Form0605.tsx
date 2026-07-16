@@ -276,10 +276,67 @@ function PageTwoReferenceTables0605() {
   return (
     <section className="reference-tables-0605">
       <p>BIR Form 0605 (ENCS) - PAGE 2</p>
-      <table className="atc-table-0605"><thead><tr>{[0, 1, 2].flatMap((index) => [<th key={`code-${index}`}>ATC</th>, <th key={`desc-${index}`}>NATURE OF PAYMENT</th>])}</tr></thead><tbody>{ATC_ROWS.map((row, rowIndex) => <tr key={rowIndex}>{row.flatMap(([code, description], groupIndex) => [<td key={`c-${groupIndex}`}>{code}</td>, <td key={`d-${groupIndex}`}>{description}</td>])}</tr>)}</tbody></table>
+      <table className="atc-table-0605">
+        <thead>
+          <tr>{[0, 1, 2].flatMap((index) => [<th key={`code-${index}`}>ATC</th>, <th key={`desc-${index}`}>NATURE OF PAYMENT</th>])}</tr>
+        </thead>
+        <tbody>
+          {ATC_ROWS.map((_, rowIndex) => (
+            <tr key={rowIndex}>
+              {[0, 1, 2].map((groupIndex) => (
+                <AtcCellPair0605
+                  key={groupIndex}
+                  groupIndex={groupIndex}
+                  rowIndex={rowIndex}
+                />
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
       <h2>T A X&nbsp;&nbsp; T Y P E</h2>
       <table className="tax-type-table-0605"><thead><tr>{[0, 1, 2].flatMap((index) => [<th key={`code-${index}`}>Code</th>, <th key={`desc-${index}`}>Description</th>])}</tr></thead><tbody>{TAX_TYPE_ROWS.map((row, rowIndex) => <tr key={rowIndex}>{row.flatMap(([code, description], groupIndex) => [<td key={`c-${groupIndex}`}>{code}</td>, <td key={`d-${groupIndex}`}>{description}</td>])}</tr>)}</tbody></table>
     </section>
+  );
+}
+
+function AtcCellPair0605({ rowIndex, groupIndex }: { rowIndex: number; groupIndex: number }) {
+  // The official right-hand XP010/XP020/XP190 entry occupies two physical
+  // rows. Subsequent right-hand codes therefore advance one row later than
+  // the left and middle columns. The two halves intentionally remain separate
+  // table cells with a suppressed shared rule: a literal rowspan makes the
+  // browser report its first tr as overflowing even though the cells fit the
+  // two official rows.
+  const sourceRow = groupIndex === 2 && rowIndex >= 12 ? rowIndex - 1 : rowIndex;
+  let [code, description] = ATC_ROWS[sourceRow][groupIndex];
+  const mergedStart = groupIndex === 2 && rowIndex === 10;
+  const mergedEnd = groupIndex === 2 && rowIndex === 11;
+  if (mergedStart) {
+    code = "XP010, XP020 &";
+    description = "Basetocks, Lubes and";
+  } else if (mergedEnd) {
+    code = "XP190";
+    description = "Greases";
+  }
+  const isCategory = code.length === 0 && description.length > 0;
+  const mergedClass = mergedStart
+    ? "atc-merged-start-0605"
+    : mergedEnd
+      ? "atc-merged-end-0605"
+      : "";
+
+  return (
+    <>
+      <td className={mergedClass || undefined}>{code}</td>
+      <td
+        className={[
+          mergedClass,
+          isCategory ? "atc-category-0605" : ""
+        ].filter(Boolean).join(" ") || undefined}
+      >
+        {description}
+      </td>
+    </>
   );
 }
 
