@@ -260,6 +260,28 @@ function AtcChoices1701({ number, selected }: { number: string; selected: string
 }
 
 function TaxElection1701({ number, rate, deduction }: { number: string; rate: string; deduction: string }) {
+  if (number === "21") {
+    return <div className="tax-election-1701 taxpayer-election-1701">
+      <span className="tax-rate-label-1701"><b>{number}</b><span>Tax<br />Rate*</span><small>(choose one)</small></span>
+      <span className="tax-election-choice-1701 graduated-choice-1701">
+        <CheckChoice checked={rate === "graduated"} label="Graduated Rates" />
+        <small>(Choose Method of Deduction in Item 21A)</small>
+      </span>
+      <span className="deduction-label-1701"><b>{number}A</b> Method of Deduction (choose one)</span>
+      <span className="tax-election-choice-1701 itemized-choice-1701">
+        <CheckChoice checked={deduction === "itemized"} label="Itemized Deduction" />
+        <small>[Sec. 34(A-J), NIRC]</small>
+      </span>
+      <span className="tax-election-choice-1701 osd-choice-1701">
+        <CheckChoice checked={deduction === "osd"} label="Optional Standard Deduction (OSD)" />
+        <small>[40% of Gross Sales/Receipts/Revenues/Fees [Sec. 34(L), NIRC]]</small>
+      </span>
+      <span className="tax-election-choice-1701 eight-percent-choice-1701">
+        <CheckChoice checked={rate === "eight_percent"} label="8% in lieu of Graduated Rates under Sec. 24(A) & Percentage Tax under Sec. 116 of NIRC" />
+        <small>(available if gross sales/receipts and other non-operating income do not exceed Three million pesos (P3M))</small>
+      </span>
+    </div>;
+  }
   return <div className="tax-election-1701"><span><b>{number}</b> Tax Rate*<small>(choose one)</small></span><CheckChoice checked={rate === "graduated"} label="Graduated Rates" /><span className="deduction-label-1701"><b>{number}A</b> Method of Deduction (choose one)</span><CheckChoice checked={deduction === "itemized"} label="Itemized Deduction" /><CheckChoice checked={deduction === "osd"} label="Optional Standard Deduction (OSD)" /><CheckChoice checked={rate === "eight_percent"} label="8% in lieu of Graduated Rates under Sec. 24(A) & Percentage Tax under Sec. 116 of NIRC" /></div>;
 }
 

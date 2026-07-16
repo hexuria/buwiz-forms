@@ -279,7 +279,11 @@
 .contact-civil-1701 > .choice-line-1701 { min-height: 27pt; }
 .two-choice-row-1701 { display: grid; grid-template-columns: 1fr 1fr; }
 .two-choice-row-1701 > * + * { border-left: .6pt solid #111; }
-.filing-status-row-1701 > .choice-line-1701 { min-height: 13pt; }
+.filing-status-row-1701 > .choice-line-1701 {
+  height: 14.5pt;
+  min-height: 0;
+  padding-block: 0;
+}
 .exempt-special-row-1701 > .choice-line-1701 { min-height: 19pt; }
 .tax-election-1701 {
   min-height: 54.5pt;
@@ -296,6 +300,67 @@
 .tax-election-1701 > span:first-child { grid-row: 1 / 3; display: flex; flex-direction: column; }
 .deduction-label-1701 { align-self: start; padding-top: 2pt; }
 .tax-election-1701 > .check-choice:last-child { grid-column: 2 / 6; }
+
+/* The official Item 21/21A row is a two-level hierarchy: the 21A heading sits
+ * above the deduction choices instead of consuming a choice column. */
+.taxpayer-election-1701 {
+  position: relative;
+  display: block;
+  height: 54.5pt;
+  padding: 0;
+}
+.taxpayer-election-1701 > :is(.tax-rate-label-1701, .deduction-label-1701, .tax-election-choice-1701) {
+  position: absolute;
+}
+.taxpayer-election-1701 > .tax-rate-label-1701 {
+  left: 4pt;
+  top: 4pt;
+  width: 39pt;
+  display: grid;
+  grid-template-columns: 11pt 1fr;
+  line-height: .92;
+}
+.taxpayer-election-1701 > .tax-rate-label-1701 > b { grid-row: 1 / 3; }
+.taxpayer-election-1701 > .tax-rate-label-1701 > small { grid-column: 1 / 3; }
+.taxpayer-election-1701 > .deduction-label-1701 {
+  left: 204pt;
+  top: 2pt;
+  padding: 0;
+  white-space: nowrap;
+}
+.taxpayer-election-1701 .tax-election-choice-1701 {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  line-height: .94;
+}
+.taxpayer-election-1701 .tax-election-choice-1701 > small {
+  margin-left: 16pt;
+  font-size: 5.15pt;
+  line-height: .94;
+  white-space: nowrap;
+}
+.taxpayer-election-1701 .check-box {
+  width: 14pt;
+  height: 12.5pt;
+}
+.taxpayer-election-1701 > .graduated-choice-1701 {
+  left: 47.5pt;
+  top: 9pt;
+}
+.taxpayer-election-1701 > .itemized-choice-1701 {
+  left: 213.5pt;
+  top: 9.5pt;
+}
+.taxpayer-election-1701 > .osd-choice-1701 {
+  left: 345pt;
+  top: 9.5pt;
+}
+.taxpayer-election-1701 > .eight-percent-choice-1701 {
+  left: 47.5pt;
+  top: 31pt;
+}
 
 .paired-section-1701 { border: 1pt solid #111; border-top: 0; }
 .paired-section-1701 > .section-band-1701 { margin: 2pt -1pt 0; }

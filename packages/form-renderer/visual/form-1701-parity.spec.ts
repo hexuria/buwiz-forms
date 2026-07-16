@@ -134,6 +134,24 @@ test("1701 2018 keeps verified page-specific PDF417, caption, and seal geometry"
   )).toEqual({ naturalHeight: 102, naturalWidth: 119 });
 });
 
+test("1701 2018 keeps the official Item 21 and 21A choice hierarchy", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701-normal.json"));
+  const firstPage = page.locator(".form-page").nth(0);
+
+  await expectCriticalRegionGeometry(firstPage, [
+    { name: "Item 21 graduated box", selector: ".taxpayer-election-1701 .graduated-choice-1701 .check-box", x: 124, y: 792, width: 28, height: 25 },
+    { name: "Item 21A itemized box", selector: ".taxpayer-election-1701 .itemized-choice-1701 .check-box", x: 456, y: 793, width: 28, height: 25 },
+    { name: "Item 21A OSD box", selector: ".taxpayer-election-1701 .osd-choice-1701 .check-box", x: 719, y: 793, width: 28, height: 25 },
+    { name: "Item 21 eight-percent box", selector: ".taxpayer-election-1701 .eight-percent-choice-1701 .check-box", x: 124, y: 836, width: 28, height: 24 }
+  ]);
+
+  await expect(firstPage.locator(".taxpayer-election-1701 .deduction-label-1701")).toHaveText("21A Method of Deduction (choose one)");
+  await expect(firstPage.locator(".taxpayer-election-1701 .graduated-choice-1701 > small")).toHaveText("(Choose Method of Deduction in Item 21A)");
+  await expect(firstPage.locator(".taxpayer-election-1701 .itemized-choice-1701 > small")).toHaveText("[Sec. 34(A-J), NIRC]");
+  await expect(firstPage.locator(".taxpayer-election-1701 .osd-choice-1701 > small")).toHaveText("[40% of Gross Sales/Receipts/Revenues/Fees [Sec. 34(L), NIRC]]");
+  await expect(firstPage.locator(".taxpayer-election-1701 .eight-percent-choice-1701 > small")).toHaveText("(available if gross sales/receipts and other non-operating income do not exceed Three million pesos (P3M))");
+});
+
 test("1701 2018 matches the complete official pages", async ({ page }, testInfo) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701-normal.json"));
   const pages = page.locator(".form-page");
