@@ -215,7 +215,7 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 .bcs-item { padding-left: 6pt; }
 .government-wordmark {
   position: absolute;
-  left: 220pt;
+  left: 182.5pt;
   top: 1.5pt;
   width: 205pt;
   display: flex;
@@ -232,6 +232,11 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   height: 23pt;
   object-fit: contain;
 }
+.government-wordmark strong,
+.official-form-number > strong,
+.official-form-title > strong,
+.page-two-form-number > strong,
+.page-two-form-title > strong { font-weight: 400; }
 
 .official-masthead {
   height: 62pt;
