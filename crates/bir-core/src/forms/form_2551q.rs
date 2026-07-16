@@ -436,6 +436,15 @@ impl Form2551QDraft {
         self.contact_number = profile.phone.clone();
         self.email = profile.email.clone();
         self.item_13_election = match self.item_13_is_applicable() {
+            Some(false)
+                if self.later_period_requires_recorded_annual_election()
+                    && matches!(
+                        annual_election,
+                        AnnualIncomeTaxElection::Unrecorded | AnnualIncomeTaxElection::Conflicting
+                    ) =>
+            {
+                Item13Election::Unanswered
+            }
             Some(false) => Item13Election::NotApplicable,
             Some(true) => match annual_election {
                 AnnualIncomeTaxElection::Graduated => Item13Election::Graduated,
@@ -512,6 +521,16 @@ impl Form2551QDraft {
             && self.schedule_1.iter().any(|row| row.atc.trim() == "PT010")
             && (1..=4).contains(&self.quarter)
             && (1..=12).contains(&self.year_end_month)
+    }
+
+    /// A later return with Section 116 activity must inherit the taxpayer's
+    /// already-recorded annual election. It is not legally safe to infer that
+    /// election from the current quarter or let the renderer silently leave
+    /// Item 13 unresolved.
+    fn later_period_requires_recorded_annual_election(&self) -> bool {
+        matches!(self.taxpayer_type, Some(TaxpayerType::Individual))
+            && self.schedule_1.iter().any(|row| row.atc.trim() == "PT010")
+            && self.item_13_is_applicable() != Some(true)
     }
 
     /// Recompute all derived values (call after any field change).
@@ -1036,6 +1055,15 @@ impl FormValidator for Form2551QDraft {
                 "Taxpayer profile contains conflicting 8% and graduated income-tax elections for this taxable year; resolve the profile ledger before filing"
                     .to_string(),
             )),
+            Some(AnnualIncomeTaxElection::Unrecorded)
+                if self.later_period_requires_recorded_annual_election() =>
+            {
+                errors.push((
+                    "annual_income_tax_election".to_string(),
+                    "This later-quarter Section 116 return needs the taxpayer profile's recorded annual income-tax election; save the election for this taxable year before filing"
+                        .to_string(),
+                ));
+            }
             _ => {}
         }
         if self.taxpayer_type.is_none() {
@@ -1809,6 +1837,45 @@ mod tests {
     }
 
     #[test]
+    fn profile_sync_keeps_later_quarter_item_13_blank_until_election_is_recorded() {
+        let profile = test_profile();
+        let mut draft = Form2551QDraft::new_from_profile(&profile, 2099, 2);
+        draft.item_13_election = Item13Election::NotApplicable;
+
+        draft.sync_with_profile(&profile);
+
+        assert_eq!(draft.item_13_election, Item13Election::Unanswered);
+        assert!(draft.validate().iter().any(|(field, message)| {
+            field == "annual_income_tax_election"
+                && message.contains("later-quarter Section 116 return")
+        }));
+    }
+
+    #[test]
+    fn profile_sync_marks_later_quarter_item_13_not_applicable_after_recorded_election() {
+        let mut profile = test_profile();
+        profile
+            .tax_elections
+            .push(crate::profile::TaxElectionHistory {
+                taxable_year: 2099,
+                election: IncomeTaxElection::GraduatedOsd,
+                elected_at: chrono::NaiveDateTime::default(),
+                source_form: "profile_manager".into(),
+            });
+        let mut draft = Form2551QDraft::new_from_profile(&profile, 2099, 2);
+
+        draft.sync_with_profile(&profile);
+
+        assert_eq!(draft.item_13_election, Item13Election::NotApplicable);
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .all(|(field, _)| field != "annual_income_tax_election")
+        );
+    }
+
+    #[test]
     fn fiscal_year_end_drives_period_code_and_quarter_deadline() {
         let mut draft = Form2551QDraft::new_from_profile(&test_profile(), 2026, 1);
         draft.tax_period_basis = TaxPeriodBasis::Fiscal;
@@ -1999,6 +2066,7 @@ mod tests {
 
         let mut later_quarter = make_draft(50_000.0, 0.0, 2099, 1);
         later_quarter.quarter = 2;
+        later_quarter.annual_income_tax_election = Some(AnnualIncomeTaxElection::Graduated);
         inapplicable_cases.push(("later quarter".to_string(), later_quarter));
 
         let mut without_pt010 = make_draft(50_000.0, 0.0, 2099, 1);
@@ -2080,7 +2148,16 @@ mod tests {
             (2023, 2, 0.01),
             (2023, 3, 0.03),
         ] {
-            let mut draft = Form2551QDraft::new_from_profile(&test_profile(), year, quarter);
+            let mut profile = test_profile();
+            profile
+                .tax_elections
+                .push(crate::profile::TaxElectionHistory {
+                    taxable_year: year,
+                    election: IncomeTaxElection::GraduatedUnspecified,
+                    elected_at: chrono::NaiveDateTime::default(),
+                    source_form: "test_fixture".into(),
+                });
+            let mut draft = Form2551QDraft::new_from_profile(&profile, year, quarter);
             draft.item_13_election = if quarter == 1 {
                 Item13Election::Graduated
             } else {
@@ -2514,7 +2591,16 @@ mod tests {
 
     #[test]
     fn queue_revalidation_catches_a_new_profile_election_before_submission() {
-        let mut draft = Form2551QDraft::new_from_profile(&test_profile(), 2099, 2);
+        let mut original_profile = test_profile();
+        original_profile
+            .tax_elections
+            .push(crate::profile::TaxElectionHistory {
+                taxable_year: 2099,
+                election: IncomeTaxElection::GraduatedUnspecified,
+                elected_at: chrono::NaiveDateTime::default(),
+                source_form: "2551Qv2018".into(),
+            });
+        let mut draft = Form2551QDraft::new_from_profile(&original_profile, 2099, 2);
         draft.item_13_election = Item13Election::NotApplicable;
         draft.schedule_1[0].taxable_amount = 50_000.0;
         draft.recompute(None);
