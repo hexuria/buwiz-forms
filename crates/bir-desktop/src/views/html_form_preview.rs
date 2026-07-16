@@ -5,8 +5,9 @@ use bir_print::html_forms::RenderLayoutPlan;
 #[cfg(target_os = "macos")]
 use bir_print::html_output::merge_single_page_pdfs;
 use bir_print::html_output::{
-    HtmlOutputKind, HtmlOutputState, PdfExpectation, create_pdf_export_temp,
-    discard_pdf_export_temp, finalize_pdf_export,
+    HtmlOutputKind, HtmlOutputState, HtmlOutputTimeoutStage, PdfExpectation,
+    create_pdf_export_temp, discard_pdf_export_temp, finalize_pdf_export,
+    html_output_timeout_stage,
 };
 use bir_print::html_support::{
     HtmlRendererSupport, RendererGeometryReport, RendererPageRect, RendererReadinessDecision,
@@ -80,7 +81,7 @@ use {
 const READINESS_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
-const OUTPUT_TIMEOUT: Duration = Duration::from_secs(30);
+const PDF_EXPORT_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 const RENDERER_WEBVIEW_IS_INCOGNITO: bool = true;
@@ -978,17 +979,25 @@ impl PendingNativeOutput {
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 fn native_output_timeout_reason(
-    _kind: HtmlOutputKind,
+    kind: HtmlOutputKind,
     backend_started: bool,
     elapsed: Duration,
 ) -> Option<String> {
-    if !backend_started && elapsed >= READINESS_TIMEOUT {
-        return Some("HTML renderer native output preflight timed out".to_string());
+    match html_output_timeout_stage(
+        kind,
+        backend_started,
+        elapsed,
+        READINESS_TIMEOUT,
+        PDF_EXPORT_TIMEOUT,
+    ) {
+        Some(HtmlOutputTimeoutStage::Preflight) => {
+            Some("HTML renderer native output preflight timed out".to_string())
+        }
+        Some(HtmlOutputTimeoutStage::PdfExportBackend) => {
+            Some("native HTML PDF export backend did not complete before its deadline".to_string())
+        }
+        None => None,
     }
-    if elapsed >= OUTPUT_TIMEOUT {
-        return Some("native HTML output backend did not complete before its deadline".to_string());
-    }
-    None
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -2263,12 +2272,24 @@ mod tests {
 
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     #[test]
-    fn native_output_backend_remains_bounded_after_it_starts() {
-        let reason = native_output_timeout_reason(HtmlOutputKind::PdfExport, true, OUTPUT_TIMEOUT);
+    fn native_pdf_export_backend_remains_bounded_after_it_starts() {
+        let reason =
+            native_output_timeout_reason(HtmlOutputKind::PdfExport, true, PDF_EXPORT_TIMEOUT);
         assert_eq!(
             reason.as_deref(),
-            Some("native HTML output backend did not complete before its deadline")
+            Some("native HTML PDF export backend did not complete before its deadline")
         );
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[test]
+    fn active_native_system_print_is_not_failed_by_the_pdf_export_deadline() {
+        let reason = native_output_timeout_reason(
+            HtmlOutputKind::SystemPrint,
+            true,
+            PDF_EXPORT_TIMEOUT + Duration::from_secs(1),
+        );
+        assert_eq!(reason, None);
     }
 
     #[cfg(any(target_os = "macos", target_os = "windows"))]

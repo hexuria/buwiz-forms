@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 const GEOMETRY_TOLERANCE_POINTS: f64 = 0.25;
 const FORM_CODE_INFO_KEY: &[u8] = b"BirFormCode";
@@ -19,6 +20,34 @@ const ENVELOPE_HASH_INFO_KEY: &[u8] = b"BirEnvelopeSha256";
 pub enum HtmlOutputKind {
     SystemPrint,
     PdfExport,
+}
+
+/// A bounded phase in the native HTML output lifecycle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HtmlOutputTimeoutStage {
+    Preflight,
+    PdfExportBackend,
+}
+
+/// Classifies elapsed native-output work without timing out an active system print dialog.
+///
+/// System print is completion-callback-bound after its platform backend starts because the user
+/// may legitimately keep the native dialog open. PDF export remains bounded because it has no
+/// interactive native-dialog phase.
+pub fn html_output_timeout_stage(
+    kind: HtmlOutputKind,
+    backend_started: bool,
+    elapsed: Duration,
+    readiness_timeout: Duration,
+    pdf_export_timeout: Duration,
+) -> Option<HtmlOutputTimeoutStage> {
+    if !backend_started && elapsed >= readiness_timeout {
+        return Some(HtmlOutputTimeoutStage::Preflight);
+    }
+    if kind == HtmlOutputKind::PdfExport && elapsed >= pdf_export_timeout {
+        return Some(HtmlOutputTimeoutStage::PdfExportBackend);
+    }
+    None
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -622,6 +651,45 @@ fn atomic_replace(temp_path: &Path, destination: &Path) -> Result<(), HtmlOutput
 mod tests {
     use super::*;
     use lopdf::{dictionary, Stream};
+
+    const TEST_READINESS_TIMEOUT: Duration = Duration::from_secs(5);
+    const TEST_PDF_EXPORT_TIMEOUT: Duration = Duration::from_secs(30);
+
+    #[test]
+    fn active_system_print_has_no_backend_deadline() {
+        let stage = html_output_timeout_stage(
+            HtmlOutputKind::SystemPrint,
+            true,
+            Duration::from_secs(3_600),
+            TEST_READINESS_TIMEOUT,
+            TEST_PDF_EXPORT_TIMEOUT,
+        );
+        assert_eq!(stage, None);
+    }
+
+    #[test]
+    fn active_pdf_export_expires_at_its_backend_deadline() {
+        let stage = html_output_timeout_stage(
+            HtmlOutputKind::PdfExport,
+            true,
+            TEST_PDF_EXPORT_TIMEOUT,
+            TEST_READINESS_TIMEOUT,
+            TEST_PDF_EXPORT_TIMEOUT,
+        );
+        assert_eq!(stage, Some(HtmlOutputTimeoutStage::PdfExportBackend));
+    }
+
+    #[test]
+    fn system_print_preflight_expires_before_backend_start() {
+        let stage = html_output_timeout_stage(
+            HtmlOutputKind::SystemPrint,
+            false,
+            TEST_READINESS_TIMEOUT,
+            TEST_READINESS_TIMEOUT,
+            TEST_PDF_EXPORT_TIMEOUT,
+        );
+        assert_eq!(stage, Some(HtmlOutputTimeoutStage::Preflight));
+    }
 
     fn expectation(page_count: usize) -> PdfExpectation {
         PdfExpectation {

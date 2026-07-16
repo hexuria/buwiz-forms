@@ -9,8 +9,8 @@ use crate::views::html_form_preview::{
 use bir_print::html::RenderEnvelopeV1;
 use bir_print::html_forms::RenderLayoutPlan;
 use bir_print::html_output::{
-    HtmlOutputKind, PdfExpectation, create_pdf_export_temp, discard_pdf_export_temp,
-    finalize_pdf_export,
+    HtmlOutputKind, HtmlOutputTimeoutStage, PdfExpectation, create_pdf_export_temp,
+    discard_pdf_export_temp, finalize_pdf_export, html_output_timeout_stage,
 };
 use bir_print::html_support::{
     RendererGeometryReport, RendererPageRect, RendererReadinessDecision,
@@ -38,7 +38,7 @@ use webkit2gtk::{
 use wry::{WebViewBuilderExtUnix, WebViewExtUnix};
 
 const READINESS_TIMEOUT: Duration = Duration::from_secs(5);
-const OUTPUT_TIMEOUT: Duration = Duration::from_secs(30);
+const PDF_EXPORT_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, thiserror::Error)]
 pub enum LinuxHtmlPreviewError {
@@ -130,16 +130,21 @@ struct LinuxHostBridge {
 }
 
 fn linux_output_timeout_reason(pending: &PendingLinuxOutput) -> Option<String> {
-    let elapsed = pending.requested_at.elapsed();
-    if !pending.backend_started && elapsed >= READINESS_TIMEOUT {
-        return Some("Linux native output preflight timed out".to_string());
+    match html_output_timeout_stage(
+        pending.kind,
+        pending.backend_started,
+        pending.requested_at.elapsed(),
+        READINESS_TIMEOUT,
+        PDF_EXPORT_TIMEOUT,
+    ) {
+        Some(HtmlOutputTimeoutStage::Preflight) => {
+            Some("Linux native output preflight timed out".to_string())
+        }
+        Some(HtmlOutputTimeoutStage::PdfExportBackend) => {
+            Some("Linux native PDF export backend did not complete before its deadline".to_string())
+        }
+        None => None,
     }
-    if elapsed >= OUTPUT_TIMEOUT {
-        return Some(
-            "Linux native output backend did not complete before its deadline".to_string(),
-        );
-    }
-    None
 }
 
 #[derive(Debug, Deserialize)]
@@ -582,7 +587,11 @@ fn expire_pending_output(
     });
 }
 
-fn schedule_output_deadlines(bridge: &Arc<Mutex<LinuxHostBridge>>, nonce: u64) {
+fn schedule_output_deadlines(
+    bridge: &Arc<Mutex<LinuxHostBridge>>,
+    nonce: u64,
+    kind: HtmlOutputKind,
+) {
     let preflight_bridge = bridge.clone();
     glib::timeout_add_once(READINESS_TIMEOUT, move || {
         expire_pending_output(
@@ -592,13 +601,16 @@ fn schedule_output_deadlines(bridge: &Arc<Mutex<LinuxHostBridge>>, nonce: u64) {
             "Linux native output preflight timed out",
         );
     });
+    if kind != HtmlOutputKind::PdfExport {
+        return;
+    }
     let backend_bridge = bridge.clone();
-    glib::timeout_add_once(OUTPUT_TIMEOUT, move || {
+    glib::timeout_add_once(PDF_EXPORT_TIMEOUT, move || {
         expire_pending_output(
             &backend_bridge,
             nonce,
             false,
-            "Linux native output backend did not complete before its deadline",
+            "Linux native PDF export backend did not complete before its deadline",
         );
     });
 }
@@ -635,7 +647,7 @@ fn request_output_preflight(
         });
         nonce
     };
-    schedule_output_deadlines(bridge, nonce);
+    schedule_output_deadlines(bridge, nonce, kind);
     evaluate_script(webview, &native_print_preflight_script(nonce));
     Ok(nonce)
 }
@@ -1321,10 +1333,11 @@ mod tests {
     }
 
     #[test]
-    fn running_backend_expires_at_the_overall_output_deadline() {
+    fn running_pdf_export_expires_at_the_overall_output_deadline() {
         let bridge = Arc::new(Mutex::new(LinuxHostBridge::default()));
         let mut pending = pending_output(9);
-        pending.requested_at = Instant::now() - OUTPUT_TIMEOUT;
+        pending.kind = HtmlOutputKind::PdfExport;
+        pending.requested_at = Instant::now() - PDF_EXPORT_TIMEOUT;
         pending.backend_started = true;
         bridge.lock().expect("bridge").pending_output = Some(pending);
 
@@ -1333,8 +1346,21 @@ mod tests {
         assert!(
             completion
                 .result
-                .is_err_and(|error| error.contains("backend did not complete"))
+                .is_err_and(|error| error.contains("PDF export backend did not complete"))
         );
+    }
+
+    #[test]
+    fn running_system_print_does_not_expire_at_the_pdf_export_deadline() {
+        let bridge = Arc::new(Mutex::new(LinuxHostBridge::default()));
+        let mut pending = pending_output(9);
+        pending.requested_at = Instant::now() - PDF_EXPORT_TIMEOUT;
+        pending.backend_started = true;
+        bridge.lock().expect("bridge").pending_output = Some(pending);
+
+        assert!(take_ready_output(&bridge).is_none());
+        assert!(take_completion(&bridge).is_none());
+        assert!(bridge.lock().expect("bridge").pending_output.is_some());
     }
 
     #[test]
