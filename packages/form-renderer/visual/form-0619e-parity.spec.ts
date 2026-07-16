@@ -95,7 +95,7 @@ test("0619E 2018 keeps verified PDF417, caption, and seal geometry", async ({ pa
   )).toEqual({ naturalHeight: 78, naturalWidth: 86 });
 });
 
-test("0619E 2018 preserves official period insets and signature bands", async ({ page }) => {
+test("0619E 2018 preserves official period, declaration, and signature bands", async ({ page }) => {
   const fixture = readFixture("packages/form-contracts/fixtures/0619e-normal.json");
   await renderEnvelope(page, fixture);
   const formPage = page.locator(".form-page").first();
@@ -116,6 +116,10 @@ test("0619E 2018 preserves official period insets and signature bands", async ({
   }
 
   await expect(page.locator(".signature-labels-0619e")).toHaveCSS(
+    "background-color",
+    "rgb(217, 217, 217)"
+  );
+  await expect(page.locator(".declaration-0619e > p")).toHaveCSS(
     "background-color",
     "rgb(217, 217, 217)"
   );
