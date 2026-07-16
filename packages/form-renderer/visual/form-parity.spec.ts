@@ -184,13 +184,13 @@ for (const parityCase of cases) {
       { name: "individual signature caption", selector: ".official-signature-grid > div:first-child .signature-caption", x: 47, y: 1345, width: 567, height: 53 },
       { name: "non-individual signature caption", selector: ".official-signature-grid > div:last-child .signature-caption", x: 615, y: 1345, width: 565, height: 53 },
       { name: "tax-agent strip", selector: ".tax-agent-strip", x: 47, y: 1398, width: 1133, height: 38 },
-      { name: "Part III item 25 decimal cell", selector: ".payment-row-25 .decimal-separator", x: 1098, y: 1502, width: 29, height: 35 },
+      { name: "Part III item 25 decimal cell", selector: ".payment-row-25 .decimal-separator", x: 1097, y: 1502, width: 30, height: 35 },
       { name: "Part III item 25 cents cells", selector: ".payment-row-25 .comb-value:last-child", x: 1127, y: 1502, width: 53, height: 35 },
-      { name: "Part III item 26 decimal cell", selector: ".payment-row-26 .decimal-separator", x: 1098, y: 1538, width: 29, height: 35 },
+      { name: "Part III item 26 decimal cell", selector: ".payment-row-26 .decimal-separator", x: 1097, y: 1538, width: 30, height: 35 },
       { name: "Part III item 26 cents cells", selector: ".payment-row-26 .comb-value:last-child", x: 1127, y: 1538, width: 53, height: 35 },
-      { name: "Part III item 27 decimal cell", selector: ".payment-row-27 .decimal-separator", x: 1098, y: 1575, width: 29, height: 35 },
+      { name: "Part III item 27 decimal cell", selector: ".payment-row-27 .decimal-separator", x: 1097, y: 1575, width: 30, height: 35 },
       { name: "Part III item 27 cents cells", selector: ".payment-row-27 .comb-value:last-child", x: 1127, y: 1575, width: 53, height: 35 },
-      { name: "Part III item 28 continuation decimal cell", selector: ".payment-other-row .decimal-separator", x: 1098, y: 1636, width: 29, height: 35 },
+      { name: "Part III item 28 continuation decimal cell", selector: ".payment-other-row .decimal-separator", x: 1097, y: 1636, width: 30, height: 35 },
       { name: "Part III item 28 continuation cents cells", selector: ".payment-other-row .comb-value:last-child", x: 1127, y: 1636, width: 53, height: 35 }
     ]);
     await expectHeaderOptionsTopAlignment(pages.nth(0));
@@ -259,6 +259,82 @@ for (const parityCase of cases) {
     ).toEqual([]);
   });
 }
+
+test("2551Q PDF417 artwork keeps the reviewed source geometry", async ({ page }) => {
+  await renderEnvelope(
+    page,
+    readFixture("packages/form-contracts/fixtures/2551q-6-rows.json")
+  );
+  const pages = page.locator(".form-page");
+  await expect(pages).toHaveCount(2);
+
+  await expectCriticalRegionGeometry(pages.nth(0), [
+    { name: "Page 1 masthead", selector: ".official-masthead", x: 45, y: 100, width: 1136, height: 124 },
+    { name: "Page 1 PDF417 symbol", selector: ".official-barcode > .official-pdf417-symbol", x: 852, y: 119, width: 323, height: 74 },
+    { name: "Page 1 PDF417 caption", selector: ".official-barcode > small", x: 1009, y: 196, width: 161, height: 16 }
+  ]);
+  await expectCriticalRegionGeometry(pages.nth(1), [
+    { name: "Page 2 masthead", selector: ".page-two-masthead", x: 45, y: 78, width: 1136, height: 117 },
+    { name: "Page 2 PDF417 symbol", selector: ".page-two-barcode > .official-pdf417-symbol", x: 849, y: 97, width: 326, height: 75 },
+    { name: "Page 2 PDF417 caption", selector: ".page-two-barcode > small", x: 1009, y: 177, width: 161, height: 16 }
+  ]);
+
+  expect(
+    await page.locator(".official-pdf417-symbol").evaluateAll((symbols) =>
+      symbols.slice(0, 2).map((symbol) => ({
+        preserveAspectRatio: symbol.getAttribute("preserveAspectRatio"),
+        shapeRendering: getComputedStyle(symbol).shapeRendering,
+        viewBox: symbol.getAttribute("viewBox")
+      }))
+    )
+  ).toEqual([
+    { preserveAspectRatio: "none", shapeRendering: "crispedges", viewBox: "0 0 120 7" },
+    { preserveAspectRatio: "none", shapeRendering: "crispedges", viewBox: "0 0 120 7" }
+  ]);
+
+  const captionStyles = await page
+    .locator(".official-barcode > small, .page-two-barcode > small")
+    .evaluateAll((captions) => captions.slice(0, 2).map((caption) => {
+      const style = getComputedStyle(caption);
+      return {
+        fontFamily: style.fontFamily,
+        fontSize: style.fontSize,
+        lineHeight: style.lineHeight,
+        textAlign: style.textAlign,
+        whiteSpace: style.whiteSpace
+      };
+    }));
+  expect(captionStyles).toEqual(Array.from({ length: 2 }, () => ({
+    fontFamily: '"eBIRForms Arimo", sans-serif',
+    fontSize: "10.6667px",
+    lineHeight: "10.6667px",
+    textAlign: "right",
+    whiteSpace: "nowrap"
+  })));
+
+  const gaps = await Promise.all([
+    measuredVerticalGap(pages.nth(0), ".official-barcode"),
+    measuredVerticalGap(pages.nth(1), ".page-two-barcode")
+  ]);
+  expect(gaps[0]).toBeCloseTo(3.04, 1);
+  expect(gaps[1]).toBeCloseTo(5.02, 1);
+});
+
+test("2551Q Part III amount cells preserve the official partition", async ({ page }) => {
+  await renderEnvelope(
+    page,
+    readFixture("packages/form-contracts/fixtures/2551q-6-rows.json")
+  );
+  const pageOne = page.locator(".form-page").first();
+  await expectCriticalRegionGeometry(pageOne, [
+    { name: "Item 25 Amount", selector: ".payment-row-25 .blank-money-value", x: 757, y: 1502, width: 422, height: 35 },
+    { name: "Item 25 decimal cell", selector: ".payment-row-25 .decimal-separator", x: 1097, y: 1502, width: 30, height: 35 },
+    { name: "Item 25 cents cells", selector: ".payment-row-25 .comb-value:last-child", x: 1127, y: 1502, width: 53, height: 35 },
+    { name: "Item 28 Amount", selector: ".payment-other-row .blank-money-value", x: 757, y: 1636, width: 422, height: 35 },
+    { name: "Item 28 decimal cell", selector: ".payment-other-row .decimal-separator", x: 1097, y: 1636, width: 30, height: 35 },
+    { name: "Item 28 cents cells", selector: ".payment-other-row .comb-value:last-child", x: 1127, y: 1636, width: 53, height: 35 }
+  ]);
+});
 
 test("development preview fallback renders without a contract error", async ({ page }) => {
   const pageErrors: string[] = [];
@@ -713,6 +789,16 @@ async function expectHeaderOptionsTopAlignment(pageOne: Locator) {
       elements.map((element) => getComputedStyle(element).backgroundColor)
     )
   ).toEqual(Array.from({ length: 8 }, () => "rgb(255, 255, 255)"));
+}
+
+async function measuredVerticalGap(formPage: Locator, barcodeSelector: string) {
+  const barcode = formPage.locator(barcodeSelector);
+  const symbol = await barcode.locator(".official-pdf417-symbol").boundingBox();
+  const caption = await barcode.locator("small").boundingBox();
+  expect(symbol, "PDF417 symbol must have geometry").not.toBeNull();
+  expect(caption, "PDF417 caption must have geometry").not.toBeNull();
+  if (!symbol || !caption) return Number.NaN;
+  return (caption.y - symbol.y - symbol.height) * DEVICE_SCALE_FACTOR;
 }
 
 async function expectCriticalRegionContent(pageOne: Locator, pageTwo: Locator) {

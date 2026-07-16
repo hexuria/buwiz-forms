@@ -779,30 +779,64 @@
           "treatment": "16-color grayscale quantization"
         },
         {
-          "asset": "static_form_barcode_page_1",
-          "crop_box_px": [
-            845,
-            111,
-            1170,
-            212
-          ],
-          "derived_png_sha256": "875dc5520cdbd5c9be0c57980ac87db6e48c1b675d76881624a18f87df0e1683",
+          "asset": "static_form_pdf417_page_1",
+          "decoded_payload": "2551Q 01/18ENCS P1",
+          "embedded_as": "reviewed_inline_svg_module_matrix",
           "embedded_in": "packages/form-renderer/src/forms/official2551QAssets.ts",
+          "logical_dimensions": [
+            120,
+            7
+          ],
+          "logical_matrix_sha256": "0b22b8418dc0dadb2043dd6022cb337e6fd60193b50105a3e7c47de3e565b9ca",
+          "source_ctm_points": [
+            161.28,
+            0.0,
+            0.0,
+            37.08,
+            425.76,
+            839.52
+          ],
           "source_page": 1,
-          "treatment": "monochrome threshold at 180"
+          "source_pdf_object_id": [
+            35,
+            0
+          ],
+          "source_pixel_dimensions": [
+            240,
+            63
+          ],
+          "source_png_sha256": "2fde50ef1089a8b5ec262b2927ea4d6d26323e9fab95832b22ca3b4ab602eae3",
+          "symbology": "PDF_417"
         },
         {
-          "asset": "static_form_barcode_page_2",
-          "crop_box_px": [
-            845,
-            90,
-            1170,
-            195
-          ],
-          "derived_png_sha256": "9db0d92ee3216af46eedab3993ca83ed1550b8c792b8bd7ad06fd2348b553dd8",
+          "asset": "static_form_pdf417_page_2",
+          "decoded_payload": "2551Q 01/18ENCS P2",
+          "embedded_as": "reviewed_inline_svg_module_matrix",
           "embedded_in": "packages/form-renderer/src/forms/official2551QAssets.ts",
+          "logical_dimensions": [
+            120,
+            7
+          ],
+          "logical_matrix_sha256": "b9257f08de39c25c64cbb7b8cbef835c060a5e347866c67b4cee558669f3233f",
+          "source_ctm_points": [
+            163.2,
+            0.0,
+            0.0,
+            37.56,
+            424.32,
+            849.84
+          ],
           "source_page": 2,
-          "treatment": "monochrome threshold at 180"
+          "source_pdf_object_id": [
+            38,
+            0
+          ],
+          "source_pixel_dimensions": [
+            240,
+            63
+          ],
+          "source_png_sha256": "8c89b401f443252642d6820164c6801ab00ba0dcd04715e9fa80eb05861f53d9",
+          "symbology": "PDF_417"
         }
       ]
     }

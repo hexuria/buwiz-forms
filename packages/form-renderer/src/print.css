@@ -275,21 +275,41 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   line-height: 1.08;
 }
 .official-barcode {
+  position: relative;
   border-left: .7pt solid #111;
-  padding: 2pt 5pt 1pt;
+  padding: 0;
 }
 .official-pdf417-symbol {
+  position: absolute;
   display: block;
-  width: 100%;
-  height: 37.5pt;
-  flex: 0 0 37.5pt;
+}
+.official-barcode > .official-pdf417-symbol {
+  left: 5.3pt;
+  top: 8.66pt;
+  width: 161.28pt;
+  height: 37.08pt;
+}
+.page-two-barcode > .official-pdf417-symbol {
+  left: 3.86pt;
+  top: 8.96pt;
+  width: 163.2pt;
+  height: 37.56pt;
 }
 .official-barcode > small,
 .page-two-barcode > small {
-  font-family: inherit;
+  position: absolute;
+  right: 5pt;
+  width: max-content;
+  font-family: "eBIRForms Arimo", sans-serif;
   font-size: 8pt;
+  font-weight: 400;
   line-height: 8pt;
+  letter-spacing: normal;
+  text-align: right;
+  white-space: nowrap;
 }
+.official-barcode > small { top: 47.26pt; }
+.page-two-barcode > small { top: 49.02pt; }
 
 .official-header-options {
   height: 33.5pt;
@@ -831,8 +851,8 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 .blank-money-value > .comb-value:first-child { flex: 1 1 0; }
 .blank-money-value > .decimal-separator {
   box-sizing: border-box;
-  flex: 0 0 14.5pt;
-  width: 14.5pt;
+  flex: 0 0 15pt;
+  width: 15pt;
   border-left: .55pt solid #111;
   border-right: .55pt solid #111;
 }
@@ -916,8 +936,9 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   letter-spacing: -.2pt;
 }
 .page-two-barcode {
+  position: relative;
   border-left: .7pt solid #111;
-  padding: 2pt 5pt 1pt;
+  padding: 0;
 }
 .page-two-identity {
   height: 30pt;
