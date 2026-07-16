@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 #[cfg(test)]
 const CONTINUATION_FIXTURE_SHA256: &str =
-    "1d5c560fa7a87325e69a1092f283cf32d839b6954dc900ab7588b35a88aa0e4d";
+    "d4d0a3fb939d53ad684c17b13a7b34c376ad52dbe7be71f135d7fcbbd38c269e";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum FormSelection {

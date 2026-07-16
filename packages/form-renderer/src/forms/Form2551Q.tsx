@@ -40,6 +40,26 @@ type AtcReferenceRow =
       lines: [string, string];
     };
 
+/**
+ * Character-guide capacities measured from the pinned January 2018 PDF.
+ *
+ * These are exact-revision document geometry, not generic input limits. A
+ * value at or below its capacity keeps every official guide; a longer valid
+ * value uses AdaptiveCombValue's single plain-box fallback in the same field
+ * footprint.
+ */
+export const OFFICIAL_2551Q_COMB_CAPACITIES = {
+  pageTwoTaxpayerName: 26,
+  payment: {
+    otherDescription: 7,
+    draweeBankOrAgency: 5,
+    number: 7,
+    date: 8,
+    amountInteger: 12,
+    amountFraction: 2
+  }
+} as const;
+
 const LENDING_NOTE: AtcReferenceRow = {
   kind: "note",
   lines: [
@@ -207,7 +227,10 @@ function PageTwoIdentity({ envelope }: { envelope: RenderEnvelope }) {
         Taxpayer’s Last Name <em>(if Individual)</em> / Registered Name <em>(if Non-Individual)</em>
       </div>
       <CombValue value={tin} cells={14} />
-      <AdaptiveCombValue value={taxpayerName} cells={26} />
+      <AdaptiveCombValue
+        value={taxpayerName}
+        cells={OFFICIAL_2551Q_COMB_CAPACITIES.pageTwoTaxpayerName}
+      />
     </section>
   );
 }
@@ -742,20 +765,75 @@ function OfficialDeclaration() {
   );
 }
 
+export function OfficialPaymentCombValue({
+  value,
+  cells,
+  field
+}: {
+  value: string;
+  cells: number;
+  field: string;
+}) {
+  return (
+    <span
+      className="official-payment-comb"
+      data-payment-field={field}
+      data-cell-capacity={cells}
+    >
+      <AdaptiveCombValue value={value} cells={cells} />
+    </span>
+  );
+}
+
+export function OfficialPaymentOtherDescriptionValue({ value }: { value: string }) {
+  const cells = OFFICIAL_2551Q_COMB_CAPACITIES.payment.otherDescription;
+  return (
+    <span
+      className="official-payment-comb payment-other-description"
+      data-payment-field="item-28-description"
+      data-cell-capacity={cells}
+    >
+      <span className="payment-other-description-leading" aria-hidden="true" />
+      <AdaptiveCombValue value={value} cells={cells} />
+    </span>
+  );
+}
+
 function OfficialPaymentDetails() {
+  const payment = OFFICIAL_2551Q_COMB_CAPACITIES.payment;
+
   return (
     <section className="official-payment-details">
       <h2>Part III – Details of Payment</h2>
       <div className="payment-grid payment-headings">
         <b>Particulars</b><b>Drawee Bank/<br />Agency</b><b>Number</b><b>Date <em>(MM/DD/YYYY)</em></b><b>Amount</b>
       </div>
-      {["Cash/Bank Debit Memo", "Check", "Tax Debit Memo"].map((label, index) => (
-        <div className={`payment-grid payment-row payment-row-${25 + index}`} key={label}>
-          <span><b>{25 + index}</b> {label}</span><CombValue value="" cells={8} /><CombValue value="" cells={8} /><CombValue value="" cells={8} /><BlankMoneyValue />
-        </div>
-      ))}
+      {["Cash/Bank Debit Memo", "Check"].map((label, index) => {
+        const item = 25 + index;
+        return (
+          <div className={`payment-grid payment-row payment-row-${item}`} key={label}>
+            <span><b>{item}</b> {label}</span>
+            <OfficialPaymentCombValue value="" cells={payment.draweeBankOrAgency} field={`item-${item}-drawee`} />
+            <OfficialPaymentCombValue value="" cells={payment.number} field={`item-${item}-number`} />
+            <OfficialPaymentCombValue value="" cells={payment.date} field={`item-${item}-date`} />
+            <BlankMoneyValue />
+          </div>
+        );
+      })}
+      <div className="payment-grid payment-row payment-row-27">
+        <span><b>27</b> Tax Debit Memo</span>
+        <OfficialPaymentCombValue value="" cells={payment.number} field="item-27-number" />
+        <OfficialPaymentCombValue value="" cells={payment.date} field="item-27-date" />
+        <BlankMoneyValue />
+      </div>
       <div className="payment-other-label"><b>28</b> Others <em>(Specify below)</em></div>
-      <div className="payment-grid payment-other-row"><span /><CombValue value="" cells={8} /><CombValue value="" cells={8} /><CombValue value="" cells={8} /><BlankMoneyValue /></div>
+      <div className="payment-grid payment-other-row">
+        <OfficialPaymentOtherDescriptionValue value="" />
+        <OfficialPaymentCombValue value="" cells={payment.draweeBankOrAgency} field="item-28-drawee" />
+        <OfficialPaymentCombValue value="" cells={payment.number} field="item-28-number" />
+        <OfficialPaymentCombValue value="" cells={payment.date} field="item-28-date" />
+        <BlankMoneyValue />
+      </div>
       <div className="machine-validation">
         <span>Machine Validation/Revenue Official Receipt (ROR) Details <em>(if not filed with an Authorized Agent Bank)</em></span>
         <span><em>Stamp of receiving Office/AAB and Date of Receipt<br />(RO’s Signature/Bank Teller’s Initial)</em></span>
@@ -765,11 +843,16 @@ function OfficialPaymentDetails() {
 }
 
 function BlankMoneyValue() {
+  const payment = OFFICIAL_2551Q_COMB_CAPACITIES.payment;
   return (
-    <span className="money-value blank-money-value">
-      <CombValue value="" cells={12} />
+    <span
+      className="money-value blank-money-value"
+      data-integer-cell-capacity={payment.amountInteger}
+      data-fraction-cell-capacity={payment.amountFraction}
+    >
+      <CombValue value="" cells={payment.amountInteger} />
       <span className="decimal-separator">.</span>
-      <CombValue value="" cells={2} />
+      <CombValue value="" cells={payment.amountFraction} />
     </span>
   );
 }

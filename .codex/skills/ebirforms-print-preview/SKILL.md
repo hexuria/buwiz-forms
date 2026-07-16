@@ -22,6 +22,15 @@ Fix an already-migrated form through the owning layer. Do not create a second re
   rendered-page crop, download/generic substitute, threshold, resample, resize,
   recolor, or sharpen. If the official form has no code, retain its audited
   explicit absence and never fabricate one.
+- Preserve adaptive character guides field by field. Count the exact guides
+  and non-applicable cells from the pinned revision; never apply one generic
+  count across a table. Spaces and punctuation each consume one official
+  character position. Empty, short, and exact-capacity values retain every
+  official guide. Only a valid value longer than that field's official
+  capacity switches to one plain text box in the same footprint, without
+  truncation. Merged or gray non-applicable cells never receive comb guides.
+  Keep explicit empty, short, exact-capacity, and capacity-plus-one tests for
+  every adaptive field pattern that the renderer introduces.
 
 Read [renderer-workflow.md](references/renderer-workflow.md) before changing shared primitives, native output, or release flags.
 

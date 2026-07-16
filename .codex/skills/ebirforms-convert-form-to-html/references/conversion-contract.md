@@ -30,6 +30,15 @@ Represent unknown semantics explicitly and fail closed. Do not silently truncate
 - `validation-edge`: missing/conflicting applicability and invalid boundaries.
 - `maximum-capacity`: every repeatable schedule filled to its verified limit.
 
+Every adaptive character-field pattern also requires deterministic boundary
+coverage for empty, short, exact-capacity, and capacity-plus-one values. Count
+spaces and punctuation as characters. The first three states must preserve the
+exact official guide geometry; capacity-plus-one must use one untruncated plain
+text box in the same footprint. Do not add guides to blank inset, merged, or
+non-applicable gray cells. If a production contract intentionally has no value
+for a printable field, exercise the production rendering helper at component
+level and record that limitation instead of inventing envelope data.
+
 Fixtures must be generated from Rust and remain deterministic. TypeScript may validate and render them but may not author tax results.
 
 ## Promotion

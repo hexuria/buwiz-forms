@@ -6,6 +6,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { FormDocument } from "../src/FormDocument";
+import { Form2551Q } from "../src/forms/Form2551Q";
 import continuationFixture from "../../form-contracts/fixtures/2551q-10-rows.json";
 import sixRowFixture from "../../form-contracts/fixtures/2551q-6-rows.json";
 import fiscalFixture from "../../form-contracts/fixtures/2551q-fiscal-period.json";
@@ -106,6 +107,44 @@ describe("2551Q runtime render contract", () => {
     );
     expect(markup.match(/data-overflow-mode="plain"/g)?.length).toBeGreaterThanOrEqual(6);
     expect(markup).toContain(`aria-label="${"A".repeat(72)}"`);
+  });
+
+  it("renders empty, short, and exact page-two names with 26 guides and only over-capacity names as plain", () => {
+    const cases = [
+      { fixture: minimumFixture, name: "", mode: "comb" },
+      { fixture: minimumFixture, name: minimumFixture.taxpayer.name, mode: "comb" },
+      { fixture: sixRowFixture, name: sixRowFixture.taxpayer.name, mode: "comb" },
+      { fixture: longValuesFixture, name: longValuesFixture.taxpayer.name, mode: "plain" }
+    ] as const;
+
+    expect(Array.from(minimumFixture.taxpayer.name)).toHaveLength(14);
+    expect(Array.from(sixRowFixture.taxpayer.name)).toHaveLength(26);
+    expect(Array.from(longValuesFixture.taxpayer.name).length).toBeGreaterThan(26);
+
+    for (const { fixture, name, mode } of cases) {
+      const envelope = structuredClone(fixture) as RenderEnvelope;
+      envelope.taxpayer.name = name;
+      const markup = renderToStaticMarkup(
+        createElement(Form2551Q, { envelope })
+      );
+      const identity = markup.match(
+        /<section class="page-two-identity"[^>]*>([\s\S]*?)<\/section>/
+      )?.[1];
+      expect(identity, `${mode} page-two identity`).toBeDefined();
+      if (!identity) continue;
+
+      if (mode === "comb") {
+        expect(identity.match(/class="comb-value"/g)).toHaveLength(2);
+        expect(identity.match(/<span/g)).toHaveLength(42);
+        expect(identity).not.toContain('data-overflow-mode="plain"');
+      } else {
+        expect(identity.match(/class="comb-value"/g)).toHaveLength(1);
+        expect(identity).toContain('data-cell-capacity="26"');
+        expect(identity).toContain('data-overflow-mode="plain"');
+        expect(identity).toContain(`aria-label="${name.toUpperCase()}"`);
+        expect(identity).toContain(`>${name.toUpperCase()}</span>`);
+      }
+    }
   });
 
   it("renders the Rust-owned long-value fixture without truncation", () => {

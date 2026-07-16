@@ -808,7 +808,39 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 .payment-other-row .comb-value,
 .payment-row .money-value,
 .payment-other-row .money-value { height: 100%; min-height: 0; }
-.payment-row-27 > :nth-child(2) { background: #d4d4d4; }
+.official-payment-comb {
+  display: block;
+  min-width: 0;
+  height: 100%;
+}
+.official-payment-comb > :is(.comb-value, .adaptive-plain-value) {
+  height: 100%;
+  min-height: 0;
+}
+.official-payment-comb > .comb-value { display: flex; }
+/* Item 28's specification line begins with one official blank inset followed
+ * by seven writable character positions. The inset boundary is a short guide,
+ * not an eighth input cell. */
+.payment-other-description {
+  display: grid;
+  grid-template-columns: 13.92pt minmax(0, 1fr);
+}
+.payment-other-description-leading {
+  position: relative;
+  min-width: 0;
+}
+.payment-other-description-leading::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  height: 7pt;
+  border-right: .55pt solid #111;
+  pointer-events: none;
+}
+/* Item 27 has no Drawee Bank/Agency field in the official source. Its gray
+ * label cell spans the first two columns; Number begins at column three. */
+.payment-row-27 > span:first-child { grid-column: 1 / span 2; }
 .payment-other-label {
   height: 12.25pt;
   display: flex;
@@ -1193,7 +1225,6 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   .official-declaration > p,
   .payment-headings,
   .payment-row > span:first-child,
-  .payment-row-27 > :nth-child(2),
   .payment-other-label
 ),
 .form-2551q-page-two :is(
@@ -1508,6 +1539,13 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   height: 7pt;
   border-right: .55pt solid #000;
   pointer-events: none;
+}
+
+/* The repeated TIN is fourteen writable cells split visually as 3-3-3-5.
+ * Its group boundaries are heavier registration ticks, not extra cells. */
+.form-2551q-page-two .page-two-identity > .comb-value:first-of-type > span:nth-child(3n):nth-child(-n + 9)::after {
+  height: 9pt;
+  border-right-width: 1pt;
 }
 
 .form-2551q-page-two .visual-integer-comb-leading-1 > .comb-value > span:nth-child(3n + 2)::after,

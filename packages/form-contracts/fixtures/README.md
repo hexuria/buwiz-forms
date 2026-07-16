@@ -38,8 +38,8 @@ the generator does not invent placeholder `PT011` through `PT019` rows. The
 taxable amounts are selected so the established 300, 600, ... tax-due series,
 page-2 subtotal, and final total stay stable while the rates remain official.
 
-- Six-row fixture SHA-256: `f3d49ddab5cdd7c1d889a7b2cbd519babf7556c186702f0232b9f18257f7a5b7`
-- Ten-row fixture SHA-256: `1d5c560fa7a87325e69a1092f283cf32d839b6954dc900ab7588b35a88aa0e4d`
+- Six-row fixture SHA-256: `f7ccf4db8b7f57ed9897351887bd34987dbfa8f088767eb120391694d53c0777`
+- Ten-row fixture SHA-256: `d4d0a3fb939d53ad684c17b13a7b34c376ad52dbe7be71f135d7fcbbd38c269e`
 
 ## Remaining source-model blockers
 

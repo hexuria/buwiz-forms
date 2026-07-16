@@ -2,9 +2,14 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   formatAtcRate,
+  OFFICIAL_2551Q_COMB_CAPACITIES,
+  OfficialPaymentCombValue,
+  OfficialPaymentOtherDescriptionValue,
   requireOfficialCellCapacity,
   splitOfficialCombRows
 } from "../src/forms/Form2551Q";
@@ -93,6 +98,67 @@ describe("2551Q official comb capacity", () => {
     expect(requireOfficialCellCapacity("12345678900000", 14, "TIN")).toBe(
       "12345678900000"
     );
+  });
+
+  it("pins the exact page-two and Part III capacities from the official PDF", () => {
+    expect(OFFICIAL_2551Q_COMB_CAPACITIES).toEqual({
+      pageTwoTaxpayerName: 26,
+      payment: {
+        otherDescription: 7,
+        draweeBankOrAgency: 5,
+        number: 7,
+        date: 8,
+        amountInteger: 12,
+        amountFraction: 2
+      }
+    });
+  });
+
+  it.each([
+    ["item-25-drawee", "", 5],
+    ["item-25-number", "ABC", 7],
+    ["item-25-date", "07172026", 8],
+    ["item-26-drawee", "AB CD", 5]
+  ])("keeps every official guide for fitting %s values", (field, value, cells) => {
+    const markup = renderToStaticMarkup(
+      createElement(OfficialPaymentCombValue, { field, value, cells })
+    );
+
+    expect(markup).toContain(`data-payment-field="${field}"`);
+    expect(markup).toContain(`data-cell-capacity="${cells}"`);
+    expect(markup).toContain('class="comb-value"');
+    expect(markup).not.toContain('data-overflow-mode="plain"');
+    expect(markup.match(/<span/g)).toHaveLength(cells + 2);
+  });
+
+  it("keeps Item 28's leading inset separate from its seven writable cells", () => {
+    const markup = renderToStaticMarkup(
+      createElement(OfficialPaymentOtherDescriptionValue, { value: "OTHERS7" })
+    );
+
+    expect(markup).toContain('data-payment-field="item-28-description"');
+    expect(markup).toContain('data-cell-capacity="7"');
+    expect(markup).toContain('class="payment-other-description-leading"');
+    expect(markup).toContain('class="comb-value"');
+    expect(markup).not.toContain('data-overflow-mode="plain"');
+    expect(markup.match(/<span/g)).toHaveLength(10);
+  });
+
+  it("uses one untruncated plain box when a payment value exceeds its field capacity", () => {
+    const value = "AB CDE";
+    const markup = renderToStaticMarkup(
+      createElement(OfficialPaymentCombValue, {
+        field: "item-25-drawee",
+        value,
+        cells: OFFICIAL_2551Q_COMB_CAPACITIES.payment.draweeBankOrAgency
+      })
+    );
+
+    expect(markup).toContain('data-cell-capacity="5"');
+    expect(markup).toContain('data-overflow-mode="plain"');
+    expect(markup).toContain(`aria-label="${value}"`);
+    expect(markup).not.toContain('class="comb-value"');
+    expect(markup).toContain(`>${value}</span>`);
   });
 });
 

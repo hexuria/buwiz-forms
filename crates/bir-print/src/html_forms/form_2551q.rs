@@ -57,7 +57,7 @@ pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     expected_base_page_count: 2,
     schedules: SCHEDULES,
     visual_fixture_file_name: "2551q-6-rows.json",
-    visual_fixture_sha256: "f3d49ddab5cdd7c1d889a7b2cbd519babf7556c186702f0232b9f18257f7a5b7",
+    visual_fixture_sha256: "f7ccf4db8b7f57ed9897351887bd34987dbfa8f088767eb120391694d53c0777",
     official_source:
         "https://bir-cdn.bir.gov.ph/local/pdf/2551Q%20Jan%202018%20ENCS%20final%20rev%203_copy.pdf",
     official_source_sha256: "1f270ecf66d778836a14697863e420ff65d5ed0a5576a6cf58b97c9a8e8c9b24",
@@ -464,7 +464,7 @@ fn fixture_with_rows(row_count: usize) -> Result<Form2551QDraft, RenderProviderE
         "item_13_election": "graduated",
         "annual_income_tax_election": "unrecorded",
         "rdo_code": "018",
-        "taxpayer_name": "Renderer Fixture Corporation",
+        "taxpayer_name": "Andrea Mae Renderer Galang",
         "registered_address": "53 Santol Extension, New Cabalan, Olongapo City",
         "zip_code": "2200",
         "contact_number": "09123456789",
@@ -530,6 +530,7 @@ fn fixture_with_rows(row_count: usize) -> Result<Form2551QDraft, RenderProviderE
 
 fn minimum_fixture() -> Result<Form2551QDraft, RenderProviderError> {
     let mut draft = fixture_with_rows(1)?;
+    draft.taxpayer_name = "Short Taxpayer".to_string();
     draft.is_amended = false;
     draft.original_return_filed_and_paid_on_time = false;
     draft.number_of_attached_sheets = 0;
@@ -624,6 +625,17 @@ fn column(key: &str, label: &str, alignment: RenderAlignment) -> RenderColumn {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn taxpayer_name_fixtures_cover_short_exact_and_overflow_comb_states() {
+        let short = minimum_fixture().expect("short fixture");
+        let exact = fixture_with_rows(6).expect("exact-capacity fixture");
+        let overflow = long_values_fixture().expect("overflow fixture");
+
+        assert_eq!(short.taxpayer_name.chars().count(), 14);
+        assert_eq!(exact.taxpayer_name.chars().count(), 26);
+        assert!(overflow.taxpayer_name.chars().count() > 26);
+    }
 
     #[test]
     fn pdf417_runtime_provenance_matches_verified_official_xobjects() {

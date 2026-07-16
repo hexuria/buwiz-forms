@@ -3076,7 +3076,7 @@
     {
       "code": "2551Q",
       "fixture": "packages/form-contracts/fixtures/2551q-6-rows.json",
-      "fixture_sha256": "f3d49ddab5cdd7c1d889a7b2cbd519babf7556c186702f0232b9f18257f7a5b7",
+      "fixture_sha256": "f7ccf4db8b7f57ed9897351887bd34987dbfa8f088767eb120391694d53c0777",
       "form_id": "2551Qv2018",
       "machine_readable_artwork": {
         "asset_ids": [

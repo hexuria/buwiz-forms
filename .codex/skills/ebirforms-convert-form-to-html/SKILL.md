@@ -13,6 +13,14 @@ Convert one exact form revision at a time. Treat conversion as a tax-data and re
 - Keep React authoritative only for semantic document structure, styling, deterministic pagination, and readiness measurement.
 - Never infer tax formulas or field meaning from one saved payload. Require primary-source or corroborated implementation evidence.
 - Never create Typst templates, formtype JSON, coordinate overlays, or full-page runtime PDF/SVG/raster backgrounds.
+- Preserve adaptive character guides field by field. Measure each field's
+  exact guide capacity and any blank, merged, or non-applicable cells from the
+  pinned revision; never reuse one generic count across a table. Spaces and
+  punctuation each consume one character position. Empty, short, and
+  exact-capacity values retain every official guide. Only a valid value longer
+  than that field's official capacity switches to one untruncated plain text
+  box in the same footprint. Gray or merged non-applicable cells receive no
+  guides.
 - Use official pages only as pinned calibration references. Runtime artwork must
   come from the exact embedded image/XObject or vector object in that pinned PDF,
   at its native dimensions. Never use a rendered-page crop, downloaded/generic
@@ -26,7 +34,7 @@ Convert one exact form revision at a time. Treat conversion as a tax-data and re
 
 1. **Lock identity and source.** Record the canonical code, exact revision, official source URL, source SHA-256, page count, and page geometry. Run `scripts/inventory_form.py` before editing. Read [source-evidence.md](references/source-evidence.md) and [conversion-contract.md](references/conversion-contract.md).
 2. **Prove tax behavior.** Audit or implement the Rust model, formulas, validation, XML round-trip, persistence, queue/submission behavior, carry-over, and repeatable-row limits. Stop when evidence is insufficient.
-3. **Add the render provider.** Map the typed Rust draft into `RenderEnvelopeV1`. Provide minimum, normal, long-value, validation-edge, and maximum-capacity fixtures. Do not repair or calculate values in TypeScript.
+3. **Add the render provider.** Map the typed Rust draft into `RenderEnvelopeV1`. Provide minimum, normal, long-value, validation-edge, and maximum-capacity fixtures. For every adaptive character field pattern, prove empty, short, exact-capacity, and capacity-plus-one behavior; use component-level fixtures only when the domain intentionally exposes no printable value for that field. Do not repair or calculate values in TypeScript.
 4. **Build semantic HTML.** Add the form component, exact-revision dispatch, scoped CSS, form specification, and pagination policy. Reuse shared paper, table, comb, checkbox, and amount primitives only when their official behavior matches.
 5. **Verify discrete artwork.** Inventory every physical page. Extract each exact
    seal/logo and page-specific PDF417/QR object from the pinned PDF. Decode every

@@ -102,20 +102,16 @@ for (const parityCase of cases) {
     const pages = page.locator(".form-page");
     await expect(pages).toHaveCount(parityCase.references.length);
 
-    const plainName = pages.nth(1).locator('[data-overflow-mode="plain"]');
-    await expect(plainName).toHaveCount(1);
-    await expect(plainName).toHaveAttribute(
-      "aria-label",
-      "RENDERER FIXTURE CORPORATION"
-    );
-    const plainGeometry = await plainName.evaluate((element) => ({
-      clientWidth: element.clientWidth,
-      clientHeight: element.clientHeight,
-      scrollWidth: element.scrollWidth,
-      scrollHeight: element.scrollHeight
-    }));
-    expect(plainGeometry.scrollWidth).toBeLessThanOrEqual(plainGeometry.clientWidth + 1);
-    expect(plainGeometry.scrollHeight).toBeLessThanOrEqual(plainGeometry.clientHeight + 1);
+    const pageTwoName = pages
+      .nth(1)
+      .locator(".page-two-identity > .comb-value:last-child");
+    await expect(pageTwoName).toHaveCount(1);
+    await expect(pageTwoName.locator("> span")).toHaveCount(26);
+    expect((await pageTwoName.locator("> span").allTextContents()).join(""))
+      .toBe("ANDREA MAE RENDERER GALANG");
+    await expect(
+      pages.nth(1).locator(".page-two-identity > .adaptive-plain-value")
+    ).toHaveCount(0);
 
     const realRowKeys = await page
       .locator("[data-row-key]")
@@ -212,13 +208,13 @@ for (const parityCase of cases) {
       { name: "non-individual signature caption", selector: ".official-signature-grid > div:last-child .signature-caption", x: 615, y: 1345, width: 565, height: 53 },
       { name: "tax-agent strip", selector: ".tax-agent-strip", x: 47, y: 1398, width: 1133, height: 38 },
       { name: "Part III item 25 decimal cell", selector: ".payment-row-25 .decimal-separator", x: 1097, y: 1502, width: 30, height: 35 },
-      { name: "Part III item 25 cents cells", selector: ".payment-row-25 .comb-value:last-child", x: 1127, y: 1502, width: 53, height: 35 },
+      { name: "Part III item 25 cents cells", selector: ".payment-row-25 .blank-money-value > .comb-value:last-child", x: 1127, y: 1502, width: 53, height: 35 },
       { name: "Part III item 26 decimal cell", selector: ".payment-row-26 .decimal-separator", x: 1097, y: 1538, width: 30, height: 35 },
-      { name: "Part III item 26 cents cells", selector: ".payment-row-26 .comb-value:last-child", x: 1127, y: 1538, width: 53, height: 35 },
+      { name: "Part III item 26 cents cells", selector: ".payment-row-26 .blank-money-value > .comb-value:last-child", x: 1127, y: 1538, width: 53, height: 35 },
       { name: "Part III item 27 decimal cell", selector: ".payment-row-27 .decimal-separator", x: 1097, y: 1575, width: 30, height: 35 },
-      { name: "Part III item 27 cents cells", selector: ".payment-row-27 .comb-value:last-child", x: 1127, y: 1575, width: 53, height: 35 },
+      { name: "Part III item 27 cents cells", selector: ".payment-row-27 .blank-money-value > .comb-value:last-child", x: 1127, y: 1575, width: 53, height: 35 },
       { name: "Part III item 28 continuation decimal cell", selector: ".payment-other-row .decimal-separator", x: 1097, y: 1636, width: 30, height: 35 },
-      { name: "Part III item 28 continuation cents cells", selector: ".payment-other-row .comb-value:last-child", x: 1127, y: 1636, width: 53, height: 35 }
+      { name: "Part III item 28 continuation cents cells", selector: ".payment-other-row .blank-money-value > .comb-value:last-child", x: 1127, y: 1636, width: 53, height: 35 }
     ]);
     await expectHeaderOptionsTopAlignment(pages.nth(0));
     await expectBackgroundInformationParity(pages.nth(0));
@@ -488,9 +484,12 @@ test("2551Q Schedule 1 keeps black rules and bottom-anchored comb guides", async
     const majorCell = element.querySelector(
       ".visual-integer-comb-leading-1 > .comb-value > span:nth-child(2)"
     );
+    const tinGroupCells = [3, 6, 9].map((index) => element.querySelector(
+      `.page-two-identity > .comb-value:first-of-type > span:nth-child(${index})`
+    ));
     const masthead = element.querySelector(".page-two-masthead");
     const atcCell = element.querySelector(".official-atc-table td");
-    if (!normalCell || !majorCell || !masthead || !atcCell) {
+    if (!normalCell || !majorCell || !masthead || !atcCell || tinGroupCells.some((cell) => !cell)) {
       throw new Error("2551Q Schedule 1 calibration targets are missing");
     }
     const normalStyle = getComputedStyle(normalCell);
@@ -503,8 +502,16 @@ test("2551Q Schedule 1 keeps black rules and bottom-anchored comb guides", async
       mastheadBorder: getComputedStyle(masthead).borderTopColor,
       normalCellBorderWidth: normalStyle.borderRightWidth,
       normalGuideColor: normalGuide.borderRightColor,
+      normalGuideBorderWidth: Number.parseFloat(normalGuide.borderRightWidth),
       normalGuideHeight: Number.parseFloat(normalGuide.height),
-      normalGuidePosition: normalGuide.position
+      normalGuidePosition: normalGuide.position,
+      tinGroupGuides: tinGroupCells.map((cell) => {
+        const guide = getComputedStyle(cell as Element, "::after");
+        return {
+          borderWidth: Number.parseFloat(guide.borderRightWidth),
+          height: Number.parseFloat(guide.height)
+        };
+      })
     };
   });
 
@@ -516,6 +523,11 @@ test("2551Q Schedule 1 keeps black rules and bottom-anchored comb guides", async
   expect(styles.normalGuideHeight).toBeCloseTo(9.33, 1);
   expect(styles.majorGuideColor).toBe("rgb(0, 0, 0)");
   expect(styles.majorGuideHeight).toBeGreaterThan(styles.normalGuideHeight);
+  expect(styles.tinGroupGuides).toHaveLength(3);
+  for (const guide of styles.tinGroupGuides) {
+    expect(guide.height).toBeGreaterThan(styles.normalGuideHeight);
+    expect(guide.borderWidth).toBeGreaterThanOrEqual(styles.normalGuideBorderWidth);
+  }
   expect(await pageHasNoOverflow(pageTwo)).toBe(true);
 });
 
@@ -528,10 +540,10 @@ test("2551Q Part III amount cells preserve the official partition", async ({ pag
   await expectCriticalRegionGeometry(pageOne, [
     { name: "Item 25 Amount", selector: ".payment-row-25 .blank-money-value", x: 757, y: 1502, width: 422, height: 35 },
     { name: "Item 25 decimal cell", selector: ".payment-row-25 .decimal-separator", x: 1097, y: 1502, width: 30, height: 35 },
-    { name: "Item 25 cents cells", selector: ".payment-row-25 .comb-value:last-child", x: 1127, y: 1502, width: 53, height: 35 },
+    { name: "Item 25 cents cells", selector: ".payment-row-25 .blank-money-value > .comb-value:last-child", x: 1127, y: 1502, width: 53, height: 35 },
     { name: "Item 28 Amount", selector: ".payment-other-row .blank-money-value", x: 757, y: 1636, width: 422, height: 35 },
     { name: "Item 28 decimal cell", selector: ".payment-other-row .decimal-separator", x: 1097, y: 1636, width: 30, height: 35 },
-    { name: "Item 28 cents cells", selector: ".payment-other-row .comb-value:last-child", x: 1127, y: 1636, width: 53, height: 35 }
+    { name: "Item 28 cents cells", selector: ".payment-other-row .blank-money-value > .comb-value:last-child", x: 1127, y: 1636, width: 53, height: 35 }
   ]);
 
   const amountRows = pageOne.locator(
@@ -559,6 +571,59 @@ test("2551Q Part III amount cells preserve the official partition", async ({ pag
     expect(widths.decimal / integerAverage).toBeLessThan(1.1);
     expect(widths.cents.every((width) => width / integerAverage > .9)).toBe(true);
   }
+
+  const exactPaymentCombs = [
+    ["item-25-drawee", 5],
+    ["item-25-number", 7],
+    ["item-25-date", 8],
+    ["item-26-drawee", 5],
+    ["item-26-number", 7],
+    ["item-26-date", 8],
+    ["item-27-number", 7],
+    ["item-27-date", 8],
+    ["item-28-description", 7],
+    ["item-28-drawee", 5],
+    ["item-28-number", 7],
+    ["item-28-date", 8]
+  ] as const;
+  for (const [field, cells] of exactPaymentCombs) {
+    const comb = pageOne.locator(`[data-payment-field="${field}"]`);
+    await expect(comb).toHaveAttribute("data-cell-capacity", String(cells));
+    await expect(comb.locator(":scope > .comb-value > span")).toHaveCount(cells);
+    await expect(comb.locator(":scope > .adaptive-plain-value")).toHaveCount(0);
+  }
+  await expect(
+    pageOne.locator(
+      '[data-payment-field="item-28-description"] > .payment-other-description-leading'
+    )
+  ).toHaveCount(1);
+  const item28DescriptionGeometry = await pageOne
+    .locator('[data-payment-field="item-28-description"]')
+    .evaluate((element) => {
+      const leading = element.querySelector(".payment-other-description-leading");
+      const cells = [...element.querySelectorAll(":scope > .comb-value > span")];
+      if (!leading || cells.length !== 7) {
+        throw new Error("Item 28 description geometry is incomplete");
+      }
+      return {
+        cellWidths: cells.map((cell) => cell.getBoundingClientRect().width),
+        leadingWidth: leading.getBoundingClientRect().width
+      };
+    });
+  expect(item28DescriptionGeometry.leadingWidth).toBeCloseTo(18.56, 1);
+  expect(
+    Math.max(...item28DescriptionGeometry.cellWidths) -
+    Math.min(...item28DescriptionGeometry.cellWidths)
+  ).toBeLessThan(.05);
+
+  await expect(pageOne.locator('[data-payment-field="item-27-drawee"]')).toHaveCount(0);
+  expect(
+    await pageOne.locator(".payment-row-27 > span:first-child").evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { end: style.gridColumnEnd, start: style.gridColumnStart };
+    })
+  ).toEqual({ start: "1", end: "span 2" });
+  expect(await pageHasNoOverflow(pageOne)).toBe(true);
 });
 
 test("2551Q Part I labels and writable cells preserve the official rendering", async ({
