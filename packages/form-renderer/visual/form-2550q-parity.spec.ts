@@ -119,6 +119,36 @@ test("2550Q April 2024 keeps verified page-specific PDF417, caption, and seal ge
   )).toEqual({ naturalHeight: 82, naturalWidth: 86 });
 });
 
+test("2550Q April 2024 preserves official disabled panels and page-one payment canvas", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/2550q-normal.json"));
+  const pages = page.locator(".form-page");
+
+  await expectCriticalRegionGeometry(pages.nth(0), [
+    {
+      name: "Item 10A ZIP panel",
+      selector: ".zip-2550q",
+      x: 923,
+      y: 486,
+      width: 262,
+      height: 38
+    }
+  ]);
+
+  for (const item of [32, 33, 48, 49]) {
+    await expect(
+      pages.nth(1).locator(`.item-${item}-2550q > .disabled-cell-2550q`)
+    ).toHaveCSS("background-color", "rgb(217, 217, 217)");
+  }
+  await expect(pages.nth(0).locator(".machine-validation-2550q"))
+    .toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(pages.nth(0).locator(".privacy-note-2550q"))
+    .toHaveText("*NOTE: The BIR Data Privacy Policy is in the BIR website (www.bir.gov.ph)");
+
+  const blankPayment = pages.nth(0).locator(".payment-row-2550q").first();
+  await expect(blankPayment.locator(".comb-value")).toHaveCount(5);
+  await expect(blankPayment.locator(".decimal-cell-2550q")).toHaveCount(1);
+});
+
 test("2550Q April 2024 matches the complete official pages", async ({ page }, testInfo) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/2550q-normal.json"));
   const pages = page.locator(".form-page");
@@ -149,6 +179,7 @@ test("2550Q April 2024 matches the complete official pages", async ({ page }, te
       .form-page[data-visual-blank-values="true"] .comb-value > span,
       .form-page[data-visual-blank-values="true"] .adaptive-plain-value,
       .form-page[data-visual-blank-values="true"] .plain-value-2550q,
+      .form-page[data-visual-blank-values="true"] .value-line-2550q,
       .form-page[data-visual-blank-values="true"] .check-box,
       .form-page[data-visual-blank-values="true"] .schedule-money-2550q {
         color: transparent !important;

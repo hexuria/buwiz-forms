@@ -170,10 +170,10 @@
 .address-2550q > span:first-child { height: 11pt; display: flex; align-items: center; padding: 1pt 4pt; background: #d9d9d9; }
 .address-2550q > span:first-child em { margin-left: 2pt; font-size: 5pt; }
 .address-value-2550q { position: relative; height: 36pt; }
-.address-value-2550q > .adaptive-plain-value { height: 36pt; padding-right: 75pt; }
+.address-value-2550q > .adaptive-plain-value { height: 36pt; padding-right: 131pt; }
 .address-comb-lines-2550q { height: 36pt; display: grid; grid-template-rows: 18pt 18pt; }
 .address-comb-lines-2550q .comb-value { height: 18pt; }
-.zip-2550q { position: absolute; right: 0; bottom: 0; width: 75pt; height: 19pt; display: grid; grid-template-columns: 42pt 1fr; align-items: center; background: #d9d9d9; border-left: .55pt solid #111; border-top: .55pt solid #111; padding-left: 2pt; }
+.zip-2550q { position: absolute; right: 0; bottom: 0; width: 131pt; height: 19pt; display: grid; grid-template-columns: 71pt 1fr; align-items: center; background: #d9d9d9; border-left: .55pt solid #111; border-top: .55pt solid #111; padding-left: 2pt; }
 .zip-label-2550q { display: flex; align-items: center; justify-content: center; gap: 2pt; line-height: 1; }
 .zip-2550q .comb-value { height: 18pt; background: #fff; }
 .split-row-2550q { display: grid; grid-template-columns: 182pt 1fr; height: 28.5pt; }
@@ -206,18 +206,18 @@
 
 .declaration-2550q { height: 125.5pt; margin-top: 1.5pt; border: 1.15pt solid #111; }
 .declaration-2550q > p { height: 26pt; padding: 2pt 5pt; text-align: center; font-size: 5.5pt; line-height: 1.04; border-bottom: .55pt solid #111; }
-.signature-panels-2550q { height: 72pt; display: grid; grid-template-columns: 1fr 1fr; }
+.signature-panels-2550q { height: 72pt; display: grid; grid-template-columns: 296pt minmax(0, 1fr); }
 .signature-panels-2550q > div { display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 2pt 5pt; text-align: center; }
 .signature-panels-2550q > div + div { border-left: .55pt solid #111; }
 .signature-panels-2550q small { font-style: italic; }
 .value-line-2550q { display: block; width: 100%; min-height: 12pt; border-bottom: .55pt solid #111; overflow: hidden; }
-.credential-row-2550q { height: 26pt; display: grid; grid-template-columns: 2fr 1fr 1fr; border-top: .55pt solid #111; }
+.credential-row-2550q { height: 26pt; display: grid; grid-template-columns: 267.5pt 143pt minmax(0, 1fr); border-top: .55pt solid #111; }
 .credential-row-2550q > span { padding: 1pt 4pt; text-align: center; }
 .credential-row-2550q > span + span { border-left: .55pt solid #111; }
 
 .part-three-2550q { height: 182pt; margin-top: 1.5pt; border: 1.15pt solid #111; }
 .payment-header-2550q,
-.payment-row-2550q { display: grid; grid-template-columns: 83.7pt 71pt 85.5pt 114.5pt 1fr; }
+.payment-row-2550q { display: grid; grid-template-columns: 85pt 71pt 85.5pt 114.5pt 1fr; }
 .payment-header-2550q { height: 22pt; background: #d9d9d9; font-weight: 700; text-align: center; }
 .payment-header-2550q > span,
 .payment-row-2550q > span { display: flex; align-items: center; justify-content: center; min-width: 0; padding: 1pt 3pt; border-right: .55pt solid #111; border-bottom: .55pt solid #111; overflow: hidden; }
@@ -228,11 +228,11 @@
 .payment-row-2550q .money-cell-2550q { border-bottom: .55pt solid #111; }
 .payment-other-label-2550q { height: 11pt; display: flex; align-items: center; gap: 4pt; padding: 1pt 4pt; background: #d9d9d9; border-bottom: .55pt solid #111; }
 .payment-other-values-2550q > span:first-child { background: #fff; }
-.receipt-validation-row-2550q { height: 68pt; display: grid; grid-template-columns: 5fr 3fr; }
-.machine-validation-2550q { padding: 3pt 5pt; background: #d9d9d9; }
+.receipt-validation-row-2550q { height: 68pt; display: grid; grid-template-columns: 356pt minmax(0, 1fr); }
+.machine-validation-2550q { padding: 3pt 5pt; background: #fff; }
 .machine-validation-2550q .plain-value-2550q { display: flex; margin-top: 4pt; min-height: 22pt; padding: 2pt; background: #fff; }
 .receiving-stamp-2550q { padding: 3pt 5pt; border-left: .55pt solid #111; text-align: center; background: #fff; }
-.privacy-note-2550q { margin-top: 2pt !important; text-align: center; font-size: 5.5pt; }
+.privacy-note-2550q { margin-top: 2pt !important; text-align: left; font-size: 8pt; }
 
 .page-two-identity-2550q { height: 28pt; display: grid; grid-template-columns: 197.5pt minmax(0, 1fr); border: 1.15pt solid #111; border-top: 0; }
 .page-two-identity-2550q > div { min-width: 0; display: grid; grid-template-rows: 11pt 17pt; }
@@ -260,7 +260,7 @@
 .part-four-row-2550q .inline-specify-2550q { min-height: 9pt; padding: 0 2pt; line-height: .9; white-space: nowrap; overflow-wrap: normal; }
 .part-four-row-2550q > span:not(:first-child) { padding: 0; background: #fff; }
 .part-four-row-2550q .money-cell-2550q { width: 100%; height: 100%; }
-.part-four-row-2550q .disabled-cell-2550q { background: #d9d9d9; }
+.part-four-row-2550q > span.disabled-cell-2550q { background: #d9d9d9; }
 .part-four-row-2550q.single-b-2550q > span:first-child { grid-column: 1 / 3; }
 .part-four-row-2550q.single-b-2550q > span:nth-child(2) { display: none; }
 .part-four-row-2550q.single-b-2550q > span:nth-child(3) { grid-column: 3; }
@@ -320,9 +320,11 @@
 .form-2550q-page .adaptive-plain-value { padding: 1pt 3pt; line-height: 1; }
 .part-one-2550q .comb-value > span,
 .page-two-identity-2550q .comb-value > span,
+.payment-row-2550q .comb-value > span,
 .money-cell-2550q .comb-value > span { position: relative; border-right: 0; }
 .part-one-2550q .comb-value > span::after,
 .page-two-identity-2550q .comb-value > span::after,
+.payment-row-2550q .comb-value > span::after,
 .money-cell-2550q .comb-value > span::after { position: absolute; right: 0; bottom: 0; height: 7pt; border-right: .55pt solid #222; content: ""; }
 .tin-comb-2550q .comb-value > span { border-right: .55pt solid #222; }
 .tin-comb-2550q .comb-value > span::after { display: none; }

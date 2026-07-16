@@ -97,7 +97,7 @@ export function Form2550Q({ envelope }: { envelope: RenderEnvelope }) {
         <PartTwo2550Q envelope={envelope} />
         <Declaration2550Q envelope={envelope} />
         <PartThree2550Q envelope={envelope} />
-        <p className="privacy-note-2550q">Please read the BIR Data Privacy Policy found in the BIR website (www.bir.gov.ph).</p>
+        <p className="privacy-note-2550q">*NOTE: The BIR Data Privacy Policy is in the BIR website (www.bir.gov.ph)</p>
       </FolioPage>
 
       <FolioPage pageNumber={2} paper="legal" className="form-2550q-page form-2550q-page-two">
@@ -278,12 +278,12 @@ function PartThree2550Q({ envelope }: { envelope: RenderEnvelope }) {
       <div className="payment-header-2550q"><span>Particulars</span><span>Drawee Bank/Agency</span><span>Number</span><span>Date <em>(MM/DD/YYYY)</em></span><span>Amount</span></div>
       {rows.map(([item, label, bank, number, date, amount]) => (
         <div className="payment-row-2550q" key={item}>
-          <span><b>{item}</b> {label}</span><PlainValue2550Q value={bank ? text(envelope, bank) : ""} capacity={15} /><PlainValue2550Q value={number ? text(envelope, number) : ""} capacity={18} /><PlainValue2550Q value={date ? text(envelope, date) : ""} capacity={10} /><MoneyCell2550Q envelope={envelope} fieldKey={amount} cells={10} />
+          <span><b>{item}</b> {label}</span><AdaptiveCombValue value={bank ? text(envelope, bank) : ""} cells={5} /><AdaptiveCombValue value={number ? text(envelope, number) : ""} cells={6} /><AdaptiveCombValue value={date ? text(envelope, date) : ""} cells={8} /><MoneyCell2550Q envelope={envelope} fieldKey={amount} cells={12} />
         </div>
       ))}
       <div className="payment-other-label-2550q"><b>30</b> Others (Specify below)</div>
       <div className="payment-row-2550q payment-other-values-2550q">
-        <PlainValue2550Q value={text(envelope, "payment_other_description")} capacity={16} /><PlainValue2550Q value={text(envelope, "payment_other_bank")} capacity={15} /><PlainValue2550Q value={text(envelope, "payment_other_number")} capacity={18} /><PlainValue2550Q value={text(envelope, "payment_other_date")} capacity={10} /><MoneyCell2550Q envelope={envelope} fieldKey="payment_other_amount" cells={10} />
+        <AdaptiveCombValue value={text(envelope, "payment_other_description")} cells={5} /><AdaptiveCombValue value={text(envelope, "payment_other_bank")} cells={5} /><AdaptiveCombValue value={text(envelope, "payment_other_number")} cells={6} /><AdaptiveCombValue value={text(envelope, "payment_other_date")} cells={8} /><MoneyCell2550Q envelope={envelope} fieldKey="payment_other_amount" cells={12} />
       </div>
       <div className="receipt-validation-row-2550q">
         <div className="machine-validation-2550q">Machine Validation/Revenue Official Receipt (ROR) Details <PlainValue2550Q value={text(envelope, "machine_validation_or_receipt_details")} capacity={72} /></div>
@@ -414,7 +414,7 @@ function ValueLine2550Q({ value }: { value: string }) {
 
 function MoneyCell2550Q({ envelope, fieldKey, cells }: { envelope: RenderEnvelope; fieldKey: string; cells: number }) {
   const value = field(envelope, fieldKey);
-  if (value?.type !== "decimal") return <span className="money-cell-2550q blank-money-2550q" />;
+  if (value?.type !== "decimal") return <span className="money-cell-2550q blank-money-2550q"><AdaptiveCombValue value="" cells={cells} align="right" /><span className="decimal-cell-2550q">.</span><CombValue value="" cells={2} align="right" /></span>;
   const [whole, decimal] = formatMoneyParts(value.value);
   return <span className="money-cell-2550q"><AdaptiveCombValue value={whole} cells={cells} align="right" /><span className="decimal-cell-2550q">.</span><CombValue value={decimal} cells={2} align="right" /></span>;
 }
