@@ -10,10 +10,8 @@ import {
 } from "../components";
 import { bool, text } from "../values";
 import {
-  OFFICIAL_1702MX_BARCODE_PAGE_FOUR,
-  OFFICIAL_1702MX_BARCODE_PAGE_ONE,
-  OFFICIAL_1702MX_BARCODE_PAGE_THREE,
-  OFFICIAL_1702MX_BARCODE_PAGE_TWO,
+  OFFICIAL_1702MX_PDF417_PATHS,
+  OFFICIAL_1702MX_PDF417_PAYLOADS,
   OFFICIAL_1702MX_SEAL
 } from "./official1702MXAssets";
 import "./Form1702MX.css";
@@ -224,12 +222,7 @@ function GovernmentHeader1702MX() {
 }
 
 function Masthead1702MX({ page, compact = false }: { page: 1 | 2 | 3 | 4; compact?: boolean }) {
-  const barcodes = [
-    OFFICIAL_1702MX_BARCODE_PAGE_ONE,
-    OFFICIAL_1702MX_BARCODE_PAGE_TWO,
-    OFFICIAL_1702MX_BARCODE_PAGE_THREE,
-    OFFICIAL_1702MX_BARCODE_PAGE_FOUR
-  ];
+  const payload = OFFICIAL_1702MX_PDF417_PAYLOADS[page];
   return (
     <header className={`masthead-1702mx${compact ? " compact-1702mx" : ""}`}>
       <div className="form-number-1702mx">
@@ -243,7 +236,20 @@ function Masthead1702MX({ page, compact = false }: { page: 1 | 2 | 3 | 4; compac
         <span>Corporation, Partnership and Other Non-Individual<br />with MIXED Income Subject to Multiple Income Tax Rates or<br />with Income Subject to SPECIAL/PREFERENTIAL RATE</span>
         {!compact && <em>Enter all required information in CAPITAL LETTERS using BLACK ink. Mark applicable boxes with an “X”.</em>}
       </div>
-      <div className="barcode-1702mx"><img src={barcodes[page - 1]} alt={`1702-MX 01/18 ENCS P${page}`} /></div>
+      <div className="barcode-1702mx" aria-label={payload} data-barcode-page={page}>
+        <span className="official-pdf417-object-1702mx" aria-hidden="true">
+          <svg
+            className="official-pdf417-symbol-1702mx"
+            viewBox="0 0 120.5 8"
+            preserveAspectRatio="none"
+            shapeRendering="crispEdges"
+            focusable="false"
+          >
+            <path d={OFFICIAL_1702MX_PDF417_PATHS[page]} />
+          </svg>
+        </span>
+        <small>{payload}</small>
+      </div>
     </header>
   );
 }

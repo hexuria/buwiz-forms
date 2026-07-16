@@ -31,6 +31,133 @@ test("1702MX January 2018C renders every Rust fixture as four stable unclipped 6
   }
 });
 
+test("1702MX January 2018C keeps verified page-specific PDF417, caption, and seal geometry", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-normal.json"));
+  const pages = page.locator(".form-page");
+  await expect(pages).toHaveCount(4);
+
+  await expectCriticalRegionGeometry(pages.nth(0), [
+    {
+      name: "official seal XObject",
+      selector: ".government-wordmark-1702mx img",
+      x: 457.04,
+      y: 57.936,
+      width: 67.364,
+      height: 56.304
+    },
+    {
+      name: "page 1 official PDF417 XObject",
+      selector: '.barcode-1702mx[data-barcode-page="1"] .official-pdf417-object-1702mx',
+      x: 864.72,
+      y: 134.64,
+      width: 316.08,
+      height: 90.72
+    },
+    {
+      name: "page 1 official PDF417 live caption",
+      selector: '.barcode-1702mx[data-barcode-page="1"] > small',
+      x: 1004.12,
+      y: 224.5276,
+      width: 178.1404,
+      height: 16.08
+    }
+  ]);
+  await expectCriticalRegionGeometry(pages.nth(1), [
+    {
+      name: "page 2 official PDF417 XObject",
+      selector: '.barcode-1702mx[data-barcode-page="2"] .official-pdf417-object-1702mx',
+      x: 862.8,
+      y: 62.4,
+      width: 321.6,
+      height: 79.2
+    },
+    {
+      name: "page 2 official PDF417 live caption",
+      selector: '.barcode-1702mx[data-barcode-page="2"] > small',
+      x: 1003.88,
+      y: 145.2876,
+      width: 178.1404,
+      height: 16.08
+    }
+  ]);
+  await expectCriticalRegionGeometry(pages.nth(2), [
+    {
+      name: "page 3 official PDF417 XObject",
+      selector: '.barcode-1702mx[data-barcode-page="3"] .official-pdf417-object-1702mx',
+      x: 861.12,
+      y: 97.44,
+      width: 322.08,
+      height: 85.44
+    },
+    {
+      name: "page 3 official PDF417 live caption",
+      selector: '.barcode-1702mx[data-barcode-page="3"] > small',
+      x: 1005.56,
+      y: 182.0476,
+      width: 178.1404,
+      height: 16.08
+    }
+  ]);
+  await expectCriticalRegionGeometry(pages.nth(3), [
+    {
+      name: "page 4 official PDF417 XObject",
+      selector: '.barcode-1702mx[data-barcode-page="4"] .official-pdf417-object-1702mx',
+      x: 862.8,
+      y: 66.24,
+      width: 320.4,
+      height: 83.28
+    },
+    {
+      name: "page 4 official PDF417 live caption",
+      selector: '.barcode-1702mx[data-barcode-page="4"] > small',
+      x: 1004.12,
+      y: 149.8476,
+      width: 178.1404,
+      height: 16.08
+    }
+  ]);
+
+  expect(await page.locator(".official-pdf417-symbol-1702mx").evaluateAll(
+    (symbols) => symbols.map((symbol) => ({
+      preserveAspectRatio: symbol.getAttribute("preserveAspectRatio"),
+      shapeRendering: getComputedStyle(symbol).shapeRendering,
+      viewBox: symbol.getAttribute("viewBox")
+    }))
+  )).toEqual(Array.from({ length: 4 }, () => ({
+    preserveAspectRatio: "none",
+    shapeRendering: "crispedges",
+    viewBox: "0 0 120.5 8"
+  })));
+
+  const captions = page.locator(".barcode-1702mx > small");
+  for (const pageNumber of [1, 2, 3, 4]) {
+    await expect(captions.nth(pageNumber - 1)).toHaveText(`1702-MX 01/18ENCS P${pageNumber}`);
+  }
+  expect(await captions.evaluateAll((elements) => elements.map((element) => {
+    const style = getComputedStyle(element);
+    return {
+      fontFamily: style.fontFamily,
+      fontSize: style.fontSize,
+      lineHeight: style.lineHeight,
+      textAlign: style.textAlign,
+      whiteSpace: style.whiteSpace
+    };
+  }))).toEqual(Array.from({ length: 4 }, () => ({
+    fontFamily: '"eBIRForms Arimo", sans-serif',
+    fontSize: "10.72px",
+    lineHeight: "10.72px",
+    textAlign: "right",
+    whiteSpace: "nowrap"
+  })));
+
+  expect(await page.locator(".government-wordmark-1702mx img").evaluate(
+    (image) => ({
+      naturalHeight: (image as HTMLImageElement).naturalHeight,
+      naturalWidth: (image as HTMLImageElement).naturalWidth
+    })
+  )).toEqual({ naturalHeight: 102, naturalWidth: 119 });
+});
+
 test("1702MX January 2018C matches the complete official pages", async ({ page }, testInfo) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-normal.json"));
   const pages = page.locator(".form-page");
@@ -68,8 +195,11 @@ test("1702MX January 2018C matches the complete official pages", async ({ page }
     { name: "Schedule 10", selector: ".schedule-ten-1702mx", x: 36, y: 1314, width: 1152, height: 438 }
   ]);
 
-  expect(await pages.nth(0).locator("img").count()).toBe(2);
-  for (const pageIndex of [1, 2, 3]) expect(await pages.nth(pageIndex).locator("img").count()).toBe(1);
+  expect(await pages.nth(0).locator("img").count()).toBe(1);
+  for (const pageIndex of [1, 2, 3]) expect(await pages.nth(pageIndex).locator("img").count()).toBe(0);
+  for (const pageIndex of [0, 1, 2, 3]) {
+    await expect(pages.nth(pageIndex).locator(".official-pdf417-symbol-1702mx")).toHaveCount(1);
+  }
 
   await page.addStyleTag({
     content: `
