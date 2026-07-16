@@ -6,15 +6,29 @@ import { FormDocument } from "@ebirforms/form-renderer";
 import { getFormSpec } from "@ebirforms/form-specs";
 import migrationStatus from "../../../packages/form-specs/form-migration-status.json";
 import referenceManifestSource from "../../../packages/form-renderer/references/manifest.json";
+import {
+  fixtureVariantLabel,
+  groupFixturesByForm,
+  preferredFixture
+} from "./fixtureCatalog";
 import "./style.css";
 
 type ViewMode = "html" | "overlay" | "difference";
 
 interface FixtureOption {
+  code: string;
   envelope: RenderEnvelope;
   id: string;
-  label: string;
+  revision: string;
   status: (typeof migrationStatus.forms)[number] | undefined;
+}
+
+interface FormOption {
+  code: string;
+  fixtures: FixtureOption[];
+  id: string;
+  label: string;
+  revision: string;
 }
 
 interface ReferencePage {
@@ -65,13 +79,11 @@ const fixtureOptions = Object.entries(fixtureModules)
     const status = migrationStatus.forms.find(
       (item) => item.code === value.form.code && item.revision === value.form.version
     );
-    const variant = fixtureVariant(id);
-    const readiness = isHtmlEnabled(status) ? "HTML enabled" : "scaffold only";
-
     return {
+      code: value.form.code,
       envelope: value,
       id,
-      label: `${value.form.code} · revision ${value.form.version}${variant} · ${readiness}`,
+      revision: value.form.version,
       status
     };
   })
@@ -80,16 +92,28 @@ const fixtureOptions = Object.entries(fixtureModules)
       || left.id.localeCompare(right.id)
   );
 
+const formOptions = groupFixturesByForm(fixtureOptions).map((group): FormOption => {
+  const status = group.fixtures[0]?.status;
+  const readiness = isHtmlEnabled(status) ? "HTML enabled" : "scaffold only";
+  return {
+    ...group,
+    label: `${group.code} · revision ${group.revision} · ${readiness}`
+  };
+});
+
 if (fixtureOptions.length === 0) {
   throw new Error("No form renderer fixtures were found");
 }
 
 const defaultFixture = fixtureOptions.find((item) => item.id === "2551q-6-rows")
   ?? fixtureOptions[0];
+const defaultForm = formOptions.find((item) => item.fixtures.some(
+  (fixture) => fixture.id === defaultFixture.id
+)) ?? formOptions[0];
 
 function CalibrationApp() {
   const [selectedFixtureId, setSelectedFixtureId] = useState(defaultFixture.id);
-  const [fixtureQuery, setFixtureQuery] = useState(defaultFixture.label);
+  const [formQuery, setFormQuery] = useState(defaultForm.label);
   const [opacity, setOpacity] = useState(0.5);
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(1);
@@ -100,6 +124,9 @@ function CalibrationApp() {
 
   const selectedFixture = fixtureOptions.find((item) => item.id === selectedFixtureId)
     ?? defaultFixture;
+  const selectedForm = formOptions.find((item) => item.fixtures.some(
+    (fixture) => fixture.id === selectedFixture.id
+  )) ?? defaultForm;
   const envelope = selectedFixture.envelope;
   const spec = getFormSpec(envelope.form.code, envelope.form.version);
   const referenceForm = referenceManifest.forms.find(
@@ -170,17 +197,21 @@ function CalibrationApp() {
 
   function chooseFixture(option: FixtureOption) {
     setSelectedFixtureId(option.id);
-    setFixtureQuery(option.label);
     setPage(1);
     setMode("html");
   }
 
-  function updateFixtureQuery(value: string) {
-    setFixtureQuery(value);
-    const exactMatch = fixtureOptions.find(
+  function chooseForm(option: FormOption) {
+    setFormQuery(option.label);
+    chooseFixture(preferredFixture(option.fixtures));
+  }
+
+  function updateFormQuery(value: string) {
+    setFormQuery(value);
+    const exactMatch = formOptions.find(
       (item) => item.label.toLocaleLowerCase() === value.trim().toLocaleLowerCase()
     );
-    if (exactMatch) chooseFixture(exactMatch);
+    if (exactMatch) chooseForm(exactMatch);
   }
 
   function goToPage(requestedPage: number) {
@@ -218,28 +249,48 @@ function CalibrationApp() {
         </header>
 
         <section className="toolbar-section" aria-labelledby="fixture-heading">
-          <h2 id="fixture-heading">Form fixture</h2>
-          <label className="sr-only" htmlFor="fixture-combobox">Filter and select a form fixture</label>
+          <h2 id="fixture-heading">Form and fixture</h2>
+          <label className="field-label" htmlFor="form-combobox">Form</label>
           <input
-            id="fixture-combobox"
+            id="form-combobox"
             className="fixture-combobox"
             type="search"
-            list="fixture-options"
-            value={fixtureQuery}
+            list="form-options"
+            value={formQuery}
             autoComplete="off"
             spellCheck={false}
             aria-describedby="fixture-help"
             onFocus={(event) => event.currentTarget.select()}
-            onChange={(event) => updateFixtureQuery(event.target.value)}
-            onBlur={() => setFixtureQuery(selectedFixture.label)}
+            onChange={(event) => updateFormQuery(event.target.value)}
+            onBlur={() => setFormQuery(selectedForm.label)}
           />
-          <datalist id="fixture-options">
-            {fixtureOptions.map((option) => (
+          <datalist id="form-options">
+            {formOptions.map((option) => (
               <option key={option.id} value={option.label} />
             ))}
           </datalist>
+          <label className="field-label fixture-variant-label" htmlFor="fixture-variant-select">
+            Fixture variant
+          </label>
+          <select
+            id="fixture-variant-select"
+            className="fixture-select"
+            value={selectedFixture.id}
+            onChange={(event) => {
+              const option = selectedForm.fixtures.find(
+                (fixture) => fixture.id === event.target.value
+              );
+              if (option) chooseFixture(option);
+            }}
+          >
+            {selectedForm.fixtures.map((option) => (
+              <option key={option.id} value={option.id}>
+                {fixtureVariantLabel(option)}
+              </option>
+            ))}
+          </select>
           <p id="fixture-help" className="field-help">
-            Type a form number, then choose a matching fixture. No upload is required.
+            Search by form number, then choose one of its committed fixture variants. No upload is required.
           </p>
         </section>
 
@@ -404,12 +455,6 @@ function passesReleaseGate(status: FixtureOption["status"]): boolean {
       && isHtmlEnabled(status)
       && Object.values(status.capabilities).every(Boolean)
   );
-}
-
-function fixtureVariant(id: string): string {
-  if (id.endsWith("-6-rows")) return " · canonical 6-row fixture";
-  if (id.endsWith("-10-rows")) return " · 10-row overflow fixture";
-  return "";
 }
 
 function modeLabel(mode: ViewMode): string {
