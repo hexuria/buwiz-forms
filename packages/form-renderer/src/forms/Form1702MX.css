@@ -217,8 +217,16 @@
 .amount-cell-1702mx { border-left: .55pt solid #111; }
 .amount-cell-1702mx:not(.blank-amount-1702mx) { z-index: 0; }
 .amount-cell-1702mx:not(.blank-amount-1702mx)::before { content: ""; position: absolute; inset: 0; background: #fff; z-index: -1; }
-.part-two-1702mx .amount-row-1702mx { height: 20pt; }
-.overpayment-row-1702mx { height: 31.5pt; display: grid; grid-template-rows: 11pt 20.5pt; background: #d9d9d9; }
+.part-two-1702mx .amount-row-1702mx { min-height: 0; height: 19.25pt; }
+.penalty-heading-1702mx {
+  height: 10.5pt;
+  display: flex;
+  align-items: center;
+  padding: 1pt 18pt;
+  background: #d9d9d9;
+  border-bottom: .55pt solid #111;
+}
+.overpayment-row-1702mx { height: 26pt; display: grid; grid-template-rows: 10pt 16pt; background: #d9d9d9; }
 .overpayment-row-1702mx > span { display: flex; align-items: center; gap: 12pt; padding: 1pt 18pt; }
 
 .declaration-1702mx { height: 100pt; margin-top: 2pt; border: 1.2pt solid #111; }

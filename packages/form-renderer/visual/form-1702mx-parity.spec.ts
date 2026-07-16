@@ -176,6 +176,25 @@ test("1702MX January 2018C preserves the official Schedule 2 group rows", async 
   expect(await pageHasNoOverflow(pageTwo)).toBe(true);
 });
 
+test("1702MX January 2018C preserves the official Part II penalty heading", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-normal.json"));
+  const pageOne = page.locator(".form-page").nth(0);
+  const partTwo = pageOne.locator(".part-two-1702mx");
+  const penaltyHeading = partTwo.locator(":scope > .penalty-heading-1702mx");
+
+  await expect(penaltyHeading).toHaveCount(1);
+  await expect(penaltyHeading).toHaveText("Add: Penalties");
+  await expect(partTwo.locator(":scope > .amount-row-1702mx")).toHaveCount(8);
+  expect(await penaltyHeading.evaluate((element) => ({
+    backgroundColor: getComputedStyle(element).backgroundColor,
+    borderBottomStyle: getComputedStyle(element).borderBottomStyle
+  }))).toEqual({
+    backgroundColor: "rgb(217, 217, 217)",
+    borderBottomStyle: "solid"
+  });
+  expect(await pageHasNoOverflow(pageOne)).toBe(true);
+});
+
 test("1702MX January 2018C preserves the official Schedule 5 Item 17 band and subrows", async ({ page }) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-normal.json"));
   const pageThree = page.locator(".form-page").nth(2);

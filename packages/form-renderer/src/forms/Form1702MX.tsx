@@ -1,6 +1,6 @@
 import type { RenderEnvelope, RenderValue } from "@ebirforms/form-contracts";
 import { getFormSpec } from "@ebirforms/form-specs";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import {
   AdaptiveCombValue,
   CheckChoice,
@@ -332,7 +332,10 @@ function PartTwo1702MX({ envelope }: { envelope: RenderEnvelope }) {
     <section className="part-two-1702mx ruled-section-1702mx">
       <SectionHeading1702MX>Part II – Total Tax Payable <small>(Do NOT enter Centavos)</small></SectionHeading1702MX>
       {rows.map(([number, label, key], index) => (
-        <AmountRow1702MX key={number} number={number} label={label} value={amount(envelope, key)} className={index >= 3 && index <= 5 ? "penalty-row-1702mx" : ""} />
+        <Fragment key={number}>
+          {number === 17 && <div className="penalty-heading-1702mx">Add: Penalties</div>}
+          <AmountRow1702MX number={number} label={label} value={amount(envelope, key)} className={index >= 3 && index <= 5 ? "penalty-row-1702mx" : ""} />
+        </Fragment>
       ))}
       <div className="overpayment-row-1702mx">
         <span>If overpayment, mark one (1) box only. Once made, the choice is irrevocable.</span>
