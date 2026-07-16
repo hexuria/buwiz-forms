@@ -13,7 +13,11 @@ Convert one exact form revision at a time. Treat conversion as a tax-data and re
 - Keep React authoritative only for semantic document structure, styling, deterministic pagination, and readiness measurement.
 - Never infer tax formulas or field meaning from one saved payload. Require primary-source or corroborated implementation evidence.
 - Never create Typst templates, formtype JSON, coordinate overlays, or full-page runtime PDF/SVG/raster backgrounds.
-- Use official pages only as pinned calibration references. Permit only reviewed discrete assets such as a seal or static form barcode.
+- Use official pages only as pinned calibration references. Permit only reviewed
+  discrete assets whose exact official-PDF provenance is recorded. Machine-readable
+  symbols and the government seal/logo must follow
+  [discrete-artwork.md](references/discrete-artwork.md); a screenshot crop is not
+  sufficient evidence.
 - Keep incomplete forms `ScaffoldOnly` or `disabled`. Never set promotion flags without recorded evidence.
 - Preserve unrelated work and use `rtk` before shell commands in this repository.
 
@@ -23,9 +27,14 @@ Convert one exact form revision at a time. Treat conversion as a tax-data and re
 2. **Prove tax behavior.** Audit or implement the Rust model, formulas, validation, XML round-trip, persistence, queue/submission behavior, carry-over, and repeatable-row limits. Stop when evidence is insufficient.
 3. **Add the render provider.** Map the typed Rust draft into `RenderEnvelopeV1`. Provide minimum, normal, long-value, validation-edge, and maximum-capacity fixtures. Do not repair or calculate values in TypeScript.
 4. **Build semantic HTML.** Add the form component, exact-revision dispatch, scoped CSS, form specification, and pagination policy. Reuse shared paper, table, comb, checkbox, and amount primitives only when their official behavior matches.
-5. **Calibrate visually.** Use `scripts/prepare_official_reference.py` to render the pinned official PDF. Read [visual-calibration.md](references/visual-calibration.md). Inspect both full pages and critical regions.
-6. **Prove output behavior.** Verify preview, system print, direct PDF export, page count, 612 x 936 point geometry where applicable, clipping detection, offline packaging, and platform evidence. Read [native-print-export.md](references/native-print-export.md).
-7. **Audit and promote.** Run `scripts/verify_form_conversion.py` at `preview`, then `release` stage. Update migration/release evidence only after every named gate passes.
+5. **Verify discrete artwork.** Extract the exact seal/logo and every page-specific
+   barcode or QR symbol from the pinned official PDF. Decode machine-readable
+   payloads, preserve their module matrices as crisp vector artwork, keep captions
+   as live bundled-font text, and record object/hash/geometry provenance. Read
+   [discrete-artwork.md](references/discrete-artwork.md).
+6. **Calibrate visually.** Use `scripts/prepare_official_reference.py` to render the pinned official PDF. Read [visual-calibration.md](references/visual-calibration.md). Inspect both full pages and critical regions.
+7. **Prove output behavior.** Verify preview, system print, direct PDF export, page count, 612 x 936 point geometry where applicable, clipping detection, offline packaging, and platform evidence. Read [native-print-export.md](references/native-print-export.md).
+8. **Audit and promote.** Run `scripts/verify_form_conversion.py` at `preview`, then `release` stage. Update migration/release evidence only after every named gate passes.
 
 Use [architecture.md](references/architecture.md) when changing cross-form interfaces. Use [2551q-gold-standard.md](references/2551q-gold-standard.md) as the repository example, while respecting its current incomplete release status.
 

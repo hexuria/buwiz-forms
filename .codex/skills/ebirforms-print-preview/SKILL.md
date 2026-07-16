@@ -15,6 +15,9 @@ Fix an already-migrated form through the owning layer. Do not create a second re
 - Fix truncation or page-count errors in the form specification and pagination policy.
 - Fix readiness, print, or export failures in the native HTML host/output path.
 - Fix false support claims in migration and release-evidence manifests.
+- Fix blurry or incorrect barcode/QR/seal artwork by tracing the exact pinned
+  official-PDF object, decoded payload, module matrix, physical geometry, and
+  bundled-font caption. Never replace it with an unverified crop or generic logo.
 
 Read [renderer-workflow.md](references/renderer-workflow.md) before changing shared primitives, native output, or release flags.
 
