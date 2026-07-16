@@ -715,13 +715,6 @@ impl TaxpayerProfile {
             .cloned()
             .collect();
 
-        if versions.is_empty() {
-            if self.compliance_source_mode == ComplianceSourceMode::CorVersioned {
-                return vec![];
-            }
-            return vec![TaxProfileVersion::from_profile_backfill(self)];
-        }
-
         versions.sort_by(|a, b| {
             a.effective_from
                 .cmp(&b.effective_from)
@@ -1299,6 +1292,28 @@ mod tests {
         assert!(resolved.issues.iter().any(|issue| {
             issue.kind == TaxProfileResolutionIssueKind::NoEffectiveVersionForPeriod
         }));
+    }
+
+    #[test]
+    fn confirmed_versions_never_synthesize_the_flat_profile() {
+        let mut profile = test_profile();
+        profile.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
+        profile.business_start_date = NaiveDate::from_ymd_opt(2020, 1, 1);
+
+        assert!(profile.profile_versions.is_empty());
+        assert!(profile.confirmed_profile_versions().is_empty());
+
+        profile.ensure_profile_version_ledger();
+        assert_eq!(profile.confirmed_profile_versions().len(), 1);
+        assert_eq!(
+            profile.confirmed_profile_versions()[0].id,
+            "legacy-current-profile"
+        );
+
+        // Backfill is an explicit, idempotent migration boundary rather than
+        // a hidden projection performed by every resolver call.
+        profile.ensure_profile_version_ledger();
+        assert_eq!(profile.profile_versions.len(), 1);
     }
 
     #[test]
