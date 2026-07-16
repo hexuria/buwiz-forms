@@ -149,6 +149,27 @@ test("2550Q April 2024 preserves official disabled panels and page-one payment c
   await expect(blankPayment.locator(".decimal-cell-2550q")).toHaveCount(1);
 });
 
+test("2550Q April 2024 preserves the official Schedule 2 fraction and result bands", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/2550q-normal.json"));
+  const schedule = page.locator(".schedule-two-2550q");
+
+  await expect(schedule.locator(".schedule-two-fraction-2550q")).toHaveCount(1);
+  await expect(schedule.locator(".schedule-two-fraction-2550q > span")).toHaveCount(2);
+  await expect(schedule.locator(".schedule-two-formula-2550q"))
+    .toHaveCSS("background-color", "rgb(217, 217, 217)");
+  await expect(schedule.locator(".schedule-two-results-2550q > .schedule-money-2550q")).toHaveCount(3);
+  await expect(schedule.locator(".schedule-two-results-2550q > .schedule-money-2550q").nth(0))
+    .toHaveCSS("border-bottom-style", "solid");
+  await expect(schedule.locator(".schedule-two-results-2550q > .schedule-money-2550q").nth(1))
+    .toHaveCSS("border-bottom-style", "solid");
+  await expect(schedule.locator(".schedule-two-results-2550q > .schedule-money-2550q").nth(2))
+    .toHaveCSS("border-bottom-style", "none");
+  const resultHeights = await schedule.locator(".schedule-two-results-2550q > .schedule-money-2550q")
+    .evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().height));
+  expect(resultHeights[1]).toBeGreaterThan(resultHeights[0] * 2);
+  expect(Math.abs(resultHeights[2] - resultHeights[0])).toBeLessThan(1);
+});
+
 test("2550Q April 2024 matches the complete official pages", async ({ page }, testInfo) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/2550q-normal.json"));
   const pages = page.locator(".form-page");

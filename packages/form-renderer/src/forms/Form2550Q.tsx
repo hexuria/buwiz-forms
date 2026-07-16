@@ -357,10 +357,17 @@ function ScheduleTwo2550Q({ envelope }: { envelope: RenderEnvelope }) {
       <h3>Schedule 2 — Input Tax Attributable to VAT-Exempt Sales</h3>
       <div className="schedule-two-body-2550q">
         <div className="schedule-two-formula-2550q">
-          <span>Input Tax directly attributable to VAT Exempt Sale</span>
-          <span>Add: Ratable portion of Input Tax not directly attributable to any activity:</span>
-          <span className="schedule-two-equation-2550q">VAT Exempt Sale <ScheduleMoney2550Q envelope={envelope} fieldKey="schedule_2_exempt_sales" /> ÷ Total Sales <ScheduleMoney2550Q envelope={envelope} fieldKey="schedule_2_total_sales" /> × Amount of Input Tax not directly attributable <ScheduleMoney2550Q envelope={envelope} fieldKey="schedule_2_indirect_input_tax" /></span>
-          <span>Total Input Tax attributable to Exempt Sale (To Part IV, Item 53)</span>
+          <span className="schedule-two-direct-label-2550q">Input Tax directly attributable to VAT Exempt Sale</span>
+          <span className="schedule-two-ratable-label-2550q">Add:&nbsp; Ratable portion of Input Tax not directly attributable to any activity:</span>
+          <span className="schedule-two-equation-2550q">
+            <span className="schedule-two-fraction-2550q">
+              <span><span>VAT Exempt Sale</span><ScheduleMoney2550Q envelope={envelope} fieldKey="schedule_2_exempt_sales" /></span>
+              <span><span>Total Sales</span><ScheduleMoney2550Q envelope={envelope} fieldKey="schedule_2_total_sales" /></span>
+            </span>
+            <b aria-hidden="true">X</b>
+            <span className="schedule-two-indirect-2550q"><span>Amount of Input Tax not directly attributable</span><ScheduleMoney2550Q envelope={envelope} fieldKey="schedule_2_indirect_input_tax" /></span>
+          </span>
+          <span className="schedule-two-total-label-2550q">Total Input Tax attributable to Exempt Sale <em>(To Part IV, Item 53)</em></span>
         </div>
         <div className="schedule-two-results-2550q"><ScheduleMoney2550Q envelope={envelope} fieldKey="schedule_2_direct_input_tax" /><ScheduleMoney2550Q envelope={envelope} fieldKey="schedule_2_ratable_input_tax" /><ScheduleMoney2550Q envelope={envelope} fieldKey="schedule_2_total_attributable_input_tax" /></div>
       </div>

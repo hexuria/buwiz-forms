@@ -291,13 +291,72 @@
 .schedule-one-note-2550q { height: 9pt; display: grid; grid-template-columns: 1fr 2fr; background: #d9d9d9; border-bottom: .45pt solid #111; font-size: 5.5pt; font-style: italic; }
 .schedule-one-note-2550q > span { display: grid; place-items: center; }
 .schedule-two-2550q { height: 58pt; }
-.schedule-two-2550q h3 { height: 10pt; }
+.schedule-two-2550q h3 {
+  height: 10pt;
+  justify-content: flex-start;
+  padding-left: 4pt;
+  font-size: 7pt;
+  font-weight: 400;
+}
 .schedule-two-body-2550q { height: 48pt; display: grid; grid-template-columns: 427.5pt minmax(0, 1fr); border-bottom: .45pt solid #111; }
-.schedule-two-formula-2550q { display: flex; flex-direction: column; justify-content: center; padding: 1pt 5pt; font-size: 6pt; }
-.schedule-two-equation-2550q { display: flex; align-items: center; gap: 3pt; padding-left: 20pt; }
-.schedule-two-equation-2550q .schedule-money-2550q { min-width: 74pt; min-height: 8pt; border-bottom: .45pt solid #111; }
-.schedule-two-results-2550q { display: grid; grid-template-rows: repeat(3, 1fr); border-left: .45pt solid #111; }
-.schedule-two-results-2550q .schedule-money-2550q { display: flex; align-items: center; justify-content: flex-end; padding-right: 3pt; }
+.schedule-two-formula-2550q {
+  display: grid;
+  grid-template-rows: 8pt 8pt 23pt 9pt;
+  padding: 0 5pt;
+  background: #d9d9d9;
+  font-size: 6pt;
+}
+.schedule-two-formula-2550q > span { min-width: 0; }
+.schedule-two-direct-label-2550q,
+.schedule-two-ratable-label-2550q,
+.schedule-two-total-label-2550q { display: flex; align-items: center; white-space: nowrap; }
+.schedule-two-equation-2550q {
+  display: grid;
+  grid-template-columns: 135pt 10pt minmax(0, 1fr);
+  align-items: center;
+  padding-left: 20pt;
+}
+.schedule-two-equation-2550q > b { margin: 0; text-align: center; font-weight: 400; }
+.schedule-two-fraction-2550q {
+  height: 22pt;
+  display: grid;
+  grid-template-rows: 11pt 11pt;
+}
+.schedule-two-fraction-2550q > span {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 72pt minmax(0, 1fr);
+  align-items: end;
+  text-align: center;
+}
+.schedule-two-fraction-2550q > span:first-child { border-bottom: .55pt solid #111; }
+.schedule-two-fraction-2550q .schedule-money-2550q,
+.schedule-two-indirect-2550q .schedule-money-2550q {
+  min-width: 0;
+  height: 10pt;
+  border-bottom: .55pt solid #111;
+}
+.schedule-two-indirect-2550q {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 3pt;
+}
+.schedule-two-indirect-2550q > span:first-child { white-space: nowrap; }
+.schedule-two-total-label-2550q em { margin-left: 2pt; }
+.schedule-two-results-2550q {
+  display: grid;
+  grid-template-rows: 10pt 27.5pt 10.5pt;
+  border-left: .45pt solid #111;
+}
+.schedule-two-results-2550q .schedule-money-2550q {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 3pt;
+}
+.schedule-two-results-2550q .schedule-money-2550q:not(:last-child) { border-bottom: .55pt solid #111; }
 .schedule-three-2550q { height: 49.5pt; }
 .schedule-three-2550q h3 { height: 10pt; }
 .schedule-four-2550q { height: 47.5pt; }
