@@ -5,7 +5,8 @@
 
 use lopdf::{dictionary, Dictionary, Document, Object, ObjectId};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -14,6 +15,8 @@ const GEOMETRY_TOLERANCE_POINTS: f64 = 0.25;
 const FORM_CODE_INFO_KEY: &[u8] = b"BirFormCode";
 const REVISION_INFO_KEY: &[u8] = b"BirFormRevision";
 const ENVELOPE_HASH_INFO_KEY: &[u8] = b"BirEnvelopeSha256";
+const RENDER_BINDING_HASH_INFO_KEY: &[u8] = b"BirRenderBindingSha256";
+const RENDER_BINDING_HASH_DOMAIN: &[u8] = b"ebirforms-envelope-render-binding-v1\0";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -157,6 +160,8 @@ pub enum HtmlOutputError {
         expected: String,
         actual: Option<String>,
     },
+    #[error("platform PDF unexpectedly contains reserved eBIRForms evidence field {field}")]
+    PreexistingEvidence { field: &'static str },
     #[error("PDF output path is invalid: {0}")]
     InvalidPath(String),
     #[error("I/O error: {0}")]
@@ -206,30 +211,16 @@ pub fn discard_pdf_export_temp(path: &Path) -> Result<(), HtmlOutputError> {
     }
 }
 
-/// Add immutable form/envelope evidence to a platform-generated PDF.
-pub fn stamp_pdf_evidence(
-    path: &Path,
-    expectation: &PdfExpectation,
-) -> Result<(), HtmlOutputError> {
+/// Test helper for constructing a finalized PDF without exercising a native backend.
+#[cfg(test)]
+fn stamp_pdf_evidence(path: &Path, expectation: &PdfExpectation) -> Result<(), HtmlOutputError> {
     expectation.validate()?;
     let mut document =
         Document::load(path).map_err(|error| HtmlOutputError::InvalidPdf(error.to_string()))?;
-
-    let mut info = document_info_dictionary(&document).unwrap_or_default();
-    info.set(
-        FORM_CODE_INFO_KEY,
-        Object::string_literal(expectation.form_code.as_bytes()),
-    );
-    info.set(
-        REVISION_INFO_KEY,
-        Object::string_literal(expectation.revision.as_bytes()),
-    );
-    info.set(
-        ENVELOPE_HASH_INFO_KEY,
-        Object::string_literal(expectation.envelope_hash.as_bytes()),
-    );
-    let info_id = document.add_object(info);
-    document.trailer.set("Info", info_id);
+    ensure_reserved_evidence_absent(&document)?;
+    validate_pdf_structure(&document, expectation)?;
+    let render_binding_hash = render_binding_hash(&document, expectation)?;
+    apply_pdf_evidence(&mut document, expectation, &render_binding_hash);
     document
         .save(path)
         .map_err(|error| HtmlOutputError::Io(std::io::Error::other(error.to_string())))?;
@@ -364,8 +355,26 @@ pub fn finalize_pdf_export(
     }
 
     let result = (|| {
-        stamp_pdf_evidence(temp_path, expectation)?;
+        expectation.validate()?;
+        validate_export_paths(temp_path, destination)?;
+
+        // Validate the untouched platform output before adding evidence. Keeping
+        // the validated document in memory avoids a path-based TOCTOU between
+        // validation and stamping.
+        let mut document = Document::load(temp_path)
+            .map_err(|error| HtmlOutputError::InvalidPdf(error.to_string()))?;
+        ensure_reserved_evidence_absent(&document)?;
+        let raw_report = validate_pdf_structure(&document, expectation)?;
+        let render_binding_hash = render_binding_hash(&document, expectation)?;
+        apply_pdf_evidence(&mut document, expectation, &render_binding_hash);
+        document
+            .save(temp_path)
+            .map_err(|error| HtmlOutputError::Io(std::io::Error::other(error.to_string())))?;
+
+        // Reload the exact bytes that will be renamed. This proves the evidence
+        // is still bound to the validated page/render graph after serialization.
         let report = validate_pdf_file(temp_path, expectation)?;
+        debug_assert_eq!(report, raw_report);
         fs::OpenOptions::new()
             .read(true)
             .open(temp_path)?
@@ -384,7 +393,15 @@ fn validate_pdf_document(
     document: &Document,
     expectation: &PdfExpectation,
 ) -> Result<PdfValidationReport, HtmlOutputError> {
+    let report = validate_pdf_structure(document, expectation)?;
     validate_pdf_evidence(document, expectation)?;
+    Ok(report)
+}
+
+fn validate_pdf_structure(
+    document: &Document,
+    expectation: &PdfExpectation,
+) -> Result<PdfValidationReport, HtmlOutputError> {
     let pages = document.get_pages();
     if pages.len() != expectation.expected_page_count {
         return Err(HtmlOutputError::PageCount {
@@ -478,7 +495,301 @@ fn validate_pdf_evidence(
             });
         }
     }
+    let expected_render_binding_hash = render_binding_hash(document, expectation)?;
+    let actual_render_binding_hash = info
+        .as_ref()
+        .and_then(|dictionary| dictionary.get(RENDER_BINDING_HASH_INFO_KEY).ok())
+        .and_then(|value| resolved_object(document, value))
+        .and_then(|value| value.as_string().ok())
+        .map(|value| value.into_owned());
+    if actual_render_binding_hash.as_deref() != Some(expected_render_binding_hash.as_str()) {
+        return Err(HtmlOutputError::EvidenceMismatch {
+            field: "render binding hash",
+            expected: expected_render_binding_hash,
+            actual: actual_render_binding_hash,
+        });
+    }
     Ok(())
+}
+
+fn apply_pdf_evidence(
+    document: &mut Document,
+    expectation: &PdfExpectation,
+    render_binding_hash: &str,
+) {
+    let mut info = document_info_dictionary(document).unwrap_or_default();
+    info.set(
+        FORM_CODE_INFO_KEY,
+        Object::string_literal(expectation.form_code.as_bytes()),
+    );
+    info.set(
+        REVISION_INFO_KEY,
+        Object::string_literal(expectation.revision.as_bytes()),
+    );
+    info.set(
+        ENVELOPE_HASH_INFO_KEY,
+        Object::string_literal(expectation.envelope_hash.as_bytes()),
+    );
+    info.set(
+        RENDER_BINDING_HASH_INFO_KEY,
+        Object::string_literal(render_binding_hash.as_bytes()),
+    );
+    let info_id = document.add_object(info);
+    document.trailer.set("Info", info_id);
+}
+
+fn ensure_reserved_evidence_absent(document: &Document) -> Result<(), HtmlOutputError> {
+    let Some(info) = document_info_dictionary(document) else {
+        return Ok(());
+    };
+    for (key, field) in [
+        (FORM_CODE_INFO_KEY, "form code"),
+        (REVISION_INFO_KEY, "revision"),
+        (ENVELOPE_HASH_INFO_KEY, "envelope hash"),
+        (RENDER_BINDING_HASH_INFO_KEY, "render binding hash"),
+    ] {
+        if info.has(key) {
+            return Err(HtmlOutputError::PreexistingEvidence { field });
+        }
+    }
+    Ok(())
+}
+
+fn render_binding_hash(
+    document: &Document,
+    expectation: &PdfExpectation,
+) -> Result<String, HtmlOutputError> {
+    let pages = document.get_pages();
+    let mut hasher = Sha256::new();
+    hasher.update(RENDER_BINDING_HASH_DOMAIN);
+    hash_bytes(&mut hasher, expectation.form_code.as_bytes());
+    hash_bytes(&mut hasher, expectation.revision.as_bytes());
+    hash_bytes(&mut hasher, expectation.envelope_hash.as_bytes());
+    hasher.update((expectation.expected_page_count as u64).to_be_bytes());
+    hasher.update(expectation.width_points.to_bits().to_be_bytes());
+    hasher.update(expectation.height_points.to_bits().to_be_bytes());
+    hash_length(&mut hasher, pages.len());
+
+    let mut visited = BTreeSet::new();
+    for (page_number, page_id) in pages {
+        hasher.update(b"page\0");
+        hasher.update(page_number.to_be_bytes());
+        let page = document
+            .get_dictionary(page_id)
+            .map_err(|error| HtmlOutputError::InvalidPdf(error.to_string()))?;
+        hash_dictionary(document, page, &mut hasher, &mut visited, &[b"Parent"])?;
+    }
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+fn hash_object(
+    document: &Document,
+    object: &Object,
+    hasher: &mut Sha256,
+    visited: &mut BTreeSet<ObjectId>,
+) -> Result<(), HtmlOutputError> {
+    match object {
+        Object::Null => hasher.update(b"null\0"),
+        Object::Boolean(value) => {
+            hasher.update(b"bool\0");
+            hasher.update([u8::from(*value)]);
+        }
+        Object::Integer(value) => {
+            hasher.update(b"integer\0");
+            hasher.update(value.to_be_bytes());
+        }
+        Object::Real(value) => {
+            hasher.update(b"real\0");
+            hasher.update(value.to_bits().to_be_bytes());
+        }
+        Object::Name(value) => {
+            hasher.update(b"name\0");
+            hash_bytes(hasher, value);
+        }
+        Object::String(value, format) => {
+            hasher.update(b"string\0");
+            hasher.update([match format {
+                lopdf::StringFormat::Literal => 0,
+                lopdf::StringFormat::Hexadecimal => 1,
+            }]);
+            hash_bytes(hasher, value);
+        }
+        Object::Array(values) => {
+            hasher.update(b"array\0");
+            hash_length(hasher, values.len());
+            for value in values {
+                hash_object(document, value, hasher, visited)?;
+            }
+        }
+        Object::Dictionary(dictionary) => {
+            hasher.update(b"dictionary\0");
+            hash_dictionary(document, dictionary, hasher, visited, &[])?;
+        }
+        Object::Stream(stream) => {
+            hasher.update(b"stream\0");
+            hash_dictionary(document, &stream.dict, hasher, visited, &[])?;
+            hash_bytes(hasher, &stream.content);
+        }
+        Object::Reference(object_id) => {
+            hasher.update(b"reference\0");
+            hasher.update(object_id.0.to_be_bytes());
+            hasher.update(object_id.1.to_be_bytes());
+            if visited.insert(*object_id) {
+                let resolved = document
+                    .get_object(*object_id)
+                    .map_err(|error| HtmlOutputError::InvalidPdf(error.to_string()))?;
+                hash_object(document, resolved, hasher, visited)?;
+            } else {
+                hasher.update(b"visited\0");
+            }
+        }
+    }
+    Ok(())
+}
+
+fn hash_dictionary(
+    document: &Document,
+    dictionary: &Dictionary,
+    hasher: &mut Sha256,
+    visited: &mut BTreeSet<ObjectId>,
+    ignored_keys: &[&[u8]],
+) -> Result<(), HtmlOutputError> {
+    let mut entries = dictionary
+        .iter()
+        .filter(|(key, _)| !ignored_keys.contains(&key.as_slice()))
+        .collect::<Vec<_>>();
+    entries.sort_unstable_by_key(|(left, _)| *left);
+    hash_length(hasher, entries.len());
+    for (key, value) in entries {
+        hash_bytes(hasher, key);
+        hash_object(document, value, hasher, visited)?;
+    }
+    Ok(())
+}
+
+fn hash_bytes(hasher: &mut Sha256, bytes: &[u8]) {
+    hash_length(hasher, bytes.len());
+    hasher.update(bytes);
+}
+
+fn hash_length(hasher: &mut Sha256, length: usize) {
+    hasher.update((length as u64).to_be_bytes());
+}
+
+fn validate_export_paths(temp_path: &Path, destination: &Path) -> Result<(), HtmlOutputError> {
+    let temp_parent = temp_path.parent().ok_or_else(|| {
+        HtmlOutputError::InvalidPath(format!(
+            "temporary PDF has no parent directory: {}",
+            temp_path.display()
+        ))
+    })?;
+    let destination_parent = destination.parent().ok_or_else(|| {
+        HtmlOutputError::InvalidPath(format!(
+            "destination PDF has no parent directory: {}",
+            destination.display()
+        ))
+    })?;
+    let temp_parent = fs::canonicalize(temp_parent)?;
+    let destination_parent = fs::canonicalize(destination_parent)?;
+    if temp_parent != destination_parent {
+        return Err(HtmlOutputError::InvalidPath(format!(
+            "temporary PDF must be a sibling of the destination: {}",
+            temp_path.display()
+        )));
+    }
+
+    let temp_metadata = fs::symlink_metadata(temp_path)?;
+    if !temp_metadata.file_type().is_file() {
+        return Err(HtmlOutputError::InvalidPath(format!(
+            "temporary PDF must be a regular file: {}",
+            temp_path.display()
+        )));
+    }
+
+    if destination.exists() {
+        let canonical_temp = fs::canonicalize(temp_path)?;
+        let canonical_destination = fs::canonicalize(destination)?;
+        if canonical_temp == canonical_destination {
+            return Err(HtmlOutputError::InvalidPath(
+                "temporary PDF aliases the destination".to_string(),
+            ));
+        }
+        reject_same_file(
+            temp_path,
+            destination,
+            &temp_metadata,
+            &fs::metadata(destination)?,
+        )?;
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn reject_same_file(
+    _temp_path: &Path,
+    _destination: &Path,
+    temp_metadata: &fs::Metadata,
+    destination_metadata: &fs::Metadata,
+) -> Result<(), HtmlOutputError> {
+    use std::os::unix::fs::MetadataExt;
+    if temp_metadata.dev() == destination_metadata.dev()
+        && temp_metadata.ino() == destination_metadata.ino()
+    {
+        return Err(HtmlOutputError::InvalidPath(
+            "temporary PDF aliases the destination".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn reject_same_file(
+    temp_path: &Path,
+    destination: &Path,
+    _temp_metadata: &fs::Metadata,
+    _destination_metadata: &fs::Metadata,
+) -> Result<(), HtmlOutputError> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{
+        GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+    };
+
+    fn identity(path: &Path) -> Result<(u32, u64), HtmlOutputError> {
+        let file = fs::File::open(path)?;
+        let mut information = BY_HANDLE_FILE_INFORMATION::default();
+        // SAFETY: `file` owns a valid handle for this synchronous query and
+        // `information` is a live, correctly-sized output buffer.
+        let succeeded =
+            unsafe { GetFileInformationByHandle(file.as_raw_handle().cast(), &mut information) };
+        if succeeded == 0 {
+            return Err(std::io::Error::last_os_error().into());
+        }
+        let file_index =
+            (u64::from(information.nFileIndexHigh) << 32) | u64::from(information.nFileIndexLow);
+        Ok((information.dwVolumeSerialNumber, file_index))
+    }
+
+    if identity(temp_path)? == identity(destination)? {
+        return Err(HtmlOutputError::InvalidPath(
+            "temporary PDF aliases the destination".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(not(any(unix, windows)))]
+fn reject_same_file(
+    _temp_path: &Path,
+    _destination: &Path,
+    _temp_metadata: &fs::Metadata,
+    _destination_metadata: &fs::Metadata,
+) -> Result<(), HtmlOutputError> {
+    // Fail closed on platforms where std does not expose a stable file identity.
+    // Creating a new destination still works; replacing an existing destination
+    // requires proving the temporary file is not a hard-link alias.
+    Err(HtmlOutputError::InvalidPath(
+        "stable file identity is unavailable for PDF replacement on this platform".to_string(),
+    ))
 }
 
 fn document_info_dictionary(document: &Document) -> Option<Dictionary> {
@@ -734,6 +1045,60 @@ mod tests {
         document.save(path).expect("test PDF should save");
     }
 
+    fn replace_first_page_content(path: &Path, content: &[u8]) {
+        let mut document = Document::load(path).expect("test PDF should load");
+        let page_id = document
+            .get_pages()
+            .into_values()
+            .next()
+            .expect("test PDF should contain a page");
+        let content_id = document
+            .get_dictionary(page_id)
+            .expect("page dictionary should exist")
+            .get(b"Contents")
+            .expect("page content should exist")
+            .as_reference()
+            .expect("test page content should be indirect");
+        let stream = document
+            .get_object_mut(content_id)
+            .expect("content object should exist")
+            .as_stream_mut()
+            .expect("content should be a stream");
+        stream.set_plain_content(content.to_vec());
+        document.save(path).expect("mutated PDF should save");
+    }
+
+    fn replace_first_page_geometry(path: &Path, width: i64, height: i64) {
+        let mut document = Document::load(path).expect("test PDF should load");
+        let page_id = document
+            .get_pages()
+            .into_values()
+            .next()
+            .expect("test PDF should contain a page");
+        let page = document
+            .get_dictionary_mut(page_id)
+            .expect("page dictionary should exist");
+        let page_box = vec![0.into(), 0.into(), width.into(), height.into()];
+        page.set("MediaBox", page_box.clone());
+        page.set("CropBox", page_box);
+        document.save(path).expect("mutated PDF should save");
+    }
+
+    fn replace_info_string(path: &Path, key: &[u8], value: &[u8]) {
+        let mut document = Document::load(path).expect("test PDF should load");
+        let info_id = document
+            .trailer
+            .get(b"Info")
+            .expect("test PDF should have an Info dictionary")
+            .as_reference()
+            .expect("Info dictionary should be indirect");
+        document
+            .get_dictionary_mut(info_id)
+            .expect("Info dictionary should exist")
+            .set(key, Object::string_literal(value));
+        document.save(path).expect("mutated PDF should save");
+    }
+
     fn stamped_pdf(page_count: usize) -> (tempfile::TempDir, PathBuf, PdfExpectation) {
         let directory = tempfile::tempdir().expect("temporary directory should be created");
         let path = directory.path().join("form.pdf");
@@ -767,11 +1132,8 @@ mod tests {
 
     #[test]
     fn rejects_incorrect_page_geometry() {
-        let directory = tempfile::tempdir().expect("temporary directory should be created");
-        let path = directory.path().join("form.pdf");
-        let expectation = expectation(1);
-        write_pdf(&path, 1, 612, 935, b"q Q");
-        stamp_pdf_evidence(&path, &expectation).expect("evidence should be stamped");
+        let (_directory, path, expectation) = stamped_pdf(1);
+        replace_first_page_geometry(&path, 612, 935);
         assert!(matches!(
             validate_pdf_file(&path, &expectation),
             Err(HtmlOutputError::PageGeometry { .. })
@@ -780,11 +1142,8 @@ mod tests {
 
     #[test]
     fn rejects_empty_page_content() {
-        let directory = tempfile::tempdir().expect("temporary directory should be created");
-        let path = directory.path().join("form.pdf");
-        let expectation = expectation(1);
-        write_pdf(&path, 1, 612, 936, b" \n\t");
-        stamp_pdf_evidence(&path, &expectation).expect("evidence should be stamped");
+        let (_directory, path, expectation) = stamped_pdf(1);
+        replace_first_page_content(&path, b" \n\t");
         assert!(matches!(
             validate_pdf_file(&path, &expectation),
             Err(HtmlOutputError::EmptyPage { page: 1 })
@@ -799,6 +1158,25 @@ mod tests {
             validate_pdf_file(&path, &expectation),
             Err(HtmlOutputError::EvidenceMismatch {
                 field: "envelope hash",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn render_binding_cryptographically_includes_envelope_identity() {
+        let (_directory, path, mut different_expectation) = stamped_pdf(1);
+        different_expectation.envelope_hash = "b".repeat(64);
+        replace_info_string(
+            &path,
+            ENVELOPE_HASH_INFO_KEY,
+            different_expectation.envelope_hash.as_bytes(),
+        );
+
+        assert!(matches!(
+            validate_pdf_file(&path, &different_expectation),
+            Err(HtmlOutputError::EvidenceMismatch {
+                field: "render binding hash",
                 ..
             })
         ));
@@ -821,6 +1199,90 @@ mod tests {
     }
 
     #[test]
+    fn raw_pdf_is_validated_before_evidence_is_added() {
+        let directory = tempfile::tempdir().expect("temporary directory should be created");
+        let destination = directory.path().join("selected.pdf");
+        fs::write(&destination, b"existing destination").expect("destination should be written");
+        let temp_path = create_pdf_export_temp(&destination).expect("temporary path should exist");
+        write_pdf(&temp_path, 1, 612, 936, b"q Q");
+
+        assert!(matches!(
+            finalize_pdf_export(&temp_path, &destination, &expectation(2)),
+            Err(HtmlOutputError::PageCount {
+                expected: 2,
+                actual: 1
+            })
+        ));
+        assert_eq!(
+            fs::read(&destination).expect("destination should remain readable"),
+            b"existing destination"
+        );
+        assert!(!temp_path.exists());
+    }
+
+    #[test]
+    fn pre_stamped_platform_pdf_is_rejected_without_rewriting_destination() {
+        let directory = tempfile::tempdir().expect("temporary directory should be created");
+        let destination = directory.path().join("selected.pdf");
+        fs::write(&destination, b"existing destination").expect("destination should be written");
+        let temp_path = create_pdf_export_temp(&destination).expect("temporary path should exist");
+        write_pdf(&temp_path, 1, 612, 936, b"q Q");
+        stamp_pdf_evidence(&temp_path, &expectation(1)).expect("test evidence should be stamped");
+
+        assert!(matches!(
+            finalize_pdf_export(&temp_path, &destination, &expectation(1)),
+            Err(HtmlOutputError::PreexistingEvidence { .. })
+        ));
+        assert_eq!(
+            fs::read(&destination).expect("destination should remain readable"),
+            b"existing destination"
+        );
+        assert!(!temp_path.exists());
+    }
+
+    #[test]
+    fn non_sibling_temp_is_rejected_without_rewriting_destination() {
+        let destination_directory =
+            tempfile::tempdir().expect("destination directory should be created");
+        let temp_directory = tempfile::tempdir().expect("temp directory should be created");
+        let destination = destination_directory.path().join("selected.pdf");
+        let temp_path = temp_directory.path().join("backend.pdf");
+        fs::write(&destination, b"existing destination").expect("destination should be written");
+        write_pdf(&temp_path, 1, 612, 936, b"q Q");
+
+        assert!(matches!(
+            finalize_pdf_export(&temp_path, &destination, &expectation(1)),
+            Err(HtmlOutputError::InvalidPath(_))
+        ));
+        assert_eq!(
+            fs::read(&destination).expect("destination should remain readable"),
+            b"existing destination"
+        );
+        assert!(!temp_path.exists());
+    }
+
+    #[test]
+    fn hard_linked_temp_is_rejected_without_rewriting_destination() {
+        let directory = tempfile::tempdir().expect("temporary directory should be created");
+        let destination = directory.path().join("selected.pdf");
+        let temp_path = directory.path().join("backend.pdf");
+        write_pdf(&destination, 1, 612, 936, b"q Q");
+        let original_destination =
+            fs::read(&destination).expect("destination snapshot should be readable");
+        fs::hard_link(&destination, &temp_path).expect("hard link should be created");
+
+        assert!(matches!(
+            finalize_pdf_export(&temp_path, &destination, &expectation(1)),
+            Err(HtmlOutputError::InvalidPath(_))
+        ));
+        assert_eq!(
+            fs::read(&destination).expect("destination should remain readable"),
+            original_destination
+        );
+        assert!(!temp_path.exists());
+    }
+
+    #[test]
     fn valid_export_atomically_replaces_destination() {
         let directory = tempfile::tempdir().expect("temporary directory should be created");
         let destination = directory.path().join("selected.pdf");
@@ -834,6 +1296,25 @@ mod tests {
         assert!(!temp_path.exists());
         validate_pdf_file(&destination, &expectation(1))
             .expect("final destination should remain valid");
+    }
+
+    #[test]
+    fn finalized_evidence_detects_render_content_tampering() {
+        let directory = tempfile::tempdir().expect("temporary directory should be created");
+        let destination = directory.path().join("selected.pdf");
+        let temp_path = create_pdf_export_temp(&destination).expect("temporary path should exist");
+        write_pdf(&temp_path, 1, 612, 936, b"q 1 0 0 1 0 0 cm Q");
+        finalize_pdf_export(&temp_path, &destination, &expectation(1))
+            .expect("valid export should finalize");
+
+        replace_first_page_content(&destination, b"q 1 0 0 1 4 4 cm Q");
+        assert!(matches!(
+            validate_pdf_file(&destination, &expectation(1)),
+            Err(HtmlOutputError::EvidenceMismatch {
+                field: "render binding hash",
+                ..
+            })
+        ));
     }
 
     #[test]
