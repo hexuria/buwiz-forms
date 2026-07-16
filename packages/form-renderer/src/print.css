@@ -38,28 +38,6 @@ body { margin: 0; }
 }
 .government-header strong { text-align: center; font-weight: 400; }
 
-.form-masthead {
-  display: grid;
-  grid-template-columns: 92pt 1fr 170pt;
-  height: 62pt;
-  border: 1pt solid #111;
-}
-.form-number, .form-title, .barcode {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
-}
-.form-number { border-right: .75pt solid #111; }
-.form-number strong { font-size: 23pt; line-height: .95; font-weight: 400; }
-.form-title strong { font-size: 18pt; line-height: 1; font-weight: 400; }
-.form-title span { font-size: 12pt; }
-.barcode { border-left: .75pt solid #111; padding: 4pt; }
-.barcode > span {
-  flex: 1;
-  background: repeating-linear-gradient(90deg, #000 0 2px, #fff 2px 4px, #000 4px 5px, #fff 5px 8px);
-}
-
 .section-title {
   margin: 2pt 0 0;
   border: 1pt solid #111;

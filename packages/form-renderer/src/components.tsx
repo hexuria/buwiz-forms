@@ -21,43 +21,6 @@ export function FolioPage({
   );
 }
 
-export function FormMasthead({
-  code,
-  title,
-  subtitle,
-  revision,
-  revisionLabel,
-  page,
-  barcodeText
-}: {
-  code: string;
-  title: string;
-  subtitle?: string;
-  revision: string;
-  revisionLabel?: string;
-  page: number;
-  barcodeText: string;
-}) {
-  return (
-    <header className="form-masthead">
-      <div className="form-number">
-        <span>BIR Form No.</span>
-        <strong>{code}</strong>
-        <small>{revisionLabel ?? `January ${revision} (ENCS)`}</small>
-        <small>Page {page}</small>
-      </div>
-      <div className="form-title">
-        <strong>{title}</strong>
-        {subtitle && <span>{subtitle}</span>}
-      </div>
-      <div className="barcode" aria-label={barcodeText}>
-        <span aria-hidden="true" />
-        <small>{barcodeText}</small>
-      </div>
-    </header>
-  );
-}
-
 export function GovernmentHeader() {
   return (
     <div className="government-header">
