@@ -147,9 +147,27 @@ for (const parityCase of cases) {
     await expectCriticalRegionGeometry(pages.nth(0), [
       { name: "Items 1-5", selector: ".official-header-options", x: 45, y: 223, width: 1137, height: 67 },
       { name: "Items 1-2 filing basis", selector: ".filing-basis", x: 45, y: 223, width: 398, height: 67 },
+      { name: "Item 1 label", selector: ".filing-basis > .option-label:first-child", x: 45, y: 223, width: 114, height: 31 },
+      { name: "Item 1 choices", selector: ".filing-basis > .option-choices", x: 159, y: 223, width: 284, height: 31 },
+      { name: "Item 2 label", selector: ".filing-basis > .year-label", x: 45, y: 253, width: 226, height: 37 },
+      { name: "Item 2 value", selector: ".filing-basis > .comb-value", x: 271, y: 253, width: 172, height: 37 },
       { name: "Item 3 quarter", selector: ".quarter-options", x: 443, y: 223, width: 369, height: 67 },
+      { name: "Item 3 label", selector: ".quarter-options > .option-label", x: 443, y: 223, width: 369, height: 30 },
+      { name: "Item 3 choices", selector: ".quarter-options > .option-choices", x: 443, y: 253, width: 369, height: 37 },
       { name: "Item 4 amended", selector: ".amended-options", x: 812, y: 223, width: 199, height: 67 },
+      { name: "Item 4 label", selector: ".amended-options > .option-label", x: 812, y: 223, width: 199, height: 30 },
+      { name: "Item 4 choices", selector: ".amended-options > .option-choices", x: 812, y: 253, width: 199, height: 37 },
       { name: "Item 5 sheets", selector: ".sheets-options", x: 1011, y: 223, width: 168, height: 67 },
+      { name: "Item 5 label", selector: ".sheets-options > .option-label", x: 1011, y: 223, width: 168, height: 30 },
+      { name: "Item 5 value", selector: ".sheets-options > .sheets-value", x: 1011, y: 253, width: 168, height: 37 },
+      { name: "Calendar checkbox", selector: ".filing-basis .check-choice:nth-child(1) .check-box", x: 169, y: 225, width: 28, height: 26 },
+      { name: "Fiscal checkbox", selector: ".filing-basis .check-choice:nth-child(2) .check-box", x: 314, y: 226, width: 28, height: 26 },
+      { name: "First-quarter checkbox", selector: ".quarter-options .check-choice:nth-child(1) .check-box", x: 488, y: 252, width: 28, height: 26 },
+      { name: "Second-quarter checkbox", selector: ".quarter-options .check-choice:nth-child(2) .check-box", x: 573, y: 252, width: 28, height: 26 },
+      { name: "Third-quarter checkbox", selector: ".quarter-options .check-choice:nth-child(3) .check-box", x: 658, y: 252, width: 28, height: 26 },
+      { name: "Fourth-quarter checkbox", selector: ".quarter-options .check-choice:nth-child(4) .check-box", x: 742, y: 252, width: 28, height: 26 },
+      { name: "Amended yes checkbox", selector: ".amended-options .check-choice:nth-child(1) .check-box", x: 851, y: 254, width: 28, height: 26 },
+      { name: "Amended no checkbox", selector: ".amended-options .check-choice:nth-child(2) .check-box", x: 934, y: 255, width: 28, height: 26 },
       { name: "Items 6-13", selector: ".background-information", x: 45, y: 295, width: 1137, height: 399 },
       { name: "Items 6-7", selector: ".tin-rdo-row", x: 45, y: 320, width: 1137, height: 36 },
       { name: "Item 8", selector: ".name-field", x: 45, y: 356, width: 1137, height: 58 },
@@ -175,6 +193,7 @@ for (const parityCase of cases) {
       { name: "Part III item 28 continuation decimal cell", selector: ".payment-other-row .decimal-separator", x: 1098, y: 1636, width: 29, height: 35 },
       { name: "Part III item 28 continuation cents cells", selector: ".payment-other-row .comb-value:last-child", x: 1127, y: 1636, width: 53, height: 35 }
     ]);
+    await expectHeaderOptionsTopAlignment(pages.nth(0));
     await expectCriticalRegionGeometry(pages.nth(1), [
       { name: "Schedule 1 masthead", selector: ".page-two-masthead", x: 45, y: 78, width: 1137, height: 117 },
       { name: "Schedule 1 identity", selector: ".page-two-identity", x: 45, y: 193, width: 1137, height: 60 },
@@ -663,6 +682,37 @@ async function expectCriticalRegionGeometry(
     failures,
     "critical regions must match the pinned 144 DPI reference within two pixels"
   ).toEqual([]);
+}
+
+async function expectHeaderOptionsTopAlignment(pageOne: Locator) {
+  const labels = pageOne.locator(".official-header-options .option-label");
+  await expect(labels).toHaveCount(5);
+  expect(
+    await labels.evaluateAll((elements) =>
+      elements.map((element) => getComputedStyle(element).alignItems)
+    )
+  ).toEqual(["flex-start", "flex-start", "flex-start", "flex-start", "flex-start"]);
+
+  for (const selector of [
+    ".filing-basis > .option-label:first-child",
+    ".filing-basis > .option-choices"
+  ]) {
+    const style = await pageOne.locator(selector).evaluate((element) => {
+      const computed = getComputedStyle(element);
+      return {
+        borderBottomStyle: computed.borderBottomStyle,
+        borderBottomWidth: Number.parseFloat(computed.borderBottomWidth)
+      };
+    });
+    expect(style.borderBottomStyle).toBe("solid");
+    expect(style.borderBottomWidth).toBeGreaterThan(0);
+  }
+
+  expect(
+    await pageOne.locator(".official-header-options .check-box").evaluateAll((elements) =>
+      elements.map((element) => getComputedStyle(element).backgroundColor)
+    )
+  ).toEqual(Array.from({ length: 8 }, () => "rgb(255, 255, 255)"));
 }
 
 async function expectCriticalRegionContent(pageOne: Locator, pageTwo: Locator) {

@@ -305,18 +305,19 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 }
 .option-block:last-child { border-right: 0; }
 .option-label {
-  height: 14.5pt;
+  height: 15pt;
   display: flex;
-  align-items: center;
-  gap: 3pt;
-  padding: 1pt 4pt;
+  align-items: flex-start;
+  gap: 2pt;
+  padding: 3pt 4pt 0;
   background: #d4d4d4;
+  font-size: 9pt;
   white-space: nowrap;
 }
-.option-label b { min-width: 7pt; }
+.option-label b { min-width: 5pt; }
 .option-label em { margin-left: 2pt; font-size: 7pt; }
 .option-choices {
-  height: 19.5pt;
+  height: 18.5pt;
   display: flex;
   justify-content: space-around;
   align-items: center;
@@ -327,6 +328,7 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   left: 0;
   top: 0;
   width: 57pt;
+  height: 15.5pt;
   border-bottom: .7pt solid #111;
 }
 .filing-basis > .option-choices {
@@ -334,7 +336,7 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   left: 57pt;
   right: 0;
   top: 0;
-  height: 14.5pt;
+  height: 15.5pt;
   border-bottom: .7pt solid #111;
   background: #d4d4d4;
 }
@@ -343,8 +345,13 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   left: 0;
   bottom: 0;
   width: 113pt;
-  height: 19.5pt;
+  height: 18.5pt;
+  padding-top: 4.5pt;
   background: #fff;
+}
+.filing-basis > .year-label em {
+  margin-left: 1pt;
+  font-size: 7.5pt;
 }
 .filing-basis > .comb-value {
   position: absolute;
@@ -352,21 +359,84 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   right: 0;
   bottom: 0;
   width: auto;
-  height: 19.5pt;
+  height: 18.5pt;
   border-left: .55pt solid #222;
+}
+.official-header-options .check-box {
+  width: 14pt;
+  border-width: .9pt;
+  background: #fff;
+}
+.filing-basis > .option-choices {
+  display: block;
+}
+.filing-basis > .option-choices .check-choice {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 9pt;
+  line-height: .9;
+}
+.filing-basis > .option-choices .check-choice:first-child {
+  left: 5pt;
+  gap: 10pt;
+}
+.filing-basis > .option-choices .check-choice:last-child {
+  left: 77.5pt;
+  gap: 14pt;
 }
 .quarter-options > .option-choices,
 .amended-options > .option-choices {
+  position: relative;
+  display: block;
   align-items: flex-start;
   background: #d9d9d9;
 }
+.quarter-options > .option-choices .check-choice,
+.amended-options > .option-choices .check-choice {
+  position: absolute;
+  top: -1.5pt;
+  align-items: flex-start;
+  padding-top: 2.5pt;
+}
+.quarter-options > .option-choices .check-box,
+.amended-options > .option-choices .check-box {
+  transform: translateY(-2.5pt);
+}
+.quarter-options > .option-choices .check-choice { gap: 7.5pt; }
+.quarter-options > .option-choices .check-choice:nth-child(1) { left: 22.5pt; }
+.quarter-options > .option-choices .check-choice:nth-child(2) { left: 65pt; }
+.quarter-options > .option-choices .check-choice:nth-child(3) { left: 107.5pt; }
+.quarter-options > .option-choices .check-choice:nth-child(4) { left: 149.5pt; }
+.amended-options > .option-choices .check-choice {
+  gap: 5pt;
+  padding-top: 5pt;
+  font-size: 9pt;
+}
+.amended-options > .option-choices .check-box { transform: translateY(-4pt); }
+.amended-options > .option-choices .check-choice:first-child { left: 18.5pt; }
+.amended-options > .option-choices .check-choice:last-child {
+  left: 60pt;
+  gap: 4.5pt;
+}
+.amended-options > .option-choices .check-choice:last-child .check-box {
+  transform: translateY(-3.5pt);
+}
+.sheets-options > .option-label {
+  padding-left: 1pt;
+  font-size: 8.5pt;
+}
 .sheets-value {
-  height: 19.5pt;
+  height: 18.5pt;
   display: grid;
   grid-template-columns: 1fr 28pt;
   align-items: start;
   text-align: center;
   background: #d9d9d9;
+}
+.sheets-value > span:first-child {
+  transform: translate(-2pt, 1.5pt);
+  font-size: 8.5pt;
 }
 .sheets-value .comb-value {
   height: 100%;
