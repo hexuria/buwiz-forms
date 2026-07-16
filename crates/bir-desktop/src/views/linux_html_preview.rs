@@ -24,6 +24,24 @@ pub enum LinuxHtmlHostStrategy {
     GtkTopLevel,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum LinuxRendererRetryAction {
+    Hidden,
+    Disabled,
+    Enabled,
+}
+
+pub(super) fn linux_renderer_retry_action(
+    renderer_failed: bool,
+    webview_available: bool,
+) -> LinuxRendererRetryAction {
+    match (renderer_failed, webview_available) {
+        (false, _) => LinuxRendererRetryAction::Hidden,
+        (true, false) => LinuxRendererRetryAction::Disabled,
+        (true, true) => LinuxRendererRetryAction::Enabled,
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LinuxDisplayEnvironment {
     pub xdg_session_type: Option<String>,
@@ -224,6 +242,30 @@ mod tests {
         assert_eq!(
             select_linux_html_host(&environment),
             Ok(LinuxHtmlHostStrategy::GpuiWryChild)
+        );
+    }
+
+    #[test]
+    fn gtk_retry_is_enabled_only_after_a_renderer_failure() {
+        assert_eq!(
+            linux_renderer_retry_action(false, true),
+            LinuxRendererRetryAction::Hidden
+        );
+        assert_eq!(
+            linux_renderer_retry_action(true, true),
+            LinuxRendererRetryAction::Enabled
+        );
+    }
+
+    #[test]
+    fn x11_retry_is_disabled_when_the_child_webview_is_unavailable() {
+        assert_eq!(
+            linux_renderer_retry_action(true, false),
+            LinuxRendererRetryAction::Disabled
+        );
+        assert_eq!(
+            linux_renderer_retry_action(true, true),
+            LinuxRendererRetryAction::Enabled
         );
     }
 

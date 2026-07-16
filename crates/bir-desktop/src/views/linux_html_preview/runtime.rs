@@ -1,6 +1,7 @@
 use super::{
     LinuxDisplayEnvironment, LinuxHostLifecycle, LinuxHostLifecycleEvent, LinuxHtmlHostStrategy,
-    LinuxLifecycleError, select_linux_html_host,
+    LinuxLifecycleError, LinuxRendererRetryAction, linux_renderer_retry_action,
+    select_linux_html_host,
 };
 use crate::views::html_form_preview::{
     PreparedHtmlPreview, native_output_cleanup_script, native_print_preflight_script,
@@ -121,12 +122,25 @@ struct LinuxOutputCompletion {
     result: Result<String, String>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct LinuxHostBridge {
     renderer: LinuxRendererState,
     next_output_nonce: u64,
     pending_output: Option<PendingLinuxOutput>,
     completion: Option<LinuxOutputCompletion>,
+    readiness_started_at: Instant,
+}
+
+impl Default for LinuxHostBridge {
+    fn default() -> Self {
+        Self {
+            renderer: LinuxRendererState::default(),
+            next_output_nonce: 0,
+            pending_output: None,
+            completion: None,
+            readiness_started_at: Instant::now(),
+        }
+    }
 }
 
 fn linux_output_timeout_reason(pending: &PendingLinuxOutput) -> Option<String> {
@@ -202,7 +216,10 @@ fn accept_renderer_message(
 
     match message {
         RendererMessage::RendererReady => bridge.renderer.ready = true,
-        RendererMessage::RendererInvalidated => bridge.renderer.invalidate(),
+        RendererMessage::RendererInvalidated => {
+            bridge.renderer.invalidate();
+            bridge.readiness_started_at = Instant::now();
+        }
         RendererMessage::RendererError { message } => bridge.renderer.error = Some(message),
         RendererMessage::PrintReady { nonce, print_mode } => {
             if !print_mode || !bridge.renderer.print_mode {
@@ -558,6 +575,70 @@ fn abandon_pending_output(bridge: &Arc<Mutex<LinuxHostBridge>>) {
     bridge.completion = None;
 }
 
+fn renderer_retry_action(
+    bridge: &Arc<Mutex<LinuxHostBridge>>,
+    webview_available: bool,
+) -> LinuxRendererRetryAction {
+    bridge
+        .lock()
+        .map(|bridge| {
+            linux_renderer_retry_action(
+                matches!(
+                    bridge.renderer.decision(),
+                    RendererReadinessDecision::Fallback(_)
+                ),
+                webview_available,
+            )
+        })
+        .unwrap_or(LinuxRendererRetryAction::Disabled)
+}
+
+fn reset_linux_renderer_for_retry(bridge: &Arc<Mutex<LinuxHostBridge>>) -> Result<(), String> {
+    let mut bridge = bridge
+        .lock()
+        .map_err(|_| "Linux renderer state is unavailable".to_string())?;
+    if let Some(temp_path) = bridge
+        .pending_output
+        .as_ref()
+        .and_then(|pending| pending.temp_path.as_deref())
+        && let Err(error) = discard_pdf_export_temp(temp_path)
+    {
+        let message = format!("Failed to clean the pending Linux PDF export: {error}");
+        bridge.renderer.error = Some(message.clone());
+        return Err(message);
+    }
+
+    bridge.pending_output = None;
+    bridge.completion = None;
+    bridge.renderer = LinuxRendererState::default();
+    bridge.readiness_started_at = Instant::now();
+    Ok(())
+}
+
+fn retry_linux_renderer(
+    webview: &webkit2gtk::WebView,
+    bridge: &Arc<Mutex<LinuxHostBridge>>,
+) -> Result<(), String> {
+    reset_linux_renderer_for_retry(bridge)?;
+    evaluate_script(webview, native_output_cleanup_script());
+    WebKitWebViewExt::stop_loading(webview);
+    // Reloading retains the original initialization script, immutable envelope,
+    // navigation allowlist, and `ebirforms://` custom protocol. No external URL
+    // or mutable draft state participates in retry.
+    WebKitWebViewExt::reload(webview);
+    Ok(())
+}
+
+fn expire_renderer_readiness(bridge: &Arc<Mutex<LinuxHostBridge>>) {
+    if let Ok(mut bridge) = bridge.lock()
+        && bridge.renderer.last_geometry.is_none()
+        && bridge.renderer.error.is_none()
+        && bridge.readiness_started_at.elapsed() >= READINESS_TIMEOUT
+    {
+        bridge.renderer.error = Some("Linux HTML renderer readiness timed out".to_string());
+    }
+}
+
 fn expire_pending_output(
     bridge: &Arc<Mutex<LinuxHostBridge>>,
     nonce: u64,
@@ -741,11 +822,15 @@ fn run_gtk_top_level(
     status.set_hexpand(true);
     let export_button = gtk::Button::with_label("Export PDF");
     let print_button = gtk::Button::with_label("Print");
+    let retry_button = gtk::Button::with_label("Retry");
     let close_button = gtk::Button::with_label("Close");
     export_button.set_sensitive(false);
     print_button.set_sensitive(false);
+    retry_button.set_no_show_all(true);
+    retry_button.set_visible(false);
     toolbar.pack_start(&status, true, true, 0);
     toolbar.pack_end(&close_button, false, false, 0);
+    toolbar.pack_end(&retry_button, false, false, 0);
     toolbar.pack_end(&print_button, false, false, 0);
     toolbar.pack_end(&export_button, false, false, 0);
     root.pack_start(&toolbar, false, false, 0);
@@ -816,6 +901,16 @@ fn run_gtk_top_level(
         chooser.show();
     });
 
+    let retry_webkit = webkit.clone();
+    let retry_bridge = bridge.clone();
+    let retry_status = status.clone();
+    retry_button.connect_clicked(move |_| {
+        match retry_linux_renderer(&retry_webkit, &retry_bridge) {
+            Ok(()) => retry_status.set_text("HTML renderer: retrying preview..."),
+            Err(error) => retry_status.set_text(&error),
+        }
+    });
+
     let close_window = window.clone();
     close_button.connect_clicked(move |_| close_window.close());
 
@@ -850,8 +945,8 @@ fn run_gtk_top_level(
     let poll_status = status;
     let poll_export_button = export_button;
     let poll_print_button = print_button;
+    let poll_retry_button = retry_button;
     let expectation = prepared.pdf_expectation;
-    let readiness_started_at = Instant::now();
     glib::timeout_add_local(Duration::from_millis(100), move || {
         // Retain the Wry owner for as long as the GTK window is alive.
         let _webview_owner = &webview;
@@ -859,35 +954,34 @@ fn run_gtk_top_level(
             return glib::ControlFlow::Break;
         }
 
-        let (decision, output_pending, has_geometry) = poll_bridge
+        expire_renderer_readiness(&poll_bridge);
+        let (decision, output_pending) = poll_bridge
             .lock()
-            .map(|bridge| {
-                (
-                    bridge.renderer.decision(),
-                    bridge.pending_output.is_some(),
-                    bridge.renderer.last_geometry.is_some(),
-                )
-            })
+            .map(|bridge| (bridge.renderer.decision(), bridge.pending_output.is_some()))
             .unwrap_or_else(|_| {
                 (
                     RendererReadinessDecision::Fallback(
                         "Linux renderer state is unavailable".to_string(),
                     ),
                     true,
-                    false,
                 )
             });
-
-        if !has_geometry && readiness_started_at.elapsed() >= READINESS_TIMEOUT {
-            if let Ok(mut bridge) = poll_bridge.lock() {
-                bridge.renderer.error = Some("Linux HTML renderer readiness timed out".to_string());
-            }
-        }
 
         let can_output =
             matches!(decision, RendererReadinessDecision::Ready { .. }) && !output_pending;
         poll_export_button.set_sensitive(can_output);
         poll_print_button.set_sensitive(can_output);
+        match renderer_retry_action(&poll_bridge, true) {
+            LinuxRendererRetryAction::Hidden => poll_retry_button.set_visible(false),
+            LinuxRendererRetryAction::Disabled => {
+                poll_retry_button.set_visible(true);
+                poll_retry_button.set_sensitive(false);
+            }
+            LinuxRendererRetryAction::Enabled => {
+                poll_retry_button.set_visible(true);
+                poll_retry_button.set_sensitive(true);
+            }
+        }
         match decision {
             RendererReadinessDecision::Pending if !output_pending => {
                 poll_status.set_text("HTML renderer: preparing preview...")
@@ -982,22 +1076,13 @@ impl LinuxEmbeddedHtmlPreviewView {
         };
 
         let poll_bridge = bridge.clone();
-        let readiness_started_at = Instant::now();
         let poll_task = cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor()
                     .timer(Duration::from_millis(100))
                     .await;
 
-                if readiness_started_at.elapsed() >= READINESS_TIMEOUT {
-                    if let Ok(mut bridge) = poll_bridge.lock()
-                        && bridge.renderer.last_geometry.is_none()
-                        && bridge.renderer.error.is_none()
-                    {
-                        bridge.renderer.error =
-                            Some("Linux HTML renderer readiness timed out".to_string());
-                    }
-                }
+                expire_renderer_readiness(&poll_bridge);
 
                 let ready_output = take_ready_output(&poll_bridge);
                 let completion = take_completion(&poll_bridge);
@@ -1109,6 +1194,22 @@ impl LinuxEmbeddedHtmlPreviewView {
         }
     }
 
+    fn request_retry(&mut self, cx: &mut Context<Self>) {
+        let Some(webview) = self.webview.clone() else {
+            self.status = "Linux renderer WebView is unavailable".to_string();
+            cx.notify();
+            return;
+        };
+        let bridge = self.bridge.clone();
+        match webview.update(cx, |webview, _| {
+            retry_linux_renderer(&webview.raw().webview(), &bridge)
+        }) {
+            Ok(()) => self.status = "HTML renderer: retrying X11 child preview...".to_string(),
+            Err(error) => self.status = error,
+        }
+        cx.notify();
+    }
+
     fn cleanup_print_mode(&self, cx: &mut Context<Self>) {
         if let Some(webview) = self.webview.clone() {
             let _ = webview.update(cx, |webview, _| {
@@ -1135,6 +1236,7 @@ impl Render for LinuxEmbeddedHtmlPreviewView {
             ) && bridge.pending_output.is_none()
                 && self.webview.is_some()
         });
+        let retry_action = renderer_retry_action(&self.bridge, self.webview.is_some());
 
         div()
             .size_full()
@@ -1181,6 +1283,22 @@ impl Render for LinuxEmbeddedHtmlPreviewView {
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.request_output(HtmlOutputKind::SystemPrint, None, cx);
                                     })),
+                            )
+                            .when(
+                                retry_action != LinuxRendererRetryAction::Hidden,
+                                |toolbar| {
+                                    toolbar.child(
+                                        Button::new("linux-html-preview-retry")
+                                            .label("Retry")
+                                            .outline()
+                                            .disabled(
+                                                retry_action != LinuxRendererRetryAction::Enabled,
+                                            )
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.request_retry(cx);
+                                            })),
+                                    )
+                                },
                             ),
                     ),
             )
@@ -1264,6 +1382,60 @@ mod tests {
             requested_at: Instant::now(),
             backend_started: false,
         }
+    }
+
+    #[test]
+    fn retry_reset_cleans_in_flight_output_and_restarts_renderer_readiness() {
+        let bridge = Arc::new(Mutex::new(LinuxHostBridge::default()));
+        let temp_path = std::env::temp_dir().join(format!(
+            "ebirforms-linux-retry-output-{}.pdf",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::write(&temp_path, b"partial").expect("write retry temp");
+        let mut pending = pending_output(17);
+        pending.kind = HtmlOutputKind::PdfExport;
+        pending.backend_started = true;
+        pending.temp_path = Some(temp_path.clone());
+        {
+            let mut state = bridge.lock().expect("bridge");
+            state.next_output_nonce = 17;
+            state.renderer.ready = true;
+            state.renderer.page_count = Some(2);
+            state.renderer.print_mode = true;
+            state.renderer.print_ready_nonce = Some(17);
+            state.renderer.error = Some("renderer failed during output".to_string());
+            state.pending_output = Some(pending);
+            state.completion = Some(LinuxOutputCompletion {
+                nonce: 17,
+                result: Err("stale completion".to_string()),
+            });
+            state.readiness_started_at = Instant::now() - READINESS_TIMEOUT;
+        }
+
+        assert_eq!(
+            renderer_retry_action(&bridge, true),
+            LinuxRendererRetryAction::Enabled
+        );
+        let reset_started_at = Instant::now();
+        reset_linux_renderer_for_retry(&bridge).expect("retry state resets");
+
+        assert!(!temp_path.exists());
+        let state = bridge.lock().expect("bridge");
+        assert_eq!(state.next_output_nonce, 17);
+        assert!(state.pending_output.is_none());
+        assert!(state.completion.is_none());
+        assert_eq!(state.renderer, LinuxRendererState::default());
+        assert!(state.readiness_started_at >= reset_started_at);
+        assert!(matches!(
+            state.renderer.decision(),
+            RendererReadinessDecision::Pending
+        ));
+        drop(state);
+
+        expire_renderer_readiness(&bridge);
+        assert!(bridge.lock().expect("bridge").renderer.error.is_none());
+        complete_output(&bridge, 17, Ok("late output".to_string()));
+        assert!(bridge.lock().expect("bridge").completion.is_none());
     }
 
     #[test]
