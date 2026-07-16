@@ -1403,6 +1403,43 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   border-right-color: #111;
 }
 
+/*
+ * The pinned Schedule 1 PDF uses process black for every live rule and glyph.
+ * Keep this page-local: continuation sheets have independent calibration and
+ * page one owns its own measured overrides above.
+ */
+.form-2551q-page-two,
+.form-2551q-page-two * {
+  color: #000;
+  border-color: #000 !important;
+}
+
+/* Page two uses the same bottom-anchored character guides as the official
+ * page-one fields, not full-height table columns. */
+.form-2551q-page-two .comb-value > span,
+.form-2551q-page-two .visual-leading-cells > span {
+  position: relative;
+  border-right: 0;
+}
+
+.form-2551q-page-two .comb-value > span::after,
+.form-2551q-page-two .visual-leading-cells > span::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  height: 7pt;
+  border-right: .55pt solid #000;
+  pointer-events: none;
+}
+
+.form-2551q-page-two .visual-integer-comb-leading-1 > .comb-value > span:nth-child(3n + 2)::after,
+.form-2551q-page-two .visual-integer-comb-leading-5 > .visual-leading-cells > span:nth-child(3)::after,
+.form-2551q-page-two .visual-integer-comb-leading-5 > .comb-value > span:nth-child(3n + 1)::after {
+  height: 9pt;
+  border-right-width: 1pt;
+}
+
 .preview-validation {
   position: relative;
   width: 568pt;

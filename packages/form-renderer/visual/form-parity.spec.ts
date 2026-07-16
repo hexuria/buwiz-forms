@@ -354,6 +354,54 @@ test("2551Q PDF417 artwork keeps the reviewed source geometry", async ({ page })
   }))).toEqual({ naturalHeight: 83, naturalWidth: 95 });
 });
 
+test("2551Q Schedule 1 keeps black rules and bottom-anchored comb guides", async ({
+  page
+}) => {
+  await renderEnvelope(
+    page,
+    readFixture("packages/form-contracts/fixtures/2551q-6-rows.json")
+  );
+  const pageTwo = page.locator(".form-2551q-page-two");
+  await expect(pageTwo).toHaveCount(1);
+
+  const styles = await pageTwo.evaluate((element) => {
+    const normalCell = element.querySelector(
+      ".page-two-identity > .comb-value > span"
+    );
+    const majorCell = element.querySelector(
+      ".visual-integer-comb-leading-1 > .comb-value > span:nth-child(2)"
+    );
+    const masthead = element.querySelector(".page-two-masthead");
+    const atcCell = element.querySelector(".official-atc-table td");
+    if (!normalCell || !majorCell || !masthead || !atcCell) {
+      throw new Error("2551Q Schedule 1 calibration targets are missing");
+    }
+    const normalStyle = getComputedStyle(normalCell);
+    const normalGuide = getComputedStyle(normalCell, "::after");
+    const majorGuide = getComputedStyle(majorCell, "::after");
+    return {
+      atcBorder: getComputedStyle(atcCell).borderTopColor,
+      majorGuideColor: majorGuide.borderRightColor,
+      majorGuideHeight: Number.parseFloat(majorGuide.height),
+      mastheadBorder: getComputedStyle(masthead).borderTopColor,
+      normalCellBorderWidth: normalStyle.borderRightWidth,
+      normalGuideColor: normalGuide.borderRightColor,
+      normalGuideHeight: Number.parseFloat(normalGuide.height),
+      normalGuidePosition: normalGuide.position
+    };
+  });
+
+  expect(styles.mastheadBorder).toBe("rgb(0, 0, 0)");
+  expect(styles.atcBorder).toBe("rgb(0, 0, 0)");
+  expect(styles.normalCellBorderWidth).toBe("0px");
+  expect(styles.normalGuidePosition).toBe("absolute");
+  expect(styles.normalGuideColor).toBe("rgb(0, 0, 0)");
+  expect(styles.normalGuideHeight).toBeCloseTo(9.33, 1);
+  expect(styles.majorGuideColor).toBe("rgb(0, 0, 0)");
+  expect(styles.majorGuideHeight).toBeGreaterThan(styles.normalGuideHeight);
+  expect(await pageHasNoOverflow(pageTwo)).toBe(true);
+});
+
 test("2551Q Part III amount cells preserve the official partition", async ({ page }) => {
   await renderEnvelope(
     page,
