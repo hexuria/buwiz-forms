@@ -1,4 +1,4 @@
 import seal from "./assets/0605-seal.png";
 
-/** Exact lossless crop from the pinned 0605v1999 page-one raster. */
+/** Exact native 113x93 DeviceGray image XObject 13 from the pinned official PDF. */
 export const OFFICIAL_0605_SEAL = seal;

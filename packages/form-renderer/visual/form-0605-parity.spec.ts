@@ -32,6 +32,106 @@ test("0605 1999 renders every Rust fixture as two stable unclipped BIR Folio pag
   }
 });
 
+test("0605 1999 keeps the native seal and live official masthead typography without machine-readable symbols", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/0605-normal.json"));
+  const pages = page.locator(".form-page");
+  await expect(pages).toHaveCount(2);
+
+  await expectCriticalRegionGeometry(pages.nth(0), [{
+    name: "official DeviceGray seal XObject",
+    selector: ".government-seal-0605",
+    x: 29.0398076,
+    y: 101.0399974,
+    width: 82.0758034,
+    height: 67.5182712
+  }]);
+
+  expect(await page.locator(".government-seal-0605").evaluate((image) => ({
+    naturalHeight: (image as HTMLImageElement).naturalHeight,
+    naturalWidth: (image as HTMLImageElement).naturalWidth,
+    objectFit: getComputedStyle(image).objectFit,
+    officialObject: image.getAttribute("data-official-pdf-object")
+  }))).toEqual({
+    naturalHeight: 93,
+    naturalWidth: 113,
+    objectFit: "fill",
+    officialObject: "13 0"
+  });
+
+  await expectOfficialMastheadTypography(pages.nth(0), [
+    {
+      selector: ".government-line-one-0605",
+      text: "Republika ng Pilipinas",
+      x: 62.6848831,
+      y: 56.0695953,
+      width: 81.5290909,
+      fontWeight: "400"
+    },
+    {
+      selector: ".government-line-two-0605",
+      text: "Kagawaran ng Pananalapi",
+      x: 62.6848831,
+      y: 64.5474854,
+      width: 97.6294785,
+      fontWeight: "400"
+    },
+    {
+      selector: ".government-line-three-0605",
+      text: "Kawanihan ng Rentas Internas",
+      x: 62.6848831,
+      y: 72.9308548,
+      width: 141.6231766,
+      fontWeight: "400"
+    },
+    {
+      selector: ".masthead-0605 h1",
+      text: "Payment Form",
+      x: 252.8769226,
+      y: 55.8901863,
+      width: 158.0611877,
+      fontWeight: "700"
+    },
+    {
+      selector: ".form-number-0605 > span",
+      text: "BIR Form No.",
+      x: 490.4837646,
+      y: 47.7416229,
+      width: 50.0783081,
+      fontWeight: "400"
+    },
+    {
+      selector: ".form-number-0605 strong",
+      text: "0605",
+      x: 485.0532532,
+      y: 52.2101860,
+      width: 75.4885559,
+      fontWeight: "700"
+    },
+    {
+      selector: ".form-number-0605 small",
+      text: "July 1999 (ENCS)",
+      x: 487.5012512,
+      y: 85.7287750,
+      width: 66.5780334,
+      fontWeight: "400"
+    }
+  ]);
+
+  const machineReadableSelector = [
+    "[data-barcode-page]",
+    "[data-symbology]",
+    "[class*='barcode']",
+    "[class*='pdf417']",
+    "[class*='qr-code']",
+    "[aria-label*='PDF417']",
+    "[aria-label*='QR code']"
+  ].join(",");
+  await expect(pages.nth(0).locator(machineReadableSelector)).toHaveCount(0);
+  await expect(pages.nth(1).locator(machineReadableSelector)).toHaveCount(0);
+  await expect(pages.nth(0).locator("img")).toHaveCount(1);
+  await expect(pages.nth(1).locator("img")).toHaveCount(0);
+});
+
 test("0605 1999 matches the complete pinned official pages", async ({ page }, testInfo) => {
   const fixture = readFixture("packages/form-contracts/fixtures/0605-normal.json");
   await renderEnvelope(page, fixture);
@@ -124,6 +224,50 @@ interface CriticalRegion {
   y: number;
   width: number;
   height: number;
+}
+
+interface OfficialMastheadSpan {
+  selector: string;
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  fontWeight: string;
+}
+
+async function expectOfficialMastheadTypography(
+  page: Locator,
+  spans: OfficialMastheadSpan[]
+) {
+  const pageBox = await page.boundingBox();
+  expect(pageBox).not.toBeNull();
+  if (!pageBox) return;
+
+  for (const expected of spans) {
+    const locator = page.locator(expected.selector);
+    await expect(locator).toHaveText(expected.text);
+    const actual = await locator.evaluate((element) => {
+      const ownerPage = element.closest(".form-page");
+      if (!ownerPage) throw new Error("masthead span is outside a form page");
+      const pageRect = ownerPage.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const rect = range.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return {
+        fontFamily: style.fontFamily,
+        fontWeight: style.fontWeight,
+        width: rect.width * 0.75,
+        x: (rect.x - pageRect.x) * 0.75,
+        y: (rect.y - pageRect.y) * 0.75
+      };
+    });
+    expect(actual.fontFamily).toBe('"eBIRForms Arimo", sans-serif');
+    expect(actual.fontWeight).toBe(expected.fontWeight);
+    expect(Math.abs(actual.x - expected.x), `${expected.text} x`).toBeLessThanOrEqual(0.02);
+    expect(Math.abs(actual.y - expected.y), `${expected.text} y`).toBeLessThanOrEqual(0.02);
+    expect(Math.abs(actual.width - expected.width), `${expected.text} width`).toBeLessThanOrEqual(0.02);
+  }
 }
 
 async function expectCriticalRegionGeometry(page: Locator, regions: CriticalRegion[]) {

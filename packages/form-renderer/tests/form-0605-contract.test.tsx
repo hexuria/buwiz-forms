@@ -2,6 +2,10 @@ import {
   assertRenderEnvelope,
   type RenderEnvelope
 } from "@ebirforms/form-contracts";
+import { createHash } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -11,6 +15,8 @@ import normalFixture from "../../form-contracts/fixtures/0605-normal.json";
 import validationEdgeFixture from "../../form-contracts/fixtures/0605-validation-edge.json";
 import variantFixture from "../../form-contracts/fixtures/0605-variant.json";
 import { FormDocument } from "../src/FormDocument";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 const fixtures = [
   minimumFixture,
@@ -32,6 +38,10 @@ describe("0605:1999 runtime render contract", () => {
       expect(markup.match(/data-paper="folio"/g)).toHaveLength(2);
       expect(markup).toContain("Part III");
       expect(markup).toContain("Guidelines and Instructions");
+      expect(markup.match(/<img/g)).toHaveLength(1);
+      expect(markup).not.toMatch(/data-(?:barcode-page|symbology)=/);
+      expect(markup).not.toMatch(/class="[^"]*(?:barcode|pdf417|qr-code)/i);
+      expect(markup).not.toMatch(/aria-label="[^"]*(?:PDF417|QR code)/i);
     }
   });
 
@@ -65,6 +75,22 @@ describe("0605:1999 runtime render contract", () => {
     expect(markup).toContain("WITHHOLDING TAX-COMPENSATION");
     expect(markup).toContain("Who Shall File");
     expect(markup).not.toContain("barcode");
+  });
+
+  it("embeds the exact native DeviceGray seal XObject", () => {
+    const sealPath = path.resolve(HERE, "../src/forms/assets/0605-seal.png");
+    const digest = createHash("sha256")
+      .update(fs.readFileSync(sealPath))
+      .digest("hex");
+    expect(digest).toBe(
+      "183a1300cfbfd19689c22b6c1f544e5de3d0c6d10098c916e185e9c951a9c94d"
+    );
+
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: normalFixture as RenderEnvelope })
+    );
+    expect(markup).toContain('data-official-pdf-object="13 0"');
+    expect(markup).not.toContain("crop_box_px");
   });
 
   it("preserves long legal values with reviewed plain-box mode", () => {

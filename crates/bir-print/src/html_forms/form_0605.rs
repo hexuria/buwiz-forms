@@ -59,11 +59,28 @@ pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
 fn runtime_discrete_assets() -> Vec<serde_json::Value> {
     vec![json!({
         "asset": "government_seal",
-        "crop_box_px": [38, 108, 102, 167],
-        "derived_png_sha256": "83e123363cded65b1037cfa124e8236db5cf3b93943cf31ac9042084667591b1",
+        "bits_per_component": 8,
+        "color_space": "DeviceGray",
+        "derived_png_sha256": "183a1300cfbfd19689c22b6c1f544e5de3d0c6d10098c916e185e9c951a9c94d",
+        "embedded_as": "lossless_native_devicegray_xobject",
+        "embedded_color_space": "DeviceGray",
         "embedded_in": "packages/form-renderer/src/forms/assets/0605-seal.png",
+        "interpolate": false,
+        "source_active_bbox_top_left_points": [18.8779112, 53.7870213, 31.9587186, 29.4031186],
+        "source_active_pixel_bounds": [12, 9, 100, 90],
+        "source_bbox_top_left_points": [14.5199038, 50.5199987, 41.0379017, 33.7591356],
+        "source_ctm_points": [41.0379, -0.00005334927, -0.0000016821018, 33.75908225025, 14.5199054348, 851.7209190328],
+        "source_decoded_grayscale_sha256": "03eb961d4f3bbd8ab0660e3f56461d85655a90bbfa4058b6a4704a4c88125202",
+        "source_form_container_id": [12, 0],
+        "source_form_matrix": [1.78, 0.0, 0.0, 1.9883, 0.0, 0.0],
+        "source_image_matrix": [39.75, 0.0, 0.0, 35.25, -0.000091553, 0.96159],
+        "source_outer_ctm_points": [0.58, -0.000000754, -0.000000024, 0.48167, 14.52, 850.8],
         "source_page": 1,
-        "treatment": "exact lossless crop from official 144 DPI source raster"
+        "source_pdf_object_id": [13, 0],
+        "source_pixel_dimensions": [113, 93],
+        "source_png_sha256": "183a1300cfbfd19689c22b6c1f544e5de3d0c6d10098c916e185e9c951a9c94d",
+        "source_stream_sha256": "2dfbae2a365476d07a5eac1e725184385f8d3297f499bf6b196baf1432389562",
+        "treatment": "lossless extraction of the exact official DeviceGray PDF image XObject without crop, resampling, recoloring, thresholding, or substitution"
     })]
 }
 
@@ -570,6 +587,36 @@ mod tests {
         );
         assert!(envelope.schedules.is_empty());
         assert!(envelope.validation.is_empty());
+    }
+
+    #[test]
+    fn discrete_artwork_provenance_matches_the_only_official_image_xobject() {
+        let assets = runtime_discrete_assets();
+        assert_eq!(assets.len(), 1);
+
+        let seal = &assets[0];
+        assert_eq!(seal["asset"], json!("government_seal"));
+        assert_eq!(seal["source_page"], json!(1));
+        assert_eq!(seal["source_form_container_id"], json!([12, 0]));
+        assert_eq!(seal["source_pdf_object_id"], json!([13, 0]));
+        assert_eq!(seal["source_pixel_dimensions"], json!([113, 93]));
+        assert_eq!(seal["color_space"], json!("DeviceGray"));
+        assert_eq!(seal["bits_per_component"], json!(8));
+        assert_eq!(seal["interpolate"], json!(false));
+        assert_eq!(seal["source_active_pixel_bounds"], json!([12, 9, 100, 90]));
+        assert_eq!(
+            seal["source_bbox_top_left_points"],
+            json!([14.5199038, 50.5199987, 41.0379017, 33.7591356])
+        );
+        assert_eq!(
+            seal["source_decoded_grayscale_sha256"],
+            json!("03eb961d4f3bbd8ab0660e3f56461d85655a90bbfa4058b6a4704a4c88125202")
+        );
+        assert_eq!(
+            seal["derived_png_sha256"],
+            json!("183a1300cfbfd19689c22b6c1f544e5de3d0c6d10098c916e185e9c951a9c94d")
+        );
+        assert!(assets.iter().all(|asset| asset.get("symbology").is_none()));
     }
 
     #[test]

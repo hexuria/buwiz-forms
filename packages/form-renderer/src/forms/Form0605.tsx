@@ -109,11 +109,24 @@ function Masthead0605() {
   return (
     <header className="masthead-0605">
       <div className="government-0605">
-        <img src={OFFICIAL_0605_SEAL} alt="Bureau of Internal Revenue seal" />
-        <span>Republika ng Pilipinas<br />Kagawaran ng Pananalapi<br />Kawanihan ng Rentas Internas</span>
+        <img
+          className="government-seal-0605"
+          src={OFFICIAL_0605_SEAL}
+          alt="Bureau of Internal Revenue seal"
+          data-official-pdf-object="13 0"
+        />
+        <span className="government-copy-0605">
+          <span className="government-line-one-0605">Republika ng Pilipinas</span>
+          <span className="government-line-two-0605">Kagawaran ng Pananalapi</span>
+          <span className="government-line-three-0605">Kawanihan ng Rentas Internas</span>
+        </span>
       </div>
       <h1>Payment Form</h1>
-      <div className="form-number-0605"><span>BIR Form No.</span><strong>0605</strong><small>July 1999 (ENCS)</small></div>
+      <div className="form-number-0605">
+        <span>BIR Form No.</span>
+        <strong>0605</strong>
+        <small>July 1999 (ENCS)</small>
+      </div>
     </header>
   );
 }

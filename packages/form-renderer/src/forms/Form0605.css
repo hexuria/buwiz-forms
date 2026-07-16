@@ -76,46 +76,101 @@
 }
 
 .masthead-0605 {
+  position: relative;
   height: 68.5pt;
-  display: grid;
-  grid-template-columns: 218pt 1fr 105pt;
-  align-items: center;
+  display: block;
   border: 2pt solid #111;
 }
 .government-0605 {
-  display: flex;
-  align-items: center;
-  gap: 11pt;
-  padding-left: 5pt;
-  font-size: 8.3pt;
-  line-height: 1.08;
+  display: contents;
 }
-.government-0605 img {
-  width: 32pt;
-  height: 29.5pt;
-  object-fit: contain;
+.government-seal-0605 {
+  position: absolute;
+  left: .5359pt;
+  top: 7.52439pt;
+  width: 41.0379pt;
+  height: 33.7591pt;
+  object-fit: fill;
   image-rendering: auto;
 }
-.masthead-0605 h1 {
-  font-size: 23pt;
+.government-copy-0605 { display: contents; }
+.government-copy-0605 > span {
+  position: absolute;
+  left: 48.700883pt;
+  width: max-content;
+  color: #000;
+  font-family: "eBIRForms Arimo", sans-serif;
   font-weight: 400;
-  text-align: center;
-  letter-spacing: .2pt;
-  transform: translate(-22pt, -9pt);
+  line-height: 1;
+  transform-origin: left top;
+  white-space: nowrap;
+}
+.government-line-one-0605 {
+  top: 13.8306pt;
+  font-size: 8.3pt;
+  transform: scaleX(.998873);
+}
+.government-line-two-0605 {
+  top: 22.30199pt;
+  font-size: 8.3pt;
+  transform: scaleX(1.003257);
+}
+.government-line-three-0605 {
+  top: 31.439855pt;
+  font-size: 10.36pt;
+  transform: scaleX(.999767);
+}
+.masthead-0605 h1 {
+  position: absolute;
+  left: 238.892923pt;
+  top: 14.39756pt;
+  width: max-content;
+  font-family: "eBIRForms Arimo", sans-serif;
+  font-size: 21.583447pt;
+  font-weight: 700;
+  line-height: 1;
+  transform: scaleX(1.054483);
+  transform-origin: left top;
+  white-space: nowrap;
 }
 .form-number-0605 {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  font-size: 8.2pt;
-  line-height: 1.02;
+  display: contents;
+}
+.form-number-0605 > span,
+.form-number-0605 > strong,
+.form-number-0605 > small {
+  position: absolute;
+  width: max-content;
+  color: #000;
+  font-family: "eBIRForms Arimo", sans-serif;
+  line-height: 1;
+  white-space: nowrap;
+}
+.form-number-0605 > span {
+  left: 476.499765pt;
+  top: 5.50668pt;
+  font-size: 7.881306pt;
+  font-weight: 400;
+  transform: scaleX(1.04025);
+  transform-origin: left top;
 }
 .form-number-0605 strong {
-  font-size: 31pt;
-  line-height: 1.05;
-  transform: translate(-4pt, -3pt) scaleX(1.08);
+  left: 471.069253pt;
+  top: 11.46725pt;
+  height: 36pt;
+  font-size: 32.580833pt;
+  font-weight: 700;
+  transform: scaleX(1.041504);
+  transform-origin: left top;
 }
-.form-number-0605 small { margin-top: 4pt; font-size: 8pt; }
+.form-number-0605 small {
+  left: 473.517251pt;
+  top: 43.4888pt;
+  font-size: 7.881306pt;
+  font-weight: 400;
+  transform: scaleX(1.056404);
+  transform-origin: left top;
+}
 
 .form-0605-page .fill-instruction-0605 {
   height: 21.5pt;
