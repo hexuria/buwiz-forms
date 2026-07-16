@@ -2,6 +2,10 @@ import {
   assertRenderEnvelope,
   type RenderEnvelope
 } from "@ebirforms/form-contracts";
+import { createHash } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -11,6 +15,47 @@ import minimumFixture from "../../form-contracts/fixtures/1601c-minimum.json";
 import normalFixture from "../../form-contracts/fixtures/1601c-normal.json";
 import validationEdgeFixture from "../../form-contracts/fixtures/1601c-validation-edge.json";
 import { FormDocument } from "../src/FormDocument";
+import {
+  OFFICIAL_1601C_PDF417_PATHS,
+  OFFICIAL_1601C_PDF417_PAYLOADS
+} from "../src/forms/official1601CAssets";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+function pdf417ModuleDigest(pathData: string): {
+  digest: string;
+  blackModules: number;
+} {
+  const modules = Array<boolean>(120 * 7).fill(false);
+  const command = /M(\d+) (\d+)h(\d+)v1H(\d+)z/g;
+  const consumed: string[] = [];
+  let blackModules = 0;
+
+  for (const match of pathData.matchAll(command)) {
+    consumed.push(match[0]);
+    const x = Number(match[1]);
+    const y = Number(match[2]);
+    const width = Number(match[3]);
+    expect(Number(match[4])).toBe(x);
+    expect(y).toBeGreaterThanOrEqual(0);
+    expect(y).toBeLessThan(7);
+    expect(x + width).toBeLessThanOrEqual(120);
+
+    for (let column = x; column < x + width; column += 1) {
+      const index = y * 120 + column;
+      expect(modules[index]).toBe(false);
+      modules[index] = true;
+      blackModules += 1;
+    }
+  }
+
+  expect(consumed.join("")).toBe(pathData);
+  const bits = modules.map((module) => module ? "1" : "0").join("");
+  return {
+    digest: createHash("sha256").update(bits).digest("hex"),
+    blackModules
+  };
+}
 
 const fixtures = [
   minimumFixture,
@@ -72,6 +117,48 @@ describe("1601C:2018 runtime render contract", () => {
       expect(markup).toContain(`aria-label="${value.toUpperCase()}"`);
     }
     expect(markup.match(/data-overflow-mode="plain"/g)?.length).toBeGreaterThan(4);
+  });
+
+  it("preserves both exact official PDF417 matrices and live captions", () => {
+    expect(pdf417ModuleDigest(OFFICIAL_1601C_PDF417_PATHS[1])).toEqual({
+      digest: "7e4a3607ef9e721686f43cef71aba5b7426e2727b830149e37866e1d35be9a45",
+      blackModules: 474
+    });
+    expect(pdf417ModuleDigest(OFFICIAL_1601C_PDF417_PATHS[2])).toEqual({
+      digest: "af50f07764d907447d25e8a18fde78e407679bfbffab5b32eb07fc82aff851c4",
+      blackModules: 476
+    });
+
+    const fixture = structuredClone(normalFixture) as RenderEnvelope;
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: fixture })
+    );
+    for (const page of [1, 2] as const) {
+      expect(markup).toContain(
+        `aria-label="${OFFICIAL_1601C_PDF417_PAYLOADS[page]}"`
+      );
+      expect(markup).toContain(`data-barcode-page="${page}"`);
+      expect(markup).toContain(
+        `<small>${OFFICIAL_1601C_PDF417_PAYLOADS[page]}</small>`
+      );
+    }
+    expect(markup.match(/viewBox="0 0 120 7"/g)).toHaveLength(2);
+    expect(markup.match(/shape-rendering="crispEdges"/g)).toHaveLength(2);
+    expect(markup).not.toContain("1601c-barcode-page-1.png");
+    expect(markup).not.toContain("1601c-barcode-page-2.png");
+  });
+
+  it("embeds the exact official object-derived grayscale seal", () => {
+    const sealPath = path.resolve(
+      HERE,
+      "../src/forms/assets/1601c-seal.png"
+    );
+    const digest = createHash("sha256")
+      .update(fs.readFileSync(sealPath))
+      .digest("hex");
+    expect(digest).toBe(
+      "de602852cef008b3182bb77b03c06d1ec3f0a6ea2484d3d25c0d161df56f270b"
+    );
   });
 
   it("fails closed on missing legal fields or rows beyond verified capacity", () => {

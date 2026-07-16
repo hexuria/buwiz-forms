@@ -11,8 +11,8 @@ import {
 } from "../components";
 import { bool, cellDecimal, cellText, decimal, integer, text } from "../values";
 import {
-  OFFICIAL_1601C_BARCODE_PAGE_ONE,
-  OFFICIAL_1601C_BARCODE_PAGE_TWO,
+  OFFICIAL_1601C_PDF417_PATHS,
+  OFFICIAL_1601C_PDF417_PAYLOADS,
   OFFICIAL_1601C_SEAL
 } from "./official1601CAssets";
 import "./Form1601C.css";
@@ -102,6 +102,7 @@ function GovernmentHeader1601C() {
 }
 
 function Masthead1601C({ page }: { page: 1 | 2 }) {
+  const payload = OFFICIAL_1601C_PDF417_PAYLOADS[page];
   return (
     <header className={`masthead-1601c masthead-1601c-page-${page}`}>
       <div className="form-number-1601c">
@@ -117,12 +118,19 @@ function Masthead1601C({ page }: { page: 1 | 2 }) {
           <em>Enter all required information in CAPITAL LETTERS using BLACK ink. Mark all applicable boxes with<br />an “X”. Two copies MUST be filed with the BIR and one held by the Taxpayer.</em>
         )}
       </div>
-      <div className="barcode-1601c" aria-label={`1601-C 01/18ENCS P${page}`}>
-        <img
-          src={page === 1 ? OFFICIAL_1601C_BARCODE_PAGE_ONE : OFFICIAL_1601C_BARCODE_PAGE_TWO}
-          alt=""
-          aria-hidden="true"
-        />
+      <div className="barcode-1601c" aria-label={payload} data-barcode-page={page}>
+        <span className="official-pdf417-object-1601c" aria-hidden="true">
+          <svg
+            className="official-pdf417-symbol-1601c"
+            viewBox="0 0 120 7"
+            preserveAspectRatio="none"
+            shapeRendering="crispEdges"
+            focusable="false"
+          >
+            <path d={OFFICIAL_1601C_PDF417_PATHS[page]} />
+          </svg>
+        </span>
+        <small>{payload}</small>
       </div>
     </header>
   );

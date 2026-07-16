@@ -49,19 +49,16 @@
 .bcs-1601c { padding-left: 1pt; font-size: 8.5pt; }
 .government-wordmark-1601c {
   position: absolute;
-  top: 0;
-  left: 211pt;
-  width: 210pt;
-  height: 29pt;
+  top: -.66pt;
+  left: 210.86pt;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 5pt;
+  gap: 3.53pt;
   text-align: left;
   font-size: 8.5pt;
   line-height: 1.05;
 }
-.government-wordmark-1601c img { width: 29pt; height: 27pt; object-fit: contain; }
+.government-wordmark-1601c img { width: 31.2pt; height: 28.2pt; object-fit: fill; }
 
 .masthead-1601c {
   height: 56.5pt;
@@ -87,8 +84,46 @@
 .form-title-1601c > strong { font-size: 20pt; line-height: 1; letter-spacing: -.2pt; }
 .form-title-1601c > span { margin-top: 2pt; font-size: 14pt; line-height: 1; }
 .form-title-1601c > em { margin-top: 5pt; font-size: 6.7pt; line-height: 1.05; }
-.barcode-1601c { border-left: .7pt solid #111; padding: 4pt 3pt 2pt; }
-.barcode-1601c img { width: 100%; height: auto; max-height: 100%; object-fit: fill; image-rendering: crisp-edges; }
+.barcode-1601c { position: relative; border-left: .7pt solid #111; padding: 0; }
+.official-pdf417-object-1601c,
+.official-pdf417-symbol-1601c {
+  position: absolute;
+  display: block;
+}
+.official-pdf417-symbol-1601c { inset: 0; width: 100%; height: 100%; overflow: visible; }
+.official-pdf417-symbol-1601c path { fill: #000; }
+.barcode-1601c[data-barcode-page="1"] .official-pdf417-object-1601c {
+  left: 4.92pt;
+  top: 8.22pt;
+  width: 150.84pt;
+  height: 34.92pt;
+}
+.barcode-1601c[data-barcode-page="2"] .official-pdf417-object-1601c {
+  left: 4.72pt;
+  top: 8.82pt;
+  width: 150.96pt;
+  height: 34.32pt;
+}
+.barcode-1601c > small {
+  position: absolute;
+  width: 82.7903pt;
+  color: #000;
+  font-family: "eBIRForms Arimo", sans-serif;
+  font-size: 8.04pt;
+  font-weight: 400;
+  line-height: 8.04pt;
+  text-align: right;
+  white-space: nowrap;
+}
+.barcode-1601c[data-barcode-page="1"] > small {
+  top: 43.204pt;
+  right: 1.35pt;
+}
+.barcode-1601c[data-barcode-page="2"] > small {
+  top: 42.584pt;
+  right: .95pt;
+  width: 82.7902pt;
+}
 
 .header-options-1601c {
   height: 31pt;

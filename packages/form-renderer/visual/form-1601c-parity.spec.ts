@@ -30,6 +30,97 @@ test("1601C 2018 renders every Rust fixture as two stable unclipped folio pages"
   }
 });
 
+test("1601C 2018 keeps verified page-specific PDF417, caption, and seal geometry", async ({ page }) => {
+  const fixture = readFixture("packages/form-contracts/fixtures/1601c-normal.json");
+  await renderEnvelope(page, fixture);
+  const pages = page.locator(".form-page");
+  await expect(pages).toHaveCount(2);
+
+  await expectCriticalRegionGeometry(pages.nth(0), [
+    {
+      name: "official seal XObject",
+      selector: ".government-wordmark-1601c img",
+      x: 457,
+      y: 20,
+      width: 62,
+      height: 56
+    },
+    {
+      name: "page 1 official PDF417 XObject",
+      selector: '.barcode-1601c[data-barcode-page="1"] .official-pdf417-object-1601c',
+      x: 882,
+      y: 97,
+      width: 302,
+      height: 70
+    },
+    {
+      name: "page 1 official PDF417 live caption",
+      selector: '.barcode-1601c[data-barcode-page="1"] > small',
+      x: 1020,
+      y: 167,
+      width: 166,
+      height: 16
+    }
+  ]);
+  await expectCriticalRegionGeometry(pages.nth(1), [
+    {
+      name: "page 2 official PDF417 XObject",
+      selector: '.barcode-1601c[data-barcode-page="2"] .official-pdf417-object-1601c',
+      x: 880,
+      y: 69,
+      width: 302,
+      height: 69
+    },
+    {
+      name: "page 2 official PDF417 live caption",
+      selector: '.barcode-1601c[data-barcode-page="2"] > small',
+      x: 1019,
+      y: 136,
+      width: 166,
+      height: 16
+    }
+  ]);
+
+  expect(await page.locator(".official-pdf417-symbol-1601c").evaluateAll(
+    (symbols) => symbols.map((symbol) => ({
+      preserveAspectRatio: symbol.getAttribute("preserveAspectRatio"),
+      shapeRendering: getComputedStyle(symbol).shapeRendering,
+      viewBox: symbol.getAttribute("viewBox")
+    }))
+  )).toEqual(Array.from({ length: 2 }, () => ({
+    preserveAspectRatio: "none",
+    shapeRendering: "crispedges",
+    viewBox: "0 0 120 7"
+  })));
+
+  const captions = page.locator(".barcode-1601c > small");
+  await expect(captions.nth(0)).toHaveText("1601-C 01/18ENCS P1");
+  await expect(captions.nth(1)).toHaveText("1601-C 01/18ENCS P2");
+  expect(await captions.evaluateAll((elements) => elements.map((element) => {
+    const style = getComputedStyle(element);
+    return {
+      fontFamily: style.fontFamily,
+      fontSize: style.fontSize,
+      lineHeight: style.lineHeight,
+      textAlign: style.textAlign,
+      whiteSpace: style.whiteSpace
+    };
+  }))).toEqual(Array.from({ length: 2 }, () => ({
+    fontFamily: '"eBIRForms Arimo", sans-serif',
+    fontSize: "10.72px",
+    lineHeight: "10.72px",
+    textAlign: "right",
+    whiteSpace: "nowrap"
+  })));
+
+  expect(await page.locator(".government-wordmark-1601c img").evaluate(
+    (image) => ({
+      naturalHeight: (image as HTMLImageElement).naturalHeight,
+      naturalWidth: (image as HTMLImageElement).naturalWidth
+    })
+  )).toEqual({ naturalHeight: 78, naturalWidth: 86 });
+});
+
 test("1601C 2018 matches the complete pinned official pages", async ({ page }, testInfo) => {
   const fixture = readFixture("packages/form-contracts/fixtures/1601c-normal.json");
   await renderEnvelope(page, fixture);
