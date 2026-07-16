@@ -128,6 +128,49 @@ test("0619E 2018 preserves official period, declaration, and signature bands", a
   )).toBe(0);
 });
 
+test("0619E 2018 preserves official payment row partitions", async ({ page }) => {
+  const fixture = readFixture("packages/form-contracts/fixtures/0619e-normal.json");
+  await renderEnvelope(page, fixture);
+  const formPage = page.locator(".form-page").first();
+
+  await expectCriticalRegionGeometry(formPage, [
+    { name: "payment heading", selector: ".payment-0619e > h2", x: 36, y: 1192, width: 1151, height: 24 },
+    { name: "payment column heading", selector: ".payment-head-0619e", x: 36, y: 1216, width: 1151, height: 22 },
+    { name: "payment Item 19", selector: "[data-payment-row='payment_19']", x: 36, y: 1238, width: 1151, height: 36 },
+    { name: "payment Item 20", selector: "[data-payment-row='payment_20']", x: 36, y: 1274, width: 1151, height: 37 },
+    { name: "payment Item 21", selector: "[data-payment-row='payment_21']", x: 36, y: 1311, width: 1151, height: 36 },
+    { name: "payment Item 22 label", selector: ".payment-other-label-0619e", x: 36, y: 1347, width: 1151, height: 22 },
+    { name: "payment Item 22 value row", selector: "[data-payment-row='payment_22']", x: 36, y: 1369, width: 1151, height: 38 }
+  ]);
+
+  await expect(
+    page.locator("[data-payment-row='payment_21'] > :nth-child(2)")
+  ).toHaveCSS("background-color", "rgb(217, 217, 217)");
+
+  const datePartitions = await page
+    .locator("[data-payment-row='payment_19'] > :nth-child(4)")
+    .evaluate((element) => ({
+      first: {
+        border: getComputedStyle(element, "::before").borderLeftWidth,
+        left: getComputedStyle(element, "::before").left
+      },
+      second: {
+        border: getComputedStyle(element, "::after").borderLeftWidth,
+        left: getComputedStyle(element, "::after").left
+      }
+    }));
+  expect(datePartitions).toEqual({
+    first: { border: "1px", left: "38px" },
+    second: { border: "1px", left: "77.3333px" }
+  });
+
+  const decimalPartition = page.locator(
+    "[data-payment-row='payment_19'] .decimal-separator-0619e"
+  );
+  await expect(decimalPartition).toHaveCSS("border-left-width", "1px");
+  await expect(decimalPartition).toHaveCSS("border-right-width", "1px");
+});
+
 test("0619E 2018 matches the complete pinned official page", async ({ page }, testInfo) => {
   const fixture = readFixture("packages/form-contracts/fixtures/0619e-normal.json");
   await renderEnvelope(page, fixture);

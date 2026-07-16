@@ -217,6 +217,7 @@
   font-size: 8.7pt;
   font-weight: 400;
 }
+.payment-0619e > h2 { height: 12pt; }
 .background-0619e { height: 155pt; margin-top: 1.5pt; }
 .tin-rdo-0619e {
   height: 18pt;
@@ -483,7 +484,32 @@
   padding-left: 5pt;
   background: #d9d9d9;
 }
+.payment-row-0619e[data-payment-row="payment_21"] > :nth-child(2) {
+  background: #d9d9d9;
+}
+.payment-row-0619e > .comb-value:nth-child(4),
+.payment-row-0619e > .adaptive-plain-value:nth-child(4) {
+  position: relative;
+}
+.payment-row-0619e > .comb-value:nth-child(4)::before,
+.payment-row-0619e > .comb-value:nth-child(4)::after,
+.payment-row-0619e > .adaptive-plain-value:nth-child(4)::before,
+.payment-row-0619e > .adaptive-plain-value:nth-child(4)::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: .6pt solid #000;
+  content: "";
+}
+.payment-row-0619e > .comb-value:nth-child(4)::before,
+.payment-row-0619e > .adaptive-plain-value:nth-child(4)::before { left: 28.5pt; }
+.payment-row-0619e > .comb-value:nth-child(4)::after,
+.payment-row-0619e > .adaptive-plain-value:nth-child(4)::after { left: 58pt; }
 .payment-row-0619e > .money-0619e { width: 100%; }
+.payment-row-0619e > .money-0619e > .decimal-separator-0619e {
+  border-right: .6pt solid #000;
+  border-left: .6pt solid #000;
+}
 .payment-other-label-0619e {
   height: 11pt;
   display: flex;
