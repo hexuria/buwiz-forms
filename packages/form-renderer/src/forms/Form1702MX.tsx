@@ -126,6 +126,10 @@ export function Form1702MX({ envelope }: { envelope: RenderEnvelope }) {
           startNumber={1}
           fieldPrefix="schedule_2"
           envelope={envelope}
+          groupsBefore={{
+            7: "Less: Deductions Allowable under Existing Law",
+            11: "OR [in case taxable under Sec 27(A) & 28(A)(1)]"
+          }}
         />
         <RegimeTable1702MX
           className="schedule-three-1702mx"
@@ -422,7 +426,8 @@ function RegimeTable1702MX({
   fieldPrefix,
   envelope,
   labelOverride,
-  numberOverride
+  numberOverride,
+  groupsBefore = {}
 }: {
   className: string;
   title: string;
@@ -432,6 +437,7 @@ function RegimeTable1702MX({
   envelope: RenderEnvelope;
   labelOverride?: (index: number, label: ReactNode) => ReactNode;
   numberOverride?: (index: number, fallback: number) => string | number;
+  groupsBefore?: Readonly<Record<number, string>>;
 }) {
   return (
     <section className={`${className} schedule-block-1702mx regime-table-1702mx`}>
@@ -441,15 +447,22 @@ function RegimeTable1702MX({
         const fallbackNumber = startNumber + index;
         const itemNumber = numberOverride?.(index, fallbackNumber) ?? fallbackNumber;
         const prefix = `${fieldPrefix}_item_${index + 1}`;
-        return (
-          <div key={String(itemNumber)} className={`regime-grid-1702mx regime-row-1702mx item-${fallbackNumber}-1702mx`}>
-            <span>{itemNumber} {labelOverride ? labelOverride(index, label) : label}</span>
-            <AmountCell1702MX value={amount(envelope, `${prefix}_exempt`)} />
-            <AmountCell1702MX value={amount(envelope, `${prefix}_special`)} />
-            <AmountCell1702MX value={amount(envelope, `${prefix}_regular`)} />
-            <AmountCell1702MX value={amount(envelope, `${prefix}_total`)} />
-          </div>
-        );
+        return [
+          groupsBefore[index] ? (
+            <div key={`group-${index}`} className={`regime-group-row-1702mx group-before-${fallbackNumber}-1702mx`}>
+              {groupsBefore[index]}
+            </div>
+          ) : null,
+          (
+            <div key={String(itemNumber)} className={`regime-grid-1702mx regime-row-1702mx item-${fallbackNumber}-1702mx`}>
+              <span>{itemNumber} {labelOverride ? labelOverride(index, label) : label}</span>
+              <AmountCell1702MX value={amount(envelope, `${prefix}_exempt`)} />
+              <AmountCell1702MX value={amount(envelope, `${prefix}_special`)} />
+              <AmountCell1702MX value={amount(envelope, `${prefix}_regular`)} />
+              <AmountCell1702MX value={amount(envelope, `${prefix}_total`)} />
+            </div>
+          )
+        ];
       })}
     </section>
   );

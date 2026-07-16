@@ -302,13 +302,41 @@
 .regime-row-1702mx > span:first-child { background: #d9d9d9; font-size: 6.7pt; line-height: .95; }
 .regime-row-1702mx > .amount-cell-1702mx { border-left: 0; }
 .regime-row-1702mx small { display: block; font-size: 5.5pt; font-style: italic; }
+.regime-group-row-1702mx {
+  flex: 0 0 6.5pt;
+  display: flex;
+  align-items: center;
+  padding: 1pt 4pt;
+  background: #d9d9d9;
+  border-bottom: .5pt solid #111;
+}
+.schedule-two-1702mx .group-before-12-1702mx { flex-basis: 3.5pt; }
 .total-row-1702mx { background: #d9d9d9; font-weight: 700; }
 .schedule-one-1702mx { height: 129pt; }
 .schedule-two-1702mx { height: 403.5pt; }
+.schedule-two-1702mx > .schedule-title-1702mx { min-height: 0; flex-basis: 10.5pt; }
+.schedule-two-1702mx > .regime-header-1702mx { flex: 0 0 10pt; }
+.schedule-two-1702mx .item-1-1702mx { flex: 0 0 18pt; }
+.schedule-two-1702mx .item-2-1702mx { flex: 0 0 18.5pt; }
+.schedule-two-1702mx .item-3-1702mx { flex: 0 0 14.5pt; }
+.schedule-two-1702mx .item-4-1702mx { flex: 0 0 18.5pt; }
+.schedule-two-1702mx .item-5-1702mx { flex: 0 0 14.5pt; }
+.schedule-two-1702mx .item-6-1702mx { flex: 0 0 18.5pt; }
+.schedule-two-1702mx .item-7-1702mx { flex: 0 0 16.5pt; }
+.schedule-two-1702mx .item-8-1702mx { flex: 0 0 18pt; }
+.schedule-two-1702mx .item-9-1702mx { flex: 0 0 18.5pt; }
+.schedule-two-1702mx .item-10-1702mx { flex: 0 0 33.5pt; }
+.schedule-two-1702mx .item-11-1702mx { flex: 0 0 15pt; }
+.schedule-two-1702mx .item-12-1702mx { flex: 0 0 10.5pt; }
+.schedule-two-1702mx .item-13-1702mx { flex: 0 0 18.5pt; }
+.schedule-two-1702mx .item-14-1702mx { flex: 0 0 18pt; }
+.schedule-two-1702mx .item-15-1702mx { flex: 0 0 27pt; }
+.schedule-two-1702mx .item-16-1702mx { flex: 0 0 19.5pt; }
+.schedule-two-1702mx .item-17-1702mx { flex: 0 0 18.5pt; }
+.schedule-two-1702mx .item-18-1702mx { flex: 0 0 12.5pt; }
+.schedule-two-1702mx .item-19-1702mx { flex: 1 1 34pt; }
 .schedule-three-1702mx { height: 184.5pt; margin-top: 4pt; }
 .schedule-three-1702mx .regime-row-1702mx > span:first-child { line-height: .8; }
-.schedule-two-1702mx .item-10-1702mx { flex-grow: 2; }
-.schedule-two-1702mx .item-19-1702mx,
 .schedule-three-1702mx .item-32-1702mx,
 .schedule-three-1702mx .item-33-1702mx { flex-grow: 1.4; }
 

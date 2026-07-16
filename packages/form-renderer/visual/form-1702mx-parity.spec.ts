@@ -158,6 +158,24 @@ test("1702MX January 2018C keeps verified page-specific PDF417, caption, and sea
   )).toEqual({ naturalHeight: 102, naturalWidth: 119 });
 });
 
+test("1702MX January 2018C preserves the official Schedule 2 group rows", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-normal.json"));
+  const pageTwo = page.locator(".form-page").nth(1);
+  const scheduleTwoGroups = pageTwo.locator(".schedule-two-1702mx .regime-group-row-1702mx");
+
+  await expect(scheduleTwoGroups).toHaveCount(2);
+  await expect(scheduleTwoGroups.nth(0)).toHaveText("Less: Deductions Allowable under Existing Law");
+  await expect(scheduleTwoGroups.nth(1)).toHaveText("OR [in case taxable under Sec 27(A) & 28(A)(1)]");
+  expect(await scheduleTwoGroups.evaluateAll((rows) => rows.map((row) => ({
+    backgroundColor: getComputedStyle(row).backgroundColor,
+    borderBottomStyle: getComputedStyle(row).borderBottomStyle
+  })))).toEqual(Array.from({ length: 2 }, () => ({
+    backgroundColor: "rgb(217, 217, 217)",
+    borderBottomStyle: "solid"
+  })));
+  expect(await pageHasNoOverflow(pageTwo)).toBe(true);
+});
+
 test("1702MX January 2018C matches the complete official pages", async ({ page }, testInfo) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-normal.json"));
   const pages = page.locator(".form-page");
