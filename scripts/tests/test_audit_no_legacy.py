@@ -144,6 +144,19 @@ class NoLegacyAuditTests(unittest.TestCase):
             ["full-page-background"],
         )
 
+    def test_retired_full_page_template_source_fails(self) -> None:
+        self.write(
+            "crates/bir-print/templates/2551Qv2018/svgbase/page1.svg",
+            '<svg width="612pt" height="936pt" viewBox="0 0 612 936"/>',
+        )
+
+        result = audit_no_legacy.audit_repository(self.root)
+
+        self.assertEqual(
+            [violation.category for violation in result.violations],
+            ["full-page-background"],
+        )
+
     def test_assembled_package_scan_rejects_runtime_payloads(self) -> None:
         package = self.root / "assembled"
         self.write("assembled/bin/node", b"binary")

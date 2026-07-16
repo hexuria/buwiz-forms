@@ -86,6 +86,7 @@ PRODUCTION_SOURCE_ROOTS = (
 RUNTIME_IMAGE_ROOTS = (
     PurePosixPath("assets/form-renderer"),
     PurePosixPath("apps/form-preview/src"),
+    PurePosixPath("crates/bir-print/templates"),
     PurePosixPath("packages/form-renderer/src"),
     PurePosixPath("formtypes"),
 )
