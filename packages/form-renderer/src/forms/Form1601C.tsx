@@ -407,7 +407,12 @@ function PageTwo({ envelope, rows }: { envelope: RenderEnvelope; rows: RenderRow
           <span>Date Paid<br /><em>(MM/DD/YYYY)</em><b>2</b></span>
           <span>Drawee Bank/Bank<br />Code/Agency<b>3</b></span>
           <span>Number<b>4</b></span>
-          <span>Tax Paid <em>(Excluding Penalties for the Month)</em><b>5</b></span>
+          <span>
+            <span className="schedule-tax-paid-label-1601c">
+              Tax Paid <em>(Excluding Penalties for the Month)</em>
+            </span>
+            <b>5</b>
+          </span>
         </div>
         {visualRows.map((row, index) => <ScheduleTopRow1601C key={row?.key ?? `schedule-1-empty-${index + 1}`} row={row} number={index + 1} />)}
         <div className="schedule-bottom-head-1601c"><span>Should be Tax Due for the Month<b>6</b></span><span>Adjustments<b>7 = (6 less 5)</b></span></div>

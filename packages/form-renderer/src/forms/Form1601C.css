@@ -547,6 +547,14 @@
 .schedule-top-head-1601c > span:last-child { border-right: 0; }
 .schedule-top-head-1601c em { font-size: 7pt; }
 .schedule-top-head-1601c b { position: absolute; bottom: 1pt; }
+.schedule-tax-paid-label-1601c {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2pt;
+  transform: translateY(-2.25pt);
+  white-space: nowrap;
+}
 .schedule-top-row-1601c {
   height: 16pt;
   display: grid;

@@ -160,6 +160,36 @@ test("1601C 2018 preserves the official gray and white field partitions", async 
   await expectWhiteBackground(pageOne.locator(".payment-other-1601c > span:first-child"));
 });
 
+test("1601C 2018 keeps the official inline Schedule I Tax Paid heading", async ({ page }) => {
+  const fixture = readFixture("packages/form-contracts/fixtures/1601c-normal.json");
+  await renderEnvelope(page, fixture);
+  const label = page.locator(".form-1601c-page-two .schedule-tax-paid-label-1601c");
+
+  await expect(label).toHaveText("Tax Paid (Excluding Penalties for the Month)");
+  const layout = await label.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const note = element.querySelector("em")?.getBoundingClientRect();
+    const heading = element.firstChild instanceof Text
+      ? document.createRange()
+      : null;
+    if (!heading || !element.firstChild) throw new Error("missing Tax Paid text node");
+    heading.selectNode(element.firstChild);
+    const headingBox = heading.getBoundingClientRect();
+    return {
+      alignItems: style.alignItems,
+      noteTop: note?.top,
+      headingTop: headingBox.top,
+      whiteSpace: style.whiteSpace
+    };
+  });
+  expect(layout).toMatchObject({
+    alignItems: "baseline",
+    whiteSpace: "nowrap"
+  });
+  expect(layout.noteTop).toBeDefined();
+  expect(Math.abs(layout.headingTop - (layout.noteTop ?? 0))).toBeLessThanOrEqual(2);
+});
+
 test("1601C 2018 matches the complete pinned official pages", async ({ page }, testInfo) => {
   const fixture = readFixture("packages/form-contracts/fixtures/1601c-normal.json");
   await renderEnvelope(page, fixture);
