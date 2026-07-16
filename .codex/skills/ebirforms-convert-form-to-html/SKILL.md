@@ -13,11 +13,12 @@ Convert one exact form revision at a time. Treat conversion as a tax-data and re
 - Keep React authoritative only for semantic document structure, styling, deterministic pagination, and readiness measurement.
 - Never infer tax formulas or field meaning from one saved payload. Require primary-source or corroborated implementation evidence.
 - Never create Typst templates, formtype JSON, coordinate overlays, or full-page runtime PDF/SVG/raster backgrounds.
-- Use official pages only as pinned calibration references. Permit only reviewed
-  discrete assets whose exact official-PDF provenance is recorded. Machine-readable
-  symbols and the government seal/logo must follow
-  [discrete-artwork.md](references/discrete-artwork.md); a screenshot crop is not
-  sufficient evidence.
+- Use official pages only as pinned calibration references. Runtime artwork must
+  come from the exact embedded image/XObject or vector object in that pinned PDF,
+  at its native dimensions. Never use a rendered-page crop, downloaded/generic
+  substitute, thresholding, resampling, resizing, recoloring, or sharpening.
+  Machine-readable symbols and government identity artwork must follow
+  [discrete-artwork.md](references/discrete-artwork.md).
 - Keep incomplete forms `ScaffoldOnly` or `disabled`. Never set promotion flags without recorded evidence.
 - Preserve unrelated work and use `rtk` before shell commands in this repository.
 
@@ -27,10 +28,12 @@ Convert one exact form revision at a time. Treat conversion as a tax-data and re
 2. **Prove tax behavior.** Audit or implement the Rust model, formulas, validation, XML round-trip, persistence, queue/submission behavior, carry-over, and repeatable-row limits. Stop when evidence is insufficient.
 3. **Add the render provider.** Map the typed Rust draft into `RenderEnvelopeV1`. Provide minimum, normal, long-value, validation-edge, and maximum-capacity fixtures. Do not repair or calculate values in TypeScript.
 4. **Build semantic HTML.** Add the form component, exact-revision dispatch, scoped CSS, form specification, and pagination policy. Reuse shared paper, table, comb, checkbox, and amount primitives only when their official behavior matches.
-5. **Verify discrete artwork.** Extract the exact seal/logo and every page-specific
-   barcode or QR symbol from the pinned official PDF. Decode machine-readable
-   payloads, preserve their module matrices as crisp vector artwork, keep captions
-   as live bundled-font text, and record object/hash/geometry provenance. Read
+5. **Verify discrete artwork.** Inventory every physical page. Extract each exact
+   seal/logo and page-specific PDF417/QR object from the pinned PDF. Decode every
+   payload, prove a zero-difference logical module matrix, render it as crisp inline
+   vector artwork, and keep captions/static text as live bundled-font text. When the official
+   PDF contains no machine-readable symbol, record an audited explicit absence and
+   render none; never fabricate one from the form identity. Read
    [discrete-artwork.md](references/discrete-artwork.md).
 6. **Calibrate visually.** Use `scripts/prepare_official_reference.py` to render the pinned official PDF. Read [visual-calibration.md](references/visual-calibration.md). Inspect both full pages and critical regions.
 7. **Prove output behavior.** Verify preview, system print, direct PDF export, page count, 612 x 936 point geometry where applicable, clipping detection, offline packaging, and platform evidence. Read [native-print-export.md](references/native-print-export.md).
@@ -77,6 +80,7 @@ Stop and report the missing evidence rather than guessing when:
 - imported data exceeds a verified official capacity;
 - the renderer clips, overflows, or changes page count;
 - preview and PDF export do not use the same immutable envelope/document;
+- an exact embedded artwork object cannot be proven and substitution would be required;
 - packaged output needs Node, networking, Typst, or runtime form backgrounds;
 - the migration manifest claims more support than tests prove.
 

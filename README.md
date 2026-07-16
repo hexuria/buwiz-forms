@@ -83,7 +83,7 @@ Fixture JSON contains form identity, taxpayer/period data, typed field values, s
 - **Form Generation**: Robust, schema-driven form generation (e.g., 2551Q) mapping directly to official BIR XML standards.
 
 ### 🛠 Form Digitization & Developer Tools
-- **Semantic HTML Form Renderer**: Exact BIR revisions are implemented as reviewed React HTML/CSS documents fed by Rust-owned render contracts. Official PDFs are calibration evidence only; runtime full-page overlays and coordinate layout packs are prohibited.
+- **Semantic HTML Form Renderer**: Exact BIR revisions are implemented as reviewed React HTML/CSS documents fed by Rust-owned render contracts. Official PDFs are calibration evidence only; runtime full-page overlays and coordinate layout packs are prohibited. Discrete artwork uses exact embedded PDF objects, vectorized verified code matrices, and live bundled-font captions—or an audited no-symbol result—never rendered-page crops or generic downloads.
 - **Fixture-Driven Calibration**: The development calibration app renders committed Rust contracts, loads pinned official references automatically, and keeps comparison evidence outside the printable runtime document.
 - **Structured Tracing**: Debug builds automatically log form save, sync, and HTML preview/print/export events to the terminal via `tracing`. Override log levels at runtime with `RUST_LOG=bir_desktop=trace just run`.
 

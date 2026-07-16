@@ -18,7 +18,12 @@ If no exact-revision component exists, stop and use `$ebirforms-convert-form-to-
 2. Confirm the contract value and type.
 3. Reproduce the layout at the visual-test viewport/DPI.
 4. Inspect readiness diagnostics for clipping, overflow, or unstable geometry.
-5. Patch only the owning layer.
+5. For artwork defects, verify the exact embedded PDF object/native dimensions,
+   decoded payload, zero-difference module matrix, inline vector, live
+   bundled-font caption, and lossless seal import. Reject rendered-page crops,
+   downloads/substitutes, and threshold/resample/resize/recolor/sharpen steps.
+   Preserve an audited no-symbol result instead of inventing a code.
+6. Patch only the owning layer.
 
 Treat each pinned PDF page as an independent page-indexed reference. Preview,
 Chrome, and Preview.app may switch between single-page and two-page-spread
@@ -29,6 +34,11 @@ Never fix a wrong value with CSS or recompute it in React. Never fix layout by e
 
 ## Verify
 
-Run the narrow form/unit test first. Then run contracts, migration audit, type checking, renderer tests, visual parity, production bundle, and offline verification. For native work, also compile the desktop crate and gather development plus packaged evidence on each affected platform.
+Run the narrow form/unit test first. Artwork tests must bind the renderer import
+to source hashes/geometry and verify payload, matrix, live caption, or explicit
+absence. Then run contracts, migration audit, type checking, renderer tests,
+visual parity, production bundle, and offline verification. For native work,
+also compile the desktop crate and gather development plus packaged evidence on
+each affected platform.
 
 Do not set `release_ready` from screenshots alone. Require exact page geometry, full fixture coverage, native print/PDF evidence, packaged-offline evidence, and a passed rollback/no-legacy policy.

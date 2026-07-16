@@ -73,11 +73,18 @@ The reference manifest pins, for every exact revision:
 - revision, physical page count, and point geometry;
 - 144 DPI page PNG paths, dimensions, and hashes;
 - calibration-only provenance;
-- reviewed seal or static-barcode crops allowed as discrete runtime assets.
+- exact embedded seal/logo objects with native dimensions and source hashes;
+- decoded PDF417/QR payloads, zero-difference logical matrices, inline vectors,
+  and bundled-font live captions/static text, or an audited explicit no-symbol result.
 
 Reference PNGs are rendered directly from pinned official PDFs. Do not replace
 a page from an unverified download or use a full official page inside the
 runtime bundle.
+
+Runtime artwork must never come from a rendered-page crop or downloaded/generic
+substitute. Preserve native embedded objects losslessly; do not threshold,
+resample, resize, recolor, or sharpen them. A form such as `0605:1999` that has
+no machine-readable symbol must record that audited absence and render no code.
 
 To prepare a new exact revision, use the repository conversion workflow:
 

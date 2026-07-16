@@ -48,6 +48,22 @@ LEGACY_TOKENS = (
     "page1.svg",
     "page2.svg",
 )
+FORBIDDEN_ARTWORK_FIELDS = frozenset(
+    {
+        "crop_box",
+        "crop_box_points",
+        "crop_box_px",
+        "download_url",
+        "downloaded_from",
+        "source_url",
+        "recolor",
+        "resample",
+        "resize",
+        "sharpen",
+        "threshold",
+    }
+)
+MACHINE_CODE_TOKENS = ("barcode", "pdf417", "qr")
 
 
 def identity(form_code: str, revision: str) -> tuple[str, str, str, str]:
@@ -143,6 +159,248 @@ def reference_pixel_dimensions(
     width_pt: float, height_pt: float, dpi: float
 ) -> tuple[int, int]:
     return (round(width_pt * dpi / 72.0), round(height_pt * dpi / 72.0))
+
+
+def positive_int_pair(value: Any) -> bool:
+    return (
+        isinstance(value, list)
+        and len(value) == 2
+        and all(
+            isinstance(item, int) and not isinstance(item, bool) and item > 0
+            for item in value
+        )
+    )
+
+
+def finite_ctm(value: Any) -> bool:
+    return (
+        isinstance(value, list)
+        and len(value) == 6
+        and all(
+            isinstance(item, (int, float))
+            and not isinstance(item, bool)
+            and math.isfinite(float(item))
+            for item in value
+        )
+    )
+
+
+def finite_rect(value: Any) -> bool:
+    return (
+        isinstance(value, list)
+        and len(value) == 4
+        and all(
+            isinstance(item, (int, float))
+            and not isinstance(item, bool)
+            and math.isfinite(float(item))
+            for item in value
+        )
+        and float(value[2]) > 0
+        and float(value[3]) > 0
+    )
+
+
+def pdf_object_id(value: Any) -> bool:
+    return (
+        isinstance(value, list)
+        and len(value) == 2
+        and all(
+            isinstance(item, int) and not isinstance(item, bool) and item >= 0
+            for item in value
+        )
+    )
+
+
+def forbidden_artwork_paths(value: Any, prefix: str = "") -> list[str]:
+    findings: list[str] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            path = f"{prefix}.{key}" if prefix else str(key)
+            if str(key).lower() in FORBIDDEN_ARTWORK_FIELDS:
+                findings.append(path)
+            findings.extend(forbidden_artwork_paths(child, path))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            findings.extend(forbidden_artwork_paths(child, f"{prefix}[{index}]"))
+    return findings
+
+
+def artwork_evidence_findings(
+    reference: dict[str, Any], root: Path, artifacts: list[str]
+) -> list[str]:
+    """Return release-blocking discrete-artwork evidence findings."""
+
+    findings: list[str] = []
+    assets = reference.get("runtime_discrete_assets")
+    if not isinstance(assets, list):
+        return ["runtime_discrete_assets must be an evidence list"]
+
+    government_assets = 0
+    code_assets: list[dict[str, Any]] = []
+    for index, asset in enumerate(assets):
+        label = f"runtime_discrete_assets[{index}]"
+        if not isinstance(asset, dict):
+            findings.append(f"{label} must be an object")
+            continue
+        forbidden = sorted(forbidden_artwork_paths(asset))
+        if forbidden:
+            findings.append(
+                f"{label} uses forbidden rendered-crop/download/transform fields: "
+                + ", ".join(forbidden)
+            )
+
+        embedded_in = asset.get("embedded_in")
+        if not isinstance(embedded_in, str) or not embedded_in:
+            findings.append(f"{label} lacks an embedded_in renderer binding")
+        else:
+            embedded_path = root / embedded_in
+            if not embedded_path.is_file():
+                findings.append(f"{label} renderer binding is missing: {embedded_in}")
+            else:
+                artifacts.append(relative(embedded_path, root))
+
+        name = str(asset.get("asset", "")).lower()
+        is_government = "seal" in name or "logo" in name or "wordmark" in name
+        is_code = any(token in name for token in MACHINE_CODE_TOKENS)
+
+        if is_government:
+            government_assets += 1
+            if not pdf_object_id(asset.get("source_pdf_object_id")):
+                findings.append(f"{label} lacks exact source_pdf_object_id")
+            if not positive_int_pair(asset.get("source_pixel_dimensions")):
+                findings.append(f"{label} lacks native source_pixel_dimensions")
+            if not finite_ctm(asset.get("source_ctm_points")):
+                findings.append(f"{label} lacks exact source_ctm_points")
+            if not SHA256_RE.fullmatch(str(asset.get("source_stream_sha256", ""))):
+                findings.append(f"{label} lacks source_stream_sha256")
+            decoded_hashes = [
+                value
+                for key, value in asset.items()
+                if key.startswith("source_decoded_") and SHA256_RE.fullmatch(str(value))
+            ]
+            if not decoded_hashes:
+                findings.append(f"{label} lacks a decoded native-content SHA-256")
+            embedded_as = str(asset.get("embedded_as", "")).lower()
+            if "lossless" not in embedded_as and "vector" not in embedded_as:
+                findings.append(
+                    f"{label} must be embedded losslessly at native dimensions"
+                )
+            rendered_hash = str(asset.get("derived_png_sha256", ""))
+            if embedded_in and SHA256_RE.fullmatch(rendered_hash):
+                embedded_path = root / embedded_in
+                if (
+                    embedded_path.is_file()
+                    and sha256_file(embedded_path) != rendered_hash
+                ):
+                    findings.append(
+                        f"{label} renderer asset hash does not match derived_png_sha256"
+                    )
+
+        if is_code:
+            code_assets.append(asset)
+            payload = asset.get("decoded_payload")
+            if not isinstance(payload, str) or not payload:
+                findings.append(f"{label} lacks decoded_payload")
+            symbology = str(asset.get("symbology", "")).upper().replace("_", "")
+            if symbology not in {"PDF417", "QR", "QRCODE"}:
+                findings.append(f"{label} lacks verified PDF417/QR symbology")
+            if not pdf_object_id(asset.get("source_pdf_object_id")):
+                findings.append(f"{label} lacks exact source_pdf_object_id")
+            if not positive_int_pair(asset.get("source_pixel_dimensions")):
+                findings.append(f"{label} lacks native source_pixel_dimensions")
+            if not finite_ctm(asset.get("source_ctm_points")):
+                findings.append(f"{label} lacks exact source_ctm_points")
+            if not SHA256_RE.fullmatch(str(asset.get("source_png_sha256", ""))):
+                findings.append(f"{label} lacks lossless source object SHA-256")
+            if not SHA256_RE.fullmatch(str(asset.get("source_stream_sha256", ""))):
+                findings.append(f"{label} lacks source_stream_sha256")
+            if not positive_int_pair(asset.get("logical_dimensions")):
+                findings.append(f"{label} lacks logical module dimensions")
+            if not SHA256_RE.fullmatch(str(asset.get("logical_matrix_sha256", ""))):
+                findings.append(f"{label} lacks logical_matrix_sha256")
+            path_hash = asset.get("logical_path_sha256", asset.get("svg_path_sha256"))
+            if not SHA256_RE.fullmatch(str(path_hash or "")):
+                findings.append(f"{label} lacks inline vector path SHA-256")
+            embedded_as = str(asset.get("embedded_as", "")).lower()
+            if "inline_svg" not in embedded_as or "live_caption" not in embedded_as:
+                findings.append(
+                    f"{label} must use inline SVG modules and a live caption"
+                )
+            if not isinstance(asset.get("caption_text"), str) or not asset.get(
+                "caption_text"
+            ):
+                findings.append(f"{label} lacks live caption_text")
+            elif asset.get("caption_text") != payload:
+                findings.append(f"{label} caption_text does not match decoded_payload")
+            if not isinstance(asset.get("caption_render_font"), str) or not asset.get(
+                "caption_render_font"
+            ):
+                findings.append(f"{label} lacks bundled caption_render_font")
+            else:
+                fonts = root / "packages/form-renderer/src/fonts.css"
+                if not fonts.is_file() or asset[
+                    "caption_render_font"
+                ] not in fonts.read_text(encoding="utf-8", errors="replace"):
+                    findings.append(f"{label} caption_render_font is not bundled")
+            if not finite_rect(asset.get("caption_bbox_top_left_points")):
+                findings.append(f"{label} lacks caption physical geometry")
+            decoder_evidence = asset.get("decoder_evidence")
+            if not isinstance(decoder_evidence, list) or not decoder_evidence:
+                findings.append(f"{label} lacks decoder_evidence")
+            elif not any(
+                isinstance(evidence, dict) and evidence.get("payload") == payload
+                for evidence in decoder_evidence
+            ):
+                findings.append(
+                    f"{label} decoder evidence does not match decoded_payload"
+                )
+            encoder_proof = asset.get("encoder_proof")
+            if (
+                not isinstance(encoder_proof, dict)
+                or encoder_proof.get("module_differences") != 0
+            ):
+                findings.append(f"{label} lacks zero-difference logical matrix proof")
+
+    if government_assets == 0:
+        findings.append("reference lacks exact embedded government seal/logo evidence")
+
+    absence = reference.get("machine_readable_artwork")
+    if code_assets:
+        if (
+            isinstance(absence, dict)
+            and absence.get("status") == "absent_in_official_pdf"
+        ):
+            findings.append(
+                "machine-readable artwork cannot be both present and absent"
+            )
+    else:
+        if (
+            not isinstance(absence, dict)
+            or absence.get("status") != "absent_in_official_pdf"
+        ):
+            findings.append(
+                "no-code form lacks audited absent_in_official_pdf evidence"
+            )
+        else:
+            if absence.get("official_source_sha256") != reference.get(
+                "official_source_sha256"
+            ):
+                findings.append(
+                    "no-code evidence source hash does not match the pinned official PDF"
+                )
+            expected_pages = list(range(1, int(reference.get("page_count", 0)) + 1))
+            if absence.get("audited_pages") != expected_pages:
+                findings.append(
+                    "no-code evidence must audit every physical page in order"
+                )
+            if not isinstance(absence.get("inventory_method"), str) or not absence.get(
+                "inventory_method"
+            ):
+                findings.append("no-code evidence lacks inventory_method")
+            if not SHA256_RE.fullmatch(str(absence.get("object_inventory_sha256", ""))):
+                findings.append("no-code evidence lacks object_inventory_sha256")
+
+    return findings
 
 
 def require_file(
@@ -366,6 +624,17 @@ def audit(root: Path, form_code: str, revision: str, stage: str) -> dict[str, An
             elif stage == "release":
                 errors.append("release reference lacks pinned visual fixture evidence")
 
+            artwork_findings = artwork_evidence_findings(reference, root, artifacts)
+            if stage == "release":
+                errors.extend(
+                    f"artwork evidence: {finding}" for finding in artwork_findings
+                )
+            else:
+                warnings.extend(
+                    f"artwork evidence incomplete: {finding}"
+                    for finding in artwork_findings
+                )
+
             if stage == "release":
                 legacy = contains_legacy(reference)
                 if legacy:
@@ -438,6 +707,93 @@ def self_test() -> None:
     findings = contains_legacy(value)
     assert findings
     assert SHA256_RE.fullmatch("a" * 64)
+    assert positive_int_pair([120, 7])
+    assert not positive_int_pair([120, 0])
+    assert finite_ctm([1, 0, 0, 1, 10, 20])
+    assert finite_rect([10, 20, 40, 8])
+    assert pdf_object_id([35, 0])
+
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        seal_path = root / "seal.png"
+        seal_path.write_bytes(b"native seal")
+        seal_hash = sha256_file(seal_path)
+        reference = {
+            "official_source_sha256": "a" * 64,
+            "page_count": 2,
+            "runtime_discrete_assets": [
+                {
+                    "asset": "government_seal",
+                    "embedded_as": "lossless_native_devicegray_xobject",
+                    "embedded_in": "seal.png",
+                    "derived_png_sha256": seal_hash,
+                    "source_pdf_object_id": [13, 0],
+                    "source_pixel_dimensions": [113, 93],
+                    "source_ctm_points": [41, 0, 0, 34, 15, 852],
+                    "source_stream_sha256": "b" * 64,
+                    "source_decoded_grayscale_sha256": "c" * 64,
+                }
+            ],
+            "machine_readable_artwork": {
+                "status": "absent_in_official_pdf",
+                "official_source_sha256": "a" * 64,
+                "audited_pages": [1, 2],
+                "inventory_method": "PDF object and page-content inventory",
+                "object_inventory_sha256": "d" * 64,
+            },
+        }
+        artifacts: list[str] = []
+        assert artwork_evidence_findings(reference, root, artifacts) == []
+        assert artifacts == ["seal.png"]
+
+        reference["runtime_discrete_assets"][0]["crop_box_px"] = [1, 2, 3, 4]
+        assert any(
+            "forbidden" in finding
+            for finding in artwork_evidence_findings(reference, root, [])
+        )
+        del reference["runtime_discrete_assets"][0]["crop_box_px"]
+        del reference["machine_readable_artwork"]
+        assert any(
+            "absent_in_official_pdf" in finding
+            for finding in artwork_evidence_findings(reference, root, [])
+        )
+
+        vector_path = root / "official0605Assets.ts"
+        vector_path.write_text("export const matrix = 'verified';\n", encoding="utf-8")
+        fonts_path = root / "packages/form-renderer/src/fonts.css"
+        fonts_path.parent.mkdir(parents=True)
+        fonts_path.write_text(
+            '@font-face { font-family: "eBIRForms Arimo"; }\n', encoding="utf-8"
+        )
+        reference["runtime_discrete_assets"].append(
+            {
+                "asset": "static_form_pdf417_page_1",
+                "embedded_as": "reviewed_inline_svg_module_matrix_with_live_caption",
+                "embedded_in": "official0605Assets.ts",
+                "source_pdf_object_id": [14, 0],
+                "source_pixel_dimensions": [240, 63],
+                "source_ctm_points": [160, 0, 0, 38, 425, 840],
+                "source_png_sha256": "e" * 64,
+                "source_stream_sha256": "1" * 64,
+                "decoded_payload": "0605 TEST P1",
+                "symbology": "PDF417",
+                "logical_dimensions": [120, 7],
+                "logical_matrix_sha256": "f" * 64,
+                "logical_path_sha256": "2" * 64,
+                "caption_text": "0605 TEST P1",
+                "caption_render_font": "eBIRForms Arimo",
+                "caption_bbox_top_left_points": [520, 90, 74, 9],
+                "decoder_evidence": [
+                    {
+                        "decoder": "test decoder",
+                        "payload": "0605 TEST P1",
+                        "symbology": "PDF417",
+                    }
+                ],
+                "encoder_proof": {"module_differences": 0},
+            }
+        )
+        assert artwork_evidence_findings(reference, root, []) == []
     print("verify_form_conversion.py self-test: ok")
 
 

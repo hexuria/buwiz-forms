@@ -11,6 +11,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 CONVERSION = ROOT / ".codex/skills/ebirforms-convert-form-to-html/SKILL.md"
 MAINTENANCE = ROOT / ".codex/skills/ebirforms-print-preview/SKILL.md"
+ARTWORK = (
+    ROOT
+    / ".codex/skills/ebirforms-convert-form-to-html/references/discrete-artwork.md"
+)
 
 
 def description(path: Path) -> str:
@@ -63,6 +67,32 @@ class SkillRoutingTests(unittest.TestCase):
         conversion = CONVERSION.read_text(encoding="utf-8").lower()
         self.assertIn("only one xml/savefile sample", conversion)
         self.assertIn("stop and report the missing evidence", conversion)
+
+    def test_artwork_policy_is_strict_and_routes_no_symbol_forms(self) -> None:
+        conversion = CONVERSION.read_text(encoding="utf-8").lower()
+        maintenance = MAINTENANCE.read_text(encoding="utf-8").lower()
+        artwork = ARTWORK.read_text(encoding="utf-8").lower()
+
+        for policy in (conversion, maintenance):
+            self.assertIn("exact embedded", policy)
+            self.assertIn("rendered-page crop", policy)
+            self.assertIn("zero-difference logical", policy)
+            self.assertIn("bundled-font", policy)
+            self.assertIn("static text", policy)
+            self.assertIn("never fabricate", policy)
+
+        self.assertIn("0605:1999", artwork)
+        self.assertIn('"status": "absent_in_official_pdf"', artwork)
+        self.assertIn("shape-rendering: crispedges", artwork)
+        for forbidden_operation in (
+            "download",
+            "threshold",
+            "resample",
+            "resize",
+            "recolor",
+            "sharpen",
+        ):
+            self.assertIn(forbidden_operation, artwork)
 
 
 if __name__ == "__main__":

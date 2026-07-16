@@ -28,8 +28,9 @@ Before writing code, record:
 - all applicable main pages, schedules, and conditional attachments;
 - representative plain and encrypted XML, when available;
 - formula, validation, carry-over, and filing-frequency evidence;
-- discrete artwork that must be cropped from the pinned source, such as the
-  government seal or static form barcode.
+- embedded discrete artwork objects, such as the government seal and each
+  page-specific PDF417/QR symbol, including their PDF object IDs, native
+  dimensions, hashes, and placement geometry.
 
 The reviewed source packs used during local development are under
 `/Users/uriah/Downloads/forms`. They are evidence inputs, not runtime layout
@@ -39,6 +40,18 @@ background.
 Do not infer tax formulas, applicability, or XML semantics from one saved XML
 payload. If evidence is incomplete, keep the exact revision `ScaffoldOnly` or
 manual/external and record the missing evidence explicitly.
+
+Audit every official page for machine-readable artwork. Decode each PDF417/QR
+payload, prove a zero-difference logical module matrix, render it as crisp inline
+vector artwork, and keep its caption/static text live using a bundled offline font.
+Extract the exact embedded seal/logo object losslessly at native dimensions.
+Rendered-page crops, downloaded/generic substitutes, thresholding, resampling,
+resizing, recoloring, and sharpening are forbidden.
+
+If the official PDF contains no machine-readable symbol, as with `0605:1999`,
+record an explicit audited absence with the source hash, audited pages, object-
+inventory method, and evidence hash. Add a negative renderer test and never
+fabricate a symbol from the form identity or nearby text.
 
 Inventory an exact target without generating authoritative behavior:
 
@@ -147,8 +160,10 @@ python3 .codex/skills/ebirforms-convert-form-to-html/scripts/prepare_official_re
 ```
 
 Commit the reference manifest entry and reviewed page PNGs. Record source and
-PNG hashes, page count, DPI, and point geometry. Runtime assets may include
-only reviewed discrete crops with provenance and hashes.
+PNG hashes, page count, DPI, and point geometry. Runtime assets may include only
+exact embedded objects with native/hash/geometry provenance, exact vector module
+matrices with live captions, or an explicit audited no-symbol record. Reference-
+page crops and downloaded substitutes are never runtime assets.
 
 ## 7. Calibrate in the development viewer
 

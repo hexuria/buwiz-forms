@@ -60,6 +60,20 @@ python3 .codex/skills/ebirforms-convert-form-to-html/scripts/prepare_official_re
 The script may hash sources, render deterministic page PNGs, and record
 geometry. It must not guess formulas or generate authoritative form layout.
 
+## Discrete artwork evidence
+
+Inventory every physical page in the pinned PDF. Extract the exact embedded
+seal/logo object at native dimensions and preserve it losslessly. For every
+PDF417 or QR symbol, record its PDF object/hash/CTM, decode the exact payload,
+prove a zero-difference logical module matrix, render the matrix as crisp inline
+vector artwork, and render caption/static text separately with a bundled offline font.
+
+Do not use a rendered-page crop, downloaded/generic substitute, thresholding,
+resampling, resizing, recoloring, or sharpening. If no code exists, record an
+audited explicit absence covering every page and add a test that no symbol is
+rendered. `0605:1999` is the canonical no-symbol case; never fabricate a code
+from its form identity.
+
 ## Contract and fixture tools
 
 Generate Rust capabilities, `RenderEnvelopeV1` schema, TypeScript types, and
@@ -189,7 +203,8 @@ Before queue enablement, prove typed behavior, exact XML, formulas, validation,
 persistence, carry-over, amendments, queue adapter, and editor behavior.
 
 Before visual promotion, prove the complete official page, exact paper and page
-count, long values, schedules, critical regions, and zero clipping.
+count, long values, schedules, critical regions, zero clipping, and the strict
+embedded-artwork or explicit no-symbol evidence above.
 
 Before release promotion, record preview, system print, direct PDF export, and
 packaged-offline evidence on macOS, Windows, and Linux using the same immutable

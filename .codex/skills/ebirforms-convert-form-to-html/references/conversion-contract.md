@@ -12,6 +12,7 @@ Lock one canonical form code and exact revision before implementation.
 | Lifecycle | Persistence, validation, queue/submission, carry-over where applicable |
 | Contract | Rust adapter plus minimum, normal, long-value, validation-edge, maximum-capacity fixtures |
 | Layout | Exact-revision React component, scoped CSS, spec, deterministic pagination |
+| Artwork | Exact embedded seal/logo objects; decoded PDF417/QR payloads, zero-difference module matrices, inline vectors, live bundled-font captions, or an audited explicit no-symbol result |
 | Visual | Pinned blank references, filled goldens, critical-region and full-page results |
 | Native | Same document proves preview, print, direct PDF, clipping, offline package behavior |
 

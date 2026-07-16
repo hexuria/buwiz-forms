@@ -33,7 +33,8 @@ Use 2551Q to understand the current HTML pipeline, not as evidence that another 
 ## Do not copy blindly
 
 2551Q is HTML-enabled but `release_ready` is false. Its verified PDF417 workflow
-is the barcode example, while its remaining seal provenance and all other form
-artwork must still satisfy [discrete-artwork.md](discrete-artwork.md). Its
+and exact native official-PDF seal extraction are artwork examples; its remaining
+layout, native-platform, and package gates are still incomplete. Every other form
+must independently satisfy [discrete-artwork.md](discrete-artwork.md). Its
 hardcoded provider/dispatch/generator shape must be generalized before treating it
 as a multi-form template.

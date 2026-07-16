@@ -20,12 +20,14 @@ The script locks geometry from `pdfinfo` by default. Supply both optional point-
 
 Rebuild the form with semantic rows, tables, labels, combs, checkboxes, signatures, and schedules. Reuse shared primitives only when they preserve exact official behavior. Keep form-specific measurements scoped to the exact revision.
 
-Verify discrete artwork through [discrete-artwork.md](discrete-artwork.md). In
-particular, do not keep a cropped bitmap barcode when the official machine-readable
-symbol can be decoded and represented by its exact module matrix. Keep its caption
-as bundled-font live text. Extract the exact monochrome government seal/logo from
-the pinned form PDF when possible; do not substitute a generic web logo. Never
-embed a whole official page as a runtime background.
+Verify discrete artwork through [discrete-artwork.md](discrete-artwork.md). Never
+keep a rendered-page bitmap crop for a machine-readable symbol: decode its exact
+payload, prove the zero-difference logical module matrix, render that matrix as
+crisp inline vector artwork, and keep its caption as bundled-font live text.
+Extract the exact embedded government seal/logo object at native dimensions; do
+not download, threshold, resize, resample, recolor, sharpen, or substitute it.
+For a form with no code, record the audited absence and render none. Never embed
+a whole official page as a runtime background.
 
 ## Acceptance
 
