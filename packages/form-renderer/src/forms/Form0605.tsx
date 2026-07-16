@@ -308,7 +308,9 @@ function AtcCellPair0605({ rowIndex, groupIndex }: { rowIndex: number; groupInde
   // browser report its first tr as overflowing even though the cells fit the
   // two official rows.
   const sourceRow = groupIndex === 2 && rowIndex >= 12 ? rowIndex - 1 : rowIndex;
-  let [code, description] = ATC_ROWS[sourceRow][groupIndex];
+  const [sourceCode, sourceDescription] = ATC_ROWS[sourceRow][groupIndex];
+  let code: string = sourceCode;
+  let description: string = sourceDescription;
   const mergedStart = groupIndex === 2 && rowIndex === 10;
   const mergedEnd = groupIndex === 2 && rowIndex === 11;
   if (mergedStart) {
