@@ -1320,7 +1320,7 @@ mod tests {
         let v: i32 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 10);
+        assert_eq!(v, 11);
 
         // Check that per_year_forms has been backfilled
         let mut stmt = conn.prepare(
@@ -1453,7 +1453,7 @@ mod tests {
         let v: i32 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 10);
+        assert_eq!(v, 11);
 
         // Assert that after migration v9, 2550Q is preserved and active is still false (0)
         let mut stmt = conn.prepare(

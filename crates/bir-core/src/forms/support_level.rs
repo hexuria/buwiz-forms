@@ -454,8 +454,9 @@ mod tests {
     #[test]
     fn certification_draft_gate_does_not_claim_release_readiness() {
         assert!(can_open_certification_draft("2551Q"));
-        assert!(can_open_certification_draft("1601C"));
-        for code in ["0619E", "0619F", "0605", "1701Q"] {
+        for code in [
+            "1601C", "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX",
+        ] {
             assert!(
                 can_open_certification_draft(code),
                 "{code} has a semantic HTML certification path"
@@ -468,12 +469,7 @@ mod tests {
         assert_eq!(form_support_level("0605"), FormSupportLevel::ScaffoldOnly);
         assert_eq!(form_support_level("1701Q"), FormSupportLevel::ScaffoldOnly);
 
-        for code in ["2550Q", "1701", "1702RT", "1702MX", "9999"] {
-            assert!(
-                !can_open_certification_draft(code),
-                "{code} must remain closed until its semantic HTML path is proven"
-            );
-        }
+        assert!(!can_open_certification_draft("9999"));
     }
 
     #[test]

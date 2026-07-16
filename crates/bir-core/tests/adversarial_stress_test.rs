@@ -1,4 +1,6 @@
-use bir_core::integration::recurring_obligation_forms_for_profile_and_year;
+use bir_core::integration::{
+    form_suggestions_for_profile_year, recurring_obligation_forms_for_profile_and_year,
+};
 use bir_core::naming::Tin;
 use bir_core::profile::{
     ComplianceSourceMode, RegisteredTaxType, TaxClassification, TaxProfileVersion,
@@ -86,6 +88,18 @@ fn confirmed_version(
     version
 }
 
+fn reconcile_forms_set(profile: &mut TaxpayerProfile, year: u16) {
+    let suggestions = form_suggestions_for_profile_year(profile, year);
+    let existing = profile.per_year_forms.get(&year);
+    let reconciled = bir_core::forms::reconcile_forms_set_for_year(year, existing, &suggestions);
+    assert!(
+        reconciled.conflicts.is_empty(),
+        "stress fixture unexpectedly produced Forms Set conflicts: {:?}",
+        reconciled.conflicts
+    );
+    profile.per_year_forms.insert(year, reconciled.forms_set);
+}
+
 #[test]
 fn test_adversarial_individual_vs_corporate_leakage() {
     let mut profile = base_profile(
@@ -105,6 +119,7 @@ fn test_adversarial_individual_vs_corporate_leakage() {
         false,
     );
     profile.profile_versions = vec![version];
+    reconcile_forms_set(&mut profile, 2026);
 
     let forms = recurring_obligation_forms_for_profile_and_year(&profile, 2026);
 
@@ -135,6 +150,7 @@ fn test_adversarial_individual_vs_corporate_leakage() {
         false,
     );
     corp_profile.profile_versions = vec![corp_version];
+    reconcile_forms_set(&mut corp_profile, 2026);
 
     let corp_forms = recurring_obligation_forms_for_profile_and_year(&corp_profile, 2026);
     assert!(
@@ -175,6 +191,7 @@ fn test_adversarial_vat_vs_non_vat_leakage() {
         false,
     );
     non_vat_profile.profile_versions = vec![non_vat_version];
+    reconcile_forms_set(&mut non_vat_profile, 2026);
 
     let non_vat_forms = recurring_obligation_forms_for_profile_and_year(&non_vat_profile, 2026);
     assert!(
@@ -209,6 +226,7 @@ fn test_adversarial_vat_vs_non_vat_leakage() {
     );
     vat_profile.profile_versions = vec![vat_version];
     vat_profile.is_vat_registered = true;
+    reconcile_forms_set(&mut vat_profile, 2026);
 
     let vat_forms = recurring_obligation_forms_for_profile_and_year(&vat_profile, 2026);
     assert!(
@@ -261,6 +279,7 @@ fn test_adversarial_mid_year_transition_union() {
     );
 
     profile.profile_versions = vec![v1, v2];
+    reconcile_forms_set(&mut profile, 2026);
 
     let forms = recurring_obligation_forms_for_profile_and_year(&profile, 2026);
 
@@ -285,7 +304,7 @@ fn test_adversarial_year_aware_deprecations() {
     let mut profile = base_profile(TaxpayerType::Corporation, None);
 
     // Add withholding tax types so withholding forms are checked
-    let version_2017 = confirmed_version(
+    let mut version_2017 = confirmed_version(
         &profile,
         "v-2017",
         Some(NaiveDate::from_ymd_opt(2017, 1, 1).unwrap()),
@@ -297,10 +316,14 @@ fn test_adversarial_year_aware_deprecations() {
         ],
         false,
     );
+    version_2017.withholds_expanded = true;
 
     profile.profile_versions = vec![version_2017];
     profile.withholds_expanded = true;
     profile.is_expanded_withholding_agent = true;
+    reconcile_forms_set(&mut profile, 2017);
+    reconcile_forms_set(&mut profile, 2018);
+    reconcile_forms_set(&mut profile, 2021);
 
     // 1. Year 2017 (before deprecations of 1601E and 2551M, and 1704)
     let forms_2017 = recurring_obligation_forms_for_profile_and_year(&profile, 2017);
