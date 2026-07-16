@@ -20,7 +20,7 @@ use bir_core::db::Database;
 use bir_core::naming::Tin;
 use bir_core::profile::{
     ComplianceSourceMode, EoptTier, RegisteredTaxType, RegistrationActivityStatus,
-    TaxClassification, TaxpayerProfile, TaxpayerType,
+    TaxClassification, TaxProfileVersionConfirmationPlan, TaxpayerProfile, TaxpayerType,
 };
 use bir_core::reference::get_all_rdos;
 use bir_core::validation::{ValidationError, validate_profile};
@@ -155,6 +155,7 @@ pub struct ProfileManagerView {
         Option<Entity<crate::components::document_viewer::InteractiveDocumentViewer>>,
     focused_ocr_field: Option<String>,
     pending_cor_editor_load: Option<String>,
+    pending_profile_version_confirmation: Option<TaxProfileVersionConfirmationPlan>,
     is_uploading_cor: bool,
 
     pub stored_per_year_forms: std::collections::BTreeMap<u16, bir_core::forms::PerYearFormsSet>,
@@ -760,6 +761,7 @@ impl ProfileManagerView {
             interactive_document_viewer: None,
             focused_ocr_field: None,
             pending_cor_editor_load: None,
+            pending_profile_version_confirmation: None,
             is_uploading_cor: false,
             pending_notification: None,
             has_unsaved_profile_changes: false,
@@ -2248,12 +2250,11 @@ impl ProfileManagerView {
         );
     }
 
-    fn confirm_cor_version(
-        &mut self,
+    fn cor_version_confirmation_plan(
+        &self,
         version_id: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Result<(), String> {
+        cx: &Context<Self>,
+    ) -> Result<TaxProfileVersionConfirmationPlan, String> {
         let Some(version) = self
             .stored_profile_versions
             .iter()
@@ -2266,13 +2267,80 @@ impl ProfileManagerView {
                 "Set the Business Start Date before confirming this COR version.".to_string(),
             );
         };
-        let version_clone = version.clone();
+
+        let mut profile = self.current_profile(cx);
+        profile.profile_versions = self.stored_profile_versions.clone();
+        profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+        profile
+            .profile_version_confirmation_plan(version_id, effective_from)
+            .ok_or_else(|| "COR version confirmation could not be prepared.".to_string())
+    }
+
+    fn request_cor_version_confirmation(
+        &mut self,
+        version_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match self.cor_version_confirmation_plan(version_id, cx) {
+            Ok(plan) if plan.auto_close_consequences.is_empty() => {
+                self.apply_cor_version_confirmation(plan, window, cx);
+            }
+            Ok(plan) => {
+                self.pending_profile_version_confirmation = Some(plan);
+                cx.notify();
+            }
+            Err(message) => {
+                self.save_message = Some(message);
+                cx.notify();
+            }
+        }
+    }
+
+    fn apply_cor_version_confirmation(
+        &mut self,
+        plan: TaxProfileVersionConfirmationPlan,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.pending_profile_version_confirmation = None;
+        let auto_closed_prior_version = !plan.auto_close_consequences.is_empty();
+        match self.confirm_cor_version(&plan, window, cx) {
+            Ok(()) => {
+                self.save_message = Some(if auto_closed_prior_version {
+                    "COR version confirmed; the acknowledged prior profile timeline was closed, and the Forms Set reconciliation was saved."
+                        .to_string()
+                } else {
+                    "COR version confirmed; profile and Forms Set reconciliation saved.".to_string()
+                });
+                self.compliance_source_mode =
+                    Self::derive_compliance_source_mode(&self.stored_profile_versions);
+            }
+            Err(message) => self.save_message = Some(message),
+        }
+        cx.notify();
+    }
+
+    fn confirm_cor_version(
+        &mut self,
+        plan: &TaxProfileVersionConfirmationPlan,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        let Some(version_clone) = self
+            .stored_profile_versions
+            .iter()
+            .find(|version| version.id == plan.version_id)
+            .cloned()
+        else {
+            return Err("COR version was not found.".to_string());
+        };
 
         let mut profile = self.current_profile(cx);
         profile.profile_versions = self.stored_profile_versions.clone();
         profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
 
-        if profile.set_profile_version_confirmed(version_id, effective_from) {
+        if profile.apply_profile_version_confirmation_plan(plan) {
             self.compliance_source_mode = ComplianceSourceMode::CorVersioned;
             self.stored_profile_versions = profile.profile_versions.clone();
 
@@ -2282,7 +2350,7 @@ impl ProfileManagerView {
             self.sync_projection_to_ui(&projected, window, cx);
 
             use chrono::Datelike as _;
-            let year = effective_from.year() as u16;
+            let year = plan.effective_from.year() as u16;
             let suggestions =
                 bir_core::integration::form_suggestions_for_profile_year(&profile, year);
             let reconciliation = bir_core::forms::reconcile_forms_set_for_year(
@@ -2299,7 +2367,10 @@ impl ProfileManagerView {
 
             Ok(())
         } else {
-            Err("COR version was not found.".to_string())
+            Err(
+                "The profile timeline changed while confirmation was open. Review the dates and confirm again; no profile or Forms Set data was changed."
+                    .to_string(),
+            )
         }
     }
 
@@ -3733,6 +3804,159 @@ impl Render for ProfileManagerView {
                         )
                 )
             })
+            .when_some(
+                self.pending_profile_version_confirmation.clone(),
+                |this, plan| {
+                    let plan_for_confirm = plan.clone();
+                    let closes_multiple_versions = plan.auto_close_consequences.len() > 1;
+                    let consequences = plan.auto_close_consequences.iter().enumerate().fold(
+                        div().flex().flex_col().gap_2(),
+                        |list, (index, consequence)| {
+                            let prior_effective_from = consequence
+                                .effective_from
+                                .map(|date| date.format("%Y-%m-%d").to_string())
+                                .unwrap_or_else(|| "Needs review (no effective date)".to_string());
+                            list.child(
+                                div()
+                                    .id(format!("profile-version-auto-close-{index}"))
+                                    .p_3()
+                                    .rounded_md()
+                                    .border_1()
+                                    .border_color(cx.theme().danger.opacity(0.5))
+                                    .bg(cx.theme().danger.opacity(0.08))
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .child(format!(
+                                                "Prior version: {}",
+                                                consequence.version_label
+                                            )),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child(format!(
+                                                "Version ID: {}",
+                                                consequence.version_id
+                                            )),
+                                    )
+                                    .child(
+                                        div().text_sm().child(format!(
+                                            "Effective From: {prior_effective_from}"
+                                        )),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(cx.theme().danger)
+                                            .child(format!(
+                                                "Effective Until: Open (no end date) → {}",
+                                                consequence.effective_until.format("%Y-%m-%d")
+                                            )),
+                                    ),
+                            )
+                        },
+                    );
+
+                    this.child(
+                        div()
+                            .absolute()
+                            .inset_0()
+                            .bg(gpui::rgba(0x000000b2))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(
+                                div()
+                                    .w_full()
+                                    .max_w(px(560.))
+                                    .bg(cx.theme().background)
+                                    .border_1()
+                                    .border_color(cx.theme().border)
+                                    .rounded_xl()
+                                    .p_6()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_4()
+                                    .shadow_lg()
+                                    .child(
+                                        div()
+                                            .text_lg()
+                                            .font_weight(FontWeight::BOLD)
+                                            .child("Confirm profile timeline change"),
+                                    )
+                                    .child(
+                                        div().text_sm().child(format!(
+                                            "Confirm “{}” with Effective From {}?",
+                                            plan.version_label,
+                                            plan.effective_from.format("%Y-%m-%d")
+                                        )),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child(format!("Version ID: {}", plan.version_id)),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child(if closes_multiple_versions {
+                                                "This will close the currently open confirmed profile versions shown below. Profile data and the yearly Forms Set will not change unless you confirm."
+                                            } else {
+                                                "This will close the currently open confirmed profile version shown below. Profile data and the yearly Forms Set will not change unless you confirm."
+                                            }),
+                                    )
+                                    .child(consequences)
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .justify_end()
+                                            .gap_2()
+                                            .child(
+                                                gpui_component::button::Button::new(
+                                                    "cancel-profile-version-confirmation",
+                                                )
+                                                .label("Cancel")
+                                                .ghost()
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.pending_profile_version_confirmation =
+                                                        None;
+                                                    cx.notify();
+                                                })),
+                                            )
+                                            .child(
+                                                gpui_component::button::Button::new(
+                                                    "confirm-profile-version-timeline-change",
+                                                )
+                                                .label(if closes_multiple_versions {
+                                                    "Confirm and Close Prior Versions"
+                                                } else {
+                                                    "Confirm and Close Prior Version"
+                                                })
+                                                .danger()
+                                                .on_click(cx.listener(
+                                                    move |this, _, window, cx| {
+                                                        this.apply_cor_version_confirmation(
+                                                            plan_for_confirm.clone(),
+                                                            window,
+                                                            cx,
+                                                        );
+                                                    },
+                                                )),
+                                            ),
+                                    ),
+                            ),
+                    )
+                },
+            )
             .into_any_element()
     }
 }

@@ -325,6 +325,26 @@ pub struct TaxProfileVersion {
     pub deadline_overrides: Vec<ProfileDeadlineOverride>,
 }
 
+/// Exact timeline change that will occur when a newer profile version is
+/// confirmed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaxProfileVersionAutoCloseConsequence {
+    pub version_id: String,
+    pub version_label: String,
+    pub effective_from: Option<NaiveDate>,
+    pub effective_until: NaiveDate,
+}
+
+/// Immutable confirmation plan used to disclose and then apply a profile
+/// timeline change without letting the warning drift from the mutation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaxProfileVersionConfirmationPlan {
+    pub version_id: String,
+    pub version_label: String,
+    pub effective_from: NaiveDate,
+    pub auto_close_consequences: Vec<TaxProfileVersionAutoCloseConsequence>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TaxProfileResolutionIssueKind {
     UndatedConfirmedVersion,
@@ -965,26 +985,92 @@ impl TaxpayerProfile {
         }
     }
 
+    pub fn profile_version_confirmation_plan(
+        &self,
+        version_id: &str,
+        effective_from: NaiveDate,
+    ) -> Option<TaxProfileVersionConfirmationPlan> {
+        let version = self
+            .profile_versions
+            .iter()
+            .find(|version| version.id == version_id)?;
+        let effective_until = effective_from.checked_sub_signed(Duration::days(1))?;
+        let auto_close_consequences = self
+            .profile_versions
+            .iter()
+            .filter(|prior| {
+                prior.id != version_id
+                    && prior.status == TaxProfileVersionStatus::Confirmed
+                    && prior.effective_until.is_none()
+                    && (prior.source == TaxProfileVersionSource::MigrationBackfill
+                        || prior
+                            .effective_from
+                            .is_none_or(|start| start < effective_from))
+            })
+            .map(|prior| TaxProfileVersionAutoCloseConsequence {
+                version_id: prior.id.clone(),
+                version_label: prior.label.clone(),
+                effective_from: prior.effective_from,
+                effective_until,
+            })
+            .collect();
+
+        Some(TaxProfileVersionConfirmationPlan {
+            version_id: version.id.clone(),
+            version_label: version.label.clone(),
+            effective_from,
+            auto_close_consequences,
+        })
+    }
+
+    pub fn apply_profile_version_confirmation_plan(
+        &mut self,
+        plan: &TaxProfileVersionConfirmationPlan,
+    ) -> bool {
+        let Some(current_plan) =
+            self.profile_version_confirmation_plan(&plan.version_id, plan.effective_from)
+        else {
+            return false;
+        };
+        if &current_plan != plan {
+            return false;
+        }
+
+        for consequence in &plan.auto_close_consequences {
+            let Some(version) = self
+                .profile_versions
+                .iter_mut()
+                .find(|version| version.id == consequence.version_id)
+            else {
+                return false;
+            };
+            version.effective_until = Some(consequence.effective_until);
+        }
+
+        let Some(version) = self
+            .profile_versions
+            .iter_mut()
+            .find(|version| version.id == plan.version_id)
+        else {
+            return false;
+        };
+        version.status = TaxProfileVersionStatus::Confirmed;
+        version.effective_from = Some(plan.effective_from);
+        version.effective_until = None;
+        version.needs_effective_date_review = false;
+        self.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+        true
+    }
+
     pub fn set_profile_version_confirmed(
         &mut self,
         version_id: &str,
         effective_from: NaiveDate,
     ) -> bool {
-        self.auto_close_previous_confirmed_version(effective_from);
-        if let Some(version) = self
-            .profile_versions
-            .iter_mut()
-            .find(|version| version.id == version_id)
-        {
-            version.status = TaxProfileVersionStatus::Confirmed;
-            version.effective_from = Some(effective_from);
-            version.effective_until = None;
-            version.needs_effective_date_review = false;
-            self.compliance_source_mode = ComplianceSourceMode::CorVersioned;
-            true
-        } else {
-            false
-        }
+        let Some(plan) = self.profile_version_confirmation_plan(version_id, effective_from) else {
+            return false;
+        };
+        self.apply_profile_version_confirmation_plan(&plan)
     }
 
     pub fn projection_for_version(&self, version: &TaxProfileVersion) -> TaxpayerProfile {
@@ -1183,6 +1269,128 @@ mod tests {
         version.needs_effective_date_review = effective_from.is_none();
         version.cor.registered_name = name.to_string();
         version
+    }
+
+    fn draft_version(profile: &TaxpayerProfile, id: &str, name: &str) -> TaxProfileVersion {
+        let mut version = TaxProfileVersion::from_profile_backfill(profile);
+        version.id = id.to_string();
+        version.label = name.to_string();
+        version.source = TaxProfileVersionSource::ManualCor;
+        version.status = TaxProfileVersionStatus::Draft;
+        version.effective_from = None;
+        version.effective_until = None;
+        version.needs_effective_date_review = true;
+        version.cor.registered_name = name.to_string();
+        version
+    }
+
+    #[test]
+    fn confirmation_plan_reports_the_exact_auto_close_consequence() {
+        let mut profile = test_profile();
+        profile.profile_versions = vec![
+            confirmed_version(
+                &profile,
+                "prior",
+                "Prior COR",
+                NaiveDate::from_ymd_opt(2025, 1, 1),
+                None,
+            ),
+            draft_version(&profile, "replacement", "Replacement COR"),
+        ];
+
+        let effective_from = NaiveDate::from_ymd_opt(2026, 7, 1).unwrap();
+        let plan = profile
+            .profile_version_confirmation_plan("replacement", effective_from)
+            .unwrap();
+
+        assert_eq!(
+            plan,
+            TaxProfileVersionConfirmationPlan {
+                version_id: "replacement".to_string(),
+                version_label: "Replacement COR".to_string(),
+                effective_from,
+                auto_close_consequences: vec![TaxProfileVersionAutoCloseConsequence {
+                    version_id: "prior".to_string(),
+                    version_label: "Prior COR".to_string(),
+                    effective_from: NaiveDate::from_ymd_opt(2025, 1, 1),
+                    effective_until: NaiveDate::from_ymd_opt(2026, 6, 30).unwrap(),
+                }],
+            }
+        );
+    }
+
+    #[test]
+    fn building_a_confirmation_plan_leaves_profile_state_unchanged() {
+        let mut profile = test_profile();
+        profile.profile_versions = vec![
+            confirmed_version(
+                &profile,
+                "prior",
+                "Prior COR",
+                NaiveDate::from_ymd_opt(2025, 1, 1),
+                None,
+            ),
+            draft_version(&profile, "replacement", "Replacement COR"),
+        ];
+        let before = serde_json::to_value(&profile).unwrap();
+
+        let _ = profile.profile_version_confirmation_plan(
+            "replacement",
+            NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
+        );
+
+        assert_eq!(serde_json::to_value(&profile).unwrap(), before);
+    }
+
+    #[test]
+    fn applying_a_stale_confirmation_plan_fails_without_mutating_state() {
+        let mut profile = test_profile();
+        profile.profile_versions = vec![
+            confirmed_version(
+                &profile,
+                "prior",
+                "Prior COR",
+                NaiveDate::from_ymd_opt(2025, 1, 1),
+                None,
+            ),
+            draft_version(&profile, "replacement", "Replacement COR"),
+        ];
+        let plan = profile
+            .profile_version_confirmation_plan(
+                "replacement",
+                NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
+            )
+            .unwrap();
+        profile.profile_versions[0].label = "Edited while dialog was open".to_string();
+        let before = serde_json::to_value(&profile).unwrap();
+
+        let applied = profile.apply_profile_version_confirmation_plan(&plan);
+
+        assert_eq!(
+            (applied, serde_json::to_value(&profile).unwrap()),
+            (false, before)
+        );
+    }
+
+    #[test]
+    fn confirming_a_missing_version_does_not_close_the_current_version() {
+        let mut profile = test_profile();
+        profile.profile_versions = vec![confirmed_version(
+            &profile,
+            "prior",
+            "Prior COR",
+            NaiveDate::from_ymd_opt(2025, 1, 1),
+            None,
+        )];
+        let before = serde_json::to_value(&profile).unwrap();
+
+        let applied = profile
+            .set_profile_version_confirmed("missing", NaiveDate::from_ymd_opt(2026, 7, 1).unwrap());
+
+        assert_eq!(
+            (applied, serde_json::to_value(&profile).unwrap()),
+            (false, before)
+        );
     }
 
     #[test]

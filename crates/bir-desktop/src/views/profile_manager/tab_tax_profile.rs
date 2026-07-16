@@ -830,8 +830,8 @@ impl ProfileManagerView {
                                 this.sync_document_viewer(cx);
                                 cx.notify();
                             }))
-                            .child("← Back to Timeline")
-                    )
+                            .child("← Back to Timeline"),
+                    ),
             )
             .child(
                 div()
@@ -846,7 +846,7 @@ impl ProfileManagerView {
                             .text_2xl()
                             .font_weight(FontWeight::BOLD)
                             .text_color(cx.theme().foreground)
-                            .child(document_name)
+                            .child(document_name),
                     )
                     .child(
                         // Row 2: Badge + Commit to Profile Button
@@ -858,38 +858,31 @@ impl ProfileManagerView {
                             .gap_4()
                             .child(
                                 // Status Badge
-                                div()
-                                    .px_2()
-                                    .py_1()
-                                    .rounded_full()
-                                    .bg(bg_color)
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(text_color)
-                                            .child(status_label)
-                                    )
+                                div().px_2().py_1().rounded_full().bg(bg_color).child(
+                                    div()
+                                        .text_xs()
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(text_color)
+                                        .child(status_label),
+                                ),
                             )
                             .when(
-                                version.status != bir_core::profile::TaxProfileVersionStatus::Confirmed,
+                                version.status
+                                    != bir_core::profile::TaxProfileVersionStatus::Confirmed,
                                 |this| {
                                     this.child(
                                         gpui_component::button::Button::new("ocr_commit_detail")
                                             .label("Commit to Profile")
                                             .on_click(cx.listener(move |this, _, window, cx| {
-                                                match this.confirm_cor_version(&version_id_for_confirm, window, cx) {
-                                                    Ok(()) => {
-                                                        this.save_message = Some("COR version confirmed; profile and Forms Set reconciliation are being saved.".into());
-                                                        this.compliance_source_mode = Self::derive_compliance_source_mode(&this.stored_profile_versions);
-                                                    }
-                                                    Err(message) => this.save_message = Some(message),
-                                                }
-                                                cx.notify();
-                                            }))
+                                                this.request_cor_version_confirmation(
+                                                    &version_id_for_confirm,
+                                                    window,
+                                                    cx,
+                                                );
+                                            })),
                                     )
-                                }
-                            )
+                                },
+                            ),
                     )
                     .child(
                         // Row 3: Uploaded on
@@ -897,8 +890,11 @@ impl ProfileManagerView {
                             .w_full()
                             .text_sm()
                             .text_color(cx.theme().muted_foreground)
-                            .child(format!("Uploaded on {} • Processed by Gemini OCR", uploaded_at))
-                    )
+                            .child(format!(
+                                "Uploaded on {} • Processed by Gemini OCR",
+                                uploaded_at
+                            )),
+                    ),
             );
 
         let left_col = div().flex().flex_col().flex_1().w_full().h_full().child(
@@ -2215,12 +2211,11 @@ impl ProfileManagerView {
                                             .label("Confirm")
                                             .small()
                                             .on_click(cx.listener(move |this, _, window, cx| {
-                                                match this.confirm_cor_version(&id_for_confirm, window, cx) {
-                                                    Ok(()) => this.save_message =
-                                                        Some("COR version confirmed. Save the profile to persist it.".into()),
-                                                    Err(message) => this.save_message = Some(message),
-                                                }
-                                                cx.notify();
+                                                this.request_cor_version_confirmation(
+                                                    &id_for_confirm,
+                                                    window,
+                                                    cx,
+                                                );
                                             })),
                                         )
                                     },
