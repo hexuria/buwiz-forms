@@ -174,15 +174,27 @@
   align-items: center;
   justify-content: space-evenly;
   min-width: 0;
+  background: #d9d9d9;
 }
 .header-option-0619f .check-box {
   width: 13pt;
   height: 13pt;
 }
-.header-option-0619f .code-value-0619f {
-  padding-left: 28pt;
-  font-size: 10pt;
+.header-option-0619f > :is(.month-value-0619f, .due-date-value-0619f, .code-value-0619f) {
   justify-content: stretch;
+}
+.header-option-0619f > .month-value-0619f { padding: 0 28pt; }
+.header-option-0619f > .due-date-value-0619f { padding: 0 14pt 0 13.5pt; }
+.header-option-0619f > .code-value-0619f {
+  padding: 0 29pt 0 27.5pt;
+  font-size: 10pt;
+}
+.header-option-0619f > :is(.month-value-0619f, .due-date-value-0619f, .code-value-0619f) > :is(.comb-value, .adaptive-plain-value) {
+  width: auto;
+  flex: 1 1 auto;
+  border-right: .5pt solid #000;
+  border-left: .5pt solid #000;
+  background: #fff;
 }
 .header-option-0619f .code-value-0619f > .comb-value { height: 100%; }
 

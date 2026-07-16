@@ -148,10 +148,16 @@ function HeaderOptions0619F({ envelope }: { envelope: RenderEnvelope }) {
   const monthYear = `${String(envelope.period.month).padStart(2, "0")}${String(envelope.period.taxable_year).padStart(4, "0")}`;
   return (
     <section className="header-options-0619f" aria-label="Return period and filing options">
-      <HeaderOption0619F label={<><b>1</b> For the Month of <em>(MM/YYYY)</em></>}>
+      <HeaderOption0619F
+        label={<><b>1</b> For the Month of <em>(MM/YYYY)</em></>}
+        valueClassName="month-value-0619f"
+      >
         <CombValue value={monthYear} cells={6} align="right" />
       </HeaderOption0619F>
-      <HeaderOption0619F label={<><b>2</b> Due Date <em>(MM/DD/YYYY)</em></>}>
+      <HeaderOption0619F
+        label={<><b>2</b> Due Date <em>(MM/DD/YYYY)</em></>}
+        valueClassName="due-date-value-0619f"
+      >
         <AdaptiveCombValue value={text(envelope, "due_date").replace(/\D/g, "")} cells={8} align="right" />
       </HeaderOption0619F>
       <HeaderOption0619F label={<><b>3</b> Amended Form?</>}>

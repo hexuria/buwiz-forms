@@ -143,6 +143,31 @@ test("0619F 2018 preserves the official declaration bands and grayscale fills", 
   )).toBe("rgb(166, 166, 166)");
 });
 
+test("0619F 2018 preserves the official Items 1-5 value-band partitions", async ({ page }) => {
+  const fixture = readFixture("packages/form-contracts/fixtures/0619f-normal.json");
+  await renderEnvelope(page, fixture);
+  const formPage = page.locator(".form-page").first();
+
+  await expectCriticalRegionGeometry(formPage, [
+    { name: "Item 1 month comb", selector: ".month-value-0619f > .comb-value", x: 92, y: 219, width: 171, height: 39 },
+    { name: "Item 2 due-date comb", selector: ".due-date-value-0619f > .comb-value", x: 349, y: 219, width: 231, height: 39 },
+    { name: "Item 5 tax-type comb", selector: ".code-value-0619f > .comb-value", x: 1071, y: 219, width: 59, height: 39 }
+  ]);
+
+  for (const selector of [
+    ".header-option-0619f:nth-child(1) > span",
+    ".header-option-0619f:nth-child(3) > span",
+    ".header-option-0619f:nth-child(5) > span"
+  ]) {
+    expect(await page.locator(selector).evaluate((element) =>
+      getComputedStyle(element).backgroundColor
+    )).toBe("rgb(217, 217, 217)");
+  }
+  expect(await page.locator(".month-value-0619f > .comb-value").evaluate((element) =>
+    getComputedStyle(element).backgroundColor
+  )).toBe("rgb(255, 255, 255)");
+});
+
 test("0619F 2018 matches the complete pinned official page", async ({ page }, testInfo) => {
   const fixture = readFixture("packages/form-contracts/fixtures/0619f-normal.json");
   await renderEnvelope(page, fixture);
