@@ -30,6 +30,92 @@ test("0619F 2018 renders every Rust fixture as one stable unclipped Letter page"
   }
 });
 
+test("0619F 2018 keeps verified PDF417 active geometry, padding, caption, and seal", async ({ page }) => {
+  const fixture = readFixture("packages/form-contracts/fixtures/0619f-normal.json");
+  await renderEnvelope(page, fixture);
+  const formPage = page.locator(".form-page").first();
+  await expect(formPage).toHaveCount(1);
+
+  await expectCriticalRegionGeometry(formPage, [
+    {
+      name: "official seal XObject",
+      selector: ".government-wordmark-0619f img",
+      x: 463,
+      y: 30,
+      width: 62,
+      height: 56
+    },
+    {
+      name: "official PDF417 XObject frame",
+      selector: ".official-pdf417-object-0619f",
+      x: 909,
+      y: 101,
+      width: 276,
+      height: 65
+    },
+    {
+      name: "official PDF417 active matrix",
+      selector: ".official-pdf417-symbol-0619f",
+      x: 909,
+      y: 101,
+      width: 273,
+      height: 64
+    },
+    {
+      name: "official PDF417 live caption",
+      selector: ".barcode-0619f > small",
+      x: 1066,
+      y: 166,
+      width: 120,
+      height: 16
+    }
+  ]);
+
+  const symbol = page.locator(".official-pdf417-symbol-0619f");
+  await expect(symbol).toHaveAttribute("viewBox", "0 0 120 7");
+  await expect(symbol).toHaveAttribute("preserveAspectRatio", "none");
+  await expect(symbol).toHaveCSS("shape-rendering", "crispedges");
+
+  const padding = await page.locator(".official-pdf417-object-0619f").evaluate((frame) => {
+    const symbolElement = frame.querySelector("svg");
+    if (!symbolElement) throw new Error("0619F PDF417 active matrix is missing");
+    const frameBox = frame.getBoundingClientRect();
+    const symbolBox = symbolElement.getBoundingClientRect();
+    return {
+      bottom: frameBox.bottom - symbolBox.bottom,
+      right: frameBox.right - symbolBox.right
+    };
+  });
+  expect(padding.right).toBeCloseTo(1.7051852 * 4 / 3, 1);
+  expect(padding.bottom).toBeCloseTo(0.504375 * 4 / 3, 1);
+
+  const caption = page.locator(".barcode-0619f > small");
+  await expect(caption).toHaveText("0619-F 01/18 P1");
+  expect(await caption.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      fontFamily: style.fontFamily,
+      fontSize: style.fontSize,
+      lineHeight: style.lineHeight,
+      textAlign: style.textAlign,
+      whiteSpace: style.whiteSpace
+    };
+  })).toEqual({
+    fontFamily: '"eBIRForms Arimo", sans-serif',
+    fontSize: "10.72px",
+    lineHeight: "10.72px",
+    textAlign: "right",
+    whiteSpace: "nowrap"
+  });
+
+  expect(await page.locator(".government-wordmark-0619f img").evaluate(
+    (image) => ({
+      naturalHeight: (image as HTMLImageElement).naturalHeight,
+      naturalWidth: (image as HTMLImageElement).naturalWidth
+    })
+  )).toEqual({ naturalHeight: 77, naturalWidth: 86 });
+});
+
 test("0619F 2018 matches the complete pinned official page", async ({ page }, testInfo) => {
   const fixture = readFixture("packages/form-contracts/fixtures/0619f-normal.json");
   await renderEnvelope(page, fixture);

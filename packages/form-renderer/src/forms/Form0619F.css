@@ -51,19 +51,19 @@
 }
 .government-wordmark-0619f {
   position: absolute;
-  left: 214.5pt;
-  top: 0;
+  left: 213.86pt;
+  top: .5pt;
   display: flex;
   align-items: center;
-  gap: 2pt;
+  gap: 1.85pt;
   text-align: left;
   font-size: 8.2pt;
   line-height: 1.03;
 }
 .government-wordmark-0619f img {
-  width: 30pt;
-  height: 30pt;
-  object-fit: contain;
+  width: 31.08pt;
+  height: 28.08pt;
+  object-fit: fill;
 }
 
 .masthead-0619f {
@@ -110,15 +110,39 @@
 }
 .form-title-0619f > em i { font-style: italic; }
 .barcode-0619f {
+  position: relative;
   border-left: .6pt solid #111;
-  justify-content: flex-start;
-  padding: 5pt 1pt 0 4.5pt;
+  padding: 0;
 }
-.barcode-0619f img {
-  width: 140pt;
-  height: 42pt;
-  object-fit: fill;
-  image-rendering: crisp-edges;
+.official-pdf417-object-0619f {
+  position: absolute;
+  left: 3.34pt;
+  top: 5.28pt;
+  display: block;
+  width: 138.12pt;
+  height: 32.28pt;
+}
+.official-pdf417-symbol-0619f {
+  position: absolute;
+  inset: 0 auto auto 0;
+  display: block;
+  width: 136.414815pt;
+  height: 31.775625pt;
+  overflow: visible;
+}
+.official-pdf417-symbol-0619f path { fill: #000; }
+.barcode-0619f > small {
+  position: absolute;
+  top: 38.104pt;
+  right: .952pt;
+  width: 59.768pt;
+  color: #000;
+  font-family: "eBIRForms Arimo", sans-serif;
+  font-size: 8.04pt;
+  font-weight: 400;
+  line-height: 8.04pt;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .header-options-0619f {

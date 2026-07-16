@@ -89,6 +89,7 @@ fn runtime_discrete_assets() -> Vec<serde_json::Value> {
             "logical_black_modules": 480,
             "logical_dimensions": [120, 7],
             "logical_matrix_sha256": "0238537d56f19276b790a8395c429a9f7645ac570eecc097064051b456dc5dfa",
+            "source_active_bbox_top_left_points": [454.8, 65.04, 134.9925925926, 35.4375],
             "source_active_pixel_bounds": [0, 0, 240, 63],
             "source_bbox_top_left_points": [454.8, 65.04, 136.68, 36.0],
             "source_ctm_points": [136.68, 0.0, 0.0, 36.0, 454.8, 690.96],
@@ -97,6 +98,7 @@ fn runtime_discrete_assets() -> Vec<serde_json::Value> {
             "source_pdf_object_id": [42, 0],
             "source_module_scale_pixels": [2, 9],
             "source_padding_pixels": {"bottom": 1, "right": 3},
+            "source_padding_points": {"bottom": 0.5625, "right": 1.6874074074},
             "source_pixel_dimensions": [243, 64],
             "source_png_sha256": "d741fca6b5b75409f277ff96754b157ffb8200b89f80aad7558f0014536102e6",
             "source_stream_sha256": "5217f1767917305c0a989e324074151d3d170db648f8777fbe5de8ace0245cd9",
@@ -507,6 +509,10 @@ mod tests {
         assert_eq!(pdf417["source_pixel_dimensions"], json!([243, 64]));
         assert_eq!(pdf417["source_active_pixel_bounds"], json!([0, 0, 240, 63]));
         assert_eq!(
+            pdf417["source_active_bbox_top_left_points"],
+            json!([454.8, 65.04, 134.9925925926, 35.4375])
+        );
+        assert_eq!(
             pdf417["source_ctm_points"],
             json!([136.68, 0.0, 0.0, 36.0, 454.8, 690.96])
         );
@@ -519,6 +525,10 @@ mod tests {
             json!("0238537d56f19276b790a8395c429a9f7645ac570eecc097064051b456dc5dfa")
         );
         assert_eq!(pdf417["source_module_scale_pixels"], json!([2, 9]));
+        assert_eq!(
+            pdf417["source_padding_points"],
+            json!({"bottom": 0.5625, "right": 1.6874074074})
+        );
         assert_eq!(pdf417["encoder_proof"]["module_differences"], json!(0));
     }
 

@@ -50,8 +50,8 @@ test("0619E 2018 keeps verified PDF417, caption, and seal geometry", async ({ pa
       selector: ".official-pdf417-symbol-0619e",
       x: 910,
       y: 130,
-      width: 273,
-      height: 72
+      width: 270,
+      height: 71
     },
     {
       name: "official PDF417 live caption",

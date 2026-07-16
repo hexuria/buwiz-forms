@@ -118,8 +118,14 @@
   position: absolute;
   left: 3.7pt;
   top: 7.54pt;
-  width: 136.68pt;
-  height: 36pt;
+  /*
+   * PDF object 42 is placed at 136.68 x 36pt, but its 243 x 64 raster
+   * contains a 240 x 63 active symbol plus three white right columns and one
+   * white bottom row. Keep the exact active CTM instead of stretching the
+   * logical modules into that source padding.
+   */
+  width: 134.992593pt;
+  height: 35.4375pt;
   overflow: visible;
 }
 .official-pdf417-symbol-0619e path { fill: #000; }
