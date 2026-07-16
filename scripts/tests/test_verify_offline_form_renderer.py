@@ -211,6 +211,41 @@ class VerifyOfflineFormRendererTests(unittest.TestCase):
         self.assertFalse(any("chunk.js" in error for error in errors))
         self.assertFalse(any("nested.css" in error for error in errors))
 
+    def test_rejects_import_meta_asset_url_in_reachable_classic_bundle(self) -> None:
+        self.write_valid_bundle()
+        (self.assets / "app.js").write_text(
+            'const barcode = new URL("./owned.woff2", import.meta.url);\n',
+            encoding="utf-8",
+        )
+
+        errors = verifier.verify_renderer(self.root)
+
+        self.assert_has_error(
+            errors,
+            "reachable classic script assets/app.js contains import.meta",
+        )
+        self.assert_has_error(
+            errors,
+            "reachable classic script assets/app.js contains new URL(..., import.meta.url)",
+        )
+
+    def test_module_script_keeps_explicit_module_semantics(self) -> None:
+        self.write_valid_bundle()
+        index = self.root / "index.html"
+        index.write_text(
+            index.read_text(encoding="utf-8").replace(
+                '<script defer src="./assets/app.js"></script>',
+                '<script type="module" src="./assets/app.js"></script>',
+            ),
+            encoding="utf-8",
+        )
+        (self.assets / "app.js").write_text(
+            'const barcode = new URL("./owned.woff2", import.meta.url);\n',
+            encoding="utf-8",
+        )
+
+        self.assertEqual(verifier.verify_renderer(self.root), [])
+
     def test_rejects_calibration_artwork_and_official_source_metadata(self) -> None:
         self.write_valid_bundle()
         (self.assets / "page1.svg").write_text("<svg></svg>\n", encoding="utf-8")

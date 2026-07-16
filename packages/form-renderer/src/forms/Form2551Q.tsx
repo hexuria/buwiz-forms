@@ -16,8 +16,8 @@ import {
 import { paginateSchedule, type SchedulePage } from "../pagination";
 import { bool, cellDecimal, cellText, decimal, integer, text } from "../values";
 import {
-  OFFICIAL_2551Q_BARCODE,
-  OFFICIAL_2551Q_PAGE_TWO_BARCODE,
+  OFFICIAL_2551Q_PDF417_PAGE_ONE_PATH,
+  OFFICIAL_2551Q_PDF417_PAGE_TWO_PATH,
   OFFICIAL_2551Q_SEAL
 } from "./official2551QAssets";
 
@@ -165,9 +165,30 @@ function PageTwoMasthead({ pageNumber }: { pageNumber: number }) {
         <strong>Quarterly Percentage Tax Return</strong>
       </div>
       <div className="page-two-barcode" aria-label={barcodeText}>
-        <img src={OFFICIAL_2551Q_PAGE_TWO_BARCODE} alt="" aria-hidden="true" />
+        <OfficialPdf417
+          path={OFFICIAL_2551Q_PDF417_PAGE_TWO_PATH}
+          title="PDF417 payload 2551Q 01/18ENCS P2"
+        />
+        <small>{barcodeText}</small>
       </div>
     </header>
+  );
+}
+
+function OfficialPdf417({ path, title }: { path: string; title: string }) {
+  return (
+    <svg
+      className="official-pdf417-symbol"
+      viewBox="0 0 120 7"
+      preserveAspectRatio="none"
+      shapeRendering="crispEdges"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <title>{title}</title>
+      <rect width="120" height="7" fill="#fff" />
+      <path d={path} fill="#000" />
+    </svg>
   );
 }
 
@@ -441,7 +462,11 @@ function OfficialPageOne({ envelope }: { envelope: RenderEnvelope }) {
           <em>Enter all required information in CAPITAL LETTERS using BLACK ink. Mark applicable<br />boxes with an “X”.&nbsp; Two copies MUST be filed with the BIR and one held by the Taxpayer.</em>
         </div>
         <div className="official-barcode" aria-label="2551Q 01/18ENCS P1">
-          <img src={OFFICIAL_2551Q_BARCODE} alt="" aria-hidden="true" />
+          <OfficialPdf417
+            path={OFFICIAL_2551Q_PDF417_PAGE_ONE_PATH}
+            title="PDF417 payload 2551Q 01/18ENCS P1"
+          />
+          <small>2551Q 01/18ENCS P1</small>
         </div>
       </header>
 
@@ -555,7 +580,7 @@ function BackgroundInformation({
         <AdaptiveCombValue value={envelope.taxpayer.email.toUpperCase()} cells={28} />
       </div>
       <div className="tax-relief-field">
-        <div className="field-label"><b>12</b> Are you availing of tax relief under<br />Special Law or International Tax Treaty?</div>
+        <div className="field-label"><b>12</b> Are you availing of tax relief under <br />Special Law or International Tax Treaty?</div>
         <div className="relief-choices">
           <CheckChoice checked={bool(envelope, "tax_relief")} label="Yes" />
           <CheckChoice checked={!bool(envelope, "tax_relief")} label="No" />

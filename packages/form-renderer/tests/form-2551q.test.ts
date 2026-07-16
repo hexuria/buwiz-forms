@@ -1,9 +1,46 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   formatAtcRate,
   requireOfficialCellCapacity,
   splitOfficialCombRows
 } from "../src/forms/Form2551Q";
+import {
+  OFFICIAL_2551Q_PDF417_PAGE_ONE_PATH,
+  OFFICIAL_2551Q_PDF417_PAGE_TWO_PATH
+} from "../src/forms/official2551QAssets";
+
+function pdf417ModuleDigest(path: string): { digest: string; blackModules: number } {
+  const modules = Array<boolean>(120 * 7).fill(false);
+  const command = /M(\d+) (\d+)h(\d+)v1H(\d+)z/g;
+  const consumed: string[] = [];
+  let blackModules = 0;
+
+  for (const match of path.matchAll(command)) {
+    consumed.push(match[0]);
+    const x = Number(match[1]);
+    const y = Number(match[2]);
+    const width = Number(match[3]);
+    expect(Number(match[4])).toBe(x);
+    expect(y).toBeGreaterThanOrEqual(0);
+    expect(y).toBeLessThan(7);
+    expect(x + width).toBeLessThanOrEqual(120);
+
+    for (let column = x; column < x + width; column += 1) {
+      const index = y * 120 + column;
+      expect(modules[index]).toBe(false);
+      modules[index] = true;
+      blackModules += 1;
+    }
+  }
+
+  expect(consumed.join("")).toBe(path);
+  const bits = modules.map((module) => module ? "1" : "0").join("");
+  return {
+    digest: createHash("sha256").update(bits).digest("hex"),
+    blackModules
+  };
+}
 
 describe("2551Q ATC rate display", () => {
   it("does not expose binary floating-point artifacts", () => {
@@ -51,5 +88,18 @@ describe("2551Q official comb capacity", () => {
     expect(requireOfficialCellCapacity("12345678900000", 14, "TIN")).toBe(
       "12345678900000"
     );
+  });
+});
+
+describe("2551Q official PDF417 module geometry", () => {
+  it("preserves every reviewed module from both official PDF XObjects", () => {
+    expect(pdf417ModuleDigest(OFFICIAL_2551Q_PDF417_PAGE_ONE_PATH)).toEqual({
+      digest: "0b22b8418dc0dadb2043dd6022cb337e6fd60193b50105a3e7c47de3e565b9ca",
+      blackModules: 491
+    });
+    expect(pdf417ModuleDigest(OFFICIAL_2551Q_PDF417_PAGE_TWO_PATH)).toEqual({
+      digest: "b9257f08de39c25c64cbb7b8cbef835c060a5e347866c67b4cee558669f3233f",
+      blackModules: 484
+    });
   });
 });

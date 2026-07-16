@@ -156,11 +156,12 @@ for (const parityCase of cases) {
       { name: "Items 9-9A", selector: ".address-field", x: 45, y: 414, width: 1137, height: 96 },
       { name: "Items 10-11", selector: ".contact-email-field", x: 45, y: 510, width: 1137, height: 59 },
       { name: "Items 12-12A", selector: ".tax-relief-field", x: 45, y: 569, width: 1137, height: 40 },
-      { name: "Item 13", selector: ".income-rate-field", x: 45, y: 609, width: 1137, height: 83 },
+      { name: "Item 13", selector: ".income-rate-field", x: 45, y: 607, width: 1137, height: 87 },
       { name: "Items 14-24 totals", selector: ".tax-payable", x: 45, y: 696, width: 1137, height: 506 },
       { name: "Item 14 total", selector: ".official-tax-line[data-item='14']", x: 45, y: 723, width: 1137, height: 36 },
       { name: "signatures", selector: ".official-declaration", x: 45, y: 1206, width: 1137, height: 232 },
-      { name: "signature boxes", selector: ".official-signature-grid", x: 45, y: 1263, width: 1133, height: 134 }
+      { name: "signature boxes", selector: ".official-signature-grid", x: 45, y: 1263, width: 1133, height: 134 },
+      { name: "Part III amount decimal cell", selector: ".payment-row-25 .decimal-separator", x: 1099, y: 1502, width: 28, height: 35 }
     ]);
     await expectCriticalRegionGeometry(pages.nth(1), [
       { name: "Schedule 1 masthead", selector: ".page-two-masthead", x: 45, y: 78, width: 1137, height: 117 },
@@ -654,6 +655,14 @@ async function expectCriticalRegionContent(pageOne: Locator, pageTwo: Locator) {
   );
   await expect(pageOne.locator(".official-declaration")).toContainText(
     "Signature over Printed Name of Taxpayer/Authorized Representative/Tax Agent"
+  );
+  await expect(pageOne.locator(".official-barcode > small")).toHaveText(
+    "2551Q 01/18ENCS P1"
+  );
+  await expect(pageOne.locator(".payment-row .decimal-separator")).toHaveCount(3);
+  await expect(pageOne.locator(".payment-other-row .decimal-separator")).toHaveCount(1);
+  await expect(pageTwo.locator(".page-two-barcode > small")).toHaveText(
+    "2551Q 01/18ENCS P2"
   );
   await expect(pageTwo.locator(".official-schedule > h2")).toContainText(
     "Schedule 1 – Computation of Tax"

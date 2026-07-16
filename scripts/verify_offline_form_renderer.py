@@ -41,6 +41,11 @@ JS_IMPORT = re.compile(
     r"(?:\bimport\s*(?:\(|[^;]*?\bfrom\s*)|\bexport\s+[^;]*?\bfrom\s*)"
     r"(['\"])(.*?)\1",
 )
+IMPORT_META = re.compile(r"\bimport\s*\.\s*meta\b")
+NEW_URL_IMPORT_META = re.compile(
+    r"\bnew\s+URL\s*\([^)]*\bimport\s*\.\s*meta\s*\.\s*url\b",
+    re.DOTALL,
+)
 SOURCE_MAP_REFERENCE = re.compile(
     r"[#@]\s*sourceMappingURL\s*=\s*([^\s*]+)", re.IGNORECASE
 )
@@ -257,6 +262,7 @@ class ReferenceParser(HTMLParser):
         self.references: list[tuple[str, str]] = []
         self.content_security_policies: list[str] = []
         self.inline_styles: list[tuple[str, str]] = []
+        self.external_scripts: list[tuple[str, str]] = []
         self._style_depth = 0
 
     def handle_starttag(
@@ -264,6 +270,13 @@ class ReferenceParser(HTMLParser):
     ) -> None:
         tag = tag.lower()
         attributes = {name.lower(): value for name, value in attrs}
+        if tag == "script" and attributes.get("src"):
+            self.external_scripts.append(
+                (
+                    attributes["src"] or "",
+                    (attributes.get("type") or "").strip().lower(),
+                )
+            )
         if tag == "style":
             self._style_depth += 1
         if (
@@ -386,6 +399,22 @@ def _js_references(source: str) -> list[str]:
     references = [match.group(2) for match in JS_IMPORT.finditer(source)]
     references.extend(match.group(1) for match in SOURCE_MAP_REFERENCE.finditer(source))
     return sorted(set(references))
+
+
+def _script_semantics(type_attribute: str) -> str:
+    """Classify external scripts using HTML's module/classic distinction."""
+
+    if type_attribute == "module":
+        return "module"
+    if type_attribute in {
+        "",
+        "application/ecmascript",
+        "application/javascript",
+        "text/ecmascript",
+        "text/javascript",
+    }:
+        return "classic"
+    return "data"
 
 
 def sha256_file(path: Path) -> str:
@@ -584,6 +613,7 @@ def verify_renderer(renderer_dir: Path) -> list[str]:
                 )
 
     roots: set[Path] = set()
+    classic_script_roots: set[Path] = set()
     dependency_edges: dict[Path, set[Path]] = {}
     local_scripts = 0
     local_styles = 0
@@ -600,6 +630,17 @@ def verify_renderer(renderer_dir: Path) -> list[str]:
         suffix = target.suffix.lower()
         local_scripts += suffix in {".js", ".mjs", ".cjs"}
         local_styles += suffix == ".css"
+
+    for reference, type_attribute in parser.external_scripts:
+        if _script_semantics(type_attribute) != "classic":
+            continue
+        try:
+            target = resolve_reference(root, index, reference)
+        except ValueError:
+            # The normal reference pass above records the actionable error.
+            continue
+        if target is not None and target.suffix.lower() in {".js", ".mjs", ".cjs"}:
+            classic_script_roots.add(target.resolve())
 
     for context, css in parser.inline_styles:
         for reference in _css_references(css):
@@ -643,6 +684,34 @@ def verify_renderer(renderer_dir: Path) -> list[str]:
             if target not in reachable:
                 reachable.add(target)
                 pending.append(target)
+
+    classic_reachable = set(classic_script_roots)
+    pending = list(classic_reachable)
+    while pending:
+        source = pending.pop()
+        for target in dependency_edges.get(source, set()):
+            if target not in classic_reachable:
+                classic_reachable.add(target)
+                pending.append(target)
+
+    for script in sorted(
+        path for path in classic_reachable if path.suffix.lower() in {".js", ".mjs", ".cjs"}
+    ):
+        try:
+            source = script.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            # The bundle source pass above already reports unreadable assets.
+            continue
+        relative = script.relative_to(root)
+        if IMPORT_META.search(source):
+            errors.append(
+                f"reachable classic script {relative} contains import.meta"
+            )
+        if NEW_URL_IMPORT_META.search(source):
+            errors.append(
+                "reachable classic script "
+                f"{relative} contains new URL(..., import.meta.url)"
+            )
 
     bundle_assets = {path.resolve() for path in files if path != index}
     for stale_asset in sorted(bundle_assets - reachable):
