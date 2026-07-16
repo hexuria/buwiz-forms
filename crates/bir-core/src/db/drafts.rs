@@ -404,6 +404,51 @@ impl Database {
         }
 
         if profile_changed {
+            let resolved = profile.resolve_tax_profile_for_year(draft.taxable_year);
+            if resolved.has_blocking_issues() || resolved.effective_segments.is_empty() {
+                let details = resolved
+                    .issues
+                    .iter()
+                    .map(|issue| issue.message.as_str())
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                return Err(DbError::Other(format!(
+                    "Cannot reconcile the {} Forms Set after recording Item 13 because the confirmed profile timeline is unresolved{}",
+                    draft.taxable_year,
+                    if details.is_empty() {
+                        String::new()
+                    } else {
+                        format!(": {details}")
+                    }
+                )));
+            }
+
+            let stored_set =
+                super::forms_set::query_per_year_forms(&tx, &draft.tin, draft.taxable_year)?;
+            let existing_set = (!stored_set.is_empty()).then_some(&stored_set);
+            let suggestions = crate::integration::validation::form_suggestions_for_profile_year(
+                &profile,
+                draft.taxable_year,
+            );
+            let reconciled = crate::forms::reconcile_forms_set_for_year(
+                draft.taxable_year,
+                existing_set,
+                &suggestions,
+            );
+            if !reconciled.conflicts.is_empty() {
+                tracing::warn!(
+                    tin = %draft.tin,
+                    taxable_year = draft.taxable_year,
+                    conflicts = reconciled.conflicts.len(),
+                    "Item 13 election reconciled a Forms Set that needs review"
+                );
+            }
+            super::forms_set::execute_replace_per_year_forms(
+                &tx,
+                &draft.tin,
+                draft.taxable_year,
+                &reconciled.forms_set,
+            )?;
             let updated_profile_json = serde_json::to_string(&profile)?;
             let updated = tx.execute(
                 "UPDATE profiles SET data_json = ?1 WHERE tin = ?2",
@@ -1073,16 +1118,22 @@ mod tests {
             "phone": "09123456789",
             "email": "test@example.com",
             "default_form_type": "2551Qv2018",
-            "taxpayer_type": "Individual"
+            "taxpayer_type": "Individual",
+            "business_start_date": "2020-01-01"
         }))
         .unwrap()
     }
 
     fn insert_test_profile(db: &Database, profile: &TaxpayerProfile) {
+        let mut persisted = profile.clone();
+        persisted.ensure_profile_version_ledger();
         db.conn
             .execute(
                 "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
-                params![profile.tin.full(), serde_json::to_string(profile).unwrap()],
+                params![
+                    profile.tin.full(),
+                    serde_json::to_string(&persisted).unwrap()
+                ],
             )
             .unwrap();
     }
@@ -1377,6 +1428,80 @@ mod tests {
         assert_eq!(elections[0].election, IncomeTaxElection::EightPercent);
         assert_eq!(elections[0].source_form, "2551Qv2018");
         assert_eq!(saved_draft.status, FilingStatus::Queued);
+        let saved_set = db.get_per_year_forms(&draft.tin, 2026).unwrap();
+        assert!(saved_set.contains_active("1701Q"));
+        assert!(saved_set.contains_active("1701"));
+        assert!(!saved_set.contains_active("2551Q"));
+        assert_eq!(saved_profile.per_year_forms.get(&2026), Some(&saved_set));
+    }
+
+    #[test]
+    fn queued_election_reconciliation_preserves_manual_forms_set_decisions() {
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        let mut existing = crate::forms::PerYearFormsSet::from_codes(
+            2026,
+            ["2551Q", "0605"],
+            crate::forms::FormSetSource::CorAi,
+        );
+        existing
+            .entries
+            .iter_mut()
+            .find(|entry| entry.form_code == "2551Q")
+            .expect("2551Q fixture entry")
+            .apply_manual_decision(true, Some("Accountant confirmed filing".into()));
+        existing
+            .entries
+            .iter_mut()
+            .find(|entry| entry.form_code == "0605")
+            .expect("0605 fixture entry")
+            .apply_manual_decision(false, Some("Not applicable for this year".into()));
+        db.save_per_year_forms(&profile.tin.full(), 2026, &existing)
+            .unwrap();
+
+        db.save_queued_2551q_draft_and_election(&queued_eight_percent_draft(&profile))
+            .expect("profile, Forms Set, and draft should commit together");
+
+        let saved = db.get_per_year_forms(&profile.tin.full(), 2026).unwrap();
+        let included = saved.entry("2551Q").expect("manual include must remain");
+        assert!(included.active);
+        assert_eq!(included.source, crate::forms::FormSetSource::Manual);
+        let excluded = saved.entry("0605").expect("manual exclude must remain");
+        assert!(!excluded.active);
+        assert_eq!(excluded.source, crate::forms::FormSetSource::Manual);
+    }
+
+    #[test]
+    fn forms_set_write_failure_rolls_back_queued_election_and_draft() {
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        db.conn
+            .execute_batch(
+                "CREATE TRIGGER reject_item13_forms_set
+                 BEFORE INSERT ON per_year_forms
+                 BEGIN
+                   SELECT RAISE(ABORT, 'forced Forms Set failure');
+                 END;",
+            )
+            .unwrap();
+        let draft = queued_eight_percent_draft(&profile);
+
+        let error = db
+            .save_queued_2551q_draft_and_election(&draft)
+            .expect_err("a Forms Set write failure must abort the transaction");
+
+        assert!(error.to_string().contains("forced Forms Set failure"));
+        let saved_profile = db.get_profile(&draft.tin).unwrap().unwrap();
+        assert!(
+            saved_profile
+                .tax_elections
+                .iter()
+                .all(|entry| entry.taxable_year != 2026)
+        );
+        assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_none());
+        assert!(db.get_per_year_forms(&draft.tin, 2026).unwrap().is_empty());
     }
 
     #[test]

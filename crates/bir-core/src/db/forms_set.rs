@@ -103,59 +103,67 @@ pub(crate) fn execute_replace_per_year_forms(
     Ok(())
 }
 
+pub(crate) fn query_per_year_forms(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+) -> Result<PerYearFormsSet, DbError> {
+    let mut stmt = conn.prepare(
+        "SELECT form_code, frequency, active, source, custom, reason,
+                source_reference, effective_from, effective_until, review_status,
+                conflict_json
+         FROM per_year_forms
+         WHERE tin = ?1 AND taxable_year = ?2
+         ORDER BY form_code ASC",
+    )?;
+    let rows = stmt.query_map(params![tin, year], |row| {
+        Ok(StoredFormSetEntry {
+            form_code: row.get(0)?,
+            frequency: row.get(1)?,
+            active: row.get(2)?,
+            source: row.get(3)?,
+            custom: row.get(4)?,
+            reason: row.get(5)?,
+            source_reference: row.get(6)?,
+            effective_from: row.get(7)?,
+            effective_until: row.get(8)?,
+            review_status: row.get(9)?,
+            conflict_json: row.get(10)?,
+        })
+    })?;
+
+    let mut entries = Vec::new();
+    for row in rows {
+        let stored = row?;
+        let conflict = stored
+            .conflict_json
+            .as_deref()
+            .map(serde_json::from_str::<FormSetConflict>)
+            .transpose()?;
+        entries.push(FormSetEntry {
+            form_code: stored.form_code,
+            frequency: frequency_from_str(&stored.frequency),
+            active: stored.active != 0,
+            source: FormSetSource::from_str_lossy(&stored.source),
+            custom: stored.custom != 0,
+            reason: stored.reason,
+            source_reference: stored.source_reference,
+            effective_from: parse_optional_date(stored.effective_from, "effective_from")?,
+            effective_until: parse_optional_date(stored.effective_until, "effective_until")?,
+            review_status: FormSetReviewStatus::from_str_lossy(&stored.review_status),
+            conflict,
+        });
+    }
+    Ok(PerYearFormsSet {
+        taxable_year: year,
+        entries,
+    })
+}
+
 impl Database {
     /// Load the Forms Set for `(tin, year)`. Returns an empty set if none is stored.
     pub fn get_per_year_forms(&self, tin: &str, year: u16) -> Result<PerYearFormsSet, DbError> {
-        let mut stmt = self.conn.prepare(
-            "SELECT form_code, frequency, active, source, custom, reason,
-                    source_reference, effective_from, effective_until, review_status,
-                    conflict_json
-             FROM per_year_forms
-             WHERE tin = ?1 AND taxable_year = ?2
-             ORDER BY form_code ASC",
-        )?;
-        let rows = stmt.query_map(params![tin, year], |row| {
-            Ok(StoredFormSetEntry {
-                form_code: row.get(0)?,
-                frequency: row.get(1)?,
-                active: row.get(2)?,
-                source: row.get(3)?,
-                custom: row.get(4)?,
-                reason: row.get(5)?,
-                source_reference: row.get(6)?,
-                effective_from: row.get(7)?,
-                effective_until: row.get(8)?,
-                review_status: row.get(9)?,
-                conflict_json: row.get(10)?,
-            })
-        })?;
-
-        let mut entries = Vec::new();
-        for row in rows {
-            let stored = row?;
-            let conflict = stored
-                .conflict_json
-                .as_deref()
-                .map(serde_json::from_str::<FormSetConflict>)
-                .transpose()?;
-            entries.push(FormSetEntry {
-                form_code: stored.form_code,
-                frequency: frequency_from_str(&stored.frequency),
-                active: stored.active != 0,
-                source: FormSetSource::from_str_lossy(&stored.source),
-                custom: stored.custom != 0,
-                reason: stored.reason,
-                source_reference: stored.source_reference,
-                effective_from: parse_optional_date(stored.effective_from, "effective_from")?,
-                effective_until: parse_optional_date(stored.effective_until, "effective_until")?,
-                review_status: FormSetReviewStatus::from_str_lossy(&stored.review_status),
-                conflict,
-            });
-        }
-        Ok(PerYearFormsSet {
-            taxable_year: year,
-            entries,
-        })
+        query_per_year_forms(&self.conn, tin, year)
     }
 
     /// Replace the entire Forms Set for `(tin, year)` (delete + insert, atomic).
