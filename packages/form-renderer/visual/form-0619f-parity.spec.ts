@@ -116,6 +116,33 @@ test("0619F 2018 keeps verified PDF417 active geometry, padding, caption, and se
   )).toEqual({ naturalHeight: 77, naturalWidth: 86 });
 });
 
+test("0619F 2018 preserves the official declaration bands and grayscale fills", async ({ page }) => {
+  const fixture = readFixture("packages/form-contracts/fixtures/0619f-normal.json");
+  await renderEnvelope(page, fixture);
+  const formPage = page.locator(".form-page").first();
+
+  await expectCriticalRegionGeometry(formPage, [
+    { name: "declaration copy", selector: ".declaration-0619f > p", x: 36, y: 1010, width: 1152, height: 44 },
+    { name: "signature body", selector: ".signature-body-0619f", x: 36, y: 1054, width: 1152, height: 118 },
+    { name: "individual signature band", selector: ".signature-body-0619f > div:first-child b", x: 36, y: 1118, width: 605, height: 54 },
+    { name: "non-individual signature column", selector: ".signature-body-0619f > div:last-child", x: 641, y: 1054, width: 548, height: 118 },
+    { name: "accreditation footer", selector: ".signature-footer-0619f", x: 36, y: 1172, width: 1152, height: 36 }
+  ]);
+
+  expect(await page.locator(".declaration-0619f > p").evaluate((element) =>
+    getComputedStyle(element).backgroundColor
+  )).toBe("rgb(217, 217, 217)");
+  expect(await page.locator(".signature-body-0619f b").first().evaluate((element) =>
+    getComputedStyle(element).backgroundColor
+  )).toBe("rgb(217, 217, 217)");
+  expect(await page.locator(".signature-footer-0619f > span").first().evaluate((element) =>
+    getComputedStyle(element).backgroundColor
+  )).toBe("rgb(217, 217, 217)");
+  expect(await page.locator(".decimal-separator-0619f").first().evaluate((element) =>
+    getComputedStyle(element).backgroundColor
+  )).toBe("rgb(166, 166, 166)");
+});
+
 test("0619F 2018 matches the complete pinned official page", async ({ page }, testInfo) => {
   const fixture = readFixture("packages/form-contracts/fixtures/0619f-normal.json");
   await renderEnvelope(page, fixture);
