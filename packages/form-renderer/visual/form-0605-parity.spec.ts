@@ -172,6 +172,19 @@ test("0605 1999 preserves the official page-two ATC category bands and merged pe
   )).toEqual(Array(9).fill("rgb(191, 191, 191)"));
 });
 
+test("0605 1999 preserves the official Part II amount-box partitions", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/0605-normal.json"));
+  const firstPage = page.locator(".form-page").nth(0);
+
+  await expectCriticalRegionGeometry(firstPage, [
+    { name: "Item 19 amount", selector: ".item-19-row-0605 > .money-0605", x: 808, y: 906, width: 345, height: 43 },
+    { name: "Item 20A amount", selector: ".penalties-row-0605 label:nth-of-type(1) > .money-0605", x: 96, y: 968, width: 216, height: 42 },
+    { name: "Item 20B amount", selector: ".penalties-row-0605 label:nth-of-type(2) > .money-0605", x: 340, y: 968, width: 214, height: 42 },
+    { name: "Item 20C amount", selector: ".penalties-row-0605 label:nth-of-type(3) > .money-0605", x: 586, y: 968, width: 190, height: 42 },
+    { name: "Item 20D amount", selector: ".penalties-row-0605 label:nth-of-type(4) > .money-0605", x: 808, y: 968, width: 345, height: 42 }
+  ]);
+});
+
 test("0605 1999 matches the complete pinned official pages", async ({ page }, testInfo) => {
   const fixture = readFixture("packages/form-contracts/fixtures/0605-normal.json");
   await renderEnvelope(page, fixture);
