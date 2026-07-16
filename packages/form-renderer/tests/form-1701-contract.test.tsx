@@ -161,6 +161,19 @@ describe("1701:2018 semantic HTML preview contract", () => {
     expect(markup).not.toContain("1701-barcode-page-");
   });
 
+  it("preserves the official Schedule 1 employer name and TIN partitions", () => {
+    const fixture = structuredClone(longFixture) as RenderEnvelope;
+    const markup = renderToStaticMarkup(createElement(Form1701, { envelope: fixture }));
+    const employerName = (fixture.fields.employer_1_name as { value: string }).value;
+    expect(markup).toContain("a. Name of Employer");
+    expect(markup.match(/class="employer-tin-label-1701"/g)).toHaveLength(2);
+    expect(markup.match(/Employer’s TIN/g)).toHaveLength(2);
+    expect(markup).toContain("DO NOT enter Centavos; 49 Centavos or Less drop down; 50 or more round up");
+    expect(markup).toContain(`aria-label="${employerName}"`);
+    expect(markup).toContain("To Part V Schedule 2 Item 4A and Part VII Item 5A");
+    expect(markup).toContain("To Part V Schedule 2 Item 4B and Part VII Item 5B");
+  });
+
   it("embeds the exact official object-derived grayscale seal", () => {
     const sealPath = path.resolve(HERE, "../src/forms/assets/1701-seal.png");
     const digest = createHash("sha256")

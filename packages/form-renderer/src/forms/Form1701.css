@@ -395,7 +395,18 @@
 
 .schedule-one-1701 { border: 1pt solid #111; border-top: 0; }
 .schedule-one-1701 > h3 { height: 12pt; }
-.schedule-one-1701 > p { height: 19pt; margin: 0; padding: 2pt 5pt; border-bottom: .6pt solid #111; font-size: 6pt; line-height: .95; }
+.schedule-one-1701 > p { position: relative; height: 19pt; margin: 0; padding: 2pt 5pt; border-bottom: .6pt solid #111; font-size: 6pt; line-height: .95; }
+.schedule-one-1701 > p > strong {
+  position: absolute;
+  right: 3pt;
+  bottom: 1pt;
+  padding-left: 2pt;
+  background: #fff;
+  font-size: 5.2pt;
+  font-style: italic;
+  font-weight: 700;
+  white-space: nowrap;
+}
 .employer-head-1701,
 .employer-row-1701 { display: grid; grid-template-columns: 74pt minmax(0, 1fr); }
 .employer-head-1701 { height: 11pt; text-align: center; background: #d1d1d1; }
@@ -406,8 +417,22 @@
 .employer-row-1701 > * + * { border-left: .6pt solid #111; }
 .employer-row-1701 > span:first-child { display: grid; grid-template-columns: 13pt 1fr; align-items: center; padding: 1pt; background: #d1d1d1; }
 .employer-row-1701 > span:first-child > .check-choice { grid-column: 2; font-size: 6.5pt; }
-.employer-row-1701 > span:nth-child(2) { display: grid; grid-template-rows: 16pt 16pt; }
-.employer-row-1701 > span:nth-child(2) > * + * { border-top: .6pt solid #111; }
+.employer-identity-1701 {
+  display: grid;
+  grid-template-columns: 224pt 74pt minmax(0, 1fr);
+  grid-template-rows: 16pt 16pt;
+}
+.employer-identity-1701 > :first-child { grid-column: 1 / 4; border-bottom: .6pt solid #111; }
+.employer-identity-1701 > :is(.comb-value, .adaptive-plain-value) { background: #fff; }
+.employer-tin-label-1701 {
+  display: flex;
+  align-items: center;
+  gap: 2pt;
+  padding: 0 4pt;
+  border-left: .6pt solid #111;
+  border-right: .6pt solid #111;
+  background: #d1d1d1;
+}
 .employer-continuation-head-1701,
 .employer-amount-row-1701,
 .employer-total-1701 { display: grid; grid-template-columns: minmax(0, 1fr) 134pt 136pt; }
@@ -419,7 +444,11 @@
 .employer-amount-row-1701 > * + * { border-left: .6pt solid #111; }
 .employer-amount-row-1701 > span:first-child { display: flex; align-items: center; padding-left: 5pt; background: #d1d1d1; }
 .employer-total-1701 { height: 17.5pt; }
-.employer-total-1701 > span:first-child { display: flex; align-items: center; padding: 1pt 31pt; background: #d1d1d1; }
+.employer-total-1701 > span:first-child { display: grid; grid-template-columns: 28pt minmax(0, 1fr); align-items: center; padding: 1pt 3pt; background: #d1d1d1; }
+.employer-total-1701 > span:first-child > b { align-self: start; }
+.employer-total-1701 > span:first-child > span { display: flex; flex-wrap: wrap; align-items: center; column-gap: 2pt; line-height: .9; }
+.employer-total-1701 > span:first-child small { flex-basis: 100%; font-size: 4.8pt; font-style: italic; }
+.employer-total-1701 > span:first-child strong { font-weight: 700; }
 .employer-total-1701 > .amount-1701 { border-left: .6pt solid #111; }
 
 .page-two-1701 > .paired-section-1701:last-child > h3 { height: 10.5pt; }
