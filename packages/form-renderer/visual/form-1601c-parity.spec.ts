@@ -49,8 +49,10 @@ test("1601C 2018 matches the complete pinned official pages", async ({ page }, t
     { name: "masthead", selector: ".masthead-1601c", x: 35, y: 49, width: 1153, height: 114 },
     { name: "identity", selector: ".identity-1601c-page-two", x: 35, y: 163, width: 1153, height: 55 },
     { name: "Schedule I", selector: ".schedule-1601c", x: 35, y: 222, width: 1153, height: 381 },
-    { name: "guidelines", selector: ".guidelines-1601c", x: 35, y: 609, width: 1153, height: 1050 }
+    { name: "guidelines", selector: ".guidelines-1601c", x: 35, y: 609, width: 1153, height: 1050 },
+    { name: "guideline columns", selector: ".guideline-columns-1601c", x: 35, y: 680, width: 1153, height: 976 }
   ]);
+  await expectGuidelineTypographyAndContent(pages.nth(1));
 
   await page.addStyleTag({
     content: `
@@ -121,6 +123,33 @@ interface CriticalRegion {
   y: number;
   width: number;
   height: number;
+}
+
+async function expectGuidelineTypographyAndContent(pageTwo: Locator) {
+  const columns = pageTwo.locator(".guideline-columns-1601c");
+  const typography = await columns.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      fontFamily: style.fontFamily,
+      fontSize: Number.parseFloat(style.fontSize),
+      lineHeight: Number.parseFloat(style.lineHeight),
+      textAlign: style.textAlign
+    };
+  });
+  expect(typography.fontFamily).toContain("Times New Roman");
+  expect(typography.fontSize).toBeCloseTo(8, 2);
+  expect(typography.lineHeight).toBeCloseTo(7.84 * 4 / 3, 2);
+  expect(typography.textAlign).toBe("justify");
+
+  for (const officialHeading of [
+    "Who Shall File",
+    "When and Where to File and Pay/Remit",
+    "Penalties",
+    "Violation of Withholding Tax Provisions",
+    "Required Attachments:"
+  ]) {
+    await expect(columns).toContainText(officialHeading);
+  }
 }
 
 async function expectCriticalRegionGeometry(page: Locator, regions: CriticalRegion[]) {
