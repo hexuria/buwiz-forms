@@ -393,12 +393,40 @@ function PaymentRow0619F({
   const amount = bool(envelope, `${prefix}_amount_present`)
     ? decimal(envelope, `${prefix}_amount`)
     : null;
+  const draweeBank = text(envelope, `${prefix}_drawee_bank_or_agency`).toUpperCase();
+
+  if (number === "22") {
+    return (
+      <div
+        className="payment-row-0619f payment-tax-debit-row-0619f"
+        data-payment-row={prefix}
+      >
+        <span>
+          <b>{number}</b> {label}
+          {draweeBank && (
+            <small className="payment-tax-debit-bank-0619f">{draweeBank}</small>
+          )}
+        </span>
+        <AdaptiveCombValue value={text(envelope, `${prefix}_number`).toUpperCase()} cells={6} />
+        <AdaptiveCombValue value={text(envelope, `${prefix}_date`).replace(/\D/g, "")} cells={8} />
+        <MoneyComb0619F value={amount} />
+      </div>
+    );
+  }
+
   return (
     <div className="payment-row-0619f" data-payment-row={prefix}>
-      <span>
-        {number ? <><b>{number}</b> {label}</> : text(envelope, "payment_23_particular").toUpperCase()}
-      </span>
-      <AdaptiveCombValue value={text(envelope, `${prefix}_drawee_bank_or_agency`).toUpperCase()} cells={5} />
+      {number ? (
+        <span><b>{number}</b> {label}</span>
+      ) : (
+        <span className="payment-particular-field-0619f">
+          <AdaptiveCombValue
+            value={text(envelope, "payment_23_particular").toUpperCase()}
+            cells={7}
+          />
+        </span>
+      )}
+      <AdaptiveCombValue value={draweeBank} cells={5} />
       <AdaptiveCombValue value={text(envelope, `${prefix}_number`).toUpperCase()} cells={6} />
       <AdaptiveCombValue value={text(envelope, `${prefix}_date`).replace(/\D/g, "")} cells={8} />
       <MoneyComb0619F value={amount} />

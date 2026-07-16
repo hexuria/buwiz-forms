@@ -168,6 +168,35 @@ test("0619F 2018 preserves the official Items 1-5 value-band partitions", async 
   )).toBe("rgb(255, 255, 255)");
 });
 
+test("0619F 2018 preserves the official payment-row partitions", async ({ page }) => {
+  const fixture = readFixture("packages/form-contracts/fixtures/0619f-normal.json");
+  await renderEnvelope(page, fixture);
+  const formPage = page.locator(".form-page").first();
+
+  await expectCriticalRegionGeometry(formPage, [
+    {
+      name: "Item 22 merged particulars and bank cell",
+      selector: '.payment-tax-debit-row-0619f > span:first-child',
+      x: 36,
+      y: 1336,
+      width: 343,
+      height: 37
+    },
+    {
+      name: "Item 23 particulars entry comb",
+      selector: '.payment-row-0619f[data-payment-row="payment_23"] > .payment-particular-field-0619f',
+      x: 36,
+      y: 1395,
+      width: 199,
+      height: 37
+    }
+  ]);
+
+  expect(await page.locator(".payment-particular-field-0619f").evaluate((element) =>
+    getComputedStyle(element).backgroundColor
+  )).toBe("rgb(255, 255, 255)");
+});
+
 test("0619F 2018 matches the complete pinned official page", async ({ page }, testInfo) => {
   const fixture = readFixture("packages/form-contracts/fixtures/0619f-normal.json");
   await renderEnvelope(page, fixture);

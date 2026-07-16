@@ -123,6 +123,10 @@ describe("0619F:2018 runtime render contract", () => {
     for (const reference of ["BDM-001", "CHECK-002", "TDM-003", "OTHER-004"]) {
       expect(paymentMarkup).toContain(reference);
     }
+    expect(paymentMarkup).toContain("payment-tax-debit-row-0619f");
+    expect(paymentMarkup).toContain("payment-tax-debit-bank-0619f\">BIR");
+    expect(paymentMarkup).toContain("payment-particular-field-0619f");
+    expect(paymentMarkup).toContain("REVENUE COLLECTION OFFICER");
 
     const minimum = structuredClone(minimumFixture) as RenderEnvelope;
     expect(minimum.fields.payment_20_amount_present).toEqual({
