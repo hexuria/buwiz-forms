@@ -1,6 +1,7 @@
 //! BIR Form 1601C — Full in-app form view.
 #![allow(dead_code)]
 
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::button::ButtonVariants;
 use gpui_component::input::{Input, InputEvent, InputState};
@@ -8,8 +9,9 @@ use gpui_component::*;
 use std::sync::{Arc, Mutex};
 
 use bir_core::db::Database;
-use bir_core::forms::FilingStatus;
-use bir_core::forms::form_1601c::Form1601CDraft;
+use bir_core::forms::form_1601c::{Form1601CDraft, Form1601CSchedule1Row, MAX_SCHEDULE_1_ROWS};
+use bir_core::forms::{FilingStatus, FormValidator, can_queue_for_submission};
+use bir_print::html::RenderEnvelopeV1;
 
 use crate::components::form_engine::FormViewTrait;
 
@@ -22,6 +24,32 @@ pub enum Form1601CEvent {
 }
 
 impl EventEmitter<Form1601CEvent> for Form1601CView {}
+
+const SCAFFOLD_MESSAGE: &str = "1601-C January 2018 is available for draft preparation only. Filing remains manual / external until its HTML renderer, formula, XML, and native output evidence gates pass.";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SubmissionDisposition {
+    QueueInApp,
+    ManualExternal,
+}
+
+fn submission_disposition() -> SubmissionDisposition {
+    if can_queue_for_submission("1601C") {
+        SubmissionDisposition::QueueInApp
+    } else {
+        SubmissionDisposition::ManualExternal
+    }
+}
+
+struct ScheduleRowInputs {
+    previous_month: Entity<InputState>,
+    date_paid: Entity<InputState>,
+    drawee_bank_code_or_agency: Entity<InputState>,
+    payment_number: Entity<InputState>,
+    tax_paid: Entity<InputState>,
+    should_be_tax_due: Entity<InputState>,
+    _subscriptions: Vec<Subscription>,
+}
 
 pub struct Form1601CView {
     draft: Form1601CDraft,
@@ -37,6 +65,11 @@ pub struct Form1601CView {
     any_taxes_withheld: bool,
     number_of_sheets: Entity<InputState>,
     atc: Entity<InputState>,
+    tax_relief: bool,
+    tax_relief_specification: Entity<InputState>,
+
+    // Part IV Schedule I inputs (parallel to draft.schedule_1)
+    schedule_row_inputs: Vec<ScheduleRowInputs>,
 
     // Part II Inputs
     tax_14_total_compensation: Entity<InputState>,
@@ -50,7 +83,6 @@ pub struct Form1601CView {
 
     tax_23_not_subject: Entity<InputState>,
     tax_25_total_taxes_withheld: Entity<InputState>,
-    tax_26_adjustment: Entity<InputState>,
     tax_28_tax_remitted_previously: Entity<InputState>,
     tax_29_other_remittances_name: Entity<InputState>,
     tax_29_other_remittances_amount: Entity<InputState>,
@@ -63,6 +95,81 @@ pub struct Form1601CView {
 }
 
 impl Form1601CView {
+    fn schedule_text_input(
+        value: &str,
+        placeholder: &'static str,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) -> Entity<InputState> {
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+        input.update(cx, |input, cx| {
+            input.set_value(value.to_string(), window, cx);
+        });
+        input
+    }
+
+    fn schedule_money_input(
+        value: f64,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) -> Entity<InputState> {
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder("0.00"));
+        input.update(cx, |input, cx| {
+            input.set_value(format!("{value:.2}"), window, cx);
+        });
+        input
+    }
+
+    fn new_schedule_row_inputs(
+        row: &Form1601CSchedule1Row,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) -> ScheduleRowInputs {
+        let previous_month = Self::schedule_text_input(&row.previous_month, "MM/YYYY", window, cx);
+        let date_paid = Self::schedule_text_input(&row.date_paid, "MM/DD/YYYY", window, cx);
+        let drawee_bank_code_or_agency = Self::schedule_text_input(
+            &row.drawee_bank_code_or_agency,
+            "Bank code / agency",
+            window,
+            cx,
+        );
+        let payment_number =
+            Self::schedule_text_input(&row.payment_number, "Reference number", window, cx);
+        let tax_paid = Self::schedule_money_input(row.tax_paid, window, cx);
+        let should_be_tax_due = Self::schedule_money_input(row.should_be_tax_due, window, cx);
+
+        let mut subscriptions = Vec::new();
+        for input in [
+            previous_month.clone(),
+            date_paid.clone(),
+            drawee_bank_code_or_agency.clone(),
+            payment_number.clone(),
+            tax_paid.clone(),
+            should_be_tax_due.clone(),
+        ] {
+            subscriptions.push(cx.subscribe_in(
+                &input,
+                window,
+                |this: &mut Self, _, event: &InputEvent, _, cx| {
+                    if let InputEvent::Change = event {
+                        this.is_validated = false;
+                        this.sync_from_inputs(cx);
+                    }
+                },
+            ));
+        }
+
+        ScheduleRowInputs {
+            previous_month,
+            date_paid,
+            drawee_bank_code_or_agency,
+            payment_number,
+            tax_paid,
+            should_be_tax_due,
+            _subscriptions: subscriptions,
+        }
+    }
+
     pub fn new(
         draft: Form1601CDraft,
         db: Arc<Mutex<Database>>,
@@ -70,6 +177,7 @@ impl Form1601CView {
         cx: &mut Context<'_, Self>,
     ) -> Self {
         let mut subscriptions = Vec::new();
+        let tax_relief = draft.tax_relief;
 
         let create_input = |cx: &mut Context<Self>, val: f64, window: &mut Window| {
             let input = cx.new(|cx| InputState::new(window, cx).placeholder("0.00"));
@@ -87,6 +195,13 @@ impl Form1601CView {
 
         let number_of_sheets = create_text_input(cx, &draft.number_of_sheets.to_string(), window);
         let atc = create_text_input(cx, &draft.atc, window);
+        let tax_relief_specification =
+            create_text_input(cx, &draft.tax_relief_specification, window);
+        let schedule_row_inputs = draft
+            .schedule_1
+            .iter()
+            .map(|row| Self::new_schedule_row_inputs(row, window, cx))
+            .collect();
 
         let tax_14_total_compensation = create_input(cx, draft.tax_14_total_compensation, window);
         let tax_15_statutory_minimum_wage =
@@ -101,7 +216,6 @@ impl Form1601CView {
         let tax_23_not_subject = create_input(cx, draft.tax_23_not_subject, window);
         let tax_25_total_taxes_withheld =
             create_input(cx, draft.tax_25_total_taxes_withheld, window);
-        let tax_26_adjustment = create_input(cx, draft.tax_26_adjustment, window);
         let tax_28_tax_remitted_previously =
             create_input(cx, draft.tax_28_tax_remitted_previously, window);
         let tax_29_other_remittances_name =
@@ -116,6 +230,7 @@ impl Form1601CView {
         let inputs = vec![
             number_of_sheets.clone(),
             atc.clone(),
+            tax_relief_specification.clone(),
             tax_14_total_compensation.clone(),
             tax_15_statutory_minimum_wage.clone(),
             tax_16_holiday_pay.clone(),
@@ -126,7 +241,6 @@ impl Form1601CView {
             tax_20_other_amount.clone(),
             tax_23_not_subject.clone(),
             tax_25_total_taxes_withheld.clone(),
-            tax_26_adjustment.clone(),
             tax_28_tax_remitted_previously.clone(),
             tax_29_other_remittances_name.clone(),
             tax_29_other_remittances_amount.clone(),
@@ -160,6 +274,9 @@ impl Form1601CView {
 
             number_of_sheets,
             atc,
+            tax_relief,
+            tax_relief_specification,
+            schedule_row_inputs,
 
             tax_14_total_compensation,
             tax_15_statutory_minimum_wage,
@@ -172,7 +289,6 @@ impl Form1601CView {
 
             tax_23_not_subject,
             tax_25_total_taxes_withheld,
-            tax_26_adjustment,
             tax_28_tax_remitted_previously,
             tax_29_other_remittances_name,
             tax_29_other_remittances_amount,
@@ -186,46 +302,216 @@ impl Form1601CView {
     }
 
     fn sync_from_inputs(&mut self, cx: &mut Context<Self>) {
-        let get_val = |input: &Entity<InputState>, cx: &Context<Self>| {
-            input.read(cx).value().parse::<f64>().unwrap_or(0.0)
+        let mut input_errors = Vec::new();
+        let parse_money = |field: &str,
+                           input: &Entity<InputState>,
+                           cx: &Context<Self>,
+                           errors: &mut Vec<(String, String)>| {
+            let value = input.read(cx).value();
+            if value.trim().is_empty() {
+                0.0
+            } else {
+                value.parse::<f64>().unwrap_or_else(|_| {
+                    errors.push((
+                        field.to_string(),
+                        format!("{field} must contain a valid amount"),
+                    ));
+                    0.0
+                })
+            }
         };
         let get_text =
             |input: &Entity<InputState>, cx: &Context<Self>| input.read(cx).value().to_string();
 
         self.draft.is_amended = self.is_amended;
         self.draft.any_taxes_withheld = self.any_taxes_withheld;
-        self.draft.number_of_sheets = get_text(&self.number_of_sheets, cx)
-            .parse::<u32>()
-            .unwrap_or(0);
+        let number_of_sheets = get_text(&self.number_of_sheets, cx);
+        self.draft.number_of_sheets = if number_of_sheets.trim().is_empty() {
+            0
+        } else {
+            number_of_sheets.parse::<u32>().unwrap_or_else(|_| {
+                input_errors.push((
+                    "number_of_sheets".to_string(),
+                    "Number of sheets must be a whole number".to_string(),
+                ));
+                0
+            })
+        };
         self.draft.atc = get_text(&self.atc, cx);
+        self.draft.tax_relief = self.tax_relief;
+        self.draft.tax_relief_specification = if self.tax_relief {
+            get_text(&self.tax_relief_specification, cx)
+        } else {
+            String::new()
+        };
 
-        self.draft.tax_14_total_compensation = get_val(&self.tax_14_total_compensation, cx);
-        self.draft.tax_15_statutory_minimum_wage = get_val(&self.tax_15_statutory_minimum_wage, cx);
-        self.draft.tax_16_holiday_pay = get_val(&self.tax_16_holiday_pay, cx);
-        self.draft.tax_17_13th_month_pay = get_val(&self.tax_17_13th_month_pay, cx);
-        self.draft.tax_18_de_minimis = get_val(&self.tax_18_de_minimis, cx);
-        self.draft.tax_19_sss_gsis = get_val(&self.tax_19_sss_gsis, cx);
+        for (index, (row, inputs)) in self
+            .draft
+            .schedule_1
+            .iter_mut()
+            .zip(&self.schedule_row_inputs)
+            .enumerate()
+        {
+            row.previous_month = get_text(&inputs.previous_month, cx);
+            row.date_paid = get_text(&inputs.date_paid, cx);
+            row.drawee_bank_code_or_agency = get_text(&inputs.drawee_bank_code_or_agency, cx);
+            row.payment_number = get_text(&inputs.payment_number, cx);
+            row.tax_paid = parse_money(
+                &format!("schedule_1_row_{}_tax_paid", index + 1),
+                &inputs.tax_paid,
+                cx,
+                &mut input_errors,
+            );
+            row.should_be_tax_due = parse_money(
+                &format!("schedule_1_row_{}_should_be_tax_due", index + 1),
+                &inputs.should_be_tax_due,
+                cx,
+                &mut input_errors,
+            );
+        }
+
+        self.draft.tax_14_total_compensation = parse_money(
+            "tax_14_total_compensation",
+            &self.tax_14_total_compensation,
+            cx,
+            &mut input_errors,
+        );
+        self.draft.tax_15_statutory_minimum_wage = parse_money(
+            "tax_15_statutory_minimum_wage",
+            &self.tax_15_statutory_minimum_wage,
+            cx,
+            &mut input_errors,
+        );
+        self.draft.tax_16_holiday_pay = parse_money(
+            "tax_16_holiday_pay",
+            &self.tax_16_holiday_pay,
+            cx,
+            &mut input_errors,
+        );
+        self.draft.tax_17_13th_month_pay = parse_money(
+            "tax_17_13th_month_pay",
+            &self.tax_17_13th_month_pay,
+            cx,
+            &mut input_errors,
+        );
+        self.draft.tax_18_de_minimis = parse_money(
+            "tax_18_de_minimis",
+            &self.tax_18_de_minimis,
+            cx,
+            &mut input_errors,
+        );
+        self.draft.tax_19_sss_gsis = parse_money(
+            "tax_19_sss_gsis",
+            &self.tax_19_sss_gsis,
+            cx,
+            &mut input_errors,
+        );
         self.draft.tax_20_other_name = get_text(&self.tax_20_other_name, cx);
-        self.draft.tax_20_other_amount = get_val(&self.tax_20_other_amount, cx);
+        self.draft.tax_20_other_amount = parse_money(
+            "tax_20_other_amount",
+            &self.tax_20_other_amount,
+            cx,
+            &mut input_errors,
+        );
 
-        self.draft.tax_23_not_subject = get_val(&self.tax_23_not_subject, cx);
-        self.draft.tax_25_total_taxes_withheld = get_val(&self.tax_25_total_taxes_withheld, cx);
-        self.draft.tax_26_adjustment = get_val(&self.tax_26_adjustment, cx);
-        self.draft.tax_28_tax_remitted_previously =
-            get_val(&self.tax_28_tax_remitted_previously, cx);
+        self.draft.tax_23_not_subject = parse_money(
+            "tax_23_not_subject",
+            &self.tax_23_not_subject,
+            cx,
+            &mut input_errors,
+        );
+        self.draft.tax_25_total_taxes_withheld = parse_money(
+            "tax_25_total_taxes_withheld",
+            &self.tax_25_total_taxes_withheld,
+            cx,
+            &mut input_errors,
+        );
+        self.draft.tax_28_tax_remitted_previously = parse_money(
+            "tax_28_tax_remitted_previously",
+            &self.tax_28_tax_remitted_previously,
+            cx,
+            &mut input_errors,
+        );
         self.draft.tax_29_other_remittances_name =
             get_text(&self.tax_29_other_remittances_name, cx);
-        self.draft.tax_29_other_remittances_amount =
-            get_val(&self.tax_29_other_remittances_amount, cx);
+        self.draft.tax_29_other_remittances_amount = parse_money(
+            "tax_29_other_remittances_amount",
+            &self.tax_29_other_remittances_amount,
+            cx,
+            &mut input_errors,
+        );
 
-        self.draft.tax_32_surcharge = get_val(&self.tax_32_surcharge, cx);
-        self.draft.tax_33_interest = get_val(&self.tax_33_interest, cx);
-        self.draft.tax_34_compromise = get_val(&self.tax_34_compromise, cx);
+        self.draft.tax_32_surcharge = parse_money(
+            "tax_32_surcharge",
+            &self.tax_32_surcharge,
+            cx,
+            &mut input_errors,
+        );
+        self.draft.tax_33_interest = parse_money(
+            "tax_33_interest",
+            &self.tax_33_interest,
+            cx,
+            &mut input_errors,
+        );
+        self.draft.tax_34_compromise = parse_money(
+            "tax_34_compromise",
+            &self.tax_34_compromise,
+            cx,
+            &mut input_errors,
+        );
 
         self.draft.compute();
 
         use bir_core::forms::FormValidator;
-        self.validation_errors = self.draft.validate();
+        input_errors.extend(self.draft.validate());
+        self.validation_errors = input_errors;
+        cx.notify();
+    }
+
+    fn add_schedule_row(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !matches!(self.draft.status, FilingStatus::Draft)
+            || self.draft.schedule_1.len() >= MAX_SCHEDULE_1_ROWS
+        {
+            return;
+        }
+
+        self.sync_from_inputs(cx);
+        let row = Form1601CSchedule1Row::default();
+        self.schedule_row_inputs
+            .push(Self::new_schedule_row_inputs(&row, window, cx));
+        self.draft.schedule_1.push(row);
+        self.finish_schedule_mutation(cx);
+    }
+
+    fn remove_schedule_row(&mut self, index: usize, cx: &mut Context<Self>) {
+        if !matches!(self.draft.status, FilingStatus::Draft)
+            || index >= self.draft.schedule_1.len()
+            || index >= self.schedule_row_inputs.len()
+        {
+            return;
+        }
+
+        self.sync_from_inputs(cx);
+        self.draft.schedule_1.remove(index);
+        self.schedule_row_inputs.remove(index);
+        self.finish_schedule_mutation(cx);
+    }
+
+    fn finish_schedule_mutation(&mut self, cx: &mut Context<Self>) {
+        self.sync_from_inputs(cx);
+        self.is_validated = false;
+    }
+
+    fn show_scaffold_message(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.status_message = Some(SCAFFOLD_MESSAGE.to_string());
+        use gpui_component::WindowExt;
+        window.push_notification(
+            gpui_component::notification::Notification::new()
+                .message(SCAFFOLD_MESSAGE.to_string())
+                .with_type(gpui_component::notification::NotificationType::Warning)
+                .autohide(true),
+            cx,
+        );
         cx.notify();
     }
 }
@@ -257,28 +543,47 @@ impl FormViewTrait for Form1601CView {
 
     fn save_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.sync_from_inputs(cx);
-        if let Ok(db) = self.db.lock() {
-            let _ = db.save_form_draft(
-                &self.draft.tin,
-                "1601C",
-                self.draft.taxable_year,
-                Some(self.draft.month),
-                &self.draft.status,
-                &self.draft,
-            );
-            use gpui_component::WindowExt;
-            window.push_notification(
-                gpui_component::notification::Notification::new()
-                    .message("Form saved.".to_string())
-                    .with_type(gpui_component::notification::NotificationType::Success)
-                    .autohide(true),
-                cx,
-            );
-            cx.emit(Form1601CEvent::Saved);
+        let save_result = match self.db.lock() {
+            Ok(db) => db
+                .save_1601c_draft(&self.draft)
+                .map_err(|error| error.to_string()),
+            Err(error) => Err(format!("Could not access the form database: {error}")),
+        };
+
+        use gpui_component::WindowExt;
+        match save_result {
+            Ok(_) => {
+                window.push_notification(
+                    gpui_component::notification::Notification::new()
+                        .message("Form saved.".to_string())
+                        .with_type(gpui_component::notification::NotificationType::Success)
+                        .autohide(true),
+                    cx,
+                );
+                cx.emit(Form1601CEvent::Saved);
+            }
+            Err(error) => {
+                self.status_message = Some(error.clone());
+                window.push_notification(
+                    gpui_component::notification::Notification::new()
+                        .message(format!("Could not save Form 1601-C: {error}"))
+                        .with_type(gpui_component::notification::NotificationType::Error)
+                        .autohide(true),
+                    cx,
+                );
+                cx.notify();
+            }
         }
     }
 
     fn mark_submitted(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if matches!(
+            submission_disposition(),
+            SubmissionDisposition::ManualExternal
+        ) {
+            self.show_scaffold_message(window, cx);
+            return;
+        }
         self.draft.status = FilingStatus::Queued;
         self.save_draft(window, cx);
         bir_core::background_cron::wake();
@@ -297,14 +602,46 @@ impl FormViewTrait for Form1601CView {
         cx.notify();
     }
 
-    fn preview_pdf(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {
-        // To be implemented via typst/print module later
+    fn preview_pdf(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Synchronize the editor first, then hand the preview host an immutable
+        // snapshot. Opening or retrying a preview never changes filing status.
+        self.sync_from_inputs(cx);
+        let render_draft = self.draft.clone();
+        let envelope = RenderEnvelopeV1::from(&render_draft);
+
+        match super::form_html_preview_launcher::launch_html_form_preview(&envelope, cx) {
+            Ok(launch_kind) => {
+                self.status_message = Some(launch_kind.status_message().to_string());
+                cx.notify();
+            }
+            Err(error) => {
+                let message = format!(
+                    "HTML print preview could not be opened: {error}. No filing state was changed."
+                );
+                self.status_message = Some(message.clone());
+                use gpui_component::WindowExt;
+                window.push_notification(
+                    gpui_component::notification::Notification::new()
+                        .message(message.clone())
+                        .with_type(gpui_component::notification::NotificationType::Error)
+                        .autohide(true),
+                    cx,
+                );
+                cx.emit(Form1601CEvent::PushNotification(
+                    "error".to_string(),
+                    "HTML preview unavailable".to_string(),
+                    message,
+                ));
+                cx.notify();
+            }
+        }
     }
 }
 
 impl Render for Form1601CView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let is_draft = matches!(self.draft.status, FilingStatus::Draft);
+        let queue_supported = matches!(submission_disposition(), SubmissionDisposition::QueueInApp);
 
         div()
             .flex()
@@ -345,9 +682,17 @@ impl Render for Form1601CView {
                             )
                             .child(
                                 gpui_component::button::Button::new("submit_btn")
-                                    .label("Generate XML & Submit")
+                                    .label(if queue_supported {
+                                        "Generate XML & Submit"
+                                    } else {
+                                        "Manual / external filing"
+                                    })
                                     .primary()
-                                    .disabled(!is_draft || !self.validation_errors.is_empty())
+                                    .disabled(
+                                        !queue_supported
+                                            || !is_draft
+                                            || !self.validation_errors.is_empty(),
+                                    )
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.mark_submitted(window, cx);
                                     })),
@@ -363,6 +708,23 @@ impl Render for Form1601CView {
                     .child(self.render_header(cx))
                     .child(div().mt_6().child(self.render_status_pipeline(cx))),
             )
+            .when(!queue_supported, |view| {
+                view.child(
+                    div()
+                        .px_8()
+                        .py_3()
+                        .bg(cx.theme().warning.opacity(0.12))
+                        .border_b_1()
+                        .border_color(cx.theme().warning.opacity(0.4))
+                        .text_sm()
+                        .text_color(cx.theme().warning_foreground)
+                        .child(
+                            self.status_message
+                                .clone()
+                                .unwrap_or_else(|| SCAFFOLD_MESSAGE.to_string()),
+                        ),
+                )
+            })
             .child(
                 div()
                     .id("scroll_container")
@@ -420,6 +782,7 @@ impl Render for Form1601CView {
                                             ))),
                                     ),
                             )
+                            .child(self.render_schedule_section(is_draft, cx))
                             .child(
                                 div()
                                     .bg(cx.theme().background)
@@ -530,7 +893,73 @@ impl Render for Form1601CView {
                                                 &self.number_of_sheets,
                                                 cx,
                                             ))
-                                            .child(self.render_input_row("ATC", &self.atc, cx)),
+                                            .child(self.render_input_row("ATC", &self.atc, cx))
+                                            .child(
+                                                div()
+                                                    .flex()
+                                                    .gap_4()
+                                                    .items_center()
+                                                    .child(div().child(
+                                                        "13 Payees availing of tax relief under Special Law or International Tax Treaty?",
+                                                    ))
+                                                    .child(
+                                                        div()
+                                                            .id("tax_relief_btn")
+                                                            .p_2()
+                                                            .border_1()
+                                                            .border_color(if self.tax_relief {
+                                                                cx.theme().primary
+                                                            } else {
+                                                                cx.theme().border
+                                                            })
+                                                            .bg(if self.tax_relief {
+                                                                cx.theme().primary.opacity(0.2)
+                                                            } else {
+                                                                cx.theme().background
+                                                            })
+                                                            .rounded_md()
+                                                            .when(is_draft, |button| {
+                                                                button.cursor_pointer()
+                                                            })
+                                                            .on_click(cx.listener(
+                                                                |this, _, window, cx| {
+                                                                    if !matches!(
+                                                                        this.draft.status,
+                                                                        FilingStatus::Draft
+                                                                    ) {
+                                                                        return;
+                                                                    }
+                                                                    this.tax_relief =
+                                                                        !this.tax_relief;
+                                                                    if !this.tax_relief {
+                                                                        this.tax_relief_specification.update(
+                                                                            cx,
+                                                                            |input, cx| {
+                                                                                input.set_value(
+                                                                                    String::new(),
+                                                                                    window,
+                                                                                    cx,
+                                                                                );
+                                                                            },
+                                                                        );
+                                                                    }
+                                                                    this.sync_from_inputs(cx);
+                                                                },
+                                                            ))
+                                                            .child(if self.tax_relief {
+                                                                "Yes"
+                                                            } else {
+                                                                "No"
+                                                            }),
+                                                    ),
+                                            )
+                                            .when(self.tax_relief, |content| {
+                                                content.child(self.render_input_row(
+                                                    "13A If yes, specify",
+                                                    &self.tax_relief_specification,
+                                                    cx,
+                                                ))
+                                            }),
                                     ),
                             )
                             .child(
@@ -619,9 +1048,9 @@ impl Render for Form1601CView {
                                                 &self.tax_25_total_taxes_withheld,
                                                 cx,
                                             ))
-                                            .child(self.render_input_row(
-                                                "26 Add/Less: Adjustment from Previous Months",
-                                                &self.tax_26_adjustment,
+                                            .child(self.render_computed_row(
+                                                "26 Add/Less: Adjustment from Schedule I",
+                                                self.draft.tax_26_adjustment,
                                                 cx,
                                             ))
                                             .child(self.render_computed_row(
@@ -729,6 +1158,161 @@ impl Render for Form1601CView {
 }
 
 impl Form1601CView {
+    fn render_schedule_section(&self, is_editable: bool, cx: &Context<Self>) -> Div {
+        let row_count = self.draft.schedule_1.len();
+        let rows = self
+            .schedule_row_inputs
+            .iter()
+            .enumerate()
+            .map(|(index, inputs)| {
+                let adjustment = self
+                    .draft
+                    .schedule_1
+                    .get(index)
+                    .map(|row| row.adjustment)
+                    .unwrap_or(0.0);
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .p_4()
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .rounded_md()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .child(
+                                div()
+                                    .font_weight(FontWeight::BOLD)
+                                    .child(format!("Schedule I row {}", index + 1)),
+                            )
+                            .when(is_editable, |header| {
+                                header.child(
+                                    gpui_component::button::Button::new(format!(
+                                        "remove_1601c_schedule_row_{}",
+                                        index + 1
+                                    ))
+                                    .label("Remove")
+                                    .small()
+                                    .outline()
+                                    .on_click(cx.listener(
+                                        move |this, _, _, cx| {
+                                            this.remove_schedule_row(index, cx);
+                                        },
+                                    )),
+                                )
+                            }),
+                    )
+                    .child(self.render_input_row(
+                        "1 Previous Month (MM/YYYY)",
+                        &inputs.previous_month,
+                        cx,
+                    ))
+                    .child(self.render_input_row("2 Date Paid (MM/DD/YYYY)", &inputs.date_paid, cx))
+                    .child(self.render_input_row(
+                        "3 Drawee Bank / Bank Code / Agency",
+                        &inputs.drawee_bank_code_or_agency,
+                        cx,
+                    ))
+                    .child(self.render_input_row(
+                        "4 Payment Reference Number",
+                        &inputs.payment_number,
+                        cx,
+                    ))
+                    .child(self.render_input_row(
+                        "5 Tax Paid (excluding penalties)",
+                        &inputs.tax_paid,
+                        cx,
+                    ))
+                    .child(self.render_input_row(
+                        "6 Should Be Tax Due for the Month",
+                        &inputs.should_be_tax_due,
+                        cx,
+                    ))
+                    .child(self.render_computed_row(
+                        "7 Adjustment (Item 6 less Item 5)",
+                        adjustment,
+                        cx,
+                    ))
+            })
+            .collect::<Vec<_>>();
+
+        div()
+            .bg(cx.theme().background)
+            .border_1()
+            .border_color(cx.theme().border)
+            .rounded_lg()
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_4()
+                    .p_4()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(
+                                        div()
+                                            .text_xl()
+                                            .font_weight(FontWeight::BOLD)
+                                            .child("Part IV - Schedule I"),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child(
+                                                "Adjustment of Taxes Withheld on Compensation from Previous Months",
+                                            ),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_3()
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child(format!(
+                                                "{row_count} of {MAX_SCHEDULE_1_ROWS} rows"
+                                            )),
+                                    )
+                                    .when(is_editable, |controls| {
+                                        controls.child(
+                                            gpui_component::button::Button::new(
+                                                "add_1601c_schedule_row",
+                                            )
+                                            .label("Add Schedule Row")
+                                            .outline()
+                                            .disabled(row_count >= MAX_SCHEDULE_1_ROWS)
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.add_schedule_row(window, cx);
+                                            })),
+                                        )
+                                    }),
+                            ),
+                    )
+                    .children(rows)
+                    .child(self.render_computed_row(
+                        "4 Total Adjustment (to Part II, Item 26)",
+                        self.draft.tax_26_adjustment,
+                        cx,
+                    )),
+            )
+    }
+
     fn render_input_row(
         &self,
         label: &str,

@@ -1,0 +1,32 @@
+{
+  "calibration_only": true,
+  "form": {
+    "code": "0619E",
+    "dpi": 144,
+    "form_id": "0619Ev2018",
+    "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/0619-E%20Jan%202018%20rev%20final.pdf",
+    "official_source_file": "external:0619-E Jan 2018 rev final.pdf",
+    "official_source_sha256": "0418160d63d4e6f68c34f2bad553273a5d148c3686d8562d338d35fcdd0c5215",
+    "page_count": 1,
+    "page_height_pt": 792.0,
+    "page_width_pt": 612.0,
+    "pages": [
+      {
+        "page": 1,
+        "reference_height_px": 1584,
+        "reference_png": "packages/form-renderer/references/0619e-2018-page-1.png",
+        "reference_png_sha256": "924db11df80f2ee4e5df63838ac6b93980725d677632c9739690c9ec9aacb83a",
+        "reference_width_px": 1224
+      }
+    ],
+    "reference_provenance": {
+      "kind": "official_pdf",
+      "replacement_required": false,
+      "runtime_eligible": false
+    },
+    "revision": "2018"
+  },
+  "generator": "prepare_official_reference.py (Poppler)",
+  "runtime_background_allowed": false,
+  "schema_version": 1
+}

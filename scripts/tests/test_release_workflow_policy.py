@@ -10,10 +10,6 @@ WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/release.yml"
 DESKTOP_MANIFEST_PATH = REPOSITORY_ROOT / "crates/bir-desktop/Cargo.toml"
 INSTALLER_WXS_PATH = REPOSITORY_ROOT / "installer.wxs"
 JUSTFILE_PATH = REPOSITORY_ROOT / "justfile"
-PLAN_PATH = (
-    REPOSITORY_ROOT
-    / "docs/form-print-readiness/print-preview-parity-rebuild-plan.md"
-)
 
 
 class ReleaseWorkflowPolicyTests(unittest.TestCase):
@@ -23,7 +19,6 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         cls.desktop_manifest = DESKTOP_MANIFEST_PATH.read_text(encoding="utf-8")
         cls.installer_wxs = INSTALLER_WXS_PATH.read_text(encoding="utf-8")
         cls.justfile = JUSTFILE_PATH.read_text(encoding="utf-8")
-        cls.plan = PLAN_PATH.read_text(encoding="utf-8")
 
     def job(self, name: str) -> str:
         match = re.search(
@@ -77,6 +72,11 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIn("xcrun stapler staple", macos)
         self.assertIn("xcrun stapler validate", macos)
         self.assertIn('cp assets/AppIcon.icns "$APP/Contents/Resources/"', macos)
+        self.assertIn('hdiutil attach "$DMG" -nobrowse -readonly', macos)
+        self.assertIn(
+            'python3 scripts/audit_no_legacy.py --package-root "$MOUNTED_APP"',
+            macos,
+        )
         self.assertIn("security set-key-partition-list", macos)
         self.assertIn("security find-identity -v -p codesigning", macos)
         self.assertIn('--keychain "$KEYCHAIN_PATH"', macos)
@@ -93,6 +93,14 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIn("secrets.WINDOWS_CERTIFICATE_PASSWORD", windows)
         self.assertIn("WINDOWS_SIGNTOOL sign /fd SHA256", windows)
         self.assertIn("WINDOWS_SIGNTOOL verify /pa /all /v", windows)
+        self.assertIn("choco install openssl innosetup 7zip -y", windows)
+        self.assertIn("Audit final Windows installer payloads", windows)
+        self.assertIn("7z.exe", windows)
+        self.assertIn("Start-Process msiexec.exe", windows)
+        self.assertGreaterEqual(
+            windows.count("python scripts/audit_no_legacy.py --package-root"),
+            3,
+        )
         self.assertIn(
             "Expected exactly one EXE and one MSI public release artifact",
             windows,
@@ -137,17 +145,24 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
             'maintainer = "Goldcoders Corp <support@goldcoders.dev>"',
             self.desktop_manifest,
         )
+        self.assertIn("dpkg-deb --extract", linux)
+        self.assertIn('tar xzf "$TARBALL"', linux)
+        self.assertIn(
+            'python3 scripts/audit_no_legacy.py --package-root "$DEB_ROOT"',
+            linux,
+        )
+        self.assertIn(
+            'python3 scripts/audit_no_legacy.py --package-root "$TAR_ROOT"',
+            linux,
+        )
+        self.assertIn('dpkg-deb --extract "$DEB" "$AUDIT_ROOT"', self.justfile)
+        self.assertIn('tar xzf "$TARBALL" -C "$AUDIT_ROOT"', self.justfile)
 
     def test_msix_is_store_only_and_still_blocked_on_certification(self) -> None:
         self.assertIn("Store-only MSIX candidate", self.justfile)
         self.assertIn(
             "BLOCKED: certify manifest artwork and packaged MSVC runtime behavior",
             self.justfile,
-        )
-        self.assertIn("They do not build,\nsign, or upload MSIX", self.plan)
-        self.assertIn(
-            "Store promotion remains blocked until correctly sized manifest",
-            self.plan,
         )
 
 

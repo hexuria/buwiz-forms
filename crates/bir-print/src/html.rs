@@ -4,10 +4,6 @@
 //! renderer receives this read-only envelope and is responsible only for
 //! deterministic layout, preview, and printing.
 
-use bir_core::forms::form_2551q::{
-    Form2551QDraft, Item13Election, OverpaymentDisposition, TaxPeriodBasis,
-};
-use bir_core::forms::FormValidator;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -27,7 +23,11 @@ pub struct RenderEnvelopeV1 {
 }
 
 impl RenderEnvelopeV1 {
-    fn new(form: RenderFormIdentity, taxpayer: RenderTaxpayer, period: RenderPeriod) -> Self {
+    pub(crate) fn new(
+        form: RenderFormIdentity,
+        taxpayer: RenderTaxpayer,
+        period: RenderPeriod,
+    ) -> Self {
         Self {
             schema_version: RENDER_CONTRACT_VERSION.to_string(),
             form,
@@ -134,219 +134,12 @@ pub fn serialize_envelope(envelope: &RenderEnvelopeV1) -> Result<String, HtmlRen
     Ok(serde_json::to_string(envelope)?)
 }
 
-impl From<&Form2551QDraft> for RenderEnvelopeV1 {
-    fn from(draft: &Form2551QDraft) -> Self {
-        let mut envelope = Self::new(
-            RenderFormIdentity {
-                code: "2551Q".to_string(),
-                version: "2018".to_string(),
-            },
-            RenderTaxpayer {
-                tin: draft.tin.clone(),
-                name: draft.taxpayer_name.clone(),
-                rdo_code: draft.rdo_code.clone(),
-                registered_address: draft.registered_address.clone(),
-                zip_code: draft.zip_code.clone(),
-                contact_number: draft.contact_number.clone(),
-                email: draft.email.clone(),
-            },
-            RenderPeriod {
-                taxable_year: draft.taxable_year,
-                month: Some(draft.year_end_month),
-                quarter: Some(draft.quarter),
-                label: format!(
-                    "Q{} year ended {:02}/{}",
-                    draft.quarter, draft.year_end_month, draft.taxable_year
-                ),
-            },
-        );
-
-        envelope.fields.extend([
-            (
-                "tax_period_basis".to_string(),
-                RenderValue::Text(
-                    match draft.tax_period_basis {
-                        TaxPeriodBasis::Calendar => "calendar",
-                        TaxPeriodBasis::Fiscal => "fiscal",
-                    }
-                    .to_string(),
-                ),
-            ),
-            (
-                "is_amended".to_string(),
-                RenderValue::Boolean(draft.is_amended),
-            ),
-            (
-                "number_of_attached_sheets".to_string(),
-                RenderValue::Integer(i64::from(draft.number_of_attached_sheets)),
-            ),
-            (
-                "tax_relief".to_string(),
-                RenderValue::Boolean(draft.tax_relief),
-            ),
-            (
-                "tax_relief_specification".to_string(),
-                RenderValue::Text(if draft.tax_relief {
-                    draft.tax_relief_specification.clone()
-                } else {
-                    String::new()
-                }),
-            ),
-            (
-                "item_13_election".to_string(),
-                RenderValue::Text(
-                    match draft.item_13_election {
-                        Item13Election::Unanswered => "unanswered",
-                        Item13Election::NotApplicable => "not_applicable",
-                        Item13Election::Graduated => "graduated",
-                        Item13Election::EightPercent => "eight_percent",
-                    }
-                    .to_string(),
-                ),
-            ),
-            (
-                "total_tax_due".to_string(),
-                RenderValue::Decimal(draft.total_tax_due),
-            ),
-            (
-                "creditable_tax_withheld".to_string(),
-                RenderValue::Decimal(draft.creditable_tax_withheld),
-            ),
-            (
-                "tax_paid_previous".to_string(),
-                RenderValue::Decimal(if draft.is_amended {
-                    draft.tax_paid_previous
-                } else {
-                    0.0
-                }),
-            ),
-            (
-                "other_tax_credit".to_string(),
-                RenderValue::Decimal(draft.other_tax_credit),
-            ),
-            (
-                "other_tax_credit_description".to_string(),
-                RenderValue::Text(draft.other_tax_credit_description.clone()),
-            ),
-            (
-                "total_tax_credits".to_string(),
-                RenderValue::Decimal(draft.total_tax_credits),
-            ),
-            (
-                "tax_payable".to_string(),
-                RenderValue::Decimal(draft.tax_payable),
-            ),
-            (
-                "surcharge".to_string(),
-                RenderValue::Decimal(draft.surcharge),
-            ),
-            ("interest".to_string(), RenderValue::Decimal(draft.interest)),
-            (
-                "compromise".to_string(),
-                RenderValue::Decimal(draft.compromise),
-            ),
-            (
-                "total_penalties".to_string(),
-                RenderValue::Decimal(draft.total_penalties),
-            ),
-            (
-                "total_amount_payable".to_string(),
-                RenderValue::Decimal(draft.total_amount_payable),
-            ),
-            (
-                "overpayment_disposition".to_string(),
-                RenderValue::Text(
-                    match draft.overpayment_disposition {
-                        OverpaymentDisposition::None => "none",
-                        OverpaymentDisposition::Refund => "refund",
-                        OverpaymentDisposition::TaxCreditCertificate => "tax_credit_certificate",
-                    }
-                    .to_string(),
-                ),
-            ),
-        ]);
-
-        // The official base Schedule 1 sheet has exactly six item slots. When
-        // the print document needs continuation pages, Rust owns the subtotal
-        // carried off page 2 so the React renderer never recomputes tax.
-        if draft.schedule_1.len() > 6 {
-            let page_2_subtotal = (draft
-                .schedule_1
-                .iter()
-                .take(6)
-                .map(|row| row.tax_due)
-                .sum::<f64>()
-                * 100.0)
-                .round()
-                / 100.0;
-            envelope.fields.insert(
-                "schedule_1_page_2_subtotal".to_string(),
-                RenderValue::Decimal(page_2_subtotal),
-            );
-        }
-
-        let rows = draft
-            .schedule_1
-            .iter()
-            .enumerate()
-            .map(|(index, row)| RenderRow {
-                key: format!("schedule-1-{}-{}", index + 1, row.atc),
-                cells: BTreeMap::from([
-                    ("atc".to_string(), RenderValue::Text(row.atc.clone())),
-                    (
-                        "description".to_string(),
-                        RenderValue::Text(row.atc_description.clone()),
-                    ),
-                    (
-                        "taxable_amount".to_string(),
-                        RenderValue::Decimal(row.taxable_amount),
-                    ),
-                    ("tax_rate".to_string(), RenderValue::Decimal(row.tax_rate)),
-                    ("tax_due".to_string(), RenderValue::Decimal(row.tax_due)),
-                ]),
-            })
-            .collect();
-
-        envelope.schedules.push(RenderSchedule {
-            id: "schedule_1".to_string(),
-            columns: vec![
-                column("atc", "ATC", RenderAlignment::Left),
-                column("description", "Tax Type", RenderAlignment::Left),
-                column("taxable_amount", "Taxable Amount", RenderAlignment::Right),
-                column("tax_rate", "Tax Rate", RenderAlignment::Right),
-                column("tax_due", "Tax Due", RenderAlignment::Right),
-            ],
-            rows,
-        });
-
-        envelope.validation = draft
-            .validate()
-            .into_iter()
-            .map(|(field_path, message)| RenderValidationMessage {
-                field_path,
-                code: "invalid".to_string(),
-                message,
-                severity: RenderValidationSeverity::Error,
-                rule_version: "2551q-main-v1".to_string(),
-            })
-            .collect();
-
-        envelope
-    }
-}
-
-fn column(key: &str, label: &str, alignment: RenderAlignment) -> RenderColumn {
-    RenderColumn {
-        key: key.to_string(),
-        label: label.to_string(),
-        alignment,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bir_core::forms::form_2551q::Schedule1Row;
+    use bir_core::forms::form_2551q::{
+        Form2551QDraft, Item13Election, OverpaymentDisposition, Schedule1Row, TaxPeriodBasis,
+    };
 
     #[test]
     fn render_2551q_preserves_identity_taxpayer_and_period() {

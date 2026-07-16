@@ -242,6 +242,7 @@ impl ProfileManagerView {
                         .cursor_pointer()
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.is_vat_registered = !this.is_vat_registered;
+                            this.mark_profile_changed();
                             cx.notify();
                         }))
                         .child(
@@ -511,7 +512,7 @@ impl ProfileManagerView {
                             .registered_tax_types
                             .iter()
                             .map(Self::registered_tax_type_label)
-                            .map(|s| s.to_string())
+                            .map(|tax_type| format!("Tax type: {tax_type}"))
                             .collect::<Vec<_>>();
                         forms.sort();
                         forms
@@ -879,7 +880,7 @@ impl ProfileManagerView {
                                             .on_click(cx.listener(move |this, _, window, cx| {
                                                 match this.confirm_cor_version(&version_id_for_confirm, window, cx) {
                                                     Ok(()) => {
-                                                        this.save_message = Some("COR version confirmed. Save the profile to persist it.".into());
+                                                        this.save_message = Some("COR version confirmed; profile and Forms Set reconciliation are being saved.".into());
                                                         this.compliance_source_mode = Self::derive_compliance_source_mode(&this.stored_profile_versions);
                                                     }
                                                     Err(message) => this.save_message = Some(message),
@@ -1194,7 +1195,7 @@ impl ProfileManagerView {
                             .flex()
                             .flex_col()
                             .gap_1()
-                            .child(Self::field_label("Extracted Applicable Forms", cx))
+                            .child(Self::field_label("Reviewed COR form-code evidence", cx))
                             .child(
                                 div()
                                     .flex()
@@ -1248,6 +1249,50 @@ impl ProfileManagerView {
                                             }))
                                     )
                                     .child(MultiSelect::new(&self.cor_extracted_forms_select))
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child(
+                                                "These are evidence from this COR version. Confirming the version reconciles them into the yearly Forms Set; it does not silently replace manual include/exclude decisions.",
+                                            ),
+                                    )
+                                    .when(self.editing_id.is_some(), |this| {
+                                        this.child(
+                                            gpui_component::button::Button::new(
+                                                "open_forms_set_from_cor",
+                                            )
+                                            .label("Review authoritative Forms Set")
+                                            .small()
+                                            .ghost()
+                                            .on_click(cx.listener(
+                                                |this, _event, window, cx| {
+                                                    if let Some(year) = this
+                                                        .cor_effective_from_input
+                                                        .read(cx)
+                                                        .value()
+                                                        .get(0..4)
+                                                        .and_then(|year| year.parse::<u16>().ok())
+                                                    {
+                                                        this.forms_editor_year = year;
+                                                        this.forms_editor_year_select.update(
+                                                            cx,
+                                                            |select, cx| {
+                                                                select.set_selected_value(
+                                                                    &year.to_string(),
+                                                                    window,
+                                                                    cx,
+                                                                );
+                                                            },
+                                                        );
+                                                    }
+                                                    this.forms_editor_selected_code = None;
+                                                    this.active_tab = 5;
+                                                    cx.notify();
+                                                },
+                                            )),
+                                        )
+                                    })
                             ),
                     )
                     .child(
@@ -1417,6 +1462,11 @@ impl ProfileManagerView {
                                     ))
                                     .child(self.render_registered_tax_type_toggle(
                                         &version.id,
+                                        bir_core::profile::RegisteredTaxType::WithholdingVatAndPercentage,
+                                        cx,
+                                    ))
+                                    .child(self.render_registered_tax_type_toggle(
+                                        &version.id,
                                         bir_core::profile::RegisteredTaxType::ExciseTax,
                                         cx,
                                     )),
@@ -1550,7 +1600,7 @@ impl ProfileManagerView {
             is_gpp_partner: false,
             is_create_msme: false,
             is_expanded_withholding_agent: false,
-            atc_codes: vec![],
+            atc_codes: self.stored_atc_codes.clone(),
             excise_tax_categories: vec![],
             tax_elections: self.stored_tax_elections.clone(),
             has_employees: false,
@@ -1810,7 +1860,7 @@ impl ProfileManagerView {
             is_gpp_partner: false,
             is_create_msme: false,
             is_expanded_withholding_agent: false,
-            atc_codes: vec![],
+            atc_codes: self.stored_atc_codes.clone(),
             excise_tax_categories: vec![],
             tax_elections: self.stored_tax_elections.clone(),
             has_employees: false,
@@ -2828,6 +2878,11 @@ impl ProfileManagerView {
                             ))
                             .child(self.render_registered_tax_type_toggle(
                                 &version_id,
+                                bir_core::profile::RegisteredTaxType::WithholdingVatAndPercentage,
+                                cx,
+                            ))
+                            .child(self.render_registered_tax_type_toggle(
+                                &version_id,
                                 bir_core::profile::RegisteredTaxType::ExciseTax,
                                 cx,
                             )),
@@ -2921,8 +2976,7 @@ impl ProfileManagerView {
 
         let mut obligation_overrides = div().flex().flex_col().gap_1();
         if let Some(version) = target_version {
-            for (index, override_rule) in version.obligation_overrides.iter().enumerate() {
-                let version_id = version.id.clone();
+            for override_rule in &version.obligation_overrides {
                 let action = match override_rule.action {
                     bir_core::profile::ManualObligationOverrideAction::Include => "Include",
                     bir_core::profile::ManualObligationOverrideAction::Exclude => "Exclude",
@@ -2946,24 +3000,14 @@ impl ProfileManagerView {
                                     "{} {}: {}",
                                     action, override_rule.form_code, override_rule.reason
                                 )),
-                        )
-                        .child(
-                            gpui_component::button::Button::new(format!(
-                                "remove_obligation_override_{}_{}",
-                                version.id, index
-                            ))
-                            .label("Remove")
-                            .small()
-                            .on_click(cx.listener(
-                                move |this, _, _, cx| {
-                                    this.remove_cor_obligation_override(&version_id, index, cx);
-                                    cx.notify();
-                                },
-                            )),
                         ),
                 );
             }
         }
+        let forms_set_year = target_version
+            .and_then(|version| version.effective_from)
+            .map(|date| date.year() as u16)
+            .unwrap_or_else(|| chrono::Local::now().year() as u16);
 
         let mut deadline_overrides = div().flex().flex_col().gap_1();
         if let Some(version) = target_version {
@@ -3057,52 +3101,35 @@ impl ProfileManagerView {
                             .text_xs()
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(cx.theme().muted_foreground)
-                            .child("Manual obligation override"),
+                            .child("Legacy obligation overrides (read only)"),
                     )
                     .child(
                         div()
-                            .grid()
-                            .grid_cols(3)
-                            .gap_2()
-                            .child(Input::new(&self.cor_obligation_form_input))
-                            .child(Input::new(&self.cor_obligation_reason_input))
-                            .child(Input::new(&self.cor_obligation_source_input)),
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(
+                                "Existing version-level overrides remain visible for audit. Create all new per-year include/exclude decisions in the Forms Set.",
+                            ),
                     )
                     .child(obligation_overrides)
                     .child(
-                        div()
-                            .flex()
-                            .gap_2()
-                            .child(
-                                gpui_component::button::Button::new("add_cor_include_override")
-                                    .label("Force Include")
-                                    .small()
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        if let Err(message) = this.add_cor_obligation_override(
-                                            bir_core::profile::ManualObligationOverrideAction::Include,
-                                            window,
-                                            cx,
-                                        ) {
-                                            this.save_message = Some(message);
-                                        }
-                                        cx.notify();
-                                    })),
-                            )
-                            .child(
-                                gpui_component::button::Button::new("add_cor_exclude_override")
-                                    .label("Force Exclude")
-                                    .small()
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        if let Err(message) = this.add_cor_obligation_override(
-                                            bir_core::profile::ManualObligationOverrideAction::Exclude,
-                                            window,
-                                            cx,
-                                        ) {
-                                            this.save_message = Some(message);
-                                        }
-                                        cx.notify();
-                                    })),
-                            ),
+                        gpui_component::button::Button::new("manage_forms_set_from_overrides")
+                            .label(format!("Manage {} Forms Set", forms_set_year))
+                            .small()
+                            .ghost()
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.forms_editor_year = forms_set_year;
+                                this.forms_editor_selected_code = None;
+                                this.forms_editor_year_select.update(cx, |select, cx| {
+                                    select.set_selected_value(
+                                        &forms_set_year.to_string(),
+                                        window,
+                                        cx,
+                                    );
+                                });
+                                this.active_tab = 5;
+                                cx.notify();
+                            })),
                     ),
             )
             .child(
@@ -3158,6 +3185,9 @@ impl ProfileManagerView {
                 "Compensation Withholding"
             }
             bir_core::profile::RegisteredTaxType::WithholdingFinal => "Final Withholding",
+            bir_core::profile::RegisteredTaxType::WithholdingVatAndPercentage => {
+                "VAT / Percentage Tax Withheld (Form 1600)"
+            }
             bir_core::profile::RegisteredTaxType::ExciseTax => "Excise Tax",
         }
     }
@@ -3225,6 +3255,9 @@ impl ProfileManagerView {
                 for election in elections {
                     let label = match &election.election {
                         bir_core::profile::IncomeTaxElection::EightPercent => "8% Flat Rate",
+                        bir_core::profile::IncomeTaxElection::GraduatedUnspecified => {
+                            "Graduated (deduction method not yet selected)"
+                        }
                         bir_core::profile::IncomeTaxElection::GraduatedOsd => "Graduated + OSD",
                         bir_core::profile::IncomeTaxElection::GraduatedItemized => {
                             "Graduated + Itemized"
@@ -3269,6 +3302,7 @@ impl ProfileManagerView {
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         this.stored_tax_elections
                                             .retain(|e| e.taxable_year != year);
+                                        this.mark_profile_changed();
                                         cx.notify();
                                     }))
                                     .child("Remove"),
@@ -3350,6 +3384,7 @@ impl ProfileManagerView {
                                     // Sort by year descending for display
                                     this.stored_tax_elections
                                         .sort_by_key(|b| std::cmp::Reverse(b.taxable_year));
+                                    this.mark_profile_changed();
                                     cx.notify();
                                 }
                             })),
@@ -3401,6 +3436,12 @@ impl ProfileManagerView {
                     }
                     _ => {}
                 }
+                if !matches!(
+                    id,
+                    "gemini_ocr_enabled_toggle" | "gemini_ocr_consent_toggle"
+                ) {
+                    this.mark_profile_changed();
+                }
                 cx.notify();
             }))
             .child(
@@ -3441,11 +3482,83 @@ impl ProfileManagerView {
         cx: &Context<Self>,
     ) -> bir_core::forms::PerYearFormsSet {
         let taxpayer_profile = self.current_profile(cx);
-        let default_codes = taxpayer_profile.applicable_forms_for_year(year);
-        bir_core::forms::PerYearFormsSet::from_codes(
+        let suggestions =
+            bir_core::integration::form_suggestions_for_profile_year(&taxpayer_profile, year);
+        bir_core::forms::reconcile_forms_set_for_year(
             year,
-            default_codes,
-            bir_core::forms::FormSetSource::Manual,
+            taxpayer_profile.forms_set_for_year(year),
+            &suggestions,
+        )
+        .forms_set
+    }
+
+    fn form_set_source_label(source: bir_core::forms::FormSetSource) -> &'static str {
+        match source {
+            bir_core::forms::FormSetSource::Manual => "Manual override",
+            bir_core::forms::FormSetSource::CorAi => "Legacy COR review",
+            bir_core::forms::FormSetSource::ReviewedCor => "Reviewed COR",
+            bir_core::forms::FormSetSource::InferredTaxType => "Inferred tax type",
+            bir_core::forms::FormSetSource::MigrationBackfill => "Migration review",
+        }
+    }
+
+    fn form_support_label(form_code: &str) -> &'static str {
+        bir_core::forms::form_support_level(form_code).action_label()
+    }
+
+    fn form_set_entry_provenance(entry: &bir_core::forms::FormSetEntry) -> (String, String) {
+        let periods = entry
+            .conflict
+            .as_ref()
+            .map(|conflict| {
+                conflict
+                    .competing_suggestions
+                    .iter()
+                    .map(|suggestion| (suggestion.effective_from, suggestion.effective_until))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_else(|| vec![(entry.effective_from, entry.effective_until)]);
+        let periods = periods
+            .into_iter()
+            .map(|(effective_from, effective_until)| {
+                let start = effective_from
+                    .map(|date| date.format("%Y-%m-%d").to_string())
+                    .unwrap_or_else(|| "unresolved".to_string());
+                let end = effective_until
+                    .map(|date| date.format("%Y-%m-%d").to_string())
+                    .unwrap_or_else(|| "open ended".to_string());
+                format!("{start} to {end}")
+            })
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>()
+            .join("; ");
+        let references = entry
+            .conflict
+            .as_ref()
+            .map(|conflict| {
+                conflict
+                    .competing_suggestions
+                    .iter()
+                    .filter_map(|suggestion| suggestion.source_reference.clone())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_else(|| entry.source_reference.clone().into_iter().collect());
+        let references = references
+            .into_iter()
+            .filter(|reference| !reference.trim().is_empty())
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        (
+            periods,
+            if references.is_empty() {
+                "No stored evidence reference".to_string()
+            } else {
+                references
+            },
         )
     }
 
@@ -3457,30 +3570,51 @@ impl ProfileManagerView {
             .cloned()
             .unwrap_or_else(|| self.seed_default_forms(year, cx));
 
+        Self::toggle_manual_form_entry(&mut set, code, year);
+        self.stored_per_year_forms.insert(year, set);
+        self.mark_profile_changed();
+        cx.notify();
+    }
+
+    fn toggle_manual_form_entry(
+        set: &mut bir_core::forms::PerYearFormsSet,
+        code: String,
+        year: u16,
+    ) {
         if let Some(entry) = set.entries.iter_mut().find(|e| e.form_code == code) {
-            entry.active = !entry.active;
+            let prior_source = Self::form_set_source_label(entry.source);
+            let next_active = !entry.is_filing_active();
+            entry.apply_manual_decision(
+                next_active,
+                Some(format!(
+                    "Manually {} for {} (previous source: {})",
+                    if next_active { "included" } else { "excluded" },
+                    year,
+                    prior_source
+                )),
+            );
         } else {
             let mut new_entry = bir_core::forms::FormSetEntry::from_code(
                 code,
                 bir_core::forms::FormSetSource::Manual,
             );
             new_entry.active = true;
+            new_entry.reason = Some(format!("Manually included for {year}"));
             set.entries.push(new_entry);
         }
-        self.stored_per_year_forms.insert(year, set);
-        cx.notify();
     }
 
     fn add_custom_form(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
-        let code = self
+        let raw_code = self
             .forms_editor_new_code_input
             .read(cx)
             .value()
             .trim()
             .to_uppercase();
-        if code.is_empty() {
+        if raw_code.is_empty() {
             return;
         }
+        let code = bir_core::forms::registry::canonical_form_code(&raw_code);
 
         let reason = self
             .forms_editor_new_reason_input
@@ -3502,7 +3636,10 @@ impl ProfileManagerView {
             "Monthly" => bir_core::forms::FilingFrequency::Monthly,
             "Quarterly" => bir_core::forms::FilingFrequency::Quarterly,
             "Annual" => bir_core::forms::FilingFrequency::Annual,
-            _ => bir_core::forms::FilingFrequency::OpenEnded,
+            "Open Ended / Event" => bir_core::forms::FilingFrequency::OpenEnded,
+            _ => bir_core::forms::registry::find_form(&code)
+                .map(|definition| definition.frequency.clone())
+                .unwrap_or(bir_core::forms::FilingFrequency::OpenEnded),
         };
 
         let year = self.forms_editor_year;
@@ -3512,35 +3649,53 @@ impl ProfileManagerView {
             .cloned()
             .unwrap_or_else(|| self.seed_default_forms(year, cx));
 
-        if !set.entries.iter().any(|e| e.form_code == code) {
-            set.entries.push(bir_core::forms::FormSetEntry {
-                form_code: code.clone(),
-                frequency,
-                active: true,
-                source: bir_core::forms::FormSetSource::Manual,
-                custom: true,
-                reason: reason_opt,
-            });
+        if let Some(entry) = set.entries.iter_mut().find(|entry| entry.form_code == code) {
+            let next_reason = reason_opt.or_else(|| Some(format!("Manually included for {year}")));
+            let changed = !entry.is_filing_active()
+                || entry.source != bir_core::forms::FormSetSource::Manual
+                || entry.reason != next_reason
+                || entry.needs_review();
+            entry.apply_manual_decision(true, next_reason);
             self.stored_per_year_forms.insert(year, set);
-
-            // Reset inputs
-            self.forms_editor_new_code_input
-                .update(cx, |input, cx| input.set_value("", window, cx));
-            self.forms_editor_new_reason_input
-                .update(cx, |input, cx| input.set_value("", window, cx));
-            self.forms_editor_new_frequency_select
-                .update(cx, |select, cx| select.set_selected_value("", window, cx));
+            if changed {
+                self.mark_profile_changed();
+            }
+        } else {
+            let custom = bir_core::forms::registry::find_form(&code).is_none();
+            let mut entry = bir_core::forms::FormSetEntry::from_code(
+                code.clone(),
+                bir_core::forms::FormSetSource::Manual,
+            );
+            entry.frequency = frequency;
+            entry.custom = custom;
+            entry.reason = reason_opt.or_else(|| Some(format!("Manually included for {year}")));
+            set.entries.push(entry);
+            self.stored_per_year_forms.insert(year, set);
+            self.mark_profile_changed();
         }
+
+        self.forms_editor_new_code_input
+            .update(cx, |input, cx| input.set_value("", window, cx));
+        self.forms_editor_new_reason_input
+            .update(cx, |input, cx| input.set_value("", window, cx));
+        self.forms_editor_new_frequency_select
+            .update(cx, |select, cx| select.set_selected_value("", window, cx));
         cx.notify();
     }
 
     fn delete_custom_form(&mut self, code: String, cx: &mut Context<Self>) {
         let year = self.forms_editor_year;
+        let mut removed = false;
         if let Some(set) = self.stored_per_year_forms.get_mut(&year) {
+            let before = set.entries.len();
             set.entries.retain(|e| !(e.form_code == code && e.custom));
+            removed = set.entries.len() != before;
         }
         if self.forms_editor_selected_code.as_ref() == Some(&code) {
             self.forms_editor_selected_code = None;
+        }
+        if removed {
+            self.mark_profile_changed();
         }
         cx.notify();
     }
@@ -3552,19 +3707,17 @@ impl ProfileManagerView {
 
         let selected_year = self.forms_editor_year;
         let taxpayer_profile = self.current_profile(cx);
-
+        let resolved_profile = taxpayer_profile.resolve_tax_profile_for_year(selected_year);
+        let resolution_issues = resolved_profile
+            .issues
+            .iter()
+            .map(|issue| issue.message.clone())
+            .collect::<Vec<_>>();
         let forms_set = self
             .stored_per_year_forms
             .get(&selected_year)
             .cloned()
-            .unwrap_or_else(|| {
-                let default_codes = taxpayer_profile.applicable_forms_for_year(selected_year);
-                bir_core::forms::PerYearFormsSet::from_codes(
-                    selected_year,
-                    default_codes,
-                    bir_core::forms::FormSetSource::Manual,
-                )
-            });
+            .unwrap_or_else(|| self.seed_default_forms(selected_year, cx));
 
         // Gap R4 UI: compute annual ITR conflicts for this year's form set
         let itr_conflicts = bir_core::integration::check_annual_itr_conflicts(&forms_set.entries);
@@ -3581,6 +3734,59 @@ impl ProfileManagerView {
                     .w(gpui::relative(0.75))
                     .gap_3()
                     .child(self.render_forms_editor_header(cx))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .px_3()
+                            .py_2()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(cx.theme().border)
+                            .bg(cx.theme().secondary)
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .child("One filing authority"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(
+                                        "Reviewed COR codes and registered tax types create suggestions here. Your include/exclude decisions become manual overrides and always win during reconciliation.",
+                                    ),
+                            ),
+                    )
+                    .when(!resolution_issues.is_empty(), |this| {
+                        this.child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_1()
+                                .px_3()
+                                .py_2()
+                                .rounded_md()
+                                .bg(gpui::rgba(0xfee2e230))
+                                .border_1()
+                                .border_color(gpui::rgba(0xef4444a0))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .font_weight(FontWeight::BOLD)
+                                        .text_color(gpui::rgb(0xb91c1c))
+                                        .child("Needs review before suggestions can refresh"),
+                                )
+                                .children(resolution_issues.into_iter().map(|message| {
+                                    div()
+                                        .text_xs()
+                                        .text_color(gpui::rgb(0x991b1b))
+                                        .child(message)
+                                })),
+                        )
+                    })
                     // Conflict warning banner (only rendered when there are conflicts)
                     .when(!itr_conflicts.is_empty(), |this| {
                         let conflict_msg = itr_conflicts
@@ -3648,14 +3854,14 @@ impl ProfileManagerView {
                         div()
                             .font_weight(FontWeight::BOLD)
                             .text_lg()
-                            .child("Active Forms Configuration"),
+                            .child(format!("{} Forms Set", selected_year)),
                     )
                     .child(
                         div()
                             .text_xs()
                             .text_color(cx.theme().muted_foreground)
                             .child(
-                                "Select a tax year to manage the authoritative filing obligations.",
+                                "This saved per-year set—not the raw COR extraction—is the authoritative filing list.",
                             ),
                     ),
             )
@@ -3689,11 +3895,12 @@ impl ProfileManagerView {
                                     let to_copy: Vec<bir_core::forms::FormSetEntry> =
                                         source_entries
                                             .into_iter()
-                                            .filter(|e| e.active)
+                                            .filter(|e| e.is_filing_active())
                                             .map(|mut e| {
-                                                e.source = bir_core::forms::FormSetSource::Manual;
-                                                e.reason =
-                                                    Some(format!("Copied from {}", prior_year));
+                                                e.apply_manual_decision(
+                                                    true,
+                                                    Some(format!("Copied from {}", prior_year)),
+                                                );
                                                 e
                                             })
                                             .collect();
@@ -3709,6 +3916,7 @@ impl ProfileManagerView {
                                         .or_insert_with(|| {
                                             bir_core::forms::PerYearFormsSet::new(selected_year)
                                         });
+                                    let mut added = false;
                                     for entry in to_copy {
                                         let already_present = dest
                                             .entries
@@ -3716,7 +3924,11 @@ impl ProfileManagerView {
                                             .any(|e| e.form_code == entry.form_code);
                                         if !already_present {
                                             dest.entries.push(entry);
+                                            added = true;
                                         }
+                                    }
+                                    if added {
+                                        this.mark_profile_changed();
                                     }
                                     cx.notify();
                                 })),
@@ -3752,7 +3964,7 @@ impl ProfileManagerView {
                     .text_xs()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(cx.theme().foreground)
-                    .child("Add Custom Obligation"),
+                    .child("Manually include a form"),
             )
             .child(
                 div()
@@ -3811,14 +4023,15 @@ impl ProfileManagerView {
                 bir_core::forms::FilingFrequency::OpenEnded => "Open Ended / Event",
             };
 
-            let source_str = match entry.source {
-                bir_core::forms::FormSetSource::Manual => "Manual",
-                bir_core::forms::FormSetSource::CorAi => "COR AI",
-                bir_core::forms::FormSetSource::MigrationBackfill => "Migration",
+            let source_str = if entry.needs_review() {
+                "Needs review"
+            } else {
+                Self::form_set_source_label(entry.source)
             };
+            let support_str = Self::form_support_label(&code);
 
             let is_selected = self.forms_editor_selected_code.as_ref() == Some(&code);
-            let active = entry.active;
+            let active = entry.is_filing_active();
 
             let checkbox_elem = div()
                 .id(format!("checkbox_{}", code))
@@ -3916,11 +4129,19 @@ impl ProfileManagerView {
                     )
                     .child(
                         div()
-                            .w(px(100.))
+                            .w(px(110.))
                             .px_3()
                             .text_sm()
                             .text_color(cx.theme().muted_foreground)
                             .child(source_str),
+                    )
+                    .child(
+                        div()
+                            .w(px(110.))
+                            .px_3()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(support_str),
                     )
                     .child(div().w(px(80.)).px_3().child(if entry.custom {
                         div()
@@ -4001,7 +4222,8 @@ impl ProfileManagerView {
                     .child(header_style(cx).w(px(100.)).child("Code"))
                     .child(header_style(cx).flex_grow().child("Description"))
                     .child(header_style(cx).w(px(120.)).child("Frequency"))
-                    .child(header_style(cx).w(px(100.)).child("Source"))
+                    .child(header_style(cx).w(px(110.)).child("Source"))
+                    .child(header_style(cx).w(px(110.)).child("Support"))
                     .child(header_style(cx).w(px(80.)).child("Custom"))
                     .child(
                         header_style(cx)
@@ -4060,6 +4282,14 @@ impl ProfileManagerView {
             bir_core::forms::FilingFrequency::Annual => "Annual",
             bir_core::forms::FilingFrequency::OpenEnded => "Open Ended / Event",
         };
+        let source_label = Self::form_set_source_label(entry.source);
+        let support_label = Self::form_support_label(selected_code);
+        let (effective_period, evidence_reference) = Self::form_set_entry_provenance(entry);
+        let review_message = entry
+            .conflict
+            .as_ref()
+            .map(|conflict| conflict.message.clone());
+        let selected_code_for_toggle = selected_code.clone();
 
         div()
             .flex()
@@ -4091,6 +4321,46 @@ impl ProfileManagerView {
                             .child(title),
                     ),
             )
+            .child(
+                gpui_component::button::Button::new("toggle_selected_form")
+                    .label(if entry.is_filing_active() {
+                        "Exclude for this year"
+                    } else {
+                        "Include for this year"
+                    })
+                    .small()
+                    .ghost()
+                    .on_click(cx.listener(move |this, _event, _window, cx| {
+                        this.toggle_form_obligation(selected_code_for_toggle.clone(), cx);
+                    })),
+            )
+            .when_some(review_message, |this, message| {
+                this.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .px_3()
+                        .py_2()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(gpui::rgba(0xd97706a0))
+                        .bg(gpui::rgba(0xfef3c720))
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(gpui::rgb(0x92400e))
+                                .child("Needs review before filing"),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(gpui::rgb(0x92400e))
+                                .child(message),
+                        ),
+                )
+            })
             .child(
                 div()
                     .flex()
@@ -4129,13 +4399,87 @@ impl ProfileManagerView {
                                     .text_xs()
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(cx.theme().foreground)
-                                    .child(match entry.source {
-                                        bir_core::forms::FormSetSource::Manual => "Manual",
-                                        bir_core::forms::FormSetSource::CorAi => "COR AI",
-                                        bir_core::forms::FormSetSource::MigrationBackfill => {
-                                            "Migration"
-                                        }
+                                    .child(source_label),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .justify_between()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("Decision"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(cx.theme().foreground)
+                                    .child(if entry.needs_review() {
+                                        "Needs review"
+                                    } else if entry.active {
+                                        "Included"
+                                    } else {
+                                        "Excluded"
                                     }),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .justify_between()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("App support"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(cx.theme().foreground)
+                                    .child(support_label),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("Effective profile evidence"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(cx.theme().foreground)
+                                    .child(effective_period),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("Evidence reference"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(cx.theme().foreground)
+                                    .child(evidence_reference),
                             ),
                     ),
             )
@@ -4158,7 +4502,9 @@ impl ProfileManagerView {
                         div()
                             .text_xs()
                             .text_color(cx.theme().muted_foreground)
-                            .child("Changes are saved automatically to your profile draft."),
+                            .child(
+                                "The note and manual include/exclude decision remain pending until Save Profile succeeds.",
+                            ),
                     ),
             )
             .into_any()

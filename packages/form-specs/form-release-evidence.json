@@ -6,11 +6,139 @@
       "visual_parity": null,
       "native_print_export": {
         "macos": null,
-        "windows": null
+        "windows": null,
+        "linux": null
       },
       "packaged_offline": {
         "macos": null,
-        "windows": null
+        "windows": null,
+        "linux": null
+      }
+    },
+    "1601C:2018": {
+      "references_manifest": "packages/form-renderer/references/manifest.json",
+      "visual_parity": null,
+      "native_print_export": {
+        "macos": null,
+        "windows": null,
+        "linux": null
+      },
+      "packaged_offline": {
+        "macos": null,
+        "windows": null,
+        "linux": null
+      }
+    },
+    "0619E:2018": {
+      "references_manifest": "packages/form-renderer/references/manifest.json",
+      "visual_parity": null,
+      "native_print_export": {
+        "macos": null,
+        "windows": null,
+        "linux": null
+      },
+      "packaged_offline": {
+        "macos": null,
+        "windows": null,
+        "linux": null
+      }
+    },
+    "0619F:2018": {
+      "references_manifest": "packages/form-renderer/references/manifest.json",
+      "visual_parity": null,
+      "native_print_export": {
+        "macos": null,
+        "windows": null,
+        "linux": null
+      },
+      "packaged_offline": {
+        "macos": null,
+        "windows": null,
+        "linux": null
+      }
+    },
+    "0605:1999": {
+      "references_manifest": "packages/form-renderer/references/manifest.json",
+      "visual_parity": null,
+      "native_print_export": {
+        "macos": null,
+        "windows": null,
+        "linux": null
+      },
+      "packaged_offline": {
+        "macos": null,
+        "windows": null,
+        "linux": null
+      }
+    },
+    "1701Q:2018": {
+      "references_manifest": "packages/form-renderer/references/manifest.json",
+      "visual_parity": null,
+      "native_print_export": {
+        "macos": null,
+        "windows": null,
+        "linux": null
+      },
+      "packaged_offline": {
+        "macos": null,
+        "windows": null,
+        "linux": null
+      }
+    },
+    "2550Q:2024": {
+      "references_manifest": "packages/form-renderer/references/manifest.json",
+      "visual_parity": null,
+      "native_print_export": {
+        "macos": null,
+        "windows": null,
+        "linux": null
+      },
+      "packaged_offline": {
+        "macos": null,
+        "windows": null,
+        "linux": null
+      }
+    },
+    "1701:2018": {
+      "references_manifest": "packages/form-renderer/references/manifest.json",
+      "visual_parity": null,
+      "native_print_export": {
+        "macos": null,
+        "windows": null,
+        "linux": null
+      },
+      "packaged_offline": {
+        "macos": null,
+        "windows": null,
+        "linux": null
+      }
+    },
+    "1702RT:2018C": {
+      "references_manifest": "packages/form-renderer/references/manifest.json",
+      "visual_parity": null,
+      "native_print_export": {
+        "macos": null,
+        "windows": null,
+        "linux": null
+      },
+      "packaged_offline": {
+        "macos": null,
+        "windows": null,
+        "linux": null
+      }
+    },
+    "1702MX:2018C": {
+      "references_manifest": "packages/form-renderer/references/manifest.json",
+      "visual_parity": null,
+      "native_print_export": {
+        "macos": null,
+        "windows": null,
+        "linux": null
+      },
+      "packaged_offline": {
+        "macos": null,
+        "windows": null,
+        "linux": null
       }
     }
   }

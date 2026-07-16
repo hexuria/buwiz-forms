@@ -3,14 +3,739 @@
   "dpi": 144,
   "forms": [
     {
+      "code": "0605",
+      "fixture": "packages/form-contracts/fixtures/0605-normal.json",
+      "fixture_sha256": "3f76b5f1ae518f81a625b07cd20976b7620bee7b0b1cead224f44af4d20887db",
+      "form_id": "0605v1999",
+      "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/0605version1999_09.02.2022_copy.pdf",
+      "official_source_sha256": "de04419766c59bf27fdeb854c0f7c3f98601900caa20630442e671e2313e536f",
+      "page_count": 2,
+      "page_height_pt": 936.0,
+      "page_width_pt": 612.0,
+      "pages": [
+        {
+          "page": 1,
+          "reference_height_px": 1872,
+          "reference_png": "packages/form-renderer/references/0605-1999-page-1.png",
+          "reference_png_sha256": "419d85b55b05fba3e789ab9ded877cdd0514239ef998f9a15258d9ff78251f84",
+          "reference_width_px": 1224
+        },
+        {
+          "page": 2,
+          "reference_height_px": 1872,
+          "reference_png": "packages/form-renderer/references/0605-1999-page-2.png",
+          "reference_png_sha256": "d1066f9ece7ba7b670f547310851bad94605ba766668d7b9f2097bfefcd02792",
+          "reference_width_px": 1224
+        }
+      ],
+      "reference_provenance": {
+        "kind": "official_pdf_raster",
+        "note": "Rendered directly from the pinned official BIR PDF with Poppler at the manifest DPI; calibration-only and never runtime-loaded.",
+        "replacement_required": false,
+        "runtime_eligible": false
+      },
+      "revision": "1999",
+      "runtime_discrete_assets": [
+        {
+          "asset": "government_seal",
+          "crop_box_px": [
+            38,
+            108,
+            102,
+            167
+          ],
+          "derived_png_sha256": "83e123363cded65b1037cfa124e8236db5cf3b93943cf31ac9042084667591b1",
+          "embedded_in": "packages/form-renderer/src/forms/assets/0605-seal.png",
+          "source_page": 1,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        }
+      ]
+    },
+    {
+      "code": "0619E",
+      "fixture": "packages/form-contracts/fixtures/0619e-normal.json",
+      "fixture_sha256": "d3a55cf0bb5183c8638451426d6962a8a0f4668662c9cb0f9765f2c92a11366c",
+      "form_id": "0619Ev2018",
+      "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/0619-E%20Jan%202018%20rev%20final.pdf",
+      "official_source_sha256": "0418160d63d4e6f68c34f2bad553273a5d148c3686d8562d338d35fcdd0c5215",
+      "page_count": 1,
+      "page_height_pt": 792.0,
+      "page_width_pt": 612.0,
+      "pages": [
+        {
+          "page": 1,
+          "reference_height_px": 1584,
+          "reference_png": "packages/form-renderer/references/0619e-2018-page-1.png",
+          "reference_png_sha256": "924db11df80f2ee4e5df63838ac6b93980725d677632c9739690c9ec9aacb83a",
+          "reference_width_px": 1224
+        }
+      ],
+      "reference_provenance": {
+        "kind": "official_pdf_raster",
+        "note": "Rendered directly from the pinned official BIR PDF with Poppler at the manifest DPI; calibration-only and never runtime-loaded.",
+        "replacement_required": false,
+        "runtime_eligible": false
+      },
+      "revision": "2018",
+      "runtime_discrete_assets": [
+        {
+          "asset": "government_seal",
+          "crop_box_px": [
+            464,
+            48,
+            524,
+            108
+          ],
+          "derived_png_sha256": "ddeb73b21e17a3f273076f3a7834e99738945d0d4f049b2bdfe2b86ce14e0fbc",
+          "embedded_in": "packages/form-renderer/src/forms/assets/0619e-seal.png",
+          "source_page": 1,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        },
+        {
+          "asset": "static_form_barcode_page_1",
+          "crop_box_px": [
+            908,
+            128,
+            1186,
+            218
+          ],
+          "derived_png_sha256": "af5ff17729b51c6e41c316e89e5315d7413cb09ed35dfc85504117709accb8ee",
+          "embedded_in": "packages/form-renderer/src/forms/assets/0619e-barcode-page-1.png",
+          "source_page": 1,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        }
+      ]
+    },
+    {
+      "code": "0619F",
+      "fixture": "packages/form-contracts/fixtures/0619f-normal.json",
+      "fixture_sha256": "e56153e3b269da028de8042dc59f5aa93df142c6b24204299ba9dd137b3e72e6",
+      "form_id": "0619Fv2018",
+      "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/0619-F%20Jan%202018%20rev%20final.pdf",
+      "official_source_sha256": "edd7357390b1f0d95f2a38c9bb76252341c15b54b82bffd338bd540452ff15e1",
+      "page_count": 1,
+      "page_height_pt": 792.0,
+      "page_width_pt": 612.0,
+      "pages": [
+        {
+          "page": 1,
+          "reference_height_px": 1584,
+          "reference_png": "packages/form-renderer/references/0619f-2018-page-1.png",
+          "reference_png_sha256": "9ca59837f330ad026f1d90e5b19f7d524945b66314b09ded2644efc508f2b627",
+          "reference_width_px": 1224
+        }
+      ],
+      "reference_provenance": {
+        "kind": "official_pdf_raster",
+        "note": "Rendered directly from the pinned official BIR PDF with Poppler at the manifest DPI; calibration-only and never runtime-loaded.",
+        "replacement_required": false,
+        "runtime_eligible": false
+      },
+      "revision": "2018",
+      "runtime_discrete_assets": [
+        {
+          "asset": "government_seal",
+          "crop_box_px": [
+            464,
+            31,
+            524,
+            86
+          ],
+          "derived_png_sha256": "b9e962368786a3a08702234fc3e5b6ec98ce89879ef11662d18b9b09753868d2",
+          "embedded_in": "packages/form-renderer/src/forms/assets/0619f-seal.png",
+          "source_page": 1,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        },
+        {
+          "asset": "static_form_barcode_page_1",
+          "crop_box_px": [
+            907,
+            99,
+            1187,
+            183
+          ],
+          "derived_png_sha256": "c50c4fc8c50e0136117a9cfc32e905ba9afef1fe5365e0dcbfaebcd6c1855ad8",
+          "embedded_in": "packages/form-renderer/src/forms/assets/0619f-barcode-page-1.png",
+          "source_page": 1,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        }
+      ]
+    },
+    {
+      "code": "1601C",
+      "fixture": "packages/form-contracts/fixtures/1601c-normal.json",
+      "fixture_sha256": "ae115b4e97c9b2ffc9b59b5820e255be3e180efba09996d72030f0c6d607ea34",
+      "form_id": "1601Cv2018",
+      "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/1601C%20final%20Jan%202018%20with%20DPA.pdf",
+      "official_source_sha256": "c8faaa71015337a73b4ceb96bfb265c539589ab5e10eb27899bb81f87f417397",
+      "page_count": 2,
+      "page_height_pt": 936.0,
+      "page_width_pt": 612.0,
+      "pages": [
+        {
+          "page": 1,
+          "reference_height_px": 1872,
+          "reference_png": "packages/form-renderer/references/1601c-2018-page-1.png",
+          "reference_png_sha256": "923cc850191e49ea69874dff55a7257fa0b3428b38a3f0387911279f1fabf023",
+          "reference_width_px": 1224
+        },
+        {
+          "page": 2,
+          "reference_height_px": 1872,
+          "reference_png": "packages/form-renderer/references/1601c-2018-page-2.png",
+          "reference_png_sha256": "26af686719726ac98f160b0665c8606e6501e46f95722ef150951ee7e976418a",
+          "reference_width_px": 1224
+        }
+      ],
+      "reference_provenance": {
+        "kind": "official_pdf_raster",
+        "note": "Rendered directly from the pinned official BIR PDF with Poppler at the manifest DPI; calibration-only and never runtime-loaded.",
+        "replacement_required": false,
+        "runtime_eligible": false
+      },
+      "revision": "2018",
+      "runtime_discrete_assets": [
+        {
+          "asset": "government_seal",
+          "crop_box_px": [
+            457,
+            20,
+            519,
+            78
+          ],
+          "derived_png_sha256": "e566c3870a95ead4cee13705ec41104aa7dba1fb92c0667b79e2b0666976f060",
+          "embedded_in": "packages/form-renderer/src/forms/assets/1601c-seal.png",
+          "source_page": 1,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        },
+        {
+          "asset": "static_form_barcode_page_1",
+          "crop_box_px": [
+            881,
+            96,
+            1187,
+            186
+          ],
+          "derived_png_sha256": "f71a72e73bcbee1e8002e84c103741c2bb640da789fac154dbba556c2d8709cf",
+          "embedded_in": "packages/form-renderer/src/forms/assets/1601c-barcode-page-1.png",
+          "source_page": 1,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        },
+        {
+          "asset": "static_form_barcode_page_2",
+          "crop_box_px": [
+            879,
+            68,
+            1185,
+            154
+          ],
+          "derived_png_sha256": "60582db03ad03295798bce5f73ea16c05bc1f0b85906dbc975c4c2bc2feeca03",
+          "embedded_in": "packages/form-renderer/src/forms/assets/1601c-barcode-page-2.png",
+          "source_page": 2,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        }
+      ]
+    },
+    {
+      "code": "1701",
+      "fixture": "packages/form-contracts/fixtures/1701-normal.json",
+      "fixture_sha256": "469be004c4f32ee8e27a4589731cedeb9b6dab61410be831ff0ff001f30dfe58",
+      "form_id": "1701v2018",
+      "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/1701%20Jan%202018%20final%20with%20rates.pdf",
+      "official_source_sha256": "19be91d78258eb7c255f2615610db2739f10c378f8ac97adc0887c1bf40d1b2e",
+      "page_count": 4,
+      "page_height_pt": 936.0,
+      "page_width_pt": 612.0,
+      "pages": [
+        {
+          "page": 1,
+          "reference_height_px": 1872,
+          "reference_png": "packages/form-renderer/references/1701-2018-page-1.png",
+          "reference_png_sha256": "37afb5ac1cfb36970601650e3d24a856e61fd0abc7afd0f36d6af9be48d5dd4a",
+          "reference_width_px": 1224
+        },
+        {
+          "page": 2,
+          "reference_height_px": 1872,
+          "reference_png": "packages/form-renderer/references/1701-2018-page-2.png",
+          "reference_png_sha256": "51a210c01bd188a7ad92dc52136afa98d2469810bf9cc0cfa2b95f7f69b23400",
+          "reference_width_px": 1224
+        },
+        {
+          "page": 3,
+          "reference_height_px": 1872,
+          "reference_png": "packages/form-renderer/references/1701-2018-page-3.png",
+          "reference_png_sha256": "d9f565209adafb59f71befef2a4523416f71abcd37d0d41ca5c16a490e5bb52c",
+          "reference_width_px": 1224
+        },
+        {
+          "page": 4,
+          "reference_height_px": 1872,
+          "reference_png": "packages/form-renderer/references/1701-2018-page-4.png",
+          "reference_png_sha256": "8597a626381d0a45164fcdc274e3706965b6290870bd320a2ef87723c2b930a0",
+          "reference_width_px": 1224
+        }
+      ],
+      "reference_provenance": {
+        "kind": "official_pdf_raster",
+        "note": "Rendered directly from the pinned official BIR PDF with Poppler at the manifest DPI; calibration-only and never runtime-loaded.",
+        "replacement_required": false,
+        "runtime_eligible": false
+      },
+      "revision": "2018",
+      "runtime_discrete_assets": [
+        {
+          "asset": "government_seal",
+          "crop_box_px": [
+            485,
+            30,
+            539,
+            87
+          ],
+          "derived_png_sha256": "eda4415f9587d26ff520f14e9796405d26f2479a271af33bde596a6a12f3a9ce",
+          "embedded_in": "packages/form-renderer/src/forms/assets/1701-seal.png",
+          "source_page": 1,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        },
+        {
+          "asset": "static_form_barcode_page_1",
+          "crop_box_px": [
+            874,
+            95,
+            1199,
+            191
+          ],
+          "derived_png_sha256": "de40bf4ef293de4926073c6b96b5d16719f1ebf7c72d13f51862e51741739720",
+          "embedded_in": "packages/form-renderer/src/forms/assets/1701-barcode-page-1.png",
+          "source_page": 1,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        },
+        {
+          "asset": "static_form_barcode_page_2",
+          "crop_box_px": [
+            870,
+            38,
+            1199,
+            132
+          ],
+          "derived_png_sha256": "fad49f7f9ef41a4ffb83384d44f3d5f6568ce4388aa59bd49540940fa62d2b61",
+          "embedded_in": "packages/form-renderer/src/forms/assets/1701-barcode-page-2.png",
+          "source_page": 2,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        },
+        {
+          "asset": "static_form_barcode_page_3",
+          "crop_box_px": [
+            864,
+            38,
+            1199,
+            132
+          ],
+          "derived_png_sha256": "382bc418aab01a5236d02004706c3aa9fd41e10b9cd4b3f54fdba7edae034fc4",
+          "embedded_in": "packages/form-renderer/src/forms/assets/1701-barcode-page-3.png",
+          "source_page": 3,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        },
+        {
+          "asset": "static_form_barcode_page_4",
+          "crop_box_px": [
+            868,
+            38,
+            1199,
+            132
+          ],
+          "derived_png_sha256": "705a9eba84e1b163588b161657e9ad9422213cc0a56ce5a5d80ab4055c4f61c2",
+          "embedded_in": "packages/form-renderer/src/forms/assets/1701-barcode-page-4.png",
+          "source_page": 4,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        }
+      ]
+    },
+    {
+      "code": "1701Q",
+      "fixture": "packages/form-contracts/fixtures/1701q-normal.json",
+      "fixture_sha256": "ca8a90050a22d5f18eaab4fcada5dfce5a074ec053c86ffa87d2694b9f9f12e8",
+      "form_id": "1701Qv2018",
+      "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/1701Q%20Jan%202018%20final%20rev2_copy.pdf",
+      "official_source_sha256": "c731d3f12556e6f19ab81f6113ca7c4a23f7ed099675c03451ac0074d96b85ed",
+      "page_count": 2,
+      "page_height_pt": 936.0,
+      "page_width_pt": 612.0,
+      "pages": [
+        {
+          "page": 1,
+          "reference_height_px": 1872,
+          "reference_png": "packages/form-renderer/references/1701q-2018-page-1.png",
+          "reference_png_sha256": "dcd98d06dde89732f4d340d6add017e2bf4b7040f3eda755a618ba43f01172ef",
+          "reference_width_px": 1224
+        },
+        {
+          "page": 2,
+          "reference_height_px": 1872,
+          "reference_png": "packages/form-renderer/references/1701q-2018-page-2.png",
+          "reference_png_sha256": "d69c01b30c6f86a92d090b3f81965a6e5f1464444012c425cece6a1ac84e1bf8",
+          "reference_width_px": 1224
+        }
+      ],
+      "reference_provenance": {
+        "kind": "official_pdf_raster",
+        "note": "Rendered directly from the pinned official BIR PDF with Poppler at the manifest DPI; calibration-only and never runtime-loaded.",
+        "replacement_required": false,
+        "runtime_eligible": false
+      },
+      "revision": "2018",
+      "runtime_discrete_assets": [
+        {
+          "asset": "government_seal",
+          "crop_box_px": [
+            478,
+            15,
+            532,
+            73
+          ],
+          "derived_png_sha256": "e5820e87ad13ec0183d9b113fa9aef6d40d4e7a6d0dbb1f8cfd5965f363a7c4a",
+          "embedded_in": "packages/form-renderer/src/forms/assets/1701q-seal.png",
+          "source_page": 1,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        },
+        {
+          "asset": "static_form_barcode_page_1",
+          "crop_box_px": [
+            881,
+            87,
+            1188,
+            181
+          ],
+          "derived_png_sha256": "e71c8154d80f62f5ff1057cedc2015a4dbd955acc42c9dd8ec8651f64c05f909",
+          "embedded_in": "packages/form-renderer/src/forms/assets/1701q-barcode-page-1.png",
+          "source_page": 1,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        },
+        {
+          "asset": "static_form_barcode_page_2",
+          "crop_box_px": [
+            887,
+            64,
+            1193,
+            172
+          ],
+          "derived_png_sha256": "cf48f21702660b07d0b5c281dd5883507c24abdc6d462c01b6fa12b0a44ed890",
+          "embedded_in": "packages/form-renderer/src/forms/assets/1701q-barcode-page-2.png",
+          "source_page": 2,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        }
+      ]
+    },
+    {
+      "code": "1702MX",
+      "fixture": "packages/form-contracts/fixtures/1702mx-normal.json",
+      "fixture_sha256": "d2f70e503945974783358b321a772e0ca4025736c93e961e29e9191779ab4ec2",
+      "form_id": "1702MXv2018C",
+      "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/1702-MX%20Jan%202018%20ENCS%20Final%20with%20OSDv2.pdf",
+      "official_source_sha256": "81c05fffadde6c0b4098aeba8547a9820a0806c6be9b0c6ceac5597cab4263d2",
+      "page_count": 4,
+      "page_height_pt": 936.0,
+      "page_width_pt": 612.0,
+      "pages": [
+        {
+          "page": 1,
+          "reference_height_px": 1872,
+          "reference_png": "packages/form-renderer/references/1702mx-2018c-page-1.png",
+          "reference_png_sha256": "c5c5788a1f0d6e3ae74e77099c53c8c77a233e929b3ab274599ef951b0e6af40",
+          "reference_width_px": 1224
+        },
+        {
+          "page": 2,
+          "reference_height_px": 1872,
+          "reference_png": "packages/form-renderer/references/1702mx-2018c-page-2.png",
+          "reference_png_sha256": "a6f00d14e7c10e0d96b3c7377625a376f7a3c5a1f2f9f9013ef14500e7d62207",
+          "reference_width_px": 1224
+        },
+        {
+          "page": 3,
+          "reference_height_px": 1872,
+          "reference_png": "packages/form-renderer/references/1702mx-2018c-page-3.png",
+          "reference_png_sha256": "34f425674f33e303a29b906a413c7e408a072742ecae0d91ca30d01a2a9938a4",
+          "reference_width_px": 1224
+        },
+        {
+          "page": 4,
+          "reference_height_px": 1872,
+          "reference_png": "packages/form-renderer/references/1702mx-2018c-page-4.png",
+          "reference_png_sha256": "f915402e6aee6bd9b4bfeefe0f7d1f2ed6c767c1284b492f0f67c364feb9065f",
+          "reference_width_px": 1224
+        }
+      ],
+      "reference_provenance": {
+        "kind": "official_pdf_raster",
+        "note": "Rendered directly from the pinned official BIR PDF with Poppler at the manifest DPI; calibration-only and never runtime-loaded.",
+        "replacement_required": false,
+        "runtime_eligible": false
+      },
+      "revision": "2018C",
+      "runtime_discrete_assets": [
+        {
+          "asset": "government_seal",
+          "crop_box_px": [
+            455,
+            51,
+            519,
+            115
+          ],
+          "derived_png_sha256": "59e2e5941160df836aeddc94e709d77a7064ed0a19324f6c17fd1c84eff24e6a",
+          "embedded_in": "packages/form-renderer/src/forms/assets/1702mx-seal.png",
+          "source_page": 1,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        },
+        {
+          "asset": "static_form_barcode_page_1",
+          "crop_box_px": [
+            855,
+            122,
+            1185,
+            234
+          ],
+          "derived_png_sha256": "3500dcc367b3d26bb587ef1f15eadb1fb02cb16418d9461f3518922ab6414e5f",
+          "embedded_in": "packages/form-renderer/src/forms/assets/1702mx-barcode-page-1.png",
+          "source_page": 1,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        },
+        {
+          "asset": "static_form_barcode_page_2",
+          "crop_box_px": [
+            855,
+            55,
+            1185,
+            160
+          ],
+          "derived_png_sha256": "b37ce51d2fd02115cd1423b5407fbf4f8ee8a6b2a6e90fd8c4fbf45fd849d25c",
+          "embedded_in": "packages/form-renderer/src/forms/assets/1702mx-barcode-page-2.png",
+          "source_page": 2,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        },
+        {
+          "asset": "static_form_barcode_page_3",
+          "crop_box_px": [
+            855,
+            88,
+            1185,
+            193
+          ],
+          "derived_png_sha256": "3581f657c0f826251f0d20116d1bfdd8f5b9dc85ef4dd0434cc5453ec58e2f4f",
+          "embedded_in": "packages/form-renderer/src/forms/assets/1702mx-barcode-page-3.png",
+          "source_page": 3,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        },
+        {
+          "asset": "static_form_barcode_page_4",
+          "crop_box_px": [
+            855,
+            55,
+            1185,
+            160
+          ],
+          "derived_png_sha256": "71b838c4682917c164d413386d2d65d6512a0910a52b51dafde3dd181dde41a5",
+          "embedded_in": "packages/form-renderer/src/forms/assets/1702mx-barcode-page-4.png",
+          "source_page": 4,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        }
+      ]
+    },
+    {
+      "code": "1702RT",
+      "fixture": "packages/form-contracts/fixtures/1702rt-normal.json",
+      "fixture_sha256": "c2506735870f32d9da7b3235022ccd6057b4d2ecfe40a2a8e23dd1122d294fd3",
+      "form_id": "1702RTv2018C",
+      "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/1702-RT%20Jan%202018%20ENCS%20Final%20v3.pdf",
+      "official_source_sha256": "d9a6a8a13e0114934261151c4eb269a1573042e7ce670eaf12b15f169d308d2d",
+      "page_count": 4,
+      "page_height_pt": 936.0,
+      "page_width_pt": 612.0,
+      "pages": [
+        {
+          "page": 1,
+          "reference_height_px": 1872,
+          "reference_png": "packages/form-renderer/references/1702rt-2018c-page-1.png",
+          "reference_png_sha256": "25d7d93484fa8d13735dec7f9794dbc42155187b530029afdc969f4009fc203f",
+          "reference_width_px": 1224
+        },
+        {
+          "page": 2,
+          "reference_height_px": 1872,
+          "reference_png": "packages/form-renderer/references/1702rt-2018c-page-2.png",
+          "reference_png_sha256": "9c421bcac8b3aee9faf03b243e8ff0c3054c010da48e754d30d01fde8ad4699b",
+          "reference_width_px": 1224
+        },
+        {
+          "page": 3,
+          "reference_height_px": 1872,
+          "reference_png": "packages/form-renderer/references/1702rt-2018c-page-3.png",
+          "reference_png_sha256": "d0fef4856013f4645c4bd6dc8b635b1d76e155ae544c0bf82e339035e52c2d53",
+          "reference_width_px": 1224
+        },
+        {
+          "page": 4,
+          "reference_height_px": 1872,
+          "reference_png": "packages/form-renderer/references/1702rt-2018c-page-4.png",
+          "reference_png_sha256": "f9471368a54efcbe2fcab6744dfbf616111cf690d39438998fe83f9f9fe500a9",
+          "reference_width_px": 1224
+        }
+      ],
+      "reference_provenance": {
+        "kind": "official_pdf_raster",
+        "note": "Rendered directly from the pinned official BIR PDF with Poppler at the manifest DPI; calibration-only and never runtime-loaded.",
+        "replacement_required": false,
+        "runtime_eligible": false
+      },
+      "revision": "2018C",
+      "runtime_discrete_assets": [
+        {
+          "asset": "government_seal",
+          "crop_box_px": [
+            454,
+            56,
+            518,
+            120
+          ],
+          "derived_png_sha256": "b2589da93414a92b35398350d9b399d92b4519e0dd754de347bb3e69f4c6a5cf",
+          "embedded_in": "packages/form-renderer/src/forms/assets/1702rt-seal.png",
+          "source_page": 1,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        },
+        {
+          "asset": "static_form_barcode_page_1",
+          "crop_box_px": [
+            860,
+            132,
+            1190,
+            232
+          ],
+          "derived_png_sha256": "82f01bc21a58c1a6f24759bd169682058f125732b741e4c939bb7aaade4b191e",
+          "embedded_in": "packages/form-renderer/src/forms/assets/1702rt-barcode-page-1.png",
+          "source_page": 1,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        },
+        {
+          "asset": "static_form_barcode_page_2",
+          "crop_box_px": [
+            860,
+            176,
+            1190,
+            276
+          ],
+          "derived_png_sha256": "b7bf73efa81a194b511f192b4b82ab2c4e7b236b633b6040687615c54fdb640a",
+          "embedded_in": "packages/form-renderer/src/forms/assets/1702rt-barcode-page-2.png",
+          "source_page": 2,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        },
+        {
+          "asset": "static_form_barcode_page_3",
+          "crop_box_px": [
+            860,
+            75,
+            1190,
+            175
+          ],
+          "derived_png_sha256": "788994dd2130921883c7203d12f9041f1db948c9e8e09854684f746f18fbc604",
+          "embedded_in": "packages/form-renderer/src/forms/assets/1702rt-barcode-page-3.png",
+          "source_page": 3,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        },
+        {
+          "asset": "static_form_barcode_page_4",
+          "crop_box_px": [
+            860,
+            75,
+            1190,
+            175
+          ],
+          "derived_png_sha256": "0c2af9a1af251a034d7f2e5c18930c9a6f03712c3ee23ff7b16532675e46414d",
+          "embedded_in": "packages/form-renderer/src/forms/assets/1702rt-barcode-page-4.png",
+          "source_page": 4,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        }
+      ]
+    },
+    {
+      "code": "2550Q",
+      "fixture": "packages/form-contracts/fixtures/2550q-normal.json",
+      "fixture_sha256": "f9b13277d40b0b6b093ac4f1c93c289ff72fcc77e191a3a98d3eb27ce11176b3",
+      "form_id": "2550Qv2024",
+      "official_source": "https://bir-cdn.bir.gov.ph/BIR/pdf/2550Q%20%20April%202024%20ENCS_Final.pdf",
+      "official_source_sha256": "18eb16925010fdda820cef958221ba2c0d073066efa93a898113e39b31135a25",
+      "page_count": 2,
+      "page_height_pt": 1008.0,
+      "page_width_pt": 612.0,
+      "pages": [
+        {
+          "page": 1,
+          "reference_height_px": 2016,
+          "reference_png": "packages/form-renderer/references/2550q-2024-page-1.png",
+          "reference_png_sha256": "abfa7be4cb205a9a7488e865279c9b83b50b8b581b6019318c5a98646b74cceb",
+          "reference_width_px": 1224
+        },
+        {
+          "page": 2,
+          "reference_height_px": 2016,
+          "reference_png": "packages/form-renderer/references/2550q-2024-page-2.png",
+          "reference_png_sha256": "6bcf45b6780789601b4a6a659cad12ef8777f3a61179ee82d9f93c62c85b97f4",
+          "reference_width_px": 1224
+        }
+      ],
+      "reference_provenance": {
+        "kind": "official_pdf_raster",
+        "note": "Rendered directly from the pinned official BIR PDF with Poppler at the manifest DPI; calibration-only and never runtime-loaded.",
+        "replacement_required": false,
+        "runtime_eligible": false
+      },
+      "revision": "2024",
+      "runtime_discrete_assets": [
+        {
+          "asset": "government_seal",
+          "crop_box_px": [
+            461,
+            34,
+            524,
+            94
+          ],
+          "derived_png_sha256": "77d0e1f977e6a2d48ed617c4d973a679b34517b6f15e039d023f8dda172d151d",
+          "embedded_in": "packages/form-renderer/src/forms/assets/2550q-seal.png",
+          "source_page": 1,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        },
+        {
+          "asset": "static_form_barcode_page_1",
+          "crop_box_px": [
+            868,
+            102,
+            1181,
+            196
+          ],
+          "derived_png_sha256": "8dbca5deea1b6302df4618be83c1bacee258f3e8778407c3b2bb3412fd4700c0",
+          "embedded_in": "packages/form-renderer/src/forms/assets/2550q-barcode-page-1.png",
+          "source_page": 1,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        },
+        {
+          "asset": "static_form_barcode_page_2",
+          "crop_box_px": [
+            867,
+            48,
+            1176,
+            139
+          ],
+          "derived_png_sha256": "b78164ad8933a1ef4bd620828383f87df70d648d43bb281b236448527a90273e",
+          "embedded_in": "packages/form-renderer/src/forms/assets/2550q-barcode-page-2.png",
+          "source_page": 2,
+          "treatment": "exact lossless crop from official 144 DPI source raster"
+        }
+      ]
+    },
+    {
       "code": "2551Q",
       "fixture": "packages/form-contracts/fixtures/2551q-6-rows.json",
       "fixture_sha256": "f3d49ddab5cdd7c1d889a7b2cbd519babf7556c186702f0232b9f18257f7a5b7",
       "form_id": "2551Qv2018",
-      "formtype": "formtypes/2551Qv2018/formtype.json",
-      "formtype_sha256": "1e6beb14024a1335c22d8e0506af8dbb0b56084d8c877c7bf1e2e4efa35728f5",
-      "metadata": "formtypes/2551Qv2018/metadata.json",
-      "metadata_sha256": "c71547d2ff917a30480c75dc76de2461ca7b51c22c3a08381cd06b316822eadb",
       "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/2551Q%20Jan%202018%20ENCS%20final%20rev%203_copy.pdf",
       "official_source_sha256": "1f270ecf66d778836a14697863e420ff65d5ed0a5576a6cf58b97c9a8e8c9b24",
       "page_count": 2,
@@ -21,21 +746,23 @@
           "page": 1,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/2551q-2018-page-1.png",
-          "reference_png_sha256": "c78f0724e2f320f1b306408008e9085ed36397c4e1add66bf5e77c322a3485ea",
-          "reference_width_px": 1224,
-          "source_svg": "formtypes/2551Qv2018/pages/page1.svg",
-          "source_svg_sha256": "e62c392a3962ba4c2c31ffcb4b77a7798140473a2af99abf95173680536db599"
+          "reference_png_sha256": "8f93ea4f937ca9bdb48ecc5b57de30e5130ab35608fdfc4609cb8dbf03f3f3d3",
+          "reference_width_px": 1224
         },
         {
           "page": 2,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/2551q-2018-page-2.png",
-          "reference_png_sha256": "d6ab5afbf6b3f4cbac7c69a01df231eaf6dcf7fde587e78c02ee20e3f2508d1a",
-          "reference_width_px": 1224,
-          "source_svg": "formtypes/2551Qv2018/pages/page2.svg",
-          "source_svg_sha256": "377ec4cee07cbff674686926aa0d402ec068b9a70fe3e8dbfc9802e90902f47a"
+          "reference_png_sha256": "67d0d81fd14e5130e6e93f7e9eedc5f9219028a1cea5ecf5674dfce3c87f31da",
+          "reference_width_px": 1224
         }
       ],
+      "reference_provenance": {
+        "kind": "official_pdf_raster",
+        "note": "Rendered directly from the pinned official BIR PDF with Poppler at the manifest DPI; calibration-only and never runtime-loaded.",
+        "replacement_required": false,
+        "runtime_eligible": false
+      },
       "revision": "2018",
       "runtime_discrete_assets": [
         {
@@ -46,7 +773,7 @@
             540,
             100
           ],
-          "derived_png_sha256": "d532deb6eff07393f0dd2360526805bbcf2680c727baedbb4510ed63c58fb3f4",
+          "derived_png_sha256": "9ac67b7ae9b242f0edfea91e8c68f67740fdf3b1e106e853f47e126f10e99d1b",
           "embedded_in": "packages/form-renderer/src/forms/official2551QAssets.ts",
           "source_page": 1,
           "treatment": "16-color grayscale quantization"
@@ -59,7 +786,7 @@
             1170,
             212
           ],
-          "derived_png_sha256": "ddb2025f8630575db15d43b855511f50821b25bc5fa05f767b2439bd9bc45279",
+          "derived_png_sha256": "875dc5520cdbd5c9be0c57980ac87db6e48c1b675d76881624a18f87df0e1683",
           "embedded_in": "packages/form-renderer/src/forms/official2551QAssets.ts",
           "source_page": 1,
           "treatment": "monochrome threshold at 180"
@@ -72,17 +799,15 @@
             1170,
             195
           ],
-          "derived_png_sha256": "dd1e8dd49782640a51fb7a69bae6662ca595f73384c371d9344a1448e3530e77",
+          "derived_png_sha256": "9db0d92ee3216af46eedab3993ca83ed1550b8c792b8bd7ad06fd2348b553dd8",
           "embedded_in": "packages/form-renderer/src/forms/official2551QAssets.ts",
           "source_page": 2,
           "treatment": "monochrome threshold at 180"
         }
-      ],
-      "template": "formtypes/2551Qv2018/template.typ",
-      "template_sha256": "a9f30daa3e328d1b5828ace4a37e26d73f9303c7ddc18273d378348f4297864d"
+      ]
     }
   ],
   "generator": "cargo run -p bir-print --bin generate_render_contract -- --visual-references",
   "runtime_background_allowed": false,
-  "schema_version": 1
+  "schema_version": 2
 }

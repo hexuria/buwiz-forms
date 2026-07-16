@@ -780,60 +780,6 @@ impl AppState {
                                 this.child(div().text_sm().text_color(cx.theme().foreground).child("Settings"))
                             })
                     )
-                    .when(cfg!(feature = "layout-editor"), |this| {
-                        this.child(
-                            div()
-                                .id("pdf_layout_editor_btn")
-                                .flex()
-                                .items_center()
-                                .w_full()
-                                .cursor_pointer()
-                                .hover(|s| s.bg(cx.theme().muted))
-                                .when(is_mini, |this| {
-                                    this.justify_center().size(px(48.)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
-                                })
-                                .when(!is_mini, |this| {
-                                    this.justify_start().h_10().px_3().gap_3().rounded_md().bg(cx.theme().secondary)
-                                })
-                                .on_click(cx.listener(|_this, _ev, _window, _cx| {
-                                    #[cfg(feature = "layout-editor")]
-                                    {
-                                        _this.active_view = ActiveView::PdfLayoutEditor;
-                                        _cx.notify();
-                                    }
-                                }))
-                                .child(Icon::new(IconName::Frame).size(px(20.)).text_color(cx.theme().foreground))
-                                .when(!is_mini, |this| {
-                                    this.child(div().text_sm().text_color(cx.theme().foreground).child("Form Editor"))
-                                })
-                        )
-                        .child(
-                            div()
-                                .id("typst_calibration_btn")
-                                .flex()
-                                .items_center()
-                                .w_full()
-                                .cursor_pointer()
-                                .hover(|s| s.bg(cx.theme().muted))
-                                .when(is_mini, |this| {
-                                    this.justify_center().size(px(48.)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
-                                })
-                                .when(!is_mini, |this| {
-                                    this.justify_start().h_10().px_3().gap_3().rounded_md().bg(cx.theme().secondary)
-                                })
-                                .on_click(cx.listener(|_this, _ev, _window, _cx| {
-                                    #[cfg(feature = "layout-editor")]
-                                    {
-                                        _this.active_view = ActiveView::TypstCalibration;
-                                        _cx.notify();
-                                    }
-                                }))
-                                .child(Icon::new(IconName::Eye).size(px(20.)).text_color(cx.theme().foreground))
-                                .when(!is_mini, |this| {
-                                    this.child(div().text_sm().text_color(cx.theme().foreground).child("Inspector"))
-                                })
-                        )
-                    })
             )
     }
 }

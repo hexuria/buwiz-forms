@@ -1,0 +1,506 @@
+{
+  "fields": {
+    "atc": {
+      "type": "text",
+      "value": "II012"
+    },
+    "citizenship": {
+      "type": "text",
+      "value": "FILIPINO"
+    },
+    "civil_status": {
+      "type": "text",
+      "value": "married"
+    },
+    "claims_foreign_tax_credits": {
+      "type": "boolean",
+      "value": false
+    },
+    "date_of_birth": {
+      "type": "text",
+      "value": "01/15/1990"
+    },
+    "deduction_method": {
+      "type": "text",
+      "value": "osd"
+    },
+    "employer_1_compensation": {
+      "type": "decimal",
+      "value": 480000.0
+    },
+    "employer_1_name": {
+      "type": "text",
+      "value": "AUTHORIZED EMPLOYER WITH A DELIBERATELY LONG REGISTERED LEGAL NAME"
+    },
+    "employer_1_owner": {
+      "type": "text",
+      "value": "taxpayer"
+    },
+    "employer_1_tin": {
+      "type": "text",
+      "value": "00000000000000"
+    },
+    "employer_1_withheld": {
+      "type": "decimal",
+      "value": 21000.0
+    },
+    "employer_2_compensation": {
+      "type": "decimal",
+      "value": 320000.0
+    },
+    "employer_2_name": {
+      "type": "text",
+      "value": "REVIEWED PROFESSIONAL PARTNERSHIP"
+    },
+    "employer_2_owner": {
+      "type": "text",
+      "value": "spouse"
+    },
+    "employer_2_tin": {
+      "type": "text",
+      "value": "11122233300000"
+    },
+    "employer_2_withheld": {
+      "type": "decimal",
+      "value": 12000.0
+    },
+    "foreign_tax_number": {
+      "type": "text",
+      "value": ""
+    },
+    "has_exempt_income": {
+      "type": "boolean",
+      "value": false
+    },
+    "has_special_rate_income": {
+      "type": "boolean",
+      "value": false
+    },
+    "is_amended": {
+      "type": "boolean",
+      "value": false
+    },
+    "is_short_period": {
+      "type": "boolean",
+      "value": false
+    },
+    "joint_filing_status": {
+      "type": "text",
+      "value": "joint"
+    },
+    "machine_validation_or_receipt_details": {
+      "type": "text",
+      "value": ""
+    },
+    "number_of_attachments": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "overpayment_disposition": {
+      "type": "text",
+      "value": "none"
+    },
+    "part_ii_22_spouse": {
+      "type": "decimal",
+      "value": 75500.0
+    },
+    "part_ii_22_taxpayer": {
+      "type": "decimal",
+      "value": 138750.0
+    },
+    "part_ii_23_spouse": {
+      "type": "decimal",
+      "value": 12000.0
+    },
+    "part_ii_23_taxpayer": {
+      "type": "decimal",
+      "value": 21000.0
+    },
+    "part_ii_24_spouse": {
+      "type": "decimal",
+      "value": 63500.0
+    },
+    "part_ii_24_taxpayer": {
+      "type": "decimal",
+      "value": 117750.0
+    },
+    "part_ii_26_spouse": {
+      "type": "decimal",
+      "value": 63500.0
+    },
+    "part_ii_26_taxpayer": {
+      "type": "decimal",
+      "value": 117750.0
+    },
+    "part_ii_31_spouse": {
+      "type": "decimal",
+      "value": 63500.0
+    },
+    "part_ii_31_taxpayer": {
+      "type": "decimal",
+      "value": 117750.0
+    },
+    "part_ii_32_aggregate": {
+      "type": "decimal",
+      "value": 181250.0
+    },
+    "part_vi_1_spouse": {
+      "type": "decimal",
+      "value": 75500.0
+    },
+    "part_vi_1_taxpayer": {
+      "type": "decimal",
+      "value": 138750.0
+    },
+    "part_vi_5_spouse": {
+      "type": "decimal",
+      "value": 75500.0
+    },
+    "part_vi_5_taxpayer": {
+      "type": "decimal",
+      "value": 138750.0
+    },
+    "part_vii_10_spouse": {
+      "type": "decimal",
+      "value": 12000.0
+    },
+    "part_vii_10_taxpayer": {
+      "type": "decimal",
+      "value": 21000.0
+    },
+    "part_vii_5_spouse": {
+      "type": "decimal",
+      "value": 12000.0
+    },
+    "part_vii_5_taxpayer": {
+      "type": "decimal",
+      "value": 21000.0
+    },
+    "part_vii_9_description": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_34_bank": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_34_date": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_34_number": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_35_bank": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_35_date": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_35_number": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_36_bank": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_36_date": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_36_number": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_37_bank": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_37_date": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_37_description": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_37_number": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_2_4_spouse": {
+      "type": "decimal",
+      "value": 320000.0
+    },
+    "schedule_2_4_taxpayer": {
+      "type": "decimal",
+      "value": 480000.0
+    },
+    "schedule_2_6_spouse": {
+      "type": "decimal",
+      "value": 320000.0
+    },
+    "schedule_2_6_taxpayer": {
+      "type": "decimal",
+      "value": 480000.0
+    },
+    "schedule_2_7_spouse": {
+      "type": "decimal",
+      "value": 10500.0
+    },
+    "schedule_2_7_taxpayer": {
+      "type": "decimal",
+      "value": 38500.0
+    },
+    "schedule_3_10_spouse": {
+      "type": "decimal",
+      "value": 420000.0
+    },
+    "schedule_3_10_taxpayer": {
+      "type": "decimal",
+      "value": 750000.0
+    },
+    "schedule_3_12_spouse": {
+      "type": "decimal",
+      "value": 420000.0
+    },
+    "schedule_3_12_taxpayer": {
+      "type": "decimal",
+      "value": 750000.0
+    },
+    "schedule_3_13_spouse": {
+      "type": "decimal",
+      "value": 75000.0
+    },
+    "schedule_3_16_spouse": {
+      "type": "decimal",
+      "value": 75000.0
+    },
+    "schedule_3_17_spouse": {
+      "type": "decimal",
+      "value": 168000.0
+    },
+    "schedule_3_17_taxpayer": {
+      "type": "decimal",
+      "value": 300000.0
+    },
+    "schedule_3_18_spouse": {
+      "type": "decimal",
+      "value": 345000.0
+    },
+    "schedule_3_18_taxpayer": {
+      "type": "decimal",
+      "value": 450000.0
+    },
+    "schedule_3_19_description": {
+      "type": "text",
+      "value": "ROYALTY INCOME NOT SUBJECT TO FINAL TAX"
+    },
+    "schedule_3_19_taxpayer": {
+      "type": "decimal",
+      "value": 15000.0
+    },
+    "schedule_3_20_description": {
+      "type": "text",
+      "value": "A VALID NON-OPERATING INCOME DESCRIPTION LONGER THAN THE OFFICIAL COMB CAPACITY"
+    },
+    "schedule_3_22_taxpayer": {
+      "type": "decimal",
+      "value": 15000.0
+    },
+    "schedule_3_23_spouse": {
+      "type": "decimal",
+      "value": 345000.0
+    },
+    "schedule_3_23_taxpayer": {
+      "type": "decimal",
+      "value": 465000.0
+    },
+    "schedule_3_24_spouse": {
+      "type": "decimal",
+      "value": 665000.0
+    },
+    "schedule_3_24_taxpayer": {
+      "type": "decimal",
+      "value": 945000.0
+    },
+    "schedule_3_25_spouse": {
+      "type": "decimal",
+      "value": 75500.0
+    },
+    "schedule_3_25_taxpayer": {
+      "type": "decimal",
+      "value": 138750.0
+    },
+    "schedule_3_8_spouse": {
+      "type": "decimal",
+      "value": 420000.0
+    },
+    "schedule_3_8_taxpayer": {
+      "type": "decimal",
+      "value": 750000.0
+    },
+    "schedule_4_17d_description": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_5_spouse_1_description": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_5_spouse_1_legal_basis": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_5_spouse_2_description": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_5_spouse_2_legal_basis": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_5_taxpayer_1_description": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_5_taxpayer_1_legal_basis": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_5_taxpayer_2_description": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_5_taxpayer_2_legal_basis": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_6_spouse_1_year": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_6_spouse_2_year": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_6_spouse_3_year": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_6_spouse_4_year": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_6_taxpayer_1_year": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_6_taxpayer_2_year": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_6_taxpayer_3_year": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_6_taxpayer_4_year": {
+      "type": "text",
+      "value": ""
+    },
+    "spouse_atc": {
+      "type": "text",
+      "value": "II014"
+    },
+    "spouse_citizenship": {
+      "type": "text",
+      "value": "FILIPINO"
+    },
+    "spouse_claims_foreign_tax_credits": {
+      "type": "boolean",
+      "value": false
+    },
+    "spouse_contact_number": {
+      "type": "text",
+      "value": "09171234567"
+    },
+    "spouse_deduction_method": {
+      "type": "text",
+      "value": "itemized"
+    },
+    "spouse_enabled": {
+      "type": "boolean",
+      "value": true
+    },
+    "spouse_foreign_tax_number": {
+      "type": "text",
+      "value": ""
+    },
+    "spouse_has_exempt_income": {
+      "type": "boolean",
+      "value": false
+    },
+    "spouse_has_income": {
+      "type": "boolean",
+      "value": true
+    },
+    "spouse_has_special_rate_income": {
+      "type": "boolean",
+      "value": false
+    },
+    "spouse_name": {
+      "type": "text",
+      "value": "MARIA CONSOLACION REYES DELA CRUZ-SANTOS WITH A VALID REGISTERED NAME LONGER THAN THE OFFICIAL COMB"
+    },
+    "spouse_rdo_code": {
+      "type": "text",
+      "value": "018"
+    },
+    "spouse_tax_rate": {
+      "type": "text",
+      "value": "graduated"
+    },
+    "spouse_tin": {
+      "type": "text",
+      "value": "98765432100000"
+    },
+    "spouse_type": {
+      "type": "text",
+      "value": "professional"
+    },
+    "tax_rate": {
+      "type": "text",
+      "value": "graduated"
+    },
+    "taxpayer_type": {
+      "type": "text",
+      "value": "single_proprietor"
+    }
+  },
+  "form": {
+    "code": "1701",
+    "version": "2018"
+  },
+  "locale": "en-PH",
+  "period": {
+    "label": "2026-12",
+    "month": 12,
+    "taxable_year": 2026
+  },
+  "schedules": [],
+  "schema_version": "1.0",
+  "taxpayer": {
+    "contact_number": "09123456789",
+    "email": "long.annual.income.tax.renderer.verification.address@example.test",
+    "name": "JUAN MIGUEL ALEJANDRO REYES DELA CRUZ-SANTOS WITH A VALID REGISTERED NAME LONGER THAN THE OFFICIAL COMB",
+    "rdo_code": "018",
+    "registered_address": "UNIT 1201, A DELIBERATELY LONG REGISTERED ADDRESS USED TO PROVE THE ANNUAL RETURN PRESERVES EVERY VALID CHARACTER, NEW CABALAN, OLONGAPO CITY",
+    "tin": "12345678900000",
+    "zip_code": "2200"
+  },
+  "validation": []
+}

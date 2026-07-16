@@ -1,15 +1,8 @@
 #![recursion_limit = "256"]
 
-use bir_core::forms::{
-    form_2551q::{
-        Form2551QDraft, Item13Election, OverpaymentDisposition, Schedule1Row, TaxPeriodBasis,
-    },
-    ATC_TABLE_2551Q,
-};
 use bir_print::html::{RenderEnvelopeV1, RENDER_CONTRACT_VERSION};
-use bir_print::render_2551q_print;
+use bir_print::html_forms::{render_form_provider, render_form_providers, RenderFormProvider};
 use schemars::schema_for;
-use serde::Serialize;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::env;
@@ -17,56 +10,20 @@ use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const FORM_CODE: &str = "2551Q";
-const FORM_REVISION: &str = "2018";
-const FORM_ID: &str = "2551Qv2018";
-const FORM_FIXTURE: &str = "packages/form-contracts/fixtures/2551q-6-rows.json";
-const ATC_REFERENCE_ARTIFACT: &str = "src/generated/2551q-atc-reference.json";
-const FIXTURE_ATC_CODES: [&str; 10] = [
-    "PT010", "PT040", "PT041", "PT060", "PT070", "PT090", "PT140", "PT150", "PT160", "PT170",
-];
-const VISUAL_FIXTURE_SHA256: &str =
-    "f3d49ddab5cdd7c1d889a7b2cbd519babf7556c186702f0232b9f18257f7a5b7";
 #[cfg(test)]
 const CONTINUATION_FIXTURE_SHA256: &str =
     "1d5c560fa7a87325e69a1092f283cf32d839b6954dc900ab7588b35a88aa0e4d";
-const OFFICIAL_SOURCE: &str =
-    "https://bir-cdn.bir.gov.ph/local/pdf/2551Q%20Jan%202018%20ENCS%20final%20rev%203_copy.pdf";
-const OFFICIAL_SOURCE_SHA256: &str =
-    "1f270ecf66d778836a14697863e420ff65d5ed0a5576a6cf58b97c9a8e8c9b24";
-const PAGE_WIDTH_PT: f64 = 612.0;
-const PAGE_HEIGHT_PT: f64 = 936.0;
-const PAGE_COUNT: usize = 2;
-const REFERENCE_DPI: u32 = 144;
-const REFERENCE_WIDTH_PX: u32 = 1_224;
-const REFERENCE_HEIGHT_PX: u32 = 1_872;
-const SOURCE_SVG_SHA256: [&str; PAGE_COUNT] = [
-    "e62c392a3962ba4c2c31ffcb4b77a7798140473a2af99abf95173680536db599",
-    "377ec4cee07cbff674686926aa0d402ec068b9a70fe3e8dbfc9802e90902f47a",
-];
-const REFERENCE_PNG_SHA256: [&str; PAGE_COUNT] = [
-    "c78f0724e2f320f1b306408008e9085ed36397c4e1add66bf5e77c322a3485ea",
-    "d6ab5afbf6b3f4cbac7c69a01df231eaf6dcf7fde587e78c02ee20e3f2508d1a",
-];
 
-#[derive(Debug, Serialize)]
-struct AtcReferenceArtifact {
-    schema_version: u8,
-    form_code: &'static str,
-    revision: &'static str,
-    entries: Vec<AtcReferenceArtifactEntry>,
-}
-
-#[derive(Debug, Serialize)]
-struct AtcReferenceArtifactEntry {
-    code: &'static str,
-    description: &'static str,
-    rate: f64,
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum FormSelection {
+    All,
+    One { code: String, revision: String },
 }
 
 #[derive(Debug, PartialEq, Eq)]
 struct Options {
     output_root: PathBuf,
+    selection: FormSelection,
     visual_references: bool,
     check_visual_references: bool,
 }
@@ -74,18 +31,15 @@ struct Options {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let root = workspace_root()?;
     let options = options_from_args(&root, env::args_os().skip(1))?;
+    let providers = selected_providers(&options.selection)?;
     if options.check_visual_references {
-        verify_committed_visual_references(&root)?;
-        println!(
-            "verified {FORM_CODE}:{FORM_REVISION} visual references: {PAGE_COUNT} pages, \
-             {PAGE_WIDTH_PT}x{PAGE_HEIGHT_PT}pt, {REFERENCE_WIDTH_PX}x{REFERENCE_HEIGHT_PX}px \
-             at {REFERENCE_DPI} DPI"
-        );
+        let all_providers = render_form_providers().iter().collect::<Vec<_>>();
+        verify_committed_visual_references(&root, &all_providers)?;
         return Ok(());
     }
-    generate_contracts(&options.output_root)?;
+    generate_contracts(&options.output_root, &providers)?;
     if options.visual_references {
-        generate_visual_references(&root, &fixture_2551q(6))?;
+        refresh_visual_reference_manifest(&root, render_form_providers())?;
     }
     Ok(())
 }
@@ -96,6 +50,7 @@ fn options_from_args(
 ) -> Result<Options, Box<dyn std::error::Error>> {
     let mut output_root = root.join("packages/form-contracts");
     let mut output_dir_seen = false;
+    let mut selection: Option<FormSelection> = None;
     let mut visual_references = false;
     let mut check_visual_references = false;
     let mut arguments = arguments.into_iter();
@@ -110,6 +65,25 @@ fn options_from_args(
                 .map(PathBuf::from)
                 .ok_or("--output-dir requires a path")?;
             output_dir_seen = true;
+        } else if argument == "--all" {
+            if selection.is_some() {
+                return Err("--all cannot be combined with another form selection".into());
+            }
+            selection = Some(FormSelection::All);
+        } else if argument == "--form" {
+            if selection.is_some() {
+                return Err("--form cannot be combined with another form selection".into());
+            }
+            let value = arguments.next().ok_or("--form requires CODE:REVISION")?;
+            let value = value.to_string_lossy();
+            let (code, revision) = value
+                .split_once(':')
+                .filter(|(code, revision)| !code.is_empty() && !revision.is_empty())
+                .ok_or("--form requires CODE:REVISION")?;
+            selection = Some(FormSelection::One {
+                code: code.to_string(),
+                revision: revision.to_string(),
+            });
         } else if argument == "--visual-references" {
             if visual_references {
                 return Err("--visual-references may be specified only once".into());
@@ -122,8 +96,8 @@ fn options_from_args(
             check_visual_references = true;
         } else {
             return Err(format!(
-                "unknown argument {}; expected --output-dir <path>, --visual-references, or \
-                 --check-visual-references",
+                "unknown argument {}; expected --all, --form CODE:REVISION, --output-dir <path>, \
+                 --visual-references, or --check-visual-references",
                 PathBuf::from(argument).display()
             )
             .into());
@@ -139,9 +113,23 @@ fn options_from_args(
 
     Ok(Options {
         output_root,
+        selection: selection.unwrap_or(FormSelection::All),
         visual_references,
         check_visual_references,
     })
+}
+
+fn selected_providers(
+    selection: &FormSelection,
+) -> Result<Vec<&'static RenderFormProvider>, Box<dyn std::error::Error>> {
+    match selection {
+        FormSelection::All => Ok(render_form_providers().iter().collect()),
+        FormSelection::One { code, revision } => render_form_provider(code, revision)
+            .map(|provider| vec![provider])
+            .ok_or_else(|| {
+                format!("no HTML render provider is registered for {code}:{revision}").into()
+            }),
+    }
 }
 
 fn workspace_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
@@ -153,13 +141,14 @@ fn workspace_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
         .to_path_buf())
 }
 
-fn generate_contracts(output_root: &Path) -> Result<(), Box<dyn std::error::Error>> {
+fn generate_contracts(
+    output_root: &Path,
+    providers: &[&RenderFormProvider],
+) -> Result<(), Box<dyn std::error::Error>> {
     let schema_dir = output_root.join("schema");
     let fixture_dir = output_root.join("fixtures");
-    let generated_source_dir = output_root.join("src/generated");
     fs::create_dir_all(&schema_dir)?;
     fs::create_dir_all(&fixture_dir)?;
-    fs::create_dir_all(&generated_source_dir)?;
 
     let mut schema = serde_json::to_value(schema_for!(RenderEnvelopeV1))?;
     schema["$id"] = json!("https://goldcoders.dev/schemas/render-envelope-v1.json");
@@ -168,60 +157,22 @@ fn generate_contracts(output_root: &Path) -> Result<(), Box<dyn std::error::Erro
         "Canonical eBIRForms renderer contract version {RENDER_CONTRACT_VERSION}"
     ));
     write_json(&schema_dir.join("render-envelope-v1.schema.json"), &schema)?;
-    write_serializable_json(
-        &output_root.join(ATC_REFERENCE_ARTIFACT),
-        &atc_reference_artifact(),
-    )?;
-
-    write_fixture(&fixture_dir, "2551q-6-rows.json", 6)?;
-    write_fixture(&fixture_dir, "2551q-10-rows.json", 10)?;
-    write_draft_fixture(&fixture_dir, "2551q-minimum.json", &minimum_fixture_2551q())?;
-    write_draft_fixture(
-        &fixture_dir,
-        "2551q-fiscal-period.json",
-        &fiscal_period_fixture_2551q(),
-    )?;
-    write_draft_fixture(
-        &fixture_dir,
-        "2551q-tax-relief.json",
-        &tax_relief_fixture_2551q(),
-    )?;
-    write_draft_fixture(
-        &fixture_dir,
-        "2551q-item13-eight-percent.json",
-        &eight_percent_fixture_2551q(),
-    )?;
-    write_draft_fixture(
-        &fixture_dir,
-        "2551q-overpayment-refund.json",
-        &overpayment_fixture_2551q(OverpaymentDisposition::Refund),
-    )?;
-    write_draft_fixture(
-        &fixture_dir,
-        "2551q-overpayment-tcc.json",
-        &overpayment_fixture_2551q(OverpaymentDisposition::TaxCreditCertificate),
-    )?;
+    for provider in providers {
+        for fixture in (provider.fixtures)()? {
+            write_json(
+                &fixture_dir.join(fixture.file_name),
+                &serde_json::to_value(fixture.envelope)?,
+            )?;
+        }
+        for artifact in (provider.generated_artifacts)()? {
+            let path = output_root.join(artifact.relative_path);
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            write_json(&path, &artifact.value)?;
+        }
+    }
     Ok(())
-}
-
-fn write_fixture(
-    fixture_dir: &Path,
-    file_name: &str,
-    row_count: usize,
-) -> Result<(), Box<dyn std::error::Error>> {
-    write_draft_fixture(fixture_dir, file_name, &fixture_2551q(row_count))
-}
-
-fn write_draft_fixture(
-    fixture_dir: &Path,
-    file_name: &str,
-    draft: &Form2551QDraft,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let envelope = RenderEnvelopeV1::from(draft);
-    write_json(
-        &fixture_dir.join(file_name),
-        &serde_json::to_value(envelope)?,
-    )
 }
 
 fn write_json(path: &Path, value: &serde_json::Value) -> Result<(), Box<dyn std::error::Error>> {
@@ -238,418 +189,178 @@ fn canonical_pretty_json(value: &serde_json::Value) -> Result<String, serde_json
     Ok(format!("{}\n", serde_json::to_string_pretty(&canonical)?))
 }
 
-fn write_serializable_json(
-    path: &Path,
-    value: &impl Serialize,
-) -> Result<(), Box<dyn std::error::Error>> {
-    fs::write(path, format!("{}\n", serde_json::to_string_pretty(value)?))?;
-    Ok(())
-}
-
-fn atc_reference_artifact() -> AtcReferenceArtifact {
-    AtcReferenceArtifact {
-        schema_version: 1,
-        form_code: FORM_CODE,
-        revision: FORM_REVISION,
-        entries: ATC_TABLE_2551Q
-            .iter()
-            .map(|entry| AtcReferenceArtifactEntry {
-                code: entry.code,
-                description: entry.description,
-                rate: entry.rate,
-            })
-            .collect(),
-    }
-}
-
-fn fixture_2551q(row_count: usize) -> Form2551QDraft {
-    let mut draft: Form2551QDraft = serde_json::from_value(json!({
-        "id": null,
-        "tin": "12345678900000",
-        "taxpayer_type": "Individual",
-        "business_start_date": "2010-01-01",
-        "taxable_year": 2026,
-        "quarter": 1,
-        "tax_period_basis": "calendar",
-        "year_end_month": 12,
-        "eopt_tier": null,
-        "is_amended": true,
-        "original_return_filed_and_paid_on_time": true,
-        "number_of_attached_sheets": 0,
-        "tax_relief": false,
-        "tax_relief_specification": "",
-        "item_13_election": "graduated",
-        "annual_income_tax_election": "unrecorded",
-        "rdo_code": "018",
-        "taxpayer_name": "Renderer Fixture Corporation",
-        "registered_address": "53 Santol Extension, New Cabalan, Olongapo City",
-        "zip_code": "2200",
-        "contact_number": "09123456789",
-        "email": "renderer@example.com",
-        "schedule_1": [],
-        "total_tax_due": 0.0,
-        "creditable_tax_withheld": 125.0,
-        "tax_paid_previous": 50.0,
-        "other_tax_credit": 25.0,
-        "other_tax_credit_description": "Validated prior payment",
-        "total_tax_credits": 200.0,
-        "tax_payable": 0.0,
-        "auto_compute_penalties": false,
-        "surcharge": 10.0,
-        "interest": 5.0,
-        "compromise": 1000.0,
-        "total_penalties": 1015.0,
-        "total_amount_payable": 0.0,
-        "overpayment_disposition": "none",
-        "status": "Draft",
-        "created_at": "2026-01-01T00:00:00Z",
-        "updated_at": "2026-01-01T00:00:00Z",
-        "submitted_at": null,
-        "confirmed_at": null,
-        "submission_filename": null,
-        "receipt_id": null,
-        "queued_submission_fingerprint": null,
-        "submission_attempts": 0,
-        "next_retry_at": null,
-        "last_error": null,
-        "carried_forward_from": null,
-        "payment_receipt_path": null
-    }))
-    .expect("canonical fixture must deserialize");
-    assert!(
-        row_count <= FIXTURE_ATC_CODES.len(),
-        "canonical fixture only defines {} real ATC rows",
-        FIXTURE_ATC_CODES.len()
-    );
-    draft.schedule_1 = FIXTURE_ATC_CODES
-        .iter()
-        .take(row_count)
-        .enumerate()
-        .map(|(index, atc)| {
-            let mut row = Schedule1Row::new(atc).expect("fixture ATC must exist in Rust registry");
-            // Preserve the established 300, 600, ... tax-due progression and
-            // aggregate fixture totals while exercising real official rates.
-            let intended_tax_due = (index + 1) as f64 * 300.0;
-            row.taxable_amount = ((intended_tax_due / row.tax_rate) * 100.0).round() / 100.0;
-            row.recompute();
-            assert_eq!(row.tax_due, intended_tax_due);
-            row
-        })
-        .collect();
-    draft.recompute(None);
-    draft
-}
-
-/// A valid draft with only the required identity, period, and one zero-valued
-/// Schedule 1 row populated. This is the renderer's blank/minimum state: Rust
-/// still supplies required taxpayer data instead of asking layout code to
-/// invent it.
-fn minimum_fixture_2551q() -> Form2551QDraft {
-    let mut draft = fixture_2551q(1);
-    draft.is_amended = false;
-    draft.original_return_filed_and_paid_on_time = false;
-    draft.number_of_attached_sheets = 0;
-    draft.tax_relief = false;
-    draft.tax_relief_specification.clear();
-    draft.item_13_election = Item13Election::Graduated;
-    draft.schedule_1 = vec![Schedule1Row::default_pt010()];
-    draft.creditable_tax_withheld = 0.0;
-    draft.tax_paid_previous = 0.0;
-    draft.other_tax_credit = 0.0;
-    draft.other_tax_credit_description.clear();
-    draft.surcharge = 0.0;
-    draft.interest = 0.0;
-    draft.compromise = 0.0;
-    draft.overpayment_disposition = OverpaymentDisposition::None;
-    draft.recompute(None);
-    draft
-}
-
-fn fiscal_period_fixture_2551q() -> Form2551QDraft {
-    let mut draft = minimum_fixture_2551q();
-    draft.tax_period_basis = TaxPeriodBasis::Fiscal;
-    draft.year_end_month = 6;
-    draft.quarter = 3;
-    draft.item_13_election = Item13Election::NotApplicable;
-    draft
-}
-
-fn tax_relief_fixture_2551q() -> Form2551QDraft {
-    let mut draft = minimum_fixture_2551q();
-    draft.tax_relief = true;
-    draft.tax_relief_specification = "Special Law 123".to_string();
-    draft
-}
-
-fn eight_percent_fixture_2551q() -> Form2551QDraft {
-    let mut draft = minimum_fixture_2551q();
-    draft.item_13_election = Item13Election::EightPercent;
-    draft
-}
-
-fn overpayment_fixture_2551q(disposition: OverpaymentDisposition) -> Form2551QDraft {
-    let mut draft = minimum_fixture_2551q();
-    draft.schedule_1[0].taxable_amount = 100_000.0;
-    draft.creditable_tax_withheld = 5_000.0;
-    draft.recompute(None);
-    debug_assert!(draft.total_amount_payable < 0.0);
-    draft.overpayment_disposition = disposition;
-    draft
-}
-
-fn generate_visual_references(
-    root: &Path,
-    form: &Form2551QDraft,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let render_output = tempfile::tempdir()?;
-    let result = render_2551q_print(
-        form,
-        render_output.path().join("2551q"),
-        Some(root.join("formtypes")),
-    )?;
-    if result.preview_png_paths.len() != PAGE_COUNT {
-        return Err(format!(
-            "{FORM_ID} generated {} preview pages, expected {PAGE_COUNT}",
-            result.preview_png_paths.len()
-        )
-        .into());
-    }
-
-    let references_dir = root.join("packages/form-renderer/references");
-    fs::create_dir_all(&references_dir)?;
-    let staging = tempfile::Builder::new()
-        .prefix(".2551q-reference-staging-")
-        .tempdir_in(&references_dir)?;
-
-    let mut staged_references = Vec::with_capacity(PAGE_COUNT);
-    for (index, generated_path) in result.preview_png_paths.iter().enumerate() {
-        let page = index + 1;
-        let staged_path = staging.path().join(format!("2551q-2018-page-{page}.png"));
-        fs::copy(generated_path, &staged_path)?;
-        validate_reference_png(&staged_path, page, false)?;
-        staged_references.push(staged_path);
-    }
-
-    if let Err(error) = validate_reference_hashes(&staged_references) {
-        let candidates = root.join(".scratch/visual-reference-drift/2551q-2018");
-        fs::create_dir_all(&candidates)?;
-        for (index, staged_path) in staged_references.iter().enumerate() {
-            fs::copy(
-                staged_path,
-                candidates.join(format!("page-{}.png", index + 1)),
-            )?;
-        }
-        return Err(format!(
-            "{error}; regenerated candidates were preserved under {} for review",
-            candidates.display()
-        )
-        .into());
-    }
-
-    let manifest = build_visual_reference_manifest(root, &staged_references)?;
-    let manifest_bytes = canonical_pretty_json(&manifest)?;
-
-    for (index, staged_path) in staged_references.iter().enumerate() {
-        let page = index + 1;
-        let destination = references_dir.join(format!("2551q-2018-page-{page}.png"));
-        replace_file(staged_path, &destination)?;
-    }
-    replace_bytes(&manifest_bytes, &references_dir.join("manifest.json"))?;
-
-    verify_committed_visual_references(root)?;
-    Ok(())
-}
-
-fn validate_reference_hashes(paths: &[PathBuf]) -> Result<(), Box<dyn std::error::Error>> {
-    for (index, path) in paths.iter().enumerate() {
-        validate_pinned_hash(path, REFERENCE_PNG_SHA256[index], "reference PNG")?;
-    }
-    Ok(())
-}
-
 fn build_visual_reference_manifest(
     root: &Path,
-    reference_paths: &[PathBuf],
+    providers: &[&RenderFormProvider],
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    if reference_paths.len() != PAGE_COUNT {
-        return Err(format!(
-            "{FORM_ID} has {} reference pages, expected {PAGE_COUNT}",
-            reference_paths.len()
-        )
-        .into());
-    }
+    let references_dir = root.join("packages/form-renderer/references");
+    let reference_dpi = providers
+        .first()
+        .map_or(144, |provider| provider.reference_dpi);
+    let mut forms = Vec::with_capacity(providers.len());
+    for provider in providers {
+        if provider.reference_dpi != reference_dpi {
+            return Err(format!(
+                "{} uses {} DPI; the shared reference manifest uses {reference_dpi} DPI",
+                provider.key(),
+                provider.reference_dpi
+            )
+            .into());
+        }
+        if provider.visual_reference_pages.len() != provider.expected_base_page_count {
+            return Err(format!(
+                "{} defines {} visual pages; expected {}",
+                provider.key(),
+                provider.visual_reference_pages.len(),
+                provider.expected_base_page_count
+            )
+            .into());
+        }
+        let fixture_path = root
+            .join("packages/form-contracts/fixtures")
+            .join(provider.visual_fixture_file_name);
+        validate_fixture(&fixture_path, provider)?;
 
-    let form_dir = root.join("formtypes").join(FORM_ID);
-    let metadata_path = form_dir.join("metadata.json");
-    let formtype_path = form_dir.join("formtype.json");
-    let template_path = form_dir.join("template.typ");
-    let fixture_path = root.join(FORM_FIXTURE);
-    validate_metadata(&metadata_path)?;
-    validate_fixture(&fixture_path)?;
+        let mut pages = Vec::with_capacity(provider.visual_reference_pages.len());
+        for page in provider.visual_reference_pages {
+            let reference_path = references_dir.join(page.file_name);
+            validate_reference_png(&reference_path, provider, page.page, page.sha256)?;
+            pages.push(json!({
+                "page": page.page,
+                "reference_png": format!("packages/form-renderer/references/{}", page.file_name),
+                "reference_png_sha256": sha256_file(&reference_path)?,
+                "reference_width_px": provider.reference_width_px,
+                "reference_height_px": provider.reference_height_px
+            }));
+        }
 
-    let mut pages = Vec::with_capacity(PAGE_COUNT);
-    for (index, reference_path) in reference_paths.iter().enumerate() {
-        let page = index + 1;
-        let source_svg = form_dir.join("pages").join(format!("page{page}.svg"));
-        validate_source_svg(&source_svg, page)?;
-        validate_reference_png(reference_path, page, true)?;
-        pages.push(json!({
-            "page": page,
-            "source_svg": repo_relative(root, &source_svg)?,
-            "source_svg_sha256": sha256_file(&source_svg)?,
-            "reference_png": format!("packages/form-renderer/references/2551q-2018-page-{page}.png"),
-            "reference_png_sha256": sha256_file(reference_path)?,
-            "reference_width_px": REFERENCE_WIDTH_PX,
-            "reference_height_px": REFERENCE_HEIGHT_PX
+        forms.push(json!({
+            "code": provider.code,
+            "revision": provider.revision,
+            "form_id": provider.form_id,
+            "fixture": format!("packages/form-contracts/fixtures/{}", provider.visual_fixture_file_name),
+            "fixture_sha256": sha256_file(&fixture_path)?,
+            "official_source": provider.official_source,
+            "official_source_sha256": provider.official_source_sha256,
+            "page_width_pt": provider.page_width_pt,
+            "page_height_pt": provider.page_height_pt,
+            "page_count": provider.expected_base_page_count,
+            "reference_provenance": {
+                "kind": "official_pdf_raster",
+                "runtime_eligible": false,
+                "replacement_required": false,
+                "note": "Rendered directly from the pinned official BIR PDF with Poppler at the manifest DPI; calibration-only and never runtime-loaded."
+            },
+            "runtime_discrete_assets": (provider.runtime_discrete_assets)(),
+            "pages": pages
         }));
     }
 
     Ok(json!({
-        "schema_version": 1,
-        "dpi": REFERENCE_DPI,
+        "schema_version": 2,
+        "dpi": reference_dpi,
         "generator": "cargo run -p bir-print --bin generate_render_contract -- --visual-references",
         "calibration_only": true,
         "runtime_background_allowed": false,
-        "forms": [{
-            "code": FORM_CODE,
-            "revision": FORM_REVISION,
-            "form_id": FORM_ID,
-            "fixture": FORM_FIXTURE,
-            "fixture_sha256": sha256_file(&fixture_path)?,
-            "official_source": OFFICIAL_SOURCE,
-            "official_source_sha256": OFFICIAL_SOURCE_SHA256,
-            "metadata": repo_relative(root, &metadata_path)?,
-            "metadata_sha256": sha256_file(&metadata_path)?,
-            "formtype": repo_relative(root, &formtype_path)?,
-            "formtype_sha256": sha256_file(&formtype_path)?,
-            "template": repo_relative(root, &template_path)?,
-            "template_sha256": sha256_file(&template_path)?,
-            "page_width_pt": PAGE_WIDTH_PT,
-            "page_height_pt": PAGE_HEIGHT_PT,
-            "page_count": PAGE_COUNT,
-            "runtime_discrete_assets": [
-                {
-                    "asset": "government_seal",
-                    "crop_box_px": [485, 42, 540, 100],
-                    "derived_png_sha256": "d532deb6eff07393f0dd2360526805bbcf2680c727baedbb4510ed63c58fb3f4",
-                    "embedded_in": "packages/form-renderer/src/forms/official2551QAssets.ts",
-                    "source_page": 1,
-                    "treatment": "16-color grayscale quantization"
-                },
-                {
-                    "asset": "static_form_barcode_page_1",
-                    "crop_box_px": [845, 111, 1170, 212],
-                    "derived_png_sha256": "ddb2025f8630575db15d43b855511f50821b25bc5fa05f767b2439bd9bc45279",
-                    "embedded_in": "packages/form-renderer/src/forms/official2551QAssets.ts",
-                    "source_page": 1,
-                    "treatment": "monochrome threshold at 180"
-                },
-                {
-                    "asset": "static_form_barcode_page_2",
-                    "crop_box_px": [845, 90, 1170, 195],
-                    "derived_png_sha256": "dd1e8dd49782640a51fb7a69bae6662ca595f73384c371d9344a1448e3530e77",
-                    "embedded_in": "packages/form-renderer/src/forms/official2551QAssets.ts",
-                    "source_page": 2,
-                    "treatment": "monochrome threshold at 180"
-                }
-            ],
-            "pages": pages
-        }]
+        "forms": forms
     }))
 }
 
-fn verify_committed_visual_references(root: &Path) -> Result<(), Box<dyn std::error::Error>> {
+fn refresh_visual_reference_manifest(
+    root: &Path,
+    providers: &[RenderFormProvider],
+) -> Result<(), Box<dyn std::error::Error>> {
+    let providers = providers.iter().collect::<Vec<_>>();
+    let manifest = canonical_pretty_json(&build_visual_reference_manifest(root, &providers)?)?;
+    replace_bytes(
+        &manifest,
+        &root.join("packages/form-renderer/references/manifest.json"),
+    )?;
+    verify_committed_visual_references(root, &providers)
+}
+
+fn verify_committed_visual_references(
+    root: &Path,
+    providers: &[&RenderFormProvider],
+) -> Result<(), Box<dyn std::error::Error>> {
     let references_dir = root.join("packages/form-renderer/references");
-    let reference_paths = (1..=PAGE_COUNT)
-        .map(|page| references_dir.join(format!("2551q-2018-page-{page}.png")))
-        .collect::<Vec<_>>();
-    let expected =
-        canonical_pretty_json(&build_visual_reference_manifest(root, &reference_paths)?)?;
+    let expected = canonical_pretty_json(&build_visual_reference_manifest(root, providers)?)?;
     let actual = fs::read_to_string(references_dir.join("manifest.json"))?;
     if actual != expected {
-        return Err("2551Q visual reference manifest is stale or non-deterministic".into());
+        return Err("visual reference manifest is stale or non-deterministic".into());
+    }
+    for provider in providers {
+        println!(
+            "verified {} visual references: {} pages, {}x{}pt, {}x{}px at {} DPI",
+            provider.key(),
+            provider.visual_reference_pages.len(),
+            provider.page_width_pt,
+            provider.page_height_pt,
+            provider.reference_width_px,
+            provider.reference_height_px,
+            provider.reference_dpi,
+        );
     }
     Ok(())
 }
 
-fn validate_metadata(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let metadata: serde_json::Value = serde_json::from_slice(&fs::read(path)?)?;
-    let expected = [
-        ("form_id", json!(FORM_ID)),
-        ("official_source", json!(OFFICIAL_SOURCE)),
-        ("sha256", json!(OFFICIAL_SOURCE_SHA256)),
-        ("page_width_pt", json!(PAGE_WIDTH_PT)),
-        ("page_height_pt", json!(PAGE_HEIGHT_PT)),
-        ("page_count", json!(PAGE_COUNT)),
-    ];
-    for (key, value) in expected {
-        if metadata.get(key) != Some(&value) {
-            return Err(format!(
-                "{} has unexpected {key}; expected {value}, found {}",
-                path.display(),
-                metadata.get(key).unwrap_or(&serde_json::Value::Null)
+fn validate_fixture(
+    path: &Path,
+    provider: &RenderFormProvider,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let fixture = (provider.fixtures)()?
+        .into_iter()
+        .find(|fixture| fixture.file_name == provider.visual_fixture_file_name)
+        .ok_or_else(|| {
+            format!(
+                "{} does not define visual fixture {}",
+                provider.key(),
+                provider.visual_fixture_file_name
             )
-            .into());
-        }
-    }
-    Ok(())
-}
-
-fn validate_fixture(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let expected = canonical_pretty_json(&serde_json::to_value(RenderEnvelopeV1::from(
-        &fixture_2551q(6),
-    ))?)?;
+        })?;
+    let expected = canonical_pretty_json(&serde_json::to_value(fixture.envelope)?)?;
     let actual = fs::read_to_string(path)?;
     if actual != expected {
         return Err(format!(
-            "{} does not match the canonical six-row Rust fixture",
-            path.display()
+            "{} does not match the canonical {} Rust fixture",
+            path.display(),
+            provider.key()
         )
         .into());
     }
-    validate_pinned_hash(path, VISUAL_FIXTURE_SHA256, "visual contract fixture")
-}
-
-fn validate_source_svg(path: &Path, page: usize) -> Result<(), Box<dyn std::error::Error>> {
-    let contents = fs::read_to_string(path)?;
-    let root_element = contents
-        .split_once('>')
-        .map(|(header, _)| header)
-        .ok_or_else(|| format!("{} has no SVG root element", path.display()))?;
-    for expected in ["width=\"612\"", "height=\"936\"", "viewBox=\"0 0 612 936\""] {
-        if !root_element.contains(expected) {
-            return Err(format!(
-                "{} does not declare the pinned 612 x 936 point geometry",
-                path.display()
-            )
-            .into());
-        }
-    }
-    validate_pinned_hash(path, SOURCE_SVG_SHA256[page - 1], "official SVG source")
+    validate_pinned_hash(
+        path,
+        provider.visual_fixture_sha256,
+        "visual contract fixture",
+    )
 }
 
 fn validate_reference_png(
     path: &Path,
+    provider: &RenderFormProvider,
     page: usize,
-    verify_pinned_hash: bool,
+    expected_hash: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bytes = fs::read(path)?;
     let dimensions = png_dimensions(&bytes)
         .ok_or_else(|| format!("{} is not a valid PNG with an IHDR chunk", path.display()))?;
-    if dimensions != (REFERENCE_WIDTH_PX, REFERENCE_HEIGHT_PX) {
+    if dimensions != (provider.reference_width_px, provider.reference_height_px) {
         return Err(format!(
-            "{} is {} x {} pixels, expected {} x {} at {REFERENCE_DPI} DPI",
+            "{} is {} x {} pixels, expected {} x {} at {} DPI",
             path.display(),
             dimensions.0,
             dimensions.1,
-            REFERENCE_WIDTH_PX,
-            REFERENCE_HEIGHT_PX
+            provider.reference_width_px,
+            provider.reference_height_px,
+            provider.reference_dpi,
         )
         .into());
     }
-    if verify_pinned_hash {
-        validate_pinned_hash(path, REFERENCE_PNG_SHA256[page - 1], "reference PNG")?;
-    }
+    validate_pinned_hash(
+        path,
+        expected_hash,
+        &format!("{} page {page} reference PNG", provider.key()),
+    )?;
     Ok(())
 }
 
@@ -685,22 +396,6 @@ fn sha256_file(path: &Path) -> Result<String, std::io::Error> {
     Ok(format!("{digest:x}"))
 }
 
-fn repo_relative(root: &Path, path: &Path) -> Result<String, Box<dyn std::error::Error>> {
-    Ok(path
-        .strip_prefix(root)?
-        .to_string_lossy()
-        .replace('\\', "/"))
-}
-
-fn replace_file(source: &Path, destination: &Path) -> Result<(), std::io::Error> {
-    let temporary = destination.with_extension("png.tmp");
-    fs::copy(source, &temporary)?;
-    if destination.exists() {
-        fs::remove_file(destination)?;
-    }
-    fs::rename(temporary, destination)
-}
-
 fn replace_bytes(contents: &str, destination: &Path) -> Result<(), std::io::Error> {
     let temporary = destination.with_extension("json.tmp");
     fs::write(&temporary, contents)?;
@@ -717,56 +412,51 @@ mod tests {
     use bir_print::html::RenderValue;
     use std::collections::BTreeMap;
 
-    const FIXTURE_NAMES: [&str; 8] = [
-        "2551q-6-rows.json",
-        "2551q-10-rows.json",
-        "2551q-minimum.json",
-        "2551q-fiscal-period.json",
-        "2551q-tax-relief.json",
-        "2551q-item13-eight-percent.json",
-        "2551q-overpayment-refund.json",
-        "2551q-overpayment-tcc.json",
-    ];
+    fn provider() -> &'static RenderFormProvider {
+        render_form_provider("2551Q", "2018").expect("2551Q provider")
+    }
 
-    const VALID_FIXTURE_NAMES: [&str; 7] = [
-        "2551q-6-rows.json",
-        "2551q-minimum.json",
-        "2551q-fiscal-period.json",
-        "2551q-tax-relief.json",
-        "2551q-item13-eight-percent.json",
-        "2551q-overpayment-refund.json",
-        "2551q-overpayment-tcc.json",
-    ];
+    fn provider_1601c() -> &'static RenderFormProvider {
+        render_form_provider("1601C", "2018").expect("1601C provider")
+    }
+
+    fn providers() -> Vec<&'static RenderFormProvider> {
+        vec![provider()]
+    }
 
     #[test]
     fn generates_deterministic_schema_and_fixture_matrix() {
         let output = tempfile::tempdir().expect("temporary output should be available");
-        generate_contracts(output.path()).expect("contracts should generate");
+        generate_contracts(output.path(), &providers()).expect("contracts should generate");
 
         let schema = output.path().join("schema/render-envelope-v1.schema.json");
-        let first_atc_reference = fs::read(output.path().join(ATC_REFERENCE_ARTIFACT))
+        let artifacts = (provider().generated_artifacts)().expect("provider artifacts");
+        let atc_artifact = &artifacts[0];
+        let first_atc_reference = fs::read(output.path().join(atc_artifact.relative_path))
             .expect("generated ATC reference should exist");
-        let first = FIXTURE_NAMES
+        let fixtures = (provider().fixtures)().expect("provider fixtures");
+        let first = fixtures
             .iter()
-            .map(|name| {
+            .map(|fixture| {
                 (
-                    *name,
-                    fs::read(output.path().join("fixtures").join(name))
+                    fixture.file_name,
+                    fs::read(output.path().join("fixtures").join(fixture.file_name))
                         .expect("generated fixture should exist"),
                 )
             })
             .collect::<BTreeMap<_, _>>();
 
-        generate_contracts(output.path()).expect("contracts should regenerate");
+        generate_contracts(output.path(), &providers()).expect("contracts should regenerate");
 
         assert!(schema.is_file());
         assert_eq!(
             first_atc_reference,
-            fs::read(output.path().join(ATC_REFERENCE_ARTIFACT))
+            fs::read(output.path().join(atc_artifact.relative_path))
                 .expect("regenerated ATC reference should exist"),
             "2551Q ATC reference must be byte deterministic"
         );
-        for name in FIXTURE_NAMES {
+        for fixture in fixtures {
+            let name = fixture.file_name;
             let regenerated = fs::read(output.path().join("fixtures").join(name))
                 .expect("regenerated fixture should exist");
             assert_eq!(
@@ -778,7 +468,7 @@ mod tests {
         assert_eq!(
             sha256_file(&output.path().join("fixtures/2551q-6-rows.json"))
                 .expect("visual fixture hash should be readable"),
-            VISUAL_FIXTURE_SHA256
+            provider().visual_fixture_sha256
         );
         assert_eq!(
             sha256_file(&output.path().join("fixtures/2551q-10-rows.json"))
@@ -790,15 +480,17 @@ mod tests {
     #[test]
     fn committed_cross_language_atc_reference_exactly_matches_rust_registry() {
         let root = workspace_root().expect("workspace root should resolve");
+        let expected_artifact = (provider().generated_artifacts)()
+            .expect("provider artifacts")
+            .remove(0);
         let artifact_path = root
             .join("packages/form-contracts")
-            .join(ATC_REFERENCE_ARTIFACT);
+            .join(expected_artifact.relative_path);
         let actual: serde_json::Value = serde_json::from_slice(
             &fs::read(&artifact_path).expect("committed generated ATC reference should exist"),
         )
         .expect("committed generated ATC reference should be valid JSON");
-        let expected = serde_json::to_value(atc_reference_artifact())
-            .expect("Rust ATC registry should serialize");
+        let expected = expected_artifact.value;
 
         assert_eq!(
             actual,
@@ -811,13 +503,15 @@ mod tests {
     #[test]
     fn fixture_matrix_covers_2551q_print_scenarios_without_unintended_errors() {
         let output = tempfile::tempdir().expect("temporary output should be available");
-        generate_contracts(output.path()).expect("contracts should generate");
+        generate_contracts(output.path(), &providers()).expect("contracts should generate");
 
-        for name in VALID_FIXTURE_NAMES {
-            let envelope = read_fixture(output.path(), name);
-            assert!(
+        for fixture in (provider().fixtures)().expect("provider fixtures") {
+            let envelope = read_fixture(output.path(), fixture.file_name);
+            assert_eq!(
                 envelope.validation.is_empty(),
-                "{name} should be valid, found {:?}",
+                fixture.expected_form_valid,
+                "{} validity expectation disagrees with Rust validation: {:?}",
+                fixture.file_name,
                 envelope.validation
             );
         }
@@ -952,12 +646,36 @@ mod tests {
 
         assert!(visual.visual_references);
         assert!(!visual.check_visual_references);
+        assert_eq!(visual.selection, FormSelection::All);
         assert_eq!(
             visual.output_root,
             Path::new("/workspace/packages/form-contracts")
         );
         assert!(!output.visual_references);
         assert_eq!(output.output_root, Path::new("/tmp/contracts"));
+
+        let one = options_from_args(
+            root,
+            [OsString::from("--form"), OsString::from("2551Q:2018")],
+        )
+        .expect("single-form option should parse");
+        assert_eq!(
+            one.selection,
+            FormSelection::One {
+                code: "2551Q".to_string(),
+                revision: "2018".to_string()
+            }
+        );
+        assert_eq!(selected_providers(&one.selection).unwrap().len(), 1);
+
+        let one_1601c = options_from_args(
+            root,
+            [OsString::from("--form"), OsString::from("1601C:2018")],
+        )
+        .expect("1601C single-form option should parse");
+        let selected_1601c = selected_providers(&one_1601c.selection).unwrap();
+        assert_eq!(selected_1601c.len(), 1);
+        assert_eq!(selected_1601c[0].key(), provider_1601c().key());
     }
 
     #[test]
@@ -989,16 +707,33 @@ mod tests {
         )
         .is_err());
         assert!(options_from_args(root, [OsString::from("--other")]).is_err());
+        assert!(options_from_args(
+            root,
+            [
+                OsString::from("--all"),
+                OsString::from("--form"),
+                OsString::from("2551Q:2018")
+            ]
+        )
+        .is_err());
+        assert!(selected_providers(&FormSelection::One {
+            code: "9999".to_string(),
+            revision: "2018".to_string()
+        })
+        .is_err());
     }
 
     #[test]
     fn reads_pinned_png_dimensions_from_ihdr() {
         let mut png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR".to_vec();
-        png.extend_from_slice(&REFERENCE_WIDTH_PX.to_be_bytes());
-        png.extend_from_slice(&REFERENCE_HEIGHT_PX.to_be_bytes());
+        png.extend_from_slice(&provider().reference_width_px.to_be_bytes());
+        png.extend_from_slice(&provider().reference_height_px.to_be_bytes());
         assert_eq!(
             png_dimensions(&png),
-            Some((REFERENCE_WIDTH_PX, REFERENCE_HEIGHT_PX))
+            Some((
+                provider().reference_width_px,
+                provider().reference_height_px
+            ))
         );
         assert_eq!(png_dimensions(b"not a png"), None);
     }
@@ -1006,7 +741,17 @@ mod tests {
     #[test]
     fn committed_reference_manifest_is_reproducible_from_pinned_files() {
         let root = workspace_root().expect("workspace root should resolve");
-        verify_committed_visual_references(&root)
-            .expect("committed 2551Q references and manifest should match pinned evidence");
+        let all_providers = render_form_providers().iter().collect::<Vec<_>>();
+        verify_committed_visual_references(&root, &all_providers)
+            .expect("committed HTML form references and manifest should match pinned evidence");
+        let manifest =
+            fs::read_to_string(root.join("packages/form-renderer/references/manifest.json"))
+                .expect("reference manifest");
+        for forbidden in ["formtypes/", ".typ\"", "source_svg"] {
+            assert!(
+                !manifest.contains(forbidden),
+                "manifest contains {forbidden}"
+            );
+        }
     }
 }

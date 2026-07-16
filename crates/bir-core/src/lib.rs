@@ -44,22 +44,24 @@ pub mod transport;
 pub mod validation;
 
 // Re-export core types
-pub use bir_xml::{generate_bir_xml, parse_bir_xml};
+pub use bir_xml::{BirXmlParseError, generate_bir_xml, parse_bir_xml_checked};
 pub use email::{
     ImapAuthenticator, fetch_and_process_emails, get_oauth_email, start_oauth_flow, test_connection,
 };
 pub use export::{export_database_zip, export_profile_data};
 pub use forms::{
     ATC_TABLE_2551Q, FilingStatus, Form2551QDraft, FormDraftSummary, FormFilingProgress,
-    QuarterState, Schedule1Row, find_atc, find_form,
+    FormSuggestion, FormSuggestionSource, FormsSetReconcileResult, QuarterState, Schedule1Row,
+    find_atc, find_form, reconcile_forms_set_for_year,
 };
 pub use import::{extract_database_zip, import_profile_data};
 pub use integration::{
     FormDraftOutput, FormMapper, IncomeCategory, IncomeSource, Mapper2551Q, MapperError,
     PayloadValidationError, SyncError, SyncResponse, SyncResult, UniversalTaxPayload,
-    applicable_forms_for_profile, deadline_applies_to_profile, import_payload_directory,
-    import_payload_file, process_sync, process_sync_json, profile_deadline_overrides_for_year,
-    recurring_obligation_decisions_for_profile_and_year, resolve_profile_obligations_for_year,
+    applicable_forms_for_profile, deadline_applies_to_profile, form_suggestions_for_profile_year,
+    import_payload_directory, import_payload_file, process_sync, process_sync_json,
+    profile_deadline_overrides_for_year, recurring_obligation_decisions_for_profile_and_year,
+    resolve_profile_obligations_for_year,
     resolve_profile_obligations_for_year_with_global_overrides, validate_form_applicability,
     validate_payload,
 };
@@ -68,8 +70,10 @@ pub use official_import::{OfficialSavefile, import_and_submit_savefile, parse_pe
 pub use profile::{
     ComplianceSourceMode, CorDocumentRef, CorRegistrationFacts, EmailAuthMethod,
     ManualObligationOverride, ManualObligationOverrideAction, ProfileDeadlineOverride,
-    RegisteredTaxType, TaxClassification, TaxProfileVersion, TaxProfileVersionSource,
-    TaxProfileVersionStatus, TaxpayerProfile,
+    RegisteredTaxType, ResolvedTaxProfileForYear, TaxClassification, TaxProfileResolutionIssue,
+    TaxProfileResolutionIssueKind, TaxProfileVersion, TaxProfileVersionSource,
+    TaxProfileVersionStatus, TaxpayerProfile, VatRegistrationTextClassification,
+    classify_vat_registration_text,
 };
 pub use receipt::{BirReceiptConfirmation, parse_bir_receipt_email, split_bir_filename};
 pub use time_utils::format_next_run;

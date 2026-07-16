@@ -19,11 +19,15 @@ class NativeRendererSecurityPolicyTests(unittest.TestCase):
 
     def test_native_host_blocks_unvalidated_browser_print_surfaces(self) -> None:
         self.assertIn('Object.defineProperty(window, "print"', self.html_host)
-        self.assertIn(
+        self.assertIn("Script-initiated printing is disabled", self.html_host)
+        self.assertNotIn(
             'Object.defineProperty(window, "authorizeEbirNativePrint"', self.html_host
         )
-        self.assertIn("native_authorized_print_script", self.html_host)
-        self.assertIn("authorizedNativePrintNonce = null", self.html_host)
+        self.assertNotIn("native_authorized_print_script", self.html_host)
+        self.assertNotIn("const originalRendererPrint", self.html_host)
+        self.assertIn("ICoreWebView2_16", self.html_host)
+        self.assertIn("PrintCompletedHandler", self.html_host)
+        self.assertIn("start_windows_system_print", self.html_host)
         self.assertIn("Native print guard installation failed", self.html_host)
         self.assertIn('window.addEventListener("DOMContentLoaded"', self.html_host)
         self.assertIn("with_browser_accelerator_keys(false)", self.html_host)

@@ -1,0 +1,4 @@
+interface:
+  display_name: "eBIRForms HTML Form Converter"
+  short_description: "Convert BIR forms to verified semantic HTML"
+  default_prompt: "Use $ebirforms-convert-form-to-html to convert an exact BIR form revision into a verified HTML renderer."

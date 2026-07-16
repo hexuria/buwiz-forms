@@ -1,0 +1,39 @@
+{
+  "calibration_only": true,
+  "form": {
+    "code": "0605",
+    "dpi": 144,
+    "form_id": "0605v1999",
+    "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/0605version1999_09.02.2022_copy.pdf",
+    "official_source_file": "external:0605version1999_09.02.2022_copy.pdf",
+    "official_source_sha256": "de04419766c59bf27fdeb854c0f7c3f98601900caa20630442e671e2313e536f",
+    "page_count": 2,
+    "page_height_pt": 936.0,
+    "page_width_pt": 612.0,
+    "pages": [
+      {
+        "page": 1,
+        "reference_height_px": 1872,
+        "reference_png": "packages/form-renderer/references/0605-1999-page-1.png",
+        "reference_png_sha256": "419d85b55b05fba3e789ab9ded877cdd0514239ef998f9a15258d9ff78251f84",
+        "reference_width_px": 1224
+      },
+      {
+        "page": 2,
+        "reference_height_px": 1872,
+        "reference_png": "packages/form-renderer/references/0605-1999-page-2.png",
+        "reference_png_sha256": "d1066f9ece7ba7b670f547310851bad94605ba766668d7b9f2097bfefcd02792",
+        "reference_width_px": 1224
+      }
+    ],
+    "reference_provenance": {
+      "kind": "official_pdf_raster",
+      "replacement_required": false,
+      "runtime_eligible": false
+    },
+    "revision": "1999"
+  },
+  "generator": "prepare_official_reference.py (Poppler)",
+  "runtime_background_allowed": false,
+  "schema_version": 1
+}

@@ -363,8 +363,6 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                     current_profile.tin.full()
                 );
 
-                let form_type =
-                    crate::forms::fileable_form_type_id("2551Q").unwrap_or("2551Qv2018");
                 let filename = draft.default_submission_filename();
                 let xml_payload = match draft.to_bir_xml_payload() {
                     Ok(payload) => payload,
@@ -399,6 +397,17 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                         fail_draft_2551q(&mut draft, db_clone.clone(), e.to_string());
                         return;
                     }
+                };
+
+                // Resolve the exact transport identifier from the audited
+                // capability registry at the irreversible boundary. Never
+                // revive an uncertified submitter with a hard-coded fallback.
+                let Some(form_type) = crate::forms::fileable_form_type_id("2551Q") else {
+                    warn!(
+                        "Cron: Refusing to submit {} because 2551Q is not authorized for queue submission",
+                        draft.period_code()
+                    );
+                    return;
                 };
 
                 // Atomically claim the exact queue generation immediately
@@ -501,77 +510,6 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                         crate::ipc::post_db_changed();
                     }
                 }
-            } else if summary.form_code == "1601C" {
-                let mut draft = {
-                    let db_guard = match db_clone.lock() {
-                        Ok(g) => g,
-                        Err(_) => return,
-                    };
-                    match db_guard.get_1601c_draft(
-                        &profile_clone.tin.full(),
-                        summary.taxable_year,
-                        summary.month.unwrap_or(0),
-                    ) {
-                        Ok(Some(d)) => d,
-                        _ => return,
-                    }
-                };
-
-                if let Some(next_retry) = &draft.next_retry_at
-                    && let Ok(next_time) = chrono::DateTime::parse_from_rfc3339(next_retry)
-                    && Utc::now() < next_time.with_timezone(&Utc)
-                {
-                    return;
-                }
-
-                info!(
-                    "Cron: Attempting to submit queued form {} for {}",
-                    draft.period_code(),
-                    profile_clone.tin.full()
-                );
-
-                let form_type =
-                    crate::forms::fileable_form_type_id("1601C").unwrap_or("1601Cv2018");
-                let filename = draft.default_submission_filename();
-                let xml_payload = draft.to_bir_xml_payload();
-                let encrypted = match crate::crypto::compress_and_encrypt(
-                    xml_payload.as_bytes(),
-                    crate::crypto::BIR_IAF_PASSPHRASE,
-                ) {
-                    Ok(enc) => enc,
-                    Err(e) => {
-                        fail_draft_1601c(&mut draft, db_clone.clone(), e.to_string());
-                        return;
-                    }
-                };
-
-                match crate::transport::submit_iaf(form_type, &filename, &encrypted).await {
-                    Ok(_) => {
-                        info!("Cron: Successfully submitted queued form {}", filename);
-                        let now = Utc::now();
-                        crate::notification::send_notification(
-                            "BIR Form Submitted",
-                            &format!(
-                                "Filename: {}\nTimestamp: {}",
-                                filename,
-                                now.format("%I:%M %p")
-                            ),
-                        );
-                        draft.transition_to_submitted(filename.clone());
-                        if let Ok(db_guard) = db_clone.lock() {
-                            let _ = db_guard.save_form_draft(
-                                &draft.tin,
-                                "1601C",
-                                draft.taxable_year,
-                                Some(draft.month),
-                                &draft.status,
-                                &draft,
-                            );
-                            schedule_email_poll(&profile_clone, "1601C", &db_guard);
-                        }
-                    }
-                    Err(e) => fail_draft_1601c(&mut draft, db_clone.clone(), e.to_string()),
-                }
             }
 
             crate::ipc::post_db_changed();
@@ -655,41 +593,6 @@ fn fail_draft_2551q(
                 error
             );
         }
-    }
-}
-
-fn fail_draft_1601c(
-    draft: &mut crate::forms::form_1601c::Form1601CDraft,
-    db: Arc<Mutex<Database>>,
-    error_msg: String,
-) {
-    warn!(
-        "Cron: Submission failed for {}: {}",
-        draft.period_code(),
-        error_msg
-    );
-    let attempts_before = draft.submission_attempts;
-    draft.record_submission_failure(error_msg);
-
-    if draft.submission_attempts >= 5 || attempts_before >= 4 {
-        warn!(
-            "Cron: Max attempts reached for {}. Giving up.",
-            draft.period_code()
-        );
-    } else {
-        let delay_mins = 2i64.pow(draft.submission_attempts - 1);
-        info!("Cron: Next retry scheduled in {} mins", delay_mins);
-    }
-
-    if let Ok(db_guard) = db.lock() {
-        let _ = db_guard.save_form_draft(
-            &draft.tin,
-            "1601C",
-            draft.taxable_year,
-            Some(draft.month),
-            &draft.status,
-            draft,
-        );
     }
 }
 
@@ -913,7 +816,7 @@ mod tests {
     use super::*;
     use crate::db::Database;
     use crate::forms::form_2551q::Item13Election;
-    use crate::profile::{EoptTier, TaxpayerProfile};
+    use crate::profile::{EoptTier, IncomeTaxElection, TaxElectionHistory, TaxpayerProfile};
     use tempfile::NamedTempFile;
 
     fn test_profile() -> TaxpayerProfile {
@@ -936,6 +839,17 @@ mod tests {
             "taxpayer_type": "Individual"
         }))
         .unwrap()
+    }
+
+    fn reviewed_profile() -> TaxpayerProfile {
+        let mut profile = test_profile();
+        profile.tax_elections.push(TaxElectionHistory {
+            taxable_year: 2099,
+            election: IncomeTaxElection::GraduatedUnspecified,
+            elected_at: chrono::NaiveDateTime::default(),
+            source_form: "2551Qv2018".to_string(),
+        });
+        profile
     }
 
     fn queued_draft(profile: &TaxpayerProfile) -> Form2551QDraft {
@@ -963,7 +877,7 @@ mod tests {
 
     #[test]
     fn submission_preparation_uses_current_profile_and_rejects_changes() {
-        let mut reviewed_profile = test_profile();
+        let mut reviewed_profile = reviewed_profile();
         reviewed_profile.eopt_tier = Some(EoptTier::Medium);
         let draft = queued_draft(&reviewed_profile);
 
@@ -974,11 +888,7 @@ mod tests {
         match prepared {
             Queued2551QPreparation::Rejected { draft, errors } => {
                 assert_eq!(draft.status, FilingStatus::Draft);
-                assert!(
-                    errors
-                        .iter()
-                        .any(|(field, _)| field == "queued_submission_fingerprint")
-                );
+                assert!(errors.iter().any(|(field, _)| field == "profile_snapshot"));
             }
             _ => panic!("a changed current profile must reject the queued return"),
         }
@@ -986,7 +896,7 @@ mod tests {
 
     #[test]
     fn submission_revision_rejects_cancel_and_identical_requeue() {
-        let profile = test_profile();
+        let profile = reviewed_profile();
         let draft = queued_draft(&profile);
         let revision = match prepare_queued_2551q(draft.clone(), &profile, None) {
             Queued2551QPreparation::Ready { revision, .. } => revision,
@@ -1010,7 +920,7 @@ mod tests {
 
     #[test]
     fn unresolved_submission_claim_is_never_eligible_for_automatic_retry() {
-        let profile = test_profile();
+        let profile = reviewed_profile();
         let mut draft = queued_draft(&profile);
         draft.submission_claim_token = Some("abandoned-network-claim".to_string());
         draft.submission_claimed_at = Some("2099-01-01T00:00:00Z".to_string());

@@ -1,0 +1,39 @@
+{
+  "calibration_only": true,
+  "form": {
+    "code": "1701Q",
+    "dpi": 144,
+    "form_id": "1701Qv2018",
+    "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/1701Q%20Jan%202018%20final%20rev2_copy.pdf",
+    "official_source_file": "external:1701Q Jan 2018 final rev2_copy.pdf",
+    "official_source_sha256": "c731d3f12556e6f19ab81f6113ca7c4a23f7ed099675c03451ac0074d96b85ed",
+    "page_count": 2,
+    "page_height_pt": 936.0,
+    "page_width_pt": 612.0,
+    "pages": [
+      {
+        "page": 1,
+        "reference_height_px": 1872,
+        "reference_png": "packages/form-renderer/references/1701q-2018-page-1.png",
+        "reference_png_sha256": "dcd98d06dde89732f4d340d6add017e2bf4b7040f3eda755a618ba43f01172ef",
+        "reference_width_px": 1224
+      },
+      {
+        "page": 2,
+        "reference_height_px": 1872,
+        "reference_png": "packages/form-renderer/references/1701q-2018-page-2.png",
+        "reference_png_sha256": "d69c01b30c6f86a92d090b3f81965a6e5f1464444012c425cece6a1ac84e1bf8",
+        "reference_width_px": 1224
+      }
+    ],
+    "reference_provenance": {
+      "kind": "official_pdf",
+      "replacement_required": false,
+      "runtime_eligible": false
+    },
+    "revision": "2018"
+  },
+  "generator": "prepare_official_reference.py (Poppler)",
+  "runtime_background_allowed": false,
+  "schema_version": 1
+}

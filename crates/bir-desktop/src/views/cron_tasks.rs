@@ -198,6 +198,7 @@ impl CronTasksView {
                 crate::events::AppEvent::DatabaseChanged => {
                     _this.load_settings(cx);
                 }
+                crate::events::AppEvent::ProfileComplianceChanged { .. } => {}
             },
         )
         .detach();

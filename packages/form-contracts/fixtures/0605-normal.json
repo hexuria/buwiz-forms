@@ -1,0 +1,199 @@
+{
+  "fields": {
+    "approval_selection": {
+      "type": "text",
+      "value": "none"
+    },
+    "atc": {
+      "type": "text",
+      "value": "II011"
+    },
+    "due_date": {
+      "type": "text",
+      "value": "07/15/2026"
+    },
+    "filing_basis": {
+      "type": "text",
+      "value": "fiscal"
+    },
+    "item_19_basic_tax_or_payment": {
+      "type": "decimal",
+      "value": 125000.0
+    },
+    "item_20a_surcharge": {
+      "type": "decimal",
+      "value": 2500.0
+    },
+    "item_20b_interest": {
+      "type": "decimal",
+      "value": 750.0
+    },
+    "item_20c_compromise": {
+      "type": "decimal",
+      "value": 1000.0
+    },
+    "item_20d_total_penalties": {
+      "type": "decimal",
+      "value": 4250.0
+    },
+    "item_21_total_amount_payable": {
+      "type": "decimal",
+      "value": 129250.0
+    },
+    "line_of_business": {
+      "type": "text",
+      "value": "SOFTWARE DEVELOPMENT"
+    },
+    "machine_validation_or_receipt_details": {
+      "type": "text",
+      "value": "AAB RECEIPT 0605-2026-0001"
+    },
+    "manner_of_payment": {
+      "type": "text",
+      "value": "self_assessment"
+    },
+    "number_of_installments": {
+      "type": "integer",
+      "value": 0
+    },
+    "number_of_installments_present": {
+      "type": "boolean",
+      "value": false
+    },
+    "number_of_sheets": {
+      "type": "integer",
+      "value": 2
+    },
+    "other_manner_description": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_23_amount": {
+      "type": "decimal",
+      "value": 129250.0
+    },
+    "payment_23_amount_present": {
+      "type": "boolean",
+      "value": true
+    },
+    "payment_24_amount": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "payment_24_amount_present": {
+      "type": "boolean",
+      "value": false
+    },
+    "payment_24_date": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_24_drawee_bank_or_agency": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_24_number": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_25_amount": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "payment_25_amount_present": {
+      "type": "boolean",
+      "value": false
+    },
+    "payment_25_date": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_25_drawee_bank_or_agency": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_25_number": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_26_amount": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "payment_26_amount_present": {
+      "type": "boolean",
+      "value": false
+    },
+    "payment_26_date": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_26_drawee_bank_or_agency": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_26_number": {
+      "type": "text",
+      "value": ""
+    },
+    "quarter": {
+      "type": "integer",
+      "value": 2
+    },
+    "return_period": {
+      "type": "text",
+      "value": "06/30/2026"
+    },
+    "signature_head_of_office": {
+      "type": "text",
+      "value": ""
+    },
+    "signature_taxpayer_or_representative": {
+      "type": "text",
+      "value": "JUAN DELA CRUZ"
+    },
+    "signature_title_or_position": {
+      "type": "text",
+      "value": "OWNER"
+    },
+    "tax_type_code": {
+      "type": "text",
+      "value": "IT"
+    },
+    "taxpayer_classification": {
+      "type": "text",
+      "value": "individual"
+    },
+    "type_of_payment": {
+      "type": "text",
+      "value": "full"
+    },
+    "year_end_month": {
+      "type": "integer",
+      "value": 6
+    }
+  },
+  "form": {
+    "code": "0605",
+    "version": "1999"
+  },
+  "locale": "en-PH",
+  "period": {
+    "label": "Q2 year ended 06/2026",
+    "month": 1,
+    "quarter": 2,
+    "taxable_year": 2026
+  },
+  "schedules": [],
+  "schema_version": "1.0",
+  "taxpayer": {
+    "contact_number": "09123456789",
+    "email": "renderer.0605@example.com",
+    "name": "JUAN DELA CRUZ",
+    "rdo_code": "018",
+    "registered_address": "53 SANTOL EXTENSION, NEW CABALAN, OLONGAPO CITY",
+    "tin": "12345678900000",
+    "zip_code": "2200"
+  },
+  "validation": []
+}

@@ -28,7 +28,7 @@ const SELF_EMPLOYED_VAT_MICRO_SMALL_8_PERCENT: &[&str] =
 const MIXED_NON_VAT: &[&str] = &["1701", "1701Q", "2551Q"];
 const MIXED_NON_VAT_8_PERCENT: &[&str] = &["1701", "1701Q"];
 const MIXED_VAT: &[&str] = &["1701", "1701Q", "2550Q"];
-const COMPENSATION_WITHHOLDING: &[&str] = &["0620", "1600", "1601C", "1604CF", "2316"];
+const COMPENSATION_WITHHOLDING: &[&str] = &["0620", "1601C", "1604CF", "2316"];
 const EXPANDED_WITHHOLDING: &[&str] = &["0619E", "1601EQ", "1604E"];
 const FINAL_WITHHOLDING: &[&str] = &["0619F", "1600WP", "1601F", "1601FQ", "1602", "1603"];
 
@@ -54,7 +54,7 @@ fn base_profile(
         default_form_type: "2551Q".into(),
         taxpayer_type,
         is_vat_registered: false,
-        business_start_date: None,
+        business_start_date: Some(NaiveDate::from_ymd_opt(2020, 1, 1).unwrap()),
         tax_classification: classification,
         eopt_tier: None,
         is_bmbe: false,
@@ -92,11 +92,28 @@ fn base_profile(
 }
 
 fn forms_for(profile: &TaxpayerProfile) -> BTreeSet<String> {
+    forms_for_year(profile, TAXABLE_YEAR)
+}
+
+fn forms_for_year(profile: &TaxpayerProfile, year: u16) -> BTreeSet<String> {
     let mut p = profile.clone();
     p.ensure_profile_version_ledger();
-    recurring_obligation_forms_for_profile_and_year(&p, TAXABLE_YEAR)
+    configure_forms_set_for_year(&mut p, year);
+    recurring_obligation_forms_for_profile_and_year(&p, year)
         .into_iter()
         .collect()
+}
+
+fn configure_forms_set_for_year(profile: &mut TaxpayerProfile, year: u16) {
+    let suggestions = bir_core::integration::form_suggestions_for_profile_year(profile, year);
+    let reconciliation = bir_core::forms::reconcile_forms_set_for_year(
+        year,
+        profile.per_year_forms.get(&year),
+        &suggestions,
+    );
+    profile
+        .per_year_forms
+        .insert(year, reconciliation.forms_set);
 }
 
 fn expected(codes: &[&str]) -> BTreeSet<String> {
@@ -573,9 +590,7 @@ fn versioned_cor_uses_the_profile_active_for_the_selected_year() {
     profile.profile_versions = vec![non_vat_2025, vat_2026];
     profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
 
-    let forms_2025: BTreeSet<_> = recurring_obligation_forms_for_profile_and_year(&profile, 2025)
-        .into_iter()
-        .collect();
+    let forms_2025 = forms_for_year(&profile, 2025);
     let forms_2026 = forms_for(&profile);
 
     assert!(forms_2025.contains("2551Q"));
@@ -659,7 +674,7 @@ fn confirming_new_cor_version_auto_closes_previous_version() {
 }
 
 #[test]
-fn cor_effective_date_filters_deadlines_by_taxable_period_not_due_month() {
+fn missing_forms_set_blocks_deadlines_even_when_profile_version_is_effective() {
     let mut profile = self_employed_profile(false, None, false);
     let version = confirmed_version(
         &profile,
@@ -706,7 +721,36 @@ fn cor_effective_date_filters_deadlines_by_taxable_period_not_due_month() {
         .unwrap();
 
     assert!(!deadline_applies_to_profile(&profile, q1_1701q));
-    assert!(deadline_applies_to_profile(&profile, q2_1701q));
+    assert!(!deadline_applies_to_profile(&profile, q2_1701q));
+}
+
+#[test]
+fn stored_forms_set_controls_deadline_applicability() {
+    let mut profile = self_employed_profile(false, None, false);
+    profile.per_year_forms.insert(
+        TAXABLE_YEAR,
+        bir_core::forms::PerYearFormsSet::from_codes(
+            TAXABLE_YEAR,
+            ["1701Q"],
+            bir_core::forms::FormSetSource::Manual,
+        ),
+    );
+    let deadlines = DeadlineResolver::resolve_taxable_year(TAXABLE_YEAR as i32);
+    let q1_1701q = deadlines
+        .iter()
+        .find(|deadline| {
+            deadline.form_code == "1701Q"
+                && matches!(
+                    deadline.period,
+                    DeadlinePeriod::Quarterly {
+                        taxable_year: 2026,
+                        quarter: 1
+                    }
+                )
+        })
+        .unwrap();
+
+    assert!(deadline_applies_to_profile(&profile, q1_1701q));
 }
 
 #[test]
@@ -769,6 +813,98 @@ fn profile_version_validation_rejects_overlaps_and_ignores_draft_versions() {
             .iter()
             .any(|error| error.field == "profile_versions")
     );
+}
+
+#[test]
+fn yearly_profile_resolution_excludes_undated_confirmed_version() {
+    let mut profile = self_employed_profile(false, None, false);
+    let version = confirmed_version(
+        &profile,
+        "undated",
+        "Undated migrated profile",
+        None,
+        None,
+        vec![RegisteredTaxType::PercentageTax],
+        false,
+    );
+    profile.profile_versions = vec![version];
+    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+
+    let resolved = profile.resolve_tax_profile_for_year(TAXABLE_YEAR);
+
+    assert!(resolved.effective_segments.is_empty());
+    assert_eq!(resolved.issues.len(), 1);
+}
+
+#[test]
+fn yearly_profile_resolution_accepts_sequential_midyear_versions() {
+    let mut profile = self_employed_profile(false, None, false);
+    let first = confirmed_version(
+        &profile,
+        "first",
+        "First half",
+        Some((2026, 1, 1)),
+        Some((2026, 6, 30)),
+        vec![RegisteredTaxType::PercentageTax],
+        false,
+    );
+    let second = confirmed_version(
+        &profile,
+        "second",
+        "Second half",
+        Some((2026, 7, 1)),
+        None,
+        vec![RegisteredTaxType::ValueAddedTax],
+        true,
+    );
+    profile.profile_versions = vec![second, first];
+    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+
+    let resolved = profile.resolve_tax_profile_for_year(TAXABLE_YEAR);
+
+    assert_eq!(resolved.effective_segments.len(), 2);
+    assert!(resolved.issues.is_empty());
+}
+
+#[test]
+fn compensation_withholding_does_not_suggest_form_1600() {
+    let mut profile = self_employed_profile(false, None, false);
+    profile.withholds_compensation = true;
+    let version = confirmed_version(
+        &profile,
+        "compensation",
+        "Compensation withholding",
+        Some((2026, 1, 1)),
+        None,
+        vec![RegisteredTaxType::WithholdingCompensation],
+        false,
+    );
+    profile.profile_versions = vec![version];
+    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+
+    let forms = forms_for(&profile);
+
+    assert!(!forms.contains("1600"));
+}
+
+#[test]
+fn vat_percentage_withholding_tax_type_suggests_form_1600() {
+    let mut profile = self_employed_profile(false, None, false);
+    let version = confirmed_version(
+        &profile,
+        "vat-percentage-withholding",
+        "VAT and percentage withholding",
+        Some((2026, 1, 1)),
+        None,
+        vec![RegisteredTaxType::WithholdingVatAndPercentage],
+        false,
+    );
+    profile.profile_versions = vec![version];
+    profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+
+    let forms = forms_for(&profile);
+
+    assert!(forms.contains("1600"));
 }
 
 #[test]
@@ -959,6 +1095,7 @@ fn cor_consistency_report_explains_8_percent_percentage_tax_suppression() {
     );
     profile.profile_versions = vec![version];
     profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+    configure_forms_set_for_year(&mut profile, 2026);
 
     let preview = profile.preview_obligations_for_year(2026);
     let issue = preview
@@ -1002,6 +1139,7 @@ fn eight_percent_election_preserves_non_pt010_percentage_tax_obligation() {
     );
     profile.profile_versions = vec![version];
     profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+    configure_forms_set_for_year(&mut profile, 2026);
 
     let preview = profile.preview_obligations_for_year(2026);
 
@@ -1033,6 +1171,7 @@ fn cor_consistency_report_flags_cor_tin_mismatch() {
     version.cor.tin = Some("999-888-777-00000".into());
     profile.profile_versions = vec![version];
     profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+    configure_forms_set_for_year(&mut profile, 2026);
 
     let preview = profile.preview_obligations_for_year(2026);
     let issue = preview
@@ -1077,6 +1216,7 @@ fn cor_consistency_report_includes_manual_override_context() {
     });
     profile.profile_versions = vec![version];
     profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+    configure_forms_set_for_year(&mut profile, 2026);
 
     let preview = profile.preview_obligations_for_year(2026);
     let issue = preview
@@ -1115,6 +1255,7 @@ fn abolished_1704_is_not_a_current_corporate_dashboard_obligation() {
     );
     profile.profile_versions = vec![version];
     profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+    configure_forms_set_for_year(&mut profile, 2026);
 
     let preview = profile.preview_obligations_for_year(2026);
     assert!(!preview.form_codes.iter().any(|code| code == "1704"));
@@ -1152,6 +1293,7 @@ fn manual_include_still_reports_missing_calendar_rule_for_1704() {
     });
     profile.profile_versions = vec![version];
     profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+    configure_forms_set_for_year(&mut profile, 2026);
 
     let preview = profile.preview_obligations_for_year(2026);
     let issue = preview

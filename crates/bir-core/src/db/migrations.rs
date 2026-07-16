@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::db::DbError;
 
-const CURRENT_MIGRATION_VERSION: i32 = 10;
+const CURRENT_MIGRATION_VERSION: i32 = 11;
 
 pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
     let mut version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
@@ -248,6 +248,9 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         CREATE INDEX IF NOT EXISTS idx_profile_calendar_events_tin
             ON profile_calendar_events(profile_tin);
         ",
+        // v11: Preserve Forms Set evidence/effective dates and fail-closed review state.
+        // Columns are added by Rust below so partially upgraded legacy databases remain safe.
+        "SELECT 1; -- v11 marker: Forms Set provenance and conflict state (Rust-side)",
     ];
 
     while version < CURRENT_MIGRATION_VERSION {
@@ -277,11 +280,57 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
             if version == 9 {
                 migrate_v9_per_year_forms_heal(conn)?;
             }
+
+            if version == 11 {
+                migrate_v11_forms_set_provenance(conn)?;
+            }
         } else {
             break;
         }
     }
 
+    Ok(())
+}
+
+/// Add auditable suggestion provenance and explicit conflict state to `per_year_forms`.
+///
+/// Each addition is checked independently because early development builds may contain
+/// only a subset of the columns. Existing rows default to `resolved`, preserving their
+/// established manual/generated decision while new conflicts fail closed.
+fn migrate_v11_forms_set_provenance(conn: &Connection) -> Result<(), DbError> {
+    let has_per_year_forms: bool = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='per_year_forms'",
+            [],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+    if !has_per_year_forms {
+        return Ok(());
+    }
+
+    let column_names = {
+        let mut stmt = conn.prepare("PRAGMA table_info(per_year_forms)")?;
+        stmt.query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<std::collections::BTreeSet<_>, _>>()?
+    };
+
+    for (column, definition) in [
+        ("source_reference", "TEXT"),
+        ("effective_from", "TEXT"),
+        ("effective_until", "TEXT"),
+        ("review_status", "TEXT NOT NULL DEFAULT 'resolved'"),
+        ("conflict_json", "TEXT"),
+    ] {
+        if !column_names.contains(column) {
+            conn.execute(
+                &format!("ALTER TABLE per_year_forms ADD COLUMN {column} {definition}"),
+                [],
+            )?;
+        }
+    }
+
+    info!("v11 migration: added Forms Set provenance and conflict state");
     Ok(())
 }
 
@@ -569,14 +618,10 @@ fn migrate_v8_per_year_forms_backfill(conn: &Connection) -> Result<(), DbError> 
                     ) && crate::integration::validation::obligation_allowed_for_version_and_profile(
                         def, version, &profile, year,
                     ) {
-                        entries.push(FormSetEntry {
-                            form_code: def.code.to_string(),
-                            frequency: def.frequency.clone(),
-                            active: true,
-                            source: FormSetSource::MigrationBackfill,
-                            custom: false,
-                            reason: None,
-                        });
+                        entries.push(FormSetEntry::from_code(
+                            def.code,
+                            FormSetSource::MigrationBackfill,
+                        ));
                     }
                 }
 
@@ -598,17 +643,15 @@ fn migrate_v8_per_year_forms_backfill(conn: &Connection) -> Result<(), DbError> 
                         let frequency = find_form(&r.form_code)
                             .map(|d| d.frequency.clone())
                             .unwrap_or(FilingFrequency::OpenEnded);
-                        entries.push(FormSetEntry {
-                            form_code: r.form_code.clone(),
-                            frequency,
-                            active: match r.action {
-                                ManualObligationOverrideAction::Include => true,
-                                ManualObligationOverrideAction::Exclude => false,
-                            },
-                            source: FormSetSource::MigrationBackfill,
-                            custom,
-                            reason: Some(r.reason.clone()),
-                        });
+                        let mut entry = FormSetEntry::from_code(
+                            r.form_code.clone(),
+                            FormSetSource::MigrationBackfill,
+                        );
+                        entry.frequency = frequency;
+                        entry.active = matches!(r.action, ManualObligationOverrideAction::Include);
+                        entry.custom = custom;
+                        entry.reason = Some(r.reason.clone());
+                        entries.push(entry);
                     }
                 }
 
@@ -724,14 +767,10 @@ fn migrate_v9_per_year_forms_heal(conn: &Connection) -> Result<(), DbError> {
                     ) && crate::integration::validation::obligation_allowed_for_version_and_profile(
                         def, version, &profile, year,
                     ) {
-                        entries.push(FormSetEntry {
-                            form_code: def.code.to_string(),
-                            frequency: def.frequency.clone(),
-                            active: true,
-                            source: FormSetSource::MigrationBackfill,
-                            custom: false,
-                            reason: None,
-                        });
+                        entries.push(FormSetEntry::from_code(
+                            def.code,
+                            FormSetSource::MigrationBackfill,
+                        ));
                     }
                 }
 
@@ -753,17 +792,15 @@ fn migrate_v9_per_year_forms_heal(conn: &Connection) -> Result<(), DbError> {
                         let frequency = find_form(&r.form_code)
                             .map(|d| d.frequency.clone())
                             .unwrap_or(FilingFrequency::OpenEnded);
-                        entries.push(FormSetEntry {
-                            form_code: r.form_code.clone(),
-                            frequency,
-                            active: match r.action {
-                                ManualObligationOverrideAction::Include => true,
-                                ManualObligationOverrideAction::Exclude => false,
-                            },
-                            source: FormSetSource::MigrationBackfill,
-                            custom,
-                            reason: Some(r.reason.clone()),
-                        });
+                        let mut entry = FormSetEntry::from_code(
+                            r.form_code.clone(),
+                            FormSetSource::MigrationBackfill,
+                        );
+                        entry.frequency = frequency;
+                        entry.active = matches!(r.action, ManualObligationOverrideAction::Include);
+                        entry.custom = custom;
+                        entry.reason = Some(r.reason.clone());
+                        entries.push(entry);
                     }
                 }
 
@@ -802,14 +839,15 @@ fn migrate_v9_per_year_forms_heal(conn: &Connection) -> Result<(), DbError> {
                             "annual" => FilingFrequency::Annual,
                             _ => FilingFrequency::OpenEnded,
                         };
-                        entries.push(FormSetEntry {
-                            form_code: code,
-                            frequency,
-                            active,
-                            source: FormSetSource::from_str_lossy(&source_str),
-                            custom,
-                            reason,
-                        });
+                        let mut entry = FormSetEntry::from_code(
+                            code,
+                            FormSetSource::from_str_lossy(&source_str),
+                        );
+                        entry.frequency = frequency;
+                        entry.active = active;
+                        entry.custom = custom;
+                        entry.reason = reason;
+                        entries.push(entry);
                     }
                 }
 
@@ -902,6 +940,46 @@ mod tests {
                 .unwrap_or(false);
             assert!(exists, "Table '{}' should exist after migration", table);
         }
+    }
+
+    #[test]
+    fn test_v10_forms_set_rows_gain_resolved_provenance_defaults() {
+        let conn = test_conn();
+        conn.execute_batch(
+            "CREATE TABLE per_year_forms (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tin TEXT NOT NULL,
+                taxable_year INTEGER NOT NULL,
+                form_code TEXT NOT NULL,
+                frequency TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1,
+                source TEXT NOT NULL,
+                custom INTEGER NOT NULL DEFAULT 0,
+                reason TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(tin, taxable_year, form_code)
+            );
+            INSERT INTO per_year_forms
+                (tin, taxable_year, form_code, frequency, active, source, custom, reason)
+            VALUES
+                ('123456789000', 2026, '2551Q', 'quarterly', 1, 'reviewed_cor', 0,
+                 'Reviewed before provenance migration');
+            PRAGMA user_version = 10;",
+        )
+        .unwrap();
+
+        migrate_database(&conn).unwrap();
+        let row: (String, Option<String>, Option<String>, Option<String>) = conn
+            .query_row(
+                "SELECT review_status, source_reference, effective_from, conflict_json
+                 FROM per_year_forms WHERE form_code = '2551Q'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap();
+
+        assert_eq!(row, ("resolved".into(), None, None, None));
     }
 
     #[test]

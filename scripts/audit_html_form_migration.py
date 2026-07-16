@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
 """Audit HTML form migration claims without promoting a renderer.
 
-The migration manifest deliberately separates an implementation that is
-available for experimental preview (``html_enabled``) from one that is safe to
-route to users (``release_ready``).  This audit accepts conservative false
-flags, but fails closed when a positive readiness claim is not backed by
-hashed, structured evidence.
-
-The current rebuild is intentionally scoped to BIR Form 2551Q January 2018.
-The implementation is generic enough to reject a future HTML-enabled scaffold
-record, but it does not infer readiness or update either manifest.
+The migration manifest separates route selection, independently reviewable
+capabilities, and final release readiness. This audit accepts conservative
+false flags, but fails closed when a positive readiness claim is not backed by
+the relevant implementation registry or hashed, structured evidence.
 """
 
 from __future__ import annotations
@@ -38,9 +33,17 @@ RELEASE_EVIDENCE = PurePosixPath(
 REFERENCE_MANIFEST = PurePosixPath(
     "packages/form-renderer/references/manifest.json"
 )
-SUPPORT_SOURCE = PurePosixPath("crates/bir-core/src/forms/support_level.rs")
-
-TARGET_FORM = ("2551Q", "2018")
+SOURCE_CATALOG = PurePosixPath(
+    "packages/form-renderer/references/source-catalog.json"
+)
+RENDER_PROVIDER_DIR = PurePosixPath("crates/bir-print/src/html_forms")
+COMPONENT_REGISTRY = PurePosixPath(
+    "packages/form-renderer/src/forms/registry.ts"
+)
+SPEC_REGISTRY = PurePosixPath("packages/form-specs/src/index.ts")
+RUST_CAPABILITY_MANIFEST = PurePosixPath(
+    "packages/form-specs/generated/form-capabilities.json"
+)
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 GIT_REVISION = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
 SUPPORTED_PAPER_SIZES = {
@@ -49,24 +52,42 @@ SUPPORTED_PAPER_SIZES = {
     (612.0, 1008.0),
 }
 
-# Every boolean below is a promotion fact.  ``contract_complete`` is included
-# explicitly; the donor audit omitted it even though the current manifest owns
-# that gate.
-PROMOTION_FLAGS = (
-    "contract_complete",
-    "typed_model_complete",
-    "xml_complete",
-    "formula_evidence_complete",
-    "layout_calibrated",
-    "validation_complete",
-    "carry_over_complete",
-    "pagination_complete",
-    "visual_parity_complete",
-    "native_print_export_verified",
-    "packaged_offline_verified",
+# Every capability below is explicit in schema v3. Structural capabilities are
+# bound to code registries; release capabilities additionally require evidence.
+CAPABILITY_FIELDS = (
+    "typed_model",
+    "xml_round_trip",
+    "formula_evidence",
+    "persistence",
+    "queue_submission",
+    "editor",
+    "render_contract",
+    "html_component",
+    "html_spec",
+    "pagination",
+    "visual_parity",
+    "native_preview",
+    "native_print",
+    "pdf_export",
+    "packaged_offline",
 )
-BOOLEAN_STATUS_FIELDS = ("html_enabled", *PROMOTION_FLAGS, "release_ready")
-PLATFORMS = ("macos", "windows")
+PROMOTION_FLAGS = CAPABILITY_FIELDS
+BOOLEAN_STATUS_FIELDS = ("release_ready",)
+ROUTES = {"disabled", "experimental", "html_only"}
+STRUCTURAL_CAPABILITIES = (
+    "render_contract",
+    "html_component",
+    "html_spec",
+    "pagination",
+)
+EVIDENCE_CAPABILITIES = (
+    "visual_parity",
+    "native_preview",
+    "native_print",
+    "pdf_export",
+    "packaged_offline",
+)
+PLATFORMS = ("macos", "windows", "linux")
 ROLLBACK_CASES = {
     "release_ready_false",
     "kill_switch",
@@ -95,16 +116,6 @@ VISUAL_EVIDENCE_PRODUCER_PATH = PurePosixPath(
 TRUSTED_VISUAL_EVIDENCE_PRODUCERS: frozenset[str] = frozenset()
 TRUSTED_PLATFORM_EVIDENCE_PRODUCERS: frozenset[str] = frozenset()
 TRUSTED_ROLLBACK_EVIDENCE_PRODUCERS: frozenset[str] = frozenset()
-UNBOUND_PROMOTION_FLAGS = (
-    "contract_complete",
-    "typed_model_complete",
-    "xml_complete",
-    "formula_evidence_complete",
-    "layout_calibrated",
-    "validation_complete",
-    "carry_over_complete",
-    "pagination_complete",
-)
 
 # Evidence is bound to the most recent commit that changed this curated source
 # set.  Evidence/status/docs are deliberately excluded: a later evidence-only
@@ -125,7 +136,6 @@ CURATED_SOURCE_PATHS = (
     "crates/bir-core/src",
     "crates/bir-desktop",
     "crates/bir-print",
-    "formtypes/2551Qv2018",
     "entitlements.dev.plist",
     "entitlements.plist",
     "installer.iss",
@@ -593,22 +603,152 @@ def _audit_official_source(code: str, source: object, errors: list[str]) -> None
         errors.append(f"{code}: official_source must be an official BIR HTTPS PDF URL")
 
 
-def _rust_fileable_codes(root: Path, errors: list[str]) -> set[str]:
-    path = root.joinpath(*SUPPORT_SOURCE.parts)
+def _audit_source_path(value: object, label: str, errors: list[str]) -> None:
+    if not isinstance(value, str) or not value.strip():
+        errors.append(f"{label}: source-pack path must be a non-empty relative path")
+        return
+    path = PurePosixPath(value)
+    if path.is_absolute() or ".." in path.parts:
+        errors.append(f"{label}: source-pack path must remain inside the evidence root")
+
+
+def _audit_source_catalog_entry(
+    form: dict[str, Any],
+    source: dict[str, Any],
+    errors: list[str],
+) -> None:
+    code = str(form.get("code", "?"))
+    revision = str(form.get("revision", "?"))
+    label = f"{code}:{revision} source catalog"
+    for field in ("code", "revision"):
+        if source.get(field) != form.get(field):
+            errors.append(f"{label}: {field} is inconsistent")
+    _audit_source_path(source.get("source_pack_relative_path"), label, errors)
+    if not isinstance(source.get("sha256"), str) or not SHA256.fullmatch(
+        str(source.get("sha256", ""))
+    ):
+        errors.append(f"{label}: source PDF sha256 is invalid")
+    _audit_official_source(code, source.get("official_source_url"), errors)
+    if source.get("source_review") != "verified_official_bytes":
+        errors.append(f"{label}: source_review must be verified_official_bytes")
+
+    width = _as_number(source.get("page_width_pt"))
+    height = _as_number(source.get("page_height_pt"))
+    page_count = source.get("page_count")
+    if width is None or height is None or (width, height) not in SUPPORTED_PAPER_SIZES:
+        errors.append(f"{label}: unsupported paper geometry {width} x {height} pt")
+    if not isinstance(page_count, int) or isinstance(page_count, bool) or page_count < 1:
+        errors.append(f"{label}: page_count must be positive")
+
+    sample_directory = source.get("sample_xml_directory")
+    if sample_directory is not None:
+        _audit_source_path(sample_directory, f"{label} XML directory", errors)
+
+    companions = source.get("conditional_companions", [])
+    if not isinstance(companions, list):
+        errors.append(f"{label}: conditional_companions must be an array")
+        return
+    for index, companion in enumerate(companions):
+        companion_label = f"{label} companion {index + 1}"
+        if not isinstance(companion, dict):
+            errors.append(f"{companion_label}: entry must be an object")
+            continue
+        _audit_source_path(
+            companion.get("source_pack_relative_path"), companion_label, errors
+        )
+        if not isinstance(companion.get("sha256"), str) or not SHA256.fullmatch(
+            str(companion.get("sha256", ""))
+        ):
+            errors.append(f"{companion_label}: sha256 is invalid")
+        _audit_official_source(code, companion.get("official_source_url"), errors)
+        if companion.get("source_review") != "verified_official_bytes":
+            errors.append(
+                f"{companion_label}: source_review must be verified_official_bytes"
+            )
+        companion_width = _as_number(companion.get("page_width_pt"))
+        companion_height = _as_number(companion.get("page_height_pt"))
+        if (
+            companion_width is None
+            or companion_height is None
+            or (companion_width, companion_height) not in SUPPORTED_PAPER_SIZES
+            and (companion_height, companion_width) not in SUPPORTED_PAPER_SIZES
+        ):
+            errors.append(
+                f"{companion_label}: unsupported paper geometry "
+                f"{companion_width} x {companion_height} pt"
+            )
+        companion_pages = companion.get("page_count")
+        if (
+            not isinstance(companion_pages, int)
+            or isinstance(companion_pages, bool)
+            or companion_pages < 1
+        ):
+            errors.append(f"{companion_label}: page_count must be positive")
+
+
+def _capability(form: dict[str, Any], name: str) -> object:
+    capabilities = form.get("capabilities")
+    return capabilities.get(name) if isinstance(capabilities, dict) else None
+
+
+def _html_enabled(form: dict[str, Any]) -> bool:
+    return form.get("route") in {"experimental", "html_only"}
+
+
+def _rust_provider_keys(root: Path, errors: list[str]) -> set[tuple[str, str]]:
+    directory = root.joinpath(*RENDER_PROVIDER_DIR.parts)
+    if not directory.is_dir():
+        errors.append(f"missing Rust HTML provider directory: {RENDER_PROVIDER_DIR}")
+        return set()
+    keys: set[tuple[str, str]] = set()
+    for path in sorted(directory.rglob("*.rs")):
+        try:
+            source = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as error:
+            errors.append(f"cannot read Rust HTML provider {path}: {error}")
+            continue
+        for provider in re.finditer(
+            r"RenderFormProvider\s*=\s*RenderFormProvider\s*\{(.*?)\n\};",
+            source,
+            flags=re.DOTALL,
+        ):
+            body = provider.group(1)
+            code = re.search(r'\bcode:\s*"([^"]+)"', body)
+            revision = re.search(r'\brevision:\s*"([^"]+)"', body)
+            if code is None or revision is None:
+                errors.append(f"{path}: provider must declare literal code and revision")
+                continue
+            key = (code.group(1), revision.group(1))
+            if key in keys:
+                errors.append(f"duplicate Rust HTML provider {key[0]}:{key[1]}")
+            keys.add(key)
+    return keys
+
+
+def _typescript_registry_keys(
+    root: Path,
+    relative: PurePosixPath,
+    declaration: str,
+    errors: list[str],
+) -> set[tuple[str, str]]:
+    path = root.joinpath(*relative.parts)
     try:
         source = path.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as error:
-        errors.append(f"cannot read Rust support source {path}: {error}")
+        errors.append(f"cannot read TypeScript registry {relative}: {error}")
         return set()
     match = re.search(
-        r"const\s+FILEABLE_FORM_CODES:\s*&\[&str\]\s*=\s*&\[(.*?)\];",
+        rf"\b{re.escape(declaration)}\b[^=]*=\s*\{{(.*?)\n\}};",
         source,
         flags=re.DOTALL,
     )
-    if not match:
-        errors.append("cannot find Rust FILEABLE_FORM_CODES")
+    if match is None:
+        errors.append(f"cannot find {declaration} in {relative}")
         return set()
-    return set(re.findall(r'"([^"]+)"', match.group(1)))
+    return {
+        (code, revision)
+        for code, revision in re.findall(r'"([^"]+):([^"]+)"\s*:', match.group(1))
+    }
 
 
 def _as_number(value: object) -> float | None:
@@ -751,6 +891,24 @@ def _audit_visual_report(
             errors.append(f"{prefix}: reference path is inconsistent")
         if page.get("reference_sha256") != expected.get("reference_png_sha256"):
             errors.append(f"{prefix}: reference_sha256 is inconsistent")
+        if page.get("comparison") != "official-complete-page-v1":
+            errors.append(
+                f"{prefix}: comparison must be official-complete-page-v1"
+            )
+        expected_ink_missing = _as_number(
+            page.get("expected_ink_missing_percent")
+        )
+        unexpected_actual_ink = _as_number(
+            page.get("unexpected_actual_ink_percent")
+        )
+        if expected_ink_missing is None or not 0 <= expected_ink_missing <= 100:
+            errors.append(
+                f"{prefix}: expected_ink_missing_percent is invalid"
+            )
+        if unexpected_actual_ink is None or not 0 <= unexpected_actual_ink <= 100:
+            errors.append(
+                f"{prefix}: unexpected_actual_ink_percent is invalid"
+            )
 
         actual_asset = _audit_hashed_file(
             root,
@@ -1152,69 +1310,45 @@ def _audit_reference(
     for key in ("code", "revision"):
         if reference.get(key) != form.get(key):
             errors.append(f"{label}: {key} is inconsistent")
-
-    expected_paths = {
-        "metadata": f"formtypes/{form_id}/metadata.json",
-        "formtype": f"formtypes/{form_id}/formtype.json",
-        "template": f"formtypes/{form_id}/template.typ",
-    }
-    loaded: dict[str, dict[str, Any]] = {}
-    for asset_name, expected_path in expected_paths.items():
-        if reference.get(asset_name) != expected_path:
-            errors.append(f"{label}: {asset_name} must be {expected_path}")
-        asset = _audit_hashed_file(
-            root,
-            reference.get(asset_name),
-            reference.get(f"{asset_name}_sha256"),
-            f"{label} {asset_name}",
-            errors,
+    legacy_fields = [
+        field for field in ("metadata", "formtype", "template")
+        if field in reference
+    ]
+    if legacy_fields:
+        errors.append(
+            f"{label}: reference manifest cannot depend on legacy assets: "
+            + ", ".join(legacy_fields)
         )
-        if asset and asset_name in {"metadata", "formtype"}:
-            parsed = _read_json(asset[0], f"{label} {asset_name}", errors)
-            if parsed is not None:
-                loaded[asset_name] = parsed
 
-    metadata = loaded.get("metadata", {})
-    formtype = loaded.get("formtype", {})
-    if metadata.get("form_id") != form_id:
-        errors.append(f"{label}: metadata form_id is inconsistent")
-    if formtype.get("form_id") != form_id:
-        errors.append(f"{label}: formtype form_id is inconsistent")
-    _audit_official_source(code, metadata.get("official_source"), errors)
-    if not isinstance(metadata.get("sha256"), str) or not SHA256.fullmatch(
-        str(metadata.get("sha256", ""))
+    _audit_official_source(code, reference.get("official_source"), errors)
+    if not isinstance(reference.get("official_source_sha256"), str) or not SHA256.fullmatch(
+        str(reference.get("official_source_sha256", ""))
     ):
-        errors.append(f"{label}: metadata official source sha256 is invalid")
-    if reference.get("official_source") != metadata.get("official_source"):
-        errors.append(f"{label}: official_source is inconsistent with metadata")
-    if reference.get("official_source_sha256") != metadata.get("sha256"):
-        errors.append(f"{label}: official_source_sha256 is inconsistent with metadata")
+        errors.append(f"{label}: official_source_sha256 is invalid")
 
-    width = _as_number(metadata.get("page_width_pt"))
-    height = _as_number(metadata.get("page_height_pt"))
-    page_count = metadata.get("page_count")
+    width = _as_number(reference.get("page_width_pt"))
+    height = _as_number(reference.get("page_height_pt"))
+    page_count = reference.get("page_count")
     if width is None or height is None or (width, height) not in SUPPORTED_PAPER_SIZES:
-        errors.append(f"{label}: unsupported paper metadata {width} x {height} pt")
+        errors.append(f"{label}: unsupported paper geometry {width} x {height} pt")
     if not isinstance(page_count, int) or isinstance(page_count, bool) or page_count < 1:
-        errors.append(f"{label}: metadata page_count must be positive")
+        errors.append(f"{label}: page_count must be positive")
         page_count = 0
-    if (
-        reference.get("page_width_pt") != metadata.get("page_width_pt")
-        or reference.get("page_height_pt") != metadata.get("page_height_pt")
-        or reference.get("page_count") != page_count
-    ):
-        errors.append(f"{label}: page geometry is inconsistent with metadata")
 
-    fields = formtype.get("fields")
-    placeholders = [
-        field.get("key")
-        for field in fields
-        if isinstance(field, dict)
-        and isinstance(field.get("key"), str)
-        and field["key"].startswith("_field_")
-    ] if isinstance(fields, list) else []
-    if form.get("layout_calibrated") is True and placeholders:
-        errors.append(f"{label}: calibrated layout still has placeholder field keys")
+    provenance = reference.get("reference_provenance")
+    if not isinstance(provenance, dict):
+        errors.append(f"{label}: reference_provenance must be an object")
+    else:
+        kind = provenance.get("kind")
+        if kind not in {"official_pdf_raster", "legacy_filled_calibration_raster"}:
+            errors.append(f"{label}: unsupported reference provenance {kind!r}")
+        if provenance.get("runtime_eligible") is not False:
+            errors.append(f"{label}: calibration reference cannot be runtime eligible")
+        if (
+            kind == "legacy_filled_calibration_raster"
+            and provenance.get("replacement_required") is not True
+        ):
+            errors.append(f"{label}: legacy raster must remain replacement_required")
 
     fixture = _audit_hashed_file(
         root,
@@ -1247,16 +1381,8 @@ def _audit_reference(
             continue
         if page.get("page") != expected_number:
             errors.append(f"{label}: pages must be sequential from page 1")
-        source_path = f"formtypes/{form_id}/pages/page{expected_number}.svg"
-        if page.get("source_svg") != source_path:
-            errors.append(f"{label}: page {expected_number} source_svg must be {source_path}")
-        _audit_hashed_file(
-            root,
-            page.get("source_svg"),
-            page.get("source_svg_sha256"),
-            f"{label} page {expected_number} source SVG",
-            errors,
-        )
+        if "source_svg" in page:
+            errors.append(f"{label}: page {expected_number} cannot depend on a legacy source SVG")
         png = _audit_hashed_file(
             root,
             page.get("reference_png"),
@@ -1301,10 +1427,110 @@ def _release_entry_has_evidence_claim(entry: object) -> bool:
     return False
 
 
+def parse_form_revision(value: str) -> tuple[str, str]:
+    """Parse an exact ``FORM:REVISION`` release-gate selector."""
+
+    code, separator, revision = value.partition(":")
+    code = code.strip()
+    revision = revision.strip()
+    if not separator or not code or not revision or ":" in revision:
+        raise argparse.ArgumentTypeError(
+            f"invalid form selector {value!r}; expected exact FORM:REVISION"
+        )
+    return code, revision
+
+
+def _require_hashed_evidence_pointer(
+    root: Path,
+    pointer: object,
+    label: str,
+    errors: list[str],
+) -> None:
+    """Require a passing pointer whose referenced evidence bytes are hashed."""
+
+    if not isinstance(pointer, dict):
+        errors.append(f"{label}: required release evidence is missing")
+        return
+    if pointer.get("passed") is not True:
+        errors.append(f"{label}: required release evidence must have passed=true")
+    _audit_hashed_file(
+        root,
+        pointer.get("path"),
+        pointer.get("sha256"),
+        f"{label} required release evidence",
+        errors,
+    )
+
+
+def _audit_required_release_target(
+    root: Path,
+    key: tuple[str, str],
+    form: dict[str, Any] | None,
+    form_evidence: object,
+    errors: list[str],
+) -> None:
+    """Fail closed unless one exact form is fully certified for release."""
+
+    label = f"{key[0]}:{key[1]}"
+    if form is None:
+        errors.append(f"required release target {label} has no migration record")
+        return
+    if form.get("route") != "html_only":
+        errors.append(f"{label}: required release target requires html_only route")
+    if form.get("support_level") != "ImplementedInApp":
+        errors.append(
+            f"{label}: required release target requires ImplementedInApp support"
+        )
+    if form.get("release_ready") is not True:
+        errors.append(f"{label}: required release target requires release_ready=true")
+    missing_capabilities = [
+        capability
+        for capability in PROMOTION_FLAGS
+        if _capability(form, capability) is not True
+    ]
+    if missing_capabilities:
+        errors.append(
+            f"{label}: required release target is missing capabilities: "
+            + ", ".join(missing_capabilities)
+        )
+
+    if not isinstance(form_evidence, dict):
+        errors.append(f"{label}: required release evidence record is missing")
+        form_evidence = {}
+    _require_hashed_evidence_pointer(
+        root,
+        form_evidence.get("visual_parity"),
+        f"{label} visual parity",
+        errors,
+    )
+    for evidence_key in ("native_print_export", "packaged_offline"):
+        platform_evidence = form_evidence.get(evidence_key)
+        if not isinstance(platform_evidence, dict):
+            errors.append(
+                f"{label}: required {evidence_key} evidence must contain "
+                "macos, windows, and linux"
+            )
+            platform_evidence = {}
+        for platform in PLATFORMS:
+            _require_hashed_evidence_pointer(
+                root,
+                platform_evidence.get(platform),
+                f"{label} {evidence_key} {platform}",
+                errors,
+            )
+    _require_hashed_evidence_pointer(
+        root,
+        form_evidence.get("rollback_drill"),
+        f"{label} rollback drill",
+        errors,
+    )
+
+
 def audit_repository(
     root: Path,
     *,
     revision_context: RevisionContext | None = None,
+    required_release_ready: tuple[tuple[str, str], ...] = (),
 ) -> AuditResult:
     root = root.resolve()
     errors: list[str] = []
@@ -1315,24 +1541,54 @@ def audit_repository(
     references = _read_json(
         root.joinpath(*REFERENCE_MANIFEST.parts), "reference manifest", errors
     )
+    source_catalog = _read_json(
+        root.joinpath(*SOURCE_CATALOG.parts), "source catalog", errors
+    )
     evidence = _read_json(
         root.joinpath(*RELEASE_EVIDENCE.parts), "release evidence", errors
     )
-    if migration is None or references is None or evidence is None:
+    rust_capabilities = _read_json(
+        root.joinpath(*RUST_CAPABILITY_MANIFEST.parts),
+        "generated Rust capability manifest",
+        errors,
+    )
+    if (
+        migration is None
+        or references is None
+        or source_catalog is None
+        or evidence is None
+        or rust_capabilities is None
+    ):
         return AuditResult(tuple(sorted(set(errors))), ())
 
-    if migration.get("schema_version") != 2:
-        errors.append("migration manifest schema_version must be 2")
-    if references.get("schema_version") != 1:
-        errors.append("reference manifest schema_version must be 1")
+    if migration.get("schema_version") != 3:
+        errors.append("migration manifest schema_version must be 3")
+    if references.get("schema_version") != 2:
+        errors.append("reference manifest schema_version must be 2")
     if references.get("calibration_only") is not True:
         errors.append("reference manifest must be calibration_only")
     if references.get("runtime_background_allowed") is not False:
         errors.append("reference manifest must forbid runtime backgrounds")
     if references.get("dpi") != 144:
         errors.append("reference manifest dpi must be 144")
+    if source_catalog.get("schema_version") != 1:
+        errors.append("source catalog schema_version must be 1")
+    if source_catalog.get("calibration_only") is not True:
+        errors.append("source catalog must be calibration_only")
+    if source_catalog.get("runtime_eligible") is not False:
+        errors.append("source catalog must not be runtime eligible")
+    source_pack = source_catalog.get("source_pack")
+    if not isinstance(source_pack, dict):
+        errors.append("source catalog source_pack must be an object")
+    else:
+        if not isinstance(source_pack.get("discovery_root"), str):
+            errors.append("source catalog discovery_root must identify operator evidence")
+        if not isinstance(source_pack.get("portable_note"), str):
+            errors.append("source catalog portable_note must explain runtime isolation")
     if evidence.get("schema_version") != 1:
         errors.append("release evidence schema_version must be 1")
+    if rust_capabilities.get("schema_version") != 1:
+        errors.append("generated Rust capability manifest schema_version must be 1")
 
     forms_value = migration.get("forms")
     if not isinstance(forms_value, list):
@@ -1356,40 +1612,157 @@ def audit_repository(
             errors.append(
                 f"{key[0]}:{key[1]}: missing boolean status fields: {', '.join(missing)}"
             )
+        capabilities = form.get("capabilities")
+        if not isinstance(capabilities, dict):
+            errors.append(f"{key[0]}:{key[1]}: capabilities must be an object")
+            capabilities = {}
+        missing_capabilities = [
+            field for field in CAPABILITY_FIELDS
+            if not isinstance(capabilities.get(field), bool)
+        ]
+        if missing_capabilities:
+            errors.append(
+                f"{key[0]}:{key[1]}: missing boolean capabilities: "
+                + ", ".join(missing_capabilities)
+            )
+        route = form.get("route")
+        if route not in ROUTES:
+            errors.append(f"{key[0]}:{key[1]}: unsupported route {route!r}")
         if form.get("support_level") not in {"ImplementedInApp", "ScaffoldOnly"}:
             errors.append(f"{key[0]}:{key[1]}: unsupported support_level")
-        if form.get("support_level") == "ScaffoldOnly" and form.get("html_enabled"):
-            errors.append(f"{key[0]}:{key[1]}: scaffold form cannot enable HTML")
-        unbound = [flag for flag in UNBOUND_PROMOTION_FLAGS if form.get(flag) is True]
-        if unbound:
+        if (
+            form.get("support_level") == "ImplementedInApp"
+            and form.get("release_ready") is not True
+        ):
             errors.append(
-                f"{key[0]}:{key[1]}: promotion flags lack a trusted derived "
-                "evidence producer: " + ", ".join(unbound)
+                f"{key[0]}:{key[1]}: ImplementedInApp requires release_ready"
             )
+        if _html_enabled(form):
+            missing_structure = [
+                flag for flag in STRUCTURAL_CAPABILITIES
+                if _capability(form, flag) is not True
+            ]
+            if missing_structure:
+                errors.append(
+                    f"{key[0]}:{key[1]}: enabled route is missing structural capabilities: "
+                    + ", ".join(missing_structure)
+                )
         if form.get("release_ready"):
-            if not form.get("html_enabled"):
-                errors.append(f"{key[0]}:{key[1]}: release_ready requires html_enabled")
+            if route != "html_only":
+                errors.append(f"{key[0]}:{key[1]}: release_ready requires html_only route")
             if form.get("support_level") != "ImplementedInApp":
                 errors.append(
                     f"{key[0]}:{key[1]}: release_ready requires ImplementedInApp"
                 )
-            incomplete = [flag for flag in PROMOTION_FLAGS if form.get(flag) is not True]
+            incomplete = [
+                flag for flag in PROMOTION_FLAGS
+                if _capability(form, flag) is not True
+            ]
             if incomplete:
                 errors.append(
-                    f"{key[0]}:{key[1]}: release_ready is missing promotion flags: "
+                    f"{key[0]}:{key[1]}: release_ready is missing capabilities: "
                     + ", ".join(incomplete)
                 )
 
-    if TARGET_FORM not in forms:
-        errors.append("migration manifest must contain 2551Q:2018")
+    rust_forms_value = rust_capabilities.get("forms")
+    if not isinstance(rust_forms_value, list):
+        errors.append("generated Rust capability manifest forms must be an array")
+        rust_forms_value = []
+    rust_forms: dict[tuple[object, object], dict[str, Any]] = {}
+    for index, rust_form in enumerate(rust_forms_value):
+        if not isinstance(rust_form, dict):
+            errors.append(
+                f"generated Rust capability record at index {index} must be an object"
+            )
+            continue
+        key = (rust_form.get("code"), rust_form.get("revision"))
+        if key in rust_forms:
+            errors.append(
+                f"duplicate generated Rust capability record {key[0]}:{key[1]}"
+            )
+            continue
+        rust_forms[key] = rust_form
+        form = forms.get(key)
+        if form is None:
+            errors.append(
+                f"generated Rust capability {key[0]}:{key[1]} has no migration record"
+            )
+            continue
+        label = f"{key[0]}:{key[1]}"
+        for field in ("form_id", "support_level", "release_ready"):
+            if form.get(field) != rust_form.get(field):
+                errors.append(
+                    f"{label}: {field} differs from generated Rust capability registry"
+                )
+        rust_flags = rust_form.get("capabilities")
+        if not isinstance(rust_flags, dict):
+            errors.append(f"{label}: generated Rust capabilities must be an object")
+            rust_flags = {}
+        for capability in CAPABILITY_FIELDS:
+            expected = rust_flags.get(capability)
+            if not isinstance(expected, bool):
+                errors.append(
+                    f"{label}: generated Rust capability {capability} must be boolean"
+                )
+            elif _capability(form, capability) is not expected:
+                errors.append(
+                    f"{label}: capabilities.{capability} differs from generated Rust registry"
+                )
 
-    rust_fileable = _rust_fileable_codes(root, errors)
+    for key in sorted(set(forms) - set(rust_forms)):
+        errors.append(
+            f"migration record {key[0]}:{key[1]} has no generated Rust capability"
+        )
+
+    rust_providers = _rust_provider_keys(root, errors)
+    component_keys = _typescript_registry_keys(
+        root, COMPONENT_REGISTRY, "FORM_COMPONENT_REGISTRY", errors
+    )
+    spec_keys = _typescript_registry_keys(
+        root, SPEC_REGISTRY, "FORM_SPEC_REGISTRY", errors
+    )
+    manifest_keys = set(forms)
+    for label, registry in (
+        ("Rust HTML provider", rust_providers),
+        ("React form component", component_keys),
+        ("form specification", spec_keys),
+    ):
+        for key in sorted(registry - manifest_keys):
+            errors.append(f"{label} {key[0]}:{key[1]} has no migration record")
     for key, form in forms.items():
-        code = form.get("code")
-        if form.get("support_level") == "ImplementedInApp" and code not in rust_fileable:
-            errors.append(f"{key[0]}:{key[1]}: Rust does not mark the form fileable")
-        if form.get("support_level") == "ScaffoldOnly" and code in rust_fileable:
-            errors.append(f"{key[0]}:{key[1]}: Rust marks a scaffold form fileable")
+        for capability, registry, label in (
+            ("render_contract", rust_providers, "Rust HTML provider"),
+            ("html_component", component_keys, "React form component"),
+            ("html_spec", spec_keys, "form specification"),
+        ):
+            if _capability(form, capability) is True and key not in registry:
+                errors.append(f"{key[0]}:{key[1]}: missing {label}")
+
+    source_values = source_catalog.get("forms")
+    if not isinstance(source_values, list):
+        errors.append("source catalog forms must be an array")
+        source_values = []
+    source_forms: dict[tuple[object, object], dict[str, Any]] = {}
+    for index, source in enumerate(source_values):
+        if not isinstance(source, dict):
+            errors.append(f"source catalog form at index {index} must be an object")
+            continue
+        key = (source.get("code"), source.get("revision"))
+        if key in source_forms:
+            errors.append(f"duplicate source catalog form {key[0]}:{key[1]}")
+            continue
+        source_forms[key] = source
+        form = forms.get(key)
+        if form is None:
+            errors.append(
+                f"source catalog form {key[0]}:{key[1]} has no migration record"
+            )
+            continue
+        _audit_source_catalog_entry(form, source, errors)
+    for key in sorted(set(forms) - set(source_forms)):
+        errors.append(
+            f"migration record {key[0]}:{key[1]} has no reviewed source catalog entry"
+        )
 
     reference_values = references.get("forms")
     if not isinstance(reference_values, list):
@@ -1410,13 +1783,28 @@ def audit_repository(
             errors.append(f"reference form {key[0]}:{key[1]} has no migration record")
             continue
         _audit_reference(root, form, reference, references.get("dpi", 0), errors)
+        source = source_forms.get(key)
+        if source is None:
+            continue
+        for reference_field, source_field in (
+            ("official_source", "official_source_url"),
+            ("official_source_sha256", "sha256"),
+            ("page_count", "page_count"),
+            ("page_width_pt", "page_width_pt"),
+            ("page_height_pt", "page_height_pt"),
+        ):
+            if reference.get(reference_field) != source.get(source_field):
+                errors.append(
+                    f"{key[0]}:{key[1]}: reference {reference_field} differs "
+                    "from the reviewed source catalog"
+                )
 
     evidence_forms = evidence.get("forms")
     if not isinstance(evidence_forms, dict):
         errors.append("release evidence forms must be an object")
         evidence_forms = {}
     expected_evidence_keys = {
-        f"{key[0]}:{key[1]}" for key, form in forms.items() if form.get("html_enabled")
+        f"{key[0]}:{key[1]}" for key, form in forms.items() if _html_enabled(form)
     }
     unknown_evidence = sorted(set(evidence_forms) - {f"{k[0]}:{k[1]}" for k in forms})
     if unknown_evidence:
@@ -1425,9 +1813,19 @@ def audit_repository(
     if missing_evidence:
         errors.append("HTML-enabled forms lack release evidence: " + ", ".join(missing_evidence))
 
+    for key in sorted(set(required_release_ready)):
+        form = forms.get(key)
+        _audit_required_release_target(
+            root,
+            key,
+            form,
+            evidence_forms.get(f"{key[0]}:{key[1]}"),
+            errors,
+        )
+
     positive_status_claim = any(
         form.get("release_ready") is True
-        or any(form.get(flag) is True for flag in PROMOTION_FLAGS)
+        or any(_capability(form, flag) is True for flag in EVIDENCE_CAPABILITIES)
         for form in forms.values()
     )
     positive_evidence_claim = any(
@@ -1461,16 +1859,23 @@ def audit_repository(
     observed_revisions: list[tuple[str, str]] = []
     for key, form in forms.items():
         code, revision = key
-        status = "release" if form.get("release_ready") else (
-            "experimental" if form.get("html_enabled") else "legacy"
-        )
+        status = "release" if form.get("release_ready") is True else form.get("route")
         statuses.append(f"{code}:{revision} {status}")
-        if not form.get("html_enabled"):
+        if not _html_enabled(form):
             continue
         reference = reference_forms.get(key)
         if reference is None:
             errors.append(f"{code}:{revision}: HTML-enabled form lacks references")
             continue
+        provenance = reference.get("reference_provenance")
+        if (
+            form.get("release_ready") is True
+            and isinstance(provenance, dict)
+            and provenance.get("kind") != "official_pdf_raster"
+        ):
+            errors.append(
+                f"{code}:{revision}: release_ready requires reviewed official-PDF references"
+            )
         form_key = f"{code}:{revision}"
         form_evidence = evidence_forms.get(form_key)
         if not isinstance(form_evidence, dict):
@@ -1498,16 +1903,22 @@ def audit_repository(
                 f"{form_key} visual parity",
                 errors,
             )
-        if form.get("visual_parity_complete") and visual is None:
-            errors.append(f"{form_key}: visual_parity_complete lacks passed evidence")
+        if _capability(form, "visual_parity") is True and visual is None:
+            errors.append(f"{form_key}: visual_parity capability lacks passed evidence")
 
-        for evidence_key, flag, gate in (
-            ("native_print_export", "native_print_export_verified", "native_print_export"),
-            ("packaged_offline", "packaged_offline_verified", "packaged_offline"),
+        for evidence_key, capabilities, gate in (
+            (
+                "native_print_export",
+                ("native_preview", "native_print", "pdf_export"),
+                "native_print_export",
+            ),
+            ("packaged_offline", ("packaged_offline",), "packaged_offline"),
         ):
             platform_values = form_evidence.get(evidence_key)
             if not isinstance(platform_values, dict):
-                errors.append(f"{form_key}: {evidence_key} must contain macos and windows")
+                errors.append(
+                    f"{form_key}: {evidence_key} must contain macos, windows, and linux"
+                )
                 platform_values = {}
             for platform in PLATFORMS:
                 report = _audit_evidence_pointer(
@@ -1534,9 +1945,14 @@ def audit_repository(
                         f"{form_key} {evidence_key} {platform}",
                         errors,
                     )
-                if form.get(flag) and report is None:
+                claimed = [
+                    capability for capability in capabilities
+                    if _capability(form, capability) is True
+                ]
+                if claimed and report is None:
                     errors.append(
-                        f"{form_key}: {flag} lacks passed {platform} evidence"
+                        f"{form_key}: {', '.join(claimed)} capabilities lack passed "
+                        f"{platform} evidence"
                     )
 
         rollback = _audit_evidence_pointer(
@@ -1595,7 +2011,24 @@ def main() -> int:
             "path is dirty"
         ),
     )
+    parser.add_argument(
+        "--require-release-ready",
+        action="append",
+        default=[],
+        metavar="FORM:REVISION",
+        type=parse_form_revision,
+        help=(
+            "fail unless the exact form is html_only, release_ready, has every "
+            "capability, and has passed hashed visual/native/package/rollback evidence; "
+            "may be repeated"
+        ),
+    )
     args = parser.parse_args()
+    if args.print_source_revision and args.require_release_ready:
+        parser.error(
+            "--print-source-revision cannot be combined with --require-release-ready"
+        )
+    revision_context: RevisionContext | None = None
     if args.print_source_revision or args.require_clean_source:
         try:
             revision_context = git_revision_context(args.root)
@@ -1615,9 +2048,13 @@ def main() -> int:
         if args.print_source_revision:
             print(revision_context.source_revision)
             return 0
-    if args.require_clean_source:
+    if args.require_clean_source and not args.require_release_ready:
         return 0
-    result = audit_repository(args.root)
+    result = audit_repository(
+        args.root,
+        revision_context=revision_context,
+        required_release_ready=tuple(args.require_release_ready),
+    )
     for status in result.statuses:
         print(status)
     if result.errors:

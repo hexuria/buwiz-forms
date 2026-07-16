@@ -4,7 +4,8 @@ use std::time::Duration;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use bir_core::profile::{
     CorDocumentRef, RegisteredTaxType, TaxProfileVersion, TaxProfileVersionSource,
-    TaxProfileVersionStatus, TaxpayerProfile, TaxpayerType,
+    TaxProfileVersionStatus, TaxpayerProfile, TaxpayerType, VatRegistrationTextClassification,
+    classify_vat_registration_text,
 };
 use chrono::{NaiveDate, NaiveDateTime};
 use serde::Deserialize;
@@ -787,7 +788,7 @@ fn normalize_model_id(model: &str) -> String {
 fn cor_extraction_prompt() -> &'static str {
     "You are extracting structured data from a Philippine BIR Certificate of Registration, Form 2303. \
     Return JSON only. If a value is unreadable, use an empty string. Do not invent facts. \
-    In the `registered_tax_types` array, make sure to extract all registered tax types listed in the \"Tax Type\" column/section on the document (such as INCOME TAX, VALUE ADDED TAX, PERCENTAGE TAX, REGISTRATION FEE, WITHHOLDING TAX - EXPANDED, WITHHOLDING TAX - COMPENSATION, WITHHOLDING TAX - FINAL, EXCISE TAX). Do not omit any registered tax types that are listed on the document. \
+    In the `registered_tax_types` array, make sure to extract all registered tax types listed in the \"Tax Type\" column/section on the document (such as INCOME TAX, VALUE ADDED TAX, PERCENTAGE TAX, REGISTRATION FEE, WITHHOLDING TAX - EXPANDED, WITHHOLDING TAX - COMPENSATION, WITHHOLDING TAX - FINAL, WITHHOLDING TAX - VAT AND OTHER PERCENTAGE TAXES, EXCISE TAX). Treat WITHHOLDING TAX - VAT AND OTHER PERCENTAGE TAXES as one distinct withholding tax type; do not split it into VAT or PERCENTAGE TAX registration. Do not omit any registered tax types that are listed on the document. \
     For every extracted field, include a tightly fitted bounding box in `field_bboxes`. \
     The bounding box must be an array of `[ymin, xmin, ymax, xmax]` normalized to 0-1000. \
     It MUST accurately hug the edges of the text. \
@@ -885,7 +886,18 @@ fn infer_tax_types_from_text(text: &str) -> Vec<RegisteredTaxType> {
 
 fn parse_registered_tax_type(value: &str) -> Option<RegisteredTaxType> {
     let normalized = normalize(value);
-    if normalized.contains("VALUE ADDED") || normalized == "VAT" || normalized.contains(" VAT ") {
+    let explicitly_non_vat =
+        classify_vat_registration_text(value) == VatRegistrationTextClassification::NonVat;
+    if normalized.contains("WITHHOLDING")
+        && normalized.contains("VAT")
+        && normalized.contains("PERCENTAGE")
+    {
+        Some(RegisteredTaxType::WithholdingVatAndPercentage)
+    } else if !explicitly_non_vat
+        && (normalized.contains("VALUE ADDED")
+            || normalized == "VAT"
+            || normalized.contains(" VAT "))
+    {
         Some(RegisteredTaxType::ValueAddedTax)
     } else if normalized.contains("PERCENTAGE") {
         Some(RegisteredTaxType::PercentageTax)
@@ -1359,6 +1371,45 @@ PERCENTAGE TAX
     }
 
     #[test]
+    fn non_vat_language_never_becomes_positive_vat_evidence() {
+        assert_eq!(parse_registered_tax_type("NON-VAT"), None);
+        assert_eq!(parse_registered_tax_type("NOT VAT REGISTERED"), None);
+        assert_eq!(parse_registered_tax_type("NOT REGISTERED FOR VAT"), None);
+        assert_eq!(
+            parse_registered_tax_type("NON-VAT / PERCENTAGE TAX"),
+            Some(RegisteredTaxType::PercentageTax)
+        );
+    }
+
+    #[test]
+    fn explicit_vat_tax_type_still_parses() {
+        assert_eq!(
+            parse_registered_tax_type("VALUE ADDED TAX"),
+            Some(RegisteredTaxType::ValueAddedTax)
+        );
+        assert_eq!(
+            parse_registered_tax_type("VAT"),
+            Some(RegisteredTaxType::ValueAddedTax)
+        );
+    }
+
+    #[test]
+    fn vat_and_percentage_withholding_phrase_is_one_distinct_tax_type() {
+        assert_eq!(
+            parse_registered_tax_type("WITHHOLDING TAX - VAT AND OTHER PERCENTAGE TAXES"),
+            Some(RegisteredTaxType::WithholdingVatAndPercentage)
+        );
+    }
+
+    #[test]
+    fn vat_and_percentage_withholding_text_does_not_infer_vat_or_percentage_registration() {
+        assert_eq!(
+            infer_tax_types_from_text("WITHHOLDING TAX - VAT AND OTHER PERCENTAGE TAXES"),
+            vec![RegisteredTaxType::WithholdingVatAndPercentage]
+        );
+    }
+
+    #[test]
     fn malformed_gemini_json_is_review_needed_error() {
         let error = parse_gemini_cor_json("not-json").unwrap_err();
         assert!(error.contains("Gemini JSON could not be parsed"));
@@ -1475,7 +1526,7 @@ PERCENTAGE TAX
     }
 
     #[test]
-    fn ocr_draft_does_not_affect_obligations_until_confirmed() {
+    fn ocr_draft_affects_obligations_only_after_confirmation_and_forms_set_reconciliation() {
         let profile = sample_profile();
         let ocr = CorOcrResult {
             text: Some("{\"source\":\"gemini\"}".to_string()),
@@ -1515,6 +1566,13 @@ PERCENTAGE TAX
 
         let mut confirmed_profile = draft_profile;
         confirmed_profile.profile_versions[0].status = TaxProfileVersionStatus::Confirmed;
+        let suggestions =
+            bir_core::integration::form_suggestions_for_profile_year(&confirmed_profile, 2026);
+        let reconciliation =
+            bir_core::forms::reconcile_forms_set_for_year(2026, None, &suggestions);
+        confirmed_profile
+            .per_year_forms
+            .insert(2026, reconciliation.forms_set);
         let confirmed_preview = confirmed_profile.preview_obligations_for_year(2026);
         assert!(
             confirmed_preview

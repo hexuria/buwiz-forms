@@ -23,13 +23,8 @@ use bir_core::forms::{ATC_TABLE_2551Q, FilingStatus};
 use bir_core::parse_bir_receipt_email;
 use bir_core::validation::{validate_email, validate_ph_phone, validate_zip};
 use bir_print::html::RenderEnvelope;
-use bir_print::html_support::{
-    LegacyPreviewDecision, bundled_html_renderer_support, legacy_2551q_preview_decision,
-};
-use bir_print::{Legacy2551QPrintIssue, legacy_2551q_print_issue, render_2551q_print};
 
 use super::email_confirmation_view::EmailConfirmationView;
-use super::pdf_viewer::PdfViewerView;
 use crate::components::form_engine::FormViewTrait;
 
 pub enum Form2551QEvent {
@@ -411,6 +406,59 @@ impl Form2551QView {
                         cx.notify();
                     }
                 }
+                crate::events::AppEvent::ProfileComplianceChanged {
+                    tin,
+                    affected_years,
+                } => {
+                    if this.draft.tin != *tin
+                        || !affected_years.contains(&this.draft.taxable_year)
+                    {
+                        return;
+                    }
+
+                    let refresh_result = (|| {
+                        let db_guard = this.db.lock().map_err(|_| {
+                            "The taxpayer profile is temporarily unavailable".to_string()
+                        })?;
+                        let profile = db_guard
+                            .get_profile(tin)
+                            .map_err(|error| error.to_string())?
+                            .ok_or_else(|| {
+                                "The taxpayer profile was removed while this form was open"
+                                    .to_string()
+                            })?;
+                        let was_editable = matches!(this.draft.status, FilingStatus::Draft);
+                        this.draft.sync_with_profile(&profile);
+                        db_guard
+                            .save_2551q_draft(&this.draft)
+                            .map_err(|error| error.to_string())?;
+                        this.is_email_tracking_active = profile.is_email_tracking_active();
+                        Ok::<_, String>(was_editable)
+                    })();
+
+                    match refresh_result {
+                        Ok(true) => {
+                            this.is_validated = false;
+                            this.validation_errors = this.validate_for_submit(cx);
+                            this.status_message = Some(
+                                "Profile changes were applied to this editable draft. Review the refreshed values before submitting."
+                                    .to_string(),
+                            );
+                        }
+                        Ok(false) if this.draft.profile_snapshot_stale => {
+                            this.validation_errors = this.validate_for_submit(cx);
+                            this.status_message = this.draft.profile_snapshot_stale_reason.clone();
+                        }
+                        Ok(false) => {}
+                        Err(error) => {
+                            tracing::warn!(%error, "Failed to reconcile open 2551Q after profile save");
+                            this.status_message = Some(format!(
+                                "Profile saved, but this form could not be reconciled: {error}"
+                            ));
+                        }
+                    }
+                    cx.notify();
+                }
             },
         );
         subscriptions.push(sub_bus);
@@ -660,6 +708,17 @@ impl Form2551QView {
             return;
         }
 
+        // The queue transaction may have recorded the taxpayer's first annual
+        // Item 13 election. Broadcast only after that transaction succeeds so
+        // every other editable draft can refresh from committed profile data.
+        let bus = cx.global::<crate::events::GlobalEventBus>().0.clone();
+        bus.update(cx, |_, cx| {
+            cx.emit(crate::events::AppEvent::ProfileComplianceChanged {
+                tin: self.draft.tin.clone(),
+                affected_years: vec![self.draft.taxable_year],
+            });
+        });
+
         bir_core::background_cron::wake();
 
         cx.emit(Form2551QEvent::PushNotification(
@@ -719,6 +778,14 @@ impl Form2551QView {
         }
         let before_revert = self.draft.clone();
         self.draft.revert_to_draft();
+        if let Ok(db) = self.db.lock()
+            && let Ok(Some(profile)) = db.get_profile(&self.draft.tin)
+        {
+            // Reverting is the explicit consent boundary for replacing a
+            // filed snapshot with current profile facts. `sync_with_profile`
+            // is deliberately immutable for every non-Draft status.
+            self.draft.sync_with_profile(&profile);
+        }
         let persistence_result = match self.db.lock() {
             Ok(db) => db
                 .save_2551q_draft(&self.draft)
@@ -998,339 +1065,41 @@ impl Form2551QView {
         }
     }
 
-    fn block_unsafe_legacy_preview(
-        &mut self,
-        row_count: usize,
-        reason: Option<&str>,
-        cx: &mut Context<Self>,
-    ) {
-        let failure_context = reason
-            .map(|reason| format!(" Experimental HTML preview failed: {reason}."))
-            .unwrap_or_default();
-        let message = format!(
-            "This draft has {row_count} Schedule 1 rows, but the legacy 2551Q preview can safely render only six.{failure_context} No legacy preview was opened because it would omit rows."
-        );
-        tracing::warn!(
-            row_count,
-            renderer_failure = reason.is_some(),
-            reason_bytes = reason.map_or(0, str::len),
-            "blocked truncating legacy 2551Q preview"
-        );
-        self.is_generating_pdf = false;
-        self.status_message = Some(message.clone());
-        cx.emit(Form2551QEvent::PushNotification(
-            "error".to_string(),
-            "Preview blocked to protect form data".to_string(),
-            message,
-        ));
-        cx.notify();
-    }
-
-    fn block_unsafe_legacy_field_preview(
-        &mut self,
-        issue: Legacy2551QPrintIssue,
-        reason: Option<&str>,
-        cx: &mut Context<Self>,
-    ) {
-        let failure_context = reason
-            .map(|reason| format!(" Experimental HTML preview failed: {reason}."))
-            .unwrap_or_default();
-        let (field, issue_kind) = match &issue {
-            Legacy2551QPrintIssue::FieldOverflow { field, .. } => (*field, "overflow"),
-            Legacy2551QPrintIssue::UnsupportedNonEmptyField { field, .. } => {
-                (*field, "unsupported")
-            }
-        };
-        let message = format!(
-            "The legacy preview was blocked because {issue}. Use Experimental HTML Preview to preserve the complete form value.{failure_context} No legacy preview was opened."
-        );
-        tracing::warn!(
-            field,
-            issue_kind,
-            renderer_failure = reason.is_some(),
-            reason_bytes = reason.map_or(0, str::len),
-            "blocked truncating legacy 2551Q field"
-        );
-        self.is_generating_pdf = false;
-        self.status_message = Some(message.clone());
-        cx.emit(Form2551QEvent::PushNotification(
-            "error".to_string(),
-            "Preview blocked to protect form data".to_string(),
-            message,
-        ));
-        cx.notify();
-    }
-
     fn preview_pdf(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         if self.is_generating_pdf {
             return;
         }
 
-        let render_draft = self.preview_draft_snapshot();
-        match legacy_2551q_preview_decision(render_draft.schedule_1.len()) {
-            LegacyPreviewDecision::Render => self.open_legacy_preview(render_draft, cx),
-            LegacyPreviewDecision::BlockScheduleOverflow { row_count, .. } => {
-                self.block_unsafe_legacy_preview(row_count, None, cx);
-            }
-        }
-    }
-
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
-    fn preview_html_experimental(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_generating_pdf {
-            return;
-        }
-
-        let render_draft = self.preview_draft_snapshot();
-        let support = bundled_html_renderer_support("2551Q", "2018");
-        if !support.permits_experimental_preview() {
-            self.fallback_from_experimental_html(
-                render_draft,
-                "the support manifest has html_enabled set to false".to_string(),
-                cx,
-            );
-            return;
-        }
-
         self.is_generating_pdf = true;
         cx.notify();
 
+        let render_draft = self.preview_draft_snapshot();
         let envelope = RenderEnvelope::from(&render_draft);
-        let prepared = match super::html_form_preview::prepare_html_form_preview(&envelope) {
-            Ok(prepared) => prepared,
-            Err(error) => {
-                self.fallback_from_experimental_html(render_draft, error.to_string(), cx);
-                return;
-            }
-        };
-
-        let preview_entity = Arc::new(Mutex::new(None));
-        let preview_entity_for_window = preview_entity.clone();
-        let options = WindowOptions {
-            window_bounds: Some(WindowBounds::centered(size(px(1200.), px(900.)), cx)),
-            titlebar: Some(TitlebarOptions {
-                title: Some("Experimental HTML Preview — Not Release Ready".into()),
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-        let open_result = cx.open_window(options, move |window, cx| {
-            let entity = cx
-                .new(|cx| super::html_form_preview::HtmlFormPreviewView::new(prepared, window, cx));
-            if let Ok(mut slot) = preview_entity_for_window.lock() {
-                *slot = Some(entity.clone());
-            }
-            entity
-        });
-
-        match open_result {
-            Ok(_) => {
-                let entity = preview_entity.lock().ok().and_then(|mut slot| slot.take());
-                let Some(entity) = entity else {
-                    self.fallback_from_experimental_html(
-                        render_draft,
-                        "the preview window opened without a renderer host".to_string(),
-                        cx,
-                    );
-                    return;
-                };
-
-                let fallback_draft = render_draft.clone();
-                self._subscriptions
-                    .push(cx.subscribe(&entity, move |this, _, event, cx| {
-                        let super::html_form_preview::HtmlFormPreviewEvent::LegacyFallbackRequested(
-                            reason,
-                        ) = event;
-                        this.fallback_from_experimental_html(
-                            fallback_draft.clone(),
-                            reason.clone(),
-                            cx,
-                        );
-                    }));
+        match super::form_html_preview_launcher::launch_html_form_preview(&envelope, cx) {
+            Ok(launch_kind) => {
                 self.is_generating_pdf = false;
-                self.status_message = Some(
-                    "Experimental HTML preview opened; legacy remains the normal print path."
-                        .to_string(),
-                );
+                self.status_message = Some(launch_kind.status_message().to_string());
                 cx.notify();
             }
             Err(error) => {
-                self.fallback_from_experimental_html(
-                    render_draft,
-                    format!("the preview window could not be opened: {error}"),
-                    cx,
-                );
+                self.report_html_preview_error(error.to_string(), cx);
             }
         }
     }
 
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    fn preview_html_experimental(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        let render_draft = self.preview_draft_snapshot();
-        self.fallback_from_experimental_html(
-            render_draft,
-            "the experimental native HTML host is unavailable on this platform".to_string(),
-            cx,
-        );
-    }
-
-    fn fallback_from_experimental_html(
-        &mut self,
-        render_draft: Form2551QDraft,
-        reason: String,
-        cx: &mut Context<Self>,
-    ) {
-        tracing::warn!(
-            reason_bytes = reason.len(),
-            "experimental HTML preview failed; considering legacy fallback"
-        );
+    fn report_html_preview_error(&mut self, reason: String, cx: &mut Context<Self>) {
+        tracing::error!(reason_bytes = reason.len(), "HTML print preview failed");
         self.is_generating_pdf = false;
-        match legacy_2551q_preview_decision(render_draft.schedule_1.len()) {
-            LegacyPreviewDecision::Render => {
-                if let Some(issue) = legacy_2551q_print_issue(&render_draft) {
-                    self.block_unsafe_legacy_field_preview(issue, Some(&reason), cx);
-                    return;
-                }
-                cx.emit(Form2551QEvent::PushNotification(
-                    "warning".to_string(),
-                    "Using legacy print preview".to_string(),
-                    format!("Experimental HTML preview was unavailable: {reason}"),
-                ));
-                self.open_legacy_preview(render_draft, cx);
-            }
-            LegacyPreviewDecision::BlockScheduleOverflow { row_count, .. } => {
-                self.block_unsafe_legacy_preview(row_count, Some(&reason), cx);
-            }
-        }
-    }
-
-    fn open_legacy_preview(&mut self, render_draft: Form2551QDraft, cx: &mut Context<Self>) {
-        if let LegacyPreviewDecision::BlockScheduleOverflow { row_count, .. } =
-            legacy_2551q_preview_decision(render_draft.schedule_1.len())
-        {
-            self.block_unsafe_legacy_preview(row_count, None, cx);
-            return;
-        }
-        if let Some(issue) = legacy_2551q_print_issue(&render_draft) {
-            self.block_unsafe_legacy_field_preview(issue, None, cx);
-            return;
-        }
-
-        self.is_generating_pdf = true;
-        cx.notify();
-
-        tracing::info!(
-            draft_id = ?render_draft.id,
-            status = ?render_draft.status,
-            schedule_rows = render_draft.schedule_1.len(),
-            "Rendering PDF from saved draft"
+        let message = format!(
+            "HTML print preview could not be opened: {reason}. Retry from Print Preview; the draft was not changed."
         );
-
-        let dir = PdfViewerView::unique_output_dir();
-        let formtypes_dir = crate::platform::find_resource_dir("formtypes");
-
-        let db = self.db.clone();
-
-        cx.spawn(async move |this, mut cx| {
-            let render_draft_bg = render_draft.clone();
-            let dir_bg = dir.clone();
-            let result =
-                cx.background_executor()
-                    .spawn(async move {
-                        render_2551q_print(&render_draft_bg, &dir_bg, Some(formtypes_dir))
-                    })
-                    .await;
-
-            cx.update(|cx| {
-                if let Some(this) = this.upgrade() {
-                    this.update(cx, |this, cx| {
-                        this.is_generating_pdf = false;
-                        cx.notify();
-
-                        match result {
-                            Ok(result) => {
-                                let draft = render_draft;
-                                let output_dir = dir.clone();
-                                let options = WindowOptions {
-                                    window_bounds: Some(WindowBounds::centered(
-                                        size(px(1200.), px(900.)),
-                                        cx,
-                                    )),
-                                    titlebar: Some(TitlebarOptions {
-                                        title: Some("Print Preview".into()),
-                                        ..Default::default()
-                                    }),
-                                    ..Default::default()
-                                };
-
-                                let mut raw_html = None;
-                                let mut confirmation = None;
-                                if let Some(receipt_id) = draft.receipt_id
-                                    && let Ok(db) = db.lock()
-                                    && let Ok(Some(receipt)) =
-                                        db.get_submission_receipt_by_id(receipt_id)
-                                {
-                                    raw_html = receipt.raw_html;
-                                    confirmation = Some(super::pdf_viewer::ConfirmationInfo {
-                                        subject: "Tax Return Receipt Confirmation".to_string(),
-                                        from: receipt.source_from.unwrap_or_else(|| {
-                                            "ebirforms-noreply@bir.gov.ph".to_string()
-                                        }),
-                                        to: draft.email.clone(),
-                                        received_date: receipt.received_date.clone(),
-                                        received_time: receipt.received_time.clone(),
-                                        body: receipt.raw_text,
-                                    });
-                                }
-
-                                if let Err(err) = cx.open_window(options, move |_window, cx| {
-                                    cx.new(|_cx| {
-                                        PdfViewerView::new(
-                                            draft,
-                                            result,
-                                            output_dir,
-                                            raw_html,
-                                            confirmation,
-                                            _cx,
-                                        )
-                                    })
-                                }) {
-                                    tracing::error!(
-                                        error_bytes = err.to_string().len(),
-                                        "PDF viewer failed to open"
-                                    );
-                                    let message = "The legacy form was generated, but its preview window could not be opened. Please try again."
-                                        .to_string();
-                                    this.status_message = Some(message.clone());
-                                    cx.emit(Form2551QEvent::PushNotification(
-                                        "error".to_string(),
-                                        "Legacy preview could not open".to_string(),
-                                        message,
-                                    ));
-                                } else {
-                                    tracing::info!("PDF viewer opened");
-                                }
-                            }
-                            Err(err) => {
-                                tracing::error!(
-                                    error_bytes = err.to_string().len(),
-                                    "PDF generation failed"
-                                );
-                                let message = "The legacy print preview could not be generated. Check that the bundled form resources are available, then try again."
-                                    .to_string();
-                                this.status_message = Some(message.clone());
-                                cx.emit(Form2551QEvent::PushNotification(
-                                    "error".to_string(),
-                                    "Legacy preview generation failed".to_string(),
-                                    message,
-                                ));
-                            }
-                        }
-                    });
-                }
-            });
-        })
-        .detach();
+        self.status_message = Some(message.clone());
+        cx.emit(Form2551QEvent::PushNotification(
+            "error".to_string(),
+            "HTML preview unavailable".to_string(),
+            message,
+        ));
+        cx.notify();
     }
 
     fn print_confirmation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1661,6 +1430,36 @@ impl Render for Form2551QView {
                         .text_sm()
                         .child("Do not submit this return again. Keep any BIR confirmation or receipt and contact support; the app will not retry or release this claim automatically."),
                 )
+                .into_any_element()
+        } else {
+            div().into_any_element()
+        };
+
+        let profile_snapshot_banner = if self.draft.profile_snapshot_stale {
+            let guidance = if matches!(self.draft.status, FilingStatus::Paid) {
+                "This paid return remains an immutable historical snapshot. Create the appropriate amended return to use the current profile."
+            } else {
+                "This return remains an immutable historical snapshot. Revert it to Draft, or use the appropriate amendment workflow, before applying the current profile."
+            };
+            div()
+                .px_4()
+                .py_3()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .bg(cx.theme().warning.opacity(0.1))
+                .rounded_lg()
+                .border_1()
+                .border_color(cx.theme().warning.opacity(0.35))
+                .text_color(cx.theme().foreground)
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(cx.theme().warning)
+                        .child("Profile changed after this return was reviewed"),
+                )
+                .child(div().text_sm().child(guidance))
                 .into_any_element()
         } else {
             div().into_any_element()
@@ -2563,6 +2362,7 @@ impl Render for Form2551QView {
             .child(title_block)
             .child(carry_banner)
             .child(submission_claim_banner)
+            .child(profile_snapshot_banner)
             .child(crate::components::form_parts::form_accordion(
                 "acc_filing_period",
                 "FILING PERIOD",
@@ -2775,25 +2575,6 @@ impl Render for Form2551QView {
                                 );
                             }
                             FilingStatus::Paid => {}
-                        }
-
-                        // Development-only calibration entry point. The normal Print Preview
-                        // button continues to use the legacy Typst/PDF renderer until the
-                        // manifest's independent `release_ready` evidence gate passes.
-                        #[cfg(any(debug_assertions, feature = "dev-tools"))]
-                        if bundled_html_renderer_support("2551Q", "2018")
-                            .permits_experimental_preview()
-                        {
-                            toolbar = toolbar.child(
-                                gpui_component::button::Button::new(
-                                    "experimental_html_preview_btn",
-                                )
-                                .label("Experimental HTML Preview")
-                                .outline()
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.preview_html_experimental(window, cx);
-                                })),
-                            );
                         }
 
                         // View Receipt — opens receipt file in system viewer (Preview.app).

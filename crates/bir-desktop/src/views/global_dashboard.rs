@@ -95,6 +95,7 @@ impl GlobalDashboardView {
                     crate::events::AppEvent::DatabaseChanged => {
                         // Refresh profiles and other DB-backed info if needed
                     }
+                    crate::events::AppEvent::ProfileComplianceChanged { .. } => {}
                 }
             },
         )

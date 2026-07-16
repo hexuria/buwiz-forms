@@ -1,5 +1,11 @@
 export { FormDocument } from "./FormDocument";
 export {
+  FORM_COMPONENT_REGISTRY,
+  getFormComponent,
+  listFormComponentKeys,
+  type FormRendererProps
+} from "./forms/registry";
+export {
   measureRenderedPages,
   rendererGeometryIsSafe,
   type RendererGeometryMeasurement,

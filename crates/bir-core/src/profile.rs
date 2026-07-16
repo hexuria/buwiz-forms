@@ -3,6 +3,7 @@
 use crate::naming::Tin;
 use chrono::{Duration, NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum TaxpayerType {
@@ -75,6 +76,11 @@ pub enum EoptTier {
 /// Optional Income Tax Elections made by the taxpayer.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum IncomeTaxElection {
+    /// The taxpayer chose the graduated-rate Item 13 option on 2551Q, but that
+    /// form does not identify whether OSD or itemized deductions will be used.
+    /// Keep the legally meaningful election without inventing a deduction
+    /// method; a later income-tax return may refine it.
+    GraduatedUnspecified,
     GraduatedOsd,
     GraduatedItemized,
     EightPercent,
@@ -150,7 +156,53 @@ pub enum RegisteredTaxType {
     WithholdingExpanded,
     WithholdingCompensation,
     WithholdingFinal,
+    /// VAT and other percentage taxes withheld and remitted on Form 1600.
+    /// This is distinct from withholding on employee compensation.
+    WithholdingVatAndPercentage,
     ExciseTax,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum VatRegistrationTextClassification {
+    VatRegistered,
+    NonVat,
+    Unknown,
+}
+
+/// Classifies explicit VAT-registration language without treating the `VAT`
+/// token inside `NON-VAT` as positive evidence.
+pub fn classify_vat_registration_text(text: &str) -> VatRegistrationTextClassification {
+    let normalized = text
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character.to_ascii_uppercase()
+            } else {
+                ' '
+            }
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    let compact = normalized.replace(' ', "");
+    let is_explicitly_non_vat = normalized.contains("NON VAT")
+        || compact.contains("NONVAT")
+        || normalized.contains("NOT VAT REGISTERED")
+        || normalized.contains("NOT REGISTERED FOR VAT");
+    if is_explicitly_non_vat {
+        return VatRegistrationTextClassification::NonVat;
+    }
+
+    if normalized.contains("VAT REGISTERED")
+        || normalized.contains("REGISTERED FOR VAT")
+        || normalized.contains("VALUE ADDED TAX REGISTERED")
+    {
+        VatRegistrationTextClassification::VatRegistered
+    } else {
+        VatRegistrationTextClassification::Unknown
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -271,6 +323,38 @@ pub struct TaxProfileVersion {
     pub obligation_overrides: Vec<ManualObligationOverride>,
     #[serde(default)]
     pub deadline_overrides: Vec<ProfileDeadlineOverride>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TaxProfileResolutionIssueKind {
+    UndatedConfirmedVersion,
+    InvalidEffectiveRange,
+    OverlappingConfirmedVersions,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaxProfileResolutionIssue {
+    pub kind: TaxProfileResolutionIssueKind,
+    pub version_ids: Vec<String>,
+    pub message: String,
+}
+
+/// Confirmed, unambiguous profile segments that apply to one taxable year.
+///
+/// Confirmed versions without an effective start date and overlapping
+/// timelines are reported and excluded instead of being guessed into the
+/// year.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolvedTaxProfileForYear {
+    pub taxable_year: u16,
+    pub effective_segments: Vec<TaxProfileVersion>,
+    pub issues: Vec<TaxProfileResolutionIssue>,
+}
+
+impl ResolvedTaxProfileForYear {
+    pub fn has_blocking_issues(&self) -> bool {
+        !self.issues.is_empty()
+    }
 }
 
 /// Taxpayer profile stored in encrypted SQLite.
@@ -443,102 +527,27 @@ impl TaxpayerProfile {
             .find_map(|(prior_year, set)| {
                 set.entries
                     .iter()
-                    .any(|entry| entry.active)
+                    .any(crate::forms::FormSetEntry::is_filing_active)
                     .then_some(*prior_year)
             })
     }
 
+    /// Returns active codes from the stored Forms Set only.
+    ///
+    /// An unconfigured year fails closed with an empty list; callers that need
+    /// suggestions must explicitly reconcile and persist a Forms Set first.
     pub fn active_form_codes_for_year(&self, year: u16) -> Vec<String> {
-        use crate::forms::FormSetSource;
         use std::collections::BTreeSet;
 
-        let active_versions = self.active_profile_versions_for_year(year);
-        let confirmed = self.confirmed_profile_versions();
-        if active_versions.is_empty()
-            && confirmed.is_empty()
-            && self.compliance_source_mode == ComplianceSourceMode::CorVersioned
-        {
-            return vec![];
-        }
-
-        let versions = if active_versions.is_empty() {
-            confirmed
-                .last()
-                .cloned()
-                .map(|version| vec![version])
-                .unwrap_or_else(|| vec![TaxProfileVersion::from_profile_backfill(self)])
-        } else {
-            active_versions
-        };
-
-        let has_exact_cor_codes = versions.iter().any(|version| {
-            version
-                .evidence
-                .iter()
-                .any(|document| !document.extracted_form_codes.is_empty())
-        });
-
-        let mut codes = BTreeSet::new();
-        if has_exact_cor_codes || !self.per_year_forms.contains_key(&year) {
-            for version in &versions {
-                codes.extend(
-                    crate::integration::validation::registered_form_codes_for_version(
-                        self, version, year,
-                    ),
-                );
-            }
-        } else if let Some(set) = self.per_year_forms.get(&year) {
-            codes.extend(
-                set.entries
-                    .iter()
-                    .filter(|entry| entry.active)
-                    .map(|entry| crate::forms::registry::canonical_form_code(&entry.form_code)),
-            );
-        }
-
-        if let Some(set) = self.per_year_forms.get(&year) {
-            for entry in &set.entries {
-                let code = crate::forms::registry::canonical_form_code(&entry.form_code);
-                if !entry.active {
-                    codes.remove(&code);
-                    continue;
-                }
-
-                // A confirmed COR's exact form list replaces stale broad CorAi
-                // expansion. Explicit manual additions remain authoritative.
-                if has_exact_cor_codes && entry.source == FormSetSource::Manual {
-                    codes.insert(code);
-                }
-            }
-        }
-
-        codes.retain(|code| {
-            crate::forms::registry::find_form(code)
-                .map(|def| {
-                    versions.iter().any(|version| {
-                        crate::integration::validation::obligation_allowed_for_version_and_profile(
-                            def, version, self, year,
-                        )
-                    })
-                })
-                .unwrap_or(true)
-        });
-
-        for version in &versions {
-            for override_rule in &version.obligation_overrides {
-                let code = crate::forms::registry::canonical_form_code(&override_rule.form_code);
-                match override_rule.action {
-                    ManualObligationOverrideAction::Include => {
-                        codes.insert(code);
-                    }
-                    ManualObligationOverrideAction::Exclude => {
-                        codes.remove(&code);
-                    }
-                }
-            }
-        }
-
-        codes.into_iter().collect()
+        self.per_year_forms
+            .get(&year)
+            .into_iter()
+            .flat_map(|set| set.entries.iter())
+            .filter(|entry| entry.is_filing_active())
+            .map(|entry| crate::forms::registry::canonical_form_code(&entry.form_code))
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect()
     }
 
     /// Returns the effective TaxClassification for the rule engine.
@@ -607,6 +616,72 @@ impl TaxpayerProfile {
         }
     }
 
+    pub(crate) fn validate_confirmed_profile_timeline(&mut self) -> Result<(), String> {
+        let has_dated_confirmed_version = self.profile_versions.iter().any(|version| {
+            version.status == TaxProfileVersionStatus::Confirmed
+                && version.source != TaxProfileVersionSource::MigrationBackfill
+                && version.effective_from.is_some()
+        });
+        if has_dated_confirmed_version {
+            for version in &mut self.profile_versions {
+                if version.status == TaxProfileVersionStatus::Confirmed
+                    && version.source == TaxProfileVersionSource::MigrationBackfill
+                    && version.effective_from.is_none()
+                {
+                    version.status = TaxProfileVersionStatus::Archived;
+                }
+            }
+        }
+
+        let mut confirmed = self
+            .profile_versions
+            .iter()
+            .filter(|version| version.status == TaxProfileVersionStatus::Confirmed)
+            .collect::<Vec<_>>();
+        for version in &confirmed {
+            let Some(effective_from) = version.effective_from else {
+                if version.source == TaxProfileVersionSource::MigrationBackfill {
+                    continue;
+                }
+                return Err(format!(
+                    "Confirmed profile version '{}' must have an effective start date",
+                    version.label
+                ));
+            };
+            if version
+                .effective_until
+                .is_some_and(|effective_until| effective_until < effective_from)
+            {
+                return Err(format!(
+                    "Confirmed profile version '{}' ends before it starts",
+                    version.label
+                ));
+            }
+        }
+
+        confirmed.retain(|version| version.effective_from.is_some());
+        confirmed.sort_by(|left, right| {
+            left.effective_from
+                .cmp(&right.effective_from)
+                .then(left.id.cmp(&right.id))
+        });
+        if let Some(pair) = confirmed.windows(2).find(|pair| {
+            let next_start = pair[1]
+                .effective_from
+                .expect("dated confirmed versions were retained above");
+            pair[0]
+                .effective_until
+                .is_none_or(|previous_end| previous_end >= next_start)
+        }) {
+            return Err(format!(
+                "Confirmed profile versions '{}' and '{}' overlap",
+                pair[0].label, pair[1].label
+            ));
+        }
+
+        Ok(())
+    }
+
     pub fn compliance_mode(&self) -> ComplianceSourceMode {
         self.compliance_source_mode.clone()
     }
@@ -639,16 +714,105 @@ impl TaxpayerProfile {
         period_start: NaiveDate,
         period_end: NaiveDate,
     ) -> Vec<TaxProfileVersion> {
-        self.confirmed_profile_versions()
+        let versions = self
+            .confirmed_profile_versions()
             .into_iter()
             .filter(|version| version.overlaps_period(period_start, period_end))
-            .collect()
+            .collect::<Vec<_>>();
+
+        if versions.windows(2).any(|pair| {
+            pair[0]
+                .effective_until
+                .is_none_or(|end| end >= pair[1].effective_from.unwrap_or(period_start))
+        }) {
+            Vec::new()
+        } else {
+            versions
+        }
     }
 
     pub fn active_profile_versions_for_year(&self, year: u16) -> Vec<TaxProfileVersion> {
-        let start = NaiveDate::from_ymd_opt(year as i32, 1, 1).unwrap();
-        let end = NaiveDate::from_ymd_opt(year as i32, 12, 31).unwrap();
-        self.active_profile_versions_for_period(start, end)
+        self.resolve_tax_profile_for_year(year).effective_segments
+    }
+
+    pub fn resolve_tax_profile_for_year(&self, year: u16) -> ResolvedTaxProfileForYear {
+        let year_start = NaiveDate::from_ymd_opt(i32::from(year), 1, 1)
+            .expect("u16 taxable year is representable by chrono");
+        let year_end = NaiveDate::from_ymd_opt(i32::from(year), 12, 31)
+            .expect("u16 taxable year is representable by chrono");
+        let mut issues = Vec::new();
+        let mut segments = Vec::new();
+
+        for version in self.confirmed_profile_versions() {
+            let Some(effective_from) = version.effective_from else {
+                issues.push(TaxProfileResolutionIssue {
+                    kind: TaxProfileResolutionIssueKind::UndatedConfirmedVersion,
+                    version_ids: vec![version.id.clone()],
+                    message: format!(
+                        "Confirmed profile version '{}' needs an effective start date",
+                        version.label
+                    ),
+                });
+                continue;
+            };
+            if version
+                .effective_until
+                .is_some_and(|effective_until| effective_until < effective_from)
+            {
+                issues.push(TaxProfileResolutionIssue {
+                    kind: TaxProfileResolutionIssueKind::InvalidEffectiveRange,
+                    version_ids: vec![version.id.clone()],
+                    message: format!(
+                        "Confirmed profile version '{}' ends before it starts",
+                        version.label
+                    ),
+                });
+                continue;
+            }
+            if effective_from <= year_end
+                && version
+                    .effective_until
+                    .is_none_or(|effective_until| effective_until >= year_start)
+            {
+                segments.push(version);
+            }
+        }
+
+        segments.sort_by(|left, right| {
+            left.effective_from
+                .cmp(&right.effective_from)
+                .then(left.id.cmp(&right.id))
+        });
+        let mut overlapping_ids = BTreeSet::new();
+        for pair in segments.windows(2) {
+            let previous = &pair[0];
+            let next = &pair[1];
+            let next_start = next
+                .effective_from
+                .expect("dated versions are required before sorting");
+            if previous
+                .effective_until
+                .is_none_or(|previous_end| previous_end >= next_start)
+            {
+                overlapping_ids.insert(previous.id.clone());
+                overlapping_ids.insert(next.id.clone());
+                issues.push(TaxProfileResolutionIssue {
+                    kind: TaxProfileResolutionIssueKind::OverlappingConfirmedVersions,
+                    version_ids: vec![previous.id.clone(), next.id.clone()],
+                    message: format!(
+                        "Confirmed profile versions '{}' and '{}' overlap",
+                        previous.label, next.label
+                    ),
+                });
+            }
+        }
+        segments.retain(|version| !overlapping_ids.contains(&version.id));
+
+        ResolvedTaxProfileForYear {
+            taxable_year: year,
+            effective_segments: segments,
+            issues,
+        }
     }
 
     pub fn current_cor_version(&self, as_of_year: u16) -> Option<TaxProfileVersion> {
@@ -818,9 +982,17 @@ impl TaxProfileVersion {
             return false;
         }
 
-        let starts_before_period_ends = self
-            .effective_from
-            .is_none_or(|effective_from| effective_from <= period_end);
+        let Some(effective_from) = self.effective_from else {
+            return false;
+        };
+        if self
+            .effective_until
+            .is_some_and(|effective_until| effective_until < effective_from)
+        {
+            return false;
+        }
+
+        let starts_before_period_ends = effective_from <= period_end;
         let ends_after_period_starts = self
             .effective_until
             .is_none_or(|effective_until| effective_until >= period_start);
@@ -844,5 +1016,26 @@ impl Drop for TaxpayerProfile {
         if let Some(ref mut h) = self.profile_pin_hash {
             h.zeroize();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vat_text_classification_prefers_non_vat_negation() {
+        assert_eq!(
+            classify_vat_registration_text("Taxpayer classification: NON-VAT registered"),
+            VatRegistrationTextClassification::NonVat
+        );
+    }
+
+    #[test]
+    fn vat_text_classification_requires_explicit_positive_phrase() {
+        assert_eq!(
+            classify_vat_registration_text("Monthly remittance return of VAT withheld"),
+            VatRegistrationTextClassification::Unknown
+        );
     }
 }

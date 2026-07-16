@@ -33,49 +33,6 @@ impl Database {
         Ok(())
     }
 
-    fn execute_save_per_year_forms(
-        conn: &rusqlite::Connection,
-        tin: &str,
-        year: u16,
-        set: &crate::forms::forms_set::PerYearFormsSet,
-    ) -> Result<(), DbError> {
-        conn.execute(
-            "DELETE FROM per_year_forms WHERE tin = ?1 AND taxable_year = ?2",
-            params![tin, year],
-        )?;
-        for entry in &set.entries {
-            conn.execute(
-                "INSERT INTO per_year_forms
-                    (tin, taxable_year, form_code, frequency, active, source, custom, reason, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))",
-                params![
-                    tin,
-                    year,
-                    entry.form_code,
-                    super::forms_set::frequency_to_str(&entry.frequency),
-                    entry.active as i64,
-                    entry.source.as_str(),
-                    entry.custom as i64,
-                    entry.reason,
-                ],
-            )?;
-        }
-        Ok(())
-    }
-
-    fn has_per_year_forms_conn(
-        conn: &rusqlite::Connection,
-        tin: &str,
-        year: u16,
-    ) -> Result<bool, DbError> {
-        let count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM per_year_forms WHERE tin = ?1 AND taxable_year = ?2",
-            params![tin, year],
-            |r| r.get(0),
-        )?;
-        Ok(count > 0)
-    }
-
     pub fn save_profile(&self, mut profile: TaxpayerProfile) -> Result<TaxpayerProfile, DbError> {
         profile.ensure_profile_version_ledger();
         let tin = profile.tin.full();
@@ -94,16 +51,43 @@ impl Database {
             .flatten();
         let lookup_tin = previous_tin.as_deref().unwrap_or(&tin);
 
-        // Query old confirmed IDs BEFORE starting transaction and doing any inserts/updates
-        let old_confirmed_ids: std::collections::HashSet<String> = self
-            .get_profile(lookup_tin)?
-            .map(|p| {
-                p.confirmed_profile_versions()
-                    .iter()
-                    .map(|v| v.id.clone())
-                    .collect()
+        let existing_profile = self.get_profile(lookup_tin)?;
+        if profile.atc_codes.is_empty()
+            && let Some(existing_atc_codes) = existing_profile
+                .as_ref()
+                .map(|stored| &stored.atc_codes)
+                .filter(|codes| !codes.is_empty())
+        {
+            profile.atc_codes.clone_from(existing_atc_codes);
+        }
+
+        let old_confirmed_ids = existing_profile
+            .as_ref()
+            .map(|stored| {
+                stored
+                    .confirmed_profile_versions()
+                    .into_iter()
+                    .map(|version| version.id)
+                    .collect::<std::collections::HashSet<_>>()
             })
             .unwrap_or_default();
+        let mut newly_confirmed_starts = profile
+            .profile_versions
+            .iter()
+            .filter(|version| {
+                version.status == crate::profile::TaxProfileVersionStatus::Confirmed
+                    && version.source != crate::profile::TaxProfileVersionSource::MigrationBackfill
+                    && !old_confirmed_ids.contains(&version.id)
+            })
+            .filter_map(|version| version.effective_from)
+            .collect::<Vec<_>>();
+        newly_confirmed_starts.sort_unstable();
+        for effective_from in newly_confirmed_starts {
+            profile.auto_close_previous_confirmed_version(effective_from);
+        }
+        profile
+            .validate_confirmed_profile_timeline()
+            .map_err(DbError::Other)?;
 
         let tx = self.conn.unchecked_transaction()?;
         tx.execute_batch("PRAGMA defer_foreign_keys = ON;")?;
@@ -139,113 +123,46 @@ impl Database {
         }
 
         for (year, set) in &profile.per_year_forms {
-            Self::execute_save_per_year_forms(&tx, &tin, *year, set)?;
+            super::forms_set::execute_replace_per_year_forms(&tx, &tin, *year, set)?;
         }
 
-        // Detect newly confirmed versions or populate missing per-year forms
+        // Refresh the current year and every already stored year in the same
+        // transaction as the profile update. Ambiguous or undated timelines
+        // preserve existing Forms Sets instead of guessing.
         let mut years_to_update = std::collections::BTreeSet::new();
         use chrono::Datelike as _;
         let current_year = chrono::Utc::now().year() as u16;
-
-        // 1. Scan for newly confirmed versions. OCR-backed versions with an
-        // exact extracted form list are also reconciled on every save so stale
-        // broad tax-type expansions are removed from older databases.
-        for v in profile.confirmed_profile_versions() {
-            let has_exact_cor_codes = v
-                .evidence
-                .iter()
-                .any(|document| !document.extracted_form_codes.is_empty());
-            if !old_confirmed_ids.contains(&v.id) || has_exact_cor_codes {
-                let start_year = v
-                    .effective_from
-                    .map(|d| d.year() as u16)
-                    .or_else(|| profile.business_start_date.map(|d| d.year() as u16))
-                    .unwrap_or(2018);
-                let end_year = v
-                    .effective_until
-                    .map(|d| d.year() as u16)
-                    .unwrap_or(current_year);
-                let end_year = end_year.max(current_year);
-                for y in start_year..=end_year {
-                    years_to_update.insert(y);
-                }
-            }
+        years_to_update.insert(current_year);
+        years_to_update.extend(profile.per_year_forms.keys().copied());
+        if let Some(stored) = &existing_profile {
+            years_to_update.extend(stored.per_year_forms.keys().copied());
         }
-
-        // 2. Scan for any missing per_year_forms rows
-        for v in profile.confirmed_profile_versions() {
-            let start_year = v
-                .effective_from
-                .map(|d| d.year() as u16)
-                .or_else(|| profile.business_start_date.map(|d| d.year() as u16))
-                .unwrap_or(2018);
-            let end_year = v
-                .effective_until
-                .map(|d| d.year() as u16)
-                .unwrap_or(current_year);
-            let end_year = end_year.max(current_year);
-            for y in start_year..=end_year {
-                if !Self::has_per_year_forms_conn(&tx, &tin, y)? {
-                    years_to_update.insert(y);
-                }
-            }
-        }
-
-        // 3. Re-generate and save forms set for affected years
-        use crate::forms::forms_set::{FormSetEntry, FormSetSource, PerYearFormsSet};
-        use crate::forms::registry::canonical_form_code;
-        use crate::profile::{ManualObligationOverrideAction, TaxProfileVersionSource};
 
         for year in years_to_update {
-            let active_versions = profile.active_profile_versions_for_year(year);
-            if let Some(version) = active_versions.last() {
-                let source = match version.source {
-                    TaxProfileVersionSource::OcrCor => FormSetSource::CorAi,
-                    TaxProfileVersionSource::ManualCor | TaxProfileVersionSource::UserOverride => {
-                        FormSetSource::Manual
-                    }
-                    TaxProfileVersionSource::MigrationBackfill => FormSetSource::MigrationBackfill,
-                };
-
-                let resolved_codes =
-                    crate::integration::validation::registered_form_codes_for_version(
-                        &profile, version, year,
-                    );
-                let mut entries_by_code = std::collections::BTreeMap::new();
-                for code in resolved_codes {
-                    let entry = FormSetEntry::from_code(code, source);
-                    entries_by_code.insert(entry.form_code.clone(), entry);
-                }
-
-                if let Some(existing_set) = profile.per_year_forms.get(&year) {
-                    for existing in &existing_set.entries {
-                        if existing.source == FormSetSource::Manual || !existing.active {
-                            let mut preserved = existing.clone();
-                            preserved.form_code = canonical_form_code(&preserved.form_code);
-                            entries_by_code.insert(preserved.form_code.clone(), preserved);
-                        }
-                    }
-                }
-
-                for override_rule in &version.obligation_overrides {
-                    let code = canonical_form_code(&override_rule.form_code);
-                    let entry = entries_by_code
-                        .entry(code.clone())
-                        .or_insert_with(|| FormSetEntry::from_code(code, source));
-                    entry.active = matches!(
-                        override_rule.action,
-                        ManualObligationOverrideAction::Include
-                    );
-                    entry.reason = Some(override_rule.reason.clone());
-                }
-
-                let set = PerYearFormsSet {
-                    taxable_year: year,
-                    entries: entries_by_code.into_values().collect(),
-                };
-                Self::execute_save_per_year_forms(&tx, &tin, year, &set)?;
-                profile.per_year_forms.insert(year, set);
+            let resolved = profile.resolve_tax_profile_for_year(year);
+            if resolved.has_blocking_issues() || resolved.effective_segments.is_empty() {
+                continue;
             }
+
+            let suggestions =
+                crate::integration::validation::form_suggestions_for_profile_year(&profile, year);
+            let existing_set = profile.per_year_forms.get(&year).or_else(|| {
+                existing_profile
+                    .as_ref()
+                    .and_then(|stored| stored.per_year_forms.get(&year))
+            });
+            let result =
+                crate::forms::reconcile_forms_set_for_year(year, existing_set, &suggestions);
+            if !result.conflicts.is_empty() {
+                tracing::warn!(
+                    tin = %tin,
+                    taxable_year = year,
+                    conflicts = result.conflicts.len(),
+                    "Forms Set reconciliation requires review"
+                );
+            }
+            super::forms_set::execute_replace_per_year_forms(&tx, &tin, year, &result.forms_set)?;
+            profile.per_year_forms.insert(year, result.forms_set);
         }
 
         tx.commit()?;

@@ -344,7 +344,10 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   border-left: .55pt solid #222;
 }
 .quarter-options > .option-choices,
-.amended-options > .option-choices { border-top: .55pt solid #aaa; }
+.amended-options > .option-choices {
+  border-top: .55pt solid #aaa;
+  background: #d9d9d9;
+}
 .sheets-value {
   height: 19.5pt;
   display: grid;
@@ -352,8 +355,13 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   align-items: center;
   text-align: center;
   border-top: .55pt solid #aaa;
+  background: #d9d9d9;
 }
-.sheets-value .comb-value { height: 100%; border-left: .7pt solid #111; }
+.sheets-value .comb-value {
+  height: 100%;
+  border-left: .7pt solid #111;
+  background: #fff;
+}
 
 .official-part { margin-top: 2pt; }
 .official-part > h2,
@@ -1082,6 +1090,28 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   border-right-color: #7f7f7f;
 }
 
+/*
+ * The 2551Q artwork does not draw the character guides as full-height table
+ * columns.  They are short registration ticks rising from the bottom rule of
+ * each writable field.  Keep the semantic comb cells (and their centering)
+ * intact, but move the page-one guide stroke onto a bottom-anchored pseudo
+ * element.  Parent grids continue to own the real full-height field borders.
+ */
+.form-2551q-page-one .comb-value > span {
+  position: relative;
+  border-right: 0;
+}
+
+.form-2551q-page-one .comb-value > span::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  height: 7pt;
+  border-right: .55pt solid #7f7f7f;
+  pointer-events: none;
+}
+
 .form-2551q-page-one .official-money-integer > .comb-value > span:nth-child(3n + 2),
 .form-2551q-page-two .visual-integer-comb-leading-1 > .comb-value > span:nth-child(3n + 2),
 .form-2551q-continuation .visual-integer-comb-leading-1 > .comb-value > span:nth-child(3n + 2),
@@ -1089,6 +1119,10 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 .form-2551q-continuation .visual-integer-comb-leading-5 > .visual-leading-cells > span:nth-child(3),
 .form-2551q-page-two .visual-integer-comb-leading-5 > .comb-value > span:nth-child(3n + 1),
 .form-2551q-continuation .visual-integer-comb-leading-5 > .comb-value > span:nth-child(3n + 1) {
+  border-right-color: #111;
+}
+
+.form-2551q-page-one .official-money-integer > .comb-value > span:nth-child(3n + 2)::after {
   border-right-color: #111;
 }
 

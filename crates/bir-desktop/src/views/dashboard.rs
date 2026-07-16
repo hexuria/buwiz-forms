@@ -1,7 +1,9 @@
 use bir_core::calendar_rules::{DeadlinePeriod, DeadlineResolver, ResolvedTaxDeadline};
 use bir_core::db::{BirNotice, Database, NoticeSourceKind};
 use bir_core::forms::registry::FilingFrequency;
-use bir_core::forms::{FormFilingProgress, QuarterState, form_support_level};
+use bir_core::forms::{
+    FormFilingProgress, QuarterState, can_open_certification_draft, form_support_level,
+};
 use bir_core::profile::TaxpayerProfile;
 use chrono::{Datelike, Local, NaiveDate};
 use gpui::*;
@@ -119,6 +121,7 @@ impl DashboardView {
                         cx.notify();
                     }
                 }
+                crate::events::AppEvent::ProfileComplianceChanged { .. } => {}
             },
         )
         .detach();
@@ -632,8 +635,15 @@ impl Render for DashboardView {
                     .cloned();
 
                 let support = form_support_level(&code);
-                let is_fileable = support.is_fileable_in_app();
-                let support_label = support.action_label();
+                let is_release_fileable = support.is_fileable_in_app();
+                let is_certification_draft = cfg!(any(debug_assertions, feature = "dev-tools"))
+                    && can_open_certification_draft(&code);
+                let is_fileable = is_release_fileable || is_certification_draft;
+                let support_label = if is_certification_draft {
+                    "Certification preview"
+                } else {
+                    support.action_label()
+                };
 
                 let card = match &form_def.frequency {
                     FilingFrequency::Quarterly => {
@@ -768,7 +778,7 @@ impl Render for DashboardView {
                                                 .text_xs()
                                                 .font_weight(FontWeight::BOLD)
                                                 .text_color(cx.theme().foreground)
-                                                .child(if is_fileable {
+                                                .child(if is_release_fileable {
                                                     format!("{}/4 filed", filed)
                                                 } else {
                                                     support_label.to_string()
@@ -931,7 +941,7 @@ impl Render for DashboardView {
                                                 .text_xs()
                                                 .font_weight(FontWeight::BOLD)
                                                 .text_color(cx.theme().foreground)
-                                                .child(if is_fileable {
+                                                .child(if is_release_fileable {
                                                     format!("{}/12 filed", filed)
                                                 } else {
                                                     support_label.to_string()
@@ -992,7 +1002,7 @@ impl Render for DashboardView {
                                                     accent
                                                 },
                                             )
-                                            .child(if is_fileable {
+                                            .child(if is_release_fileable {
                                                 match &status {
                                                     QuarterState::Paid => "View Paid Return",
                                                     QuarterState::Confirmed => {
@@ -1005,6 +1015,8 @@ impl Render for DashboardView {
                                                         "File Annual Return"
                                                     }
                                                 }
+                                            } else if is_certification_draft {
+                                                "Open certification draft"
                                             } else {
                                                 support_label
                                             }),
@@ -1074,15 +1086,17 @@ impl Render for DashboardView {
                                             .text_base()
                                             .font_weight(FontWeight::BOLD)
                                             .text_color(cx.theme().foreground)
-                                            .child(if is_fileable { "+" } else { "" }),
+                                            .child(if is_release_fileable { "+" } else { "" }),
                                     )
                                     .child(
                                         div()
                                             .text_sm()
                                             .font_weight(FontWeight::BOLD)
                                             .text_color(cx.theme().foreground)
-                                            .child(if is_fileable {
+                                            .child(if is_release_fileable {
                                                 "File New Return"
+                                            } else if is_certification_draft {
+                                                "Open certification draft"
                                             } else {
                                                 support_label
                                             }),

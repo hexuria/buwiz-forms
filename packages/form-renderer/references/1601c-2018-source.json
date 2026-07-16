@@ -1,0 +1,39 @@
+{
+  "calibration_only": true,
+  "form": {
+    "code": "1601C",
+    "dpi": 144,
+    "form_id": "1601Cv2018",
+    "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/1601C%20final%20Jan%202018%20with%20DPA.pdf",
+    "official_source_file": "external:1601C final Jan 2018 with DPA.pdf",
+    "official_source_sha256": "c8faaa71015337a73b4ceb96bfb265c539589ab5e10eb27899bb81f87f417397",
+    "page_count": 2,
+    "page_height_pt": 936.0,
+    "page_width_pt": 612.0,
+    "pages": [
+      {
+        "page": 1,
+        "reference_height_px": 1872,
+        "reference_png": "packages/form-renderer/references/1601c-2018-page-1.png",
+        "reference_png_sha256": "923cc850191e49ea69874dff55a7257fa0b3428b38a3f0387911279f1fabf023",
+        "reference_width_px": 1224
+      },
+      {
+        "page": 2,
+        "reference_height_px": 1872,
+        "reference_png": "packages/form-renderer/references/1601c-2018-page-2.png",
+        "reference_png_sha256": "26af686719726ac98f160b0665c8606e6501e46f95722ef150951ee7e976418a",
+        "reference_width_px": 1224
+      }
+    ],
+    "reference_provenance": {
+      "kind": "official_pdf",
+      "replacement_required": false,
+      "runtime_eligible": false
+    },
+    "revision": "2018"
+  },
+  "generator": "prepare_official_reference.py (Poppler)",
+  "runtime_background_allowed": false,
+  "schema_version": 1
+}

@@ -1,2373 +1,450 @@
-//! BIR Form 1701v2018 — Typed draft struct and computation logic.
+//! BIR Form 1701, January 2018 (ENCS).
 //!
-//! Generated from savefile: 00000000000000-1701v2018-122025.xml
-//! Total BIR fields: 837
-//! Form-specific fields: 759
-//!
-//! ⚠️ ScaffoldOnly — formula evidence not yet verified
+//! The semantic model is limited to the four-page official return and the
+//! exact 837-field editable save reviewed in `/Users/uriah/Downloads/forms`.
+//! The separate Part X/attachment worksheets are retained losslessly when an
+//! exact save is imported, but are not interpreted as tax evidence here.
 
-use crate::forms::{FilingStatus, FormValidator};
-use crate::profile::TaxpayerProfile;
+use std::collections::{BTreeMap, BTreeSet};
+
 use serde::{Deserialize, Serialize};
 
-/// Complete draft for Form 1701v2018.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Form1701Draft {
-    /// Database row ID (None before first save)
-    pub id: Option<i64>,
+use super::form_2551q::{AnnualIncomeTaxElection, annual_income_tax_election};
+use super::{FilingPeriod, FilingStatus, FormValidator, TypedBirForm};
+use crate::profile::{IncomeTaxElection, TaxClassification, TaxpayerProfile, TaxpayerType};
+use crate::validation::{validate_email, validate_ph_phone, validate_zip};
 
-    // === Filing Period ===
-    pub tin: String,
-    pub taxable_year: u16,
-    pub month: u8,
+pub const FORM_CODE: &str = "1701";
+pub const FORM_REVISION: &str = "2018";
+pub const FORM_TYPE_ID: &str = "1701v2018";
+pub const EXACT_REVIEWED_XML_FIELD_COUNT: usize = 837;
+pub const EXACT_REVIEWED_XML_VERSION: &str = "051414";
+pub const QUEUE_SUBMISSION_SUPPORTED: bool = false;
 
-    // === Header / Options ===
-    pub is_amended: bool,
-
-    // === Profile Fields (pre-filled) ===
-    pub rdo_code: String,
-    pub taxpayer_name: String,
-    pub registered_address: String,
-    pub zip_code: String,
-    pub contact_number: String,
-    pub email: String,
-
-    // === checkboxes ===
-    /// BIR: `frm1701:chkPg2IShed1a_1Spouse` (sample: `false`)
-    pub chk_pg2ished1a_1spouse: bool,
-    /// BIR: `frm1701:chkPg2IShed1a_1Taxpayer` (sample: `false`)
-    pub chk_pg2ished1a_1taxpayer: bool,
-    /// BIR: `frm1701:chkPg2IShed2a_2Spouse` (sample: `false`)
-    pub chk_pg2ished2a_2spouse: bool,
-    /// BIR: `frm1701:chkPg2IShed2a_2Taxpayer` (sample: `false`)
-    pub chk_pg2ished2a_2taxpayer: bool,
-
-    // === radio_options ===
-    /// BIR: `frm1701:rdoEXAttachmentS` (sample: `false`)
-    pub rdo_exattachment_s: bool,
-    /// BIR: `frm1701:rdoEXAttachmentTF` (sample: `false`)
-    pub rdo_exattachment_tf: bool,
-    /// BIR: `frm1701:rdoPg1I13ForeignTaxCreditsNo` (sample: `true`)
-    pub rdo_pg1i13foreign_tax_credits_no: bool,
-    /// BIR: `frm1701:rdoPg1I13ForeignTaxCreditsYes` (sample: `false`)
-    pub rdo_pg1i13foreign_tax_credits_yes: bool,
-    /// BIR: `frm1701:rdoPg1I16CivilStatusLS` (sample: `false`)
-    pub rdo_pg1i16civil_status_ls: bool,
-    /// BIR: `frm1701:rdoPg1I16CivilStatusM` (sample: `false`)
-    pub rdo_pg1i16civil_status_m: bool,
-    /// BIR: `frm1701:rdoPg1I16CivilStatusS` (sample: `true`)
-    pub rdo_pg1i16civil_status_s: bool,
-    /// BIR: `frm1701:rdoPg1I16CivilStatusW` (sample: `false`)
-    pub rdo_pg1i16civil_status_w: bool,
-    /// BIR: `frm1701:rdoPg1I17SpouseIncomeNo` (sample: `false`)
-    pub rdo_pg1i17spouse_income_no: bool,
-    /// BIR: `frm1701:rdoPg1I17SpouseIncomeYes` (sample: `false`)
-    pub rdo_pg1i17spouse_income_yes: bool,
-    /// BIR: `frm1701:rdoPg1I18FilingStatusJ` (sample: `false`)
-    pub rdo_pg1i18filing_status_j: bool,
-    /// BIR: `frm1701:rdoPg1I18FilingStatusS` (sample: `false`)
-    pub rdo_pg1i18filing_status_s: bool,
-    /// BIR: `frm1701:rdoPg1I19IncomeExemptNo` (sample: `true`)
-    pub rdo_pg1i19income_exempt_no: bool,
-    /// BIR: `frm1701:rdoPg1I19IncomeExemptYes` (sample: `false`)
-    pub rdo_pg1i19income_exempt_yes: bool,
-    /// BIR: `frm1701:rdoPg1I20IncomeSpecialNo` (sample: `true`)
-    pub rdo_pg1i20income_special_no: bool,
-    /// BIR: `frm1701:rdoPg1I20IncomeSpecialYes` (sample: `false`)
-    pub rdo_pg1i20income_special_yes: bool,
-    /// BIR: `frm1701:rdoPg1I21AMethodDeductionI` (sample: `false`)
-    pub rdo_pg1i21amethod_deduction_i: bool,
-    /// BIR: `frm1701:rdoPg1I21AMethodDeductionO` (sample: `true`)
-    pub rdo_pg1i21amethod_deduction_o: bool,
-    /// BIR: `frm1701:rdoPg1I21TaxRateG` (sample: `true`)
-    pub rdo_pg1i21tax_rate_g: bool,
-    /// BIR: `frm1701:rdoPg1I21TaxRateP` (sample: `false`)
-    pub rdo_pg1i21tax_rate_p: bool,
-    /// BIR: `frm1701:rdoPg1I3ShortPeriodNo` (sample: `true`)
-    pub rdo_pg1i3short_period_no: bool,
-    /// BIR: `frm1701:rdoPg1I3ShortPeriodYes` (sample: `false`)
-    pub rdo_pg1i3short_period_yes: bool,
-    /// BIR: `frm1701:rdoPg1I6TaxpayerTypeC` (sample: `false`)
-    pub rdo_pg1i6taxpayer_type_c: bool,
-    /// BIR: `frm1701:rdoPg1I6TaxpayerTypeE` (sample: `false`)
-    pub rdo_pg1i6taxpayer_type_e: bool,
-    /// BIR: `frm1701:rdoPg1I6TaxpayerTypeP` (sample: `false`)
-    pub rdo_pg1i6taxpayer_type_p: bool,
-    /// BIR: `frm1701:rdoPg1I6TaxpayerTypeS` (sample: `true`)
-    pub rdo_pg1i6taxpayer_type_s: bool,
-    /// BIR: `frm1701:rdoPg1I6TaxpayerTypeT` (sample: `false`)
-    pub rdo_pg1i6taxpayer_type_t: bool,
-    /// BIR: `frm1701:rdoPg1I7ATC_II011` (sample: `false`)
-    pub rdo_pg1i7atc_ii011: bool,
-    /// BIR: `frm1701:rdoPg1I7ATC_II012` (sample: `true`)
-    pub rdo_pg1i7atc_ii012: bool,
-    /// BIR: `frm1701:rdoPg1I7ATC_II013` (sample: `false`)
-    pub rdo_pg1i7atc_ii013: bool,
-    /// BIR: `frm1701:rdoPg1I7ATC_II014` (sample: `false`)
-    pub rdo_pg1i7atc_ii014: bool,
-    /// BIR: `frm1701:rdoPg1I7ATC_II015` (sample: `false`)
-    pub rdo_pg1i7atc_ii015: bool,
-    /// BIR: `frm1701:rdoPg1I7ATC_II016` (sample: `false`)
-    pub rdo_pg1i7atc_ii016: bool,
-    /// BIR: `frm1701:rdoPg1I7ATC_II017` (sample: `false`)
-    pub rdo_pg1i7atc_ii017: bool,
-    /// BIR: `frm1701:rdoPg1OverpaymentCarryOver` (sample: `false`)
-    pub rdo_pg1overpayment_carry_over: bool,
-    /// BIR: `frm1701:rdoPg1OverpaymentRefund` (sample: `false`)
-    pub rdo_pg1overpayment_refund: bool,
-    /// BIR: `frm1701:rdoPg1OverpaymentTCC` (sample: `false`)
-    pub rdo_pg1overpayment_tcc: bool,
-    /// BIR: `frm1701:rdoPg1mOption1` (sample: `true`)
-    pub rdo_pg1m_option1: bool,
-    /// BIR: `frm1701:rdoPg1mOption2` (sample: `false`)
-    pub rdo_pg1m_option2: bool,
-    /// BIR: `frm1701:rdoPg2I10IncomeExemptNo` (sample: `false`)
-    pub rdo_pg2i10income_exempt_no: bool,
-    /// BIR: `frm1701:rdoPg2I10IncomeExemptYes` (sample: `false`)
-    pub rdo_pg2i10income_exempt_yes: bool,
-    /// BIR: `frm1701:rdoPg2I11IncomeSpecialNo` (sample: `false`)
-    pub rdo_pg2i11income_special_no: bool,
-    /// BIR: `frm1701:rdoPg2I11IncomeSpecialYes` (sample: `false`)
-    pub rdo_pg2i11income_special_yes: bool,
-    /// BIR: `frm1701:rdoPg2I12AMethodDeductionI` (sample: `false`)
-    pub rdo_pg2i12amethod_deduction_i: bool,
-    /// BIR: `frm1701:rdoPg2I12AMethodDeductionO` (sample: `false`)
-    pub rdo_pg2i12amethod_deduction_o: bool,
-    /// BIR: `frm1701:rdoPg2I12TaxRateG` (sample: `false`)
-    pub rdo_pg2i12tax_rate_g: bool,
-    /// BIR: `frm1701:rdoPg2I12TaxRateP` (sample: `false`)
-    pub rdo_pg2i12tax_rate_p: bool,
-    /// BIR: `frm1701:rdoPg2I3SpouseTypeC` (sample: `false`)
-    pub rdo_pg2i3spouse_type_c: bool,
-    /// BIR: `frm1701:rdoPg2I3SpouseTypeP` (sample: `false`)
-    pub rdo_pg2i3spouse_type_p: bool,
-    /// BIR: `frm1701:rdoPg2I3SpouseTypeS` (sample: `false`)
-    pub rdo_pg2i3spouse_type_s: bool,
-    /// BIR: `frm1701:rdoPg2I4ATC_II011` (sample: `false`)
-    pub rdo_pg2i4atc_ii011: bool,
-    /// BIR: `frm1701:rdoPg2I4ATC_II012` (sample: `false`)
-    pub rdo_pg2i4atc_ii012: bool,
-    /// BIR: `frm1701:rdoPg2I4ATC_II013` (sample: `false`)
-    pub rdo_pg2i4atc_ii013: bool,
-    /// BIR: `frm1701:rdoPg2I4ATC_II014` (sample: `false`)
-    pub rdo_pg2i4atc_ii014: bool,
-    /// BIR: `frm1701:rdoPg2I4ATC_II015` (sample: `false`)
-    pub rdo_pg2i4atc_ii015: bool,
-    /// BIR: `frm1701:rdoPg2I4ATC_II016` (sample: `false`)
-    pub rdo_pg2i4atc_ii016: bool,
-    /// BIR: `frm1701:rdoPg2I4ATC_II017` (sample: `false`)
-    pub rdo_pg2i4atc_ii017: bool,
-    /// BIR: `frm1701:rdoPg2I8ForeignTaxCreditsNo` (sample: `false`)
-    pub rdo_pg2i8foreign_tax_credits_no: bool,
-    /// BIR: `frm1701:rdoPg2I8ForeignTaxCreditsYes` (sample: `false`)
-    pub rdo_pg2i8foreign_tax_credits_yes: bool,
-    /// BIR: `frm1701:rdoPg3mExemptTYPE` (sample: `false`)
-    pub rdo_pg3m_exempt_type: bool,
-    /// BIR: `frm1701:rdoPg3mSpecialRateTYPE` (sample: `false`)
-    pub rdo_pg3m_special_rate_type: bool,
-    /// BIR: `frm1701:rdoSPAttachmentS` (sample: `false`)
-    pub rdo_spattachment_s: bool,
-    /// BIR: `frm1701:rdoSPAttachmentTF` (sample: `false`)
-    pub rdo_spattachment_tf: bool,
-
-    // === text_fields ===
-    /// BIR: `frm1701:txtAttachmentTypes` (sample: ``)
-    pub txt_attachment_types: String,
-    /// BIR: `frm1701:txtCurrentPage` (sample: `1`)
-    pub txt_current_page: u32,
-    /// BIR: `frm1701:txtDisabledInputs` (sample: ``)
-    pub txt_disabled_inputs: String,
-    /// BIR: `frm1701:txtDisabledOnSave` (sample: ``)
-    pub txt_disabled_on_save: String,
-    /// BIR: `frm1701:txtEnabledInputsOnValidation` (sample: ``)
-    pub txt_enabled_inputs_on_validation: String,
-    /// BIR: `frm1701:txtEnabledLinks` (sample: ``)
-    pub txt_enabled_links: String,
-    /// BIR: `frm1701:txtEnabledOnSave` (sample: ``)
-    pub txt_enabled_on_save: String,
-    /// BIR: `frm1701:txtIsSpouseDisabled` (sample: ``)
-    pub txt_is_spouse_disabled: String,
-    /// BIR: `frm1701:txtIsTaxFilerDisabled` (sample: `FALSE`)
-    pub txt_is_tax_filer_disabled: String,
-    /// BIR: `frm1701:txtLineBus` (sample: `SOFTWARE%2520DEVELOPMENT`)
-    pub txt_line_bus: String,
-    /// BIR: `frm1701:txtMaxPage` (sample: `4`)
-    pub txt_max_page: u32,
-    /// BIR: `frm1701:txtPg1I10BirthDate` (sample: `08/17/1988`)
-    pub txt_pg1i10birth_date: String,
-    /// BIR: `frm1701:txtPg1I12Citizenship` (sample: `FILIPINO`)
-    pub txt_pg1i12citizenship: String,
-    /// BIR: `frm1701:txtPg1I14ForeignTaxNumber` (sample: ``)
-    pub txt_pg1i14foreign_tax_number: String,
-    /// BIR: `frm1701:txtPg1I22ATaxDue` (sample: `0.00`)
-    pub txt_pg1i22atax_due: f64,
-    /// BIR: `frm1701:txtPg1I22BTaxDue` (sample: `0.00`)
-    pub txt_pg1i22btax_due: f64,
-    /// BIR: `frm1701:txtPg1I235Number` (sample: ``)
-    pub txt_pg1i235number: String,
-    /// BIR: `frm1701:txtPg1I23A` (sample: `0.00`)
-    pub txt_pg1i23a: f64,
-    /// BIR: `frm1701:txtPg1I23B` (sample: `0.00`)
-    pub txt_pg1i23b: f64,
-    /// BIR: `frm1701:txtPg1I24ATaxPayable` (sample: `0.00`)
-    pub txt_pg1i24atax_payable: f64,
-    /// BIR: `frm1701:txtPg1I24BTaxPayable` (sample: `0.00`)
-    pub txt_pg1i24btax_payable: f64,
-    /// BIR: `frm1701:txtPg1I25A` (sample: `0.00`)
-    pub txt_pg1i25a: f64,
-    /// BIR: `frm1701:txtPg1I25B` (sample: `0.00`)
-    pub txt_pg1i25b: f64,
-    /// BIR: `frm1701:txtPg1I26A` (sample: `0.00`)
-    pub txt_pg1i26a: f64,
-    /// BIR: `frm1701:txtPg1I26B` (sample: `0.00`)
-    pub txt_pg1i26b: f64,
-    /// BIR: `frm1701:txtPg1I27A` (sample: `100.00`)
-    pub txt_pg1i27a: f64,
-    /// BIR: `frm1701:txtPg1I27B` (sample: `0.00`)
-    pub txt_pg1i27b: f64,
-    /// BIR: `frm1701:txtPg1I28A` (sample: `100.00`)
-    pub txt_pg1i28a: f64,
-    /// BIR: `frm1701:txtPg1I28B` (sample: `0.00`)
-    pub txt_pg1i28b: f64,
-    /// BIR: `frm1701:txtPg1I29A` (sample: `100.00`)
-    pub txt_pg1i29a: f64,
-    /// BIR: `frm1701:txtPg1I29B` (sample: `0.00`)
-    pub txt_pg1i29b: f64,
-    /// BIR: `frm1701:txtPg1I30A` (sample: `300.00`)
-    pub txt_pg1i30a: f64,
-    /// BIR: `frm1701:txtPg1I30B` (sample: `0.00`)
-    pub txt_pg1i30b: f64,
-    /// BIR: `frm1701:txtPg1I31ATotalAmtPyble` (sample: `300.00`)
-    pub txt_pg1i31atotal_amt_pyble: f64,
-    /// BIR: `frm1701:txtPg1I31BTotalAmtPyble` (sample: `0.00`)
-    pub txt_pg1i31btotal_amt_pyble: f64,
-    /// BIR: `frm1701:txtPg1I32AggregateAmtPyble` (sample: `300.00`)
-    pub txt_pg1i32aggregate_amt_pyble: f64,
-    /// BIR: `frm1701:txtPg1I33NumberOfAttachments` (sample: `00`)
-    pub txt_pg1i33number_of_attachments: u32,
-    /// BIR: `frm1701:txtPg1I34Agency` (sample: ``)
-    pub txt_pg1i34agency: String,
-    /// BIR: `frm1701:txtPg1I34Amount` (sample: ``)
-    pub txt_pg1i34amount: String,
-    /// BIR: `frm1701:txtPg1I34Date` (sample: ``)
-    pub txt_pg1i34date: String,
-    /// BIR: `frm1701:txtPg1I34Number` (sample: ``)
-    pub txt_pg1i34number: String,
-    /// BIR: `frm1701:txtPg1I35Agency` (sample: ``)
-    pub txt_pg1i35agency: String,
-    /// BIR: `frm1701:txtPg1I35Amount` (sample: ``)
-    pub txt_pg1i35amount: String,
-    /// BIR: `frm1701:txtPg1I35Date` (sample: ``)
-    pub txt_pg1i35date: String,
-    /// BIR: `frm1701:txtPg1I36Amount` (sample: ``)
-    pub txt_pg1i36amount: String,
-    /// BIR: `frm1701:txtPg1I36Date` (sample: ``)
-    pub txt_pg1i36date: String,
-    /// BIR: `frm1701:txtPg1I36Number` (sample: ``)
-    pub txt_pg1i36number: String,
-    /// BIR: `frm1701:txtPg1I37Agency` (sample: ``)
-    pub txt_pg1i37agency: String,
-    /// BIR: `frm1701:txtPg1I37Amount` (sample: ``)
-    pub txt_pg1i37amount: String,
-    /// BIR: `frm1701:txtPg1I37Date` (sample: ``)
-    pub txt_pg1i37date: String,
-    /// BIR: `frm1701:txtPg1I37Number` (sample: ``)
-    pub txt_pg1i37number: String,
-    /// BIR: `frm1701:txtPg1I37Particular` (sample: ``)
-    pub txt_pg1i37particular: String,
-    /// BIR: `frm1701:txtPg1I9Address` (sample: `OLONGAPO`)
-    pub txt_pg1i9address: String,
-    /// BIR: `frm1701:txtPg1mI10CSchdB` (sample: `0.00`)
-    pub txt_pg1m_i10cschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI10DSchdB` (sample: `0.00`)
-    pub txt_pg1m_i10dschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI10GSchdB` (sample: `0.00`)
-    pub txt_pg1m_i10gschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI10HSchdB` (sample: `0.00`)
-    pub txt_pg1m_i10hschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI11ASchdB` (sample: `0.00`)
-    pub txt_pg1m_i11aschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI11BSchdB` (sample: `0.00`)
-    pub txt_pg1m_i11bschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI11CSchdB` (sample: `0.00`)
-    pub txt_pg1m_i11cschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI11DSchdB` (sample: `0.00`)
-    pub txt_pg1m_i11dschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI11ESchdB` (sample: `0.00`)
-    pub txt_pg1m_i11eschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI11FSchdB` (sample: `0.00`)
-    pub txt_pg1m_i11fschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI11GSchdB` (sample: `0.00`)
-    pub txt_pg1m_i11gschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI11HSchdB` (sample: `0.00`)
-    pub txt_pg1m_i11hschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI12ASchdB` (sample: `0.00`)
-    pub txt_pg1m_i12aschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI12BSchdB` (sample: `0.00`)
-    pub txt_pg1m_i12bschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI12CSchdB` (sample: `0.00`)
-    pub txt_pg1m_i12cschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI12DSchdB` (sample: `0.00`)
-    pub txt_pg1m_i12dschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI12DescSchdB` (sample: ``)
-    pub txt_pg1m_i12desc_schd_b: String,
-    /// BIR: `frm1701:txtPg1mI12ESchdB` (sample: `0.00`)
-    pub txt_pg1m_i12eschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI12FSchdB` (sample: `0.00`)
-    pub txt_pg1m_i12fschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI12GSchdB` (sample: `0.00`)
-    pub txt_pg1m_i12gschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI12HSchdB` (sample: `0.00`)
-    pub txt_pg1m_i12hschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI13ASchdB` (sample: `0.00`)
-    pub txt_pg1m_i13aschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI13BSchdB` (sample: `0.00`)
-    pub txt_pg1m_i13bschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI13CSchdB` (sample: `0.00`)
-    pub txt_pg1m_i13cschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI13DSchdB` (sample: `0.00`)
-    pub txt_pg1m_i13dschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI13DescSchdB` (sample: ``)
-    pub txt_pg1m_i13desc_schd_b: String,
-    /// BIR: `frm1701:txtPg1mI13ESchdB` (sample: `0.00`)
-    pub txt_pg1m_i13eschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI13FSchdB` (sample: `0.00`)
-    pub txt_pg1m_i13fschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI13GSchdB` (sample: `0.00`)
-    pub txt_pg1m_i13gschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI13HSchdB` (sample: `0.00`)
-    pub txt_pg1m_i13hschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI14CSchdB` (sample: `0.00`)
-    pub txt_pg1m_i14cschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI14DSchdB` (sample: `0.00`)
-    pub txt_pg1m_i14dschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI14GSchdB` (sample: `0.00`)
-    pub txt_pg1m_i14gschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI14HSchdB` (sample: `0.00`)
-    pub txt_pg1m_i14hschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI15ASchdB` (sample: `0.00`)
-    pub txt_pg1m_i15aschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI15BSchdB` (sample: `0.00`)
-    pub txt_pg1m_i15bschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI15CSchdB` (sample: `0.00`)
-    pub txt_pg1m_i15cschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI15DSchdB` (sample: `0.00`)
-    pub txt_pg1m_i15dschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI15ESchdB` (sample: `0.00`)
-    pub txt_pg1m_i15eschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI15FSchdB` (sample: `0.00`)
-    pub txt_pg1m_i15fschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI15GSchdB` (sample: `0.00`)
-    pub txt_pg1m_i15gschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI15HSchdB` (sample: `0.00`)
-    pub txt_pg1m_i15hschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI16ASchdB` (sample: `0.00`)
-    pub txt_pg1m_i16aschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI16BSchdB` (sample: `0.00`)
-    pub txt_pg1m_i16bschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI16CSchdB` (sample: `0.00`)
-    pub txt_pg1m_i16cschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI16DSchdB` (sample: `0.00`)
-    pub txt_pg1m_i16dschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI16ESchdB` (sample: `0.00`)
-    pub txt_pg1m_i16eschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI16FSchdB` (sample: `0.00`)
-    pub txt_pg1m_i16fschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI16GSchdB` (sample: `0.00`)
-    pub txt_pg1m_i16gschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI16HSchdB` (sample: `0.00`)
-    pub txt_pg1m_i16hschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI17ASchdB` (sample: `0.00`)
-    pub txt_pg1m_i17aschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI17BSchdB` (sample: `0.00`)
-    pub txt_pg1m_i17bschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI17CSchdB` (sample: `0.00`)
-    pub txt_pg1m_i17cschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI17DSchdB` (sample: `0.00`)
-    pub txt_pg1m_i17dschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI17ESchdB` (sample: `0.00`)
-    pub txt_pg1m_i17eschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI17FSchdB` (sample: `0.00`)
-    pub txt_pg1m_i17fschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI17GSchdB` (sample: `0.00`)
-    pub txt_pg1m_i17gschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI17HSchdB` (sample: `0.00`)
-    pub txt_pg1m_i17hschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI1ASchdA` (sample: ``)
-    pub txt_pg1m_i1aschd_a: String,
-    /// BIR: `frm1701:txtPg1mI1ASchdB` (sample: `0.00`)
-    pub txt_pg1m_i1aschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI1BSchdA` (sample: ``)
-    pub txt_pg1m_i1bschd_a: String,
-    /// BIR: `frm1701:txtPg1mI1BSchdB` (sample: `0.00`)
-    pub txt_pg1m_i1bschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI1CSchdA` (sample: ``)
-    pub txt_pg1m_i1cschd_a: String,
-    /// BIR: `frm1701:txtPg1mI1CSchdB` (sample: `0.00`)
-    pub txt_pg1m_i1cschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI1DSchdA` (sample: ``)
-    pub txt_pg1m_i1dschd_a: String,
-    /// BIR: `frm1701:txtPg1mI1DSchdB` (sample: `0.00`)
-    pub txt_pg1m_i1dschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI1ESchdA` (sample: ``)
-    pub txt_pg1m_i1eschd_a: String,
-    /// BIR: `frm1701:txtPg1mI1ESchdB` (sample: `0.00`)
-    pub txt_pg1m_i1eschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI1FSchdA` (sample: ``)
-    pub txt_pg1m_i1fschd_a: String,
-    /// BIR: `frm1701:txtPg1mI1FSchdB` (sample: `0.00`)
-    pub txt_pg1m_i1fschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI1GSchdB` (sample: `0.00`)
-    pub txt_pg1m_i1gschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI1HSchdB` (sample: `0.00`)
-    pub txt_pg1m_i1hschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI2ASchdA` (sample: ``)
-    pub txt_pg1m_i2aschd_a: String,
-    /// BIR: `frm1701:txtPg1mI2ASchdB` (sample: `0.00`)
-    pub txt_pg1m_i2aschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI2BSchdA` (sample: ``)
-    pub txt_pg1m_i2bschd_a: String,
-    /// BIR: `frm1701:txtPg1mI2BSchdB` (sample: `0.00`)
-    pub txt_pg1m_i2bschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI2CSchdA` (sample: ``)
-    pub txt_pg1m_i2cschd_a: String,
-    /// BIR: `frm1701:txtPg1mI2CSchdB` (sample: `0.00`)
-    pub txt_pg1m_i2cschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI2DSchdA` (sample: ``)
-    pub txt_pg1m_i2dschd_a: String,
-    /// BIR: `frm1701:txtPg1mI2DSchdB` (sample: `0.00`)
-    pub txt_pg1m_i2dschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI2ESchdA` (sample: ``)
-    pub txt_pg1m_i2eschd_a: String,
-    /// BIR: `frm1701:txtPg1mI2ESchdB` (sample: `0.00`)
-    pub txt_pg1m_i2eschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI2FSchdA` (sample: ``)
-    pub txt_pg1m_i2fschd_a: String,
-    /// BIR: `frm1701:txtPg1mI2FSchdB` (sample: `0.00`)
-    pub txt_pg1m_i2fschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI2GSchdB` (sample: `0.00`)
-    pub txt_pg1m_i2gschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI2HSchdB` (sample: `0.00`)
-    pub txt_pg1m_i2hschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI3ASchdA` (sample: ``)
-    pub txt_pg1m_i3aschd_a: String,
-    /// BIR: `frm1701:txtPg1mI3ASchdB` (sample: `0.00`)
-    pub txt_pg1m_i3aschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI3BSchdA` (sample: ``)
-    pub txt_pg1m_i3bschd_a: String,
-    /// BIR: `frm1701:txtPg1mI3BSchdB` (sample: `0.00`)
-    pub txt_pg1m_i3bschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI3CSchdA` (sample: ``)
-    pub txt_pg1m_i3cschd_a: String,
-    /// BIR: `frm1701:txtPg1mI3CSchdB` (sample: `0.00`)
-    pub txt_pg1m_i3cschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI3DSchdA` (sample: ``)
-    pub txt_pg1m_i3dschd_a: String,
-    /// BIR: `frm1701:txtPg1mI3DSchdB` (sample: `0.00`)
-    pub txt_pg1m_i3dschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI3ESchdA` (sample: ``)
-    pub txt_pg1m_i3eschd_a: String,
-    /// BIR: `frm1701:txtPg1mI3ESchdB` (sample: `0.00`)
-    pub txt_pg1m_i3eschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI3FSchdA` (sample: ``)
-    pub txt_pg1m_i3fschd_a: String,
-    /// BIR: `frm1701:txtPg1mI3FSchdB` (sample: `0.00`)
-    pub txt_pg1m_i3fschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI3GSchdB` (sample: `0.00`)
-    pub txt_pg1m_i3gschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI3HSchdB` (sample: `0.00`)
-    pub txt_pg1m_i3hschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI4ASchdB` (sample: `0.00`)
-    pub txt_pg1m_i4aschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI4BSchdA` (sample: `0.00`)
-    pub txt_pg1m_i4bschd_a: f64,
-    /// BIR: `frm1701:txtPg1mI4BSchdB` (sample: `0.00`)
-    pub txt_pg1m_i4bschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI4CSchdB` (sample: `0.00`)
-    pub txt_pg1m_i4cschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI4DSchdB` (sample: `0.00`)
-    pub txt_pg1m_i4dschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI4ESchdA` (sample: `0.00`)
-    pub txt_pg1m_i4eschd_a: f64,
-    /// BIR: `frm1701:txtPg1mI4ESchdB` (sample: `0.00`)
-    pub txt_pg1m_i4eschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI4FSchdB` (sample: `0.00`)
-    pub txt_pg1m_i4fschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI4GSchdB` (sample: `0.00`)
-    pub txt_pg1m_i4gschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI4HSchdB` (sample: `0.00`)
-    pub txt_pg1m_i4hschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI5ASchdA` (sample: ``)
-    pub txt_pg1m_i5aschd_a: String,
-    /// BIR: `frm1701:txtPg1mI5ASchdB` (sample: `0.00`)
-    pub txt_pg1m_i5aschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI5BSchdA` (sample: ``)
-    pub txt_pg1m_i5bschd_a: String,
-    /// BIR: `frm1701:txtPg1mI5BSchdB` (sample: `0.00`)
-    pub txt_pg1m_i5bschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI5CSchdA` (sample: ``)
-    pub txt_pg1m_i5cschd_a: String,
-    /// BIR: `frm1701:txtPg1mI5CSchdB` (sample: `0.00`)
-    pub txt_pg1m_i5cschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI5DSchdA` (sample: ``)
-    pub txt_pg1m_i5dschd_a: String,
-    /// BIR: `frm1701:txtPg1mI5DSchdB` (sample: `0.00`)
-    pub txt_pg1m_i5dschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI5ESchdA` (sample: ``)
-    pub txt_pg1m_i5eschd_a: String,
-    /// BIR: `frm1701:txtPg1mI5ESchdB` (sample: `0.00`)
-    pub txt_pg1m_i5eschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI5FSchdA` (sample: ``)
-    pub txt_pg1m_i5fschd_a: String,
-    /// BIR: `frm1701:txtPg1mI5FSchdB` (sample: `0.00`)
-    pub txt_pg1m_i5fschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI5GSchdB` (sample: `0.00`)
-    pub txt_pg1m_i5gschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI5HSchdB` (sample: `0.00`)
-    pub txt_pg1m_i5hschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI6ASchdA` (sample: ``)
-    pub txt_pg1m_i6aschd_a: String,
-    /// BIR: `frm1701:txtPg1mI6ASchdB` (sample: `0.00`)
-    pub txt_pg1m_i6aschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI6BSchdA` (sample: ``)
-    pub txt_pg1m_i6bschd_a: String,
-    /// BIR: `frm1701:txtPg1mI6BSchdB` (sample: `0.00`)
-    pub txt_pg1m_i6bschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI6CSchdA` (sample: ``)
-    pub txt_pg1m_i6cschd_a: String,
-    /// BIR: `frm1701:txtPg1mI6CSchdB` (sample: `0.00`)
-    pub txt_pg1m_i6cschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI6DSchdA` (sample: ``)
-    pub txt_pg1m_i6dschd_a: String,
-    /// BIR: `frm1701:txtPg1mI6DSchdB` (sample: `0.00`)
-    pub txt_pg1m_i6dschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI6ESchdA` (sample: ``)
-    pub txt_pg1m_i6eschd_a: String,
-    /// BIR: `frm1701:txtPg1mI6ESchdB` (sample: `0.00`)
-    pub txt_pg1m_i6eschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI6FSchdA` (sample: ``)
-    pub txt_pg1m_i6fschd_a: String,
-    /// BIR: `frm1701:txtPg1mI6FSchdB` (sample: `0.00`)
-    pub txt_pg1m_i6fschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI6GSchdB` (sample: `0.00`)
-    pub txt_pg1m_i6gschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI6HSchdB` (sample: `0.00`)
-    pub txt_pg1m_i6hschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI7ASchdB` (sample: `0.00`)
-    pub txt_pg1m_i7aschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI7BSchdB` (sample: `0.00`)
-    pub txt_pg1m_i7bschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI7CSchdB` (sample: `0.00`)
-    pub txt_pg1m_i7cschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI7DSchdB` (sample: `0.00`)
-    pub txt_pg1m_i7dschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI7ESchdB` (sample: `0.00`)
-    pub txt_pg1m_i7eschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI7FSchdB` (sample: `0.00`)
-    pub txt_pg1m_i7fschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI7GSchdB` (sample: `0.00`)
-    pub txt_pg1m_i7gschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI7HSchdB` (sample: `0.00`)
-    pub txt_pg1m_i7hschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI8CSchdB` (sample: `0.00`)
-    pub txt_pg1m_i8cschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI8DSchdB` (sample: `0.00`)
-    pub txt_pg1m_i8dschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI8GSchdB` (sample: `0.00`)
-    pub txt_pg1m_i8gschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI8HSchdB` (sample: `0.00`)
-    pub txt_pg1m_i8hschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI9ASchdB` (sample: `0.00`)
-    pub txt_pg1m_i9aschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI9BSchdB` (sample: `0.00`)
-    pub txt_pg1m_i9bschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI9CSchdB` (sample: `0.00`)
-    pub txt_pg1m_i9cschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI9DSchdB` (sample: `0.00`)
-    pub txt_pg1m_i9dschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI9ESchdB` (sample: `0.00`)
-    pub txt_pg1m_i9eschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI9FSchdB` (sample: `0.00`)
-    pub txt_pg1m_i9fschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI9GSchdB` (sample: `0.00`)
-    pub txt_pg1m_i9gschd_b: f64,
-    /// BIR: `frm1701:txtPg1mI9HSchdB` (sample: `0.00`)
-    pub txt_pg1m_i9hschd_b: f64,
-    /// BIR: `frm1701:txtPg2I5SpouseName` (sample: ``)
-    pub txt_pg2i5spouse_name: String,
-    /// BIR: `frm1701:txtPg2I7Citizenship` (sample: ``)
-    pub txt_pg2i7citizenship: String,
-    /// BIR: `frm1701:txtPg2I9ForeignTaxNumber` (sample: ``)
-    pub txt_pg2i9foreign_tax_number: String,
-    /// BIR: `frm1701:txtPg2IShed1a_1SName` (sample: ``)
-    pub txt_pg2ished1a_1sname: String,
-    /// BIR: `frm1701:txtPg2IShed1a_1TPName` (sample: ``)
-    pub txt_pg2ished1a_1tpname: String,
-    /// BIR: `frm1701:txtPg2IShed1c_1CI` (sample: `0.00`)
-    pub txt_pg2ished1c_1ci: f64,
-    /// BIR: `frm1701:txtPg2IShed1c_1TW` (sample: `0.00`)
-    pub txt_pg2ished1c_1tw: f64,
-    /// BIR: `frm1701:txtPg2IShed1c_2CI` (sample: `0.00`)
-    pub txt_pg2ished1c_2ci: f64,
-    /// BIR: `frm1701:txtPg2IShed1c_2TW` (sample: `0.00`)
-    pub txt_pg2ished1c_2tw: f64,
-    /// BIR: `frm1701:txtPg2IShed1c_3ACI` (sample: `0.00`)
-    pub txt_pg2ished1c_3aci: f64,
-    /// BIR: `frm1701:txtPg2IShed1c_3ATW` (sample: `0.00`)
-    pub txt_pg2ished1c_3atw: f64,
-    /// BIR: `frm1701:txtPg2IShed1c_3BCI` (sample: `0.00`)
-    pub txt_pg2ished1c_3bci: f64,
-    /// BIR: `frm1701:txtPg2IShed1c_3BTW` (sample: `0.00`)
-    pub txt_pg2ished1c_3btw: f64,
-    /// BIR: `frm1701:txtPg2IShed2_4A` (sample: `0.00`)
-    pub txt_pg2ished2_4a: f64,
-    /// BIR: `frm1701:txtPg2IShed2_4B` (sample: `0.00`)
-    pub txt_pg2ished2_4b: f64,
-    /// BIR: `frm1701:txtPg2IShed2_5A` (sample: `0.00`)
-    pub txt_pg2ished2_5a: f64,
-    /// BIR: `frm1701:txtPg2IShed2_5B` (sample: `0.00`)
-    pub txt_pg2ished2_5b: f64,
-    /// BIR: `frm1701:txtPg2IShed2_6A` (sample: `0.00`)
-    pub txt_pg2ished2_6a: f64,
-    /// BIR: `frm1701:txtPg2IShed2_6B` (sample: `0.00`)
-    pub txt_pg2ished2_6b: f64,
-    /// BIR: `frm1701:txtPg2IShed2_7A` (sample: `0.00`)
-    pub txt_pg2ished2_7a: f64,
-    /// BIR: `frm1701:txtPg2IShed2_7B` (sample: `0.00`)
-    pub txt_pg2ished2_7b: f64,
-    /// BIR: `frm1701:txtPg2IShed2a_2SName` (sample: ``)
-    pub txt_pg2ished2a_2sname: String,
-    /// BIR: `frm1701:txtPg2IShed2a_2TPName` (sample: ``)
-    pub txt_pg2ished2a_2tpname: String,
-    /// BIR: `frm1701:txtPg2IShed3_10A` (sample: `0.00`)
-    pub txt_pg2ished3_10a: f64,
-    /// BIR: `frm1701:txtPg2IShed3_10B` (sample: `0.00`)
-    pub txt_pg2ished3_10b: f64,
-    /// BIR: `frm1701:txtPg2IShed3_11A` (sample: `0.00`)
-    pub txt_pg2ished3_11a: f64,
-    /// BIR: `frm1701:txtPg2IShed3_11B` (sample: `0.00`)
-    pub txt_pg2ished3_11b: f64,
-    /// BIR: `frm1701:txtPg2IShed3_12A` (sample: `0.00`)
-    pub txt_pg2ished3_12a: f64,
-    /// BIR: `frm1701:txtPg2IShed3_12B` (sample: `0.00`)
-    pub txt_pg2ished3_12b: f64,
-    /// BIR: `frm1701:txtPg2IShed3_13A` (sample: `0.00`)
-    pub txt_pg2ished3_13a: f64,
-    /// BIR: `frm1701:txtPg2IShed3_13B` (sample: `0.00`)
-    pub txt_pg2ished3_13b: f64,
-    /// BIR: `frm1701:txtPg2IShed3_14A` (sample: `0.00`)
-    pub txt_pg2ished3_14a: f64,
-    /// BIR: `frm1701:txtPg2IShed3_14B` (sample: `0.00`)
-    pub txt_pg2ished3_14b: f64,
-    /// BIR: `frm1701:txtPg2IShed3_15A` (sample: `0.00`)
-    pub txt_pg2ished3_15a: f64,
-    /// BIR: `frm1701:txtPg2IShed3_15B` (sample: `0.00`)
-    pub txt_pg2ished3_15b: f64,
-    /// BIR: `frm1701:txtPg2IShed3_16A` (sample: `0.00`)
-    pub txt_pg2ished3_16a: f64,
-    /// BIR: `frm1701:txtPg2IShed3_16B` (sample: `0.00`)
-    pub txt_pg2ished3_16b: f64,
-    /// BIR: `frm1701:txtPg2IShed3_17A` (sample: `0.00`)
-    pub txt_pg2ished3_17a: f64,
-    /// BIR: `frm1701:txtPg2IShed3_17B` (sample: `0.00`)
-    pub txt_pg2ished3_17b: f64,
-    /// BIR: `frm1701:txtPg2IShed3_18A` (sample: `0.00`)
-    pub txt_pg2ished3_18a: f64,
-    /// BIR: `frm1701:txtPg2IShed3_18B` (sample: `0.00`)
-    pub txt_pg2ished3_18b: f64,
-    /// BIR: `frm1701:txtPg2IShed3_19A` (sample: `0.00`)
-    pub txt_pg2ished3_19a: f64,
-    /// BIR: `frm1701:txtPg2IShed3_19B` (sample: `0.00`)
-    pub txt_pg2ished3_19b: f64,
-    /// BIR: `frm1701:txtPg2IShed3_19Desc` (sample: ``)
-    pub txt_pg2ished3_19desc: String,
-    /// BIR: `frm1701:txtPg2IShed3_20A` (sample: `0.00`)
-    pub txt_pg2ished3_20a: f64,
-    /// BIR: `frm1701:txtPg2IShed3_20B` (sample: `0.00`)
-    pub txt_pg2ished3_20b: f64,
-    /// BIR: `frm1701:txtPg2IShed3_20Desc` (sample: ``)
-    pub txt_pg2ished3_20desc: String,
-    /// BIR: `frm1701:txtPg2IShed3_21A` (sample: `0.00`)
-    pub txt_pg2ished3_21a: f64,
-    /// BIR: `frm1701:txtPg2IShed3_21B` (sample: `0.00`)
-    pub txt_pg2ished3_21b: f64,
-    /// BIR: `frm1701:txtPg2IShed3_22A` (sample: `0.00`)
-    pub txt_pg2ished3_22a: f64,
-    /// BIR: `frm1701:txtPg2IShed3_22B` (sample: `0.00`)
-    pub txt_pg2ished3_22b: f64,
-    /// BIR: `frm1701:txtPg2IShed3_23A` (sample: `0.00`)
-    pub txt_pg2ished3_23a: f64,
-    /// BIR: `frm1701:txtPg2IShed3_23B` (sample: `0.00`)
-    pub txt_pg2ished3_23b: f64,
-    /// BIR: `frm1701:txtPg2IShed3_24A` (sample: `0.00`)
-    pub txt_pg2ished3_24a: f64,
-    /// BIR: `frm1701:txtPg2IShed3_24B` (sample: `0.00`)
-    pub txt_pg2ished3_24b: f64,
-    /// BIR: `frm1701:txtPg2IShed3_25A` (sample: `0.00`)
-    pub txt_pg2ished3_25a: f64,
-    /// BIR: `frm1701:txtPg2IShed3_25B` (sample: `0.00`)
-    pub txt_pg2ished3_25b: f64,
-    /// BIR: `frm1701:txtPg2IShed3_8A` (sample: `0.00`)
-    pub txt_pg2ished3_8a: f64,
-    /// BIR: `frm1701:txtPg2IShed3_8B` (sample: `0.00`)
-    pub txt_pg2ished3_8b: f64,
-    /// BIR: `frm1701:txtPg2IShed3_9A` (sample: `0.00`)
-    pub txt_pg2ished3_9a: f64,
-    /// BIR: `frm1701:txtPg2IShed3_9B` (sample: `0.00`)
-    pub txt_pg2ished3_9b: f64,
-    /// BIR: `frm1701:txtPg2mI10ASchdC` (sample: `0.00`)
-    pub txt_pg2m_i10aschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI10BSchdC` (sample: `0.00`)
-    pub txt_pg2m_i10bschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI10CSchdC` (sample: `0.00`)
-    pub txt_pg2m_i10cschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI10DSchdC` (sample: `0.00`)
-    pub txt_pg2m_i10dschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI11ASchdC` (sample: `0.00`)
-    pub txt_pg2m_i11aschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI11BSchdC` (sample: `0.00`)
-    pub txt_pg2m_i11bschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI11CSchdC` (sample: `0.00`)
-    pub txt_pg2m_i11cschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI11DSchdC` (sample: `0.00`)
-    pub txt_pg2m_i11dschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI12ASchdC` (sample: `0.00`)
-    pub txt_pg2m_i12aschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI12BSchdC` (sample: `0.00`)
-    pub txt_pg2m_i12bschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI12CSchdC` (sample: `0.00`)
-    pub txt_pg2m_i12cschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI12DSchdC` (sample: `0.00`)
-    pub txt_pg2m_i12dschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI13ASchdC` (sample: `0.00`)
-    pub txt_pg2m_i13aschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI13BSchdC` (sample: `0.00`)
-    pub txt_pg2m_i13bschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI13CSchdC` (sample: `0.00`)
-    pub txt_pg2m_i13cschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI13DSchdC` (sample: `0.00`)
-    pub txt_pg2m_i13dschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI14ASchdC` (sample: `0.00`)
-    pub txt_pg2m_i14aschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI14BSchdC` (sample: `0.00`)
-    pub txt_pg2m_i14bschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI14CSchdC` (sample: `0.00`)
-    pub txt_pg2m_i14cschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI14DSchdC` (sample: `0.00`)
-    pub txt_pg2m_i14dschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI15ASchdC` (sample: `0.00`)
-    pub txt_pg2m_i15aschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI15BSchdC` (sample: `0.00`)
-    pub txt_pg2m_i15bschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI15CSchdC` (sample: `0.00`)
-    pub txt_pg2m_i15cschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI15DSchdC` (sample: `0.00`)
-    pub txt_pg2m_i15dschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI16ASchdC` (sample: `0.00`)
-    pub txt_pg2m_i16aschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI16BSchdC` (sample: `0.00`)
-    pub txt_pg2m_i16bschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI16CSchdC` (sample: `0.00`)
-    pub txt_pg2m_i16cschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI16DSchdC` (sample: `0.00`)
-    pub txt_pg2m_i16dschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI17aASchdC` (sample: `0.00`)
-    pub txt_pg2m_i17a_aschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI17aBSchdC` (sample: `0.00`)
-    pub txt_pg2m_i17a_bschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI17aCSchdC` (sample: `0.00`)
-    pub txt_pg2m_i17a_cschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI17aDSchdC` (sample: `0.00`)
-    pub txt_pg2m_i17a_dschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI17bASchdC` (sample: `0.00`)
-    pub txt_pg2m_i17b_aschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI17bBSchdC` (sample: `0.00`)
-    pub txt_pg2m_i17b_bschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI17bCSchdC` (sample: `0.00`)
-    pub txt_pg2m_i17b_cschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI17bDSchdC` (sample: `0.00`)
-    pub txt_pg2m_i17b_dschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI17cASchdC` (sample: `0.00`)
-    pub txt_pg2m_i17c_aschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI17cBSchdC` (sample: `0.00`)
-    pub txt_pg2m_i17c_bschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI17cCSchdC` (sample: `0.00`)
-    pub txt_pg2m_i17c_cschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI17cDSchdC` (sample: `0.00`)
-    pub txt_pg2m_i17c_dschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI17dASchdC` (sample: `0.00`)
-    pub txt_pg2m_i17d_aschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI17dBSchdC` (sample: `0.00`)
-    pub txt_pg2m_i17d_bschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI17dCSchdC` (sample: `0.00`)
-    pub txt_pg2m_i17d_cschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI17dDSchdC` (sample: `0.00`)
-    pub txt_pg2m_i17d_dschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI17dDescSchdC` (sample: ``)
-    pub txt_pg2m_i17d_desc_schd_c: String,
-    /// BIR: `frm1701:txtPg2mI18ASchdC` (sample: `0.00`)
-    pub txt_pg2m_i18aschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI18BSchdC` (sample: `0.00`)
-    pub txt_pg2m_i18bschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI18CSchdC` (sample: `0.00`)
-    pub txt_pg2m_i18cschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI18DSchdC` (sample: `0.00`)
-    pub txt_pg2m_i18dschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI1ASchdC` (sample: `0.00`)
-    pub txt_pg2m_i1aschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI1ASchdD` (sample: `0.00`)
-    pub txt_pg2m_i1aschd_d: f64,
-    /// BIR: `frm1701:txtPg2mI1BSchdC` (sample: `0.00`)
-    pub txt_pg2m_i1bschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI1BSchdD` (sample: `0.00`)
-    pub txt_pg2m_i1bschd_d: f64,
-    /// BIR: `frm1701:txtPg2mI1CSchdC` (sample: `0.00`)
-    pub txt_pg2m_i1cschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI1DSchdC` (sample: `0.00`)
-    pub txt_pg2m_i1dschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI1DescSchdD` (sample: ``)
-    pub txt_pg2m_i1desc_schd_d: String,
-    /// BIR: `frm1701:txtPg2mI1LBSchdD` (sample: ``)
-    pub txt_pg2m_i1lbschd_d: String,
-    /// BIR: `frm1701:txtPg2mI2ASchdC` (sample: `0.00`)
-    pub txt_pg2m_i2aschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI2ASchdD` (sample: `0.00`)
-    pub txt_pg2m_i2aschd_d: f64,
-    /// BIR: `frm1701:txtPg2mI2BSchdC` (sample: `0.00`)
-    pub txt_pg2m_i2bschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI2BSchdD` (sample: `0.00`)
-    pub txt_pg2m_i2bschd_d: f64,
-    /// BIR: `frm1701:txtPg2mI2CSchdC` (sample: `0.00`)
-    pub txt_pg2m_i2cschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI2DSchdC` (sample: `0.00`)
-    pub txt_pg2m_i2dschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI2DescSchdD` (sample: ``)
-    pub txt_pg2m_i2desc_schd_d: String,
-    /// BIR: `frm1701:txtPg2mI2LBSchdD` (sample: ``)
-    pub txt_pg2m_i2lbschd_d: String,
-    /// BIR: `frm1701:txtPg2mI3ASchdC` (sample: `0.00`)
-    pub txt_pg2m_i3aschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI3ASchdD` (sample: `0.00`)
-    pub txt_pg2m_i3aschd_d: f64,
-    /// BIR: `frm1701:txtPg2mI3BSchdC` (sample: `0.00`)
-    pub txt_pg2m_i3bschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI3BSchdD` (sample: `0.00`)
-    pub txt_pg2m_i3bschd_d: f64,
-    /// BIR: `frm1701:txtPg2mI3CSchdC` (sample: `0.00`)
-    pub txt_pg2m_i3cschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI3DSchdC` (sample: `0.00`)
-    pub txt_pg2m_i3dschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI3DescSchdD` (sample: ``)
-    pub txt_pg2m_i3desc_schd_d: String,
-    /// BIR: `frm1701:txtPg2mI3LBSchdD` (sample: ``)
-    pub txt_pg2m_i3lbschd_d: String,
-    /// BIR: `frm1701:txtPg2mI4ASchdC` (sample: `0.00`)
-    pub txt_pg2m_i4aschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI4ASchdD` (sample: `0.00`)
-    pub txt_pg2m_i4aschd_d: f64,
-    /// BIR: `frm1701:txtPg2mI4BSchdC` (sample: `0.00`)
-    pub txt_pg2m_i4bschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI4BSchdD` (sample: `0.00`)
-    pub txt_pg2m_i4bschd_d: f64,
-    /// BIR: `frm1701:txtPg2mI4CSchdC` (sample: `0.00`)
-    pub txt_pg2m_i4cschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI4DSchdC` (sample: `0.00`)
-    pub txt_pg2m_i4dschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI4DescSchdD` (sample: ``)
-    pub txt_pg2m_i4desc_schd_d: String,
-    /// BIR: `frm1701:txtPg2mI4LBSchdD` (sample: ``)
-    pub txt_pg2m_i4lbschd_d: String,
-    /// BIR: `frm1701:txtPg2mI5ASchdC` (sample: `0.00`)
-    pub txt_pg2m_i5aschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI5ASchdD` (sample: `0.00`)
-    pub txt_pg2m_i5aschd_d: f64,
-    /// BIR: `frm1701:txtPg2mI5BSchdC` (sample: `0.00`)
-    pub txt_pg2m_i5bschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI5BSchdD` (sample: `0.00`)
-    pub txt_pg2m_i5bschd_d: f64,
-    /// BIR: `frm1701:txtPg2mI5CSchdC` (sample: `0.00`)
-    pub txt_pg2m_i5cschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI5DSchdC` (sample: `0.00`)
-    pub txt_pg2m_i5dschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI6ASchdC` (sample: `0.00`)
-    pub txt_pg2m_i6aschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI6BSchdC` (sample: `0.00`)
-    pub txt_pg2m_i6bschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI6CSchdC` (sample: `0.00`)
-    pub txt_pg2m_i6cschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI6DSchdC` (sample: `0.00`)
-    pub txt_pg2m_i6dschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI7ASchdC` (sample: `0.00`)
-    pub txt_pg2m_i7aschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI7BSchdC` (sample: `0.00`)
-    pub txt_pg2m_i7bschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI7CSchdC` (sample: `0.00`)
-    pub txt_pg2m_i7cschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI7DSchdC` (sample: `0.00`)
-    pub txt_pg2m_i7dschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI8ASchdC` (sample: `0.00`)
-    pub txt_pg2m_i8aschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI8BSchdC` (sample: `0.00`)
-    pub txt_pg2m_i8bschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI8CSchdC` (sample: `0.00`)
-    pub txt_pg2m_i8cschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI8DSchdC` (sample: `0.00`)
-    pub txt_pg2m_i8dschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI9ASchdC` (sample: `0.00`)
-    pub txt_pg2m_i9aschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI9BSchdC` (sample: `0.00`)
-    pub txt_pg2m_i9bschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI9CSchdC` (sample: `0.00`)
-    pub txt_pg2m_i9cschd_c: f64,
-    /// BIR: `frm1701:txtPg2mI9DSchdC` (sample: `0.00`)
-    pub txt_pg2m_i9dschd_c: f64,
-    /// BIR: `frm1701:txtPg3IShed3_26A` (sample: `0.00`)
-    pub txt_pg3ished3_26a: f64,
-    /// BIR: `frm1701:txtPg3IShed3_26B` (sample: `0.00`)
-    pub txt_pg3ished3_26b: f64,
-    /// BIR: `frm1701:txtPg3IShed3_27A` (sample: `0.00`)
-    pub txt_pg3ished3_27a: f64,
-    /// BIR: `frm1701:txtPg3IShed3_27B` (sample: `0.00`)
-    pub txt_pg3ished3_27b: f64,
-    /// BIR: `frm1701:txtPg3IShed3_27Desc` (sample: ``)
-    pub txt_pg3ished3_27desc: String,
-    /// BIR: `frm1701:txtPg3IShed3_28A` (sample: `0.00`)
-    pub txt_pg3ished3_28a: f64,
-    /// BIR: `frm1701:txtPg3IShed3_28B` (sample: `0.00`)
-    pub txt_pg3ished3_28b: f64,
-    /// BIR: `frm1701:txtPg3IShed3_29A` (sample: `0.00`)
-    pub txt_pg3ished3_29a: f64,
-    /// BIR: `frm1701:txtPg3IShed3_29B` (sample: `0.00`)
-    pub txt_pg3ished3_29b: f64,
-    /// BIR: `frm1701:txtPg3IShed3_30A` (sample: `0.00`)
-    pub txt_pg3ished3_30a: f64,
-    /// BIR: `frm1701:txtPg3IShed3_30B` (sample: `0.00`)
-    pub txt_pg3ished3_30b: f64,
-    /// BIR: `frm1701:txtPg3IShed3_31A` (sample: `0.00`)
-    pub txt_pg3ished3_31a: f64,
-    /// BIR: `frm1701:txtPg3IShed3_31B` (sample: `0.00`)
-    pub txt_pg3ished3_31b: f64,
-    /// BIR: `frm1701:txtPg3IShed3_32A` (sample: `0.00`)
-    pub txt_pg3ished3_32a: f64,
-    /// BIR: `frm1701:txtPg3IShed3_32B` (sample: `0.00`)
-    pub txt_pg3ished3_32b: f64,
-    /// BIR: `frm1701:txtPg3IShed4_10A` (sample: `0.00`)
-    pub txt_pg3ished4_10a: f64,
-    /// BIR: `frm1701:txtPg3IShed4_10B` (sample: `0.00`)
-    pub txt_pg3ished4_10b: f64,
-    /// BIR: `frm1701:txtPg3IShed4_11A` (sample: `0.00`)
-    pub txt_pg3ished4_11a: f64,
-    /// BIR: `frm1701:txtPg3IShed4_11B` (sample: `0.00`)
-    pub txt_pg3ished4_11b: f64,
-    /// BIR: `frm1701:txtPg3IShed4_12A` (sample: `0.00`)
-    pub txt_pg3ished4_12a: f64,
-    /// BIR: `frm1701:txtPg3IShed4_12B` (sample: `0.00`)
-    pub txt_pg3ished4_12b: f64,
-    /// BIR: `frm1701:txtPg3IShed4_13A` (sample: `0.00`)
-    pub txt_pg3ished4_13a: f64,
-    /// BIR: `frm1701:txtPg3IShed4_13B` (sample: `0.00`)
-    pub txt_pg3ished4_13b: f64,
-    /// BIR: `frm1701:txtPg3IShed4_14A` (sample: `0.00`)
-    pub txt_pg3ished4_14a: f64,
-    /// BIR: `frm1701:txtPg3IShed4_14B` (sample: `0.00`)
-    pub txt_pg3ished4_14b: f64,
-    /// BIR: `frm1701:txtPg3IShed4_15A` (sample: `0.00`)
-    pub txt_pg3ished4_15a: f64,
-    /// BIR: `frm1701:txtPg3IShed4_15B` (sample: `0.00`)
-    pub txt_pg3ished4_15b: f64,
-    /// BIR: `frm1701:txtPg3IShed4_16A` (sample: `0.00`)
-    pub txt_pg3ished4_16a: f64,
-    /// BIR: `frm1701:txtPg3IShed4_16B` (sample: `0.00`)
-    pub txt_pg3ished4_16b: f64,
-    /// BIR: `frm1701:txtPg3IShed4_17aA` (sample: `0.00`)
-    pub txt_pg3ished4_17a_a: f64,
-    /// BIR: `frm1701:txtPg3IShed4_17aB` (sample: `0.00`)
-    pub txt_pg3ished4_17a_b: f64,
-    /// BIR: `frm1701:txtPg3IShed4_17bA` (sample: `0.00`)
-    pub txt_pg3ished4_17b_a: f64,
-    /// BIR: `frm1701:txtPg3IShed4_17bB` (sample: `0.00`)
-    pub txt_pg3ished4_17b_b: f64,
-    /// BIR: `frm1701:txtPg3IShed4_17cA` (sample: `0.00`)
-    pub txt_pg3ished4_17c_a: f64,
-    /// BIR: `frm1701:txtPg3IShed4_17cB` (sample: `0.00`)
-    pub txt_pg3ished4_17c_b: f64,
-    /// BIR: `frm1701:txtPg3IShed4_17dA` (sample: `0.00`)
-    pub txt_pg3ished4_17d_a: f64,
-    /// BIR: `frm1701:txtPg3IShed4_17dB` (sample: `0.00`)
-    pub txt_pg3ished4_17d_b: f64,
-    /// BIR: `frm1701:txtPg3IShed4_17dDesc` (sample: ``)
-    pub txt_pg3ished4_17d_desc: String,
-    /// BIR: `frm1701:txtPg3IShed4_18A` (sample: `0.00`)
-    pub txt_pg3ished4_18a: f64,
-    /// BIR: `frm1701:txtPg3IShed4_18B` (sample: `0.00`)
-    pub txt_pg3ished4_18b: f64,
-    /// BIR: `frm1701:txtPg3IShed4_1A` (sample: `0.00`)
-    pub txt_pg3ished4_1a: f64,
-    /// BIR: `frm1701:txtPg3IShed4_1B` (sample: `0.00`)
-    pub txt_pg3ished4_1b: f64,
-    /// BIR: `frm1701:txtPg3IShed4_2A` (sample: `0.00`)
-    pub txt_pg3ished4_2a: f64,
-    /// BIR: `frm1701:txtPg3IShed4_2B` (sample: `0.00`)
-    pub txt_pg3ished4_2b: f64,
-    /// BIR: `frm1701:txtPg3IShed4_3A` (sample: `0.00`)
-    pub txt_pg3ished4_3a: f64,
-    /// BIR: `frm1701:txtPg3IShed4_3B` (sample: `0.00`)
-    pub txt_pg3ished4_3b: f64,
-    /// BIR: `frm1701:txtPg3IShed4_4A` (sample: `0.00`)
-    pub txt_pg3ished4_4a: f64,
-    /// BIR: `frm1701:txtPg3IShed4_4B` (sample: `0.00`)
-    pub txt_pg3ished4_4b: f64,
-    /// BIR: `frm1701:txtPg3IShed4_5A` (sample: `0.00`)
-    pub txt_pg3ished4_5a: f64,
-    /// BIR: `frm1701:txtPg3IShed4_5B` (sample: `0.00`)
-    pub txt_pg3ished4_5b: f64,
-    /// BIR: `frm1701:txtPg3IShed4_6A` (sample: `0.00`)
-    pub txt_pg3ished4_6a: f64,
-    /// BIR: `frm1701:txtPg3IShed4_6B` (sample: `0.00`)
-    pub txt_pg3ished4_6b: f64,
-    /// BIR: `frm1701:txtPg3IShed4_7A` (sample: `0.00`)
-    pub txt_pg3ished4_7a: f64,
-    /// BIR: `frm1701:txtPg3IShed4_7B` (sample: `0.00`)
-    pub txt_pg3ished4_7b: f64,
-    /// BIR: `frm1701:txtPg3IShed4_8A` (sample: `0.00`)
-    pub txt_pg3ished4_8a: f64,
-    /// BIR: `frm1701:txtPg3IShed4_8B` (sample: `0.00`)
-    pub txt_pg3ished4_8b: f64,
-    /// BIR: `frm1701:txtPg3IShed4_9A` (sample: `0.00`)
-    pub txt_pg3ished4_9a: f64,
-    /// BIR: `frm1701:txtPg3IShed4_9B` (sample: `0.00`)
-    pub txt_pg3ished4_9b: f64,
-    /// BIR: `frm1701:txtPg3IShed5_1Amt` (sample: `0.00`)
-    pub txt_pg3ished5_1amt: f64,
-    /// BIR: `frm1701:txtPg3IShed5_1Desc` (sample: ``)
-    pub txt_pg3ished5_1desc: String,
-    /// BIR: `frm1701:txtPg3IShed5_1Legal` (sample: ``)
-    pub txt_pg3ished5_1legal: String,
-    /// BIR: `frm1701:txtPg3IShed5_2Amt` (sample: `0.00`)
-    pub txt_pg3ished5_2amt: f64,
-    /// BIR: `frm1701:txtPg3IShed5_2Desc` (sample: ``)
-    pub txt_pg3ished5_2desc: String,
-    /// BIR: `frm1701:txtPg3IShed5_2Legal` (sample: ``)
-    pub txt_pg3ished5_2legal: String,
-    /// BIR: `frm1701:txtPg3IShed5_3` (sample: `0.00`)
-    pub txt_pg3ished5_3: f64,
-    /// BIR: `frm1701:txtPg3IShed5_4Amt` (sample: `0.00`)
-    pub txt_pg3ished5_4amt: f64,
-    /// BIR: `frm1701:txtPg3IShed5_4Desc` (sample: ``)
-    pub txt_pg3ished5_4desc: String,
-    /// BIR: `frm1701:txtPg3IShed5_4Legal` (sample: ``)
-    pub txt_pg3ished5_4legal: String,
-    /// BIR: `frm1701:txtPg3IShed5_5Amt` (sample: `0.00`)
-    pub txt_pg3ished5_5amt: f64,
-    /// BIR: `frm1701:txtPg3IShed5_5Desc` (sample: ``)
-    pub txt_pg3ished5_5desc: String,
-    /// BIR: `frm1701:txtPg3IShed5_5Legal` (sample: ``)
-    pub txt_pg3ished5_5legal: String,
-    /// BIR: `frm1701:txtPg3IShed5_6` (sample: `0.00`)
-    pub txt_pg3ished5_6: f64,
-    /// BIR: `frm1701:txtPg3IShed6_1A` (sample: `0.00`)
-    pub txt_pg3ished6_1a: f64,
-    /// BIR: `frm1701:txtPg3IShed6_1B` (sample: `0.00`)
-    pub txt_pg3ished6_1b: f64,
-    /// BIR: `frm1701:txtPg3IShed6_2A` (sample: `0.00`)
-    pub txt_pg3ished6_2a: f64,
-    /// BIR: `frm1701:txtPg3IShed6_2B` (sample: `0.00`)
-    pub txt_pg3ished6_2b: f64,
-    /// BIR: `frm1701:txtPg3IShed6_3A` (sample: `0.00`)
-    pub txt_pg3ished6_3a: f64,
-    /// BIR: `frm1701:txtPg3IShed6_3B` (sample: `0.00`)
-    pub txt_pg3ished6_3b: f64,
-    /// BIR: `frm1701:txtPg3IShed6_4A` (sample: `0.00`)
-    pub txt_pg3ished6_4a: f64,
-    /// BIR: `frm1701:txtPg3IShed6_4B` (sample: `0.00`)
-    pub txt_pg3ished6_4b: f64,
-    /// BIR: `frm1701:txtPg3IShed6_4C` (sample: `0.00`)
-    pub txt_pg3ished6_4c: f64,
-    /// BIR: `frm1701:txtPg3IShed6_4D` (sample: `0.00`)
-    pub txt_pg3ished6_4d: f64,
-    /// BIR: `frm1701:txtPg3IShed6_4E` (sample: `0.00`)
-    pub txt_pg3ished6_4e: f64,
-    /// BIR: `frm1701:txtPg3IShed6_5A` (sample: `0.00`)
-    pub txt_pg3ished6_5a: f64,
-    /// BIR: `frm1701:txtPg3IShed6_5B` (sample: `0.00`)
-    pub txt_pg3ished6_5b: f64,
-    /// BIR: `frm1701:txtPg3IShed6_5C` (sample: `0.00`)
-    pub txt_pg3ished6_5c: f64,
-    /// BIR: `frm1701:txtPg3IShed6_5D` (sample: `0.00`)
-    pub txt_pg3ished6_5d: f64,
-    /// BIR: `frm1701:txtPg3IShed6_5E` (sample: `0.00`)
-    pub txt_pg3ished6_5e: f64,
-    /// BIR: `frm1701:txtPg3IShed6_6A` (sample: `0.00`)
-    pub txt_pg3ished6_6a: f64,
-    /// BIR: `frm1701:txtPg3IShed6_6B` (sample: `0.00`)
-    pub txt_pg3ished6_6b: f64,
-    /// BIR: `frm1701:txtPg3IShed6_6C` (sample: `0.00`)
-    pub txt_pg3ished6_6c: f64,
-    /// BIR: `frm1701:txtPg3IShed6_6D` (sample: `0.00`)
-    pub txt_pg3ished6_6d: f64,
-    /// BIR: `frm1701:txtPg3IShed6_6E` (sample: `0.00`)
-    pub txt_pg3ished6_6e: f64,
-    /// BIR: `frm1701:txtPg3IShed6_7A` (sample: `0.00`)
-    pub txt_pg3ished6_7a: f64,
-    /// BIR: `frm1701:txtPg3IShed6_7B` (sample: `0.00`)
-    pub txt_pg3ished6_7b: f64,
-    /// BIR: `frm1701:txtPg3IShed6_7C` (sample: `0.00`)
-    pub txt_pg3ished6_7c: f64,
-    /// BIR: `frm1701:txtPg3IShed6_7D` (sample: `0.00`)
-    pub txt_pg3ished6_7d: f64,
-    /// BIR: `frm1701:txtPg3IShed6_7E` (sample: `0.00`)
-    pub txt_pg3ished6_7e: f64,
-    /// BIR: `frm1701:txtPg3IShed6_8D` (sample: `0.00`)
-    pub txt_pg3ished6_8d: f64,
-    /// BIR: `frm1701:txtPg3mSchedA_1ATYPE` (sample: ``)
-    pub txt_pg3m_sched_a_1atype: String,
-    /// BIR: `frm1701:txtPg3mSchedA_1BTYPE` (sample: ``)
-    pub txt_pg3m_sched_a_1btype: String,
-    /// BIR: `frm1701:txtPg3mSchedA_2ATYPE` (sample: ``)
-    pub txt_pg3m_sched_a_2atype: String,
-    /// BIR: `frm1701:txtPg3mSchedA_2BTYPE` (sample: ``)
-    pub txt_pg3m_sched_a_2btype: String,
-    /// BIR: `frm1701:txtPg3mSchedA_3ATYPE` (sample: ``)
-    pub txt_pg3m_sched_a_3atype: String,
-    /// BIR: `frm1701:txtPg3mSchedA_3BTYPE` (sample: ``)
-    pub txt_pg3m_sched_a_3btype: String,
-    /// BIR: `frm1701:txtPg3mSchedA_4ATYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_a_4atype: f64,
-    /// BIR: `frm1701:txtPg3mSchedA_4BTYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_a_4btype: f64,
-    /// BIR: `frm1701:txtPg3mSchedA_5ATYPE` (sample: ``)
-    pub txt_pg3m_sched_a_5atype: String,
-    /// BIR: `frm1701:txtPg3mSchedA_5BTYPE` (sample: ``)
-    pub txt_pg3m_sched_a_5btype: String,
-    /// BIR: `frm1701:txtPg3mSchedA_6ATYPE` (sample: ``)
-    pub txt_pg3m_sched_a_6atype: String,
-    /// BIR: `frm1701:txtPg3mSchedA_6BTYPE` (sample: ``)
-    pub txt_pg3m_sched_a_6btype: String,
-    /// BIR: `frm1701:txtPg3mSchedB_10ATYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_10atype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_10BTYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_10btype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_10TYPE` (sample: ``)
-    pub txt_pg3m_sched_b_10type: String,
-    /// BIR: `frm1701:txtPg3mSchedB_11ATYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_11atype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_11BTYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_11btype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_11TYPE` (sample: ``)
-    pub txt_pg3m_sched_b_11type: String,
-    /// BIR: `frm1701:txtPg3mSchedB_12ATYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_12atype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_12BTYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_12btype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_13ATYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_13atype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_13BTYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_13btype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_14ATYPE` (sample: `0.0`)
-    pub txt_pg3m_sched_b_14atype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_14BTYPE` (sample: `0.0`)
-    pub txt_pg3m_sched_b_14btype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_15ATYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_15atype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_15BTYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_15btype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_1ATYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_1atype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_1BTYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_1btype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_2ATYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_2atype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_2BTYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_2btype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_3ATYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_3atype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_3BTYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_3btype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_4ATYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_4atype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_4BTYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_4btype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_5ATYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_5atype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_5BTYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_5btype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_6ATYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_6atype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_6BTYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_6btype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_7ATYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_7atype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_7BTYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_7btype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_8ATYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_8atype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_8BTYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_8btype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_9ATYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_9atype: f64,
-    /// BIR: `frm1701:txtPg3mSchedB_9BTYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_b_9btype: f64,
-    /// BIR: `frm1701:txtPg3mSchedC_1ATYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_c_1atype: f64,
-    /// BIR: `frm1701:txtPg3mSchedC_1BTYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_c_1btype: f64,
-    /// BIR: `frm1701:txtPg3mSchedC_2ATYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_c_2atype: f64,
-    /// BIR: `frm1701:txtPg3mSchedC_2BTYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_c_2btype: f64,
-    /// BIR: `frm1701:txtPg3mSchedC_3ATYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_c_3atype: f64,
-    /// BIR: `frm1701:txtPg3mSchedC_3BTYPE` (sample: `0.00`)
-    pub txt_pg3m_sched_c_3btype: f64,
-    /// BIR: `frm1701:txtPg4IPart7_10A` (sample: `0.00`)
-    pub txt_pg4ipart7_10a: f64,
-    /// BIR: `frm1701:txtPg4IPart7_10B` (sample: `0.00`)
-    pub txt_pg4ipart7_10b: f64,
-    /// BIR: `frm1701:txtPg4IPart7_1A` (sample: `0.00`)
-    pub txt_pg4ipart7_1a: f64,
-    /// BIR: `frm1701:txtPg4IPart7_1B` (sample: `0.00`)
-    pub txt_pg4ipart7_1b: f64,
-    /// BIR: `frm1701:txtPg4IPart7_2A` (sample: `0.00`)
-    pub txt_pg4ipart7_2a: f64,
-    /// BIR: `frm1701:txtPg4IPart7_2B` (sample: `0.00`)
-    pub txt_pg4ipart7_2b: f64,
-    /// BIR: `frm1701:txtPg4IPart7_3A` (sample: `0.00`)
-    pub txt_pg4ipart7_3a: f64,
-    /// BIR: `frm1701:txtPg4IPart7_3B` (sample: `0.00`)
-    pub txt_pg4ipart7_3b: f64,
-    /// BIR: `frm1701:txtPg4IPart7_4A` (sample: `0.00`)
-    pub txt_pg4ipart7_4a: f64,
-    /// BIR: `frm1701:txtPg4IPart7_4B` (sample: `0.00`)
-    pub txt_pg4ipart7_4b: f64,
-    /// BIR: `frm1701:txtPg4IPart7_5A` (sample: `0.00`)
-    pub txt_pg4ipart7_5a: f64,
-    /// BIR: `frm1701:txtPg4IPart7_5B` (sample: `0.00`)
-    pub txt_pg4ipart7_5b: f64,
-    /// BIR: `frm1701:txtPg4IPart7_6A` (sample: `0.00`)
-    pub txt_pg4ipart7_6a: f64,
-    /// BIR: `frm1701:txtPg4IPart7_6B` (sample: `0.00`)
-    pub txt_pg4ipart7_6b: f64,
-    /// BIR: `frm1701:txtPg4IPart7_7A` (sample: `0.00`)
-    pub txt_pg4ipart7_7a: f64,
-    /// BIR: `frm1701:txtPg4IPart7_7B` (sample: `0.00`)
-    pub txt_pg4ipart7_7b: f64,
-    /// BIR: `frm1701:txtPg4IPart7_8A` (sample: `0.00`)
-    pub txt_pg4ipart7_8a: f64,
-    /// BIR: `frm1701:txtPg4IPart7_8B` (sample: `0.00`)
-    pub txt_pg4ipart7_8b: f64,
-    /// BIR: `frm1701:txtPg4IPart7_9A` (sample: `0.00`)
-    pub txt_pg4ipart7_9a: f64,
-    /// BIR: `frm1701:txtPg4IPart7_9B` (sample: `0.00`)
-    pub txt_pg4ipart7_9b: f64,
-    /// BIR: `frm1701:txtPg4IPart7_9Specify` (sample: ``)
-    pub txt_pg4ipart7_9specify: String,
-    /// BIR: `frm1701:txtPg4IPart8_10A` (sample: `0.00`)
-    pub txt_pg4ipart8_10a: f64,
-    /// BIR: `frm1701:txtPg4IPart8_10B` (sample: `0.00`)
-    pub txt_pg4ipart8_10b: f64,
-    /// BIR: `frm1701:txtPg4IPart8_1A` (sample: `0.00`)
-    pub txt_pg4ipart8_1a: f64,
-    /// BIR: `frm1701:txtPg4IPart8_1B` (sample: `0.00`)
-    pub txt_pg4ipart8_1b: f64,
-    /// BIR: `frm1701:txtPg4IPart8_2A` (sample: `0.00`)
-    pub txt_pg4ipart8_2a: f64,
-    /// BIR: `frm1701:txtPg4IPart8_2B` (sample: `0.00`)
-    pub txt_pg4ipart8_2b: f64,
-    /// BIR: `frm1701:txtPg4IPart8_3A` (sample: `0.00`)
-    pub txt_pg4ipart8_3a: f64,
-    /// BIR: `frm1701:txtPg4IPart8_3B` (sample: `0.00`)
-    pub txt_pg4ipart8_3b: f64,
-    /// BIR: `frm1701:txtPg4IPart8_4A` (sample: `0.00`)
-    pub txt_pg4ipart8_4a: f64,
-    /// BIR: `frm1701:txtPg4IPart8_4B` (sample: `0.00`)
-    pub txt_pg4ipart8_4b: f64,
-    /// BIR: `frm1701:txtPg4IPart8_5A` (sample: `0.00`)
-    pub txt_pg4ipart8_5a: f64,
-    /// BIR: `frm1701:txtPg4IPart8_5B` (sample: `0.00`)
-    pub txt_pg4ipart8_5b: f64,
-    /// BIR: `frm1701:txtPg4IPart8_6A` (sample: `0.00`)
-    pub txt_pg4ipart8_6a: f64,
-    /// BIR: `frm1701:txtPg4IPart8_6B` (sample: `0.00`)
-    pub txt_pg4ipart8_6b: f64,
-    /// BIR: `frm1701:txtPg4IPart8_7A` (sample: `0.00`)
-    pub txt_pg4ipart8_7a: f64,
-    /// BIR: `frm1701:txtPg4IPart8_7B` (sample: `0.00`)
-    pub txt_pg4ipart8_7b: f64,
-    /// BIR: `frm1701:txtPg4IPart8_8A` (sample: `0.00`)
-    pub txt_pg4ipart8_8a: f64,
-    /// BIR: `frm1701:txtPg4IPart8_8B` (sample: `0.00`)
-    pub txt_pg4ipart8_8b: f64,
-    /// BIR: `frm1701:txtPg4IPart8_9A` (sample: `0.00`)
-    pub txt_pg4ipart8_9a: f64,
-    /// BIR: `frm1701:txtPg4IPart8_9B` (sample: `0.00`)
-    pub txt_pg4ipart8_9b: f64,
-    /// BIR: `frm1701:txtPg4IPart9_10A` (sample: `0.00`)
-    pub txt_pg4ipart9_10a: f64,
-    /// BIR: `frm1701:txtPg4IPart9_10B` (sample: `0.00`)
-    pub txt_pg4ipart9_10b: f64,
-    /// BIR: `frm1701:txtPg4IPart9_11A` (sample: `0.00`)
-    pub txt_pg4ipart9_11a: f64,
-    /// BIR: `frm1701:txtPg4IPart9_11B` (sample: `0.00`)
-    pub txt_pg4ipart9_11b: f64,
-    /// BIR: `frm1701:txtPg4IPart9_1A` (sample: `0.00`)
-    pub txt_pg4ipart9_1a: f64,
-    /// BIR: `frm1701:txtPg4IPart9_1B` (sample: `0.00`)
-    pub txt_pg4ipart9_1b: f64,
-    /// BIR: `frm1701:txtPg4IPart9_2A` (sample: `0.00`)
-    pub txt_pg4ipart9_2a: f64,
-    /// BIR: `frm1701:txtPg4IPart9_2B` (sample: `0.00`)
-    pub txt_pg4ipart9_2b: f64,
-    /// BIR: `frm1701:txtPg4IPart9_2Particulars` (sample: ``)
-    pub txt_pg4ipart9_2particulars: String,
-    /// BIR: `frm1701:txtPg4IPart9_3A` (sample: `0.00`)
-    pub txt_pg4ipart9_3a: f64,
-    /// BIR: `frm1701:txtPg4IPart9_3B` (sample: `0.00`)
-    pub txt_pg4ipart9_3b: f64,
-    /// BIR: `frm1701:txtPg4IPart9_3Particulars` (sample: ``)
-    pub txt_pg4ipart9_3particulars: String,
-    /// BIR: `frm1701:txtPg4IPart9_4A` (sample: `0.00`)
-    pub txt_pg4ipart9_4a: f64,
-    /// BIR: `frm1701:txtPg4IPart9_4B` (sample: `0.00`)
-    pub txt_pg4ipart9_4b: f64,
-    /// BIR: `frm1701:txtPg4IPart9_4Particulars` (sample: ``)
-    pub txt_pg4ipart9_4particulars: String,
-    /// BIR: `frm1701:txtPg4IPart9_5A` (sample: `0.00`)
-    pub txt_pg4ipart9_5a: f64,
-    /// BIR: `frm1701:txtPg4IPart9_5B` (sample: `0.00`)
-    pub txt_pg4ipart9_5b: f64,
-    /// BIR: `frm1701:txtPg4IPart9_6A` (sample: `0.00`)
-    pub txt_pg4ipart9_6a: f64,
-    /// BIR: `frm1701:txtPg4IPart9_6B` (sample: `0.00`)
-    pub txt_pg4ipart9_6b: f64,
-    /// BIR: `frm1701:txtPg4IPart9_6Particulars` (sample: ``)
-    pub txt_pg4ipart9_6particulars: String,
-    /// BIR: `frm1701:txtPg4IPart9_7A` (sample: `0.00`)
-    pub txt_pg4ipart9_7a: f64,
-    /// BIR: `frm1701:txtPg4IPart9_7B` (sample: `0.00`)
-    pub txt_pg4ipart9_7b: f64,
-    /// BIR: `frm1701:txtPg4IPart9_7Particulars` (sample: ``)
-    pub txt_pg4ipart9_7particulars: String,
-    /// BIR: `frm1701:txtPg4IPart9_8A` (sample: `0.00`)
-    pub txt_pg4ipart9_8a: f64,
-    /// BIR: `frm1701:txtPg4IPart9_8B` (sample: `0.00`)
-    pub txt_pg4ipart9_8b: f64,
-    /// BIR: `frm1701:txtPg4IPart9_8Particulars` (sample: ``)
-    pub txt_pg4ipart9_8particulars: String,
-    /// BIR: `frm1701:txtPg4IPart9_9A` (sample: `0.00`)
-    pub txt_pg4ipart9_9a: f64,
-    /// BIR: `frm1701:txtPg4IPart9_9B` (sample: `0.00`)
-    pub txt_pg4ipart9_9b: f64,
-    /// BIR: `frm1701:txtPg4IPart9_9Particulars` (sample: ``)
-    pub txt_pg4ipart9_9particulars: String,
-    /// BIR: `frm1701:txtPg4ISc6_1A` (sample: `0.00`)
-    pub txt_pg4isc6_1a: f64,
-    /// BIR: `frm1701:txtPg4ISc6_1B` (sample: `0.00`)
-    pub txt_pg4isc6_1b: f64,
-    /// BIR: `frm1701:txtPg4ISc6_2A` (sample: `0.00`)
-    pub txt_pg4isc6_2a: f64,
-    /// BIR: `frm1701:txtPg4ISc6_2B` (sample: `0.00`)
-    pub txt_pg4isc6_2b: f64,
-    /// BIR: `frm1701:txtPg4ISc6_3A` (sample: `0.00`)
-    pub txt_pg4isc6_3a: f64,
-    /// BIR: `frm1701:txtPg4ISc6_3B` (sample: `0.00`)
-    pub txt_pg4isc6_3b: f64,
-    /// BIR: `frm1701:txtPg4ISc6_4A` (sample: `0.00`)
-    pub txt_pg4isc6_4a: f64,
-    /// BIR: `frm1701:txtPg4ISc6_4B` (sample: `0.00`)
-    pub txt_pg4isc6_4b: f64,
-    /// BIR: `frm1701:txtPg4ISc6_5A` (sample: `0.00`)
-    pub txt_pg4isc6_5a: f64,
-    /// BIR: `frm1701:txtPg4ISc6_5B` (sample: `0.00`)
-    pub txt_pg4isc6_5b: f64,
-    /// BIR: `frm1701:txtPg4IShed6_10A` (sample: `0.00`)
-    pub txt_pg4ished6_10a: f64,
-    /// BIR: `frm1701:txtPg4IShed6_10B` (sample: `0.00`)
-    pub txt_pg4ished6_10b: f64,
-    /// BIR: `frm1701:txtPg4IShed6_10C` (sample: `0.00`)
-    pub txt_pg4ished6_10c: f64,
-    /// BIR: `frm1701:txtPg4IShed6_10D` (sample: `0.00`)
-    pub txt_pg4ished6_10d: f64,
-    /// BIR: `frm1701:txtPg4IShed6_10E` (sample: `0.00`)
-    pub txt_pg4ished6_10e: f64,
-    /// BIR: `frm1701:txtPg4IShed6_11A` (sample: `0.00`)
-    pub txt_pg4ished6_11a: f64,
-    /// BIR: `frm1701:txtPg4IShed6_11B` (sample: `0.00`)
-    pub txt_pg4ished6_11b: f64,
-    /// BIR: `frm1701:txtPg4IShed6_11C` (sample: `0.00`)
-    pub txt_pg4ished6_11c: f64,
-    /// BIR: `frm1701:txtPg4IShed6_11D` (sample: `0.00`)
-    pub txt_pg4ished6_11d: f64,
-    /// BIR: `frm1701:txtPg4IShed6_11E` (sample: `0.00`)
-    pub txt_pg4ished6_11e: f64,
-    /// BIR: `frm1701:txtPg4IShed6_12A` (sample: `0.00`)
-    pub txt_pg4ished6_12a: f64,
-    /// BIR: `frm1701:txtPg4IShed6_12B` (sample: `0.00`)
-    pub txt_pg4ished6_12b: f64,
-    /// BIR: `frm1701:txtPg4IShed6_12C` (sample: `0.00`)
-    pub txt_pg4ished6_12c: f64,
-    /// BIR: `frm1701:txtPg4IShed6_12D` (sample: `0.00`)
-    pub txt_pg4ished6_12d: f64,
-    /// BIR: `frm1701:txtPg4IShed6_12E` (sample: `0.00`)
-    pub txt_pg4ished6_12e: f64,
-    /// BIR: `frm1701:txtPg4IShed6_13D` (sample: `0.00`)
-    pub txt_pg4ished6_13d: f64,
-    /// BIR: `frm1701:txtPg4IShed6_9A` (sample: `0.00`)
-    pub txt_pg4ished6_9a: f64,
-    /// BIR: `frm1701:txtPg4IShed6_9B` (sample: `0.00`)
-    pub txt_pg4ished6_9b: f64,
-    /// BIR: `frm1701:txtPg4IShed6_9C` (sample: `0.00`)
-    pub txt_pg4ished6_9c: f64,
-    /// BIR: `frm1701:txtPg4IShed6_9D` (sample: `0.00`)
-    pub txt_pg4ished6_9d: f64,
-    /// BIR: `frm1701:txtPg4IShed6_9E` (sample: `0.00`)
-    pub txt_pg4ished6_9e: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_10ATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_10atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_10BTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_10btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_11ATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_11atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_11BTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_11btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_12ATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_12atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_12BTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_12btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_13ATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_13atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_13BTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_13btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_14ATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_14atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_14BTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_14btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_15ATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_15atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_15BTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_15btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_16ATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_16atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_16BTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_16btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_17aATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_17a_atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_17aBTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_17a_btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_17bATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_17b_atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_17bBTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_17b_btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_17cATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_17c_atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_17cBTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_17c_btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_17dATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_17d_atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_17dBTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_17d_btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_17dTYPE` (sample: ``)
-    pub txt_pg4m_sched_c_17d_type: String,
-    /// BIR: `frm1701:txtPg4mSchedC_18ATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_18atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_18BTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_18btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_4ATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_4atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_4BTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_4btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_5ATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_5atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_5BTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_5btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_6ATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_6atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_6BTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_6btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_7ATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_7atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_7BTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_7btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_8ATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_8atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_8BTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_8btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_9ATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_9atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedC_9BTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_c_9btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedD1_1ALBTYPE` (sample: ``)
-    pub txt_pg4m_sched_d1_1albtype: String,
-    /// BIR: `frm1701:txtPg4mSchedD1_1ATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_d1_1atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedD1_1TYPE` (sample: ``)
-    pub txt_pg4m_sched_d1_1type: String,
-    /// BIR: `frm1701:txtPg4mSchedD1_2ALBTYPE` (sample: ``)
-    pub txt_pg4m_sched_d1_2albtype: String,
-    /// BIR: `frm1701:txtPg4mSchedD1_2ATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_d1_2atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedD1_2TYPE` (sample: ``)
-    pub txt_pg4m_sched_d1_2type: String,
-    /// BIR: `frm1701:txtPg4mSchedD1_3ALBTYPE` (sample: ``)
-    pub txt_pg4m_sched_d1_3albtype: String,
-    /// BIR: `frm1701:txtPg4mSchedD1_3ATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_d1_3atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedD1_3TYPE` (sample: ``)
-    pub txt_pg4m_sched_d1_3type: String,
-    /// BIR: `frm1701:txtPg4mSchedD1_4ALBTYPE` (sample: ``)
-    pub txt_pg4m_sched_d1_4albtype: String,
-    /// BIR: `frm1701:txtPg4mSchedD1_4ATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_d1_4atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedD1_4TYPE` (sample: ``)
-    pub txt_pg4m_sched_d1_4type: String,
-    /// BIR: `frm1701:txtPg4mSchedD1_5ATYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_d1_5atype: f64,
-    /// BIR: `frm1701:txtPg4mSchedD2_10BTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_d2_10btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedD2_6BLBTYPE` (sample: ``)
-    pub txt_pg4m_sched_d2_6blbtype: String,
-    /// BIR: `frm1701:txtPg4mSchedD2_6BTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_d2_6btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedD2_6TYPE` (sample: ``)
-    pub txt_pg4m_sched_d2_6type: String,
-    /// BIR: `frm1701:txtPg4mSchedD2_7BLBTYPE` (sample: ``)
-    pub txt_pg4m_sched_d2_7blbtype: String,
-    /// BIR: `frm1701:txtPg4mSchedD2_7BTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_d2_7btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedD2_7TYPE` (sample: ``)
-    pub txt_pg4m_sched_d2_7type: String,
-    /// BIR: `frm1701:txtPg4mSchedD2_8BTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_d2_8btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedD2_8LBBTYPE` (sample: ``)
-    pub txt_pg4m_sched_d2_8lbbtype: String,
-    /// BIR: `frm1701:txtPg4mSchedD2_8TYPE` (sample: ``)
-    pub txt_pg4m_sched_d2_8type: String,
-    /// BIR: `frm1701:txtPg4mSchedD2_9BLBTYPE` (sample: ``)
-    pub txt_pg4m_sched_d2_9blbtype: String,
-    /// BIR: `frm1701:txtPg4mSchedD2_9BTYPE` (sample: `0.00`)
-    pub txt_pg4m_sched_d2_9btype: f64,
-    /// BIR: `frm1701:txtPg4mSchedD2_9TYPE` (sample: ``)
-    pub txt_pg4m_sched_d2_9type: String,
-    /// BIR: `frm1701:txtTIN4` (sample: ``)
-    pub txt_tin4: String,
-    /// BIR: `frm1701:txtVersion` (sample: `051414`)
-    pub txt_version: u32,
-    /// BIR: `frm1701:txtZIP` (sample: ``)
-    pub txt_zip: String,
-    /// BIR: `frm1701:txtdisabledID` (sample: ``)
-    pub txtdisabled_id: String,
-
-    // === Lifecycle ===
-    pub status: FilingStatus,
-    pub created_at: String,
-    pub updated_at: String,
-    #[serde(default)]
-    pub submitted_at: Option<String>,
-    #[serde(default)]
-    pub confirmed_at: Option<String>,
-    #[serde(default)]
-    pub submission_filename: Option<String>,
-    #[serde(default)]
-    pub receipt_id: Option<i64>,
-    #[serde(default)]
-    pub submission_attempts: u32,
-    #[serde(default)]
-    pub next_retry_at: Option<String>,
-    #[serde(default)]
-    pub last_error: Option<String>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum Form1701Party {
+    Taxpayer,
+    Spouse,
 }
 
-impl FormValidator for Form1701Draft {
-    fn validate(&self) -> Vec<(String, String)> {
-        let mut errors = Vec::new();
-        if self.tin.is_empty() {
-            errors.push(("tin".into(), "TIN is required".into()));
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Form1701TaxpayerType {
+    SingleProprietor,
+    Professional,
+    Estate,
+    Trust,
+    CompensationEarner,
+}
+
+impl Form1701TaxpayerType {
+    pub const ALL: [Self; 5] = [
+        Self::SingleProprietor,
+        Self::Professional,
+        Self::Estate,
+        Self::Trust,
+        Self::CompensationEarner,
+    ];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::SingleProprietor => "Single Proprietor",
+            Self::Professional => "Professional",
+            Self::Estate => "Estate",
+            Self::Trust => "Trust",
+            Self::CompensationEarner => "Compensation Earner",
         }
-        if self.taxpayer_name.is_empty() {
-            errors.push(("taxpayer_name".into(), "Taxpayer name is required".into()));
-        }
-        // TODO: Add form-specific validation rules
-        errors
     }
 }
 
-impl Form1701Draft {
-    /// Create a new draft from a taxpayer profile.
-    pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, month: u8) -> Self {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Form1701SpouseType {
+    SingleProprietor,
+    Professional,
+    CompensationEarner,
+}
+
+impl Form1701SpouseType {
+    pub const ALL: [Self; 3] = [
+        Self::SingleProprietor,
+        Self::Professional,
+        Self::CompensationEarner,
+    ];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::SingleProprietor => "Single Proprietor",
+            Self::Professional => "Professional",
+            Self::CompensationEarner => "Compensation Earner",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum Form1701Atc {
+    Ii011,
+    Ii012,
+    Ii013,
+    Ii014,
+    Ii015,
+    Ii016,
+    Ii017,
+}
+
+impl Form1701Atc {
+    pub const ALL: [Self; 7] = [
+        Self::Ii011,
+        Self::Ii012,
+        Self::Ii013,
+        Self::Ii014,
+        Self::Ii015,
+        Self::Ii016,
+        Self::Ii017,
+    ];
+
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::Ii011 => "II011",
+            Self::Ii012 => "II012",
+            Self::Ii013 => "II013",
+            Self::Ii014 => "II014",
+            Self::Ii015 => "II015",
+            Self::Ii016 => "II016",
+            Self::Ii017 => "II017",
+        }
+    }
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Ii011 => "Compensation Income",
+            Self::Ii012 => "Business Income - Graduated IT Rates",
+            Self::Ii013 => "Mixed Income - Graduated IT Rates",
+            Self::Ii014 => "Income from Profession - Graduated IT Rates",
+            Self::Ii015 => "Business Income - 8% IT Rate",
+            Self::Ii016 => "Mixed Income - 8% IT Rate",
+            Self::Ii017 => "Income from Profession - 8% IT Rate",
+        }
+    }
+
+    pub const fn tax_rate(self) -> Option<Form1701TaxRate> {
+        match self {
+            Self::Ii011 => None,
+            Self::Ii012 | Self::Ii013 | Self::Ii014 => Some(Form1701TaxRate::Graduated),
+            Self::Ii015 | Self::Ii016 | Self::Ii017 => Some(Form1701TaxRate::EightPercent),
+        }
+    }
+
+    pub const fn gets_eight_percent_reduction(self) -> bool {
+        matches!(self, Self::Ii015 | Self::Ii017)
+    }
+
+    pub fn from_code(code: &str) -> Option<Self> {
+        match code.trim().to_ascii_uppercase().as_str() {
+            "II011" => Some(Self::Ii011),
+            "II012" => Some(Self::Ii012),
+            "II013" => Some(Self::Ii013),
+            "II014" => Some(Self::Ii014),
+            "II015" => Some(Self::Ii015),
+            "II016" => Some(Self::Ii016),
+            "II017" => Some(Self::Ii017),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Form1701TaxRate {
+    Graduated,
+    EightPercent,
+}
+
+impl Form1701TaxRate {
+    pub const ALL: [Self; 2] = [Self::Graduated, Self::EightPercent];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Graduated => "Graduated Rates",
+            Self::EightPercent => "8% IT Rate",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Form1701DeductionMethod {
+    Itemized,
+    Osd,
+}
+
+impl Form1701DeductionMethod {
+    pub const ALL: [Self; 2] = [Self::Itemized, Self::Osd];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Itemized => "Itemized Deduction",
+            Self::Osd => "Optional Standard Deduction (OSD)",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Form1701CivilStatus {
+    Single,
+    Married,
+    LegallySeparated,
+    Widowed,
+}
+
+impl Form1701CivilStatus {
+    pub const ALL: [Self; 4] = [
+        Self::Single,
+        Self::Married,
+        Self::LegallySeparated,
+        Self::Widowed,
+    ];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Single => "Single",
+            Self::Married => "Married",
+            Self::LegallySeparated => "Legally Separated",
+            Self::Widowed => "Widow/er",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Form1701JointFilingStatus {
+    Joint,
+    Separate,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum Form1701OverpaymentDisposition {
+    #[default]
+    None,
+    Refund,
+    TaxCreditCertificate,
+    CarryOver,
+}
+
+/// An amount pair preserves an officially blank cell (`None`) separately from
+/// an explicitly entered zero (`Some(0.0)`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Form1701AmountPair {
+    pub taxpayer: Option<f64>,
+    pub spouse: Option<f64>,
+}
+
+impl Form1701AmountPair {
+    pub const fn value(&self, party: Form1701Party) -> Option<f64> {
+        match party {
+            Form1701Party::Taxpayer => self.taxpayer,
+            Form1701Party::Spouse => self.spouse,
+        }
+    }
+
+    pub fn set(&mut self, party: Form1701Party, value: Option<f64>) {
+        match party {
+            Form1701Party::Taxpayer => self.taxpayer = value,
+            Form1701Party::Spouse => self.spouse = value,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Form1701EmployerRow {
+    pub owner: Option<Form1701Party>,
+    pub employer_name: String,
+    pub employer_tin: String,
+    pub compensation_income: Option<f64>,
+    pub tax_withheld: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Form1701SpecialDeductionRow {
+    pub description: String,
+    pub legal_basis: String,
+    pub amount: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Form1701NolcoRow {
+    pub year_incurred: String,
+    pub amount: Option<f64>,
+    pub applied_previous_years: Option<f64>,
+    pub expired: Option<f64>,
+    pub applied_current_year: Option<f64>,
+    pub unapplied: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Form1701PaymentRow {
+    pub drawee_bank_or_agency: String,
+    pub number: String,
+    pub date: String,
+    pub amount: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Form1701PaymentDetails {
+    pub item_34_cash_or_bank_debit_memo: Form1701PaymentRow,
+    pub item_35_check: Form1701PaymentRow,
+    pub item_36_tax_debit_memo: Form1701PaymentRow,
+    pub item_37_others: Form1701PaymentRow,
+    pub item_37_others_description: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Form1701Spouse {
+    pub enabled: bool,
+    pub tin: String,
+    pub rdo_code: String,
+    pub filer_type: Option<Form1701SpouseType>,
+    pub atc: Option<Form1701Atc>,
+    pub name: String,
+    pub contact_number: String,
+    pub citizenship: String,
+    pub claims_foreign_tax_credits: Option<bool>,
+    pub foreign_tax_number: String,
+    pub has_exempt_income: Option<bool>,
+    pub has_special_rate_income: Option<bool>,
+    pub tax_rate: Option<Form1701TaxRate>,
+    pub deduction_method: Option<Form1701DeductionMethod>,
+}
+
+/// Main-return computation tables. The official item numbers are the keys.
+/// Maps allow the UI/renderer to iterate exact printed lines without keeping
+/// hundreds of transport-derived Rust identifiers.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Form1701Computations {
+    pub part_ii: BTreeMap<u8, Form1701AmountPair>,
+    pub part_ii_item_32_aggregate: Option<f64>,
+    pub schedule_2: BTreeMap<u8, Form1701AmountPair>,
+    pub schedule_3: BTreeMap<u8, Form1701AmountPair>,
+    pub schedule_3_descriptions: BTreeMap<u8, String>,
+    pub schedule_4: BTreeMap<u8, Form1701AmountPair>,
+    /// Schedule 4 Item 17a through 17d.
+    pub schedule_4_item_17: [Form1701AmountPair; 4],
+    pub schedule_4_item_17d_description: String,
+    pub schedule_5_taxpayer: [Form1701SpecialDeductionRow; 2],
+    pub schedule_5_spouse: [Form1701SpecialDeductionRow; 2],
+    pub schedule_5_total_taxpayer: Option<f64>,
+    pub schedule_5_total_spouse: Option<f64>,
+    pub schedule_6_summary: BTreeMap<u8, Form1701AmountPair>,
+    pub schedule_6_taxpayer_nolco: [Form1701NolcoRow; 4],
+    pub schedule_6_spouse_nolco: [Form1701NolcoRow; 4],
+    pub schedule_6_total_taxpayer: Option<f64>,
+    pub schedule_6_total_spouse: Option<f64>,
+    pub part_vi: BTreeMap<u8, Form1701AmountPair>,
+    pub part_vii: BTreeMap<u8, Form1701AmountPair>,
+    pub part_vii_item_9_description: String,
+    pub part_viii: BTreeMap<u8, Form1701AmountPair>,
+    pub part_ix: BTreeMap<u8, Form1701AmountPair>,
+    pub part_ix_descriptions: BTreeMap<u8, String>,
+}
+
+/// Complete local draft for exact identity `1701v2018`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Form1701Draft {
+    pub id: Option<i64>,
+
+    // Filing identity.
+    pub tin: String,
+    pub taxable_year: u16,
+    /// The save schema carries an end month. A normal annual return must use
+    /// December; another month requires the Short Period choice.
+    #[serde(alias = "month")]
+    pub period_end_month: u8,
+    pub is_amended: bool,
+    pub is_short_period: bool,
+
+    // Part I.
+    pub rdo_code: String,
+    pub taxpayer_type: Option<Form1701TaxpayerType>,
+    pub atc: Option<Form1701Atc>,
+    pub taxpayer_name: String,
+    pub registered_address: String,
+    pub zip_code: String,
+    pub date_of_birth: String,
+    pub email: String,
+    pub citizenship: String,
+    pub claims_foreign_tax_credits: Option<bool>,
+    pub foreign_tax_number: String,
+    pub contact_number: String,
+    pub civil_status: Option<Form1701CivilStatus>,
+    pub spouse_has_income: Option<bool>,
+    pub joint_filing_status: Option<Form1701JointFilingStatus>,
+    pub has_exempt_income: Option<bool>,
+    pub has_special_rate_income: Option<bool>,
+    pub tax_rate: Option<Form1701TaxRate>,
+    pub deduction_method: Option<Form1701DeductionMethod>,
+
+    // Page 1 remainder and page 2 spouse background.
+    pub number_of_attachments: Option<u8>,
+    pub overpayment_disposition: Form1701OverpaymentDisposition,
+    pub spouse: Form1701Spouse,
+    pub employers: [Form1701EmployerRow; 2],
+    pub computations: Form1701Computations,
+    pub payment_details: Form1701PaymentDetails,
+    pub machine_validation_or_receipt_details: String,
+
+    /// The complete raw field map from an exact imported save. Modeled values
+    /// overwrite their corresponding keys on export; all attachment and
+    /// unknown fields remain byte-value equivalent after parse/generate.
+    pub preserved_xml_fields: BTreeMap<String, String>,
+    pub has_exact_xml_snapshot: bool,
+
+    // Local lifecycle only. Electronic queue/submission is not certified.
+    pub status: FilingStatus,
+    pub created_at: String,
+    pub updated_at: String,
+    pub submitted_at: Option<String>,
+    pub confirmed_at: Option<String>,
+    pub submission_filename: Option<String>,
+    pub receipt_id: Option<i64>,
+    pub submission_attempts: u32,
+    pub next_retry_at: Option<String>,
+    pub last_error: Option<String>,
+}
+
+impl Default for Form1701Draft {
+    fn default() -> Self {
         let now = chrono::Utc::now().to_rfc3339();
         Self {
             id: None,
-            tin: profile.tin.full(),
-            taxable_year: year,
-            month,
+            tin: String::new(),
+            taxable_year: 2018,
+            period_end_month: 12,
             is_amended: false,
-            rdo_code: profile.rdo_code.clone(),
-            taxpayer_name: profile.full_name.clone(),
-            registered_address: profile.registered_address.clone(),
-            zip_code: profile.zip_code.clone(),
-            contact_number: profile.phone.clone(),
-            email: profile.email.clone(),
-            chk_pg2ished1a_1spouse: false,
-            chk_pg2ished1a_1taxpayer: false,
-            chk_pg2ished2a_2spouse: false,
-            chk_pg2ished2a_2taxpayer: false,
-            rdo_exattachment_s: false,
-            rdo_exattachment_tf: false,
-            rdo_pg1i13foreign_tax_credits_no: true,
-            rdo_pg1i13foreign_tax_credits_yes: false,
-            rdo_pg1i16civil_status_ls: false,
-            rdo_pg1i16civil_status_m: false,
-            rdo_pg1i16civil_status_s: true,
-            rdo_pg1i16civil_status_w: false,
-            rdo_pg1i17spouse_income_no: false,
-            rdo_pg1i17spouse_income_yes: false,
-            rdo_pg1i18filing_status_j: false,
-            rdo_pg1i18filing_status_s: false,
-            rdo_pg1i19income_exempt_no: true,
-            rdo_pg1i19income_exempt_yes: false,
-            rdo_pg1i20income_special_no: true,
-            rdo_pg1i20income_special_yes: false,
-            rdo_pg1i21amethod_deduction_i: false,
-            rdo_pg1i21amethod_deduction_o: true,
-            rdo_pg1i21tax_rate_g: true,
-            rdo_pg1i21tax_rate_p: false,
-            rdo_pg1i3short_period_no: true,
-            rdo_pg1i3short_period_yes: false,
-            rdo_pg1i6taxpayer_type_c: false,
-            rdo_pg1i6taxpayer_type_e: false,
-            rdo_pg1i6taxpayer_type_p: false,
-            rdo_pg1i6taxpayer_type_s: true,
-            rdo_pg1i6taxpayer_type_t: false,
-            rdo_pg1i7atc_ii011: false,
-            rdo_pg1i7atc_ii012: true,
-            rdo_pg1i7atc_ii013: false,
-            rdo_pg1i7atc_ii014: false,
-            rdo_pg1i7atc_ii015: false,
-            rdo_pg1i7atc_ii016: false,
-            rdo_pg1i7atc_ii017: false,
-            rdo_pg1overpayment_carry_over: false,
-            rdo_pg1overpayment_refund: false,
-            rdo_pg1overpayment_tcc: false,
-            rdo_pg1m_option1: true,
-            rdo_pg1m_option2: false,
-            rdo_pg2i10income_exempt_no: false,
-            rdo_pg2i10income_exempt_yes: false,
-            rdo_pg2i11income_special_no: false,
-            rdo_pg2i11income_special_yes: false,
-            rdo_pg2i12amethod_deduction_i: false,
-            rdo_pg2i12amethod_deduction_o: false,
-            rdo_pg2i12tax_rate_g: false,
-            rdo_pg2i12tax_rate_p: false,
-            rdo_pg2i3spouse_type_c: false,
-            rdo_pg2i3spouse_type_p: false,
-            rdo_pg2i3spouse_type_s: false,
-            rdo_pg2i4atc_ii011: false,
-            rdo_pg2i4atc_ii012: false,
-            rdo_pg2i4atc_ii013: false,
-            rdo_pg2i4atc_ii014: false,
-            rdo_pg2i4atc_ii015: false,
-            rdo_pg2i4atc_ii016: false,
-            rdo_pg2i4atc_ii017: false,
-            rdo_pg2i8foreign_tax_credits_no: false,
-            rdo_pg2i8foreign_tax_credits_yes: false,
-            rdo_pg3m_exempt_type: false,
-            rdo_pg3m_special_rate_type: false,
-            rdo_spattachment_s: false,
-            rdo_spattachment_tf: false,
-            txt_attachment_types: String::new(),
-            txt_current_page: 0,
-            txt_disabled_inputs: String::new(),
-            txt_disabled_on_save: String::new(),
-            txt_enabled_inputs_on_validation: String::new(),
-            txt_enabled_links: String::new(),
-            txt_enabled_on_save: String::new(),
-            txt_is_spouse_disabled: String::new(),
-            txt_is_tax_filer_disabled: String::new(),
-            txt_line_bus: String::new(),
-            txt_max_page: 0,
-            txt_pg1i10birth_date: profile
-                .birth_date
-                .map(|d| d.format("%m/%d/%Y").to_string())
-                .unwrap_or_default(),
-            txt_pg1i12citizenship: String::new(),
-            txt_pg1i14foreign_tax_number: String::new(),
-            txt_pg1i22atax_due: 0.0,
-            txt_pg1i22btax_due: 0.0,
-            txt_pg1i235number: String::new(),
-            txt_pg1i23a: 0.0,
-            txt_pg1i23b: 0.0,
-            txt_pg1i24atax_payable: 0.0,
-            txt_pg1i24btax_payable: 0.0,
-            txt_pg1i25a: 0.0,
-            txt_pg1i25b: 0.0,
-            txt_pg1i26a: 0.0,
-            txt_pg1i26b: 0.0,
-            txt_pg1i27a: 0.0,
-            txt_pg1i27b: 0.0,
-            txt_pg1i28a: 0.0,
-            txt_pg1i28b: 0.0,
-            txt_pg1i29a: 0.0,
-            txt_pg1i29b: 0.0,
-            txt_pg1i30a: 0.0,
-            txt_pg1i30b: 0.0,
-            txt_pg1i31atotal_amt_pyble: 0.0,
-            txt_pg1i31btotal_amt_pyble: 0.0,
-            txt_pg1i32aggregate_amt_pyble: 0.0,
-            txt_pg1i33number_of_attachments: 0,
-            txt_pg1i34agency: String::new(),
-            txt_pg1i34amount: String::new(),
-            txt_pg1i34date: String::new(),
-            txt_pg1i34number: String::new(),
-            txt_pg1i35agency: String::new(),
-            txt_pg1i35amount: String::new(),
-            txt_pg1i35date: String::new(),
-            txt_pg1i36amount: String::new(),
-            txt_pg1i36date: String::new(),
-            txt_pg1i36number: String::new(),
-            txt_pg1i37agency: String::new(),
-            txt_pg1i37amount: String::new(),
-            txt_pg1i37date: String::new(),
-            txt_pg1i37number: String::new(),
-            txt_pg1i37particular: String::new(),
-            txt_pg1i9address: String::new(),
-            txt_pg1m_i10cschd_b: 0.0,
-            txt_pg1m_i10dschd_b: 0.0,
-            txt_pg1m_i10gschd_b: 0.0,
-            txt_pg1m_i10hschd_b: 0.0,
-            txt_pg1m_i11aschd_b: 0.0,
-            txt_pg1m_i11bschd_b: 0.0,
-            txt_pg1m_i11cschd_b: 0.0,
-            txt_pg1m_i11dschd_b: 0.0,
-            txt_pg1m_i11eschd_b: 0.0,
-            txt_pg1m_i11fschd_b: 0.0,
-            txt_pg1m_i11gschd_b: 0.0,
-            txt_pg1m_i11hschd_b: 0.0,
-            txt_pg1m_i12aschd_b: 0.0,
-            txt_pg1m_i12bschd_b: 0.0,
-            txt_pg1m_i12cschd_b: 0.0,
-            txt_pg1m_i12dschd_b: 0.0,
-            txt_pg1m_i12desc_schd_b: String::new(),
-            txt_pg1m_i12eschd_b: 0.0,
-            txt_pg1m_i12fschd_b: 0.0,
-            txt_pg1m_i12gschd_b: 0.0,
-            txt_pg1m_i12hschd_b: 0.0,
-            txt_pg1m_i13aschd_b: 0.0,
-            txt_pg1m_i13bschd_b: 0.0,
-            txt_pg1m_i13cschd_b: 0.0,
-            txt_pg1m_i13dschd_b: 0.0,
-            txt_pg1m_i13desc_schd_b: String::new(),
-            txt_pg1m_i13eschd_b: 0.0,
-            txt_pg1m_i13fschd_b: 0.0,
-            txt_pg1m_i13gschd_b: 0.0,
-            txt_pg1m_i13hschd_b: 0.0,
-            txt_pg1m_i14cschd_b: 0.0,
-            txt_pg1m_i14dschd_b: 0.0,
-            txt_pg1m_i14gschd_b: 0.0,
-            txt_pg1m_i14hschd_b: 0.0,
-            txt_pg1m_i15aschd_b: 0.0,
-            txt_pg1m_i15bschd_b: 0.0,
-            txt_pg1m_i15cschd_b: 0.0,
-            txt_pg1m_i15dschd_b: 0.0,
-            txt_pg1m_i15eschd_b: 0.0,
-            txt_pg1m_i15fschd_b: 0.0,
-            txt_pg1m_i15gschd_b: 0.0,
-            txt_pg1m_i15hschd_b: 0.0,
-            txt_pg1m_i16aschd_b: 0.0,
-            txt_pg1m_i16bschd_b: 0.0,
-            txt_pg1m_i16cschd_b: 0.0,
-            txt_pg1m_i16dschd_b: 0.0,
-            txt_pg1m_i16eschd_b: 0.0,
-            txt_pg1m_i16fschd_b: 0.0,
-            txt_pg1m_i16gschd_b: 0.0,
-            txt_pg1m_i16hschd_b: 0.0,
-            txt_pg1m_i17aschd_b: 0.0,
-            txt_pg1m_i17bschd_b: 0.0,
-            txt_pg1m_i17cschd_b: 0.0,
-            txt_pg1m_i17dschd_b: 0.0,
-            txt_pg1m_i17eschd_b: 0.0,
-            txt_pg1m_i17fschd_b: 0.0,
-            txt_pg1m_i17gschd_b: 0.0,
-            txt_pg1m_i17hschd_b: 0.0,
-            txt_pg1m_i1aschd_a: String::new(),
-            txt_pg1m_i1aschd_b: 0.0,
-            txt_pg1m_i1bschd_a: String::new(),
-            txt_pg1m_i1bschd_b: 0.0,
-            txt_pg1m_i1cschd_a: String::new(),
-            txt_pg1m_i1cschd_b: 0.0,
-            txt_pg1m_i1dschd_a: String::new(),
-            txt_pg1m_i1dschd_b: 0.0,
-            txt_pg1m_i1eschd_a: String::new(),
-            txt_pg1m_i1eschd_b: 0.0,
-            txt_pg1m_i1fschd_a: String::new(),
-            txt_pg1m_i1fschd_b: 0.0,
-            txt_pg1m_i1gschd_b: 0.0,
-            txt_pg1m_i1hschd_b: 0.0,
-            txt_pg1m_i2aschd_a: String::new(),
-            txt_pg1m_i2aschd_b: 0.0,
-            txt_pg1m_i2bschd_a: String::new(),
-            txt_pg1m_i2bschd_b: 0.0,
-            txt_pg1m_i2cschd_a: String::new(),
-            txt_pg1m_i2cschd_b: 0.0,
-            txt_pg1m_i2dschd_a: String::new(),
-            txt_pg1m_i2dschd_b: 0.0,
-            txt_pg1m_i2eschd_a: String::new(),
-            txt_pg1m_i2eschd_b: 0.0,
-            txt_pg1m_i2fschd_a: String::new(),
-            txt_pg1m_i2fschd_b: 0.0,
-            txt_pg1m_i2gschd_b: 0.0,
-            txt_pg1m_i2hschd_b: 0.0,
-            txt_pg1m_i3aschd_a: String::new(),
-            txt_pg1m_i3aschd_b: 0.0,
-            txt_pg1m_i3bschd_a: String::new(),
-            txt_pg1m_i3bschd_b: 0.0,
-            txt_pg1m_i3cschd_a: String::new(),
-            txt_pg1m_i3cschd_b: 0.0,
-            txt_pg1m_i3dschd_a: String::new(),
-            txt_pg1m_i3dschd_b: 0.0,
-            txt_pg1m_i3eschd_a: String::new(),
-            txt_pg1m_i3eschd_b: 0.0,
-            txt_pg1m_i3fschd_a: String::new(),
-            txt_pg1m_i3fschd_b: 0.0,
-            txt_pg1m_i3gschd_b: 0.0,
-            txt_pg1m_i3hschd_b: 0.0,
-            txt_pg1m_i4aschd_b: 0.0,
-            txt_pg1m_i4bschd_a: 0.0,
-            txt_pg1m_i4bschd_b: 0.0,
-            txt_pg1m_i4cschd_b: 0.0,
-            txt_pg1m_i4dschd_b: 0.0,
-            txt_pg1m_i4eschd_a: 0.0,
-            txt_pg1m_i4eschd_b: 0.0,
-            txt_pg1m_i4fschd_b: 0.0,
-            txt_pg1m_i4gschd_b: 0.0,
-            txt_pg1m_i4hschd_b: 0.0,
-            txt_pg1m_i5aschd_a: String::new(),
-            txt_pg1m_i5aschd_b: 0.0,
-            txt_pg1m_i5bschd_a: String::new(),
-            txt_pg1m_i5bschd_b: 0.0,
-            txt_pg1m_i5cschd_a: String::new(),
-            txt_pg1m_i5cschd_b: 0.0,
-            txt_pg1m_i5dschd_a: String::new(),
-            txt_pg1m_i5dschd_b: 0.0,
-            txt_pg1m_i5eschd_a: String::new(),
-            txt_pg1m_i5eschd_b: 0.0,
-            txt_pg1m_i5fschd_a: String::new(),
-            txt_pg1m_i5fschd_b: 0.0,
-            txt_pg1m_i5gschd_b: 0.0,
-            txt_pg1m_i5hschd_b: 0.0,
-            txt_pg1m_i6aschd_a: String::new(),
-            txt_pg1m_i6aschd_b: 0.0,
-            txt_pg1m_i6bschd_a: String::new(),
-            txt_pg1m_i6bschd_b: 0.0,
-            txt_pg1m_i6cschd_a: String::new(),
-            txt_pg1m_i6cschd_b: 0.0,
-            txt_pg1m_i6dschd_a: String::new(),
-            txt_pg1m_i6dschd_b: 0.0,
-            txt_pg1m_i6eschd_a: String::new(),
-            txt_pg1m_i6eschd_b: 0.0,
-            txt_pg1m_i6fschd_a: String::new(),
-            txt_pg1m_i6fschd_b: 0.0,
-            txt_pg1m_i6gschd_b: 0.0,
-            txt_pg1m_i6hschd_b: 0.0,
-            txt_pg1m_i7aschd_b: 0.0,
-            txt_pg1m_i7bschd_b: 0.0,
-            txt_pg1m_i7cschd_b: 0.0,
-            txt_pg1m_i7dschd_b: 0.0,
-            txt_pg1m_i7eschd_b: 0.0,
-            txt_pg1m_i7fschd_b: 0.0,
-            txt_pg1m_i7gschd_b: 0.0,
-            txt_pg1m_i7hschd_b: 0.0,
-            txt_pg1m_i8cschd_b: 0.0,
-            txt_pg1m_i8dschd_b: 0.0,
-            txt_pg1m_i8gschd_b: 0.0,
-            txt_pg1m_i8hschd_b: 0.0,
-            txt_pg1m_i9aschd_b: 0.0,
-            txt_pg1m_i9bschd_b: 0.0,
-            txt_pg1m_i9cschd_b: 0.0,
-            txt_pg1m_i9dschd_b: 0.0,
-            txt_pg1m_i9eschd_b: 0.0,
-            txt_pg1m_i9fschd_b: 0.0,
-            txt_pg1m_i9gschd_b: 0.0,
-            txt_pg1m_i9hschd_b: 0.0,
-            txt_pg2i5spouse_name: String::new(),
-            txt_pg2i7citizenship: String::new(),
-            txt_pg2i9foreign_tax_number: String::new(),
-            txt_pg2ished1a_1sname: String::new(),
-            txt_pg2ished1a_1tpname: String::new(),
-            txt_pg2ished1c_1ci: 0.0,
-            txt_pg2ished1c_1tw: 0.0,
-            txt_pg2ished1c_2ci: 0.0,
-            txt_pg2ished1c_2tw: 0.0,
-            txt_pg2ished1c_3aci: 0.0,
-            txt_pg2ished1c_3atw: 0.0,
-            txt_pg2ished1c_3bci: 0.0,
-            txt_pg2ished1c_3btw: 0.0,
-            txt_pg2ished2_4a: 0.0,
-            txt_pg2ished2_4b: 0.0,
-            txt_pg2ished2_5a: 0.0,
-            txt_pg2ished2_5b: 0.0,
-            txt_pg2ished2_6a: 0.0,
-            txt_pg2ished2_6b: 0.0,
-            txt_pg2ished2_7a: 0.0,
-            txt_pg2ished2_7b: 0.0,
-            txt_pg2ished2a_2sname: String::new(),
-            txt_pg2ished2a_2tpname: String::new(),
-            txt_pg2ished3_10a: 0.0,
-            txt_pg2ished3_10b: 0.0,
-            txt_pg2ished3_11a: 0.0,
-            txt_pg2ished3_11b: 0.0,
-            txt_pg2ished3_12a: 0.0,
-            txt_pg2ished3_12b: 0.0,
-            txt_pg2ished3_13a: 0.0,
-            txt_pg2ished3_13b: 0.0,
-            txt_pg2ished3_14a: 0.0,
-            txt_pg2ished3_14b: 0.0,
-            txt_pg2ished3_15a: 0.0,
-            txt_pg2ished3_15b: 0.0,
-            txt_pg2ished3_16a: 0.0,
-            txt_pg2ished3_16b: 0.0,
-            txt_pg2ished3_17a: 0.0,
-            txt_pg2ished3_17b: 0.0,
-            txt_pg2ished3_18a: 0.0,
-            txt_pg2ished3_18b: 0.0,
-            txt_pg2ished3_19a: 0.0,
-            txt_pg2ished3_19b: 0.0,
-            txt_pg2ished3_19desc: String::new(),
-            txt_pg2ished3_20a: 0.0,
-            txt_pg2ished3_20b: 0.0,
-            txt_pg2ished3_20desc: String::new(),
-            txt_pg2ished3_21a: 0.0,
-            txt_pg2ished3_21b: 0.0,
-            txt_pg2ished3_22a: 0.0,
-            txt_pg2ished3_22b: 0.0,
-            txt_pg2ished3_23a: 0.0,
-            txt_pg2ished3_23b: 0.0,
-            txt_pg2ished3_24a: 0.0,
-            txt_pg2ished3_24b: 0.0,
-            txt_pg2ished3_25a: 0.0,
-            txt_pg2ished3_25b: 0.0,
-            txt_pg2ished3_8a: 0.0,
-            txt_pg2ished3_8b: 0.0,
-            txt_pg2ished3_9a: 0.0,
-            txt_pg2ished3_9b: 0.0,
-            txt_pg2m_i10aschd_c: 0.0,
-            txt_pg2m_i10bschd_c: 0.0,
-            txt_pg2m_i10cschd_c: 0.0,
-            txt_pg2m_i10dschd_c: 0.0,
-            txt_pg2m_i11aschd_c: 0.0,
-            txt_pg2m_i11bschd_c: 0.0,
-            txt_pg2m_i11cschd_c: 0.0,
-            txt_pg2m_i11dschd_c: 0.0,
-            txt_pg2m_i12aschd_c: 0.0,
-            txt_pg2m_i12bschd_c: 0.0,
-            txt_pg2m_i12cschd_c: 0.0,
-            txt_pg2m_i12dschd_c: 0.0,
-            txt_pg2m_i13aschd_c: 0.0,
-            txt_pg2m_i13bschd_c: 0.0,
-            txt_pg2m_i13cschd_c: 0.0,
-            txt_pg2m_i13dschd_c: 0.0,
-            txt_pg2m_i14aschd_c: 0.0,
-            txt_pg2m_i14bschd_c: 0.0,
-            txt_pg2m_i14cschd_c: 0.0,
-            txt_pg2m_i14dschd_c: 0.0,
-            txt_pg2m_i15aschd_c: 0.0,
-            txt_pg2m_i15bschd_c: 0.0,
-            txt_pg2m_i15cschd_c: 0.0,
-            txt_pg2m_i15dschd_c: 0.0,
-            txt_pg2m_i16aschd_c: 0.0,
-            txt_pg2m_i16bschd_c: 0.0,
-            txt_pg2m_i16cschd_c: 0.0,
-            txt_pg2m_i16dschd_c: 0.0,
-            txt_pg2m_i17a_aschd_c: 0.0,
-            txt_pg2m_i17a_bschd_c: 0.0,
-            txt_pg2m_i17a_cschd_c: 0.0,
-            txt_pg2m_i17a_dschd_c: 0.0,
-            txt_pg2m_i17b_aschd_c: 0.0,
-            txt_pg2m_i17b_bschd_c: 0.0,
-            txt_pg2m_i17b_cschd_c: 0.0,
-            txt_pg2m_i17b_dschd_c: 0.0,
-            txt_pg2m_i17c_aschd_c: 0.0,
-            txt_pg2m_i17c_bschd_c: 0.0,
-            txt_pg2m_i17c_cschd_c: 0.0,
-            txt_pg2m_i17c_dschd_c: 0.0,
-            txt_pg2m_i17d_aschd_c: 0.0,
-            txt_pg2m_i17d_bschd_c: 0.0,
-            txt_pg2m_i17d_cschd_c: 0.0,
-            txt_pg2m_i17d_dschd_c: 0.0,
-            txt_pg2m_i17d_desc_schd_c: String::new(),
-            txt_pg2m_i18aschd_c: 0.0,
-            txt_pg2m_i18bschd_c: 0.0,
-            txt_pg2m_i18cschd_c: 0.0,
-            txt_pg2m_i18dschd_c: 0.0,
-            txt_pg2m_i1aschd_c: 0.0,
-            txt_pg2m_i1aschd_d: 0.0,
-            txt_pg2m_i1bschd_c: 0.0,
-            txt_pg2m_i1bschd_d: 0.0,
-            txt_pg2m_i1cschd_c: 0.0,
-            txt_pg2m_i1dschd_c: 0.0,
-            txt_pg2m_i1desc_schd_d: String::new(),
-            txt_pg2m_i1lbschd_d: String::new(),
-            txt_pg2m_i2aschd_c: 0.0,
-            txt_pg2m_i2aschd_d: 0.0,
-            txt_pg2m_i2bschd_c: 0.0,
-            txt_pg2m_i2bschd_d: 0.0,
-            txt_pg2m_i2cschd_c: 0.0,
-            txt_pg2m_i2dschd_c: 0.0,
-            txt_pg2m_i2desc_schd_d: String::new(),
-            txt_pg2m_i2lbschd_d: String::new(),
-            txt_pg2m_i3aschd_c: 0.0,
-            txt_pg2m_i3aschd_d: 0.0,
-            txt_pg2m_i3bschd_c: 0.0,
-            txt_pg2m_i3bschd_d: 0.0,
-            txt_pg2m_i3cschd_c: 0.0,
-            txt_pg2m_i3dschd_c: 0.0,
-            txt_pg2m_i3desc_schd_d: String::new(),
-            txt_pg2m_i3lbschd_d: String::new(),
-            txt_pg2m_i4aschd_c: 0.0,
-            txt_pg2m_i4aschd_d: 0.0,
-            txt_pg2m_i4bschd_c: 0.0,
-            txt_pg2m_i4bschd_d: 0.0,
-            txt_pg2m_i4cschd_c: 0.0,
-            txt_pg2m_i4dschd_c: 0.0,
-            txt_pg2m_i4desc_schd_d: String::new(),
-            txt_pg2m_i4lbschd_d: String::new(),
-            txt_pg2m_i5aschd_c: 0.0,
-            txt_pg2m_i5aschd_d: 0.0,
-            txt_pg2m_i5bschd_c: 0.0,
-            txt_pg2m_i5bschd_d: 0.0,
-            txt_pg2m_i5cschd_c: 0.0,
-            txt_pg2m_i5dschd_c: 0.0,
-            txt_pg2m_i6aschd_c: 0.0,
-            txt_pg2m_i6bschd_c: 0.0,
-            txt_pg2m_i6cschd_c: 0.0,
-            txt_pg2m_i6dschd_c: 0.0,
-            txt_pg2m_i7aschd_c: 0.0,
-            txt_pg2m_i7bschd_c: 0.0,
-            txt_pg2m_i7cschd_c: 0.0,
-            txt_pg2m_i7dschd_c: 0.0,
-            txt_pg2m_i8aschd_c: 0.0,
-            txt_pg2m_i8bschd_c: 0.0,
-            txt_pg2m_i8cschd_c: 0.0,
-            txt_pg2m_i8dschd_c: 0.0,
-            txt_pg2m_i9aschd_c: 0.0,
-            txt_pg2m_i9bschd_c: 0.0,
-            txt_pg2m_i9cschd_c: 0.0,
-            txt_pg2m_i9dschd_c: 0.0,
-            txt_pg3ished3_26a: 0.0,
-            txt_pg3ished3_26b: 0.0,
-            txt_pg3ished3_27a: 0.0,
-            txt_pg3ished3_27b: 0.0,
-            txt_pg3ished3_27desc: String::new(),
-            txt_pg3ished3_28a: 0.0,
-            txt_pg3ished3_28b: 0.0,
-            txt_pg3ished3_29a: 0.0,
-            txt_pg3ished3_29b: 0.0,
-            txt_pg3ished3_30a: 0.0,
-            txt_pg3ished3_30b: 0.0,
-            txt_pg3ished3_31a: 0.0,
-            txt_pg3ished3_31b: 0.0,
-            txt_pg3ished3_32a: 0.0,
-            txt_pg3ished3_32b: 0.0,
-            txt_pg3ished4_10a: 0.0,
-            txt_pg3ished4_10b: 0.0,
-            txt_pg3ished4_11a: 0.0,
-            txt_pg3ished4_11b: 0.0,
-            txt_pg3ished4_12a: 0.0,
-            txt_pg3ished4_12b: 0.0,
-            txt_pg3ished4_13a: 0.0,
-            txt_pg3ished4_13b: 0.0,
-            txt_pg3ished4_14a: 0.0,
-            txt_pg3ished4_14b: 0.0,
-            txt_pg3ished4_15a: 0.0,
-            txt_pg3ished4_15b: 0.0,
-            txt_pg3ished4_16a: 0.0,
-            txt_pg3ished4_16b: 0.0,
-            txt_pg3ished4_17a_a: 0.0,
-            txt_pg3ished4_17a_b: 0.0,
-            txt_pg3ished4_17b_a: 0.0,
-            txt_pg3ished4_17b_b: 0.0,
-            txt_pg3ished4_17c_a: 0.0,
-            txt_pg3ished4_17c_b: 0.0,
-            txt_pg3ished4_17d_a: 0.0,
-            txt_pg3ished4_17d_b: 0.0,
-            txt_pg3ished4_17d_desc: String::new(),
-            txt_pg3ished4_18a: 0.0,
-            txt_pg3ished4_18b: 0.0,
-            txt_pg3ished4_1a: 0.0,
-            txt_pg3ished4_1b: 0.0,
-            txt_pg3ished4_2a: 0.0,
-            txt_pg3ished4_2b: 0.0,
-            txt_pg3ished4_3a: 0.0,
-            txt_pg3ished4_3b: 0.0,
-            txt_pg3ished4_4a: 0.0,
-            txt_pg3ished4_4b: 0.0,
-            txt_pg3ished4_5a: 0.0,
-            txt_pg3ished4_5b: 0.0,
-            txt_pg3ished4_6a: 0.0,
-            txt_pg3ished4_6b: 0.0,
-            txt_pg3ished4_7a: 0.0,
-            txt_pg3ished4_7b: 0.0,
-            txt_pg3ished4_8a: 0.0,
-            txt_pg3ished4_8b: 0.0,
-            txt_pg3ished4_9a: 0.0,
-            txt_pg3ished4_9b: 0.0,
-            txt_pg3ished5_1amt: 0.0,
-            txt_pg3ished5_1desc: String::new(),
-            txt_pg3ished5_1legal: String::new(),
-            txt_pg3ished5_2amt: 0.0,
-            txt_pg3ished5_2desc: String::new(),
-            txt_pg3ished5_2legal: String::new(),
-            txt_pg3ished5_3: 0.0,
-            txt_pg3ished5_4amt: 0.0,
-            txt_pg3ished5_4desc: String::new(),
-            txt_pg3ished5_4legal: String::new(),
-            txt_pg3ished5_5amt: 0.0,
-            txt_pg3ished5_5desc: String::new(),
-            txt_pg3ished5_5legal: String::new(),
-            txt_pg3ished5_6: 0.0,
-            txt_pg3ished6_1a: 0.0,
-            txt_pg3ished6_1b: 0.0,
-            txt_pg3ished6_2a: 0.0,
-            txt_pg3ished6_2b: 0.0,
-            txt_pg3ished6_3a: 0.0,
-            txt_pg3ished6_3b: 0.0,
-            txt_pg3ished6_4a: 0.0,
-            txt_pg3ished6_4b: 0.0,
-            txt_pg3ished6_4c: 0.0,
-            txt_pg3ished6_4d: 0.0,
-            txt_pg3ished6_4e: 0.0,
-            txt_pg3ished6_5a: 0.0,
-            txt_pg3ished6_5b: 0.0,
-            txt_pg3ished6_5c: 0.0,
-            txt_pg3ished6_5d: 0.0,
-            txt_pg3ished6_5e: 0.0,
-            txt_pg3ished6_6a: 0.0,
-            txt_pg3ished6_6b: 0.0,
-            txt_pg3ished6_6c: 0.0,
-            txt_pg3ished6_6d: 0.0,
-            txt_pg3ished6_6e: 0.0,
-            txt_pg3ished6_7a: 0.0,
-            txt_pg3ished6_7b: 0.0,
-            txt_pg3ished6_7c: 0.0,
-            txt_pg3ished6_7d: 0.0,
-            txt_pg3ished6_7e: 0.0,
-            txt_pg3ished6_8d: 0.0,
-            txt_pg3m_sched_a_1atype: String::new(),
-            txt_pg3m_sched_a_1btype: String::new(),
-            txt_pg3m_sched_a_2atype: String::new(),
-            txt_pg3m_sched_a_2btype: String::new(),
-            txt_pg3m_sched_a_3atype: String::new(),
-            txt_pg3m_sched_a_3btype: String::new(),
-            txt_pg3m_sched_a_4atype: 0.0,
-            txt_pg3m_sched_a_4btype: 0.0,
-            txt_pg3m_sched_a_5atype: String::new(),
-            txt_pg3m_sched_a_5btype: String::new(),
-            txt_pg3m_sched_a_6atype: String::new(),
-            txt_pg3m_sched_a_6btype: String::new(),
-            txt_pg3m_sched_b_10atype: 0.0,
-            txt_pg3m_sched_b_10btype: 0.0,
-            txt_pg3m_sched_b_10type: String::new(),
-            txt_pg3m_sched_b_11atype: 0.0,
-            txt_pg3m_sched_b_11btype: 0.0,
-            txt_pg3m_sched_b_11type: String::new(),
-            txt_pg3m_sched_b_12atype: 0.0,
-            txt_pg3m_sched_b_12btype: 0.0,
-            txt_pg3m_sched_b_13atype: 0.0,
-            txt_pg3m_sched_b_13btype: 0.0,
-            txt_pg3m_sched_b_14atype: 0.0,
-            txt_pg3m_sched_b_14btype: 0.0,
-            txt_pg3m_sched_b_15atype: 0.0,
-            txt_pg3m_sched_b_15btype: 0.0,
-            txt_pg3m_sched_b_1atype: 0.0,
-            txt_pg3m_sched_b_1btype: 0.0,
-            txt_pg3m_sched_b_2atype: 0.0,
-            txt_pg3m_sched_b_2btype: 0.0,
-            txt_pg3m_sched_b_3atype: 0.0,
-            txt_pg3m_sched_b_3btype: 0.0,
-            txt_pg3m_sched_b_4atype: 0.0,
-            txt_pg3m_sched_b_4btype: 0.0,
-            txt_pg3m_sched_b_5atype: 0.0,
-            txt_pg3m_sched_b_5btype: 0.0,
-            txt_pg3m_sched_b_6atype: 0.0,
-            txt_pg3m_sched_b_6btype: 0.0,
-            txt_pg3m_sched_b_7atype: 0.0,
-            txt_pg3m_sched_b_7btype: 0.0,
-            txt_pg3m_sched_b_8atype: 0.0,
-            txt_pg3m_sched_b_8btype: 0.0,
-            txt_pg3m_sched_b_9atype: 0.0,
-            txt_pg3m_sched_b_9btype: 0.0,
-            txt_pg3m_sched_c_1atype: 0.0,
-            txt_pg3m_sched_c_1btype: 0.0,
-            txt_pg3m_sched_c_2atype: 0.0,
-            txt_pg3m_sched_c_2btype: 0.0,
-            txt_pg3m_sched_c_3atype: 0.0,
-            txt_pg3m_sched_c_3btype: 0.0,
-            txt_pg4ipart7_10a: 0.0,
-            txt_pg4ipart7_10b: 0.0,
-            txt_pg4ipart7_1a: 0.0,
-            txt_pg4ipart7_1b: 0.0,
-            txt_pg4ipart7_2a: 0.0,
-            txt_pg4ipart7_2b: 0.0,
-            txt_pg4ipart7_3a: 0.0,
-            txt_pg4ipart7_3b: 0.0,
-            txt_pg4ipart7_4a: 0.0,
-            txt_pg4ipart7_4b: 0.0,
-            txt_pg4ipart7_5a: 0.0,
-            txt_pg4ipart7_5b: 0.0,
-            txt_pg4ipart7_6a: 0.0,
-            txt_pg4ipart7_6b: 0.0,
-            txt_pg4ipart7_7a: 0.0,
-            txt_pg4ipart7_7b: 0.0,
-            txt_pg4ipart7_8a: 0.0,
-            txt_pg4ipart7_8b: 0.0,
-            txt_pg4ipart7_9a: 0.0,
-            txt_pg4ipart7_9b: 0.0,
-            txt_pg4ipart7_9specify: String::new(),
-            txt_pg4ipart8_10a: 0.0,
-            txt_pg4ipart8_10b: 0.0,
-            txt_pg4ipart8_1a: 0.0,
-            txt_pg4ipart8_1b: 0.0,
-            txt_pg4ipart8_2a: 0.0,
-            txt_pg4ipart8_2b: 0.0,
-            txt_pg4ipart8_3a: 0.0,
-            txt_pg4ipart8_3b: 0.0,
-            txt_pg4ipart8_4a: 0.0,
-            txt_pg4ipart8_4b: 0.0,
-            txt_pg4ipart8_5a: 0.0,
-            txt_pg4ipart8_5b: 0.0,
-            txt_pg4ipart8_6a: 0.0,
-            txt_pg4ipart8_6b: 0.0,
-            txt_pg4ipart8_7a: 0.0,
-            txt_pg4ipart8_7b: 0.0,
-            txt_pg4ipart8_8a: 0.0,
-            txt_pg4ipart8_8b: 0.0,
-            txt_pg4ipart8_9a: 0.0,
-            txt_pg4ipart8_9b: 0.0,
-            txt_pg4ipart9_10a: 0.0,
-            txt_pg4ipart9_10b: 0.0,
-            txt_pg4ipart9_11a: 0.0,
-            txt_pg4ipart9_11b: 0.0,
-            txt_pg4ipart9_1a: 0.0,
-            txt_pg4ipart9_1b: 0.0,
-            txt_pg4ipart9_2a: 0.0,
-            txt_pg4ipart9_2b: 0.0,
-            txt_pg4ipart9_2particulars: String::new(),
-            txt_pg4ipart9_3a: 0.0,
-            txt_pg4ipart9_3b: 0.0,
-            txt_pg4ipart9_3particulars: String::new(),
-            txt_pg4ipart9_4a: 0.0,
-            txt_pg4ipart9_4b: 0.0,
-            txt_pg4ipart9_4particulars: String::new(),
-            txt_pg4ipart9_5a: 0.0,
-            txt_pg4ipart9_5b: 0.0,
-            txt_pg4ipart9_6a: 0.0,
-            txt_pg4ipart9_6b: 0.0,
-            txt_pg4ipart9_6particulars: String::new(),
-            txt_pg4ipart9_7a: 0.0,
-            txt_pg4ipart9_7b: 0.0,
-            txt_pg4ipart9_7particulars: String::new(),
-            txt_pg4ipart9_8a: 0.0,
-            txt_pg4ipart9_8b: 0.0,
-            txt_pg4ipart9_8particulars: String::new(),
-            txt_pg4ipart9_9a: 0.0,
-            txt_pg4ipart9_9b: 0.0,
-            txt_pg4ipart9_9particulars: String::new(),
-            txt_pg4isc6_1a: 0.0,
-            txt_pg4isc6_1b: 0.0,
-            txt_pg4isc6_2a: 0.0,
-            txt_pg4isc6_2b: 0.0,
-            txt_pg4isc6_3a: 0.0,
-            txt_pg4isc6_3b: 0.0,
-            txt_pg4isc6_4a: 0.0,
-            txt_pg4isc6_4b: 0.0,
-            txt_pg4isc6_5a: 0.0,
-            txt_pg4isc6_5b: 0.0,
-            txt_pg4ished6_10a: 0.0,
-            txt_pg4ished6_10b: 0.0,
-            txt_pg4ished6_10c: 0.0,
-            txt_pg4ished6_10d: 0.0,
-            txt_pg4ished6_10e: 0.0,
-            txt_pg4ished6_11a: 0.0,
-            txt_pg4ished6_11b: 0.0,
-            txt_pg4ished6_11c: 0.0,
-            txt_pg4ished6_11d: 0.0,
-            txt_pg4ished6_11e: 0.0,
-            txt_pg4ished6_12a: 0.0,
-            txt_pg4ished6_12b: 0.0,
-            txt_pg4ished6_12c: 0.0,
-            txt_pg4ished6_12d: 0.0,
-            txt_pg4ished6_12e: 0.0,
-            txt_pg4ished6_13d: 0.0,
-            txt_pg4ished6_9a: 0.0,
-            txt_pg4ished6_9b: 0.0,
-            txt_pg4ished6_9c: 0.0,
-            txt_pg4ished6_9d: 0.0,
-            txt_pg4ished6_9e: 0.0,
-            txt_pg4m_sched_c_10atype: 0.0,
-            txt_pg4m_sched_c_10btype: 0.0,
-            txt_pg4m_sched_c_11atype: 0.0,
-            txt_pg4m_sched_c_11btype: 0.0,
-            txt_pg4m_sched_c_12atype: 0.0,
-            txt_pg4m_sched_c_12btype: 0.0,
-            txt_pg4m_sched_c_13atype: 0.0,
-            txt_pg4m_sched_c_13btype: 0.0,
-            txt_pg4m_sched_c_14atype: 0.0,
-            txt_pg4m_sched_c_14btype: 0.0,
-            txt_pg4m_sched_c_15atype: 0.0,
-            txt_pg4m_sched_c_15btype: 0.0,
-            txt_pg4m_sched_c_16atype: 0.0,
-            txt_pg4m_sched_c_16btype: 0.0,
-            txt_pg4m_sched_c_17a_atype: 0.0,
-            txt_pg4m_sched_c_17a_btype: 0.0,
-            txt_pg4m_sched_c_17b_atype: 0.0,
-            txt_pg4m_sched_c_17b_btype: 0.0,
-            txt_pg4m_sched_c_17c_atype: 0.0,
-            txt_pg4m_sched_c_17c_btype: 0.0,
-            txt_pg4m_sched_c_17d_atype: 0.0,
-            txt_pg4m_sched_c_17d_btype: 0.0,
-            txt_pg4m_sched_c_17d_type: String::new(),
-            txt_pg4m_sched_c_18atype: 0.0,
-            txt_pg4m_sched_c_18btype: 0.0,
-            txt_pg4m_sched_c_4atype: 0.0,
-            txt_pg4m_sched_c_4btype: 0.0,
-            txt_pg4m_sched_c_5atype: 0.0,
-            txt_pg4m_sched_c_5btype: 0.0,
-            txt_pg4m_sched_c_6atype: 0.0,
-            txt_pg4m_sched_c_6btype: 0.0,
-            txt_pg4m_sched_c_7atype: 0.0,
-            txt_pg4m_sched_c_7btype: 0.0,
-            txt_pg4m_sched_c_8atype: 0.0,
-            txt_pg4m_sched_c_8btype: 0.0,
-            txt_pg4m_sched_c_9atype: 0.0,
-            txt_pg4m_sched_c_9btype: 0.0,
-            txt_pg4m_sched_d1_1albtype: String::new(),
-            txt_pg4m_sched_d1_1atype: 0.0,
-            txt_pg4m_sched_d1_1type: String::new(),
-            txt_pg4m_sched_d1_2albtype: String::new(),
-            txt_pg4m_sched_d1_2atype: 0.0,
-            txt_pg4m_sched_d1_2type: String::new(),
-            txt_pg4m_sched_d1_3albtype: String::new(),
-            txt_pg4m_sched_d1_3atype: 0.0,
-            txt_pg4m_sched_d1_3type: String::new(),
-            txt_pg4m_sched_d1_4albtype: String::new(),
-            txt_pg4m_sched_d1_4atype: 0.0,
-            txt_pg4m_sched_d1_4type: String::new(),
-            txt_pg4m_sched_d1_5atype: 0.0,
-            txt_pg4m_sched_d2_10btype: 0.0,
-            txt_pg4m_sched_d2_6blbtype: String::new(),
-            txt_pg4m_sched_d2_6btype: 0.0,
-            txt_pg4m_sched_d2_6type: String::new(),
-            txt_pg4m_sched_d2_7blbtype: String::new(),
-            txt_pg4m_sched_d2_7btype: 0.0,
-            txt_pg4m_sched_d2_7type: String::new(),
-            txt_pg4m_sched_d2_8btype: 0.0,
-            txt_pg4m_sched_d2_8lbbtype: String::new(),
-            txt_pg4m_sched_d2_8type: String::new(),
-            txt_pg4m_sched_d2_9blbtype: String::new(),
-            txt_pg4m_sched_d2_9btype: 0.0,
-            txt_pg4m_sched_d2_9type: String::new(),
-            txt_tin4: String::new(),
-            txt_version: 0,
-            txt_zip: String::new(),
-            txtdisabled_id: String::new(),
+            is_short_period: false,
+            rdo_code: String::new(),
+            taxpayer_type: None,
+            atc: None,
+            taxpayer_name: String::new(),
+            registered_address: String::new(),
+            zip_code: String::new(),
+            date_of_birth: String::new(),
+            email: String::new(),
+            citizenship: String::new(),
+            claims_foreign_tax_credits: None,
+            foreign_tax_number: String::new(),
+            contact_number: String::new(),
+            civil_status: None,
+            spouse_has_income: None,
+            joint_filing_status: None,
+            has_exempt_income: None,
+            has_special_rate_income: None,
+            tax_rate: None,
+            deduction_method: None,
+            number_of_attachments: None,
+            overpayment_disposition: Form1701OverpaymentDisposition::None,
+            spouse: Form1701Spouse::default(),
+            employers: std::array::from_fn(|_| Form1701EmployerRow::default()),
+            computations: Form1701Computations::default(),
+            payment_details: Form1701PaymentDetails::default(),
+            machine_validation_or_receipt_details: String::new(),
+            preserved_xml_fields: BTreeMap::new(),
+            has_exact_xml_snapshot: false,
             status: FilingStatus::Draft,
             created_at: now.clone(),
             updated_at: now,
@@ -2380,350 +457,1190 @@ impl Form1701Draft {
             last_error: None,
         }
     }
+}
 
-    /// Recompute all derived fields per BIR 1701 (Annual ITR for Individuals).
-    ///
-    /// Key computation areas (per official BIR form):
-    /// - Schedule B: Income, cost of sales, deductions → net taxable income
-    /// - Graduated tax table (TRAIN law) OR 8% flat rate
-    /// - Page 1 summary: Tax due, credits, penalties, total payable
-    /// - Dual columns: A (taxpayer) and B (spouse, if joint filing)
-    pub fn recompute(&mut self) {
-        // ── Schedule B — Column C (Taxpayer) / D (Spouse) ──
-
-        // Item 4C/4D: Total Gross Sales/Revenue (sum of income sources 1-3)
-        self.txt_pg1m_i4cschd_b =
-            self.txt_pg1m_i1gschd_b + self.txt_pg1m_i2gschd_b + self.txt_pg1m_i3gschd_b;
-        self.txt_pg1m_i4dschd_b =
-            self.txt_pg1m_i1hschd_b + self.txt_pg1m_i2hschd_b + self.txt_pg1m_i3hschd_b;
-
-        // Item 7C/7D: Sum of cost-of-sales sub-items (5+6)
-        self.txt_pg1m_i7cschd_b = self.txt_pg1m_i5gschd_b + self.txt_pg1m_i6gschd_b;
-        self.txt_pg1m_i7dschd_b = self.txt_pg1m_i5hschd_b + self.txt_pg1m_i6hschd_b;
-
-        // Item 8C/8D: Gross Income = Revenue − Cost of Sales
-        self.txt_pg1m_i8cschd_b = self.txt_pg1m_i4cschd_b - self.txt_pg1m_i7cschd_b;
-        self.txt_pg1m_i8dschd_b = self.txt_pg1m_i4dschd_b - self.txt_pg1m_i7dschd_b;
-
-        // Item 9: OSD (Optional Standard Deduction) = 40% of gross income
-        // Only used when rdoPg1I21AMethodDeductionO is selected
-        if self.rdo_pg1i21amethod_deduction_o {
-            self.txt_pg1m_i9cschd_b = self.txt_pg1m_i8cschd_b * 0.40;
-            self.txt_pg1m_i9dschd_b = self.txt_pg1m_i8dschd_b * 0.40;
-        }
-
-        // Item 15C/15D: Total Deductions
-        if self.rdo_pg1i21amethod_deduction_o {
-            // OSD: just the 40% value
-            self.txt_pg1m_i15cschd_b = self.txt_pg1m_i9cschd_b;
-            self.txt_pg1m_i15dschd_b = self.txt_pg1m_i9dschd_b;
-        } else {
-            // Itemized: sum items 10-14
-            self.txt_pg1m_i15cschd_b = self.txt_pg1m_i10cschd_b
-                + self.txt_pg1m_i11cschd_b
-                + self.txt_pg1m_i12cschd_b
-                + self.txt_pg1m_i13cschd_b
-                + self.txt_pg1m_i14cschd_b;
-            self.txt_pg1m_i15dschd_b = self.txt_pg1m_i10dschd_b
-                + self.txt_pg1m_i11dschd_b
-                + self.txt_pg1m_i12dschd_b
-                + self.txt_pg1m_i13dschd_b
-                + self.txt_pg1m_i14dschd_b;
-        }
-
-        // Item 16C/16D: Net Taxable Income = Gross Income − Total Deductions
-        self.txt_pg1m_i16cschd_b =
-            f64::max(0.0, self.txt_pg1m_i8cschd_b - self.txt_pg1m_i15cschd_b);
-        self.txt_pg1m_i16dschd_b =
-            f64::max(0.0, self.txt_pg1m_i8dschd_b - self.txt_pg1m_i15dschd_b);
-
-        // Item 17: Tax Due — either graduated table or 8% flat rate
-        let tax_a = if self.rdo_pg1i21tax_rate_p {
-            // 8% flat rate on gross sales/receipts exceeding 250,000
-            f64::max(0.0, (self.txt_pg1m_i4cschd_b - 250_000.0) * 0.08)
-        } else {
-            // Graduated rate (TRAIN law — effective 2018)
-            Self::graduated_tax(self.txt_pg1m_i16cschd_b)
+impl Form1701Draft {
+    pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, _legacy_month: u8) -> Self {
+        let mut draft = Self {
+            tin: profile.tin.full(),
+            taxable_year: year,
+            period_end_month: 12,
+            rdo_code: profile.rdo_code.clone(),
+            taxpayer_name: profile.full_name.clone(),
+            registered_address: profile.registered_address.clone(),
+            zip_code: profile.zip_code.clone(),
+            date_of_birth: profile
+                .birth_date
+                .map(|date| date.format("%m/%d/%Y").to_string())
+                .unwrap_or_default(),
+            email: profile.email.clone(),
+            contact_number: profile.phone.clone(),
+            ..Self::default()
         };
 
-        let tax_b = if self.rdo_pg2i12tax_rate_p {
-            f64::max(0.0, (self.txt_pg1m_i4dschd_b - 250_000.0) * 0.08)
-        } else {
-            Self::graduated_tax(self.txt_pg1m_i16dschd_b)
+        let recognized_atcs = profile
+            .atc_codes
+            .iter()
+            .filter_map(|code| Form1701Atc::from_code(code))
+            .collect::<BTreeSet<_>>();
+        draft.atc = (recognized_atcs.len() == 1)
+            .then(|| recognized_atcs.iter().next().copied())
+            .flatten();
+        draft.taxpayer_type = profile_taxpayer_type(profile, draft.atc);
+        let annual_election = annual_income_tax_election(profile, year);
+        draft.tax_rate = match annual_election {
+            AnnualIncomeTaxElection::Graduated => Some(Form1701TaxRate::Graduated),
+            AnnualIncomeTaxElection::EightPercent => Some(Form1701TaxRate::EightPercent),
+            AnnualIncomeTaxElection::Unrecorded | AnnualIncomeTaxElection::Conflicting => None,
         };
-
-        // Store in schedule columns 17a (Page 2, Schedule C)
-        self.txt_pg2m_i17a_cschd_c = tax_a;
-        self.txt_pg2m_i17a_dschd_c = tax_b;
-
-        // ── Page 1 Summary ──
-
-        // 22A/B: Tax Due
-        self.txt_pg1i22atax_due = tax_a;
-        self.txt_pg1i22btax_due = tax_b;
-
-        // 23A/B: Tax Credits (user-entered, kept as-is)
-        // These are pre-populated from schedules
-
-        // 24A/B: Tax Payable = max(0, Tax Due − Credits)
-        self.txt_pg1i24atax_payable = f64::max(0.0, self.txt_pg1i22atax_due - self.txt_pg1i23a);
-        self.txt_pg1i24btax_payable = f64::max(0.0, self.txt_pg1i22btax_due - self.txt_pg1i23b);
-
-        // 25-27: Penalties (user-entered)
-        // 28A/B: Total Penalties
-        self.txt_pg1i28a = self.txt_pg1i25a + self.txt_pg1i26a + self.txt_pg1i27a;
-        self.txt_pg1i28b = self.txt_pg1i25b + self.txt_pg1i26b + self.txt_pg1i27b;
-
-        // 29A/B: Net amount due
-        self.txt_pg1i29a = self.txt_pg1i24atax_payable + self.txt_pg1i28a;
-        self.txt_pg1i29b = self.txt_pg1i24btax_payable + self.txt_pg1i28b;
-
-        // 30A/B: Total amount due (same as 29 for non-installment)
-        self.txt_pg1i30a = self.txt_pg1i29a;
-        self.txt_pg1i30b = self.txt_pg1i29b;
-
-        // 31A/B: Total Amount Payable
-        self.txt_pg1i31atotal_amt_pyble = self.txt_pg1i30a;
-        self.txt_pg1i31btotal_amt_pyble = self.txt_pg1i30b;
-
-        // 32: Aggregate Amount Payable = A + B
-        self.txt_pg1i32aggregate_amt_pyble =
-            self.txt_pg1i31atotal_amt_pyble + self.txt_pg1i31btotal_amt_pyble;
-
-        self.updated_at = chrono::Utc::now().to_rfc3339();
-    }
-
-    /// Philippine graduated income tax table (TRAIN law, effective 2018).
-    ///
-    /// | Over        | But not over | Tax     | + % of excess |
-    /// |-------------|-------------|---------|---------------|
-    /// | 0           | 250,000     | 0       | 0%            |
-    /// | 250,000     | 400,000     | 0       | 15%           |
-    /// | 400,000     | 800,000     | 22,500  | 20%           |
-    /// | 800,000     | 2,000,000   | 102,500 | 25%           |
-    /// | 2,000,000   | 8,000,000   | 402,500 | 30%           |
-    /// | 8,000,000   | —           | 2,202,500| 35%          |
-    fn graduated_tax(net_taxable: f64) -> f64 {
-        if net_taxable <= 250_000.0 {
-            0.0
-        } else if net_taxable <= 400_000.0 {
-            (net_taxable - 250_000.0) * 0.15
-        } else if net_taxable <= 800_000.0 {
-            22_500.0 + (net_taxable - 400_000.0) * 0.20
-        } else if net_taxable <= 2_000_000.0 {
-            102_500.0 + (net_taxable - 800_000.0) * 0.25
-        } else if net_taxable <= 8_000_000.0 {
-            402_500.0 + (net_taxable - 2_000_000.0) * 0.30
-        } else {
-            2_202_500.0 + (net_taxable - 8_000_000.0) * 0.35
+        let has_osd = profile.tax_elections.iter().any(|election| {
+            election.taxable_year == year && election.election == IncomeTaxElection::GraduatedOsd
+        });
+        let has_itemized = profile.tax_elections.iter().any(|election| {
+            election.taxable_year == year
+                && election.election == IncomeTaxElection::GraduatedItemized
+        });
+        draft.deduction_method = match (has_osd, has_itemized) {
+            (true, false) => Some(Form1701DeductionMethod::Osd),
+            (false, true) => Some(Form1701DeductionMethod::Itemized),
+            (false, false) | (true, true) => None,
+        };
+        if draft.tax_rate == Some(Form1701TaxRate::EightPercent) {
+            draft.deduction_method = None;
         }
+        draft
     }
-
-    // ── State Transition Methods ──
 
     pub fn is_editable(&self) -> bool {
         matches!(self.status, FilingStatus::Draft)
     }
 
-    pub fn transition_to_queued(&mut self) -> Result<(), Vec<(String, String)>> {
-        assert!(matches!(self.status, FilingStatus::Draft), "Must be Draft");
-        let errors = self.validate();
-        if errors.is_empty() {
-            self.recompute();
-            self.status = FilingStatus::Queued;
-            self.updated_at = chrono::Utc::now().to_rfc3339();
-            Ok(())
-        } else {
-            Err(errors)
+    pub const fn can_queue_for_submission(&self) -> bool {
+        QUEUE_SUBMISSION_SUPPORTED
+    }
+
+    pub fn xml_evidence_warnings(&self) -> Vec<String> {
+        let mut warnings = vec![
+            "The reviewed source proves editable-save XML round-trip, not electronic submission semantics; queueing remains disabled."
+                .to_string(),
+            "The encrypted companion payload is opaque and is not treated as formula or final-flag evidence."
+                .to_string(),
+            "Part X and attachment worksheet fields are preserved losslessly but are not editable or calculated by this four-page model."
+                .to_string(),
+        ];
+        if !self.has_exact_xml_snapshot {
+            warnings.push(
+                "This locally-created draft has no imported 837-field exact XML snapshot, so checked XML export is unavailable."
+                    .to_string(),
+            );
         }
+        warnings
     }
 
-    pub fn transition_to_submitted(&mut self, filename: String) {
-        assert!(
-            matches!(self.status, FilingStatus::Queued),
-            "Must be Queued"
-        );
-        let now = chrono::Utc::now();
-        self.status = FilingStatus::Submitted;
-        self.submitted_at = Some(now.to_rfc3339());
-        self.submission_filename = Some(filename);
-        self.submission_attempts = 0;
-        self.next_retry_at = None;
-        self.last_error = None;
-        self.updated_at = now.to_rfc3339();
+    pub fn amount(
+        &self,
+        section: Form1701AmountSection,
+        item: u8,
+        party: Form1701Party,
+    ) -> Option<f64> {
+        self.amount_table(section)
+            .get(&item)
+            .and_then(|pair| pair.value(party))
     }
 
-    pub fn transition_to_confirmed(
+    pub fn set_amount(
         &mut self,
-        confirmed_at: String,
-        receipt_id: Option<i64>,
-        filename: Option<String>,
+        section: Form1701AmountSection,
+        item: u8,
+        party: Form1701Party,
+        value: Option<f64>,
     ) {
-        assert!(
-            matches!(self.status, FilingStatus::Submitted),
-            "Must be Submitted"
-        );
-        self.status = FilingStatus::Confirmed;
-        self.confirmed_at = Some(confirmed_at);
-        self.receipt_id = receipt_id;
-        if let Some(f) = filename {
-            self.submission_filename = Some(f);
+        self.amount_table_mut(section)
+            .entry(item)
+            .or_default()
+            .set(party, value);
+    }
+
+    fn amount_table(&self, section: Form1701AmountSection) -> &BTreeMap<u8, Form1701AmountPair> {
+        match section {
+            Form1701AmountSection::PartIi => &self.computations.part_ii,
+            Form1701AmountSection::Schedule2 => &self.computations.schedule_2,
+            Form1701AmountSection::Schedule3 => &self.computations.schedule_3,
+            Form1701AmountSection::Schedule4 => &self.computations.schedule_4,
+            Form1701AmountSection::Schedule6 => &self.computations.schedule_6_summary,
+            Form1701AmountSection::PartVi => &self.computations.part_vi,
+            Form1701AmountSection::PartVii => &self.computations.part_vii,
+            Form1701AmountSection::PartViii => &self.computations.part_viii,
+            Form1701AmountSection::PartIx => &self.computations.part_ix,
         }
+    }
+
+    fn amount_table_mut(
+        &mut self,
+        section: Form1701AmountSection,
+    ) -> &mut BTreeMap<u8, Form1701AmountPair> {
+        match section {
+            Form1701AmountSection::PartIi => &mut self.computations.part_ii,
+            Form1701AmountSection::Schedule2 => &mut self.computations.schedule_2,
+            Form1701AmountSection::Schedule3 => &mut self.computations.schedule_3,
+            Form1701AmountSection::Schedule4 => &mut self.computations.schedule_4,
+            Form1701AmountSection::Schedule6 => &mut self.computations.schedule_6_summary,
+            Form1701AmountSection::PartVi => &mut self.computations.part_vi,
+            Form1701AmountSection::PartVii => &mut self.computations.part_vii,
+            Form1701AmountSection::PartViii => &mut self.computations.part_viii,
+            Form1701AmountSection::PartIx => &mut self.computations.part_ix,
+        }
+    }
+
+    /// Recompute only arithmetic explicitly printed on the January 2018 form.
+    /// Blank inputs remain blank until enough upstream evidence exists.
+    pub fn recompute(&mut self) {
+        self.recompute_employer_totals();
+        self.recompute_schedule_4_and_5();
+        self.recompute_nolco();
+        for party in [Form1701Party::Taxpayer, Form1701Party::Spouse] {
+            self.recompute_party(party);
+        }
+        self.computations.part_ii_item_32_aggregate = sum_present([
+            self.amount(Form1701AmountSection::PartIi, 31, Form1701Party::Taxpayer),
+            self.amount(Form1701AmountSection::PartIi, 31, Form1701Party::Spouse),
+        ]);
         self.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
-    pub fn transition_to_paid(&mut self) {
-        assert!(
-            matches!(self.status, FilingStatus::Confirmed),
-            "Must be Confirmed"
-        );
-        self.status = FilingStatus::Paid;
-        self.updated_at = chrono::Utc::now().to_rfc3339();
+    fn recompute_employer_totals(&mut self) {
+        for party in [Form1701Party::Taxpayer, Form1701Party::Spouse] {
+            let compensation =
+                sum_present(self.employers.iter().filter_map(|row| {
+                    (row.owner == Some(party)).then_some(row.compensation_income)
+                }));
+            let withheld = sum_present(
+                self.employers
+                    .iter()
+                    .filter_map(|row| (row.owner == Some(party)).then_some(row.tax_withheld)),
+            );
+            self.set_amount(Form1701AmountSection::Schedule2, 4, party, compensation);
+            self.set_amount(Form1701AmountSection::PartVii, 5, party, withheld);
+        }
     }
 
-    pub fn revert_to_draft(&mut self) {
-        assert!(
-            !matches!(self.status, FilingStatus::Paid),
-            "Cannot revert Paid"
+    fn recompute_schedule_4_and_5(&mut self) {
+        for party in [Form1701Party::Taxpayer, Form1701Party::Spouse] {
+            let ordinary = sum_present(
+                (1..=16)
+                    .map(|item| self.amount(Form1701AmountSection::Schedule4, item, party))
+                    .chain(
+                        self.computations
+                            .schedule_4_item_17
+                            .iter()
+                            .map(|pair| pair.value(party)),
+                    ),
+            );
+            self.set_amount(Form1701AmountSection::Schedule4, 18, party, ordinary);
+        }
+        self.computations.schedule_5_total_taxpayer = sum_present(
+            self.computations
+                .schedule_5_taxpayer
+                .iter()
+                .map(|row| row.amount),
         );
+        self.computations.schedule_5_total_spouse = sum_present(
+            self.computations
+                .schedule_5_spouse
+                .iter()
+                .map(|row| row.amount),
+        );
+    }
+
+    fn recompute_nolco(&mut self) {
+        for party in [Form1701Party::Taxpayer, Form1701Party::Spouse] {
+            let item_3 = subtract_optional(
+                self.amount(Form1701AmountSection::Schedule6, 1, party),
+                self.amount(Form1701AmountSection::Schedule6, 2, party),
+            );
+            self.set_amount(Form1701AmountSection::Schedule6, 3, party, item_3);
+        }
+        for row in self
+            .computations
+            .schedule_6_taxpayer_nolco
+            .iter_mut()
+            .chain(self.computations.schedule_6_spouse_nolco.iter_mut())
+        {
+            row.unapplied = subtract_many_optional(
+                row.amount,
+                [
+                    row.applied_previous_years,
+                    row.expired,
+                    row.applied_current_year,
+                ],
+            );
+        }
+        self.computations.schedule_6_total_taxpayer = sum_present(
+            self.computations
+                .schedule_6_taxpayer_nolco
+                .iter()
+                .map(|row| row.applied_current_year),
+        );
+        self.computations.schedule_6_total_spouse = sum_present(
+            self.computations
+                .schedule_6_spouse_nolco
+                .iter()
+                .map(|row| row.applied_current_year),
+        );
+    }
+
+    fn recompute_party(&mut self, party: Form1701Party) {
+        let rate = self.party_tax_rate(party);
+        let deduction = self.party_deduction_method(party);
+        let atc = self.party_atc(party);
+
+        let item_4 = self.amount(Form1701AmountSection::Schedule2, 4, party);
+        let item_5 = self.amount(Form1701AmountSection::Schedule2, 5, party);
+        let item_6 = subtract_optional(item_4, item_5);
+        let item_7 =
+            item_6.map(|income| round_peso(graduated_income_tax(self.taxable_year, income)));
+        self.set_amount(Form1701AmountSection::Schedule2, 6, party, item_6);
+        self.set_amount(Form1701AmountSection::Schedule2, 7, party, item_7);
+
+        if rate == Some(Form1701TaxRate::Graduated) {
+            let item_10 = subtract_optional(
+                self.amount(Form1701AmountSection::Schedule3, 8, party),
+                self.amount(Form1701AmountSection::Schedule3, 9, party),
+            );
+            let item_12 = subtract_optional(
+                item_10,
+                self.amount(Form1701AmountSection::Schedule3, 11, party),
+            );
+            let item_16 = sum_present([
+                self.amount(Form1701AmountSection::Schedule3, 13, party),
+                self.amount(Form1701AmountSection::Schedule3, 14, party),
+                self.amount(Form1701AmountSection::Schedule3, 15, party),
+            ]);
+            let item_17 = item_10.map(|value| round_peso(value * 0.40));
+            let item_18 = match deduction {
+                Some(Form1701DeductionMethod::Itemized) => subtract_optional(item_12, item_16),
+                Some(Form1701DeductionMethod::Osd) => subtract_optional(item_10, item_17),
+                None => None,
+            };
+            let item_22 = sum_present([
+                self.amount(Form1701AmountSection::Schedule3, 19, party),
+                self.amount(Form1701AmountSection::Schedule3, 20, party),
+                self.amount(Form1701AmountSection::Schedule3, 21, party),
+            ]);
+            let item_23 = add_optional(item_18, item_22);
+            let item_24 = add_optional(item_6, item_23);
+            let item_25 =
+                item_24.map(|income| round_peso(graduated_income_tax(self.taxable_year, income)));
+            for (item, value) in [
+                (10, item_10),
+                (12, item_12),
+                (16, item_16),
+                (17, item_17),
+                (18, item_18),
+                (22, item_22),
+                (23, item_23),
+                (24, item_24),
+                (25, item_25),
+            ] {
+                self.set_amount(Form1701AmountSection::Schedule3, item, party, value);
+            }
+        } else if rate == Some(Form1701TaxRate::EightPercent) {
+            let item_28 = add_optional(
+                self.amount(Form1701AmountSection::Schedule3, 26, party),
+                self.amount(Form1701AmountSection::Schedule3, 27, party),
+            );
+            let item_29 = item_28.map(|_| {
+                if atc.is_some_and(Form1701Atc::gets_eight_percent_reduction) {
+                    250_000.0
+                } else {
+                    0.0
+                }
+            });
+            let item_30 = subtract_optional(item_28, item_29);
+            let item_31 = item_30.map(|income| round_peso(income.max(0.0) * 0.08));
+            let item_32 = add_optional(item_7, item_31);
+            for (item, value) in [
+                (28, item_28),
+                (29, item_29),
+                (30, item_30),
+                (31, item_31),
+                (32, item_32),
+            ] {
+                self.set_amount(Form1701AmountSection::Schedule3, item, party, value);
+            }
+        }
+
+        let regular_tax_due = match (atc, rate) {
+            (Some(Form1701Atc::Ii011), _) => item_7,
+            (_, Some(Form1701TaxRate::Graduated)) => {
+                self.amount(Form1701AmountSection::Schedule3, 25, party)
+            }
+            (_, Some(Form1701TaxRate::EightPercent)) => {
+                self.amount(Form1701AmountSection::Schedule3, 32, party)
+            }
+            _ => None,
+        };
+        self.set_amount(Form1701AmountSection::PartVi, 1, party, regular_tax_due);
+        let part_vi_4 = subtract_optional(
+            self.amount(Form1701AmountSection::PartVi, 2, party),
+            self.amount(Form1701AmountSection::PartVi, 3, party),
+        );
+        let part_vi_5 = add_optional(regular_tax_due, part_vi_4);
+        self.set_amount(Form1701AmountSection::PartVi, 4, party, part_vi_4);
+        self.set_amount(Form1701AmountSection::PartVi, 5, party, part_vi_5);
+
+        let credits = sum_present(
+            (1..=9).map(|item| self.amount(Form1701AmountSection::PartVii, item, party)),
+        );
+        self.set_amount(Form1701AmountSection::PartVii, 10, party, credits);
+
+        let relief_3 = add_optional(
+            self.amount(Form1701AmountSection::PartViii, 1, party),
+            self.amount(Form1701AmountSection::PartViii, 2, party),
+        );
+        let relief_5 = subtract_optional(
+            relief_3,
+            self.amount(Form1701AmountSection::PartViii, 4, party),
+        );
+        let relief_7 = add_optional(
+            relief_5,
+            self.amount(Form1701AmountSection::PartViii, 6, party),
+        );
+        let relief_10 = add_optional(
+            self.amount(Form1701AmountSection::PartViii, 8, party),
+            self.amount(Form1701AmountSection::PartViii, 9, party),
+        );
+        for (item, value) in [(3, relief_3), (5, relief_5), (7, relief_7), (10, relief_10)] {
+            self.set_amount(Form1701AmountSection::PartViii, item, party, value);
+        }
+
+        let reconciliation_5 = sum_present(
+            (1..=4).map(|item| self.amount(Form1701AmountSection::PartIx, item, party)),
+        );
+        let reconciliation_10 = sum_present(
+            (6..=9).map(|item| self.amount(Form1701AmountSection::PartIx, item, party)),
+        );
+        let reconciliation_11 = subtract_optional(reconciliation_5, reconciliation_10);
+        for (item, value) in [
+            (5, reconciliation_5),
+            (10, reconciliation_10),
+            (11, reconciliation_11),
+        ] {
+            self.set_amount(Form1701AmountSection::PartIx, item, party, value);
+        }
+
+        self.set_amount(Form1701AmountSection::PartIi, 22, party, part_vi_5);
+        self.set_amount(Form1701AmountSection::PartIi, 23, party, credits);
+        let item_24 = subtract_optional(part_vi_5, credits);
+        self.set_amount(Form1701AmountSection::PartIi, 24, party, item_24);
+        let item_26 = subtract_optional(
+            item_24,
+            self.amount(Form1701AmountSection::PartIi, 25, party),
+        );
+        self.set_amount(Form1701AmountSection::PartIi, 26, party, item_26);
+        let penalties = sum_present([
+            self.amount(Form1701AmountSection::PartIi, 27, party),
+            self.amount(Form1701AmountSection::PartIi, 28, party),
+            self.amount(Form1701AmountSection::PartIi, 29, party),
+        ]);
+        self.set_amount(Form1701AmountSection::PartIi, 30, party, penalties);
+        self.set_amount(
+            Form1701AmountSection::PartIi,
+            31,
+            party,
+            add_optional(item_26, penalties),
+        );
+    }
+
+    fn party_atc(&self, party: Form1701Party) -> Option<Form1701Atc> {
+        match party {
+            Form1701Party::Taxpayer => self.atc,
+            Form1701Party::Spouse => self.spouse.enabled.then_some(self.spouse.atc).flatten(),
+        }
+    }
+
+    fn party_tax_rate(&self, party: Form1701Party) -> Option<Form1701TaxRate> {
+        match party {
+            Form1701Party::Taxpayer => self.tax_rate,
+            Form1701Party::Spouse => self
+                .spouse
+                .enabled
+                .then_some(self.spouse.tax_rate)
+                .flatten(),
+        }
+    }
+
+    fn party_deduction_method(&self, party: Form1701Party) -> Option<Form1701DeductionMethod> {
+        match party {
+            Form1701Party::Taxpayer => self.deduction_method,
+            Form1701Party::Spouse => self
+                .spouse
+                .enabled
+                .then_some(self.spouse.deduction_method)
+                .flatten(),
+        }
+    }
+
+    pub fn transition_to_queued(&mut self) -> Result<(), Vec<(String, String)>> {
+        let mut errors = self.validate();
+        errors.push((
+            "submission".to_string(),
+            "1701v2018 is manual/external because electronic queue and final-flag semantics are not certified"
+                .to_string(),
+        ));
+        Err(errors)
+    }
+
+    pub fn transition_to_submitted(&mut self, _filename: String) -> Result<(), String> {
+        Err(
+            "1701v2018 cannot transition to Submitted because electronic transport is not certified"
+                .to_string(),
+        )
+    }
+
+    pub fn revert_to_draft(&mut self) -> Result<(), String> {
+        if matches!(self.status, FilingStatus::Paid) {
+            return Err("A paid 1701 return cannot be reverted directly to Draft".to_string());
+        }
         self.status = FilingStatus::Draft;
         self.submitted_at = None;
         self.confirmed_at = None;
-        self.receipt_id = None;
         self.submission_filename = None;
+        self.receipt_id = None;
         self.submission_attempts = 0;
         self.next_retry_at = None;
         self.last_error = None;
         self.updated_at = chrono::Utc::now().to_rfc3339();
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Form1701AmountSection {
+    PartIi,
+    Schedule2,
+    Schedule3,
+    Schedule4,
+    Schedule6,
+    PartVi,
+    PartVii,
+    PartViii,
+    PartIx,
+}
+
+impl FormValidator for Form1701Draft {
+    fn validate(&self) -> Vec<(String, String)> {
+        let mut errors = Vec::new();
+        validate_identity(self, &mut errors);
+        validate_choices(self, &mut errors);
+        validate_amounts(self, &mut errors);
+        validate_payments(self, &mut errors);
+        validate_computed_values(self, &mut errors);
+        errors
+    }
+}
+
+impl TypedBirForm for Form1701Draft {
+    fn form_code(&self) -> &'static str {
+        FORM_CODE
     }
 
-    pub fn record_submission_failure(&mut self, error_msg: String) {
-        assert!(
-            matches!(self.status, FilingStatus::Queued),
-            "Must be Queued"
-        );
-        self.submission_attempts += 1;
-        self.last_error = Some(error_msg);
-        if self.submission_attempts >= 5 {
-            self.status = FilingStatus::Draft;
-            self.next_retry_at = None;
-        } else {
-            let delay = 2i64.pow(self.submission_attempts - 1);
-            let next = chrono::Utc::now() + chrono::Duration::minutes(delay);
-            self.next_retry_at = Some(next.to_rfc3339());
+    fn form_type_id(&self) -> &'static str {
+        FORM_TYPE_ID
+    }
+
+    fn filing_period(&self) -> FilingPeriod {
+        FilingPeriod::Annual
+    }
+
+    fn recompute(&mut self) {
+        Form1701Draft::recompute(self);
+    }
+
+    fn to_bir_field_map(&self) -> BTreeMap<String, String> {
+        Form1701Draft::to_bir_field_map(self)
+    }
+}
+
+fn validate_identity(draft: &Form1701Draft, errors: &mut Vec<(String, String)>) {
+    let tin_digits = digits(&draft.tin);
+    if !(12..=14).contains(&tin_digits.len()) {
+        errors.push((
+            "tin".to_string(),
+            "TIN must contain 12 to 14 digits, with optional separators".to_string(),
+        ));
+    }
+    if !(2018..=9999).contains(&draft.taxable_year) {
+        errors.push((
+            "taxable_year".to_string(),
+            "January 2018 Form 1701 supports taxable years 2018 onward".to_string(),
+        ));
+    }
+    if !(1..=12).contains(&draft.period_end_month) {
+        errors.push((
+            "period_end_month".to_string(),
+            "Period-end month must be between 1 and 12".to_string(),
+        ));
+    } else if !draft.is_short_period && draft.period_end_month != 12 {
+        errors.push((
+            "period_end_month".to_string(),
+            "A non-short-period annual return must end in December".to_string(),
+        ));
+    }
+    for (field, label, value) in [
+        ("rdo_code", "RDO code", draft.rdo_code.as_str()),
+        (
+            "taxpayer_name",
+            "Taxpayer/filer name",
+            draft.taxpayer_name.as_str(),
+        ),
+        (
+            "registered_address",
+            "Registered address",
+            draft.registered_address.as_str(),
+        ),
+        ("zip_code", "ZIP code", draft.zip_code.as_str()),
+        ("email", "Email address", draft.email.as_str()),
+    ] {
+        if value.trim().is_empty() {
+            errors.push((field.to_string(), format!("{label} is required")));
         }
-        self.updated_at = chrono::Utc::now().to_rfc3339();
+    }
+    if !draft.rdo_code.trim().is_empty()
+        && (draft.rdo_code.len() != 3 || !draft.rdo_code.chars().all(|ch| ch.is_ascii_digit()))
+    {
+        errors.push((
+            "rdo_code".to_string(),
+            "RDO code must be 3 digits".to_string(),
+        ));
+    }
+    if !draft.zip_code.trim().is_empty() && !validate_zip(draft.zip_code.trim()) {
+        errors.push((
+            "zip_code".to_string(),
+            "ZIP code must be 4 digits".to_string(),
+        ));
+    }
+    if !draft.email.trim().is_empty() && !validate_email(&draft.email) {
+        errors.push(("email".to_string(), "Email address is invalid".to_string()));
+    }
+    if !draft.contact_number.trim().is_empty() && !validate_ph_phone(&draft.contact_number) {
+        errors.push((
+            "contact_number".to_string(),
+            "Contact number must be a valid Philippine landline or mobile number".to_string(),
+        ));
+    }
+    validate_optional_date("date_of_birth", &draft.date_of_birth, errors);
+    if draft.number_of_attachments.is_some_and(|value| value > 99) {
+        errors.push((
+            "number_of_attachments".to_string(),
+            "Item 33 supports at most two digits".to_string(),
+        ));
+    }
+}
+
+fn validate_choices(draft: &Form1701Draft, errors: &mut Vec<(String, String)>) {
+    if draft.taxpayer_type.is_none() {
+        errors.push((
+            "taxpayer_type".to_string(),
+            "Select Item 6 taxpayer type".to_string(),
+        ));
+    }
+    if draft.atc.is_none() {
+        errors.push(("atc".to_string(), "Select Item 7 ATC".to_string()));
+    }
+    validate_rate_choice(
+        "taxpayer",
+        draft.atc,
+        draft.tax_rate,
+        draft.deduction_method,
+        errors,
+    );
+    for (field, item, choice) in [
+        (
+            "claims_foreign_tax_credits",
+            13,
+            draft.claims_foreign_tax_credits,
+        ),
+        ("has_exempt_income", 19, draft.has_exempt_income),
+        ("has_special_rate_income", 20, draft.has_special_rate_income),
+    ] {
+        if choice.is_none() {
+            errors.push((field.to_string(), format!("Answer Item {item} Yes or No")));
+        }
+    }
+    if draft.claims_foreign_tax_credits == Some(true) && draft.foreign_tax_number.trim().is_empty()
+    {
+        errors.push((
+            "foreign_tax_number".to_string(),
+            "Item 14 is required when Item 13 is Yes".to_string(),
+        ));
+    }
+    if draft.has_exempt_income == Some(true) || draft.has_special_rate_income == Some(true) {
+        errors.push((
+            "part_x".to_string(),
+            "This return requires Part X/attachment schedules, which are preserved on import but are not yet modeled for safe editing"
+                .to_string(),
+        ));
+    }
+    if draft.civil_status == Some(Form1701CivilStatus::Married) {
+        if draft.spouse_has_income.is_none() {
+            errors.push((
+                "spouse_has_income".to_string(),
+                "Answer Item 17 for a married filer".to_string(),
+            ));
+        }
+        if draft.spouse_has_income == Some(true) && draft.joint_filing_status.is_none() {
+            errors.push((
+                "joint_filing_status".to_string(),
+                "Select Joint or Separate filing in Item 18".to_string(),
+            ));
+        }
+    }
+    if draft.spouse.enabled {
+        let spouse_digits = digits(&draft.spouse.tin);
+        if !(12..=14).contains(&spouse_digits.len()) {
+            errors.push((
+                "spouse_tin".to_string(),
+                "Spouse TIN must contain 12 to 14 digits".to_string(),
+            ));
+        }
+        if draft.spouse.name.trim().is_empty() {
+            errors.push((
+                "spouse_name".to_string(),
+                "Spouse name is required".to_string(),
+            ));
+        }
+        if draft.spouse.filer_type.is_none() {
+            errors.push(("spouse_type".to_string(), "Select spouse type".to_string()));
+        }
+        if draft.spouse.atc.is_none() {
+            errors.push(("spouse_atc".to_string(), "Select spouse ATC".to_string()));
+        }
+        validate_rate_choice(
+            "spouse",
+            draft.spouse.atc,
+            draft.spouse.tax_rate,
+            draft.spouse.deduction_method,
+            errors,
+        );
+        if draft.spouse.claims_foreign_tax_credits.is_none() {
+            errors.push((
+                "spouse_claims_foreign_tax_credits".to_string(),
+                "Answer spouse Item 8 Yes or No".to_string(),
+            ));
+        }
+        if draft.spouse.has_exempt_income == Some(true)
+            || draft.spouse.has_special_rate_income == Some(true)
+        {
+            errors.push((
+                "spouse_part_x".to_string(),
+                "Spouse exempt/special-rate income requires the unsupported Part X attachment editor"
+                    .to_string(),
+            ));
+        }
+    }
+}
+
+fn validate_rate_choice(
+    prefix: &str,
+    atc: Option<Form1701Atc>,
+    rate: Option<Form1701TaxRate>,
+    deduction: Option<Form1701DeductionMethod>,
+    errors: &mut Vec<(String, String)>,
+) {
+    if atc == Some(Form1701Atc::Ii011) {
+        if rate.is_some() || deduction.is_some() {
+            errors.push((
+                format!("{prefix}_tax_rate"),
+                "II011 compensation income does not use the business-rate/deduction choices"
+                    .to_string(),
+            ));
+        }
+        return;
+    }
+    if rate.is_none() {
+        errors.push((
+            format!("{prefix}_tax_rate"),
+            "Select the income tax rate".to_string(),
+        ));
+    }
+    if let (Some(atc), Some(rate)) = (atc, rate)
+        && atc.tax_rate().is_some_and(|expected| expected != rate)
+    {
+        errors.push((
+            format!("{prefix}_atc"),
+            format!("ATC {} does not match {}", atc.code(), rate.label()),
+        ));
+    }
+    match rate {
+        Some(Form1701TaxRate::Graduated) if deduction.is_none() => errors.push((
+            format!("{prefix}_deduction_method"),
+            "Graduated rates require Itemized or OSD".to_string(),
+        )),
+        Some(Form1701TaxRate::EightPercent) if deduction.is_some() => errors.push((
+            format!("{prefix}_deduction_method"),
+            "The deduction-method choice does not apply to the 8% rate".to_string(),
+        )),
+        _ => {}
+    }
+}
+
+fn validate_amounts(draft: &Form1701Draft, errors: &mut Vec<(String, String)>) {
+    for (section_name, table) in [
+        ("part_ii", &draft.computations.part_ii),
+        ("schedule_2", &draft.computations.schedule_2),
+        ("schedule_3", &draft.computations.schedule_3),
+        ("schedule_4", &draft.computations.schedule_4),
+        ("schedule_6", &draft.computations.schedule_6_summary),
+        ("part_vi", &draft.computations.part_vi),
+        ("part_vii", &draft.computations.part_vii),
+        ("part_viii", &draft.computations.part_viii),
+        ("part_ix", &draft.computations.part_ix),
+    ] {
+        for (item, pair) in table {
+            validate_pair(section_name, *item, pair, errors);
+        }
+    }
+    for (index, pair) in draft.computations.schedule_4_item_17.iter().enumerate() {
+        validate_pair("schedule_4_item_17", (index + 1) as u8, pair, errors);
+    }
+    for (party_name, rows) in [
+        ("taxpayer", &draft.computations.schedule_5_taxpayer),
+        ("spouse", &draft.computations.schedule_5_spouse),
+    ] {
+        for (index, row) in rows.iter().enumerate() {
+            validate_optional_whole_peso(
+                format!("schedule_5_{party_name}_{}", index + 1),
+                row.amount,
+                errors,
+            );
+        }
+    }
+    for (party_name, rows) in [
+        ("taxpayer", &draft.computations.schedule_6_taxpayer_nolco),
+        ("spouse", &draft.computations.schedule_6_spouse_nolco),
+    ] {
+        for (index, row) in rows.iter().enumerate() {
+            for (column, value) in [
+                ("amount", row.amount),
+                ("previous", row.applied_previous_years),
+                ("expired", row.expired),
+                ("current", row.applied_current_year),
+                ("unapplied", row.unapplied),
+            ] {
+                validate_optional_whole_peso(
+                    format!("nolco_{party_name}_{}_{}", index + 1, column),
+                    value,
+                    errors,
+                );
+            }
+        }
+    }
+    for (index, employer) in draft.employers.iter().enumerate() {
+        validate_optional_whole_peso(
+            format!("employer_{}_compensation", index + 1),
+            employer.compensation_income,
+            errors,
+        );
+        validate_optional_whole_peso(
+            format!("employer_{}_withheld", index + 1),
+            employer.tax_withheld,
+            errors,
+        );
+        if employer.owner.is_some()
+            && (employer.employer_name.trim().is_empty()
+                || digits(&employer.employer_tin).is_empty())
+        {
+            errors.push((
+                format!("employer_{}", index + 1),
+                "Selected employer rows require both employer name and TIN".to_string(),
+            ));
+        }
+    }
+
+    for (party, rate) in [
+        (Form1701Party::Taxpayer, draft.tax_rate),
+        (
+            Form1701Party::Spouse,
+            draft
+                .spouse
+                .enabled
+                .then_some(draft.spouse.tax_rate)
+                .flatten(),
+        ),
+    ] {
+        match rate {
+            Some(Form1701TaxRate::Graduated) => {
+                for item in [26, 27] {
+                    if draft
+                        .amount(Form1701AmountSection::Schedule3, item, party)
+                        .is_some_and(|value| value != 0.0)
+                    {
+                        errors.push((
+                            format!("schedule_3_{item}_{party:?}"),
+                            "8% schedule inputs must be blank for a graduated-rate filer"
+                                .to_string(),
+                        ));
+                    }
+                }
+            }
+            Some(Form1701TaxRate::EightPercent) => {
+                for item in [8, 9, 11, 13, 14, 15, 19, 20, 21] {
+                    if draft
+                        .amount(Form1701AmountSection::Schedule3, item, party)
+                        .is_some_and(|value| value != 0.0)
+                    {
+                        errors.push((
+                            format!("schedule_3_{item}_{party:?}"),
+                            "Graduated-rate schedule inputs must be blank for an 8% filer"
+                                .to_string(),
+                        ));
+                    }
+                }
+            }
+            None => {}
+        }
+    }
+
+    for party in [Form1701Party::Taxpayer, Form1701Party::Spouse] {
+        if let (Some(installment), Some(tax_due)) = (
+            draft.amount(Form1701AmountSection::PartIi, 25, party),
+            draft.amount(Form1701AmountSection::PartIi, 22, party),
+        ) && installment > tax_due.max(0.0) * 0.5
+        {
+            errors.push((
+                format!("item_25_{party:?}"),
+                "Item 25 cannot exceed 50% of Item 22".to_string(),
+            ));
+        }
+    }
+
+    let aggregate = draft.computations.part_ii_item_32_aggregate;
+    validate_optional_whole_peso("part_ii_item_32".to_string(), aggregate, errors);
+    if aggregate.is_some_and(|value| value < 0.0)
+        && draft.overpayment_disposition == Form1701OverpaymentDisposition::None
+    {
+        errors.push((
+            "overpayment_disposition".to_string(),
+            "Choose one irrevocable overpayment disposition when Item 32 is negative".to_string(),
+        ));
+    } else if aggregate.is_some_and(|value| value >= 0.0)
+        && draft.overpayment_disposition != Form1701OverpaymentDisposition::None
+    {
+        errors.push((
+            "overpayment_disposition".to_string(),
+            "Overpayment disposition must be blank when Item 32 is not an overpayment".to_string(),
+        ));
+    }
+}
+
+fn validate_pair(
+    section: &str,
+    item: u8,
+    pair: &Form1701AmountPair,
+    errors: &mut Vec<(String, String)>,
+) {
+    validate_optional_whole_peso(format!("{section}_{item}_taxpayer"), pair.taxpayer, errors);
+    validate_optional_whole_peso(format!("{section}_{item}_spouse"), pair.spouse, errors);
+}
+
+fn validate_optional_whole_peso(
+    field: String,
+    value: Option<f64>,
+    errors: &mut Vec<(String, String)>,
+) {
+    let Some(value) = value else {
+        return;
+    };
+    if !value.is_finite() {
+        errors.push((field, "Amount must be finite".to_string()));
+    } else if (value - value.round()).abs() > 0.000_001 {
+        errors.push((
+            field,
+            "Form 1701 requires whole-peso amounts; do not enter centavos".to_string(),
+        ));
+    }
+}
+
+fn validate_payments(draft: &Form1701Draft, errors: &mut Vec<(String, String)>) {
+    for (item, row) in [
+        (34, &draft.payment_details.item_34_cash_or_bank_debit_memo),
+        (35, &draft.payment_details.item_35_check),
+        (36, &draft.payment_details.item_36_tax_debit_memo),
+        (37, &draft.payment_details.item_37_others),
+    ] {
+        validate_optional_whole_peso(format!("payment_{item}_amount"), row.amount, errors);
+        validate_optional_date(&format!("payment_{item}_date"), &row.date, errors);
+    }
+    if !draft
+        .payment_details
+        .item_36_tax_debit_memo
+        .drawee_bank_or_agency
+        .trim()
+        .is_empty()
+    {
+        errors.push((
+            "payment_36_agency".to_string(),
+            "The reviewed 1701 XML schema has no drawee-bank/agency field for Item 36".to_string(),
+        ));
+    }
+    if draft.payment_details.item_37_others.amount.is_some()
+        && draft
+            .payment_details
+            .item_37_others_description
+            .trim()
+            .is_empty()
+    {
+        errors.push((
+            "payment_37_description".to_string(),
+            "Specify the Item 37 other payment type".to_string(),
+        ));
+    }
+}
+
+fn validate_computed_values(draft: &Form1701Draft, errors: &mut Vec<(String, String)>) {
+    let mut expected = draft.clone();
+    expected.recompute();
+    for (section, items) in [
+        (Form1701AmountSection::PartIi, &[22, 23, 24, 26, 30, 31][..]),
+        (Form1701AmountSection::Schedule2, &[4, 6, 7][..]),
+        (
+            Form1701AmountSection::Schedule3,
+            &[10, 12, 16, 17, 18, 22, 23, 24, 25, 28, 29, 30, 31, 32][..],
+        ),
+        (Form1701AmountSection::Schedule4, &[18][..]),
+        (Form1701AmountSection::Schedule6, &[3][..]),
+        (Form1701AmountSection::PartVi, &[1, 4, 5][..]),
+        (Form1701AmountSection::PartVii, &[5, 10][..]),
+        (Form1701AmountSection::PartViii, &[3, 5, 7, 10][..]),
+        (Form1701AmountSection::PartIx, &[5, 10, 11][..]),
+    ] {
+        for item in items {
+            for party in [Form1701Party::Taxpayer, Form1701Party::Spouse] {
+                if !amounts_equal(
+                    draft.amount(section, *item, party),
+                    expected.amount(section, *item, party),
+                ) {
+                    errors.push((
+                        format!("computed_{section:?}_{item}_{party:?}"),
+                        "Stored computed value does not match the printed-form arithmetic"
+                            .to_string(),
+                    ));
+                }
+            }
+        }
+    }
+    if !amounts_equal(
+        draft.computations.part_ii_item_32_aggregate,
+        expected.computations.part_ii_item_32_aggregate,
+    ) {
+        errors.push((
+            "computed_part_ii_32".to_string(),
+            "Stored Item 32 does not equal Items 31A plus 31B".to_string(),
+        ));
+    }
+}
+
+fn amounts_equal(left: Option<f64>, right: Option<f64>) -> bool {
+    match (left, right) {
+        (None, None) => true,
+        (Some(left), Some(right)) => (left - right).abs() < 0.005,
+        // The reviewed eBIRForms save materializes some computed blank cells
+        // as 0.00. Treat that transport placeholder as arithmetically
+        // equivalent while retaining None versus Some(0) in the model and XML.
+        (None, Some(value)) | (Some(value), None) => value.abs() < 0.005,
+    }
+}
+
+fn validate_optional_date(field: &str, value: &str, errors: &mut Vec<(String, String)>) {
+    if value.trim().is_empty() {
+        return;
+    }
+    if chrono::NaiveDate::parse_from_str(value.trim(), "%m/%d/%Y").is_err() {
+        errors.push((field.to_string(), "Date must use MM/DD/YYYY".to_string()));
+    }
+}
+
+fn profile_taxpayer_type(
+    profile: &TaxpayerProfile,
+    atc: Option<Form1701Atc>,
+) -> Option<Form1701TaxpayerType> {
+    match profile.taxpayer_type {
+        TaxpayerType::Estate => Some(Form1701TaxpayerType::Estate),
+        TaxpayerType::Trust => Some(Form1701TaxpayerType::Trust),
+        TaxpayerType::Individual => match atc {
+            Some(Form1701Atc::Ii011) => Some(Form1701TaxpayerType::CompensationEarner),
+            Some(Form1701Atc::Ii012 | Form1701Atc::Ii015) => {
+                Some(Form1701TaxpayerType::SingleProprietor)
+            }
+            Some(Form1701Atc::Ii014 | Form1701Atc::Ii017) => {
+                Some(Form1701TaxpayerType::Professional)
+            }
+            Some(Form1701Atc::Ii013 | Form1701Atc::Ii016) | None => {
+                match profile.effective_classification() {
+                    Some(TaxClassification::PurelyCompensation) => {
+                        Some(Form1701TaxpayerType::CompensationEarner)
+                    }
+                    _ => None,
+                }
+            }
+        },
+        TaxpayerType::Corporation | TaxpayerType::Partnership | TaxpayerType::Cooperative => None,
+    }
+}
+
+fn digits(value: &str) -> String {
+    value.chars().filter(|ch| ch.is_ascii_digit()).collect()
+}
+
+fn round_peso(value: f64) -> f64 {
+    value.round()
+}
+
+fn sum_present(values: impl IntoIterator<Item = Option<f64>>) -> Option<f64> {
+    let mut any = false;
+    let sum = values.into_iter().flatten().fold(0.0, |sum, value| {
+        any = true;
+        sum + value
+    });
+    any.then(|| round_peso(sum))
+}
+
+fn add_optional(left: Option<f64>, right: Option<f64>) -> Option<f64> {
+    match (left, right) {
+        (None, None) => None,
+        (left, right) => Some(round_peso(left.unwrap_or(0.0) + right.unwrap_or(0.0))),
+    }
+}
+
+fn subtract_optional(left: Option<f64>, right: Option<f64>) -> Option<f64> {
+    left.map(|left| round_peso(left - right.unwrap_or(0.0)))
+}
+
+fn subtract_many_optional(
+    left: Option<f64>,
+    rights: impl IntoIterator<Item = Option<f64>>,
+) -> Option<f64> {
+    left.map(|left| round_peso(left - rights.into_iter().flatten().sum::<f64>()))
+}
+
+/// Printed January 2018 Form 1701 Tables 1 and 2.
+pub fn graduated_income_tax(taxable_year: u16, taxable_income: f64) -> f64 {
+    let income = taxable_income.max(0.0);
+    if taxable_year <= 2022 {
+        if income <= 250_000.0 {
+            0.0
+        } else if income <= 400_000.0 {
+            (income - 250_000.0) * 0.20
+        } else if income <= 800_000.0 {
+            30_000.0 + (income - 400_000.0) * 0.25
+        } else if income <= 2_000_000.0 {
+            130_000.0 + (income - 800_000.0) * 0.30
+        } else if income <= 8_000_000.0 {
+            490_000.0 + (income - 2_000_000.0) * 0.32
+        } else {
+            2_410_000.0 + (income - 8_000_000.0) * 0.35
+        }
+    } else if income <= 250_000.0 {
+        0.0
+    } else if income <= 400_000.0 {
+        (income - 250_000.0) * 0.15
+    } else if income <= 800_000.0 {
+        22_500.0 + (income - 400_000.0) * 0.20
+    } else if income <= 2_000_000.0 {
+        102_500.0 + (income - 800_000.0) * 0.25
+    } else if income <= 8_000_000.0 {
+        402_500.0 + (income - 2_000_000.0) * 0.30
+    } else {
+        2_202_500.0 + (income - 8_000_000.0) * 0.35
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::naming::Tin;
 
-    fn make_draft() -> Form1701Draft {
-        let profile = TaxpayerProfile {
-            id: Some(1),
-            full_name: "Test".into(),
-            tin: Tin {
-                segment1: "000".into(),
-                segment2: "000".into(),
-                segment3: "000".into(),
-                branch: "000".into(),
-            },
-            rdo_code: "039".into(),
-            line_of_business: String::new(),
-            registered_address: "Test".into(),
-            zip_code: "1100".into(),
-            phone: "09170000000".into(),
-            email: "t@t.com".into(),
-            default_form_type: "1701".into(),
-            taxpayer_type: Default::default(),
-            is_vat_registered: false,
-            business_start_date: None,
-            birth_date: None,
-            tax_classification: None,
-            eopt_tier: None,
-            is_bmbe: false,
-            is_gpp_partner: false,
-            is_create_msme: false,
-            is_expanded_withholding_agent: false,
-            atc_codes: vec![],
-            excise_tax_categories: vec![],
-            tax_elections: vec![],
-            has_employees: false,
-            is_dormant: false,
-            has_single_employer: false,
-            withholds_compensation: false,
-            withholds_expanded: false,
-            withholds_final: false,
-            is_top_withholding_agent: false,
-            is_government_withholding_entity: false,
-            registration_activity_status: Default::default(),
-            is_archived: false,
-            profile_pin_hash: None,
-            totp_secret: None,
-            email_tracking_enabled: false,
-            email_auth_method: Default::default(),
-            imap_email: None,
-            imap_host: None,
-            test_notification_enabled: false,
-            imap_app_password: None,
-            oauth_access_token: None,
-            oauth_refresh_token: None,
-            profile_versions: vec![],
-            compliance_source_mode: Default::default(),
-            per_year_forms: Default::default(),
+    #[test]
+    fn printed_tax_tables_change_after_2022() {
+        assert_eq!(graduated_income_tax(2022, 600_000.0), 80_000.0);
+        assert_eq!(graduated_income_tax(2023, 600_000.0), 62_500.0);
+        assert_eq!(graduated_income_tax(2025, -1.0), 0.0);
+    }
+
+    #[test]
+    fn printed_graduated_osd_arithmetic_preserves_overpayment_sign() {
+        let mut draft = Form1701Draft {
+            taxable_year: 2025,
+            atc: Some(Form1701Atc::Ii012),
+            tax_rate: Some(Form1701TaxRate::Graduated),
+            deduction_method: Some(Form1701DeductionMethod::Osd),
+            ..Form1701Draft::default()
         };
-        Form1701Draft::new_from_profile(&profile, 2025, 12)
+        draft.set_amount(
+            Form1701AmountSection::Schedule3,
+            8,
+            Form1701Party::Taxpayer,
+            Some(1_000_000.0),
+        );
+        draft.set_amount(
+            Form1701AmountSection::PartVii,
+            1,
+            Form1701Party::Taxpayer,
+            Some(200_000.0),
+        );
+        draft.recompute();
+
+        assert_eq!(
+            draft.amount(
+                Form1701AmountSection::Schedule3,
+                17,
+                Form1701Party::Taxpayer
+            ),
+            Some(400_000.0)
+        );
+        assert_eq!(
+            draft.amount(
+                Form1701AmountSection::Schedule3,
+                25,
+                Form1701Party::Taxpayer
+            ),
+            Some(62_500.0)
+        );
+        assert_eq!(
+            draft.amount(Form1701AmountSection::PartIi, 24, Form1701Party::Taxpayer),
+            Some(-137_500.0)
+        );
+        assert_eq!(
+            draft.computations.part_ii_item_32_aggregate,
+            Some(-137_500.0)
+        );
     }
 
     #[test]
-    fn test_graduated_tax_brackets() {
-        assert_eq!(Form1701Draft::graduated_tax(200_000.0), 0.0);
-        assert_eq!(Form1701Draft::graduated_tax(250_000.0), 0.0);
-        assert!((Form1701Draft::graduated_tax(300_000.0) - 7_500.0).abs() < 0.01);
-        assert!((Form1701Draft::graduated_tax(500_000.0) - 42_500.0).abs() < 0.01);
-        assert!((Form1701Draft::graduated_tax(1_000_000.0) - 152_500.0).abs() < 0.01);
-        assert!((Form1701Draft::graduated_tax(5_000_000.0) - 1_302_500.0).abs() < 0.01);
-        assert!((Form1701Draft::graduated_tax(10_000_000.0) - 2_902_500.0).abs() < 0.01);
+    fn blank_and_explicit_zero_are_distinct() {
+        let mut draft = Form1701Draft::default();
+        assert_eq!(
+            draft.amount(Form1701AmountSection::PartVii, 1, Form1701Party::Taxpayer),
+            None
+        );
+        draft.set_amount(
+            Form1701AmountSection::PartVii,
+            1,
+            Form1701Party::Taxpayer,
+            Some(0.0),
+        );
+        assert_eq!(
+            draft.amount(Form1701AmountSection::PartVii, 1, Form1701Party::Taxpayer),
+            Some(0.0)
+        );
     }
 
     #[test]
-    fn test_recompute_graduated_with_osd() {
-        let mut d = make_draft();
-        d.rdo_pg1i21tax_rate_g = true;
-        d.rdo_pg1i21tax_rate_p = false;
-        d.rdo_pg1i21amethod_deduction_o = true;
-        d.txt_pg1m_i1gschd_b = 1_000_000.0;
-        d.recompute();
-        // Gross=1M, OSD=400k, Net=600k, Tax=22500+(200k*20%)=62500
-        assert!((d.txt_pg1m_i16cschd_b - 600_000.0).abs() < 0.01);
-        assert!((d.txt_pg1i22atax_due - 62_500.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn test_recompute_8pct_flat() {
-        let mut d = make_draft();
-        d.rdo_pg1i21tax_rate_p = true;
-        d.txt_pg1m_i1gschd_b = 500_000.0;
-        d.recompute();
-        // 8% of (500k-250k) = 20,000
-        assert!((d.txt_pg1i22atax_due - 20_000.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn test_recompute_penalties_aggregate() {
-        let mut d = make_draft();
-        d.rdo_pg1i21tax_rate_g = true;
-        d.rdo_pg1i21amethod_deduction_o = true;
-        d.txt_pg1m_i1gschd_b = 500_000.0;
-        d.txt_pg1i25a = 100.0;
-        d.txt_pg1i26a = 50.0;
-        d.txt_pg1i27a = 25.0;
-        d.recompute();
-        assert!((d.txt_pg1i28a - 175.0).abs() < 0.01);
-        // Net=300k, tax=(300k-250k)*15%=7500, total=7500+175=7675
-        assert!((d.txt_pg1i32aggregate_amt_pyble - 7_675.0).abs() < 0.01);
+    fn queue_boundary_fails_closed() {
+        let mut draft = Form1701Draft::default();
+        let errors = draft
+            .transition_to_queued()
+            .expect_err("queueing must be disabled");
+        assert!(errors.iter().any(|(field, _)| field == "submission"));
     }
 }

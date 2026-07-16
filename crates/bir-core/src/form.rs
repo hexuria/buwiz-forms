@@ -89,11 +89,14 @@ impl FormData {
     }
 
     /// Load from BIR pseudo-XML payload.
-    pub fn from_bir_xml(schema_id: &str, xml: &str) -> Self {
-        Self {
+    pub fn from_bir_xml(
+        schema_id: &str,
+        xml: &str,
+    ) -> Result<Self, crate::bir_xml::BirXmlParseError> {
+        Ok(Self {
             schema_id: schema_id.to_string(),
-            fields: crate::bir_xml::parse_bir_xml(xml),
-        }
+            fields: crate::bir_xml::parse_bir_xml_checked(xml)?,
+        })
     }
 }
 
@@ -106,7 +109,12 @@ mod tests {
         let mut form = FormData::new("2551Qv2018");
         form.set("frm:txtName", "JOHN DOE");
         let xml = form.to_bir_xml();
-        let parsed = FormData::from_bir_xml("2551Qv2018", &xml);
+        let parsed = FormData::from_bir_xml("2551Qv2018", &xml).expect("generated payload parses");
         assert_eq!(parsed.get("frm:txtName"), Some("JOHN DOE"));
+    }
+
+    #[test]
+    fn malformed_form_data_payload_fails_closed() {
+        assert!(FormData::from_bir_xml("2551Qv2018", "<div>broken</div>").is_err());
     }
 }

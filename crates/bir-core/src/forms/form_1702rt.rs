@@ -1,1192 +1,1384 @@
-//! BIR Form 1702RTv2018C — Typed draft struct and computation logic.
+//! BIR Form 1702-RT, January 2018 (ENCS), exact revision `1702RTv2018C`.
 //!
-//! Generated from savefile: 00000000000000-1702RTv2018C-122025.xml
-//! Total BIR fields: 258
-//! Form-specific fields: 234
-//!
-//! ⚠️ ScaffoldOnly — formula evidence not yet verified
+//! The semantic model is bounded by the locked four-page official form and the
+//! reviewed 258-field plain/encrypted save pair. Amounts are whole pesos: the
+//! official form explicitly says to drop 49 centavos or less and round up 50
+//! centavos or more. XML persistence is supported, but electronic submission
+//! remains disabled until an independently reviewed submission contract exists.
 
-use crate::forms::{FilingStatus, FormValidator};
-use crate::profile::TaxpayerProfile;
+use std::collections::BTreeMap;
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
-/// Complete draft for Form 1702RTv2018C.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Form1702RTDraft {
-    /// Database row ID (None before first save)
-    pub id: Option<i64>,
+use super::{FilingPeriod, FilingStatus, FormValidator, TypedBirForm};
+use crate::profile::TaxpayerProfile;
+use crate::validation::{validate_email, validate_ph_phone, validate_zip};
 
-    // === Filing Period ===
+pub const FORM_CODE: &str = "1702RT";
+pub const FORM_REVISION: &str = "2018C";
+pub const FORM_TYPE_ID: &str = "1702RTv2018C";
+pub const FORM_VERSION_LABEL: &str = "January 2018 (ENCS)";
+pub const OFFICIAL_PAGE_COUNT: usize = 4;
+pub const OFFICIAL_PAGE_WIDTH_POINTS: u16 = 612;
+pub const OFFICIAL_PAGE_HEIGHT_POINTS: u16 = 936;
+pub const XML_ROUND_TRIP_SUPPORTED: bool = true;
+pub const QUEUE_SUBMISSION_SUPPORTED: bool = false;
+pub const OFFICIAL_FORM_SHA256: &str =
+    "d9a6a8a13e0114934261151c4eb269a1573042e7ce670eaf12b15f169d308d2d";
+pub const REVIEWED_EDITABLE_XML_SHA256: &str =
+    "a5316d974ffca1db2359d92208fd4f6b15533e5330fcfc73922becd6b2c29299";
+pub const REVIEWED_ENCRYPTED_XML_SHA256: &str =
+    "e45db05bb89c2513054e7f075e41a09e9ec35c9590982619dcfb1dfb57602501";
+
+/// Alternate Item 5 ATC evidence reviewed from the companion editable save and
+/// the captured January 2018 application UI. Other dropdown entries remain
+/// unsupported until their exact code/description pair is independently
+/// reviewed; printing an unreviewed description would be an unsafe inference.
+pub const REVIEWED_ALTERNATE_ATC_IC010_DESCRIPTION: &str =
+    "CORPORATION IN GENERAL - JAN 1, 2009 (2009)";
+
+pub fn reviewed_alternate_atc_description(code: &str) -> Option<&'static str> {
+    match code.trim() {
+        "IC010" => Some(REVIEWED_ALTERNATE_ATC_IC010_DESCRIPTION),
+        _ => None,
+    }
+}
+
+/// A signed, whole-peso amount. This deliberately cannot represent centavos.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct WholePeso(pub i64);
+
+impl WholePeso {
+    pub const ZERO: Self = Self(0);
+
+    pub fn parse_bir(value: &str) -> Result<Self, String> {
+        let value = value.trim();
+        if value.is_empty() {
+            return Err("whole-peso amount is blank".to_string());
+        }
+        let (sign, digits) = match value.as_bytes().first() {
+            Some(b'-') => (-1_i64, &value[1..]),
+            Some(b'+') => (1_i64, &value[1..]),
+            _ => (1_i64, value),
+        };
+        if digits.is_empty() || digits.contains('.') {
+            return Err("amount must contain whole pesos only".to_string());
+        }
+        let groups = digits.split(',').collect::<Vec<_>>();
+        let grouping_is_valid = if groups.len() == 1 {
+            !groups[0].is_empty() && groups[0].chars().all(|c| c.is_ascii_digit())
+        } else {
+            (1..=3).contains(&groups[0].len())
+                && groups[0].chars().all(|c| c.is_ascii_digit())
+                && groups[1..]
+                    .iter()
+                    .all(|group| group.len() == 3 && group.chars().all(|c| c.is_ascii_digit()))
+        };
+        if !grouping_is_valid {
+            return Err("amount has invalid thousands grouping".to_string());
+        }
+        let compact = groups.concat();
+        let absolute = compact
+            .parse::<i64>()
+            .map_err(|_| "amount is outside the supported whole-peso range".to_string())?;
+        absolute
+            .checked_mul(sign)
+            .map(Self)
+            .ok_or_else(|| "amount is outside the supported whole-peso range".to_string())
+    }
+
+    pub fn format_bir(self) -> String {
+        let negative = self.0 < 0;
+        let digits = self.0.unsigned_abs().to_string();
+        let mut grouped = String::with_capacity(digits.len() + digits.len() / 3);
+        for (index, character) in digits.chars().enumerate() {
+            if index > 0 && (digits.len() - index).is_multiple_of(3) {
+                grouped.push(',');
+            }
+            grouped.push(character);
+        }
+        if negative {
+            format!("-{grouped}")
+        } else {
+            grouped
+        }
+    }
+}
+
+impl fmt::Display for WholePeso {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.format_bir())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum Form1702RTFilingBasis {
+    #[default]
+    Calendar,
+    Fiscal,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum Form1702RTDeductionMethod {
+    Itemized,
+    OptionalStandard,
+    #[default]
+    Unresolved,
+}
+
+impl Form1702RTDeductionMethod {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Itemized => "Itemized deductions",
+            Self::OptionalStandard => "Optional Standard Deduction (40%)",
+            Self::Unresolved => "Needs review",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Form1702RTOverpaymentDisposition {
+    Refund,
+    TaxCreditCertificate,
+    CarryOver,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Form1702RTAtcSelection {
+    /// The official page prints IC055 for MCIT.
+    pub printed_mcit_selected: bool,
+    /// The reviewed save exposes a second ATC selector without enough evidence
+    /// to infer mutual exclusivity with the printed IC055 control.
+    pub other_selected: bool,
+    pub other_code: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Form1702RTDate {
+    pub year: u16,
+    pub month: u8,
+    pub day: u8,
+}
+
+impl Form1702RTDate {
+    pub fn new(year: u16, month: u8, day: u8) -> Result<Self, String> {
+        let value = Self { year, month, day };
+        value.validate()?;
+        Ok(value)
+    }
+
+    pub fn parse(value: &str) -> Result<Self, String> {
+        use chrono::Datelike;
+        let parsed = chrono::NaiveDate::parse_from_str(value.trim(), "%m/%d/%Y")
+            .map_err(|_| "date must use MM/DD/YYYY and be a real calendar date".to_string())?;
+        Self::new(
+            u16::try_from(parsed.year()).map_err(|_| "date year is unsupported".to_string())?,
+            u8::try_from(parsed.month()).map_err(|_| "date month is unsupported".to_string())?,
+            u8::try_from(parsed.day()).map_err(|_| "date day is unsupported".to_string())?,
+        )
+    }
+
+    pub fn validate(self) -> Result<(), String> {
+        chrono::NaiveDate::from_ymd_opt(
+            i32::from(self.year),
+            u32::from(self.month),
+            u32::from(self.day),
+        )
+        .map(|_| ())
+        .ok_or_else(|| "date is not a real calendar date".to_string())
+    }
+}
+
+impl fmt::Display for Form1702RTDate {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "{:02}/{:02}/{:04}",
+            self.month, self.day, self.year
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Form1702RTNamedAmount {
+    pub description: String,
+    pub amount: WholePeso,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Form1702RTPaymentDetail {
+    pub specification: String,
+    pub drawee_bank_or_agency: String,
+    pub number: String,
+    pub date: Option<Form1702RTDate>,
+    pub amount: WholePeso,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Form1702RTPartII {
+    pub item_14_tax_due: WholePeso,
+    pub item_15_total_tax_credits: WholePeso,
+    pub item_16_net_tax_payable_or_overpayment: WholePeso,
+    pub item_17_surcharge: WholePeso,
+    pub item_18_interest: WholePeso,
+    pub item_19_compromise: WholePeso,
+    pub item_20_total_penalties: WholePeso,
+    pub item_21_total_amount_payable_or_overpayment: WholePeso,
+    pub overpayment_disposition: Option<Form1702RTOverpaymentDisposition>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Form1702RTTaxCredits {
+    pub item_44_prior_year_excess_credits: WholePeso,
+    pub item_45_previous_quarter_mcit_payments: WholePeso,
+    pub item_46_previous_quarter_regular_payments: WholePeso,
+    pub item_47_excess_mcit_applied: WholePeso,
+    pub item_48_previous_quarter_withholding: WholePeso,
+    pub item_49_fourth_quarter_withholding: WholePeso,
+    pub item_50_foreign_tax_credits: WholePeso,
+    pub item_51_tax_paid_on_previous_return: WholePeso,
+    pub item_52_special_tax_credits: WholePeso,
+    pub item_53_other: Form1702RTNamedAmount,
+    pub item_54_other: Form1702RTNamedAmount,
+    pub item_55_total: WholePeso,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Form1702RTPartIV {
+    pub item_27_sales: WholePeso,
+    pub item_28_sales_returns: WholePeso,
+    pub item_29_net_sales: WholePeso,
+    pub item_30_cost_of_sales_or_services: WholePeso,
+    pub item_31_gross_income_from_operations: WholePeso,
+    pub item_32_other_taxable_income: WholePeso,
+    pub item_33_total_taxable_income: WholePeso,
+    pub item_34_ordinary_itemized_deductions: WholePeso,
+    pub item_35_special_itemized_deductions: WholePeso,
+    pub item_36_nolco: WholePeso,
+    pub item_37_total_itemized_deductions: WholePeso,
+    pub item_38_optional_standard_deduction: WholePeso,
+    pub item_39_net_taxable_income_or_loss: WholePeso,
+    /// An explicit percentage from Item 40. Zero means unresolved, never a
+    /// silent 25% or 30% default.
+    pub item_40_income_tax_rate_percent: u8,
+    pub item_41_normal_income_tax_due: WholePeso,
+    pub item_42_mcit_due: WholePeso,
+    pub item_43_tax_due: WholePeso,
+    pub tax_credits: Form1702RTTaxCredits,
+    pub item_56_net_tax_payable_or_overpayment: WholePeso,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Form1702RTPartV {
+    pub item_57_special_allowable_deductions_tax_effect: WholePeso,
+    pub item_58_special_tax_credits: WholePeso,
+    pub item_59_total_tax_relief: WholePeso,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Form1702RTSchedule1 {
+    pub amortizations: WholePeso,
+    pub bad_debts: WholePeso,
+    pub charitable_contributions: WholePeso,
+    pub depletion: WholePeso,
+    pub depreciation: WholePeso,
+    pub entertainment: WholePeso,
+    pub fringe_benefits: WholePeso,
+    pub interest: WholePeso,
+    pub losses: WholePeso,
+    pub pension_trusts: WholePeso,
+    pub rental: WholePeso,
+    pub research_and_development: WholePeso,
+    pub salaries_wages_allowances: WholePeso,
+    pub statutory_contributions: WholePeso,
+    pub taxes_and_licenses: WholePeso,
+    pub transportation_and_travel: WholePeso,
+    pub janitorial_and_messengerial: WholePeso,
+    pub professional_fees: WholePeso,
+    pub security_services: WholePeso,
+    /// Official fixed capacity: Items 17d through 17i.
+    pub other: [Form1702RTNamedAmount; 6],
+    pub item_18_total: WholePeso,
+}
+
+impl Form1702RTSchedule1 {
+    pub fn source_amounts(&self) -> [WholePeso; 19] {
+        [
+            self.amortizations,
+            self.bad_debts,
+            self.charitable_contributions,
+            self.depletion,
+            self.depreciation,
+            self.entertainment,
+            self.fringe_benefits,
+            self.interest,
+            self.losses,
+            self.pension_trusts,
+            self.rental,
+            self.research_and_development,
+            self.salaries_wages_allowances,
+            self.statutory_contributions,
+            self.taxes_and_licenses,
+            self.transportation_and_travel,
+            self.janitorial_and_messengerial,
+            self.professional_fees,
+            self.security_services,
+        ]
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Form1702RTSpecialDeductionRow {
+    pub description: String,
+    pub legal_basis: String,
+    pub amount: WholePeso,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Form1702RTSchedule2 {
+    /// Official fixed capacity: four rows.
+    pub rows: [Form1702RTSpecialDeductionRow; 4],
+    pub item_5_total: WholePeso,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Form1702RTNolcoRow {
+    pub year_incurred: String,
+    pub amount: WholePeso,
+    pub applied_previous_years: WholePeso,
+    pub expired: WholePeso,
+    pub applied_current_year: WholePeso,
+    pub unapplied_balance: WholePeso,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Form1702RTSchedule3 {
+    pub item_1_gross_income: WholePeso,
+    pub item_2_ordinary_deductions: WholePeso,
+    pub item_3_net_operating_loss: WholePeso,
+    /// Official fixed capacity: Items 4 through 7.
+    pub rows: [Form1702RTNolcoRow; 4],
+    pub item_8_total_applied_current_year: WholePeso,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Form1702RTMcitRow {
+    pub year: String,
+    pub normal_income_tax: WholePeso,
+    pub mcit: WholePeso,
+    /// Item C is retained as an explicit input. The official label identifies
+    /// it as excess MCIT but does not print a formula or floor-at-zero rule.
+    pub excess_mcit: WholePeso,
+    pub applied_previous_years: WholePeso,
+    pub expired: WholePeso,
+    pub applied_current_year: WholePeso,
+    pub allowable_balance: WholePeso,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Form1702RTSchedule4 {
+    /// Official fixed capacity: three rows.
+    pub rows: [Form1702RTMcitRow; 3],
+    pub item_4_total_applied_current_year: WholePeso,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Form1702RTSchedule5 {
+    pub item_1_net_income_or_loss_per_books: WholePeso,
+    pub additions: [Form1702RTNamedAmount; 2],
+    pub item_4_total: WholePeso,
+    pub non_taxable_income: [Form1702RTNamedAmount; 2],
+    pub special_deductions: [Form1702RTNamedAmount; 2],
+    pub item_9_total: WholePeso,
+    pub item_10_net_taxable_income_or_loss: WholePeso,
+}
+
+/// Full four-page editable draft. Transport-only modal/subtotal fields are
+/// retained separately so an imported official save can round-trip exactly.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct Form1702RTDraft {
+    pub id: Option<i64>,
     pub tin: String,
     pub taxable_year: u16,
     pub month: u8,
-
-    // === Header / Options ===
-
-    // === Profile Fields (pre-filled) ===
+    pub filing_basis: Form1702RTFilingBasis,
+    pub is_amended: bool,
+    pub is_short_period: bool,
+    pub atc: Form1702RTAtcSelection,
     pub rdo_code: String,
     pub taxpayer_name: String,
+    pub registered_name_lines: [String; 3],
     pub registered_address: String,
+    pub registered_address_lines: [String; 3],
     pub zip_code: String,
+    pub incorporation_date: Option<Form1702RTDate>,
     pub contact_number: String,
     pub email: String,
-
-    // === other ===
-    /// BIR: `BranchMaskP1` (sample: `00000`)
-    pub branch_mask_p1: u32,
-    /// BIR: `frm1702RT:Pg2Pt4I40IncomeTaxRate` (sample: `30`)
-    pub pg2pt4i40income_tax_rate: u32,
-
-    // === radio_options ===
-    /// BIR: `frm1702RT:rdoPg1I1Calendar` (sample: `true`)
-    pub rdo_pg1i1calendar: bool,
-    /// BIR: `frm1702RT:rdoPg1I1Fiscal` (sample: `false`)
-    pub rdo_pg1i1fiscal: bool,
-    /// BIR: `frm1702RT:rdoPg1I3AmmendNo` (sample: `true`)
-    pub rdo_pg1i3ammend_no: bool,
-    /// BIR: `frm1702RT:rdoPg1I3AmmendYes` (sample: `false`)
-    pub rdo_pg1i3ammend_yes: bool,
-    /// BIR: `frm1702RT:rdoPg1I4ShortPeriodNo` (sample: `true`)
-    pub rdo_pg1i4short_period_no: bool,
-    /// BIR: `frm1702RT:rdoPg1I4ShortPeriodYes` (sample: `false`)
-    pub rdo_pg1i4short_period_yes: bool,
-    /// BIR: `frm1702RT:rdoPg1I5Atc` (sample: `true`)
-    pub rdo_pg1i5atc: bool,
-    /// BIR: `frm1702RT:rdoPg1I5AtcOther` (sample: `true`)
-    pub rdo_pg1i5atc_other: bool,
-    /// BIR: `frm1702RT:rdoPg1Pt1I13ItemizedDeduction` (sample: `false`)
-    pub rdo_pg1pt1i13itemized_deduction: bool,
-    /// BIR: `frm1702RT:rdoPg1Pt1I13OptionalStandard` (sample: `true`)
-    pub rdo_pg1pt1i13optional_standard: bool,
-    /// BIR: `frm1702RT:rdoPg1Pt2I21OverpaymentCarried` (sample: `false`)
-    pub rdo_pg1pt2i21overpayment_carried: bool,
-    /// BIR: `frm1702RT:rdoPg1Pt2I21OverpaymentIssued` (sample: `false`)
-    pub rdo_pg1pt2i21overpayment_issued: bool,
-    /// BIR: `frm1702RT:rdoPg1Pt2I21OverpaymentRefunded` (sample: `true`)
-    pub rdo_pg1pt2i21overpayment_refunded: bool,
-
-    // === selects ===
-    /// BIR: `frm1702RT:drpPg1I5AtcOther` (sample: `IC010`)
-    pub drp_pg1i5atc_other: String,
-
-    // === shared_text ===
-    /// BIR: `txtBranchMaskP2` (sample: `00000`)
-    pub txt_branch_mask_p2: u32,
-    /// BIR: `txtBranchMaskP3` (sample: `00000`)
-    pub txt_branch_mask_p3: u32,
-    /// BIR: `txtBranchMaskP4` (sample: `00000`)
-    pub txt_branch_mask_p4: u32,
-
-    // === text_fields ===
-    /// BIR: `frm1702RT:txtCurrentPage` (sample: `1`)
-    pub txt_current_page: u32,
-    /// BIR: `frm1702RT:txtMaxPage` (sample: `4`)
-    pub txt_max_page: u32,
-    /// BIR: `frm1702RT:txtPg1Pt1I10` (sample: `12/10/2019`)
-    pub txt_pg1pt1i10: String,
-    /// BIR: `frm1702RT:txtPg1Pt1I11Contact` (sample: `09123456789`)
-    pub txt_pg1pt1i11contact: String,
-    /// BIR: `frm1702RT:txtPg1Pt1I12Email` (sample: `CODEITLIKEMILEY@GMAIL.COM`)
-    pub txt_pg1pt1i12email: String,
-    /// BIR: `frm1702RT:txtPg1Pt1I6TIN4` (sample: `00000`)
-    pub txt_pg1pt1i6tin4: u32,
-    /// BIR: `frm1702RT:txtPg1Pt1I8Name1` (sample: `JUAN DELA CRUZ`)
-    pub txt_pg1pt1i8name1: String,
-    /// BIR: `frm1702RT:txtPg1Pt1I8Name2` (sample: ``)
-    pub txt_pg1pt1i8name2: String,
-    /// BIR: `frm1702RT:txtPg1Pt1I8Name3` (sample: ``)
-    pub txt_pg1pt1i8name3: String,
-    /// BIR: `frm1702RT:txtPg1Pt1I9Address1` (sample: `OLONGAPO`)
-    pub txt_pg1pt1i9address1: String,
-    /// BIR: `frm1702RT:txtPg1Pt1I9Address2` (sample: ``)
-    pub txt_pg1pt1i9address2: String,
-    /// BIR: `frm1702RT:txtPg1Pt1I9Address3` (sample: ``)
-    pub txt_pg1pt1i9address3: String,
-    /// BIR: `frm1702RT:txtPg1Pt2I14IncomeTax` (sample: `1,000`)
-    pub txt_pg1pt2i14income_tax: String,
-    /// BIR: `frm1702RT:txtPg1Pt2I15TotalTaxCredits` (sample: `9,000`)
-    pub txt_pg1pt2i15total_tax_credits: String,
-    /// BIR: `frm1702RT:txtPg1Pt2I16NetTax` (sample: `-8,000`)
-    pub txt_pg1pt2i16net_tax: String,
-    /// BIR: `frm1702RT:txtPg1Pt2I17Surcharge` (sample: `1,000`)
-    pub txt_pg1pt2i17surcharge: String,
-    /// BIR: `frm1702RT:txtPg1Pt2I18Interest` (sample: `1,000`)
-    pub txt_pg1pt2i18interest: String,
-    /// BIR: `frm1702RT:txtPg1Pt2I19Compromise` (sample: `1,000`)
-    pub txt_pg1pt2i19compromise: String,
-    /// BIR: `frm1702RT:txtPg1Pt2I20TotalPenalties` (sample: `3,000`)
-    pub txt_pg1pt2i20total_penalties: String,
-    /// BIR: `frm1702RT:txtPg1Pt2I21TotalAmount` (sample: `3,000`)
-    pub txt_pg1pt2i21total_amount: String,
-    /// BIR: `frm1702RT:txtPg1Pt2PagesFilled` (sample: `000`)
-    pub txt_pg1pt2pages_filled: u32,
-    /// BIR: `frm1702RT:txtPg1Pt2Signatory1` (sample: ``)
-    pub txt_pg1pt2signatory1: String,
-    /// BIR: `frm1702RT:txtPg1Pt2Signatory2` (sample: ``)
-    pub txt_pg1pt2signatory2: String,
-    /// BIR: `frm1702RT:txtPg1Pt3I23DebitMemoC1` (sample: ``)
-    pub txt_pg1pt3i23debit_memo_c1: String,
-    /// BIR: `frm1702RT:txtPg1Pt3I23DebitMemoC2` (sample: ``)
-    pub txt_pg1pt3i23debit_memo_c2: String,
-    /// BIR: `frm1702RT:txtPg1Pt3I23DebitMemoC3Date` (sample: ``)
-    pub txt_pg1pt3i23debit_memo_c3date: String,
-    /// BIR: `frm1702RT:txtPg1Pt3I23DebitMemoC4Amount` (sample: `0`)
-    pub txt_pg1pt3i23debit_memo_c4amount: u32,
-    /// BIR: `frm1702RT:txtPg1Pt3I24CheckC1` (sample: ``)
-    pub txt_pg1pt3i24check_c1: String,
-    /// BIR: `frm1702RT:txtPg1Pt3I24CheckC2` (sample: ``)
-    pub txt_pg1pt3i24check_c2: String,
-    /// BIR: `frm1702RT:txtPg1Pt3I24CheckC3Date` (sample: ``)
-    pub txt_pg1pt3i24check_c3date: String,
-    /// BIR: `frm1702RT:txtPg1Pt3I24CheckC4Amount` (sample: `0`)
-    pub txt_pg1pt3i24check_c4amount: u32,
-    /// BIR: `frm1702RT:txtPg1Pt3I25TaxDebitC2` (sample: ``)
-    pub txt_pg1pt3i25tax_debit_c2: String,
-    /// BIR: `frm1702RT:txtPg1Pt3I25TaxDebitC4Amount` (sample: `0`)
-    pub txt_pg1pt3i25tax_debit_c4amount: u32,
-    /// BIR: `frm1702RT:txtPg1Pt3I25TaxDebitDate` (sample: ``)
-    pub txt_pg1pt3i25tax_debit_date: String,
-    /// BIR: `frm1702RT:txtPg1Pt3I26Others` (sample: ``)
-    pub txt_pg1pt3i26others: String,
-    /// BIR: `frm1702RT:txtPg1Pt3I26OthersC1` (sample: ``)
-    pub txt_pg1pt3i26others_c1: String,
-    /// BIR: `frm1702RT:txtPg1Pt3I26OthersC2` (sample: ``)
-    pub txt_pg1pt3i26others_c2: String,
-    /// BIR: `frm1702RT:txtPg1Pt3I26OthersC3Date` (sample: ``)
-    pub txt_pg1pt3i26others_c3date: String,
-    /// BIR: `frm1702RT:txtPg1Pt3I26OthersC4Amount` (sample: `0`)
-    pub txt_pg1pt3i26others_c4amount: u32,
-    /// BIR: `frm1702RT:txtPg2Pt452SpecialTaxCredits` (sample: `1,000`)
-    pub txt_pg2pt452special_tax_credits: String,
-    /// BIR: `frm1702RT:txtPg2Pt4I27Sales` (sample: `1,000`)
-    pub txt_pg2pt4i27sales: String,
-    /// BIR: `frm1702RT:txtPg2Pt4I28LessSales` (sample: `1,000`)
-    pub txt_pg2pt4i28less_sales: String,
-    /// BIR: `frm1702RT:txtPg2Pt4I29NetSales` (sample: `0`)
-    pub txt_pg2pt4i29net_sales: u32,
-    /// BIR: `frm1702RT:txtPg2Pt4I30LessCost` (sample: `1,000`)
-    pub txt_pg2pt4i30less_cost: String,
-    /// BIR: `frm1702RT:txtPg2Pt4I31GrossIncome` (sample: `-1,000`)
-    pub txt_pg2pt4i31gross_income: String,
-    /// BIR: `frm1702RT:txtPg2Pt4I32AddOtherTaxable` (sample: `1,000`)
-    pub txt_pg2pt4i32add_other_taxable: String,
-    /// BIR: `frm1702RT:txtPg2Pt4I33TotalGross` (sample: `0`)
-    pub txt_pg2pt4i33total_gross: u32,
-    /// BIR: `frm1702RT:txtPg2Pt4I34OrdinaryAllowable` (sample: `0`)
-    pub txt_pg2pt4i34ordinary_allowable: u32,
-    /// BIR: `frm1702RT:txtPg2Pt4I35SpecialAllowable` (sample: `0`)
-    pub txt_pg2pt4i35special_allowable: u32,
-    /// BIR: `frm1702RT:txtPg2Pt4I36Nolco` (sample: `0`)
-    pub txt_pg2pt4i36nolco: u32,
-    /// BIR: `frm1702RT:txtPg2Pt4I37TotalItemized` (sample: `0`)
-    pub txt_pg2pt4i37total_itemized: u32,
-    /// BIR: `frm1702RT:txtPg2Pt4I38OptionalStandard` (sample: `0`)
-    pub txt_pg2pt4i38optional_standard: u32,
-    /// BIR: `frm1702RT:txtPg2Pt4I39NetTaxable` (sample: `0`)
-    pub txt_pg2pt4i39net_taxable: u32,
-    /// BIR: `frm1702RT:txtPg2Pt4I41IncomeTaxDue` (sample: `0`)
-    pub txt_pg2pt4i41income_tax_due: u32,
-    /// BIR: `frm1702RT:txtPg2Pt4I42MinimumCorporate` (sample: `1,000`)
-    pub txt_pg2pt4i42minimum_corporate: String,
-    /// BIR: `frm1702RT:txtPg2Pt4I43TotalIncomeTax` (sample: `1,000`)
-    pub txt_pg2pt4i43total_income_tax: String,
-    /// BIR: `frm1702RT:txtPg2Pt4I44ExcessCredits` (sample: `1,000`)
-    pub txt_pg2pt4i44excess_credits: String,
-    /// BIR: `frm1702RT:txtPg2Pt4I45IncomeTaxPaymentUnderMCIT` (sample: `1,000`)
-    pub txt_pg2pt4i45income_tax_payment_under_mcit: String,
-    /// BIR: `frm1702RT:txtPg2Pt4I46IncomeTaxUnderRegular` (sample: `1,000`)
-    pub txt_pg2pt4i46income_tax_under_regular: String,
-    /// BIR: `frm1702RT:txtPg2Pt4I47ExcessMCIT` (sample: `0`)
-    pub txt_pg2pt4i47excess_mcit: u32,
-    /// BIR: `frm1702RT:txtPg2Pt4I48CreditableTaxWithheldFromPrevious` (sample: `1,000`)
-    pub txt_pg2pt4i48creditable_tax_withheld_from_previous: String,
-    /// BIR: `frm1702RT:txtPg2Pt4I50ForeignTaxCredits` (sample: `1,000`)
-    pub txt_pg2pt4i50foreign_tax_credits: String,
-    /// BIR: `frm1702RT:txtPg2Pt4I51TaxPaidInReturn` (sample: `0`)
-    pub txt_pg2pt4i51tax_paid_in_return: u32,
-    /// BIR: `frm1702RT:txtPg2Pt4I53C1` (sample: `EXAMPLE`)
-    pub txt_pg2pt4i53c1: String,
-    /// BIR: `frm1702RT:txtPg2Pt4I53C2` (sample: `1,000`)
-    pub txt_pg2pt4i53c2: String,
-    /// BIR: `frm1702RT:txtPg2Pt4I54C1` (sample: `EXAMPLE 2`)
-    pub txt_pg2pt4i54c1: String,
-    /// BIR: `frm1702RT:txtPg2Pt4I54C2` (sample: `1,000`)
-    pub txt_pg2pt4i54c2: String,
-    /// BIR: `frm1702RT:txtPg2Pt4I54CtrModal` (sample: `0`)
-    pub txt_pg2pt4i54ctr_modal: u32,
-    /// BIR: `frm1702RT:txtPg2Pt4I54Subtotal` (sample: `0`)
-    pub txt_pg2pt4i54subtotal: u32,
-    /// BIR: `frm1702RT:txtPg2Pt4I55TotalTaxCredits` (sample: `9,000`)
-    pub txt_pg2pt4i55total_tax_credits: String,
-    /// BIR: `frm1702RT:txtPg2Pt4I56NetTax` (sample: `-8,000`)
-    pub txt_pg2pt4i56net_tax: String,
-    /// BIR: `frm1702RT:txtPg2Pt5I57SpecialAllowable` (sample: `0`)
-    pub txt_pg2pt5i57special_allowable: u32,
-    /// BIR: `frm1702RT:txtPg2Pt5I58AddSpecialTax` (sample: `1,000`)
-    pub txt_pg2pt5i58add_special_tax: String,
-    /// BIR: `frm1702RT:txtPg2Pt5I59TotalTax` (sample: `1,000`)
-    pub txt_pg2pt5i59total_tax: String,
-    /// BIR: `frm1702RT:txtPg2RegisteredName` (sample: `JUAN DELA CRUZ`)
-    pub txt_pg2registered_name: String,
-    /// BIR: `frm1702RT:txtPg2TIN4` (sample: `00000`)
-    pub txt_pg2tin4: u32,
-    /// BIR: `frm1702RT:txtPg3RegisteredName` (sample: `JUAN DELA CRUZ`)
-    pub txt_pg3registered_name: String,
-    /// BIR: `frm1702RT:txtPg3Sc1I10PensionTrust` (sample: `0`)
-    pub txt_pg3sc1i10pension_trust: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I11Rental` (sample: `0`)
-    pub txt_pg3sc1i11rental: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I12Research` (sample: `0`)
-    pub txt_pg3sc1i12research: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I13Salaries` (sample: `0`)
-    pub txt_pg3sc1i13salaries: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I14Contributions` (sample: `0`)
-    pub txt_pg3sc1i14contributions: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I15TaxesandLicenses` (sample: `0`)
-    pub txt_pg3sc1i15taxesand_licenses: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I16TransportationandTravel` (sample: `0`)
-    pub txt_pg3sc1i16transportationand_travel: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I17aJanitorial` (sample: `0`)
-    pub txt_pg3sc1i17a_janitorial: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I17bProfessionalFees` (sample: `0`)
-    pub txt_pg3sc1i17b_professional_fees: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I17cSecurityServices` (sample: `0`)
-    pub txt_pg3sc1i17c_security_services: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I17dC1` (sample: ``)
-    pub txt_pg3sc1i17d_c1: String,
-    /// BIR: `frm1702RT:txtPg3Sc1I17dC2` (sample: `0`)
-    pub txt_pg3sc1i17d_c2: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I17eC1` (sample: ``)
-    pub txt_pg3sc1i17e_c1: String,
-    /// BIR: `frm1702RT:txtPg3Sc1I17eC2` (sample: `0`)
-    pub txt_pg3sc1i17e_c2: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I17fC1` (sample: ``)
-    pub txt_pg3sc1i17f_c1: String,
-    /// BIR: `frm1702RT:txtPg3Sc1I17fC2` (sample: `0`)
-    pub txt_pg3sc1i17f_c2: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I17gC1` (sample: ``)
-    pub txt_pg3sc1i17g_c1: String,
-    /// BIR: `frm1702RT:txtPg3Sc1I17gC2` (sample: `0`)
-    pub txt_pg3sc1i17g_c2: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I17hC1` (sample: ``)
-    pub txt_pg3sc1i17h_c1: String,
-    /// BIR: `frm1702RT:txtPg3Sc1I17hC2` (sample: `0`)
-    pub txt_pg3sc1i17h_c2: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I17iC1` (sample: ``)
-    pub txt_pg3sc1i17i_c1: String,
-    /// BIR: `frm1702RT:txtPg3Sc1I17iC2` (sample: `0`)
-    pub txt_pg3sc1i17i_c2: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I17iCtrModal` (sample: `0`)
-    pub txt_pg3sc1i17i_ctr_modal: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I17iSubtotal` (sample: `0`)
-    pub txt_pg3sc1i17i_subtotal: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I18TotalOrdinaryAllowable` (sample: `0`)
-    pub txt_pg3sc1i18total_ordinary_allowable: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I1Amortization` (sample: `0`)
-    pub txt_pg3sc1i1amortization: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I2BadDebts` (sample: `0`)
-    pub txt_pg3sc1i2bad_debts: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I3CharitableContributions` (sample: `0`)
-    pub txt_pg3sc1i3charitable_contributions: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I4Depletion` (sample: `0`)
-    pub txt_pg3sc1i4depletion: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I5Depreciation` (sample: `0`)
-    pub txt_pg3sc1i5depreciation: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I6Entertainment` (sample: `0`)
-    pub txt_pg3sc1i6entertainment: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I7FringeBenefits` (sample: `0`)
-    pub txt_pg3sc1i7fringe_benefits: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I8Interest` (sample: `0`)
-    pub txt_pg3sc1i8interest: u32,
-    /// BIR: `frm1702RT:txtPg3Sc1I9Losses` (sample: `0`)
-    pub txt_pg3sc1i9losses: u32,
-    /// BIR: `frm1702RT:txtPg3Sc2I1C1` (sample: ``)
-    pub txt_pg3sc2i1c1: String,
-    /// BIR: `frm1702RT:txtPg3Sc2I1C2` (sample: ``)
-    pub txt_pg3sc2i1c2: String,
-    /// BIR: `frm1702RT:txtPg3Sc2I1C3` (sample: `0`)
-    pub txt_pg3sc2i1c3: u32,
-    /// BIR: `frm1702RT:txtPg3Sc2I2C1` (sample: ``)
-    pub txt_pg3sc2i2c1: String,
-    /// BIR: `frm1702RT:txtPg3Sc2I2C2` (sample: ``)
-    pub txt_pg3sc2i2c2: String,
-    /// BIR: `frm1702RT:txtPg3Sc2I2C3` (sample: `0`)
-    pub txt_pg3sc2i2c3: u32,
-    /// BIR: `frm1702RT:txtPg3Sc2I3C1` (sample: ``)
-    pub txt_pg3sc2i3c1: String,
-    /// BIR: `frm1702RT:txtPg3Sc2I3C2` (sample: ``)
-    pub txt_pg3sc2i3c2: String,
-    /// BIR: `frm1702RT:txtPg3Sc2I3C3` (sample: `0`)
-    pub txt_pg3sc2i3c3: u32,
-    /// BIR: `frm1702RT:txtPg3Sc2I4C1` (sample: ``)
-    pub txt_pg3sc2i4c1: String,
-    /// BIR: `frm1702RT:txtPg3Sc2I4C2` (sample: ``)
-    pub txt_pg3sc2i4c2: String,
-    /// BIR: `frm1702RT:txtPg3Sc2I4C3` (sample: `0`)
-    pub txt_pg3sc2i4c3: u32,
-    /// BIR: `frm1702RT:txtPg3Sc2I4CtrModal` (sample: `0`)
-    pub txt_pg3sc2i4ctr_modal: u32,
-    /// BIR: `frm1702RT:txtPg3Sc2I4Subtotal` (sample: `0`)
-    pub txt_pg3sc2i4subtotal: u32,
-    /// BIR: `frm1702RT:txtPg3Sc2I5TotalSpecialAllowable` (sample: `0`)
-    pub txt_pg3sc2i5total_special_allowable: u32,
-    /// BIR: `frm1702RT:txtPg3TIN4` (sample: `00000`)
-    pub txt_pg3tin4: u32,
-    /// BIR: `frm1702RT:txtPg4RegisteredName` (sample: `JUAN DELA CRUZ`)
-    pub txt_pg4registered_name: String,
-    /// BIR: `frm1702RT:txtPg4Sc3AI4C1` (sample: ``)
-    pub txt_pg4sc3ai4c1: String,
-    /// BIR: `frm1702RT:txtPg4Sc3AI4C2` (sample: `0`)
-    pub txt_pg4sc3ai4c2: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI4C3` (sample: `0`)
-    pub txt_pg4sc3ai4c3: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI4C4` (sample: `0`)
-    pub txt_pg4sc3ai4c4: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI4C5` (sample: `0`)
-    pub txt_pg4sc3ai4c5: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI4C6` (sample: `0`)
-    pub txt_pg4sc3ai4c6: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI5C1` (sample: ``)
-    pub txt_pg4sc3ai5c1: String,
-    /// BIR: `frm1702RT:txtPg4Sc3AI5C2` (sample: `0`)
-    pub txt_pg4sc3ai5c2: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI5C3` (sample: `0`)
-    pub txt_pg4sc3ai5c3: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI5C4` (sample: `0`)
-    pub txt_pg4sc3ai5c4: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI5C5` (sample: `0`)
-    pub txt_pg4sc3ai5c5: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI5C6` (sample: `0`)
-    pub txt_pg4sc3ai5c6: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI6C1` (sample: ``)
-    pub txt_pg4sc3ai6c1: String,
-    /// BIR: `frm1702RT:txtPg4Sc3AI6C2` (sample: `0`)
-    pub txt_pg4sc3ai6c2: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI6C3` (sample: `0`)
-    pub txt_pg4sc3ai6c3: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI6C4` (sample: `0`)
-    pub txt_pg4sc3ai6c4: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI6C5` (sample: `0`)
-    pub txt_pg4sc3ai6c5: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI6C6` (sample: `0`)
-    pub txt_pg4sc3ai6c6: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI7C1` (sample: ``)
-    pub txt_pg4sc3ai7c1: String,
-    /// BIR: `frm1702RT:txtPg4Sc3AI7C2` (sample: `0`)
-    pub txt_pg4sc3ai7c2: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI7C2Subtotal` (sample: `0`)
-    pub txt_pg4sc3ai7c2subtotal: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI7C3` (sample: `0`)
-    pub txt_pg4sc3ai7c3: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI7C3Subtotal` (sample: `0`)
-    pub txt_pg4sc3ai7c3subtotal: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI7C4` (sample: `0`)
-    pub txt_pg4sc3ai7c4: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI7C4Subtotal` (sample: `0`)
-    pub txt_pg4sc3ai7c4subtotal: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI7C5` (sample: `0`)
-    pub txt_pg4sc3ai7c5: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI7C5Subtotal` (sample: `0`)
-    pub txt_pg4sc3ai7c5subtotal: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI7C6` (sample: `0`)
-    pub txt_pg4sc3ai7c6: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3AI7C6Subtotal` (sample: `0`)
-    pub txt_pg4sc3ai7c6subtotal: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3I1GrossIncome` (sample: `0`)
-    pub txt_pg4sc3i1gross_income: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3I2TotalDeductions` (sample: `0`)
-    pub txt_pg4sc3i2total_deductions: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3I3NetOperatingLoss` (sample: `0`)
-    pub txt_pg4sc3i3net_operating_loss: u32,
-    /// BIR: `frm1702RT:txtPg4Sc3I3Subtotal` (sample: `0`)
-    pub txt_pg4sc3i3subtotal: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I1C1` (sample: ``)
-    pub txt_pg4sc4i1c1: String,
-    /// BIR: `frm1702RT:txtPg4Sc4I1C2` (sample: `0`)
-    pub txt_pg4sc4i1c2: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I1C3` (sample: `0`)
-    pub txt_pg4sc4i1c3: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I1C4` (sample: `0`)
-    pub txt_pg4sc4i1c4: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I1C5` (sample: `0`)
-    pub txt_pg4sc4i1c5: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I1C6` (sample: `0`)
-    pub txt_pg4sc4i1c6: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I1C7` (sample: `0`)
-    pub txt_pg4sc4i1c7: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I1C8` (sample: `0`)
-    pub txt_pg4sc4i1c8: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I2C1` (sample: ``)
-    pub txt_pg4sc4i2c1: String,
-    /// BIR: `frm1702RT:txtPg4Sc4I2C2` (sample: `0`)
-    pub txt_pg4sc4i2c2: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I2C3` (sample: `0`)
-    pub txt_pg4sc4i2c3: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I2C4` (sample: `0`)
-    pub txt_pg4sc4i2c4: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I2C5` (sample: `0`)
-    pub txt_pg4sc4i2c5: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I2C6` (sample: `0`)
-    pub txt_pg4sc4i2c6: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I2C7` (sample: `0`)
-    pub txt_pg4sc4i2c7: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I2C8` (sample: `0`)
-    pub txt_pg4sc4i2c8: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I3C1` (sample: ``)
-    pub txt_pg4sc4i3c1: String,
-    /// BIR: `frm1702RT:txtPg4Sc4I3C2` (sample: `0`)
-    pub txt_pg4sc4i3c2: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I3C3` (sample: `0`)
-    pub txt_pg4sc4i3c3: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I3C4` (sample: `0`)
-    pub txt_pg4sc4i3c4: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I3C5` (sample: `0`)
-    pub txt_pg4sc4i3c5: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I3C6` (sample: `0`)
-    pub txt_pg4sc4i3c6: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I3C7` (sample: `0`)
-    pub txt_pg4sc4i3c7: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I3C8` (sample: `0`)
-    pub txt_pg4sc4i3c8: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I4Subtotal` (sample: `0`)
-    pub txt_pg4sc4i4subtotal: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I4TotalExcessMCIT` (sample: `0`)
-    pub txt_pg4sc4i4total_excess_mcit: u32,
-    /// BIR: `frm1702RT:txtPg4Sc4I8TotalNOLCO` (sample: `0`)
-    pub txt_pg4sc4i8total_nolco: u32,
-    /// BIR: `frm1702RT:txtPg4Sc5I10NetTaxableIncome` (sample: `0`)
-    pub txt_pg4sc5i10net_taxable_income: u32,
-    /// BIR: `frm1702RT:txtPg4Sc5I1NetIncome` (sample: `0`)
-    pub txt_pg4sc5i1net_income: u32,
-    /// BIR: `frm1702RT:txtPg4Sc5I2C1` (sample: ``)
-    pub txt_pg4sc5i2c1: String,
-    /// BIR: `frm1702RT:txtPg4Sc5I2C2` (sample: `0`)
-    pub txt_pg4sc5i2c2: u32,
-    /// BIR: `frm1702RT:txtPg4Sc5I3C1` (sample: ``)
-    pub txt_pg4sc5i3c1: String,
-    /// BIR: `frm1702RT:txtPg4Sc5I3C2` (sample: `0`)
-    pub txt_pg4sc5i3c2: u32,
-    /// BIR: `frm1702RT:txtPg4Sc5I3CtrModal` (sample: `0`)
-    pub txt_pg4sc5i3ctr_modal: u32,
-    /// BIR: `frm1702RT:txtPg4Sc5I3Subtotal` (sample: `0`)
-    pub txt_pg4sc5i3subtotal: u32,
-    /// BIR: `frm1702RT:txtPg4Sc5I4Total` (sample: `0`)
-    pub txt_pg4sc5i4total: u32,
-    /// BIR: `frm1702RT:txtPg4Sc5I5C1` (sample: ``)
-    pub txt_pg4sc5i5c1: String,
-    /// BIR: `frm1702RT:txtPg4Sc5I5C2` (sample: `0`)
-    pub txt_pg4sc5i5c2: u32,
-    /// BIR: `frm1702RT:txtPg4Sc5I6C1` (sample: ``)
-    pub txt_pg4sc5i6c1: String,
-    /// BIR: `frm1702RT:txtPg4Sc5I6C2` (sample: `0`)
-    pub txt_pg4sc5i6c2: u32,
-    /// BIR: `frm1702RT:txtPg4Sc5I6CtrModal` (sample: `0`)
-    pub txt_pg4sc5i6ctr_modal: u32,
-    /// BIR: `frm1702RT:txtPg4Sc5I6Subtotal` (sample: `0`)
-    pub txt_pg4sc5i6subtotal: u32,
-    /// BIR: `frm1702RT:txtPg4Sc5I7C1` (sample: ``)
-    pub txt_pg4sc5i7c1: String,
-    /// BIR: `frm1702RT:txtPg4Sc5I7C2` (sample: `0`)
-    pub txt_pg4sc5i7c2: u32,
-    /// BIR: `frm1702RT:txtPg4Sc5I8C1` (sample: ``)
-    pub txt_pg4sc5i8c1: String,
-    /// BIR: `frm1702RT:txtPg4Sc5I8C2` (sample: `0`)
-    pub txt_pg4sc5i8c2: u32,
-    /// BIR: `frm1702RT:txtPg4Sc5I8CtrModal` (sample: `0`)
-    pub txt_pg4sc5i8ctr_modal: u32,
-    /// BIR: `frm1702RT:txtPg4Sc5I8Subtotal` (sample: `0`)
-    pub txt_pg4sc5i8subtotal: u32,
-    /// BIR: `frm1702RT:txtPg4Sc5I9Total` (sample: `0`)
-    pub txt_pg4sc5i9total: u32,
-    /// BIR: `frm1702RT:txtPg4TIN4` (sample: `00000`)
-    pub txt_pg4tin4: u32,
-    /// BIR: `frm1702RT:txtRDO` (sample: `018`)
-    pub txt_rdo: u32,
-    /// BIR: `frm1702RT:txtSignaturePresident` (sample: ``)
-    pub txt_signature_president: String,
-    /// BIR: `frm1702RT:txtSignatureTreasurer` (sample: ``)
-    pub txt_signature_treasurer: String,
-    /// BIR: `frm1702RT:txtZIP` (sample: `2200`)
-    pub txt_zip: u32,
-
-    /// BIR: `frm1702RT:txtPg2Pt4I49CreditableTaxWithheldFor4thQuarter` (sample: `1,000`)
-    pub txt_pg2pt4i49creditable_tax_withheld_for4th_quarter: String,
-
-    // === Lifecycle ===
+    pub deduction_method: Form1702RTDeductionMethod,
+    pub part_ii: Form1702RTPartII,
+    /// Official fixed payment rows: Cash/Bank Debit Memo, Check, Tax Debit
+    /// Memo, and Others.
+    pub payment_details: [Form1702RTPaymentDetail; 4],
+    pub part_iv: Form1702RTPartIV,
+    pub part_v: Form1702RTPartV,
+    pub schedule_1: Form1702RTSchedule1,
+    pub schedule_2: Form1702RTSchedule2,
+    pub schedule_3: Form1702RTSchedule3,
+    pub schedule_4: Form1702RTSchedule4,
+    pub schedule_5: Form1702RTSchedule5,
+    pub president_signature: String,
+    pub treasurer_signature: String,
+    /// XML `txtPg1Pt2Signatory1` is printed under "Title of Signatory".
+    #[serde(alias = "president_signatory_name")]
+    pub president_signatory_title: String,
+    pub president_signatory_tin: String,
+    /// XML `txtPg1Pt2Signatory2` is printed under "Title of Signatory".
+    #[serde(alias = "treasurer_signatory_name")]
+    pub treasurer_signatory_title: String,
+    pub treasurer_signatory_tin: String,
+    /// Item 22 is a three-character field in the reviewed save.
+    pub number_of_attachments: String,
+    /// Reviewed values are `0` (encrypted companion) and `1` (plain save).
+    pub xml_final_flag: String,
+    #[serde(default)]
+    pub preserved_transport_fields: BTreeMap<String, String>,
+    #[serde(default)]
+    pub calculation_issues: Vec<(String, String)>,
     pub status: FilingStatus,
     pub created_at: String,
     pub updated_at: String,
-    #[serde(default)]
     pub submitted_at: Option<String>,
-    #[serde(default)]
     pub confirmed_at: Option<String>,
-    #[serde(default)]
     pub submission_filename: Option<String>,
-    #[serde(default)]
     pub receipt_id: Option<i64>,
-    #[serde(default)]
     pub submission_attempts: u32,
-    #[serde(default)]
     pub next_retry_at: Option<String>,
-    #[serde(default)]
     pub last_error: Option<String>,
 }
 
-impl FormValidator for Form1702RTDraft {
-    fn validate(&self) -> Vec<(String, String)> {
-        let mut errors = Vec::new();
-        if self.tin.is_empty() {
-            errors.push(("tin".into(), "TIN is required".into()));
-        }
-        if self.taxpayer_name.is_empty() {
-            errors.push(("taxpayer_name".into(), "Taxpayer name is required".into()));
-        }
-        // TODO: Add form-specific validation rules
-        errors
-    }
-}
-
 impl Form1702RTDraft {
-    /// Create a new draft from a taxpayer profile.
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, month: u8) -> Self {
         let now = chrono::Utc::now().to_rfc3339();
-        Self {
-            id: None,
+        let incorporation_date = profile.business_start_date.and_then(|date| {
+            use chrono::Datelike;
+            Form1702RTDate::new(
+                u16::try_from(date.year()).ok()?,
+                u8::try_from(date.month()).ok()?,
+                u8::try_from(date.day()).ok()?,
+            )
+            .ok()
+        });
+        let mut draft = Self {
             tin: profile.tin.full(),
             taxable_year: year,
             month,
+            filing_basis: Form1702RTFilingBasis::Calendar,
             rdo_code: profile.rdo_code.clone(),
             taxpayer_name: profile.full_name.clone(),
+            registered_name_lines: [profile.full_name.clone(), String::new(), String::new()],
             registered_address: profile.registered_address.clone(),
+            registered_address_lines: [
+                profile.registered_address.clone(),
+                String::new(),
+                String::new(),
+            ],
             zip_code: profile.zip_code.clone(),
+            incorporation_date,
             contact_number: profile.phone.clone(),
             email: profile.email.clone(),
-            branch_mask_p1: 0,
-            pg2pt4i40income_tax_rate: 0,
-            rdo_pg1i1calendar: true,
-            rdo_pg1i1fiscal: false,
-            rdo_pg1i3ammend_no: true,
-            rdo_pg1i3ammend_yes: false,
-            rdo_pg1i4short_period_no: true,
-            rdo_pg1i4short_period_yes: false,
-            rdo_pg1i5atc: true,
-            rdo_pg1i5atc_other: true,
-            rdo_pg1pt1i13itemized_deduction: false,
-            rdo_pg1pt1i13optional_standard: true,
-            rdo_pg1pt2i21overpayment_carried: false,
-            rdo_pg1pt2i21overpayment_issued: false,
-            rdo_pg1pt2i21overpayment_refunded: true,
-            drp_pg1i5atc_other: String::new(),
-            txt_branch_mask_p2: 0,
-            txt_branch_mask_p3: 0,
-            txt_branch_mask_p4: 0,
-            txt_current_page: 0,
-            txt_max_page: 0,
-            txt_pg1pt1i10: String::new(),
-            txt_pg1pt1i11contact: String::new(),
-            txt_pg1pt1i12email: String::new(),
-            txt_pg1pt1i6tin4: 0,
-            txt_pg1pt1i8name1: String::new(),
-            txt_pg1pt1i8name2: String::new(),
-            txt_pg1pt1i8name3: String::new(),
-            txt_pg1pt1i9address1: String::new(),
-            txt_pg1pt1i9address2: String::new(),
-            txt_pg1pt1i9address3: String::new(),
-            txt_pg1pt2i14income_tax: String::new(),
-            txt_pg1pt2i15total_tax_credits: String::new(),
-            txt_pg1pt2i16net_tax: String::new(),
-            txt_pg1pt2i17surcharge: String::new(),
-            txt_pg1pt2i18interest: String::new(),
-            txt_pg1pt2i19compromise: String::new(),
-            txt_pg1pt2i20total_penalties: String::new(),
-            txt_pg1pt2i21total_amount: String::new(),
-            txt_pg1pt2pages_filled: 0,
-            txt_pg1pt2signatory1: String::new(),
-            txt_pg1pt2signatory2: String::new(),
-            txt_pg1pt3i23debit_memo_c1: String::new(),
-            txt_pg1pt3i23debit_memo_c2: String::new(),
-            txt_pg1pt3i23debit_memo_c3date: String::new(),
-            txt_pg1pt3i23debit_memo_c4amount: 0,
-            txt_pg1pt3i24check_c1: String::new(),
-            txt_pg1pt3i24check_c2: String::new(),
-            txt_pg1pt3i24check_c3date: String::new(),
-            txt_pg1pt3i24check_c4amount: 0,
-            txt_pg1pt3i25tax_debit_c2: String::new(),
-            txt_pg1pt3i25tax_debit_c4amount: 0,
-            txt_pg1pt3i25tax_debit_date: String::new(),
-            txt_pg1pt3i26others: String::new(),
-            txt_pg1pt3i26others_c1: String::new(),
-            txt_pg1pt3i26others_c2: String::new(),
-            txt_pg1pt3i26others_c3date: String::new(),
-            txt_pg1pt3i26others_c4amount: 0,
-            txt_pg2pt452special_tax_credits: String::new(),
-            txt_pg2pt4i27sales: String::new(),
-            txt_pg2pt4i28less_sales: String::new(),
-            txt_pg2pt4i29net_sales: 0,
-            txt_pg2pt4i30less_cost: String::new(),
-            txt_pg2pt4i31gross_income: String::new(),
-            txt_pg2pt4i32add_other_taxable: String::new(),
-            txt_pg2pt4i33total_gross: 0,
-            txt_pg2pt4i34ordinary_allowable: 0,
-            txt_pg2pt4i35special_allowable: 0,
-            txt_pg2pt4i36nolco: 0,
-            txt_pg2pt4i37total_itemized: 0,
-            txt_pg2pt4i38optional_standard: 0,
-            txt_pg2pt4i39net_taxable: 0,
-            txt_pg2pt4i41income_tax_due: 0,
-            txt_pg2pt4i42minimum_corporate: String::new(),
-            txt_pg2pt4i43total_income_tax: String::new(),
-            txt_pg2pt4i44excess_credits: String::new(),
-            txt_pg2pt4i45income_tax_payment_under_mcit: String::new(),
-            txt_pg2pt4i46income_tax_under_regular: String::new(),
-            txt_pg2pt4i47excess_mcit: 0,
-            txt_pg2pt4i48creditable_tax_withheld_from_previous: String::new(),
-            txt_pg2pt4i50foreign_tax_credits: String::new(),
-            txt_pg2pt4i51tax_paid_in_return: 0,
-            txt_pg2pt4i53c1: String::new(),
-            txt_pg2pt4i53c2: String::new(),
-            txt_pg2pt4i54c1: String::new(),
-            txt_pg2pt4i54c2: String::new(),
-            txt_pg2pt4i54ctr_modal: 0,
-            txt_pg2pt4i54subtotal: 0,
-            txt_pg2pt4i55total_tax_credits: String::new(),
-            txt_pg2pt4i56net_tax: String::new(),
-            txt_pg2pt5i57special_allowable: 0,
-            txt_pg2pt5i58add_special_tax: String::new(),
-            txt_pg2pt5i59total_tax: String::new(),
-            txt_pg2registered_name: String::new(),
-            txt_pg2tin4: 0,
-            txt_pg3registered_name: String::new(),
-            txt_pg3sc1i10pension_trust: 0,
-            txt_pg3sc1i11rental: 0,
-            txt_pg3sc1i12research: 0,
-            txt_pg3sc1i13salaries: 0,
-            txt_pg3sc1i14contributions: 0,
-            txt_pg3sc1i15taxesand_licenses: 0,
-            txt_pg3sc1i16transportationand_travel: 0,
-            txt_pg3sc1i17a_janitorial: 0,
-            txt_pg3sc1i17b_professional_fees: 0,
-            txt_pg3sc1i17c_security_services: 0,
-            txt_pg3sc1i17d_c1: String::new(),
-            txt_pg3sc1i17d_c2: 0,
-            txt_pg3sc1i17e_c1: String::new(),
-            txt_pg3sc1i17e_c2: 0,
-            txt_pg3sc1i17f_c1: String::new(),
-            txt_pg3sc1i17f_c2: 0,
-            txt_pg3sc1i17g_c1: String::new(),
-            txt_pg3sc1i17g_c2: 0,
-            txt_pg3sc1i17h_c1: String::new(),
-            txt_pg3sc1i17h_c2: 0,
-            txt_pg3sc1i17i_c1: String::new(),
-            txt_pg3sc1i17i_c2: 0,
-            txt_pg3sc1i17i_ctr_modal: 0,
-            txt_pg3sc1i17i_subtotal: 0,
-            txt_pg3sc1i18total_ordinary_allowable: 0,
-            txt_pg3sc1i1amortization: 0,
-            txt_pg3sc1i2bad_debts: 0,
-            txt_pg3sc1i3charitable_contributions: 0,
-            txt_pg3sc1i4depletion: 0,
-            txt_pg3sc1i5depreciation: 0,
-            txt_pg3sc1i6entertainment: 0,
-            txt_pg3sc1i7fringe_benefits: 0,
-            txt_pg3sc1i8interest: 0,
-            txt_pg3sc1i9losses: 0,
-            txt_pg3sc2i1c1: String::new(),
-            txt_pg3sc2i1c2: String::new(),
-            txt_pg3sc2i1c3: 0,
-            txt_pg3sc2i2c1: String::new(),
-            txt_pg3sc2i2c2: String::new(),
-            txt_pg3sc2i2c3: 0,
-            txt_pg3sc2i3c1: String::new(),
-            txt_pg3sc2i3c2: String::new(),
-            txt_pg3sc2i3c3: 0,
-            txt_pg3sc2i4c1: String::new(),
-            txt_pg3sc2i4c2: String::new(),
-            txt_pg3sc2i4c3: 0,
-            txt_pg3sc2i4ctr_modal: 0,
-            txt_pg3sc2i4subtotal: 0,
-            txt_pg3sc2i5total_special_allowable: 0,
-            txt_pg3tin4: 0,
-            txt_pg4registered_name: String::new(),
-            txt_pg4sc3ai4c1: String::new(),
-            txt_pg4sc3ai4c2: 0,
-            txt_pg4sc3ai4c3: 0,
-            txt_pg4sc3ai4c4: 0,
-            txt_pg4sc3ai4c5: 0,
-            txt_pg4sc3ai4c6: 0,
-            txt_pg4sc3ai5c1: String::new(),
-            txt_pg4sc3ai5c2: 0,
-            txt_pg4sc3ai5c3: 0,
-            txt_pg4sc3ai5c4: 0,
-            txt_pg4sc3ai5c5: 0,
-            txt_pg4sc3ai5c6: 0,
-            txt_pg4sc3ai6c1: String::new(),
-            txt_pg4sc3ai6c2: 0,
-            txt_pg4sc3ai6c3: 0,
-            txt_pg4sc3ai6c4: 0,
-            txt_pg4sc3ai6c5: 0,
-            txt_pg4sc3ai6c6: 0,
-            txt_pg4sc3ai7c1: String::new(),
-            txt_pg4sc3ai7c2: 0,
-            txt_pg4sc3ai7c2subtotal: 0,
-            txt_pg4sc3ai7c3: 0,
-            txt_pg4sc3ai7c3subtotal: 0,
-            txt_pg4sc3ai7c4: 0,
-            txt_pg4sc3ai7c4subtotal: 0,
-            txt_pg4sc3ai7c5: 0,
-            txt_pg4sc3ai7c5subtotal: 0,
-            txt_pg4sc3ai7c6: 0,
-            txt_pg4sc3ai7c6subtotal: 0,
-            txt_pg4sc3i1gross_income: 0,
-            txt_pg4sc3i2total_deductions: 0,
-            txt_pg4sc3i3net_operating_loss: 0,
-            txt_pg4sc3i3subtotal: 0,
-            txt_pg4sc4i1c1: String::new(),
-            txt_pg4sc4i1c2: 0,
-            txt_pg4sc4i1c3: 0,
-            txt_pg4sc4i1c4: 0,
-            txt_pg4sc4i1c5: 0,
-            txt_pg4sc4i1c6: 0,
-            txt_pg4sc4i1c7: 0,
-            txt_pg4sc4i1c8: 0,
-            txt_pg4sc4i2c1: String::new(),
-            txt_pg4sc4i2c2: 0,
-            txt_pg4sc4i2c3: 0,
-            txt_pg4sc4i2c4: 0,
-            txt_pg4sc4i2c5: 0,
-            txt_pg4sc4i2c6: 0,
-            txt_pg4sc4i2c7: 0,
-            txt_pg4sc4i2c8: 0,
-            txt_pg4sc4i3c1: String::new(),
-            txt_pg4sc4i3c2: 0,
-            txt_pg4sc4i3c3: 0,
-            txt_pg4sc4i3c4: 0,
-            txt_pg4sc4i3c5: 0,
-            txt_pg4sc4i3c6: 0,
-            txt_pg4sc4i3c7: 0,
-            txt_pg4sc4i3c8: 0,
-            txt_pg4sc4i4subtotal: 0,
-            txt_pg4sc4i4total_excess_mcit: 0,
-            txt_pg4sc4i8total_nolco: 0,
-            txt_pg4sc5i10net_taxable_income: 0,
-            txt_pg4sc5i1net_income: 0,
-            txt_pg4sc5i2c1: String::new(),
-            txt_pg4sc5i2c2: 0,
-            txt_pg4sc5i3c1: String::new(),
-            txt_pg4sc5i3c2: 0,
-            txt_pg4sc5i3ctr_modal: 0,
-            txt_pg4sc5i3subtotal: 0,
-            txt_pg4sc5i4total: 0,
-            txt_pg4sc5i5c1: String::new(),
-            txt_pg4sc5i5c2: 0,
-            txt_pg4sc5i6c1: String::new(),
-            txt_pg4sc5i6c2: 0,
-            txt_pg4sc5i6ctr_modal: 0,
-            txt_pg4sc5i6subtotal: 0,
-            txt_pg4sc5i7c1: String::new(),
-            txt_pg4sc5i7c2: 0,
-            txt_pg4sc5i8c1: String::new(),
-            txt_pg4sc5i8c2: 0,
-            txt_pg4sc5i8ctr_modal: 0,
-            txt_pg4sc5i8subtotal: 0,
-            txt_pg4sc5i9total: 0,
-            txt_pg4tin4: 0,
-            txt_rdo: 0,
-            txt_signature_president: String::new(),
-            txt_signature_treasurer: String::new(),
-            txt_zip: 0,
-            txt_pg2pt4i49creditable_tax_withheld_for4th_quarter: String::new(),
+            number_of_attachments: "000".to_string(),
+            xml_final_flag: "1".to_string(),
             status: FilingStatus::Draft,
             created_at: now.clone(),
             updated_at: now,
-            submitted_at: None,
-            confirmed_at: None,
-            submission_filename: None,
-            receipt_id: None,
-            submission_attempts: 0,
-            next_retry_at: None,
-            last_error: None,
-        }
-    }
-
-    /// Parse BIR money string (e.g. "1,000.50" or "-8,000") to f64.
-    fn parse_money(s: &str) -> f64 {
-        s.replace(',', "").parse::<f64>().unwrap_or(0.0)
-    }
-
-    /// Format f64 back to BIR money string.
-    fn fmt_money(v: f64) -> String {
-        if v == 0.0 {
-            return "0".to_string();
-        }
-        let neg = v < 0.0;
-        let abs = v.abs();
-        let whole = abs as i64;
-        let frac = ((abs - whole as f64) * 100.0).round() as i64;
-        let s = whole.to_string();
-        let mut result = String::new();
-        for (i, c) in s.chars().rev().enumerate() {
-            if i > 0 && i % 3 == 0 {
-                result.push(',');
-            }
-            result.push(c);
-        }
-        let formatted: String = result.chars().rev().collect();
-        if neg {
-            format!("-{}", formatted)
-        } else if frac > 0 {
-            format!("{}.{:02}", formatted, frac)
-        } else {
-            formatted
-        }
-    }
-
-    /// Recompute all derived fields per BIR 1702RT (Annual ITR for Corporations).
-    ///
-    /// **Key computation (Page 2, Part 4):**
-    /// - Item 29: Net Sales = Sales (27) − Returns/Discounts (28)
-    /// - Item 31: Gross Income = Net Sales − Cost of Sales (30)
-    /// - Item 33: Total Gross = Gross Income + Other Taxable Income (32)
-    /// - Item 37: Total Itemized Deductions (from Schedule 1)
-    /// - Item 38: OSD = 40% of Total Gross (if elected)
-    /// - Item 39: Net Taxable Income = Total Gross − Deductions
-    /// - Item 41: RCIT = Net Taxable × Rate (25% default, or pg2pt4i40income_tax_rate)
-    /// - Item 42: MCIT = 2% × Gross Income (from 4th year of operations)
-    /// - Item 43: Total Income Tax = max(RCIT, MCIT)
-    /// - Items 44-54: Tax Credits
-    /// - Item 55: Total Tax Credits
-    /// - Item 56: Net Tax = Total Income Tax − Total Tax Credits
-    ///
-    /// **Page 1 summary (Items 14-21):**
-    /// - Item 14: Income Tax = Total Tax from Pg2
-    /// - Item 15: Total Tax Credits (from Pg2)
-    /// - Item 16: Net Tax
-    /// - Items 17-19: Penalties (surcharge, interest, compromise)
-    /// - Item 20: Total Penalties
-    /// - Item 21: Total Amount Payable
-    pub fn recompute(&mut self) {
-        let pm = Self::parse_money;
-        let fm = Self::fmt_money;
-
-        // ── Page 2, Part 4: Income Computation ──
-
-        // Item 29: Net Sales
-        let sales = pm(&self.txt_pg2pt4i27sales);
-        let less_sales = pm(&self.txt_pg2pt4i28less_sales);
-        let net_sales = sales - less_sales;
-        self.txt_pg2pt4i29net_sales = net_sales as u32;
-
-        // Item 31: Gross Income
-        let cost = pm(&self.txt_pg2pt4i30less_cost);
-        let gross_income = net_sales - cost;
-        self.txt_pg2pt4i31gross_income = fm(gross_income);
-
-        // Item 33: Total Gross Income
-        let other_taxable = pm(&self.txt_pg2pt4i32add_other_taxable);
-        let total_gross = gross_income + other_taxable;
-        self.txt_pg2pt4i33total_gross = f64::max(0.0, total_gross) as u32;
-
-        // Deductions (OSD or Itemized)
-        if self.rdo_pg1pt1i13optional_standard {
-            // OSD = 40% of total gross
-            let osd = total_gross * 0.40;
-            self.txt_pg2pt4i38optional_standard = f64::max(0.0, osd) as u32;
-            self.txt_pg2pt4i37total_itemized = 0;
-        } else {
-            // Itemized: items 34 + 35 + 36
-            let total_itemized = self.txt_pg2pt4i34ordinary_allowable
-                + self.txt_pg2pt4i35special_allowable
-                + self.txt_pg2pt4i36nolco;
-            self.txt_pg2pt4i37total_itemized = total_itemized;
-            self.txt_pg2pt4i38optional_standard = 0;
-        }
-
-        // Item 39: Net Taxable Income
-        let deductions = if self.rdo_pg1pt1i13optional_standard {
-            self.txt_pg2pt4i38optional_standard as f64
-        } else {
-            self.txt_pg2pt4i37total_itemized as f64
+            ..Self::default()
         };
-        let net_taxable = f64::max(0.0, total_gross - deductions);
-        self.txt_pg2pt4i39net_taxable = net_taxable as u32;
-
-        // Item 40: Income Tax Rate (default 25% for RCIT under CREATE law)
-        let rate = if self.pg2pt4i40income_tax_rate > 0 {
-            self.pg2pt4i40income_tax_rate as f64 / 100.0
-        } else {
-            0.25
-        };
-
-        // Item 41: RCIT = Net Taxable × Rate
-        let rcit = net_taxable * rate;
-        self.txt_pg2pt4i41income_tax_due = rcit as u32;
-
-        // Item 42: MCIT = 2% of Gross Income (1% during CREATE transition)
-        let mcit = f64::max(0.0, gross_income) * 0.02;
-        self.txt_pg2pt4i42minimum_corporate = fm(mcit);
-
-        // Item 43: Total Income Tax = max(RCIT, MCIT)
-        let total_income_tax = f64::max(rcit, mcit);
-        self.txt_pg2pt4i43total_income_tax = fm(total_income_tax);
-
-        // Excess MCIT (Item 47): only when MCIT > RCIT
-        let excess_mcit = if mcit > rcit { mcit - rcit } else { 0.0 };
-        self.txt_pg2pt4i47excess_mcit = excess_mcit as u32;
-
-        // ── Tax Credits (Items 44-54) ──
-        let credits_44 = pm(&self.txt_pg2pt4i44excess_credits);
-        let credits_45 = pm(&self.txt_pg2pt4i45income_tax_payment_under_mcit);
-        let credits_46 = pm(&self.txt_pg2pt4i46income_tax_under_regular);
-        let credits_48 = pm(&self.txt_pg2pt4i48creditable_tax_withheld_from_previous);
-        let credits_49 = pm(&self.txt_pg2pt4i49creditable_tax_withheld_for4th_quarter);
-        let credits_50 = pm(&self.txt_pg2pt4i50foreign_tax_credits);
-        let credits_51 = self.txt_pg2pt4i51tax_paid_in_return as f64;
-        let credits_52 = pm(&self.txt_pg2pt452special_tax_credits);
-        let credits_53 = pm(&self.txt_pg2pt4i53c2);
-        let credits_54 = pm(&self.txt_pg2pt4i54c2);
-
-        let total_tax_credits = credits_44
-            + credits_45
-            + credits_46
-            + credits_48
-            + credits_49
-            + credits_50
-            + credits_51
-            + credits_52
-            + credits_53
-            + credits_54;
-        self.txt_pg2pt4i55total_tax_credits = fm(total_tax_credits);
-
-        // Item 56: Net Tax = Total Income Tax − Total Tax Credits
-        let net_tax = total_income_tax - total_tax_credits;
-        self.txt_pg2pt4i56net_tax = fm(net_tax);
-
-        // ── Page 1 Summary (Part 2) ──
-        self.txt_pg1pt2i14income_tax = fm(total_income_tax);
-        self.txt_pg1pt2i15total_tax_credits = fm(total_tax_credits);
-        self.txt_pg1pt2i16net_tax = fm(net_tax);
-
-        // Penalties
-        let surcharge = pm(&self.txt_pg1pt2i17surcharge);
-        let interest = pm(&self.txt_pg1pt2i18interest);
-        let compromise = pm(&self.txt_pg1pt2i19compromise);
-        let total_penalties = surcharge + interest + compromise;
-        self.txt_pg1pt2i20total_penalties = fm(total_penalties);
-
-        // Total Amount Payable
-        let total_amount = f64::max(0.0, net_tax) + total_penalties;
-        self.txt_pg1pt2i21total_amount = fm(total_amount);
-
-        self.updated_at = chrono::Utc::now().to_rfc3339();
+        draft.recompute();
+        draft
     }
-
-    // ── State Transition Methods ──
 
     pub fn is_editable(&self) -> bool {
         matches!(self.status, FilingStatus::Draft)
     }
 
-    pub fn transition_to_queued(&mut self) -> Result<(), Vec<(String, String)>> {
-        assert!(matches!(self.status, FilingStatus::Draft), "Must be Draft");
-        let errors = self.validate();
-        if errors.is_empty() {
-            self.recompute();
-            self.status = FilingStatus::Queued;
-            self.updated_at = chrono::Utc::now().to_rfc3339();
-            Ok(())
+    /// Recompute only formulas printed by the locked official form. No rate,
+    /// applicability, or floor-at-zero rule is invented.
+    pub fn recompute(&mut self) {
+        self.calculation_issues.clear();
+
+        self.schedule_1.item_18_total = checked_sum(
+            "schedule_1.item_18_total",
+            self.schedule_1
+                .source_amounts()
+                .into_iter()
+                .chain(self.schedule_1.other.iter().map(|row| row.amount)),
+            &mut self.calculation_issues,
+        );
+        self.schedule_2.item_5_total = checked_sum(
+            "schedule_2.item_5_total",
+            self.schedule_2.rows.iter().map(|row| row.amount),
+            &mut self.calculation_issues,
+        );
+
+        // Part IV Items 27-33 are required before Schedule III.
+        self.part_iv.item_29_net_sales = checked_sub(
+            "part_iv.item_29_net_sales",
+            self.part_iv.item_27_sales,
+            self.part_iv.item_28_sales_returns,
+            &mut self.calculation_issues,
+        );
+        self.part_iv.item_31_gross_income_from_operations = checked_sub(
+            "part_iv.item_31_gross_income_from_operations",
+            self.part_iv.item_29_net_sales,
+            self.part_iv.item_30_cost_of_sales_or_services,
+            &mut self.calculation_issues,
+        );
+        self.part_iv.item_33_total_taxable_income = checked_sum(
+            "part_iv.item_33_total_taxable_income",
+            [
+                self.part_iv.item_31_gross_income_from_operations,
+                self.part_iv.item_32_other_taxable_income,
+            ],
+            &mut self.calculation_issues,
+        );
+
+        self.schedule_3.item_1_gross_income = self.part_iv.item_33_total_taxable_income;
+        self.schedule_3.item_2_ordinary_deductions = self.schedule_1.item_18_total;
+        self.schedule_3.item_3_net_operating_loss = checked_sub(
+            "schedule_3.item_3_net_operating_loss",
+            self.schedule_3.item_1_gross_income,
+            self.schedule_3.item_2_ordinary_deductions,
+            &mut self.calculation_issues,
+        );
+        // The official form explicitly carries Schedule III Item 3 to Item 7A.
+        self.schedule_3.rows[3].amount = self.schedule_3.item_3_net_operating_loss;
+        for (index, row) in self.schedule_3.rows.iter_mut().enumerate() {
+            row.unapplied_balance = checked_sub_many(
+                &format!("schedule_3.rows[{index}].unapplied_balance"),
+                row.amount,
+                [
+                    row.applied_previous_years,
+                    row.expired,
+                    row.applied_current_year,
+                ],
+                &mut self.calculation_issues,
+            );
+        }
+        self.schedule_3.item_8_total_applied_current_year = checked_sum(
+            "schedule_3.item_8_total_applied_current_year",
+            self.schedule_3
+                .rows
+                .iter()
+                .map(|row| row.applied_current_year),
+            &mut self.calculation_issues,
+        );
+
+        for (index, row) in self.schedule_4.rows.iter_mut().enumerate() {
+            row.allowable_balance = checked_sub_many(
+                &format!("schedule_4.rows[{index}].allowable_balance"),
+                row.excess_mcit,
+                [
+                    row.applied_previous_years,
+                    row.expired,
+                    row.applied_current_year,
+                ],
+                &mut self.calculation_issues,
+            );
+        }
+        self.schedule_4.item_4_total_applied_current_year = checked_sum(
+            "schedule_4.item_4_total_applied_current_year",
+            self.schedule_4
+                .rows
+                .iter()
+                .map(|row| row.applied_current_year),
+            &mut self.calculation_issues,
+        );
+
+        self.schedule_5.item_4_total = checked_sum(
+            "schedule_5.item_4_total",
+            std::iter::once(self.schedule_5.item_1_net_income_or_loss_per_books)
+                .chain(self.schedule_5.additions.iter().map(|row| row.amount)),
+            &mut self.calculation_issues,
+        );
+        self.schedule_5.item_9_total = checked_sum(
+            "schedule_5.item_9_total",
+            self.schedule_5
+                .non_taxable_income
+                .iter()
+                .chain(self.schedule_5.special_deductions.iter())
+                .map(|row| row.amount),
+            &mut self.calculation_issues,
+        );
+        self.schedule_5.item_10_net_taxable_income_or_loss = checked_sub(
+            "schedule_5.item_10_net_taxable_income_or_loss",
+            self.schedule_5.item_4_total,
+            self.schedule_5.item_9_total,
+            &mut self.calculation_issues,
+        );
+
+        self.part_iv.item_34_ordinary_itemized_deductions = self.schedule_1.item_18_total;
+        self.part_iv.item_35_special_itemized_deductions = self.schedule_2.item_5_total;
+        self.part_iv.item_36_nolco = self.schedule_3.item_8_total_applied_current_year;
+        self.part_iv.item_37_total_itemized_deductions = checked_sum(
+            "part_iv.item_37_total_itemized_deductions",
+            [
+                self.part_iv.item_34_ordinary_itemized_deductions,
+                self.part_iv.item_35_special_itemized_deductions,
+                self.part_iv.item_36_nolco,
+            ],
+            &mut self.calculation_issues,
+        );
+        match self.deduction_method {
+            Form1702RTDeductionMethod::Itemized => {
+                self.part_iv.item_38_optional_standard_deduction = WholePeso::ZERO;
+                self.part_iv.item_39_net_taxable_income_or_loss = checked_sub(
+                    "part_iv.item_39_net_taxable_income_or_loss",
+                    self.part_iv.item_33_total_taxable_income,
+                    self.part_iv.item_37_total_itemized_deductions,
+                    &mut self.calculation_issues,
+                );
+            }
+            Form1702RTDeductionMethod::OptionalStandard => {
+                self.part_iv.item_38_optional_standard_deduction = checked_percent(
+                    "part_iv.item_38_optional_standard_deduction",
+                    self.part_iv.item_33_total_taxable_income,
+                    40,
+                    &mut self.calculation_issues,
+                );
+                self.part_iv.item_39_net_taxable_income_or_loss = checked_sub(
+                    "part_iv.item_39_net_taxable_income_or_loss",
+                    self.part_iv.item_33_total_taxable_income,
+                    self.part_iv.item_38_optional_standard_deduction,
+                    &mut self.calculation_issues,
+                );
+            }
+            Form1702RTDeductionMethod::Unresolved => {
+                self.part_iv.item_38_optional_standard_deduction = WholePeso::ZERO;
+                self.part_iv.item_39_net_taxable_income_or_loss = WholePeso::ZERO;
+                self.calculation_issues.push((
+                    "deduction_method".to_string(),
+                    "Item 39 cannot be calculated until Item 13 is selected".to_string(),
+                ));
+            }
+        }
+        if self.part_iv.item_40_income_tax_rate_percent == 0 {
+            self.part_iv.item_41_normal_income_tax_due = WholePeso::ZERO;
+            self.calculation_issues.push((
+                "part_iv.item_40_income_tax_rate_percent".to_string(),
+                "Item 40 requires an evidenced applicable income-tax rate".to_string(),
+            ));
         } else {
-            Err(errors)
+            self.part_iv.item_41_normal_income_tax_due = checked_percent(
+                "part_iv.item_41_normal_income_tax_due",
+                self.part_iv.item_39_net_taxable_income_or_loss,
+                self.part_iv.item_40_income_tax_rate_percent,
+                &mut self.calculation_issues,
+            );
         }
-    }
-
-    pub fn transition_to_submitted(&mut self, filename: String) {
-        assert!(
-            matches!(self.status, FilingStatus::Queued),
-            "Must be Queued"
+        self.part_iv.item_42_mcit_due = checked_percent(
+            "part_iv.item_42_mcit_due",
+            self.part_iv.item_33_total_taxable_income,
+            2,
+            &mut self.calculation_issues,
         );
-        let now = chrono::Utc::now();
-        self.status = FilingStatus::Submitted;
-        self.submitted_at = Some(now.to_rfc3339());
-        self.submission_filename = Some(filename);
-        self.submission_attempts = 0;
-        self.next_retry_at = None;
-        self.last_error = None;
-        self.updated_at = now.to_rfc3339();
-    }
-
-    pub fn transition_to_confirmed(
-        &mut self,
-        confirmed_at: String,
-        receipt_id: Option<i64>,
-        filename: Option<String>,
-    ) {
-        assert!(
-            matches!(self.status, FilingStatus::Submitted),
-            "Must be Submitted"
+        self.part_iv.item_43_tax_due = std::cmp::max(
+            self.part_iv.item_41_normal_income_tax_due,
+            self.part_iv.item_42_mcit_due,
         );
-        self.status = FilingStatus::Confirmed;
-        self.confirmed_at = Some(confirmed_at);
-        self.receipt_id = receipt_id;
-        if let Some(f) = filename {
-            self.submission_filename = Some(f);
-        }
+        self.part_iv.tax_credits.item_47_excess_mcit_applied =
+            self.schedule_4.item_4_total_applied_current_year;
+        self.part_iv.tax_credits.item_55_total = checked_sum(
+            "part_iv.tax_credits.item_55_total",
+            [
+                self.part_iv.tax_credits.item_44_prior_year_excess_credits,
+                self.part_iv
+                    .tax_credits
+                    .item_45_previous_quarter_mcit_payments,
+                self.part_iv
+                    .tax_credits
+                    .item_46_previous_quarter_regular_payments,
+                self.part_iv.tax_credits.item_47_excess_mcit_applied,
+                self.part_iv
+                    .tax_credits
+                    .item_48_previous_quarter_withholding,
+                self.part_iv.tax_credits.item_49_fourth_quarter_withholding,
+                self.part_iv.tax_credits.item_50_foreign_tax_credits,
+                self.part_iv.tax_credits.item_51_tax_paid_on_previous_return,
+                self.part_iv.tax_credits.item_52_special_tax_credits,
+                self.part_iv.tax_credits.item_53_other.amount,
+                self.part_iv.tax_credits.item_54_other.amount,
+            ],
+            &mut self.calculation_issues,
+        );
+        self.part_iv.item_56_net_tax_payable_or_overpayment = checked_sub(
+            "part_iv.item_56_net_tax_payable_or_overpayment",
+            self.part_iv.item_43_tax_due,
+            self.part_iv.tax_credits.item_55_total,
+            &mut self.calculation_issues,
+        );
+
+        self.part_v.item_57_special_allowable_deductions_tax_effect = checked_percent(
+            "part_v.item_57_special_allowable_deductions_tax_effect",
+            self.part_iv.item_35_special_itemized_deductions,
+            self.part_iv.item_40_income_tax_rate_percent,
+            &mut self.calculation_issues,
+        );
+        self.part_v.item_58_special_tax_credits =
+            self.part_iv.tax_credits.item_52_special_tax_credits;
+        self.part_v.item_59_total_tax_relief = checked_sum(
+            "part_v.item_59_total_tax_relief",
+            [
+                self.part_v.item_57_special_allowable_deductions_tax_effect,
+                self.part_v.item_58_special_tax_credits,
+            ],
+            &mut self.calculation_issues,
+        );
+
+        self.part_ii.item_14_tax_due = self.part_iv.item_43_tax_due;
+        self.part_ii.item_15_total_tax_credits = self.part_iv.tax_credits.item_55_total;
+        self.part_ii.item_16_net_tax_payable_or_overpayment =
+            self.part_iv.item_56_net_tax_payable_or_overpayment;
+        self.part_ii.item_20_total_penalties = checked_sum(
+            "part_ii.item_20_total_penalties",
+            [
+                self.part_ii.item_17_surcharge,
+                self.part_ii.item_18_interest,
+                self.part_ii.item_19_compromise,
+            ],
+            &mut self.calculation_issues,
+        );
+        self.part_ii.item_21_total_amount_payable_or_overpayment = checked_sum(
+            "part_ii.item_21_total_amount_payable_or_overpayment",
+            [
+                self.part_ii.item_16_net_tax_payable_or_overpayment,
+                self.part_ii.item_20_total_penalties,
+            ],
+            &mut self.calculation_issues,
+        );
+
         self.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
-    pub fn transition_to_paid(&mut self) {
-        assert!(
-            matches!(self.status, FilingStatus::Confirmed),
-            "Must be Confirmed"
-        );
+    pub fn transition_to_queued(&mut self) -> Result<(), Vec<(String, String)>> {
+        Err(vec![(
+            "submission".to_string(),
+            "1702RTv2018C electronic submission is disabled: the reviewed XML establishes editable-save persistence only".to_string(),
+        )])
+    }
+
+    pub fn transition_to_paid(&mut self) -> Result<(), String> {
+        if !matches!(self.status, FilingStatus::Confirmed) {
+            return Err("Only a confirmed return can be marked paid".to_string());
+        }
         self.status = FilingStatus::Paid;
         self.updated_at = chrono::Utc::now().to_rfc3339();
+        Ok(())
     }
 
-    pub fn revert_to_draft(&mut self) {
-        assert!(
-            !matches!(self.status, FilingStatus::Paid),
-            "Cannot revert Paid"
-        );
+    pub fn revert_to_draft(&mut self) -> Result<(), String> {
+        if matches!(self.status, FilingStatus::Paid) {
+            return Err("A paid return requires an explicit amendment workflow".to_string());
+        }
         self.status = FilingStatus::Draft;
         self.submitted_at = None;
         self.confirmed_at = None;
-        self.receipt_id = None;
         self.submission_filename = None;
+        self.receipt_id = None;
         self.submission_attempts = 0;
         self.next_retry_at = None;
         self.last_error = None;
         self.updated_at = chrono::Utc::now().to_rfc3339();
+        Ok(())
+    }
+}
+
+impl FormValidator for Form1702RTDraft {
+    fn validate(&self) -> Vec<(String, String)> {
+        let mut errors = Vec::new();
+        let compact_tin = self
+            .tin
+            .chars()
+            .filter(|character| character.is_ascii_digit())
+            .collect::<String>();
+        if !matches!(compact_tin.len(), 12..=14)
+            || compact_tin.len() != self.tin.chars().filter(|c| c.is_ascii_digit()).count()
+            || self.tin.chars().any(|c| !c.is_ascii_digit() && c != '-')
+        {
+            errors.push((
+                "tin".to_string(),
+                "TIN must contain 12 to 14 digits, optionally separated by dashes".to_string(),
+            ));
+        }
+        if !(2000..=2099).contains(&self.taxable_year) {
+            errors.push((
+                "taxable_year".to_string(),
+                "Item 2 prints a fixed MM/20YY year and supports taxable years 2000 through 2099"
+                    .to_string(),
+            ));
+        }
+        if !(1..=12).contains(&self.month) {
+            errors.push((
+                "month".to_string(),
+                "Year-end month must be between 1 and 12".to_string(),
+            ));
+        }
+        for (field, value) in [
+            ("rdo_code", self.rdo_code.as_str()),
+            ("taxpayer_name", self.taxpayer_name.as_str()),
+            ("registered_address", self.registered_address.as_str()),
+        ] {
+            if value.trim().is_empty() {
+                errors.push((
+                    field.to_string(),
+                    "This profile-prefilled value is required".to_string(),
+                ));
+            }
+        }
+        if !self.zip_code.trim().is_empty() && !validate_zip(self.zip_code.trim()) {
+            errors.push((
+                "zip_code".to_string(),
+                "ZIP code must contain four digits".to_string(),
+            ));
+        }
+        if !self.contact_number.trim().is_empty() && !validate_ph_phone(&self.contact_number) {
+            errors.push((
+                "contact_number".to_string(),
+                "Contact number is not a recognized Philippine phone number".to_string(),
+            ));
+        }
+        if !self.email.trim().is_empty() && !validate_email(&self.email) {
+            errors.push(("email".to_string(), "Email address is invalid".to_string()));
+        }
+        if matches!(self.deduction_method, Form1702RTDeductionMethod::Unresolved) {
+            errors.push((
+                "deduction_method".to_string(),
+                "Item 13 method of deductions must be selected".to_string(),
+            ));
+        }
+        if self.part_iv.item_40_income_tax_rate_percent == 0
+            || self.part_iv.item_40_income_tax_rate_percent > 100
+        {
+            errors.push((
+                "part_iv.item_40_income_tax_rate_percent".to_string(),
+                "Item 40 must be an explicitly reviewed percentage from 1 to 100".to_string(),
+            ));
+        }
+        if !self.atc.printed_mcit_selected && !self.atc.other_selected {
+            errors.push((
+                "atc".to_string(),
+                "Item 5 ATC selection is unresolved".to_string(),
+            ));
+        }
+        if self.atc.other_selected {
+            if self.atc.other_code.trim().is_empty() {
+                errors.push((
+                    "atc.other_code".to_string(),
+                    "The alternate ATC selector requires an exact code".to_string(),
+                ));
+            } else if reviewed_alternate_atc_description(&self.atc.other_code).is_none() {
+                errors.push((
+                    "atc.other_code".to_string(),
+                    format!(
+                        "Alternate ATC {} has no reviewed 1702RTv2018C code/description evidence",
+                        self.atc.other_code.trim()
+                    ),
+                ));
+            }
+        }
+        for (index, row) in self.payment_details.iter().enumerate() {
+            let item = index + 23;
+            if item != 26 && !row.specification.trim().is_empty() {
+                errors.push((
+                    format!("payment_details[{index}].specification"),
+                    format!("Official Item {item} has no specification field"),
+                ));
+            }
+            if item == 25 && !row.drawee_bank_or_agency.trim().is_empty() {
+                errors.push((
+                    "payment_details[2].drawee_bank_or_agency".to_string(),
+                    "Official Item 25 Tax Debit Memo has no Drawee Bank/Agency field".to_string(),
+                ));
+            }
+        }
+        if !self.is_amended
+            && self
+                .part_iv
+                .tax_credits
+                .item_51_tax_paid_on_previous_return
+                .0
+                != 0
+        {
+            errors.push((
+                "part_iv.tax_credits.item_51_tax_paid_on_previous_return".to_string(),
+                "Item 51 applies only to an amended return".to_string(),
+            ));
+        }
+        if self.part_ii.item_21_total_amount_payable_or_overpayment.0 < 0
+            && self.part_ii.overpayment_disposition.is_none()
+        {
+            errors.push((
+                "part_ii.overpayment_disposition".to_string(),
+                "An overpayment requires exactly one irrevocable disposition".to_string(),
+            ));
+        }
+        if self.part_ii.item_21_total_amount_payable_or_overpayment.0 >= 0
+            && self.part_ii.overpayment_disposition.is_some()
+        {
+            errors.push((
+                "part_ii.overpayment_disposition".to_string(),
+                "The overpayment disposition boxes apply only when Item 21 is negative".to_string(),
+            ));
+        }
+        for (field, row) in self
+            .schedule_1
+            .other
+            .iter()
+            .enumerate()
+            .filter_map(|(index, row)| {
+                (row.amount.0 != 0 && row.description.trim().is_empty())
+                    .then_some((format!("schedule_1.other[{index}].description"), row))
+            })
+        {
+            let _ = row;
+            errors.push((
+                field,
+                "An Others deduction amount requires a description".to_string(),
+            ));
+        }
+        for (index, row) in self.schedule_2.rows.iter().enumerate() {
+            if row.amount.0 != 0
+                && (row.description.trim().is_empty() || row.legal_basis.trim().is_empty())
+            {
+                errors.push((
+                    format!("schedule_2.rows[{index}]"),
+                    "A special deduction amount requires both description and legal basis"
+                        .to_string(),
+                ));
+            }
+        }
+        for (field, row) in [
+            (
+                "part_iv.tax_credits.item_53_other",
+                &self.part_iv.tax_credits.item_53_other,
+            ),
+            (
+                "part_iv.tax_credits.item_54_other",
+                &self.part_iv.tax_credits.item_54_other,
+            ),
+        ] {
+            if row.amount.0 != 0 && row.description.trim().is_empty() {
+                errors.push((
+                    field.to_string(),
+                    "An other tax credit requires a description".to_string(),
+                ));
+            }
+        }
+        if !matches!(self.xml_final_flag.as_str(), "0" | "1") {
+            errors.push((
+                "xml_final_flag".to_string(),
+                "txtFinalFlag must be one of the two reviewed values 0 or 1".to_string(),
+            ));
+        }
+
+        errors.extend(self.calculation_issues.clone());
+        let mut expected = self.clone();
+        expected.recompute();
+        errors.extend(expected.calculation_issues.clone());
+        compare_derived_values(self, &expected, &mut errors);
+        errors
+    }
+}
+
+impl TypedBirForm for Form1702RTDraft {
+    fn form_code(&self) -> &'static str {
+        FORM_CODE
     }
 
-    pub fn record_submission_failure(&mut self, error_msg: String) {
-        assert!(
-            matches!(self.status, FilingStatus::Queued),
-            "Must be Queued"
-        );
-        self.submission_attempts += 1;
-        self.last_error = Some(error_msg);
-        if self.submission_attempts >= 5 {
-            self.status = FilingStatus::Draft;
-            self.next_retry_at = None;
-        } else {
-            let delay = 2i64.pow(self.submission_attempts - 1);
-            let next = chrono::Utc::now() + chrono::Duration::minutes(delay);
-            self.next_retry_at = Some(next.to_rfc3339());
+    fn form_type_id(&self) -> &'static str {
+        FORM_TYPE_ID
+    }
+
+    fn filing_period(&self) -> FilingPeriod {
+        FilingPeriod::Annual
+    }
+
+    fn recompute(&mut self) {
+        Form1702RTDraft::recompute(self);
+    }
+
+    fn to_bir_field_map(&self) -> BTreeMap<String, String> {
+        Form1702RTDraft::to_bir_field_map(self)
+    }
+}
+
+fn compare_derived_values(
+    actual: &Form1702RTDraft,
+    expected: &Form1702RTDraft,
+    errors: &mut Vec<(String, String)>,
+) {
+    let pairs = [
+        (
+            "schedule_1.item_18_total",
+            actual.schedule_1.item_18_total,
+            expected.schedule_1.item_18_total,
+        ),
+        (
+            "schedule_2.item_5_total",
+            actual.schedule_2.item_5_total,
+            expected.schedule_2.item_5_total,
+        ),
+        (
+            "schedule_3.item_3_net_operating_loss",
+            actual.schedule_3.item_3_net_operating_loss,
+            expected.schedule_3.item_3_net_operating_loss,
+        ),
+        (
+            "schedule_3.item_8_total_applied_current_year",
+            actual.schedule_3.item_8_total_applied_current_year,
+            expected.schedule_3.item_8_total_applied_current_year,
+        ),
+        (
+            "schedule_4.item_4_total_applied_current_year",
+            actual.schedule_4.item_4_total_applied_current_year,
+            expected.schedule_4.item_4_total_applied_current_year,
+        ),
+        (
+            "schedule_5.item_4_total",
+            actual.schedule_5.item_4_total,
+            expected.schedule_5.item_4_total,
+        ),
+        (
+            "schedule_5.item_9_total",
+            actual.schedule_5.item_9_total,
+            expected.schedule_5.item_9_total,
+        ),
+        (
+            "schedule_5.item_10_net_taxable_income_or_loss",
+            actual.schedule_5.item_10_net_taxable_income_or_loss,
+            expected.schedule_5.item_10_net_taxable_income_or_loss,
+        ),
+        (
+            "part_iv.item_29_net_sales",
+            actual.part_iv.item_29_net_sales,
+            expected.part_iv.item_29_net_sales,
+        ),
+        (
+            "part_iv.item_31_gross_income_from_operations",
+            actual.part_iv.item_31_gross_income_from_operations,
+            expected.part_iv.item_31_gross_income_from_operations,
+        ),
+        (
+            "part_iv.item_33_total_taxable_income",
+            actual.part_iv.item_33_total_taxable_income,
+            expected.part_iv.item_33_total_taxable_income,
+        ),
+        (
+            "part_iv.item_37_total_itemized_deductions",
+            actual.part_iv.item_37_total_itemized_deductions,
+            expected.part_iv.item_37_total_itemized_deductions,
+        ),
+        (
+            "part_iv.item_38_optional_standard_deduction",
+            actual.part_iv.item_38_optional_standard_deduction,
+            expected.part_iv.item_38_optional_standard_deduction,
+        ),
+        (
+            "part_iv.item_39_net_taxable_income_or_loss",
+            actual.part_iv.item_39_net_taxable_income_or_loss,
+            expected.part_iv.item_39_net_taxable_income_or_loss,
+        ),
+        (
+            "part_iv.item_41_normal_income_tax_due",
+            actual.part_iv.item_41_normal_income_tax_due,
+            expected.part_iv.item_41_normal_income_tax_due,
+        ),
+        (
+            "part_iv.item_42_mcit_due",
+            actual.part_iv.item_42_mcit_due,
+            expected.part_iv.item_42_mcit_due,
+        ),
+        (
+            "part_iv.item_43_tax_due",
+            actual.part_iv.item_43_tax_due,
+            expected.part_iv.item_43_tax_due,
+        ),
+        (
+            "part_iv.tax_credits.item_55_total",
+            actual.part_iv.tax_credits.item_55_total,
+            expected.part_iv.tax_credits.item_55_total,
+        ),
+        (
+            "part_iv.item_56_net_tax_payable_or_overpayment",
+            actual.part_iv.item_56_net_tax_payable_or_overpayment,
+            expected.part_iv.item_56_net_tax_payable_or_overpayment,
+        ),
+        (
+            "part_v.item_59_total_tax_relief",
+            actual.part_v.item_59_total_tax_relief,
+            expected.part_v.item_59_total_tax_relief,
+        ),
+        (
+            "part_ii.item_20_total_penalties",
+            actual.part_ii.item_20_total_penalties,
+            expected.part_ii.item_20_total_penalties,
+        ),
+        (
+            "part_ii.item_21_total_amount_payable_or_overpayment",
+            actual.part_ii.item_21_total_amount_payable_or_overpayment,
+            expected.part_ii.item_21_total_amount_payable_or_overpayment,
+        ),
+    ];
+    for (field, actual, expected) in pairs {
+        if actual != expected {
+            errors.push((
+                field.to_string(),
+                format!(
+                    "Stored value {} does not match the official printed formula result {}",
+                    actual, expected
+                ),
+            ));
         }
-        self.updated_at = chrono::Utc::now().to_rfc3339();
+    }
+    for (index, (actual, expected)) in actual
+        .schedule_3
+        .rows
+        .iter()
+        .zip(expected.schedule_3.rows.iter())
+        .enumerate()
+    {
+        if actual.unapplied_balance != expected.unapplied_balance {
+            errors.push((
+                format!("schedule_3.rows[{index}].unapplied_balance"),
+                "Stored NOLCO balance does not match E = A - (B + C + D)".to_string(),
+            ));
+        }
+    }
+    for (index, (actual, expected)) in actual
+        .schedule_4
+        .rows
+        .iter()
+        .zip(expected.schedule_4.rows.iter())
+        .enumerate()
+    {
+        if actual.allowable_balance != expected.allowable_balance {
+            errors.push((
+                format!("schedule_4.rows[{index}].allowable_balance"),
+                "Stored MCIT balance does not match G = C - (D + E + F)".to_string(),
+            ));
+        }
+    }
+}
+
+fn checked_sum(
+    field: &str,
+    values: impl IntoIterator<Item = WholePeso>,
+    issues: &mut Vec<(String, String)>,
+) -> WholePeso {
+    let total = values
+        .into_iter()
+        .try_fold(0_i64, |total, value| total.checked_add(value.0));
+    match total {
+        Some(total) => WholePeso(total),
+        None => {
+            issues.push((
+                field.to_string(),
+                "Whole-peso calculation overflowed".to_string(),
+            ));
+            WholePeso::ZERO
+        }
+    }
+}
+
+fn checked_sub(
+    field: &str,
+    left: WholePeso,
+    right: WholePeso,
+    issues: &mut Vec<(String, String)>,
+) -> WholePeso {
+    match left.0.checked_sub(right.0) {
+        Some(value) => WholePeso(value),
+        None => {
+            issues.push((
+                field.to_string(),
+                "Whole-peso calculation overflowed".to_string(),
+            ));
+            WholePeso::ZERO
+        }
+    }
+}
+
+fn checked_sub_many(
+    field: &str,
+    minuend: WholePeso,
+    subtrahends: impl IntoIterator<Item = WholePeso>,
+    issues: &mut Vec<(String, String)>,
+) -> WholePeso {
+    let result = subtrahends
+        .into_iter()
+        .try_fold(minuend.0, |value, subtrahend| {
+            value.checked_sub(subtrahend.0)
+        });
+    match result {
+        Some(value) => WholePeso(value),
+        None => {
+            issues.push((
+                field.to_string(),
+                "Whole-peso calculation overflowed".to_string(),
+            ));
+            WholePeso::ZERO
+        }
+    }
+}
+
+fn checked_percent(
+    field: &str,
+    amount: WholePeso,
+    percent: u8,
+    issues: &mut Vec<(String, String)>,
+) -> WholePeso {
+    let numerator = i128::from(amount.0) * i128::from(percent);
+    // The form's whole-peso instruction rounds an absolute 0.50 upward. For
+    // negative values this is symmetric, away from zero at the half boundary.
+    let rounded = if numerator >= 0 {
+        (numerator + 50) / 100
+    } else {
+        (numerator - 50) / 100
+    };
+    match i64::try_from(rounded) {
+        Ok(value) => WholePeso(value),
+        Err(_) => {
+            issues.push((
+                field.to_string(),
+                "Whole-peso percentage overflowed".to_string(),
+            ));
+            WholePeso::ZERO
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::naming::Tin;
 
-    fn make_draft() -> Form1702RTDraft {
-        let profile = TaxpayerProfile {
-            id: Some(1),
-            full_name: "TestCorp".into(),
-            tin: Tin {
-                segment1: "000".into(),
-                segment2: "000".into(),
-                segment3: "000".into(),
-                branch: "000".into(),
+    #[test]
+    fn whole_peso_parser_preserves_negative_values_and_rejects_centavos() {
+        assert_eq!(WholePeso::parse_bir("-8,000"), Ok(WholePeso(-8_000)));
+        assert_eq!(WholePeso(-8_000).format_bir(), "-8,000");
+        assert!(WholePeso::parse_bir("1,2").is_err());
+        assert!(WholePeso::parse_bir("100.50").is_err());
+    }
+
+    #[test]
+    fn printed_part_iv_and_schedule_formulas_are_recomputed_without_a_rate_default() {
+        let mut draft = Form1702RTDraft {
+            deduction_method: Form1702RTDeductionMethod::OptionalStandard,
+            part_iv: Form1702RTPartIV {
+                item_27_sales: WholePeso(100_000),
+                item_28_sales_returns: WholePeso(10_000),
+                item_30_cost_of_sales_or_services: WholePeso(20_000),
+                item_32_other_taxable_income: WholePeso(5_000),
+                item_40_income_tax_rate_percent: 30,
+                ..Form1702RTPartIV::default()
             },
-            rdo_code: "039".into(),
-            line_of_business: String::new(),
-            registered_address: "Test".into(),
-            zip_code: "1100".into(),
-            phone: "09170000000".into(),
-            email: "t@t.com".into(),
-            default_form_type: "1702RT".into(),
-            taxpayer_type: Default::default(),
-            is_vat_registered: false,
-            business_start_date: None,
-            birth_date: None,
-            tax_classification: None,
-            eopt_tier: None,
-            is_bmbe: false,
-            is_gpp_partner: false,
-            is_create_msme: false,
-            is_expanded_withholding_agent: false,
-            atc_codes: vec![],
-            excise_tax_categories: vec![],
-            tax_elections: vec![],
-            has_employees: false,
-            is_dormant: false,
-            has_single_employer: false,
-            withholds_compensation: false,
-            withholds_expanded: false,
-            withholds_final: false,
-            is_top_withholding_agent: false,
-            is_government_withholding_entity: false,
-            registration_activity_status: Default::default(),
-            is_archived: false,
-            profile_pin_hash: None,
-            totp_secret: None,
-            email_tracking_enabled: false,
-            email_auth_method: Default::default(),
-            imap_email: None,
-            imap_host: None,
-            test_notification_enabled: false,
-            imap_app_password: None,
-            oauth_access_token: None,
-            oauth_refresh_token: None,
-            profile_versions: vec![],
-            compliance_source_mode: Default::default(),
-            per_year_forms: Default::default(),
+            ..Form1702RTDraft::default()
         };
-        Form1702RTDraft::new_from_profile(&profile, 2025, 12)
-    }
-
-    #[test]
-    fn test_parse_money() {
-        assert_eq!(Form1702RTDraft::parse_money("1,000"), 1000.0);
-        assert_eq!(Form1702RTDraft::parse_money("-8,000"), -8000.0);
-        assert_eq!(Form1702RTDraft::parse_money("0"), 0.0);
-    }
-
-    #[test]
-    fn test_rcit_osd() {
-        let mut d = make_draft();
-        d.rdo_pg1pt1i13optional_standard = true;
-        d.txt_pg2pt4i27sales = "1,000,000".to_string();
-        d.recompute();
-        // Net sales = 1M, gross = 1M, OSD = 400k, net taxable = 600k
-        assert_eq!(d.txt_pg2pt4i29net_sales, 1_000_000);
-        assert_eq!(d.txt_pg2pt4i38optional_standard, 400_000);
-        assert_eq!(d.txt_pg2pt4i39net_taxable, 600_000);
-        // RCIT = 600k * 25% = 150k
-        assert_eq!(d.txt_pg2pt4i41income_tax_due, 150_000);
-    }
-
-    #[test]
-    fn test_mcit_wins() {
-        let mut d = make_draft();
-        d.rdo_pg1pt1i13optional_standard = true;
-        d.txt_pg2pt4i27sales = "100,000".to_string();
-        d.recompute();
-        // Gross = 100k, OSD=40k, net taxable=60k
-        // RCIT = 60k * 25% = 15k
-        // MCIT = 100k * 2% = 2k
-        // RCIT > MCIT → RCIT applies
-        assert_eq!(d.txt_pg2pt4i41income_tax_due, 15_000);
-        // For MCIT to win, we need low net taxable but high gross
-        // e.g. Sales=1M, Cost=900k → gross=100k, net taxable with OSD=60k
-        // RCIT=15k, MCIT=2k → still RCIT
-    }
-
-    #[test]
-    fn test_penalties_total() {
-        let mut d = make_draft();
-        d.txt_pg2pt4i27sales = "500,000".to_string();
-        d.txt_pg1pt2i17surcharge = "1,000".to_string();
-        d.txt_pg1pt2i18interest = "500".to_string();
-        d.txt_pg1pt2i19compromise = "250".to_string();
-        d.recompute();
+        draft.recompute();
+        assert_eq!(draft.part_iv.item_29_net_sales, WholePeso(90_000));
         assert_eq!(
-            Form1702RTDraft::parse_money(&d.txt_pg1pt2i20total_penalties),
-            1750.0
+            draft.part_iv.item_31_gross_income_from_operations,
+            WholePeso(70_000)
         );
+        assert_eq!(
+            draft.part_iv.item_33_total_taxable_income,
+            WholePeso(75_000)
+        );
+        assert_eq!(
+            draft.part_iv.item_38_optional_standard_deduction,
+            WholePeso(30_000)
+        );
+        assert_eq!(
+            draft.part_iv.item_39_net_taxable_income_or_loss,
+            WholePeso(45_000)
+        );
+        assert_eq!(
+            draft.part_iv.item_41_normal_income_tax_due,
+            WholePeso(13_500)
+        );
+        assert_eq!(draft.part_iv.item_42_mcit_due, WholePeso(1_500));
+        assert_eq!(draft.part_iv.item_43_tax_due, WholePeso(13_500));
+    }
+
+    #[test]
+    fn queue_submission_is_explicitly_disabled() {
+        let mut draft = Form1702RTDraft::default();
+        let errors = draft.transition_to_queued().expect_err("must fail closed");
+        assert!(errors[0].1.contains("editable-save persistence only"));
+        assert_eq!(draft.status, FilingStatus::Draft);
+    }
+
+    #[test]
+    fn local_json_persistence_preserves_signed_amounts_and_fixed_schedule_rows() {
+        let mut draft = Form1702RTDraft::default();
+        draft.part_iv.item_31_gross_income_from_operations = WholePeso(-1_000);
+        draft.schedule_3.rows[3].amount = WholePeso(-8_000);
+        draft.schedule_4.rows[2].year = "2025".to_string();
+
+        let json = serde_json::to_string(&draft).expect("semantic draft serializes");
+        let restored: Form1702RTDraft =
+            serde_json::from_str(&json).expect("semantic draft deserializes");
+
+        assert_eq!(restored, draft);
+        assert_eq!(restored.schedule_3.rows.len(), 4);
+        assert_eq!(restored.schedule_4.rows.len(), 3);
+    }
+
+    #[test]
+    fn page_one_semantics_fail_closed_for_unreviewed_atc_years_and_payment_cells() {
+        let mut draft = Form1702RTDraft {
+            taxable_year: 2100,
+            atc: Form1702RTAtcSelection {
+                other_selected: true,
+                other_code: "IC999".to_string(),
+                ..Form1702RTAtcSelection::default()
+            },
+            ..Form1702RTDraft::default()
+        };
+        draft.payment_details[0].specification = "NOT AN OFFICIAL ITEM 23 FIELD".to_string();
+        draft.payment_details[2].drawee_bank_or_agency = "NOT AN ITEM 25 FIELD".to_string();
+
+        let errors = draft.validate();
+        assert!(
+            errors
+                .iter()
+                .any(|(field, message)| { field == "taxable_year" && message.contains("MM/20YY") })
+        );
+        assert!(errors.iter().any(|(field, message)| {
+            field == "atc.other_code" && message.contains("no reviewed 1702RTv2018C")
+        }));
+        assert!(errors.iter().any(|(field, message)| {
+            field == "payment_details[0].specification" && message.contains("Item 23")
+        }));
+        assert!(errors.iter().any(|(field, message)| {
+            field == "payment_details[2].drawee_bank_or_agency" && message.contains("no Drawee")
+        }));
+    }
+
+    #[test]
+    fn reviewed_ic010_description_and_legacy_signatory_title_aliases_are_exact() {
+        assert_eq!(
+            reviewed_alternate_atc_description("IC010"),
+            Some(REVIEWED_ALTERNATE_ATC_IC010_DESCRIPTION)
+        );
+        assert_eq!(reviewed_alternate_atc_description("IC020"), None);
+
+        let restored: Form1702RTDraft = serde_json::from_str(
+            r#"{"president_signatory_name":"PRESIDENT","treasurer_signatory_name":"TREASURER"}"#,
+        )
+        .expect("legacy signatory keys remain readable");
+        assert_eq!(restored.president_signatory_title, "PRESIDENT");
+        assert_eq!(restored.treasurer_signatory_title, "TREASURER");
     }
 }

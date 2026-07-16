@@ -66,7 +66,8 @@ impl EmailConfirmationView {
 
     fn print_pdf(&mut self, cx: &mut Context<Self>) {
         let pdf_bytes = self.generate_pdf_bytes();
-        let dir = crate::views::pdf_viewer::PdfViewerView::unique_output_dir();
+        let dir = bir_core::platform::temp_dir()
+            .join(format!("ebirforms-confirmation-{}", uuid::Uuid::new_v4()));
         let _ = std::fs::create_dir_all(&dir);
         let path = dir.join("temp-print.pdf");
 

@@ -5,10 +5,7 @@ edition = "2021"
 
 [dependencies]
 bir-core = { path = "../bir-core" }
-tokio = { version = "1.0", features = ["full"] }
 tempfile = "3.27.0"
-open = "5.3.4"
-genpdf = "0.2.0"
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -16,11 +13,5 @@ lopdf = "0.34"
 schemars = "1.0"
 sha2.workspace = true
 
-[target.'cfg(target_os = "macos")'.dependencies]
-objc2 = "0.5.2"
-objc2-foundation = { version = "0.2.2", features = ["NSString"] }
-objc2-app-kit = { version = "0.2.2", features = ["NSApplication", "NSPrintInfo", "NSPrintOperation"] }
-objc2-web-kit = { version = "0.2.2", features = ["WKWebView"] }
-
-[dev-dependencies]
-image = { version = "0.25", default-features = false, features = ["png"] }
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.60", features = ["Win32_Storage_FileSystem"] }

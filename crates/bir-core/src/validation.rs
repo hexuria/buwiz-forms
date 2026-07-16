@@ -1,7 +1,5 @@
 use crate::naming::Tin;
-use crate::profile::{
-    ComplianceSourceMode, TaxProfileVersionSource, TaxProfileVersionStatus, TaxpayerProfile,
-};
+use crate::profile::{ComplianceSourceMode, TaxProfileVersionStatus, TaxpayerProfile};
 use regex::Regex;
 use std::sync::OnceLock;
 
@@ -147,9 +145,7 @@ pub fn validate_profile(profile: &TaxpayerProfile) -> Vec<ValidationError> {
     }
 
     for version in &confirmed_versions {
-        if version.effective_from.is_none()
-            && version.source != TaxProfileVersionSource::MigrationBackfill
-        {
+        if version.effective_from.is_none() {
             errors.push(ValidationError::new(
                 "profile_versions",
                 format!(

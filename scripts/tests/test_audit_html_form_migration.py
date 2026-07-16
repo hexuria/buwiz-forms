@@ -11,6 +11,7 @@ import tempfile
 import unittest
 import zlib
 from pathlib import Path
+from unittest import mock
 
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "audit_html_form_migration.py"
@@ -68,17 +69,22 @@ class AuditHtmlFormMigrationTests(unittest.TestCase):
         for relative in (
             "packages/form-specs/form-migration-status.json",
             "packages/form-specs/form-release-evidence.json",
+            "packages/form-specs/generated/form-capabilities.json",
             "packages/form-renderer/references/manifest.json",
+            "packages/form-renderer/references/source-catalog.json",
             "packages/form-renderer/visual/form-parity.spec.ts",
-            "crates/bir-core/src/forms/support_level.rs",
+            "packages/form-renderer/src/forms/registry.ts",
+            "packages/form-specs/src/index.ts",
         ):
             self._copy(relative)
+        for provider in sorted(
+            (REPOSITORY_ROOT / "crates/bir-print/src/html_forms").glob("form_*.rs")
+        ):
+            self._copy(provider.relative_to(REPOSITORY_ROOT).as_posix())
         references = self.read_json("packages/form-renderer/references/manifest.json")
         for form in references["forms"]:
-            for key in ("fixture", "formtype", "metadata", "template"):
-                self._copy(form[key])
+            self._copy(form["fixture"])
             for page in form["pages"]:
-                self._copy(page["source_svg"])
                 self._copy(page["reference_png"])
 
     def read_json(self, relative: str) -> dict:
@@ -93,9 +99,19 @@ class AuditHtmlFormMigrationTests(unittest.TestCase):
         manifest = self.read_json("packages/form-specs/form-migration-status.json")
         return manifest, manifest["forms"][0]
 
+    def migration_form(self, code: str) -> tuple[dict, dict]:
+        manifest = self.read_json("packages/form-specs/form-migration-status.json")
+        form = next(form for form in manifest["forms"] if form["code"] == code)
+        return manifest, form
+
     def references(self) -> tuple[dict, dict]:
         manifest = self.read_json("packages/form-renderer/references/manifest.json")
-        return manifest, manifest["forms"][0]
+        reference = next(
+            form
+            for form in manifest["forms"]
+            if form["code"] == "2551Q" and form["revision"] == "2018"
+        )
+        return manifest, reference
 
     def install_evidence(self, relative: str, report: dict) -> dict:
         self.write_json(relative, report)
@@ -106,13 +122,18 @@ class AuditHtmlFormMigrationTests(unittest.TestCase):
             "sha256": hashlib.sha256(payload).hexdigest(),
         }
 
-    def run_audit(self, *dirty_paths: str) -> audit.AuditResult:
+    def run_audit(
+        self,
+        *dirty_paths: str,
+        required_release_ready: tuple[tuple[str, str], ...] = (),
+    ) -> audit.AuditResult:
         return audit.audit_repository(
             self.root,
             revision_context=audit.RevisionContext(
                 source_revision=self.HEAD_REVISION,
                 dirty_paths=tuple(dirty_paths),
             ),
+            required_release_ready=required_release_ready,
         )
 
     def valid_visual_report(self) -> dict:
@@ -164,6 +185,9 @@ class AuditHtmlFormMigrationTests(unittest.TestCase):
                     "changed_percent": 0.0,
                     "max_changed_percent": 1.0,
                     "pixelmatch_threshold": 0.1,
+                    "comparison": "official-complete-page-v1",
+                    "expected_ink_missing_percent": 0.0,
+                    "unexpected_actual_ink_percent": 0.0,
                     "passed": True,
                 }
             )
@@ -216,7 +240,11 @@ class AuditHtmlFormMigrationTests(unittest.TestCase):
             "form_revision": reference["revision"],
             "platform": platform,
             "architecture": "aarch64" if platform == "macos" else "x86_64",
-            "artifact_kind": "macos_app" if platform == "macos" else "windows_msix",
+            "artifact_kind": {
+                "macos": "macos_app",
+                "windows": "windows_msix",
+                "linux": "linux_tarball",
+            }[platform],
             "artifact_path": artifact_relative,
             "artifact_sha256": hashlib.sha256(artifact_path.read_bytes()).hexdigest(),
             "renderer_assets": [
@@ -294,35 +322,204 @@ class AuditHtmlFormMigrationTests(unittest.TestCase):
             "temporary_files_remaining": 0,
         }
 
-    def test_current_conservative_experimental_state_passes(self) -> None:
+    def test_current_html_only_certification_state_passes(self) -> None:
         result = self.run_audit()
 
         self.assertTrue(result.passed, result.errors)
-        self.assertEqual(result.statuses, ("2551Q:2018 experimental",))
+        migration = self.read_json("packages/form-specs/form-migration-status.json")
+        expected = {
+            f"{form['code']}:{form['revision']} {form['route']}"
+            for form in migration["forms"]
+        }
+        self.assertEqual(set(result.statuses), expected)
+
+    def test_required_release_target_rejects_current_incomplete_2551q(self) -> None:
+        result = self.run_audit(
+            required_release_ready=(("2551Q", "2018"),),
+        )
+
+        self.assertFalse(result.passed)
+        self.assertTrue(
+            any(
+                "2551Q:2018: required release target requires release_ready=true"
+                in error
+                for error in result.errors
+            ),
+            result.errors,
+        )
+        self.assertTrue(
+            any(
+                "required release target is missing capabilities" in error
+                and "visual_parity" in error
+                and "packaged_offline" in error
+                for error in result.errors
+            ),
+            result.errors,
+        )
+        for evidence_label in (
+            "visual parity",
+            "native_print_export macos",
+            "native_print_export windows",
+            "native_print_export linux",
+            "packaged_offline macos",
+            "packaged_offline windows",
+            "packaged_offline linux",
+            "rollback drill",
+        ):
+            self.assertTrue(
+                any(
+                    evidence_label in error
+                    and "required release evidence is missing" in error
+                    for error in result.errors
+                ),
+                (evidence_label, result.errors),
+            )
+
+    def test_required_release_target_accepts_complete_hashed_fixture(self) -> None:
+        manifest, form = self.migration()
+        form["support_level"] = "ImplementedInApp"
+        form["route"] = "html_only"
+        form["release_ready"] = True
+        for capability in audit.PROMOTION_FLAGS:
+            form["capabilities"][capability] = True
+        self.write_json("packages/form-specs/form-migration-status.json", manifest)
+
+        rust_capabilities = self.read_json(
+            "packages/form-specs/generated/form-capabilities.json"
+        )
+        rust_form = next(
+            item
+            for item in rust_capabilities["forms"]
+            if item["code"] == "2551Q" and item["revision"] == "2018"
+        )
+        rust_form["support_level"] = "ImplementedInApp"
+        rust_form["release_ready"] = True
+        for capability in audit.PROMOTION_FLAGS:
+            rust_form["capabilities"][capability] = True
+        self.write_json(
+            "packages/form-specs/generated/form-capabilities.json",
+            rust_capabilities,
+        )
+
+        evidence = self.read_json("packages/form-specs/form-release-evidence.json")
+        form_evidence = evidence["forms"]["2551Q:2018"]
+        form_evidence["visual_parity"] = self.install_evidence(
+            "evidence/complete-visual.json",
+            self.valid_visual_report(),
+        )
+        for platform in audit.PLATFORMS:
+            form_evidence["native_print_export"][platform] = self.install_evidence(
+                f"evidence/complete-native-{platform}.json",
+                self.valid_platform_report("native_print_export", platform),
+            )
+            form_evidence["packaged_offline"][platform] = self.install_evidence(
+                f"evidence/complete-package-{platform}.json",
+                self.valid_platform_report("packaged_offline", platform),
+            )
+        form_evidence["rollback_drill"] = self.install_evidence(
+            "evidence/complete-rollback.json",
+            self.valid_rollback_report(),
+        )
+        self.write_json("packages/form-specs/form-release-evidence.json", evidence)
+
+        with (
+            mock.patch.object(
+                audit,
+                "TRUSTED_VISUAL_EVIDENCE_PRODUCERS",
+                frozenset({audit.VISUAL_EVIDENCE_PRODUCER}),
+            ),
+            mock.patch.object(
+                audit,
+                "TRUSTED_PLATFORM_EVIDENCE_PRODUCERS",
+                frozenset({"self-attested-test-platform-report"}),
+            ),
+            mock.patch.object(
+                audit,
+                "TRUSTED_ROLLBACK_EVIDENCE_PRODUCERS",
+                frozenset({"self-attested-test-rollback-report"}),
+            ),
+        ):
+            result = self.run_audit(
+                required_release_ready=(("2551Q", "2018"),),
+            )
+
+        self.assertTrue(result.passed, result.errors)
+
+    def test_disabled_future_form_is_audited_without_being_enabled(self) -> None:
+        manifest, future = self.migration_form("2550Q")
+        future["route"] = "disabled"
+        self.write_json("packages/form-specs/form-migration-status.json", manifest)
+
+        result = self.run_audit()
+
+        self.assertTrue(result.passed, result.errors)
+        self.assertIn("2550Q:2024 disabled", result.statuses)
+
+    def test_enabled_form_requires_all_three_implementation_registries(self) -> None:
+        manifest, future = self.migration_form("2550Q")
+        future["route"] = "experimental"
+        for capability in audit.STRUCTURAL_CAPABILITIES:
+            future["capabilities"][capability] = True
+        self.write_json("packages/form-specs/form-migration-status.json", manifest)
+
+        (self.root / "crates/bir-print/src/html_forms/form_2550q.rs").unlink()
+        registry_path = self.root / "packages/form-renderer/src/forms/registry.ts"
+        registry = registry_path.read_text(encoding="utf-8")
+        registry = registry.replace('import { Form2550Q } from "./Form2550Q";\n', "")
+        registry = registry.replace('  "2550Q:2024": Form2550Q,\n', "")
+        registry_path.write_text(registry, encoding="utf-8")
+        spec_path = self.root / "packages/form-specs/src/index.ts"
+        spec = spec_path.read_text(encoding="utf-8")
+        start = spec.index('  "2550Q:2024": {')
+        end = spec.index('  "2551Q:2018": {', start)
+        spec_path.write_text(spec[:start] + spec[end:], encoding="utf-8")
+
+        result = self.run_audit()
+
+        self.assertTrue(any("2550Q:2024: missing Rust HTML provider" in error for error in result.errors))
+        self.assertTrue(any("2550Q:2024: missing React form component" in error for error in result.errors))
+        self.assertTrue(any("2550Q:2024: missing form specification" in error for error in result.errors))
 
     def test_release_ready_requires_every_flag_and_rollback_evidence(self) -> None:
         manifest, form = self.migration()
+        form["route"] = "html_only"
         form["release_ready"] = True
         self.write_json("packages/form-specs/form-migration-status.json", manifest)
 
         result = self.run_audit()
 
         self.assertTrue(
-            any("release_ready is missing promotion flags" in error for error in result.errors)
+            any("release_ready is missing capabilities" in error for error in result.errors)
         )
         self.assertTrue(
             any("release_ready lacks passed rollback-drill evidence" in error for error in result.errors)
         )
-        self.assertIn("contract_complete", " ".join(result.errors))
+        self.assertIn("visual_parity", " ".join(result.errors))
 
-    def test_html_enabled_scaffold_is_rejected(self) -> None:
+    def test_html_enabled_scaffold_can_be_certified_without_claiming_release(self) -> None:
         manifest, form = self.migration()
         form["support_level"] = "ScaffoldOnly"
+        form["release_ready"] = False
         self.write_json("packages/form-specs/form-migration-status.json", manifest)
 
         result = self.run_audit()
 
-        self.assertTrue(any("scaffold form cannot enable HTML" in error for error in result.errors))
+        self.assertFalse(
+            any("ScaffoldOnly" in error for error in result.errors),
+            result.errors,
+        )
+
+    def test_implemented_in_app_requires_release_ready(self) -> None:
+        manifest, form = self.migration()
+        form["support_level"] = "ImplementedInApp"
+        form["release_ready"] = False
+        self.write_json("packages/form-specs/form-migration-status.json", manifest)
+
+        result = self.run_audit()
+
+        self.assertTrue(
+            any("ImplementedInApp requires release_ready" in error for error in result.errors)
+        )
 
     def test_every_referenced_asset_hash_is_enforced(self) -> None:
         _, reference = self.references()
@@ -333,15 +530,54 @@ class AuditHtmlFormMigrationTests(unittest.TestCase):
 
         self.assertTrue(any("fixture sha256 mismatch" in error for error in result.errors))
 
+    def test_every_migration_form_requires_reviewed_source_catalog_identity(self) -> None:
+        catalog = self.read_json("packages/form-renderer/references/source-catalog.json")
+        catalog["forms"][0]["sha256"] = "not-a-sha256"
+        catalog["forms"].pop()
+        self.write_json("packages/form-renderer/references/source-catalog.json", catalog)
+
+        result = self.run_audit()
+
+        self.assertTrue(any("source PDF sha256 is invalid" in error for error in result.errors))
+        self.assertTrue(
+            any("has no reviewed source catalog entry" in error for error in result.errors)
+        )
+
+    def test_reference_identity_must_match_reviewed_source_catalog(self) -> None:
+        manifest, reference = self.references()
+        reference["official_source_sha256"] = "f" * 64
+        self.write_json("packages/form-renderer/references/manifest.json", manifest)
+
+        result = self.run_audit()
+
+        self.assertTrue(
+            any(
+                "reference official_source_sha256 differs from the reviewed source catalog"
+                in error
+                for error in result.errors
+            )
+        )
+
+    def test_reference_manifest_rejects_typst_and_full_page_svg_dependencies(self) -> None:
+        manifest, reference = self.references()
+        reference["template"] = "formtypes/2551Qv2018/template.typ"
+        reference["pages"][0]["source_svg"] = "formtypes/2551Qv2018/pages/page1.svg"
+        self.write_json("packages/form-renderer/references/manifest.json", manifest)
+
+        result = self.run_audit()
+
+        self.assertTrue(any("legacy assets: template" in error for error in result.errors))
+        self.assertTrue(any("cannot depend on a legacy source SVG" in error for error in result.errors))
+
     def test_positive_visual_flag_requires_curated_evidence(self) -> None:
         manifest, form = self.migration()
-        form["visual_parity_complete"] = True
+        form["capabilities"]["visual_parity"] = True
         self.write_json("packages/form-specs/form-migration-status.json", manifest)
 
         result = self.run_audit()
 
         self.assertTrue(
-            any("visual_parity_complete lacks passed evidence" in error for error in result.errors)
+            any("visual_parity capability lacks passed evidence" in error for error in result.errors)
         )
 
     def test_visual_evidence_requires_fixture_hash_and_actual_dimensions(self) -> None:
@@ -430,6 +666,64 @@ class AuditHtmlFormMigrationTests(unittest.TestCase):
         )
         self.assertTrue(
             any("changed_pixels does not match rendered screenshot" in error for error in result.errors)
+        )
+
+    def test_visual_evidence_rejects_threshold_above_one_percent(self) -> None:
+        report = self.valid_visual_report()
+        for page in report["pages"]:
+            page["max_changed_percent"] = 100.0
+        pointer = self.install_evidence("evidence/permissive-visual.json", report)
+        evidence = self.read_json("packages/form-specs/form-release-evidence.json")
+        evidence["forms"]["2551Q:2018"]["visual_parity"] = pointer
+        self.write_json("packages/form-specs/form-release-evidence.json", evidence)
+
+        result = self.run_audit()
+
+        self.assertEqual(
+            sum(
+                "max_changed_percent must be at most 1" in error
+                for error in result.errors
+            ),
+            report["expected_page_count"],
+            result.errors,
+        )
+
+    def test_visual_evidence_requires_complete_official_page_comparison(self) -> None:
+        report = self.valid_visual_report()
+        report["pages"][0]["comparison"] = "ruled-lines-only-v1"
+        pointer = self.install_evidence("evidence/sparse-visual.json", report)
+        evidence = self.read_json("packages/form-specs/form-release-evidence.json")
+        evidence["forms"]["2551Q:2018"]["visual_parity"] = pointer
+        self.write_json("packages/form-specs/form-release-evidence.json", evidence)
+
+        result = self.run_audit()
+
+        self.assertTrue(
+            any(
+                "comparison must be official-complete-page-v1" in error
+                for error in result.errors
+            ),
+            result.errors,
+        )
+
+    def test_visual_evidence_requires_separate_ink_diagnostics(self) -> None:
+        report = self.valid_visual_report()
+        report["pages"][0].pop("expected_ink_missing_percent")
+        report["pages"][1]["unexpected_actual_ink_percent"] = 101.0
+        pointer = self.install_evidence("evidence/missing-ink-diagnostics.json", report)
+        evidence = self.read_json("packages/form-specs/form-release-evidence.json")
+        evidence["forms"]["2551Q:2018"]["visual_parity"] = pointer
+        self.write_json("packages/form-specs/form-release-evidence.json", evidence)
+
+        result = self.run_audit()
+
+        self.assertTrue(
+            any("expected_ink_missing_percent is invalid" in error for error in result.errors),
+            result.errors,
+        )
+        self.assertTrue(
+            any("unexpected_actual_ink_percent is invalid" in error for error in result.errors),
+            result.errors,
         )
 
     def test_visual_artifacts_are_hashed_and_recomputed_independently(self) -> None:
@@ -616,9 +910,10 @@ class AuditHtmlFormMigrationTests(unittest.TestCase):
             dirty_producer.stderr,
         )
 
-    def test_complete_native_gate_requires_both_platforms_and_pdf_exercise(self) -> None:
+    def test_complete_native_gate_requires_all_platforms_and_pdf_exercise(self) -> None:
         manifest, form = self.migration()
-        form["native_print_export_verified"] = True
+        form["capabilities"]["native_print"] = True
+        form["capabilities"]["pdf_export"] = True
         self.write_json("packages/form-specs/form-migration-status.json", manifest)
         evidence = self.read_json("packages/form-specs/form-release-evidence.json")
         native = evidence["forms"]["2551Q:2018"]["native_print_export"]
@@ -631,7 +926,10 @@ class AuditHtmlFormMigrationTests(unittest.TestCase):
 
         self.assertTrue(any("must be exercised and passed" in error for error in result.errors))
         self.assertTrue(
-            any("lacks passed windows evidence" in error for error in result.errors)
+            any("lack passed windows evidence" in error for error in result.errors)
+        )
+        self.assertTrue(
+            any("lack passed linux evidence" in error for error in result.errors)
         )
 
     def test_platform_artifact_and_renderer_hashes_are_verified(self) -> None:
@@ -665,11 +963,12 @@ class AuditHtmlFormMigrationTests(unittest.TestCase):
 
     def test_self_attested_platform_reports_cannot_promote_native_gate(self) -> None:
         manifest, form = self.migration()
-        form["native_print_export_verified"] = True
+        form["capabilities"]["native_print"] = True
+        form["capabilities"]["pdf_export"] = True
         self.write_json("packages/form-specs/form-migration-status.json", manifest)
         evidence = self.read_json("packages/form-specs/form-release-evidence.json")
         native = evidence["forms"]["2551Q:2018"]["native_print_export"]
-        for platform in ("macos", "windows"):
+        for platform in audit.PLATFORMS:
             native[platform] = self.install_evidence(
                 f"evidence/native-{platform}.json",
                 self.valid_platform_report("native_print_export", platform),
@@ -684,7 +983,7 @@ class AuditHtmlFormMigrationTests(unittest.TestCase):
                 "no trusted packaged platform evidence producer is registered" in error
                 for error in result.errors
             ),
-            2,
+            len(audit.PLATFORMS),
         )
 
     def test_static_offline_report_cannot_satisfy_packaged_gate(self) -> None:
@@ -755,19 +1054,25 @@ class AuditHtmlFormMigrationTests(unittest.TestCase):
         ):
             self.assertIn(path, audit.CURATED_SOURCE_PATHS)
 
-    def test_unbound_status_boole_cannot_self_promote(self) -> None:
+    def test_semantic_capability_drift_from_rust_is_rejected(self) -> None:
         manifest, form = self.migration()
-        form["contract_complete"] = True
-        form["validation_complete"] = True
+        form["capabilities"]["typed_model"] = False
+        form["capabilities"]["persistence"] = False
         self.write_json("packages/form-specs/form-migration-status.json", manifest)
 
         result = self.run_audit()
 
         self.assertTrue(
             any(
-                "promotion flags lack a trusted derived evidence producer" in error
-                and "contract_complete" in error
-                and "validation_complete" in error
+                "differs from generated Rust registry" in error
+                and "typed_model" in error
+                for error in result.errors
+            )
+        )
+        self.assertTrue(
+            any(
+                "differs from generated Rust registry" in error
+                and "persistence" in error
                 for error in result.errors
             )
         )

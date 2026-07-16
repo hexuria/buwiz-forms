@@ -6,15 +6,16 @@
 //! **Form eligibility is evaluated through the database-backed Forms Set.**
 
 use crate::calendar_rules::{
-    DeadlineOverride, DeadlinePeriod, DeadlineResolver, ResolvedTaxDeadline, canonical_form_code,
+    DeadlineOverride, DeadlineResolver, ResolvedTaxDeadline, canonical_form_code,
 };
 use crate::forms::atc::find_atc;
 use crate::forms::registry::FilingFrequency;
+use crate::forms::{FormSuggestion, FormSuggestionSource};
 use crate::integration::models::UniversalTaxPayload;
 use crate::profile::{
     ManualObligationOverrideAction, RegisteredTaxType, TaxProfileVersion, TaxpayerProfile,
 };
-use chrono::{Datelike, NaiveDate};
+use chrono::Datelike;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -203,6 +204,26 @@ pub fn validate_form_applicability(
         ));
     }
 
+    let Some(forms_set) = profile.forms_set_for_year(taxable_year) else {
+        return Some(PayloadValidationError::new(
+            "target_form",
+            format!(
+                "The Forms Set for taxable year {taxable_year} is not configured and needs review before a form can be selected"
+            ),
+        ));
+    };
+
+    if let Some(entry) = forms_set.entry(normalized)
+        && entry.needs_review()
+    {
+        return Some(PayloadValidationError::new(
+            "target_form",
+            format!(
+                "Form {normalized} has conflicting equally authoritative Forms Set evidence for {taxable_year}; record a manual include/exclude decision before filing"
+            ),
+        ));
+    }
+
     let visible = profile.active_form_codes_for_year(taxable_year);
 
     if !visible.iter().any(|c| *c == normalized) {
@@ -235,6 +256,7 @@ pub fn evaluate_forms_for_year(
     profile: &TaxpayerProfile,
     taxable_year: u16,
 ) -> Vec<FormSuggestionDecision> {
+    let forms_set_configured = profile.forms_set_for_year(taxable_year).is_some();
     let active_codes = profile.active_form_codes_for_year(taxable_year);
     crate::forms::registry::FORM_REGISTRY
         .iter()
@@ -245,6 +267,8 @@ pub fn evaluate_forms_for_year(
                 is_suggested,
                 reason: if is_suggested {
                     "Applicable based on Forms Set".to_string()
+                } else if !forms_set_configured {
+                    format!("Forms Set for taxable year {taxable_year} needs review")
                 } else {
                     "Not registered / not applicable".to_string()
                 },
@@ -371,6 +395,117 @@ pub fn registered_form_codes_for_version(
     codes.into_iter().collect()
 }
 
+/// Builds auditable form suggestions from the unambiguous confirmed profile
+/// segments for a taxable year. Exact reviewed COR codes outrank tax-type
+/// inference within each segment; explicit obligation overrides outrank both.
+pub fn form_suggestions_for_profile_year(
+    profile: &TaxpayerProfile,
+    year: u16,
+) -> Vec<FormSuggestion> {
+    let resolved = profile.resolve_tax_profile_for_year(year);
+    if resolved.has_blocking_issues() {
+        return Vec::new();
+    }
+
+    let mut suggestions = Vec::new();
+    for version in resolved.effective_segments {
+        let mut guarded_version = version.clone();
+        if guarded_version.evidence.iter().any(|document| {
+            document.ocr_text.as_deref().is_some_and(|text| {
+                crate::profile::classify_vat_registration_text(text)
+                    == crate::profile::VatRegistrationTextClassification::NonVat
+            })
+        }) {
+            guarded_version.is_vat_registered = false;
+            guarded_version
+                .registered_tax_types
+                .retain(|tax_type| *tax_type != RegisteredTaxType::ValueAddedTax);
+        }
+
+        let has_exact_cor_codes = version_has_exact_cor_codes(&guarded_version);
+        let generated_source = if guarded_version.source
+            == crate::profile::TaxProfileVersionSource::MigrationBackfill
+        {
+            FormSuggestionSource::MigrationBackfill
+        } else if has_exact_cor_codes {
+            FormSuggestionSource::ReviewedCor
+        } else {
+            FormSuggestionSource::InferredTaxType
+        };
+        let source_reference = if has_exact_cor_codes {
+            let document_ids = guarded_version
+                .evidence
+                .iter()
+                .filter(|document| !document.extracted_form_codes.is_empty())
+                .map(|document| document.id.as_str())
+                .collect::<Vec<_>>();
+            Some(document_ids.join(", "))
+        } else {
+            Some(guarded_version.id.clone())
+        };
+
+        for code in registered_form_codes_for_version(profile, &guarded_version, year) {
+            let manual_override = guarded_version.obligation_overrides.iter().find(|rule| {
+                normalize_form_code(&rule.form_code) == normalize_form_code(&code)
+                    && rule.action == ManualObligationOverrideAction::Include
+            });
+            let (source, reason, reference) = if let Some(rule) = manual_override {
+                (
+                    FormSuggestionSource::ManualOverride,
+                    Some(rule.reason.clone()),
+                    rule.source_reference.clone(),
+                )
+            } else {
+                let reason = match generated_source {
+                    FormSuggestionSource::ReviewedCor => {
+                        format!(
+                            "Reviewed exact COR form code from '{}'",
+                            guarded_version.label
+                        )
+                    }
+                    FormSuggestionSource::InferredTaxType => format!(
+                        "Inferred from registered tax types in '{}'",
+                        guarded_version.label
+                    ),
+                    FormSuggestionSource::MigrationBackfill => format!(
+                        "Migrated from legacy profile version '{}'",
+                        guarded_version.label
+                    ),
+                    FormSuggestionSource::ManualOverride => String::new(),
+                };
+                (generated_source, Some(reason), source_reference.clone())
+            };
+            suggestions.push(FormSuggestion {
+                form_code: code,
+                active: true,
+                source,
+                reason,
+                source_reference: reference,
+                effective_from: guarded_version.effective_from,
+                effective_until: guarded_version.effective_until,
+            });
+        }
+
+        for rule in guarded_version
+            .obligation_overrides
+            .iter()
+            .filter(|rule| rule.action == ManualObligationOverrideAction::Exclude)
+        {
+            suggestions.push(FormSuggestion {
+                form_code: normalize_form_code(&rule.form_code),
+                active: false,
+                source: FormSuggestionSource::ManualOverride,
+                reason: Some(rule.reason.clone()),
+                source_reference: rule.source_reference.clone(),
+                effective_from: guarded_version.effective_from,
+                effective_until: guarded_version.effective_until,
+            });
+        }
+    }
+
+    suggestions
+}
+
 fn version_has_exact_cor_codes(version: &TaxProfileVersion) -> bool {
     version
         .evidence
@@ -387,74 +522,66 @@ pub fn resolve_profile_obligations_for_year(
     let mut code_version_ids: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     let mut consistency_report = ProfileConsistencyReport::default();
 
+    let resolved_profile = profile.resolve_tax_profile_for_year(year);
+    for issue in resolved_profile.issues {
+        consistency_report.push_detailed(
+            ProfileConsistencySeverity::NeedsReview,
+            "PROFILE_TIMELINE_NEEDS_REVIEW",
+            issue.message,
+            issue.version_ids.first().cloned(),
+            None,
+            Some("Confirmed profile version timeline".into()),
+            Some(
+                "Set non-overlapping effective dates before accepting regenerated form suggestions. The stored Forms Set remains authoritative until then."
+                    .into(),
+            ),
+        );
+    }
+    let effective_segments = resolved_profile.effective_segments;
+    for version in &effective_segments {
+        active_version_ids.push(version.id.clone());
+        report_cor_tin_mismatch(profile, version, &mut consistency_report);
+    }
+
     if profile.per_year_forms.contains_key(&year) {
+        for version in &effective_segments {
+            if !version_has_exact_cor_codes(version) {
+                let projected = profile.projection_for_version(version);
+                let _ = recurring_obligation_codes_for_version(
+                    &projected,
+                    version,
+                    year,
+                    &mut consistency_report,
+                );
+            }
+        }
         let active_codes = profile.active_form_codes_for_year(year);
-        let active_versions = profile.active_profile_versions_for_year(year);
-        let versions_to_process = if active_versions.is_empty() {
-            vec![TaxProfileVersion::from_profile_backfill(profile)]
-        } else {
-            active_versions
-        };
-
-        for version in versions_to_process {
-            active_version_ids.push(version.id.clone());
-            report_cor_tin_mismatch(profile, &version, &mut consistency_report);
-
-            let mut version_codes = BTreeSet::new();
-            for code in &active_codes {
-                if code_passes_version_filter(code, &version, profile, year) {
-                    version_codes.insert(code.clone());
-                }
-            }
-
-            for r in &version.obligation_overrides {
-                let code = normalize_form_code(&r.form_code);
-                match r.action {
-                    ManualObligationOverrideAction::Include => {
-                        version_codes.insert(code);
-                    }
-                    ManualObligationOverrideAction::Exclude => {
-                        version_codes.remove(&code);
-                    }
-                }
-            }
-
-            for code in version_codes {
-                if is_recurring_form_code(&code) {
+        for code in active_codes {
+            if is_recurring_form_code(&code) {
+                for version_id in &active_version_ids {
                     code_version_ids
                         .entry(code.clone())
                         .or_default()
-                        .insert(version.id.clone());
-                    all_codes.insert(code);
+                        .insert(version_id.clone());
                 }
+                all_codes.insert(code);
             }
         }
     } else {
-        for version in profile.active_profile_versions_for_year(year) {
-            active_version_ids.push(version.id.clone());
-            report_cor_tin_mismatch(profile, &version, &mut consistency_report);
-            let projected = profile.projection_for_version(&version);
-            let version_codes = if version_has_exact_cor_codes(&version) {
-                registered_form_codes_for_version(&projected, &version, year)
-                    .into_iter()
-                    .filter(|code| is_recurring_form_code(code))
-                    .collect()
-            } else {
-                recurring_obligation_codes_for_version(
-                    &projected,
-                    &version,
-                    year,
-                    &mut consistency_report,
-                )
-            };
-            for code in &version_codes {
-                code_version_ids
-                    .entry(code.clone())
-                    .or_default()
-                    .insert(version.id.clone());
-            }
-            all_codes.extend(version_codes);
-        }
+        consistency_report.push_detailed(
+            ProfileConsistencySeverity::NeedsReview,
+            "FORMS_SET_NOT_CONFIGURED",
+            format!(
+                "No authoritative Forms Set is stored for taxable year {year}; profile suggestions were not used as filing obligations."
+            ),
+            None,
+            None,
+            Some("Per-year Forms Set".into()),
+            Some(
+                "Review the confirmed COR/profile suggestions and save the Forms Set for this taxable year."
+                    .into(),
+            ),
+        );
     }
 
     report_obligations_without_calendar_rules(
@@ -506,48 +633,11 @@ pub fn deadline_applies_to_profile(
     let Some(taxable_year) = deadline.period.taxable_year() else {
         return false;
     };
-    let Some((period_start, period_end)) = deadline_period_bounds(deadline) else {
-        return false;
-    };
 
-    let active_versions = profile.active_profile_versions_for_period(period_start, period_end);
-    if active_versions.is_empty() {
-        return false;
-    }
-
-    if profile.per_year_forms.contains_key(&(taxable_year as u16)) {
-        if !profile
+    profile.forms_set_for_year(taxable_year as u16).is_some()
+        && profile
             .active_form_codes_for_year(taxable_year as u16)
             .contains(&deadline.form_code)
-        {
-            return false;
-        }
-
-        return active_versions.into_iter().any(|version| {
-            let projected = profile.projection_for_version(&version);
-            registered_form_codes_for_version(&projected, &version, taxable_year as u16)
-                .iter()
-                .any(|code| code == &deadline.form_code)
-        });
-    }
-
-    active_versions.into_iter().any(|version| {
-        let projected = profile.projection_for_version(&version);
-        if version_has_exact_cor_codes(&version) {
-            registered_form_codes_for_version(&projected, &version, taxable_year as u16)
-                .iter()
-                .any(|code| code == &deadline.form_code)
-        } else {
-            let mut report = ProfileConsistencyReport::default();
-            recurring_obligation_codes_for_version(
-                &projected,
-                &version,
-                taxable_year as u16,
-                &mut report,
-            )
-            .contains(&deadline.form_code)
-        }
-    })
 }
 
 pub fn profile_deadline_overrides_for_year(
@@ -968,15 +1058,6 @@ fn report_cor_tin_mismatch(
     );
 }
 
-fn deadline_period_bounds(deadline: &ResolvedTaxDeadline) -> Option<(NaiveDate, NaiveDate)> {
-    match deadline.period {
-        DeadlinePeriod::Monthly { .. }
-        | DeadlinePeriod::Quarterly { .. }
-        | DeadlinePeriod::Annual { .. } => Some((deadline.period_start?, deadline.period_end?)),
-        DeadlinePeriod::EventBased => None,
-    }
-}
-
 fn normalize_form_code(code: &str) -> String {
     crate::forms::registry::canonical_form_code(code)
 }
@@ -1051,6 +1132,11 @@ fn report_missing_ttce_categories(
             RegisteredTaxType::WithholdingFinal,
             &["0619F", "1601F", "1601FQ", "1602", "1603"],
             "COR/profile version registers final withholding but TTCE did not produce final withholding obligations.",
+        ),
+        (
+            RegisteredTaxType::WithholdingVatAndPercentage,
+            &["1600"],
+            "COR/profile version registers VAT/percentage-tax withholding but TTCE did not produce Form 1600.",
         ),
         (
             RegisteredTaxType::ExciseTax,
@@ -1137,6 +1223,9 @@ pub(crate) fn registered_tax_types_allow_form(version: &TaxProfileVersion, code:
     if is_final_withholding_form(code) {
         return tax_types.contains(&RegisteredTaxType::WithholdingFinal);
     }
+    if is_vat_percentage_withholding_form(code) {
+        return tax_types.contains(&RegisteredTaxType::WithholdingVatAndPercentage);
+    }
     if is_excise_form(code) {
         return tax_types.contains(&RegisteredTaxType::ExciseTax);
     }
@@ -1180,7 +1269,7 @@ fn is_expanded_withholding_form(code: &str) -> bool {
 }
 
 fn is_compensation_withholding_form(code: &str) -> bool {
-    matches!(code, "0620" | "1600" | "1601C" | "1604CF" | "2316")
+    matches!(code, "0620" | "1601C" | "1604CF" | "2316")
 }
 
 fn is_final_withholding_form(code: &str) -> bool {
@@ -1188,6 +1277,10 @@ fn is_final_withholding_form(code: &str) -> bool {
         code,
         "0619F" | "1600WP" | "1601F" | "1601FQ" | "1602" | "1603"
     )
+}
+
+fn is_vat_percentage_withholding_form(code: &str) -> bool {
+    code == "1600"
 }
 
 fn is_excise_form(code: &str) -> bool {
@@ -1227,7 +1320,7 @@ pub fn check_annual_itr_conflicts(
     ] {
         let active_in_group: Vec<&str> = entries
             .iter()
-            .filter(|e| e.active && group_codes.contains(&e.form_code.as_str()))
+            .filter(|e| e.is_filing_active() && group_codes.contains(&e.form_code.as_str()))
             .map(|e| e.form_code.as_str())
             .collect();
 
@@ -1306,7 +1399,7 @@ mod tests {
             default_form_type: "2551Q".into(),
             taxpayer_type: TaxpayerType::Individual,
             is_vat_registered,
-            business_start_date: None,
+            business_start_date: NaiveDate::from_ymd_opt(2020, 1, 1),
             birth_date: None,
             tax_classification: Some(classification),
             eopt_tier: None,
@@ -1343,6 +1436,43 @@ mod tests {
         };
         profile.ensure_profile_version_ledger();
         profile
+    }
+
+    fn configure_forms_set_from_suggestions(profile: &mut TaxpayerProfile, year: u16) {
+        let suggestions = form_suggestions_for_profile_year(profile, year);
+        let reconciliation = crate::forms::reconcile_forms_set_for_year(year, None, &suggestions);
+        profile
+            .per_year_forms
+            .insert(year, reconciliation.forms_set);
+    }
+
+    #[test]
+    fn form_applicability_requires_a_stored_forms_set() {
+        let profile = profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, false);
+
+        let error = validate_form_applicability("2551Q", &profile, 2026)
+            .expect("missing Forms Set must block applicability");
+
+        assert!(error.message.contains("needs review"));
+    }
+
+    #[test]
+    fn form_applicability_blocks_needs_review_forms_set_conflict() {
+        let mut profile =
+            profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, false);
+        let include = FormSuggestion::active("2551Q", FormSuggestionSource::ReviewedCor);
+        let mut exclude = include.clone();
+        exclude.active = false;
+        let reconciliation =
+            crate::forms::reconcile_forms_set_for_year(2026, None, &[include, exclude]);
+        profile
+            .per_year_forms
+            .insert(2026, reconciliation.forms_set);
+
+        let error = validate_form_applicability("2551Q", &profile, 2026)
+            .expect("unresolved Forms Set conflict must block filing");
+
+        assert!(error.message.contains("conflicting equally authoritative"));
     }
 
     #[test]
@@ -1428,7 +1558,7 @@ mod tests {
             default_form_type: "1701".into(),
             taxpayer_type: TaxpayerType::Individual,
             is_vat_registered: false,
-            business_start_date: None,
+            business_start_date: NaiveDate::from_ymd_opt(2020, 1, 1),
             birth_date: None,
             tax_classification: Some(crate::profile::TaxClassification::PurelyCompensation),
             eopt_tier: None,
@@ -1467,6 +1597,7 @@ mod tests {
 
         // PurelyCompensation should NOT be allowed to file 2551Q
         let current_year = chrono::Local::now().year() as u16;
+        configure_forms_set_from_suggestions(&mut profile, current_year);
         let err = validate_form_applicability("2551Q", &profile, current_year);
         assert!(err.is_some());
 
@@ -1498,7 +1629,7 @@ mod tests {
             default_form_type: "2551Q".into(),
             taxpayer_type: TaxpayerType::Individual,
             is_vat_registered: false,
-            business_start_date: None,
+            business_start_date: NaiveDate::from_ymd_opt(2020, 1, 1),
             birth_date: None,
             tax_classification: Some(crate::profile::TaxClassification::SelfEmployed),
             eopt_tier: None,
@@ -1534,6 +1665,8 @@ mod tests {
             per_year_forms: Default::default(),
         };
         profile.ensure_profile_version_ledger();
+        let current_year = chrono::Local::now().year() as u16;
+        configure_forms_set_from_suggestions(&mut profile, current_year);
 
         let forms = applicable_forms_for_profile(&profile);
         assert!(forms.iter().any(|code| code == "2551Q"));
@@ -1545,8 +1678,9 @@ mod tests {
 
     #[test]
     fn recurring_dashboard_forms_hide_transaction_forms_for_compensation_profile() {
-        let profile =
+        let mut profile =
             profile_for_dashboard(crate::profile::TaxClassification::PurelyCompensation, false);
+        configure_forms_set_from_suggestions(&mut profile, 2026);
 
         let forms = recurring_obligation_forms_for_profile_and_year(&profile, 2026);
 
@@ -1555,7 +1689,9 @@ mod tests {
 
     #[test]
     fn recurring_dashboard_forms_keep_only_profile_obligations_for_non_vat_business() {
-        let profile = profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, false);
+        let mut profile =
+            profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, false);
+        configure_forms_set_from_suggestions(&mut profile, 2026);
 
         let forms = recurring_obligation_forms_for_profile_and_year(&profile, 2026);
 
@@ -1623,8 +1759,14 @@ mod tests {
         profile.profile_versions = vec![version.clone()];
 
         let preview = resolve_profile_obligations_for_year(&profile, 2026);
-        assert!(preview.form_codes.contains(&"1702".to_string()));
-        assert!(!preview.form_codes.contains(&"1702RT".to_string()));
+        assert!(preview.form_codes.is_empty());
+        assert!(
+            preview
+                .consistency_report
+                .issues
+                .iter()
+                .any(|issue| issue.code == "FORMS_SET_NOT_CONFIGURED")
+        );
 
         profile.per_year_forms.insert(
             2026,
@@ -1636,15 +1778,12 @@ mod tests {
 
         assert_eq!(
             codes,
-            vec![
-                "0605", "0619E", "1601C", "1601EQ", "1604CF", "1604E", "1702", "1702Q", "1905",
-                "2550Q",
-            ]
-            .into_iter()
-            .map(str::to_string)
-            .collect::<Vec<_>>()
+            vec!["1701Q", "1702RT", "2550M"]
+                .into_iter()
+                .map(str::to_string)
+                .collect::<Vec<_>>()
         );
-        assert!(!codes.contains(&"1702RT".to_string()));
+        assert!(codes.contains(&"1702RT".to_string()));
         assert!(
             resolved
                 .consistency_report
@@ -1772,6 +1911,43 @@ mod tests {
             issues
                 .iter()
                 .any(|i| i.severity == ProfileConsistencySeverity::Warning)
+        );
+    }
+
+    #[test]
+    fn non_vat_ocr_evidence_cannot_generate_vat_suggestion() {
+        use crate::profile::{CorDocumentRef, RegisteredTaxType, TaxProfileVersionStatus};
+
+        let mut profile =
+            profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, true);
+        let mut version = TaxProfileVersion::from_profile_backfill(&profile);
+        version.id = "ocr-cor".into();
+        version.status = TaxProfileVersionStatus::Confirmed;
+        version.effective_from = NaiveDate::from_ymd_opt(2026, 1, 1);
+        version.is_vat_registered = true;
+        version.registered_tax_types = vec![RegisteredTaxType::ValueAddedTax];
+        version.evidence.push(CorDocumentRef {
+            id: "cor-document".into(),
+            file_name: "cor.pdf".into(),
+            stored_path: "/tmp/cor.pdf".into(),
+            uploaded_at: None,
+            provider: Some("ocr".into()),
+            model: None,
+            document_type: Some("COR".into()),
+            extracted_form_codes: Vec::new(),
+            ocr_text: Some("TAXPAYER TYPE: NON-VAT REGISTERED".into()),
+            ocr_confidence: Some(0.99),
+            field_bboxes: Default::default(),
+        });
+        profile.profile_versions = vec![version];
+        profile.compliance_source_mode = crate::profile::ComplianceSourceMode::CorVersioned;
+
+        let suggestions = form_suggestions_for_profile_year(&profile, 2026);
+
+        assert!(
+            suggestions
+                .iter()
+                .all(|suggestion| !suggestion.form_code.starts_with("2550"))
         );
     }
 

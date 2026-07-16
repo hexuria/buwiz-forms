@@ -52,12 +52,6 @@ impl AppState {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        // When the layout editor is active, Cmd+N is reserved for EditorNewBox.
-        // This guard prevents the global CreateProfile from firing on that page.
-        #[cfg(feature = "layout-editor")]
-        if self.active_view == ActiveView::PdfLayoutEditor {
-            return;
-        }
         self.active_view = ActiveView::ProfileManager;
         self.active_profile_tin = None;
         self.profile_manager.update(cx, |view, cx| {

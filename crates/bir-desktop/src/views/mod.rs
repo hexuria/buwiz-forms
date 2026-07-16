@@ -13,13 +13,11 @@ pub mod form_1702mx_view;
 pub mod form_1702rt_view;
 pub mod form_2550q_view;
 pub mod form_2551q_view;
+pub mod form_html_preview_launcher;
 pub mod global_dashboard;
 pub mod html_form_preview;
 pub mod import_export;
+pub mod linux_html_preview;
 pub mod lock_screen;
-#[cfg(feature = "layout-editor")]
-pub mod pdf_layout_editor_view;
-pub mod pdf_viewer;
 pub mod profile_manager;
 pub mod settings;
-pub mod typst_calibration_view;

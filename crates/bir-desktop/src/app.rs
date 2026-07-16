@@ -64,10 +64,6 @@ pub enum ActiveView {
     ImportExport,
     Settings,
     AdminCalendarDashboard,
-    #[cfg(feature = "layout-editor")]
-    PdfLayoutEditor,
-    #[cfg(feature = "layout-editor")]
-    TypstCalibration,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -88,12 +84,6 @@ pub struct AppState {
     pub(crate) settings_view: Entity<SettingsView>,
     pub(crate) admin_calendar_dashboard_view:
         Entity<crate::views::admin_calendar_dashboard::AdminCalendarDashboard>,
-    #[cfg(feature = "layout-editor")]
-    pub(crate) pdf_layout_editor_view:
-        Entity<crate::views::pdf_layout_editor_view::PdfLayoutEditorView>,
-    #[cfg(feature = "layout-editor")]
-    pub(crate) typst_calibration_view:
-        Entity<crate::views::typst_calibration_view::TypstCalibrationView>,
     pub(crate) form_2551q_view: Option<Entity<Form2551QView>>,
     pub(crate) pending_form_draft: Option<Form2551QDraft>,
     pub(crate) form_1701q_view: Option<Entity<Form1701QView>>,
@@ -160,13 +150,6 @@ impl AppState {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        // Cleanup any leftover ephemeral PDF directories from previous sessions.
-        cx.background_executor()
-            .spawn(async move {
-                crate::views::pdf_viewer::PdfViewerView::cleanup_all_temp_dirs();
-            })
-            .detach();
-
         let (theme_preference, hide_tax_profiles, enable_profile_pins, is_locked, has_admin_totp) = {
             let db_guard = db.lock().unwrap();
             let tp = if let Ok(Some(val)) = db_guard.get_setting("theme_preference") {
@@ -490,12 +473,6 @@ impl AppState {
             )
         });
 
-        #[cfg(feature = "layout-editor")]
-        let pdf_layout_editor_view =
-            cx.new(|cx| crate::views::pdf_layout_editor_view::PdfLayoutEditorView::new(window, cx));
-        #[cfg(feature = "layout-editor")]
-        let typst_calibration_view = cx
-            .new(|cx| crate::views::typst_calibration_view::TypstCalibrationView::new(window, cx));
         cx.subscribe(
             &settings_view,
             |this: &mut Self, _entity, event: &SettingsEvent, cx| match event {
@@ -574,6 +551,9 @@ impl AppState {
                                 query.chars().filter(|c| c.is_ascii_digit()).collect();
 
                             if is_tin_like && query_digits.len() >= 9 {
+                                if this.block_unsaved_compliance_navigation(window, cx) {
+                                    return;
+                                }
                                 this.active_session_tin = None;
                                 this.active_view = ActiveView::ProfileManager;
                                 this.active_profile_tin = None;
@@ -676,7 +656,7 @@ impl AppState {
                         year: *year,
                         quarter: *quarter,
                     };
-                    this.handle_file_form(&event, cx);
+                    this.handle_file_form(&event, window, cx);
                 }
                 GlobalDashboardEvent::CheckStatus { .. } => {
                     // Now handled internally by GlobalDashboardView::check_status_for_tin
@@ -691,10 +671,11 @@ impl AppState {
         )
         .detach();
 
-        cx.subscribe(
+        cx.subscribe_in(
             &dashboard_view,
-            |this: &mut Self, _entity, event: &DashboardEvent, cx| match event {
-                DashboardEvent::FileForm { .. } => this.handle_file_form(event, cx),
+            window,
+            |this: &mut Self, _entity, event: &DashboardEvent, window, cx| match event {
+                DashboardEvent::FileForm { .. } => this.handle_file_form(event, window, cx),
                 DashboardEvent::Reload => {
                     if let Some(tin) = &this.active_profile_tin
                         && let Some(profile) = this.profiles.iter().find(|p| p.tin.full() == *tin)
@@ -780,10 +761,6 @@ impl AppState {
             admin_auth_error: None,
             admin_os_auth_triggered: false,
             active_session_tin: None,
-            #[cfg(feature = "layout-editor")]
-            pdf_layout_editor_view,
-            #[cfg(feature = "layout-editor")]
-            typst_calibration_view,
         }
     }
 
@@ -794,6 +771,10 @@ impl AppState {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.block_unsaved_compliance_navigation(window, cx) {
+            return;
+        }
+
         let tin = profile.tin.full();
 
         // If this profile is already the active session, skip PIN entirely
@@ -936,10 +917,6 @@ impl AppState {
                 .admin_calendar_dashboard_view
                 .clone()
                 .into_any_element(),
-            #[cfg(feature = "layout-editor")]
-            ActiveView::PdfLayoutEditor => self.pdf_layout_editor_view.clone().into_any_element(),
-            #[cfg(feature = "layout-editor")]
-            ActiveView::TypstCalibration => self.typst_calibration_view.clone().into_any_element(),
             ActiveView::Dashboard => self.dashboard_view.clone().into_any_element(),
             ActiveView::Form2551Q => {
                 if let Some(view) = &self.form_2551q_view {
@@ -1014,7 +991,37 @@ impl AppState {
         }
     }
 
-    fn handle_file_form(&mut self, event: &DashboardEvent, cx: &mut Context<Self>) {
+    fn block_unsaved_compliance_navigation(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self
+            .profile_manager
+            .read(cx)
+            .has_unsaved_compliance_changes()
+        {
+            return false;
+        }
+
+        self.active_view = ActiveView::ProfileManager;
+        self.profile_manager.update(cx, |view, cx| {
+            view.notify_unsaved_compliance_blocked(window, cx);
+        });
+        cx.notify();
+        true
+    }
+
+    fn handle_file_form(
+        &mut self,
+        event: &DashboardEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.block_unsaved_compliance_navigation(window, cx) {
+            return;
+        }
+
         let (form_code, year, quarter) = match event {
             DashboardEvent::FileForm {
                 form_code,
@@ -1026,11 +1033,17 @@ impl AppState {
         let year = *year;
         let quarter = *quarter;
 
-        // Guard: only open in-app form views for implemented forms
-        if !bir_core::forms::form_support_level(form_code).is_fileable_in_app() {
+        // Production builds only open certified forms. Debug/dev-tools builds
+        // may additionally open a semantically complete HTML draft while its
+        // platform/package release evidence is still being collected.
+        let support = bir_core::forms::form_support_level(form_code);
+        let is_certification_build = cfg!(any(debug_assertions, feature = "dev-tools"));
+        let can_open = support.is_fileable_in_app()
+            || (is_certification_build && bir_core::forms::can_open_certification_draft(form_code));
+        if !can_open {
             tracing::warn!(
                 form_code,
-                "Attempted to file unsupported form — manual filing required"
+                "Attempted to open an uncertified or unsupported form — manual filing required"
             );
             return;
         }
@@ -1047,6 +1060,9 @@ impl AppState {
                         // are reflected in the form before submission.
                         let mut d = d;
                         d.sync_with_profile(profile);
+                        if let Err(error) = db.save_2551q_draft(&d) {
+                            tracing::warn!(%error, "Failed to persist refreshed 2551Q draft");
+                        }
                         tracing::info!(
                             tin = %d.tin,
                             status = ?d.status,
@@ -1055,14 +1071,20 @@ impl AppState {
                         );
                         d
                     } else {
-                        // Non-draft: preserve profile state from submission time
-                        // for data integrity — changes to the profile should NOT
-                        // alter a submitted/confirmed/paid form.
+                        // Non-draft: compare against the current profile without
+                        // replacing any reviewed values. The draft owns a stale
+                        // marker that drives the explicit revert/amend warning.
+                        let mut d = d;
+                        d.sync_with_profile(profile);
+                        if let Err(error) = db.save_2551q_draft(&d) {
+                            tracing::warn!(%error, "Failed to persist 2551Q profile-snapshot marker");
+                        }
                         tracing::info!(
                             tin = %d.tin,
                             status = ?d.status,
                             name = %d.taxpayer_name,
-                            "Loading existing draft from DB (profile frozen — data integrity)"
+                            profile_snapshot_stale = d.profile_snapshot_stale,
+                            "Loading existing draft from DB (immutable profile snapshot)"
                         );
                         d
                     }
@@ -1091,9 +1113,35 @@ impl AppState {
             && let Some(tin) = &self.active_profile_tin
             && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
         {
-            let draft = bir_core::forms::form_1701q::Form1701QDraft::new_from_profile(
-                profile, year, quarter,
-            );
+            let load_result = self
+                .db
+                .lock()
+                .map_err(|_| "1701Q draft database lock is unavailable".to_string())
+                .and_then(|db| {
+                    db.get_form_draft::<bir_core::forms::form_1701q::Form1701QDraft>(
+                        tin,
+                        "1701Q",
+                        year,
+                        Some(quarter),
+                    )
+                    .map_err(|error| error.to_string())
+                });
+            let draft = match load_result {
+                Ok(Some(draft)) => draft,
+                Ok(None) => bir_core::forms::form_1701q::Form1701QDraft::new_from_profile(
+                    profile, year, quarter,
+                ),
+                Err(error) => {
+                    tracing::error!(
+                        %error,
+                        tin,
+                        year,
+                        quarter,
+                        "Refusing to replace an unreadable 1701Q draft"
+                    );
+                    return;
+                }
+            };
             self.pending_form_1701q_draft = Some(draft);
             self.active_view = ActiveView::Form1701Q;
             cx.notify();
@@ -1339,15 +1387,20 @@ impl Render for AppState {
         }
 
         if let Some(draft) = self.pending_form_1701q_draft.take() {
-            let form_view = cx.new(|_cx| Form1701QView::new(draft));
+            let db_for_view = Arc::clone(&self.db);
+            let form_view = cx.new(|cx| Form1701QView::new(draft, db_for_view, window, cx));
             cx.subscribe_in(
                 &form_view,
                 window,
-                |this: &mut Self, _entity, event: &Form1701QEvent, _window, cx| match event {
+                |this: &mut Self, _entity, event: &Form1701QEvent, window, cx| match event {
                     Form1701QEvent::BackToDashboard => {
                         this.active_view = ActiveView::Dashboard;
                         cx.notify();
                     }
+                    Form1701QEvent::PushNotification(level, title, message) => {
+                        push_notification(level, title, message, window, cx);
+                    }
+                    Form1701QEvent::Saved => cx.notify(),
                 },
             )
             .detach();

@@ -1,7 +1,4 @@
 {
-  "schema_version": 1,
-  "form_code": "2551Q",
-  "revision": "2018",
   "entries": [
     {
       "code": "PT010",
@@ -113,5 +110,8 @@
       "description": "2) Owners of property obtaining insurance directly with foreign insurance companies",
       "rate": 0.05
     }
-  ]
+  ],
+  "form_code": "2551Q",
+  "revision": "2018",
+  "schema_version": 1
 }

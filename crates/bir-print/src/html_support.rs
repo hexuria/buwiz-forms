@@ -1,19 +1,19 @@
 //! Native routing gates for the owned HTML form renderer.
 //!
-//! `html_enabled` permits an explicitly labelled development preview.
-//! `release_ready` is a separate, stricter gate for any future production
-//! routing. Keeping both decisions in Rust prevents the desktop host from
-//! treating the presence of a React component as release evidence.
+//! The schema-v3 `route` permits an explicitly labelled development preview or
+//! production HTML routing. `release_ready` remains a separate, stricter gate.
+//! Keeping both decisions in Rust prevents the desktop host from treating the
+//! presence of a React component as release evidence.
 
 use serde::Deserialize;
 
+use crate::html::RenderEnvelopeV1;
+use crate::html_forms::{
+    render_layout_plan, RenderLayoutError, RenderLayoutPlan, RenderPageGeometry,
+};
+
 const BUNDLED_MIGRATION_STATUS: &str =
     include_str!("../../../packages/form-specs/form-migration-status.json");
-
-pub const LEGACY_2551Q_SCHEDULE_CAPACITY: usize = 6;
-pub const CONTINUATION_2551Q_SCHEDULE_CAPACITY: usize = 12;
-pub const PAGE_2551Q_WIDTH_PT: f64 = 612.0;
-pub const PAGE_2551Q_HEIGHT_PT: f64 = 936.0;
 
 const CSS_PIXELS_PER_POINT: f64 = 96.0 / 72.0;
 const POINT_TOLERANCE: f64 = 0.25;
@@ -27,8 +27,10 @@ pub struct HtmlRendererSupport {
 }
 
 impl HtmlRendererSupport {
-    /// Explicit development access only requires the renderer to be enabled.
-    pub fn permits_experimental_preview(self) -> bool {
+    /// Preview access requires an enabled HTML route. Release certification is
+    /// tracked separately so pre-release builds can exercise the only renderer
+    /// without reintroducing a second output path.
+    pub fn permits_preview(self) -> bool {
         self.html_enabled
     }
 
@@ -36,15 +38,6 @@ impl HtmlRendererSupport {
     pub fn permits_release_routing(self) -> bool {
         self.html_enabled && self.release_ready
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LegacyPreviewDecision {
-    Render,
-    BlockScheduleOverflow {
-        row_count: usize,
-        supported_rows: usize,
-    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,6 +71,14 @@ pub struct RendererGeometryReport {
     pub pages: Vec<RendererPageRect>,
 }
 
+/// Resolve the exact-revision provider before constructing a native HTML host.
+/// The returned plan is the single source for both DOM and PDF validation.
+pub fn renderer_host_plan(
+    envelope: &RenderEnvelopeV1,
+) -> Result<RenderLayoutPlan, RenderLayoutError> {
+    render_layout_plan(envelope)
+}
+
 /// Look up the renderer flags embedded from the single source-of-truth
 /// migration manifest. Malformed or missing entries fail closed.
 pub fn bundled_html_renderer_support(code: &str, revision: &str) -> HtmlRendererSupport {
@@ -85,33 +86,34 @@ pub fn bundled_html_renderer_support(code: &str, revision: &str) -> HtmlRenderer
         .unwrap_or_default()
 }
 
-pub fn legacy_2551q_preview_decision(row_count: usize) -> LegacyPreviewDecision {
-    if row_count <= LEGACY_2551Q_SCHEDULE_CAPACITY {
-        LegacyPreviewDecision::Render
-    } else {
-        LegacyPreviewDecision::BlockScheduleOverflow {
-            row_count,
-            supported_rows: LEGACY_2551Q_SCHEDULE_CAPACITY,
-        }
-    }
+/// Validate renderer measurements against an exact provider-owned host plan.
+/// The renderer cannot become ready merely by reporting a nonzero page count
+/// or geometry that it chose for itself.
+pub fn validate_renderer_geometry(
+    report: &RendererGeometryReport,
+    plan: &RenderLayoutPlan,
+) -> Result<(), String> {
+    validate_renderer_geometry_against(
+        report,
+        plan.expected_page_count,
+        plan.page_geometry,
+        &plan.provider.key(),
+    )
 }
 
-pub fn expected_2551q_page_count(row_count: usize) -> usize {
-    let continuation_rows = row_count.saturating_sub(LEGACY_2551Q_SCHEDULE_CAPACITY);
-    let continuation_pages = continuation_rows.div_ceil(CONTINUATION_2551Q_SCHEDULE_CAPACITY);
-    2 + continuation_pages
-}
-
-/// Validate renderer measurements against host-owned 2551Q geometry. The
-/// renderer cannot become ready merely by reporting a nonzero page count.
-pub fn validate_2551q_renderer_geometry(
+fn validate_renderer_geometry_against(
     report: &RendererGeometryReport,
     expected_page_count: usize,
+    page_geometry: RenderPageGeometry,
+    provider_key: &str,
 ) -> Result<(), String> {
+    page_geometry
+        .validate()
+        .map_err(|error| error.to_string())?;
     if report.page_count != expected_page_count {
         return Err(format!(
-            "HTML renderer reported {} pages; host expected {expected_page_count}",
-            report.page_count
+            "HTML renderer for {provider_key} reported {} pages; host expected {expected_page_count}",
+            report.page_count,
         ));
     }
     if report.pages.len() != report.page_count {
@@ -121,17 +123,26 @@ pub fn validate_2551q_renderer_geometry(
             report.page_count
         ));
     }
-    if !approximately_equal(report.page_width_pt, PAGE_2551Q_WIDTH_PT, POINT_TOLERANCE)
-        || !approximately_equal(report.page_height_pt, PAGE_2551Q_HEIGHT_PT, POINT_TOLERANCE)
-    {
+    if !approximately_equal(
+        report.page_width_pt,
+        page_geometry.width_points,
+        POINT_TOLERANCE,
+    ) || !approximately_equal(
+        report.page_height_pt,
+        page_geometry.height_points,
+        POINT_TOLERANCE,
+    ) {
         return Err(format!(
             "HTML renderer reported {:.3}x{:.3}pt pages; host expected {}x{}pt",
-            report.page_width_pt, report.page_height_pt, PAGE_2551Q_WIDTH_PT, PAGE_2551Q_HEIGHT_PT
+            report.page_width_pt,
+            report.page_height_pt,
+            page_geometry.width_points,
+            page_geometry.height_points,
         ));
     }
 
-    let expected_width_px = PAGE_2551Q_WIDTH_PT * CSS_PIXELS_PER_POINT;
-    let expected_height_px = PAGE_2551Q_HEIGHT_PT * CSS_PIXELS_PER_POINT;
+    let expected_width_px = page_geometry.width_points * CSS_PIXELS_PER_POINT;
+    let expected_height_px = page_geometry.height_points * CSS_PIXELS_PER_POINT;
     let mut expected_x = None;
     let mut previous_bottom = None;
     for (index, page) in report.pages.iter().enumerate() {
@@ -263,27 +274,38 @@ fn html_renderer_support_from_manifest(
     revision: &str,
 ) -> Option<HtmlRendererSupport> {
     let manifest: MigrationManifest = serde_json::from_str(manifest).ok()?;
+    if manifest.schema_version != 3 {
+        return None;
+    }
     manifest
         .forms
         .into_iter()
         .find(|form| form.code == code && form.revision == revision)
         .map(|form| HtmlRendererSupport {
-            html_enabled: form.html_enabled,
-            release_ready: form.release_ready,
+            html_enabled: form.route != MigrationRoute::Disabled,
+            release_ready: form.release_ready && form.route == MigrationRoute::HtmlOnly,
         })
 }
 
 #[derive(Debug, Deserialize)]
 struct MigrationManifest {
+    schema_version: u8,
     forms: Vec<MigrationForm>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum MigrationRoute {
+    Disabled,
+    Experimental,
+    HtmlOnly,
 }
 
 #[derive(Debug, Deserialize)]
 struct MigrationForm {
     code: String,
     revision: String,
-    #[serde(default)]
-    html_enabled: bool,
+    route: MigrationRoute,
     #[serde(default)]
     release_ready: bool,
 }
@@ -291,12 +313,29 @@ struct MigrationForm {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::html_forms::{render_form_provider, RenderFixtureKind};
 
     #[test]
-    fn bundled_2551q_is_experimental_but_not_release_routable() {
+    fn bundled_2551q_is_html_only_but_not_release_certified() {
         let support = bundled_html_renderer_support("2551Q", "2018");
 
-        assert!(support.permits_experimental_preview());
+        assert!(support.permits_preview());
+        assert!(!support.permits_release_routing());
+    }
+
+    #[test]
+    fn bundled_1601c_is_experimental_but_not_release_certified() {
+        let support = bundled_html_renderer_support("1601C", "2018");
+
+        assert!(support.permits_preview());
+        assert!(!support.permits_release_routing());
+    }
+
+    #[test]
+    fn bundled_0619e_is_experimental_but_not_release_certified() {
+        let support = bundled_html_renderer_support("0619E", "2018");
+
+        assert!(support.permits_preview());
         assert!(!support.permits_release_routing());
     }
 
@@ -313,31 +352,28 @@ mod tests {
     }
 
     #[test]
-    fn release_ready_never_bypasses_html_enablement() {
+    fn release_ready_never_bypasses_experimental_route() {
         let support = html_renderer_support_from_manifest(
-            r#"{"forms":[{"code":"2551Q","revision":"2018","html_enabled":false,"release_ready":true}]}"#,
+            r#"{"schema_version":3,"forms":[{"code":"2551Q","revision":"2018","route":"experimental","release_ready":true}]}"#,
             "2551Q",
             "2018",
         )
         .expect("matching support entry");
 
-        assert!(!support.permits_experimental_preview());
+        assert!(support.permits_preview());
         assert!(!support.permits_release_routing());
     }
 
     #[test]
-    fn legacy_preview_blocks_the_first_unrepresentable_row() {
-        assert_eq!(
-            legacy_2551q_preview_decision(LEGACY_2551Q_SCHEDULE_CAPACITY),
-            LegacyPreviewDecision::Render
-        );
-        assert_eq!(
-            legacy_2551q_preview_decision(LEGACY_2551Q_SCHEDULE_CAPACITY + 1),
-            LegacyPreviewDecision::BlockScheduleOverflow {
-                row_count: 7,
-                supported_rows: 6,
-            }
-        );
+    fn only_html_only_route_can_be_release_routable() {
+        let support = html_renderer_support_from_manifest(
+            r#"{"schema_version":3,"forms":[{"code":"2551Q","revision":"2018","route":"html_only","release_ready":true}]}"#,
+            "2551Q",
+            "2018",
+        )
+        .expect("matching support entry");
+
+        assert!(support.permits_release_routing());
     }
 
     #[test]
@@ -364,21 +400,26 @@ mod tests {
         ));
     }
 
-    fn geometry_report(page_count: usize) -> RendererGeometryReport {
+    fn geometry_report_for(
+        page_count: usize,
+        page_geometry: RenderPageGeometry,
+    ) -> RendererGeometryReport {
+        let width_px = page_geometry.width_points * CSS_PIXELS_PER_POINT;
+        let height_px = page_geometry.height_points * CSS_PIXELS_PER_POINT;
         RendererGeometryReport {
             page_count,
-            page_width_pt: PAGE_2551Q_WIDTH_PT,
-            page_height_pt: PAGE_2551Q_HEIGHT_PT,
+            page_width_pt: page_geometry.width_points,
+            page_height_pt: page_geometry.height_points,
             pages: (0..page_count)
                 .map(|index| RendererPageRect {
                     x: 24.0,
-                    y: index as f64 * 1_260.0,
-                    width: PAGE_2551Q_WIDTH_PT * CSS_PIXELS_PER_POINT,
-                    height: PAGE_2551Q_HEIGHT_PT * CSS_PIXELS_PER_POINT,
-                    client_width: 814.0,
-                    client_height: 1_246.0,
-                    scroll_width: 814.0,
-                    scroll_height: 1_246.0,
+                    y: index as f64 * (height_px + 12.0),
+                    width: width_px,
+                    height: height_px,
+                    client_width: width_px,
+                    client_height: height_px,
+                    scroll_width: width_px,
+                    scroll_height: height_px,
                     descendant_overflow_x: 0,
                     descendant_overflow_y: 0,
                     descendant_clipped_x: 0,
@@ -388,70 +429,152 @@ mod tests {
         }
     }
 
+    fn geometry_report(page_count: usize) -> RendererGeometryReport {
+        geometry_report_for(page_count, RenderPageGeometry::LEGAL)
+    }
+
     #[test]
     fn host_owns_2551q_page_count_boundaries() {
+        let provider = render_form_provider("2551Q", "2018").expect("2551Q provider");
+        let mut envelope = (provider.fixtures)()
+            .expect("provider fixtures")
+            .into_iter()
+            .find(|fixture| fixture.kind == RenderFixtureKind::ScheduleCapacity)
+            .expect("schedule-capacity fixture")
+            .envelope;
+        let prototype = envelope.schedules[0]
+            .rows
+            .first()
+            .cloned()
+            .expect("schedule prototype");
         for (rows, expected_pages) in [(0, 2), (6, 2), (7, 3), (18, 3), (19, 4), (30, 4), (31, 5)] {
-            assert_eq!(expected_2551q_page_count(rows), expected_pages);
+            envelope.schedules[0].rows = std::iter::repeat_n(prototype.clone(), rows).collect();
+            assert_eq!(
+                renderer_host_plan(&envelope)
+                    .expect("provider-owned page count")
+                    .expected_page_count,
+                expected_pages
+            );
         }
     }
 
     #[test]
+    fn host_plan_resolves_exact_provider_geometry_and_rejects_unknown_forms() {
+        let provider = render_form_provider("2551Q", "2018").unwrap();
+        let mut envelope = (provider.fixtures)().unwrap().remove(0).envelope;
+        let plan = renderer_host_plan(&envelope).expect("known provider plan");
+
+        assert_eq!(plan.provider.key(), "2551Q:2018");
+        assert_eq!(plan.page_geometry, RenderPageGeometry::LEGAL);
+        assert_eq!(plan.expected_page_count, 2);
+
+        envelope.form.version = "unknown".to_string();
+        assert!(matches!(
+            renderer_host_plan(&envelope),
+            Err(RenderLayoutError::UnknownProvider { .. })
+        ));
+    }
+
+    #[test]
+    fn generic_geometry_validation_supports_every_source_pack_paper_height() {
+        for geometry in [
+            RenderPageGeometry::LETTER,
+            RenderPageGeometry::LEGAL,
+            RenderPageGeometry::FOURTEEN_INCH,
+        ] {
+            validate_renderer_geometry_against(
+                &geometry_report_for(1, geometry),
+                1,
+                geometry,
+                "test:revision",
+            )
+            .expect("provider geometry should validate");
+        }
+
+        let letter_report = geometry_report_for(1, RenderPageGeometry::LETTER);
+        assert!(validate_renderer_geometry_against(
+            &letter_report,
+            1,
+            RenderPageGeometry::FOURTEEN_INCH,
+            "test:revision",
+        )
+        .expect_err("provider paper height mismatch must fail")
+        .contains("612x1008pt"));
+    }
+
+    #[test]
+    fn generic_validator_uses_the_resolved_provider_plan() {
+        let provider = render_form_provider("2551Q", "2018").unwrap();
+        let envelope = (provider.fixtures)().unwrap().remove(0).envelope;
+        let plan = renderer_host_plan(&envelope).unwrap();
+
+        validate_renderer_geometry(&geometry_report(2), &plan).expect("resolved provider geometry");
+        assert!(validate_renderer_geometry(&geometry_report(3), &plan)
+            .expect_err("self-reported page count cannot override provider")
+            .contains("2551Q:2018"));
+    }
+
+    #[test]
     fn geometry_validation_rejects_self_reported_drift() {
-        assert!(validate_2551q_renderer_geometry(&geometry_report(2), 2).is_ok());
+        let provider = render_form_provider("2551Q", "2018").expect("2551Q provider");
+        let envelope = (provider.fixtures)().expect("fixtures").remove(0).envelope;
+        let plan = renderer_host_plan(&envelope).expect("2551Q host plan");
+
+        assert!(validate_renderer_geometry(&geometry_report(2), &plan).is_ok());
 
         let mut wrong_count = geometry_report(2);
         wrong_count.page_count = 3;
-        assert!(validate_2551q_renderer_geometry(&wrong_count, 2)
+        assert!(validate_renderer_geometry(&wrong_count, &plan)
             .expect_err("wrong count must fail")
             .contains("host expected"));
 
         let mut wrong_points = geometry_report(2);
         wrong_points.page_height_pt = 792.0;
-        assert!(validate_2551q_renderer_geometry(&wrong_points, 2)
+        assert!(validate_renderer_geometry(&wrong_points, &plan)
             .expect_err("wrong paper size must fail")
             .contains("612x936pt"));
 
         let mut wrong_rect = geometry_report(2);
         wrong_rect.pages[1].width = 800.0;
-        assert!(validate_2551q_renderer_geometry(&wrong_rect, 2)
+        assert!(validate_renderer_geometry(&wrong_rect, &plan)
             .expect_err("wrong measured rectangle must fail")
             .contains("page 2"));
 
         let mut overflowing = geometry_report(2);
         overflowing.pages[0].scroll_height = 1_300.0;
-        assert!(validate_2551q_renderer_geometry(&overflowing, 2)
+        assert!(validate_renderer_geometry(&overflowing, &plan)
             .expect_err("overflow must fail")
             .contains("overflowing"));
 
         let mut hidden_descendant_overflow = geometry_report(2);
         hidden_descendant_overflow.pages[0].descendant_overflow_x = 1;
         assert!(
-            validate_2551q_renderer_geometry(&hidden_descendant_overflow, 2)
+            validate_renderer_geometry(&hidden_descendant_overflow, &plan)
                 .expect_err("hidden descendant overflow must fail")
                 .contains("descendant overflow x/y: 1/0")
         );
 
         let mut clipped_descendant = geometry_report(2);
         clipped_descendant.pages[1].descendant_clipped_y = 2;
-        assert!(validate_2551q_renderer_geometry(&clipped_descendant, 2)
+        assert!(validate_renderer_geometry(&clipped_descendant, &plan)
             .expect_err("descendant clipping must fail")
             .contains("clipped x/y: 0/2"));
 
         let mut overlapping = geometry_report(2);
         overlapping.pages[1].y = overlapping.pages[0].y + 1.0;
-        assert!(validate_2551q_renderer_geometry(&overlapping, 2)
+        assert!(validate_renderer_geometry(&overlapping, &plan)
             .expect_err("overlapping pages must fail")
             .contains("overlaps the preceding page"));
 
         let mut misaligned = geometry_report(2);
         misaligned.pages[1].x += 2.0;
-        assert!(validate_2551q_renderer_geometry(&misaligned, 2)
+        assert!(validate_renderer_geometry(&misaligned, &plan)
             .expect_err("horizontal page drift must fail")
             .contains("not horizontally aligned"));
 
         let mut transformed_client_box = geometry_report(2);
         transformed_client_box.pages[0].client_width /= 2.0;
-        assert!(validate_2551q_renderer_geometry(&transformed_client_box, 2)
+        assert!(validate_renderer_geometry(&transformed_client_box, &plan)
             .expect_err("transformed client dimensions must fail")
             .contains("client dimensions"));
     }

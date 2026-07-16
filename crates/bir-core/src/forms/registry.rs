@@ -111,7 +111,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
             TaxpayerType::Partnership,
         ],
         requires_vat: None,
-        requires_employees: true,
+        requires_employees: false,
         is_deprecated: false,
     },
     FormDefinition {

@@ -377,6 +377,105 @@ class VerifyOfflineFormRendererTests(unittest.TestCase):
 
         self.assert_has_error(errors, "matches a pinned official/reference page hash")
 
+    def test_runtime_artwork_authorization_is_derived_from_valid_manifest_entries(self) -> None:
+        workspace = Path(self.temporary_directory.name) / "artwork-workspace"
+        source = workspace / "packages/form-renderer/src/forms/assets/reviewed.png"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"reviewed-runtime-crop")
+        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        manifest_path = workspace / "packages/form-renderer/references/manifest.json"
+        manifest_path.parent.mkdir(parents=True)
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "forms": [
+                        {
+                            "code": "TEST",
+                            "revision": "2018",
+                            "page_count": 1,
+                            "pages": [
+                                {
+                                    "reference_width_px": 100,
+                                    "reference_height_px": 100,
+                                    "reference_png_sha256": "a" * 64,
+                                }
+                            ],
+                            "runtime_discrete_assets": [
+                                {
+                                    "asset": "government_seal",
+                                    "derived_png_sha256": digest,
+                                    "embedded_in": "packages/form-renderer/src/forms/assets/reviewed.png",
+                                    "crop_box_px": [10, 10, 30, 30],
+                                    "source_page": 1,
+                                }
+                            ],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        authorized, errors = verifier._load_runtime_artwork_authorization(
+            manifest_path, workspace
+        )
+
+        self.assertEqual(errors, ())
+        self.assertEqual(authorized, {digest})
+
+    def test_runtime_artwork_manifest_fails_closed_on_invalid_entries(self) -> None:
+        workspace = Path(self.temporary_directory.name) / "invalid-artwork-workspace"
+        source = workspace / "packages/form-renderer/src/forms/assets/reviewed.png"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"reviewed-runtime-crop")
+        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        manifest_path = workspace / "packages/form-renderer/references/manifest.json"
+        manifest_path.parent.mkdir(parents=True)
+        base_asset = {
+            "asset": "government_seal",
+            "derived_png_sha256": digest,
+            "embedded_in": "packages/form-renderer/src/forms/assets/reviewed.png",
+            "crop_box_px": [10, 10, 30, 30],
+            "source_page": 1,
+        }
+
+        invalid_cases = {
+            "missing hash": [{key: value for key, value in base_asset.items() if key != "derived_png_sha256"}],
+            "duplicate hash": [base_asset, {**base_asset, "asset": "second_barcode"}],
+            "invalid path": [{**base_asset, "embedded_in": "../references/full-page.png"}],
+            "missing path": [{**base_asset, "embedded_in": "packages/form-renderer/src/forms/assets/missing.png"}],
+            "full page crop": [{**base_asset, "crop_box_px": [0, 0, 100, 100]}],
+        }
+        for name, assets in invalid_cases.items():
+            with self.subTest(name=name):
+                manifest_path.write_text(
+                    json.dumps(
+                        {
+                            "forms": [
+                                {
+                                    "code": "TEST",
+                                    "revision": "2018",
+                                    "page_count": 1,
+                                    "pages": [
+                                        {
+                                            "reference_width_px": 100,
+                                            "reference_height_px": 100,
+                                            "reference_png_sha256": "a" * 64,
+                                        }
+                                    ],
+                                    "runtime_discrete_assets": assets,
+                                }
+                            ]
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                authorized, errors = verifier._load_runtime_artwork_authorization(
+                    manifest_path, workspace
+                )
+                self.assertEqual(authorized, set())
+                self.assertNotEqual(errors, ())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -101,7 +101,9 @@ pub(crate) fn annual_income_tax_election(
     for history in elections {
         match history.election {
             IncomeTaxElection::EightPercent => eight_percent = true,
-            IncomeTaxElection::GraduatedOsd | IncomeTaxElection::GraduatedItemized => {
+            IncomeTaxElection::GraduatedUnspecified
+            | IncomeTaxElection::GraduatedOsd
+            | IncomeTaxElection::GraduatedItemized => {
                 graduated = true;
             }
         }
@@ -284,6 +286,13 @@ pub struct Form2551QDraft {
     pub submission_claim_token: Option<String>,
     #[serde(default)]
     pub submission_claimed_at: Option<String>,
+    /// A filed/queued snapshot is immutable. When the taxpayer profile later
+    /// changes, we mark the return for an explicit revert/amendment workflow
+    /// instead of silently rewriting the reviewed submission fields.
+    #[serde(default)]
+    pub profile_snapshot_stale: bool,
+    #[serde(default)]
+    pub profile_snapshot_stale_reason: Option<String>,
 
     // === Background Retry Logic ===
     #[serde(default)]
@@ -357,6 +366,8 @@ impl Form2551QDraft {
             queued_submission_fingerprint: None,
             submission_claim_token: None,
             submission_claimed_at: None,
+            profile_snapshot_stale: false,
+            profile_snapshot_stale_reason: None,
             submission_attempts: 0,
             next_retry_at: None,
             last_error: None,
@@ -391,18 +402,58 @@ impl Form2551QDraft {
     /// This ensures that if the user updates their profile (e.g., phone number),
     /// the changes reflect in the draft return as long as it hasn't been submitted.
     pub fn sync_with_profile(&mut self, profile: &TaxpayerProfile) {
+        let annual_election = annual_income_tax_election(profile, self.taxable_year);
+        if !matches!(self.status, FilingStatus::Draft) {
+            let snapshot_matches = self.tin == profile.tin.full()
+                && self.taxpayer_type.as_ref() == Some(&profile.taxpayer_type)
+                && self.business_start_date == profile.business_start_date
+                && self.eopt_tier == profile.eopt_tier
+                && self.annual_income_tax_election == Some(annual_election)
+                && self.rdo_code == profile.rdo_code
+                && self.taxpayer_name == profile.full_name
+                && self.registered_address == profile.registered_address
+                && self.zip_code == profile.zip_code
+                && self.contact_number == profile.phone
+                && self.email == profile.email;
+            self.profile_snapshot_stale = !snapshot_matches;
+            self.profile_snapshot_stale_reason = (!snapshot_matches).then(|| {
+                "The taxpayer profile changed after this return was reviewed. Revert or amend the return to review refreshed profile values before filing."
+                    .to_string()
+            });
+            self.updated_at = chrono::Utc::now().to_rfc3339();
+            return;
+        }
+
         self.tin = profile.tin.full();
         self.taxpayer_type = Some(profile.taxpayer_type.clone());
         self.business_start_date = profile.business_start_date;
         self.eopt_tier = profile.eopt_tier.clone();
-        self.annual_income_tax_election =
-            Some(annual_income_tax_election(profile, self.taxable_year));
+        self.annual_income_tax_election = Some(annual_election);
         self.rdo_code = profile.rdo_code.clone();
         self.taxpayer_name = profile.full_name.clone();
         self.registered_address = profile.registered_address.clone();
         self.zip_code = profile.zip_code.clone();
         self.contact_number = profile.phone.clone();
         self.email = profile.email.clone();
+        self.item_13_election = match self.item_13_is_applicable() {
+            Some(false) => Item13Election::NotApplicable,
+            Some(true) => match annual_election {
+                AnnualIncomeTaxElection::Graduated => Item13Election::Graduated,
+                AnnualIncomeTaxElection::EightPercent => Item13Election::EightPercent,
+                AnnualIncomeTaxElection::Conflicting => Item13Election::Unanswered,
+                AnnualIncomeTaxElection::Unrecorded => match self.item_13_election {
+                    Item13Election::Graduated | Item13Election::EightPercent => {
+                        self.item_13_election
+                    }
+                    Item13Election::Unanswered | Item13Election::NotApplicable => {
+                        Item13Election::Unanswered
+                    }
+                },
+            },
+            None => Item13Election::Unanswered,
+        };
+        self.profile_snapshot_stale = false;
+        self.profile_snapshot_stale_reason = None;
         self.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
@@ -683,13 +734,14 @@ impl Form2551QDraft {
                 self.annual_income_tax_election,
                 Some(AnnualIncomeTaxElection::Unrecorded)
             )
-            && self.item_13_election == Item13Election::EightPercent
         {
-            // The profile ledger has an exact 8% variant, so this irrevocable
-            // election is recorded atomically with the queued draft. Item 13's
-            // generic "Graduated" choice does not identify OSD versus itemized
-            // deductions and must not be coerced into either profile variant.
-            self.annual_income_tax_election = Some(AnnualIncomeTaxElection::EightPercent);
+            self.annual_income_tax_election = match self.item_13_election {
+                Item13Election::EightPercent => Some(AnnualIncomeTaxElection::EightPercent),
+                Item13Election::Graduated => Some(AnnualIncomeTaxElection::Graduated),
+                Item13Election::Unanswered | Item13Election::NotApplicable => {
+                    self.annual_income_tax_election
+                }
+            };
         }
         self.queued_submission_fingerprint = Some(self.submission_fingerprint());
         self.submission_claim_token = None;
@@ -698,6 +750,8 @@ impl Form2551QDraft {
         self.submission_attempts = 0;
         self.next_retry_at = Some(chrono::Utc::now().to_rfc3339());
         self.last_error = None;
+        self.profile_snapshot_stale = false;
+        self.profile_snapshot_stale_reason = None;
         self.updated_at = chrono::Utc::now().to_rfc3339();
         Ok(())
     }
@@ -898,6 +952,15 @@ use crate::validation::{validate_email, validate_ph_phone, validate_zip};
 impl FormValidator for Form2551QDraft {
     fn validate(&self) -> Vec<(String, String)> {
         let mut errors = Vec::new();
+        if self.profile_snapshot_stale {
+            errors.push((
+                "profile_snapshot".to_string(),
+                self.profile_snapshot_stale_reason.clone().unwrap_or_else(|| {
+                    "The taxpayer profile changed after this return was queued; revert or amend it before filing"
+                        .to_string()
+                }),
+            ));
+        }
         if !(1900..=9999).contains(&self.taxable_year) {
             errors.push((
                 "taxable_year".to_string(),
@@ -935,10 +998,18 @@ impl FormValidator for Form2551QDraft {
                 "tax_relief_specification".to_string(),
                 "Tax-relief specification is required when tax relief is selected".to_string(),
             ));
-        } else if self.tax_relief_specification.chars().count() > 160 {
+        } else if self.tax_relief_specification.chars().count() > 100 {
             errors.push((
                 "tax_relief_specification".to_string(),
-                "Tax-relief specification exceeds the 160-character rendering safety limit"
+                "Tax-relief specification exceeds the official 100-character submission limit"
+                    .to_string(),
+            ));
+        }
+
+        if self.other_tax_credit_description.chars().count() > 100 {
+            errors.push((
+                "other_tax_credit_description".to_string(),
+                "Other tax credit description exceeds the official 100-character submission limit"
                     .to_string(),
             ));
         }
@@ -1074,42 +1145,36 @@ impl FormValidator for Form2551QDraft {
             ));
         }
 
-        // These are defensive document-rendering limits, not official comb-cell
-        // limits. The HTML renderer uses the official cells while a value fits,
-        // then switches to a single unclipped text box for longer legal values.
+        // Reviewed XML/submission capacities, deliberately independent of the
+        // shorter printed combs. Longer legal values use the HTML renderer's
+        // reviewed plain-box layout instead of being truncated to comb cells.
         for (field, label, value, capacity) in [
             (
                 "taxpayer_name",
                 "Taxpayer name",
                 self.taxpayer_name.as_str(),
-                160,
+                100,
             ),
             (
                 "registered_address",
                 "Registered address",
                 self.registered_address.as_str(),
-                320,
+                200,
             ),
-            ("email", "Email address", self.email.as_str(), 254),
+            ("email", "Email address", self.email.as_str(), 100),
+            (
+                "contact_number",
+                "Contact number",
+                self.contact_number.as_str(),
+                20,
+            ),
         ] {
             if value.chars().count() > capacity {
                 errors.push((
                     field.to_string(),
-                    format!("{label} exceeds the {capacity}-character rendering safety limit"),
+                    format!("{label} exceeds the official {capacity}-character submission limit"),
                 ));
             }
-        }
-
-        let contact_digits = self
-            .contact_number
-            .chars()
-            .filter(|character| character.is_ascii_digit())
-            .count();
-        if contact_digits > 32 {
-            errors.push((
-                "contact_number".to_string(),
-                "Contact number exceeds the 32-digit rendering safety limit".to_string(),
-            ));
         }
 
         if self.schedule_1.is_empty() {
@@ -1685,6 +1750,65 @@ mod tests {
     }
 
     #[test]
+    fn profile_sync_maps_saved_osd_and_itemized_elections_to_item_13_graduated() {
+        for election in [
+            IncomeTaxElection::GraduatedOsd,
+            IncomeTaxElection::GraduatedItemized,
+        ] {
+            let mut draft = Form2551QDraft::new_from_profile(&test_profile(), 2099, 1);
+            let mut updated_profile = test_profile();
+            updated_profile
+                .tax_elections
+                .push(crate::profile::TaxElectionHistory {
+                    taxable_year: 2099,
+                    election,
+                    elected_at: chrono::NaiveDateTime::default(),
+                    source_form: "profile_manager".into(),
+                });
+
+            draft.sync_with_profile(&updated_profile);
+
+            assert_eq!(draft.item_13_election, Item13Election::Graduated);
+            assert_eq!(
+                draft.annual_income_tax_election,
+                Some(AnnualIncomeTaxElection::Graduated)
+            );
+        }
+    }
+
+    #[test]
+    fn profile_sync_applies_a_saved_eight_percent_election_to_item_13() {
+        let mut draft = Form2551QDraft::new_from_profile(&test_profile(), 2099, 1);
+        let mut updated_profile = test_profile();
+        updated_profile
+            .tax_elections
+            .push(crate::profile::TaxElectionHistory {
+                taxable_year: 2099,
+                election: IncomeTaxElection::EightPercent,
+                elected_at: chrono::NaiveDateTime::default(),
+                source_form: "profile_manager".into(),
+            });
+
+        draft.sync_with_profile(&updated_profile);
+
+        assert_eq!(draft.item_13_election, Item13Election::EightPercent);
+    }
+
+    #[test]
+    fn profile_sync_clears_item_13_when_later_quarter_context_is_unknown() {
+        let mut draft = Form2551QDraft::new_from_profile(&test_profile(), 2099, 1);
+        draft.quarter = 2;
+        draft.business_start_date = None;
+        draft.item_13_election = Item13Election::Graduated;
+
+        let mut updated_profile = test_profile();
+        updated_profile.business_start_date = None;
+        draft.sync_with_profile(&updated_profile);
+
+        assert_eq!(draft.item_13_election, Item13Election::Unanswered);
+    }
+
+    #[test]
     fn fiscal_year_end_drives_period_code_and_quarter_deadline() {
         let mut draft = Form2551QDraft::new_from_profile(&test_profile(), 2026, 1);
         draft.tax_period_basis = TaxPeriodBasis::Fiscal;
@@ -1757,14 +1881,14 @@ mod tests {
     }
 
     #[test]
-    fn validation_enforces_document_rendering_safety_limits() {
+    fn validation_enforces_reviewed_submission_limits_not_comb_capacities() {
         let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
         draft.tax_relief = true;
-        draft.tax_relief_specification = "X".repeat(161);
-        draft.taxpayer_name = "N".repeat(161);
-        draft.registered_address = "A".repeat(321);
-        draft.email = format!("{}@example.com", "e".repeat(244));
-        draft.contact_number = "9".repeat(33);
+        draft.tax_relief_specification = "X".repeat(101);
+        draft.taxpayer_name = "N".repeat(101);
+        draft.registered_address = "A".repeat(201);
+        draft.email = format!("{}@example.com", "e".repeat(89));
+        draft.contact_number = "9".repeat(21);
 
         let errors = draft.validate();
         for field in [
@@ -1776,9 +1900,9 @@ mod tests {
         ] {
             assert!(
                 errors.iter().any(|(error_field, message)| {
-                    error_field == field && message.contains("safety limit")
+                    error_field == field && message.contains("official")
                 }),
-                "expected a rendering safety error for {field}: {errors:?}"
+                "expected an official submission-limit error for {field}: {errors:?}"
             );
         }
     }
@@ -2137,36 +2261,65 @@ mod tests {
     }
 
     #[test]
-    fn generic_graduated_choice_survives_profile_sync_while_queued() {
-        let profile = test_profile();
-        let mut draft = make_draft(50_000.0, 0.0, 2099, 1);
+    fn queued_snapshot_is_immutable_when_current_profile_changes() {
+        let mut profile = test_profile();
+        profile
+            .tax_elections
+            .push(crate::profile::TaxElectionHistory {
+                taxable_year: 2099,
+                election: IncomeTaxElection::GraduatedUnspecified,
+                elected_at: chrono::NaiveDateTime::default(),
+                source_form: "2551Qv2018".into(),
+            });
+        let mut draft = Form2551QDraft::new_from_profile(&profile, 2099, 1);
+        draft.schedule_1[0].taxable_amount = 50_000.0;
+        draft.recompute(None);
         assert_eq!(
             draft.annual_income_tax_election,
-            Some(AnnualIncomeTaxElection::Unrecorded)
+            Some(AnnualIncomeTaxElection::Graduated)
         );
 
         draft
             .transition_to_queued()
             .expect("the reviewed graduated choice should queue");
-        assert_eq!(
-            draft.annual_income_tax_election,
-            Some(AnnualIncomeTaxElection::Unrecorded),
-            "2551Q does not identify OSD versus itemized deductions"
-        );
+        let original_name = draft.taxpayer_name.clone();
+        let original_tier = draft.eopt_tier.clone();
+        let original_election = draft.annual_income_tax_election;
 
-        draft.sync_with_profile(&profile);
-        draft
-            .revalidate_queued_before_submission()
-            .expect("an unchanged graduated choice must survive current-profile sync");
+        let mut changed_profile = profile;
+        changed_profile.full_name = "Changed After Queue".to_string();
+        changed_profile.eopt_tier = Some(crate::profile::EoptTier::Micro);
+        changed_profile.tax_elections.clear();
+        changed_profile
+            .tax_elections
+            .push(crate::profile::TaxElectionHistory {
+                taxable_year: 2099,
+                election: IncomeTaxElection::EightPercent,
+                elected_at: chrono::NaiveDateTime::default(),
+                source_form: "profile_manager".into(),
+            });
+        draft.sync_with_profile(&changed_profile);
+
+        assert_eq!(draft.taxpayer_name, original_name);
+        assert_eq!(draft.eopt_tier, original_tier);
+        assert_eq!(draft.annual_income_tax_election, original_election);
+        assert!(draft.profile_snapshot_stale);
         assert_eq!(draft.status, FilingStatus::Queued);
     }
 
     #[test]
-    fn profile_sync_refreshes_eopt_tier_and_requires_queue_review() {
+    fn stale_queued_profile_snapshot_fails_validation_without_rewriting_values() {
         let mut profile = test_profile();
         profile.eopt_tier = Some(crate::profile::EoptTier::Medium);
+        profile
+            .tax_elections
+            .push(crate::profile::TaxElectionHistory {
+                taxable_year: 2099,
+                election: IncomeTaxElection::GraduatedUnspecified,
+                elected_at: chrono::NaiveDateTime::default(),
+                source_form: "2551Qv2018".into(),
+            });
         let mut draft = Form2551QDraft::new_from_profile(&profile, 2099, 1);
-        draft.item_13_election = Item13Election::Graduated;
         draft
             .transition_to_queued()
             .expect("the reviewed return should queue");
@@ -2174,17 +2327,15 @@ mod tests {
         let mut changed_profile = profile;
         changed_profile.eopt_tier = Some(crate::profile::EoptTier::Micro);
         draft.sync_with_profile(&changed_profile);
-        assert_eq!(draft.eopt_tier, Some(crate::profile::EoptTier::Micro));
+        assert_eq!(draft.eopt_tier, Some(crate::profile::EoptTier::Medium));
+        assert!(draft.profile_snapshot_stale);
 
         let errors = draft
             .revalidate_queued_before_submission()
             .expect_err("a changed EOPT tier must require another review");
-        assert!(
-            errors
-                .iter()
-                .any(|(field, _)| field == "queued_submission_fingerprint")
-        );
+        assert!(errors.iter().any(|(field, _)| field == "profile_snapshot"));
         assert_eq!(draft.status, FilingStatus::Draft);
+        assert!(draft.profile_snapshot_stale);
     }
 
     #[test]
@@ -2385,14 +2536,7 @@ mod tests {
         let errors = draft
             .revalidate_queued_before_submission()
             .expect_err("a later annual 8% election must stop queued PT010 submission");
-        assert!(errors.iter().any(|(field, message)| {
-            field == "schedule_1_row_1" && message.contains("NIL row")
-        }));
-        assert!(
-            errors
-                .iter()
-                .any(|(field, _)| field == "queued_submission_fingerprint")
-        );
+        assert!(errors.iter().any(|(field, _)| field == "profile_snapshot"));
         assert_eq!(draft.status, FilingStatus::Draft);
     }
 
@@ -2584,8 +2728,9 @@ mod tests {
         draft.tax_period_basis = TaxPeriodBasis::Fiscal;
         draft.number_of_attached_sheets = 99;
         let errors = draft.validate();
-        assert!(errors.iter().all(|(field, _)|
-            field != "year_end_month" && field != "number_of_attached_sheets"));
+        assert!(errors
+            .iter()
+            .all(|(field, _)| field != "year_end_month" && field != "number_of_attached_sheets"));
     }
 
     #[test]

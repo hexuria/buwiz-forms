@@ -1,0 +1,198 @@
+{
+  "fields": {
+    "any_taxes_withheld": {
+      "type": "boolean",
+      "value": true
+    },
+    "due_date": {
+      "type": "text",
+      "value": "05/10/2026"
+    },
+    "is_amended": {
+      "type": "boolean",
+      "value": true
+    },
+    "item_13_atc": {
+      "type": "text",
+      "value": "WMF10"
+    },
+    "item_13_interest_final_tax_withheld": {
+      "type": "decimal",
+      "value": 9999999999999.0
+    },
+    "item_14_atc": {
+      "type": "text",
+      "value": "WMF20"
+    },
+    "item_14_other_final_tax_withheld": {
+      "type": "decimal",
+      "value": 8888888888888.0
+    },
+    "item_15_total": {
+      "type": "decimal",
+      "value": 18888888888887.0
+    },
+    "item_16_remitted_previously": {
+      "type": "decimal",
+      "value": 1111111111111.0
+    },
+    "item_17_net_amount_of_remittance": {
+      "type": "decimal",
+      "value": 17777777777776.0
+    },
+    "item_18a_surcharge": {
+      "type": "decimal",
+      "value": 222222222222.0
+    },
+    "item_18b_interest": {
+      "type": "decimal",
+      "value": 33333333333.0
+    },
+    "item_18c_compromise": {
+      "type": "decimal",
+      "value": 4444444444.0
+    },
+    "item_18d_total_penalties": {
+      "type": "decimal",
+      "value": 259999999999.0
+    },
+    "item_19_total_amount_of_remittance": {
+      "type": "decimal",
+      "value": 18037777777775.0
+    },
+    "line_of_business": {
+      "type": "text",
+      "value": "SOFTWARE DEVELOPMENT AND INFORMATION TECHNOLOGY CONSULTING SERVICES"
+    },
+    "payment_20_amount": {
+      "type": "decimal",
+      "value": 18037777777775.0
+    },
+    "payment_20_amount_present": {
+      "type": "boolean",
+      "value": true
+    },
+    "payment_20_date": {
+      "type": "text",
+      "value": "05/10/2026"
+    },
+    "payment_20_drawee_bank_or_agency": {
+      "type": "text",
+      "value": "AUTHORIZED AGENT BANK LONG BRANCH NAME"
+    },
+    "payment_20_number": {
+      "type": "text",
+      "value": "PAYMENT-REFERENCE-0619F-2026-0000000001"
+    },
+    "payment_21_amount": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "payment_21_amount_present": {
+      "type": "boolean",
+      "value": false
+    },
+    "payment_21_date": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_21_drawee_bank_or_agency": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_21_number": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_22_amount": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "payment_22_amount_present": {
+      "type": "boolean",
+      "value": false
+    },
+    "payment_22_date": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_22_drawee_bank_or_agency": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_22_number": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_23_amount": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "payment_23_amount_present": {
+      "type": "boolean",
+      "value": false
+    },
+    "payment_23_date": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_23_drawee_bank_or_agency": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_23_number": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_23_particular": {
+      "type": "text",
+      "value": ""
+    },
+    "registered_address_2": {
+      "type": "text",
+      "value": "BARANGAY NEW CABALAN, OLONGAPO CITY, ZAMBALES, PHILIPPINES"
+    },
+    "tax_agent_accreditation_number": {
+      "type": "text",
+      "value": "LONG-TAX-AGENT-ACCREDITATION-REFERENCE-0619F"
+    },
+    "tax_agent_date_of_expiry": {
+      "type": "text",
+      "value": "01/15/2027"
+    },
+    "tax_agent_date_of_issue": {
+      "type": "text",
+      "value": "01/15/2024"
+    },
+    "tax_type_code": {
+      "type": "text",
+      "value": "WB"
+    },
+    "withholding_agent_category": {
+      "type": "text",
+      "value": "private"
+    }
+  },
+  "form": {
+    "code": "0619F",
+    "version": "2018"
+  },
+  "locale": "en-PH",
+  "period": {
+    "label": "04/2026",
+    "month": 4,
+    "taxable_year": 2026
+  },
+  "schedules": [],
+  "schema_version": "1.0",
+  "taxpayer": {
+    "contact_number": "09123456789",
+    "email": "long.final.withholding.renderer.verification.address@example.test",
+    "name": "LONG REGISTERED WITHHOLDING AGENT NAME THAT EXCEEDS THE OFFICIAL CHARACTER COMB CAPACITY INCORPORATED",
+    "rdo_code": "018",
+    "registered_address": "UNIT 1201, A DELIBERATELY LONG REGISTERED ADDRESS USED TO PROVE THAT THE SEMANTIC HTML RENDERER PRESERVES EVERY VALID CHARACTER",
+    "tin": "12345678900000",
+    "zip_code": "2200"
+  },
+  "validation": []
+}

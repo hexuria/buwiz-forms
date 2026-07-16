@@ -356,7 +356,14 @@ impl Database {
         }
 
         let requests_eight_percent = draft.item_13_election == Item13Election::EightPercent;
+        let requests_graduated = draft.item_13_election == Item13Election::Graduated;
         if requests_eight_percent && current_annual_election == AnnualIncomeTaxElection::Graduated {
+            return Err(DbError::Other(format!(
+                "Taxpayer profile already records a conflicting income-tax election for {}",
+                draft.taxable_year
+            )));
+        }
+        if requests_graduated && current_annual_election == AnnualIncomeTaxElection::EightPercent {
             return Err(DbError::Other(format!(
                 "Taxpayer profile already records a conflicting income-tax election for {}",
                 draft.taxable_year
@@ -364,14 +371,19 @@ impl Database {
         }
 
         let mut profile_changed = false;
-        if requests_eight_percent && current_annual_election == AnnualIncomeTaxElection::Unrecorded
+        if (requests_eight_percent || requests_graduated)
+            && current_annual_election == AnnualIncomeTaxElection::Unrecorded
         {
             // Keep the new election in this transaction's in-memory profile
             // until the fully synchronized queued draft validates. An invalid
             // or stale draft therefore cannot leave a partial ledger write.
             profile.tax_elections.push(TaxElectionHistory {
                 taxable_year: draft.taxable_year,
-                election: IncomeTaxElection::EightPercent,
+                election: if requests_eight_percent {
+                    IncomeTaxElection::EightPercent
+                } else {
+                    IncomeTaxElection::GraduatedUnspecified
+                },
                 elected_at: chrono::Utc::now().naive_utc(),
                 source_form: "2551Qv2018".to_string(),
             });
@@ -1144,6 +1156,205 @@ mod tests {
     }
 
     #[test]
+    fn save_and_reopen_1601c_preserves_all_three_schedule_rows() {
+        use crate::forms::form_1601c::{Form1601CDraft, Form1601CSchedule1Row};
+
+        let db = test_db();
+        let profile = test_profile();
+        let mut draft = Form1601CDraft::new_from_profile(&profile, 2026, 4);
+        draft.any_taxes_withheld = false;
+        draft.auto_compute_penalties = false;
+        draft.tax_relief = true;
+        draft.tax_relief_specification = "International Tax Treaty".to_string();
+        draft.schedule_1 = (1..=3)
+            .map(|index| Form1601CSchedule1Row {
+                previous_month: format!("{index:02}/2026"),
+                date_paid: format!("{index:02}/10/2026"),
+                drawee_bank_code_or_agency: format!("AAB-{index}"),
+                payment_number: format!("REF-{index}"),
+                tax_paid: f64::from(index) * 100.0,
+                should_be_tax_due: f64::from(index) * 125.0,
+                adjustment: 0.0,
+            })
+            .collect();
+        draft.compute();
+
+        db.save_1601c_draft(&draft)
+            .expect("three-row 1601-C draft should save");
+        let reopened = db
+            .get_1601c_draft(&draft.tin, draft.taxable_year, draft.month)
+            .expect("1601-C lookup should succeed")
+            .expect("saved 1601-C draft should exist");
+
+        assert_eq!(reopened.schedule_1, draft.schedule_1);
+        assert_eq!(
+            reopened.tax_relief_specification,
+            "International Tax Treaty"
+        );
+        assert_eq!(reopened.tax_26_adjustment, 150.0);
+    }
+
+    #[test]
+    fn save_and_reopen_0605_preserves_independent_dates_codes_and_pdf_only_details() {
+        use crate::forms::FormValidator;
+        use crate::forms::form_0605::{
+            Form0605Date, Form0605Draft, Form0605FilingBasis, Form0605MannerOfPayment,
+            Form0605ReviewedAtc, Form0605ReviewedTaxType, Form0605TypeOfPayment,
+        };
+
+        let db = test_db();
+        let profile = test_profile();
+        let mut draft = Form0605Draft::new_from_profile(&profile, 2025, 1);
+        draft.filing_basis = Form0605FilingBasis::Fiscal;
+        draft.quarter = 1;
+        draft.year_end_month = 12;
+        draft.due_date = Some(Form0605Date::new(2025, 12, 31).unwrap());
+        draft.return_period = Some(Form0605Date::new(2025, 12, 31).unwrap());
+        draft.number_of_sheets = 10;
+        draft.select_reviewed_atc(Form0605ReviewedAtc::Ii011);
+        draft.select_reviewed_tax_type(Form0605ReviewedTaxType::It);
+        draft.manner_of_payment = Some(Form0605MannerOfPayment::Others);
+        draft.other_manner_description = "MANUAL PAYMENT".to_string();
+        draft.type_of_payment = Some(Form0605TypeOfPayment::Installment);
+        draft.number_of_installments = Some(10);
+        draft.item_19_basic_tax_or_payment = 1_000.0;
+        draft.item_20a_surcharge = 10.0;
+        draft.item_20b_interest = 20.0;
+        draft.item_20c_compromise = 1_000.0;
+        draft.signatures.taxpayer_or_authorized_representative = "TEST TAXPAYER".to_string();
+        draft.signatures.title_or_position = "OWNER".to_string();
+        draft.payment_details.check.drawee_bank_or_agency = "AAB".to_string();
+        draft.payment_details.check.number = "CHECK-24".to_string();
+        draft.payment_details.check.date = "12/31/2025".to_string();
+        draft.payment_details.check.amount = Some(2_030.0);
+        draft.recompute();
+        assert!(draft.validate().is_empty(), "test draft must be valid");
+
+        db.save_form_draft(
+            &draft.tin,
+            "0605",
+            draft.taxable_year,
+            Some(draft.month),
+            &draft.status,
+            &draft,
+        )
+        .expect("0605 draft should save");
+        let reopened = db
+            .get_form_draft::<Form0605Draft>(
+                &draft.tin,
+                "0605",
+                draft.taxable_year,
+                Some(draft.month),
+            )
+            .expect("0605 lookup should succeed")
+            .expect("saved 0605 draft should exist");
+
+        assert_eq!(reopened, draft);
+        assert_eq!(reopened.item_20d_total_penalties, 1_030.0);
+        assert_eq!(reopened.item_21_total_amount_payable, 2_030.0);
+    }
+
+    #[test]
+    fn save_and_reopen_0619e_preserves_manual_due_day_and_fixed_payment_rows() {
+        use crate::forms::form_0619e::{
+            Form0619EDraft, Form0619EPaymentRow, WithholdingAgentCategory,
+        };
+
+        let db = test_db();
+        let profile = test_profile();
+        let mut draft = Form0619EDraft::new_from_profile(&profile, 2026, 12);
+        draft.due_day = Some(10);
+        draft.withholding_agent_category = WithholdingAgentCategory::Government;
+        draft.any_taxes_withheld = true;
+        draft.item_14_amount_of_remittance = 1_000.0;
+        draft.item_17a_surcharge = 100.0;
+        draft.item_17b_interest = 30.0;
+        draft.item_17c_compromise = 100.0;
+        draft.payment_details.others = Form0619EPaymentRow {
+            drawee_bank_or_agency: "AAB".to_string(),
+            number: "REF-22".to_string(),
+            date: "01/10/2027".to_string(),
+            amount: Some(1_230.0),
+        };
+        draft.payment_details.others_description = "OTHER PAYMENT".to_string();
+        draft.recompute();
+
+        db.save_form_draft(
+            &draft.tin,
+            "0619E",
+            draft.taxable_year,
+            Some(draft.month),
+            &draft.status,
+            &draft,
+        )
+        .expect("0619-E draft should save");
+        let reopened = db
+            .get_form_draft::<Form0619EDraft>(
+                &draft.tin,
+                "0619E",
+                draft.taxable_year,
+                Some(draft.month),
+            )
+            .expect("0619-E lookup should succeed")
+            .expect("saved 0619-E draft should exist");
+
+        assert_eq!(reopened.due_day, Some(10));
+        assert_eq!(reopened.due_month_and_year(), (1, 2027));
+        assert_eq!(reopened.payment_details, draft.payment_details);
+        assert_eq!(reopened.item_18_total_amount_of_remittance, 1_230.0);
+    }
+
+    #[test]
+    fn save_and_reopen_0619f_preserves_manual_due_day_and_fixed_payment_rows() {
+        use crate::forms::form_0619f::{
+            Form0619FDraft, Form0619FPaymentRow, WithholdingAgentCategory,
+        };
+
+        let db = test_db();
+        let profile = test_profile();
+        let mut draft = Form0619FDraft::new_from_profile(&profile, 2026, 12);
+        draft.due_day = Some(10);
+        draft.withholding_agent_category = WithholdingAgentCategory::Government;
+        draft.any_taxes_withheld = true;
+        draft.item_13_interest_final_tax_withheld = 1_000.0;
+        draft.item_18a_surcharge = 100.0;
+        draft.item_18b_interest = 30.0;
+        draft.item_18c_compromise = 100.0;
+        draft.payment_details.others = Form0619FPaymentRow {
+            drawee_bank_or_agency: "AAB".to_string(),
+            number: "REF-23".to_string(),
+            date: "01/10/2027".to_string(),
+            amount: Some(1_230.0),
+        };
+        draft.payment_details.others_description = "OTHER PAYMENT".to_string();
+        draft.recompute();
+
+        db.save_form_draft(
+            &draft.tin,
+            "0619F",
+            draft.taxable_year,
+            Some(draft.month),
+            &draft.status,
+            &draft,
+        )
+        .expect("0619-F draft should save");
+        let reopened = db
+            .get_form_draft::<Form0619FDraft>(
+                &draft.tin,
+                "0619F",
+                draft.taxable_year,
+                Some(draft.month),
+            )
+            .expect("0619-F lookup should succeed")
+            .expect("saved 0619-F draft should exist");
+
+        assert_eq!(reopened.due_day, Some(10));
+        assert_eq!(reopened.due_month_and_year(), (1, 2027));
+        assert_eq!(reopened.payment_details, draft.payment_details);
+        assert_eq!(reopened.item_19_total_amount_of_remittance, 1_230.0);
+    }
+
+    #[test]
     fn queued_q1_eight_percent_draft_atomically_records_annual_election() {
         let db = test_db();
         let profile = test_profile();
@@ -1199,7 +1410,7 @@ mod tests {
     }
 
     #[test]
-    fn queued_graduated_return_requires_and_revalidates_current_profile() {
+    fn queued_graduated_return_atomically_records_unspecified_graduated_election() {
         let db = test_db();
         let profile = test_profile();
         insert_test_profile(&db, &profile);
@@ -1209,7 +1420,17 @@ mod tests {
             .expect("an unchanged current profile should accept the queued draft");
 
         let saved_profile = db.get_profile(&draft.tin).unwrap().unwrap();
-        assert!(saved_profile.tax_elections.is_empty());
+        let elections = saved_profile
+            .tax_elections
+            .iter()
+            .filter(|entry| entry.taxable_year == 2026)
+            .collect::<Vec<_>>();
+        assert_eq!(elections.len(), 1);
+        assert_eq!(
+            elections[0].election,
+            IncomeTaxElection::GraduatedUnspecified
+        );
+        assert_eq!(elections[0].source_form, "2551Qv2018");
         assert_eq!(
             db.get_2551q_draft(&draft.tin, 2026, 1)
                 .unwrap()
@@ -1427,11 +1648,7 @@ mod tests {
         {
             Claim2551QSubmissionResult::Rejected { draft, errors } => {
                 assert_eq!(draft.status, FilingStatus::Draft);
-                assert!(
-                    errors
-                        .iter()
-                        .any(|(field, _)| field == "queued_submission_fingerprint")
-                );
+                assert!(errors.iter().any(|(field, _)| field == "profile_snapshot"));
             }
             _ => panic!("a changed current profile must not be claimed"),
         }
@@ -1609,7 +1826,10 @@ mod tests {
             "1601C",
             2026,
             &FilingPeriod::Monthly(12),
-            &FilingStatus::Queued,
+            // 1601C remains a persisted editor scaffold until its formula and
+            // XML round-trip evidence is reviewed; do not make this period-key
+            // test bypass the capability registry's queue gate.
+            &FilingStatus::Draft,
             &TestDraft { value: 1 },
         )
         .unwrap();

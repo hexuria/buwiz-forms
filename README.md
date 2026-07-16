@@ -38,7 +38,7 @@ A modern, native, and secure desktop application for managing and filing eBIRFor
 - **Form Generation**: Robust, schema-driven form generation (e.g., 2551Q) mapping directly to official BIR XML standards.
 
 ### 🛠 Form Digitization & Developer Tools
-- **Visual PDF Layout Editor**: Developers can graphically digitize new BIR forms by dragging, dropping, and resizing field boundaries directly on an SVG overlay. This replaces the slow process of manually nudging coordinates in JSON files, drastically speeding up the integration of new forms.
+- **Semantic HTML Form Renderer**: Exact BIR revisions are implemented as reviewed React HTML/CSS documents fed by Rust-owned render contracts. Official PDFs are calibration evidence only; runtime full-page overlays and coordinate layout packs are prohibited.
 - **Dev-Only Inspect Button**: A feature-gated `Inspect` button (enabled via `--features dev-tools`) lets developers preview the PDF output without going through the full submission pipeline. It automatically saves the form before rendering to ensure data integrity.
 - **Structured Tracing**: Debug builds automatically log form save, sync, and PDF rendering events to the terminal via `tracing`. Override log levels at runtime with `RUST_LOG=bir_desktop=trace just run`.
 
@@ -57,15 +57,14 @@ A modern, native, and secure desktop application for managing and filing eBIRFor
   ```
 
 ### 🍏 macOS Dependencies
-- **Typst** (Required for PDF generation & tests):
-  ```bash
-  brew install typst
-  ```
+
+No external document renderer is required. The app uses the platform WebView
+with its bundled offline HTML form assets.
 
 ### 🪟 Windows Dependencies
-- **OpenSSL** & **Typst** (Required for SQLCipher, networking, and PDF generation):
+- **OpenSSL** (Required for SQLCipher and networking):
   ```powershell
-  choco install openssl typst -y
+  choco install openssl -y
   ```
   *Note: Ensure the `OPENSSL_DIR` environment variable is set to your OpenSSL installation path (e.g., `C:\Program Files\OpenSSL`).*
 
@@ -80,7 +79,7 @@ sudo apt-get install -y \
   libfontconfig1-dev libfreetype-dev libssl-dev libpolkit-gobject-1-dev \
   mesa-vulkan-drivers libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 ```
-- **Typst**: Download the latest Linux binary from the [Typst GitHub Releases](https://github.com/typst/typst/releases) and place it in your `PATH` (e.g., `/usr/local/bin/`).
+- **WebKitGTK** powers the bundled offline HTML preview, print, and PDF export host.
 
 ---
 
@@ -121,9 +120,9 @@ sudo apt-get install -y \
 
 We follow a "less is better" philosophy. You only need to remember a few core commands:
 
-- `just run` — Run the app locally for development (automatically enables `dev-tools` and `layout-editor` features).
+- `just run` — Build the offline form renderer and run the app locally with developer diagnostics.
 - `just install` — Automatically figure out your OS and build the installer package (macOS DMG, Windows Zip, Linux DEB/Tarball).
-- `DEV_MODE=true just install --layout-editor --inspector` — Compiles a production-ready package with internal developer tools unlocked.
+- `DEV_MODE=true just install --inspector` — Compiles a package with internal diagnostics unlocked.
 - `just publish` — Auto-increment the patch version, tag, and push (triggers the release workflow in GitHub Actions).
 
 **Quality & Testing:**
@@ -230,7 +229,7 @@ However, if you want to automatically codesign and notarize the **macOS** DMG on
   - `components/form_engine.rs` — `FormViewTrait` providing shared status pipeline, header, and action infrastructure for all tax forms.
   - `components/form_parts.rs` — Reusable UI primitives: `form_accordion`, `taxpayer_info_section`, `atc_schedule_table`, `computation_row_*`, `penalty_summary_section`, and more.
   - `views/` — Per-form view implementations (e.g., `form_2551q_view.rs`, `form_1701q_view.rs`) that compose the shared components.
-- `crates/bir-print/`: High-performance PDF generation and native OS printing integrations.
+- `crates/bir-print/`: Typed HTML render contracts, provider registry, native output coordination, PDF validation, and PDF merging.
 - `crates/gpui-component/`: A centralized design system and UI toolkit customized exclusively for GPUI.
 
 ### 🧩 Form Engine
@@ -248,11 +247,12 @@ See [docs/adding-a-new-form.md](docs/adding-a-new-form.md) for the comprehensive
 
 ## 🧠 Agent Skills
 
-This repository uses **Project-Local Skills** to automatically equip AI agents (like Antigravity or Gemini) with project-specific capabilities without requiring manual installation.
+This repository keeps its canonical, versioned agent workflows under `.codex/skills/`:
 
-- **Location:** All custom tools, scripts, and instructions are stored in the `.agent/skills/` directory within the repository (e.g., `.agent/skills/form-generator`).
-- **How It Works:** When you clone this repository on a new machine, the agent system will automatically discover the `.agent/skills/` folder at the root. Project-local skills take precedence over any global skills installed on your machine.
-- **Portability:** Because the skills are committed to version control, you don't need to run `npx skills add` or install anything globally. The agent will automatically recognize the `form-generator` skill (and any others) as soon as it interacts with this repository.
+- Use `ebirforms-convert-form-to-html` to migrate an exact BIR form revision into the Rust-contract + semantic HTML pipeline.
+- Use `ebirforms-print-preview` to maintain or calibrate a form that is already HTML-enabled.
+- Treat `.codex/skills/` as the single source of truth. If user-level discovery is needed, use a symlink back to the repository skill rather than a copied second source.
+- Snapshot-overlay and generated-tax-behavior workflows are unsupported and have been removed.
 
 ---
 
@@ -267,7 +267,5 @@ This repository uses **Project-Local Skills** to automatically equip AI agents (
 - **Schema Migrations:** Managed via a `schema_version` table with forward-only numbered migrations in `bir-core/src/db/migrations.rs`.
 - **Security:** Sensitive credential fields (`imap_app_password`, `oauth_access_token`, `oauth_refresh_token`, `profile_pin_hash`) are zeroed on `Drop` via the `zeroize` crate.
 - **Feature Flags:**
-  - `dev-tools` — Enables the Inspect button and additional developer diagnostics. Automatically included in `just run`.
-  - `layout-editor` — Enables the PDF Layout Editor view for form digitization. Automatically included in `just run`.
+  - `dev-tools` — Enables additional developer diagnostics. Automatically included in `just run`.
 - **Tracing:** Debug builds initialize `tracing-subscriber` automatically. Control verbosity with `RUST_LOG` (default: `bir_desktop=debug,bir_print=debug,bir_core=info`).
-

@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 
 const generatedPaths = [
+  "packages/form-specs/generated/form-capabilities.json",
   "packages/form-contracts/schema",
   "packages/form-contracts/fixtures",
   "packages/form-contracts/src/generated/2551q-atc-reference.json",

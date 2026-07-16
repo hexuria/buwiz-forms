@@ -1,471 +1,455 @@
-//! BIR Form 0605 — Typed draft struct and computation logic.
+//! BIR Form 0605, July 1999 (ENCS).
 //!
-//! Generated from savefile: 00000000000000-0605-12312025143024.xml
-//! Total BIR fields: 235
-//! Form-specific fields: 208
-//!
-//! ⚠️ ScaffoldOnly — formula evidence not yet verified
+//! This model is intentionally limited to behavior established by the pinned
+//! two-page official form and two reviewed 235-field editable saves. Form 0605
+//! remains manual/external: the reviewed saves prove an editable persistence
+//! contract, not an electronic-submission contract.
 
-use crate::forms::{FilingStatus, FormValidator};
-use crate::profile::TaxpayerProfile;
+use std::collections::BTreeMap;
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
-/// Complete draft for Form 0605.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+use super::{FilingPeriod, FilingStatus, FormValidator, TypedBirForm};
+use crate::profile::{TaxpayerProfile, TaxpayerType};
+use crate::validation::{validate_email, validate_ph_phone, validate_zip};
+
+pub const FORM_CODE: &str = "0605";
+pub const FORM_REVISION: &str = "1999";
+pub const FORM_TYPE_ID: &str = "0605v1999";
+pub const FORM_VERSION_LABEL: &str = "July 1999 (ENCS)";
+pub const QUEUE_SUBMISSION_SUPPORTED: bool = false;
+
+/// Item 1. The two XML flags are derived from this single choice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum Form0605FilingBasis {
+    #[default]
+    Calendar,
+    Fiscal,
+}
+
+/// Item 11. The official form defines only Individual and Non-Individual.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum Form0605TaxpayerClassification {
+    #[default]
+    Individual,
+    NonIndividual,
+}
+
+/// Item 17. The five voluntary-payment and two audit/delinquency XML flags
+/// are one semantic choice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Form0605MannerOfPayment {
+    SelfAssessment,
+    TaxDepositOrAdvancePayment,
+    IncomeTaxSecondInstallmentIndividual,
+    Penalties,
+    Others,
+    PreliminaryOrFinalAssessmentOrDeficiencyTax,
+    AccountsReceivableOrDelinquentAccount,
+}
+
+impl Form0605MannerOfPayment {
+    pub const ALL: [Self; 7] = [
+        Self::SelfAssessment,
+        Self::TaxDepositOrAdvancePayment,
+        Self::IncomeTaxSecondInstallmentIndividual,
+        Self::Penalties,
+        Self::Others,
+        Self::PreliminaryOrFinalAssessmentOrDeficiencyTax,
+        Self::AccountsReceivableOrDelinquentAccount,
+    ];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::SelfAssessment => "Self-Assessment",
+            Self::TaxDepositOrAdvancePayment => "Tax Deposit / Advance Payment",
+            Self::IncomeTaxSecondInstallmentIndividual => {
+                "Income Tax Second Installment (Individual)"
+            }
+            Self::Penalties => "Penalties",
+            Self::Others => "Others (Specify)",
+            Self::PreliminaryOrFinalAssessmentOrDeficiencyTax => {
+                "Preliminary / Final Assessment / Deficiency Tax"
+            }
+            Self::AccountsReceivableOrDelinquentAccount => {
+                "Accounts Receivable / Delinquent Account"
+            }
+        }
+    }
+}
+
+/// Item 18. The source samples prove XML option 1 is Installment and option 3
+/// is Full; the intervening official option is Partial Payment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Form0605TypeOfPayment {
+    Installment,
+    PartialPayment,
+    FullPayment,
+}
+
+impl Form0605TypeOfPayment {
+    pub const ALL: [Self; 3] = [Self::Installment, Self::PartialPayment, Self::FullPayment];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Installment => "Installment",
+            Self::PartialPayment => "Partial Payment",
+            Self::FullPayment => "Full Payment",
+        }
+    }
+}
+
+/// The reviewed XML exposes two BIR-approval flags, but neither sample selects
+/// one and the official printable form does not label them. Preserve the exact
+/// flags without inventing Yes/No semantics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum Form0605ApprovalSelection {
+    #[default]
+    None,
+    XmlOption1,
+    XmlOption2,
+}
+
+/// Signature lines printed in Item 22 of the locked July 1999 form.
+///
+/// The reviewed editable saves do not contain keys for these lines. They are
+/// persisted in the app draft for semantic HTML output, but are deliberately
+/// omitted from the 235-field editable-save payload.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Form0605SignatureDetails {
+    pub taxpayer_or_authorized_representative: String,
+    pub title_or_position: String,
+    pub head_of_office: String,
+}
+
+/// Item 24, Check, has all four payment-detail columns on the official form.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Form0605CheckPayment {
+    pub drawee_bank_or_agency: String,
+    pub number: String,
+    /// Manual `MM/DD/YYYY` value. No payment-channel date rule is inferred.
+    pub date: String,
+    /// `None` is an officially blank amount; `Some(0.0)` is an entered zero.
+    pub amount: Option<f64>,
+}
+
+/// Item 25, Tax Debit Memo, has Number, Date, and Amount fields only.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Form0605TaxDebitMemoPayment {
+    pub number: String,
+    /// Manual `MM/DD/YYYY` value. No payment-channel date rule is inferred.
+    pub date: String,
+    /// `None` is an officially blank amount; `Some(0.0)` is an entered zero.
+    pub amount: Option<f64>,
+}
+
+/// Item 26, Others, has all four payment-detail columns on the official form.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Form0605OtherPayment {
+    pub drawee_bank_or_agency: String,
+    pub number: String,
+    /// Manual `MM/DD/YYYY` value. No payment-channel date rule is inferred.
+    pub date: String,
+    /// `None` is an officially blank amount; `Some(0.0)` is an entered zero.
+    pub amount: Option<f64>,
+}
+
+/// The four fixed Part III rows on page 1 of the official form.
+///
+/// These values are PDF-backed draft/renderer data. The two reviewed editable
+/// saves have no corresponding XML keys, so they never expand the exact
+/// 235-field save contract or imply an electronic-submission contract.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Form0605PaymentDetails {
+    pub cash_or_bank_debit_memo_amount: Option<f64>,
+    pub check: Form0605CheckPayment,
+    pub tax_debit_memo: Form0605TaxDebitMemoPayment,
+    pub others: Form0605OtherPayment,
+    pub machine_validation_or_receipt_details: String,
+}
+
+/// A complete Gregorian date retained as three exact XML components.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Form0605Date {
+    pub year: u16,
+    pub month: u8,
+    pub day: u8,
+}
+
+impl Form0605Date {
+    pub fn new(year: u16, month: u8, day: u8) -> Result<Self, String> {
+        let value = Self { year, month, day };
+        value.validate()?;
+        Ok(value)
+    }
+
+    pub fn parse_mm_dd_yyyy(value: &str) -> Result<Self, String> {
+        let date = chrono::NaiveDate::parse_from_str(value.trim(), "%m/%d/%Y")
+            .map_err(|_| "Date must use MM/DD/YYYY and be a real calendar date".to_string())?;
+        let year = u16::try_from(chrono::Datelike::year(&date))
+            .map_err(|_| "Date year is outside the supported range".to_string())?;
+        let month = u8::try_from(chrono::Datelike::month(&date))
+            .map_err(|_| "Date month is outside the supported range".to_string())?;
+        let day = u8::try_from(chrono::Datelike::day(&date))
+            .map_err(|_| "Date day is outside the supported range".to_string())?;
+        Ok(Self { year, month, day })
+    }
+
+    pub fn validate(self) -> Result<(), String> {
+        chrono::NaiveDate::from_ymd_opt(
+            i32::from(self.year),
+            u32::from(self.month),
+            u32::from(self.day),
+        )
+        .map(|_| ())
+        .ok_or_else(|| "Date is not a real calendar date".to_string())
+    }
+}
+
+impl fmt::Display for Form0605Date {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "{:02}/{:02}/{:04}",
+            self.month, self.day, self.year
+        )
+    }
+}
+
+/// Source-proven ATC choices. Their XML indexes come from the two reviewed
+/// editable saves, not from the visual ordering of the official table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Form0605ReviewedAtc {
+    Fp010,
+    Ii011,
+}
+
+impl Form0605ReviewedAtc {
+    pub const ALL: [Self; 2] = [Self::Fp010, Self::Ii011];
+
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::Fp010 => "FP010",
+            Self::Ii011 => "II011",
+        }
+    }
+
+    pub const fn xml_index(self) -> u16 {
+        match self {
+            Self::Fp010 => 1,
+            Self::Ii011 => 24,
+        }
+    }
+
+    pub const fn description(self) -> &'static str {
+        match self {
+            Self::Fp010 => "Fines and Penalties",
+            Self::Ii011 => "Pure Compensation Income",
+        }
+    }
+}
+
+/// Source-proven Tax Type choices and indexes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Form0605ReviewedTaxType {
+    Do,
+    It,
+}
+
+impl Form0605ReviewedTaxType {
+    pub const ALL: [Self; 2] = [Self::Do, Self::It];
+
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::Do => "DO",
+            Self::It => "IT",
+        }
+    }
+
+    pub const fn xml_index(self) -> u16 {
+        match self {
+            Self::Do => 4,
+            Self::It => 9,
+        }
+    }
+
+    pub const fn description(self) -> &'static str {
+        match self {
+            Self::Do => "Documentary Stamp Tax - One Time",
+            Self::It => "Income Tax",
+        }
+    }
+}
+
+/// Distinguishes app-selectable reviewed mappings from exact imported pairs
+/// that can be retained but cannot be treated as certified choices.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Form0605CodeEvidence {
+    ReviewedPair,
+    ImportedExact,
+}
+
+/// Semantic code plus the one selected checkbox index in the 142/37-field
+/// legacy matrix. Unknown imported pairs survive round-trip without becoming
+/// app-authorized mappings.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Form0605IndexedCode {
+    code: String,
+    xml_index: u16,
+    evidence: Form0605CodeEvidence,
+}
+
+impl Form0605IndexedCode {
+    pub fn reviewed_atc(value: Form0605ReviewedAtc) -> Self {
+        Self {
+            code: value.code().to_string(),
+            xml_index: value.xml_index(),
+            evidence: Form0605CodeEvidence::ReviewedPair,
+        }
+    }
+
+    pub fn reviewed_tax_type(value: Form0605ReviewedTaxType) -> Self {
+        Self {
+            code: value.code().to_string(),
+            xml_index: value.xml_index(),
+            evidence: Form0605CodeEvidence::ReviewedPair,
+        }
+    }
+
+    pub(crate) fn imported_atc(code: String, xml_index: u16) -> Self {
+        let is_reviewed = Form0605ReviewedAtc::ALL
+            .iter()
+            .copied()
+            .any(|candidate| candidate.code() == code && candidate.xml_index() == xml_index);
+        let evidence = if is_reviewed {
+            Form0605CodeEvidence::ReviewedPair
+        } else {
+            Form0605CodeEvidence::ImportedExact
+        };
+        Self {
+            code,
+            xml_index,
+            evidence,
+        }
+    }
+
+    pub(crate) fn imported_tax_type(code: String, xml_index: u16) -> Self {
+        let is_reviewed = Form0605ReviewedTaxType::ALL
+            .iter()
+            .copied()
+            .any(|candidate| candidate.code() == code && candidate.xml_index() == xml_index);
+        let evidence = if is_reviewed {
+            Form0605CodeEvidence::ReviewedPair
+        } else {
+            Form0605CodeEvidence::ImportedExact
+        };
+        Self {
+            code,
+            xml_index,
+            evidence,
+        }
+    }
+
+    pub fn code(&self) -> &str {
+        &self.code
+    }
+
+    pub const fn xml_index(&self) -> u16 {
+        self.xml_index
+    }
+
+    pub const fn evidence(&self) -> Form0605CodeEvidence {
+        self.evidence
+    }
+
+    pub const fn requires_review(&self) -> bool {
+        matches!(self.evidence, Form0605CodeEvidence::ImportedExact)
+    }
+}
+
+/// Complete editable draft for exact identity `0605v1999`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Form0605Draft {
-    /// Database row ID (None before first save)
     pub id: Option<i64>,
 
-    // === Filing Period ===
+    // Database/open-ended filing slot. It is not used to derive official
+    // dates, quarter, or year-ended fields.
     pub tin: String,
     pub taxable_year: u16,
     pub month: u8,
 
-    // === Header / Options ===
+    // Items 1-8.
+    #[serde(default)]
+    pub filing_basis: Form0605FilingBasis,
+    #[serde(default = "default_quarter")]
+    pub quarter: u8,
+    #[serde(default = "default_year_end_month")]
+    pub year_end_month: u8,
+    #[serde(default)]
+    pub due_date: Option<Form0605Date>,
+    #[serde(default)]
+    pub return_period: Option<Form0605Date>,
+    #[serde(default)]
+    pub number_of_sheets: u16,
+    #[serde(default)]
+    pub atc: Option<Form0605IndexedCode>,
+    #[serde(default)]
+    pub tax_type: Option<Form0605IndexedCode>,
 
-    // === Profile Fields (pre-filled) ===
+    // Items 9-16.
     pub rdo_code: String,
     pub taxpayer_name: String,
+    #[serde(default)]
+    pub classification: Form0605TaxpayerClassification,
+    #[serde(default, alias = "txt_line_bus")]
+    pub line_of_business: String,
     pub registered_address: String,
     pub zip_code: String,
     pub contact_number: String,
     pub email: String,
 
-    // === itemApprovedYN ===
-    /// BIR: `frm0605:itemApprovedYN:_1` (sample: `false`)
-    pub item_approved_yn_1: bool,
-    /// BIR: `frm0605:itemApprovedYN:_2` (sample: `false`)
-    pub item_approved_yn_2: bool,
+    // Items 17-18.
+    #[serde(default)]
+    pub manner_of_payment: Option<Form0605MannerOfPayment>,
+    #[serde(default)]
+    pub other_manner_description: String,
+    #[serde(default)]
+    pub type_of_payment: Option<Form0605TypeOfPayment>,
+    #[serde(default)]
+    pub number_of_installments: Option<u16>,
 
-    // === itemMannerOfPayment ===
-    /// BIR: `frm0605:itemMannerOfPayment:_1` (sample: `false`)
-    pub item_manner_of_payment_1: bool,
-    /// BIR: `frm0605:itemMannerOfPayment:_2` (sample: `false`)
-    pub item_manner_of_payment_2: bool,
-    /// BIR: `frm0605:itemMannerOfPayment:_3` (sample: `false`)
-    pub item_manner_of_payment_3: bool,
-    /// BIR: `frm0605:itemMannerOfPayment:_4` (sample: `false`)
-    pub item_manner_of_payment_4: bool,
-    /// BIR: `frm0605:itemMannerOfPayment:_5` (sample: `true`)
-    pub item_manner_of_payment_5: bool,
+    // Items 19-21. The aliases retain amount data from the generated scaffold.
+    #[serde(alias = "txt_tax19")]
+    pub item_19_basic_tax_or_payment: f64,
+    #[serde(alias = "txt_tax20a")]
+    pub item_20a_surcharge: f64,
+    #[serde(alias = "txt_tax20b")]
+    pub item_20b_interest: f64,
+    #[serde(alias = "txt_tax20c")]
+    pub item_20c_compromise: f64,
+    #[serde(alias = "txt_tax20d")]
+    pub item_20d_total_penalties: f64,
+    #[serde(alias = "txt_tax21")]
+    pub item_21_total_amount_payable: f64,
 
-    // === itemMannerOfPaymentB ===
-    /// BIR: `frm0605:itemMannerOfPaymentB:_1` (sample: `false`)
-    pub item_manner_of_payment_b_1: bool,
-    /// BIR: `frm0605:itemMannerOfPaymentB:_2` (sample: `false`)
-    pub item_manner_of_payment_b_2: bool,
+    // The only approval-related fields present in either exact XML source.
+    #[serde(default)]
+    pub approval_selection: Form0605ApprovalSelection,
 
-    // === itemModeOfPayment ===
-    /// BIR: `frm0605:itemModeOfPayment:_1` (sample: `true`)
-    pub item_mode_of_payment_1: bool,
-    /// BIR: `frm0605:itemModeOfPayment:_2` (sample: `false`)
-    pub item_mode_of_payment_2: bool,
-    /// BIR: `frm0605:itemModeOfPayment:_3` (sample: `false`)
-    pub item_mode_of_payment_3: bool,
+    // Item 22 and Part III. These are official-PDF-backed app fields, but are
+    // absent from both reviewed 235-field editable saves.
+    #[serde(default)]
+    pub signatures: Form0605SignatureDetails,
+    #[serde(default)]
+    pub payment_details: Form0605PaymentDetails,
 
-    // === other ===
-    /// BIR: `AtcCode1` (sample: `false`)
-    pub atc_code1: bool,
-    /// BIR: `AtcCode10` (sample: `false`)
-    pub atc_code10: bool,
-    /// BIR: `AtcCode100` (sample: `false`)
-    pub atc_code100: bool,
-    /// BIR: `AtcCode101` (sample: `false`)
-    pub atc_code101: bool,
-    /// BIR: `AtcCode102` (sample: `false`)
-    pub atc_code102: bool,
-    /// BIR: `AtcCode103` (sample: `false`)
-    pub atc_code103: bool,
-    /// BIR: `AtcCode104` (sample: `false`)
-    pub atc_code104: bool,
-    /// BIR: `AtcCode105` (sample: `false`)
-    pub atc_code105: bool,
-    /// BIR: `AtcCode106` (sample: `false`)
-    pub atc_code106: bool,
-    /// BIR: `AtcCode107` (sample: `false`)
-    pub atc_code107: bool,
-    /// BIR: `AtcCode108` (sample: `false`)
-    pub atc_code108: bool,
-    /// BIR: `AtcCode109` (sample: `false`)
-    pub atc_code109: bool,
-    /// BIR: `AtcCode11` (sample: `false`)
-    pub atc_code11: bool,
-    /// BIR: `AtcCode110` (sample: `false`)
-    pub atc_code110: bool,
-    /// BIR: `AtcCode111` (sample: `false`)
-    pub atc_code111: bool,
-    /// BIR: `AtcCode112` (sample: `false`)
-    pub atc_code112: bool,
-    /// BIR: `AtcCode113` (sample: `false`)
-    pub atc_code113: bool,
-    /// BIR: `AtcCode114` (sample: `false`)
-    pub atc_code114: bool,
-    /// BIR: `AtcCode115` (sample: `false`)
-    pub atc_code115: bool,
-    /// BIR: `AtcCode116` (sample: `false`)
-    pub atc_code116: bool,
-    /// BIR: `AtcCode117` (sample: `false`)
-    pub atc_code117: bool,
-    /// BIR: `AtcCode118` (sample: `false`)
-    pub atc_code118: bool,
-    /// BIR: `AtcCode119` (sample: `false`)
-    pub atc_code119: bool,
-    /// BIR: `AtcCode12` (sample: `false`)
-    pub atc_code12: bool,
-    /// BIR: `AtcCode120` (sample: `false`)
-    pub atc_code120: bool,
-    /// BIR: `AtcCode121` (sample: `false`)
-    pub atc_code121: bool,
-    /// BIR: `AtcCode122` (sample: `false`)
-    pub atc_code122: bool,
-    /// BIR: `AtcCode123` (sample: `false`)
-    pub atc_code123: bool,
-    /// BIR: `AtcCode124` (sample: `false`)
-    pub atc_code124: bool,
-    /// BIR: `AtcCode125` (sample: `false`)
-    pub atc_code125: bool,
-    /// BIR: `AtcCode126` (sample: `false`)
-    pub atc_code126: bool,
-    /// BIR: `AtcCode127` (sample: `false`)
-    pub atc_code127: bool,
-    /// BIR: `AtcCode128` (sample: `false`)
-    pub atc_code128: bool,
-    /// BIR: `AtcCode129` (sample: `false`)
-    pub atc_code129: bool,
-    /// BIR: `AtcCode13` (sample: `false`)
-    pub atc_code13: bool,
-    /// BIR: `AtcCode130` (sample: `false`)
-    pub atc_code130: bool,
-    /// BIR: `AtcCode131` (sample: `false`)
-    pub atc_code131: bool,
-    /// BIR: `AtcCode132` (sample: `false`)
-    pub atc_code132: bool,
-    /// BIR: `AtcCode133` (sample: `false`)
-    pub atc_code133: bool,
-    /// BIR: `AtcCode134` (sample: `false`)
-    pub atc_code134: bool,
-    /// BIR: `AtcCode135` (sample: `false`)
-    pub atc_code135: bool,
-    /// BIR: `AtcCode136` (sample: `false`)
-    pub atc_code136: bool,
-    /// BIR: `AtcCode137` (sample: `false`)
-    pub atc_code137: bool,
-    /// BIR: `AtcCode138` (sample: `false`)
-    pub atc_code138: bool,
-    /// BIR: `AtcCode139` (sample: `false`)
-    pub atc_code139: bool,
-    /// BIR: `AtcCode14` (sample: `false`)
-    pub atc_code14: bool,
-    /// BIR: `AtcCode140` (sample: `false`)
-    pub atc_code140: bool,
-    /// BIR: `AtcCode141` (sample: `false`)
-    pub atc_code141: bool,
-    /// BIR: `AtcCode142` (sample: `false`)
-    pub atc_code142: bool,
-    /// BIR: `AtcCode15` (sample: `false`)
-    pub atc_code15: bool,
-    /// BIR: `AtcCode16` (sample: `false`)
-    pub atc_code16: bool,
-    /// BIR: `AtcCode17` (sample: `false`)
-    pub atc_code17: bool,
-    /// BIR: `AtcCode18` (sample: `false`)
-    pub atc_code18: bool,
-    /// BIR: `AtcCode19` (sample: `false`)
-    pub atc_code19: bool,
-    /// BIR: `AtcCode2` (sample: `false`)
-    pub atc_code2: bool,
-    /// BIR: `AtcCode20` (sample: `false`)
-    pub atc_code20: bool,
-    /// BIR: `AtcCode21` (sample: `false`)
-    pub atc_code21: bool,
-    /// BIR: `AtcCode22` (sample: `false`)
-    pub atc_code22: bool,
-    /// BIR: `AtcCode23` (sample: `false`)
-    pub atc_code23: bool,
-    /// BIR: `AtcCode24` (sample: `true`)
-    pub atc_code24: bool,
-    /// BIR: `AtcCode25` (sample: `false`)
-    pub atc_code25: bool,
-    /// BIR: `AtcCode26` (sample: `false`)
-    pub atc_code26: bool,
-    /// BIR: `AtcCode27` (sample: `false`)
-    pub atc_code27: bool,
-    /// BIR: `AtcCode28` (sample: `false`)
-    pub atc_code28: bool,
-    /// BIR: `AtcCode29` (sample: `false`)
-    pub atc_code29: bool,
-    /// BIR: `AtcCode3` (sample: `false`)
-    pub atc_code3: bool,
-    /// BIR: `AtcCode30` (sample: `false`)
-    pub atc_code30: bool,
-    /// BIR: `AtcCode31` (sample: `false`)
-    pub atc_code31: bool,
-    /// BIR: `AtcCode32` (sample: `false`)
-    pub atc_code32: bool,
-    /// BIR: `AtcCode33` (sample: `false`)
-    pub atc_code33: bool,
-    /// BIR: `AtcCode34` (sample: `false`)
-    pub atc_code34: bool,
-    /// BIR: `AtcCode35` (sample: `false`)
-    pub atc_code35: bool,
-    /// BIR: `AtcCode36` (sample: `false`)
-    pub atc_code36: bool,
-    /// BIR: `AtcCode37` (sample: `false`)
-    pub atc_code37: bool,
-    /// BIR: `AtcCode38` (sample: `false`)
-    pub atc_code38: bool,
-    /// BIR: `AtcCode39` (sample: `false`)
-    pub atc_code39: bool,
-    /// BIR: `AtcCode4` (sample: `false`)
-    pub atc_code4: bool,
-    /// BIR: `AtcCode40` (sample: `false`)
-    pub atc_code40: bool,
-    /// BIR: `AtcCode41` (sample: `false`)
-    pub atc_code41: bool,
-    /// BIR: `AtcCode42` (sample: `false`)
-    pub atc_code42: bool,
-    /// BIR: `AtcCode43` (sample: `false`)
-    pub atc_code43: bool,
-    /// BIR: `AtcCode44` (sample: `false`)
-    pub atc_code44: bool,
-    /// BIR: `AtcCode45` (sample: `false`)
-    pub atc_code45: bool,
-    /// BIR: `AtcCode46` (sample: `false`)
-    pub atc_code46: bool,
-    /// BIR: `AtcCode47` (sample: `false`)
-    pub atc_code47: bool,
-    /// BIR: `AtcCode48` (sample: `false`)
-    pub atc_code48: bool,
-    /// BIR: `AtcCode49` (sample: `false`)
-    pub atc_code49: bool,
-    /// BIR: `AtcCode5` (sample: `false`)
-    pub atc_code5: bool,
-    /// BIR: `AtcCode50` (sample: `false`)
-    pub atc_code50: bool,
-    /// BIR: `AtcCode51` (sample: `false`)
-    pub atc_code51: bool,
-    /// BIR: `AtcCode52` (sample: `false`)
-    pub atc_code52: bool,
-    /// BIR: `AtcCode53` (sample: `false`)
-    pub atc_code53: bool,
-    /// BIR: `AtcCode54` (sample: `false`)
-    pub atc_code54: bool,
-    /// BIR: `AtcCode55` (sample: `false`)
-    pub atc_code55: bool,
-    /// BIR: `AtcCode56` (sample: `false`)
-    pub atc_code56: bool,
-    /// BIR: `AtcCode57` (sample: `false`)
-    pub atc_code57: bool,
-    /// BIR: `AtcCode58` (sample: `false`)
-    pub atc_code58: bool,
-    /// BIR: `AtcCode59` (sample: `false`)
-    pub atc_code59: bool,
-    /// BIR: `AtcCode6` (sample: `false`)
-    pub atc_code6: bool,
-    /// BIR: `AtcCode60` (sample: `false`)
-    pub atc_code60: bool,
-    /// BIR: `AtcCode61` (sample: `false`)
-    pub atc_code61: bool,
-    /// BIR: `AtcCode62` (sample: `false`)
-    pub atc_code62: bool,
-    /// BIR: `AtcCode63` (sample: `false`)
-    pub atc_code63: bool,
-    /// BIR: `AtcCode64` (sample: `false`)
-    pub atc_code64: bool,
-    /// BIR: `AtcCode65` (sample: `false`)
-    pub atc_code65: bool,
-    /// BIR: `AtcCode66` (sample: `false`)
-    pub atc_code66: bool,
-    /// BIR: `AtcCode67` (sample: `false`)
-    pub atc_code67: bool,
-    /// BIR: `AtcCode68` (sample: `false`)
-    pub atc_code68: bool,
-    /// BIR: `AtcCode69` (sample: `false`)
-    pub atc_code69: bool,
-    /// BIR: `AtcCode7` (sample: `false`)
-    pub atc_code7: bool,
-    /// BIR: `AtcCode70` (sample: `false`)
-    pub atc_code70: bool,
-    /// BIR: `AtcCode71` (sample: `false`)
-    pub atc_code71: bool,
-    /// BIR: `AtcCode72` (sample: `false`)
-    pub atc_code72: bool,
-    /// BIR: `AtcCode73` (sample: `false`)
-    pub atc_code73: bool,
-    /// BIR: `AtcCode74` (sample: `false`)
-    pub atc_code74: bool,
-    /// BIR: `AtcCode75` (sample: `false`)
-    pub atc_code75: bool,
-    /// BIR: `AtcCode76` (sample: `false`)
-    pub atc_code76: bool,
-    /// BIR: `AtcCode77` (sample: `false`)
-    pub atc_code77: bool,
-    /// BIR: `AtcCode78` (sample: `false`)
-    pub atc_code78: bool,
-    /// BIR: `AtcCode79` (sample: `false`)
-    pub atc_code79: bool,
-    /// BIR: `AtcCode8` (sample: `false`)
-    pub atc_code8: bool,
-    /// BIR: `AtcCode80` (sample: `false`)
-    pub atc_code80: bool,
-    /// BIR: `AtcCode81` (sample: `false`)
-    pub atc_code81: bool,
-    /// BIR: `AtcCode82` (sample: `false`)
-    pub atc_code82: bool,
-    /// BIR: `AtcCode83` (sample: `false`)
-    pub atc_code83: bool,
-    /// BIR: `AtcCode84` (sample: `false`)
-    pub atc_code84: bool,
-    /// BIR: `AtcCode85` (sample: `false`)
-    pub atc_code85: bool,
-    /// BIR: `AtcCode86` (sample: `false`)
-    pub atc_code86: bool,
-    /// BIR: `AtcCode87` (sample: `false`)
-    pub atc_code87: bool,
-    /// BIR: `AtcCode88` (sample: `false`)
-    pub atc_code88: bool,
-    /// BIR: `AtcCode89` (sample: `false`)
-    pub atc_code89: bool,
-    /// BIR: `AtcCode9` (sample: `false`)
-    pub atc_code9: bool,
-    /// BIR: `AtcCode90` (sample: `false`)
-    pub atc_code90: bool,
-    /// BIR: `AtcCode91` (sample: `false`)
-    pub atc_code91: bool,
-    /// BIR: `AtcCode92` (sample: `false`)
-    pub atc_code92: bool,
-    /// BIR: `AtcCode93` (sample: `false`)
-    pub atc_code93: bool,
-    /// BIR: `AtcCode94` (sample: `false`)
-    pub atc_code94: bool,
-    /// BIR: `AtcCode95` (sample: `false`)
-    pub atc_code95: bool,
-    /// BIR: `AtcCode96` (sample: `false`)
-    pub atc_code96: bool,
-    /// BIR: `AtcCode97` (sample: `false`)
-    pub atc_code97: bool,
-    /// BIR: `AtcCode98` (sample: `false`)
-    pub atc_code98: bool,
-    /// BIR: `AtcCode99` (sample: `false`)
-    pub atc_code99: bool,
-    /// BIR: `TaxTypeCode1` (sample: `false`)
-    pub tax_type_code1: bool,
-    /// BIR: `TaxTypeCode10` (sample: `false`)
-    pub tax_type_code10: bool,
-    /// BIR: `TaxTypeCode11` (sample: `false`)
-    pub tax_type_code11: bool,
-    /// BIR: `TaxTypeCode12` (sample: `false`)
-    pub tax_type_code12: bool,
-    /// BIR: `TaxTypeCode13` (sample: `false`)
-    pub tax_type_code13: bool,
-    /// BIR: `TaxTypeCode14` (sample: `false`)
-    pub tax_type_code14: bool,
-    /// BIR: `TaxTypeCode15` (sample: `false`)
-    pub tax_type_code15: bool,
-    /// BIR: `TaxTypeCode16` (sample: `false`)
-    pub tax_type_code16: bool,
-    /// BIR: `TaxTypeCode17` (sample: `false`)
-    pub tax_type_code17: bool,
-    /// BIR: `TaxTypeCode18` (sample: `false`)
-    pub tax_type_code18: bool,
-    /// BIR: `TaxTypeCode19` (sample: `false`)
-    pub tax_type_code19: bool,
-    /// BIR: `TaxTypeCode2` (sample: `false`)
-    pub tax_type_code2: bool,
-    /// BIR: `TaxTypeCode20` (sample: `false`)
-    pub tax_type_code20: bool,
-    /// BIR: `TaxTypeCode21` (sample: `false`)
-    pub tax_type_code21: bool,
-    /// BIR: `TaxTypeCode22` (sample: `false`)
-    pub tax_type_code22: bool,
-    /// BIR: `TaxTypeCode23` (sample: `false`)
-    pub tax_type_code23: bool,
-    /// BIR: `TaxTypeCode24` (sample: `false`)
-    pub tax_type_code24: bool,
-    /// BIR: `TaxTypeCode25` (sample: `false`)
-    pub tax_type_code25: bool,
-    /// BIR: `TaxTypeCode26` (sample: `false`)
-    pub tax_type_code26: bool,
-    /// BIR: `TaxTypeCode27` (sample: `false`)
-    pub tax_type_code27: bool,
-    /// BIR: `TaxTypeCode28` (sample: `false`)
-    pub tax_type_code28: bool,
-    /// BIR: `TaxTypeCode29` (sample: `false`)
-    pub tax_type_code29: bool,
-    /// BIR: `TaxTypeCode3` (sample: `false`)
-    pub tax_type_code3: bool,
-    /// BIR: `TaxTypeCode30` (sample: `false`)
-    pub tax_type_code30: bool,
-    /// BIR: `TaxTypeCode31` (sample: `false`)
-    pub tax_type_code31: bool,
-    /// BIR: `TaxTypeCode32` (sample: `false`)
-    pub tax_type_code32: bool,
-    /// BIR: `TaxTypeCode33` (sample: `false`)
-    pub tax_type_code33: bool,
-    /// BIR: `TaxTypeCode34` (sample: `false`)
-    pub tax_type_code34: bool,
-    /// BIR: `TaxTypeCode35` (sample: `false`)
-    pub tax_type_code35: bool,
-    /// BIR: `TaxTypeCode36` (sample: `false`)
-    pub tax_type_code36: bool,
-    /// BIR: `TaxTypeCode37` (sample: `false`)
-    pub tax_type_code37: bool,
-    /// BIR: `TaxTypeCode4` (sample: `false`)
-    pub tax_type_code4: bool,
-    /// BIR: `TaxTypeCode5` (sample: `false`)
-    pub tax_type_code5: bool,
-    /// BIR: `TaxTypeCode6` (sample: `false`)
-    pub tax_type_code6: bool,
-    /// BIR: `TaxTypeCode7` (sample: `false`)
-    pub tax_type_code7: bool,
-    /// BIR: `TaxTypeCode8` (sample: `false`)
-    pub tax_type_code8: bool,
-    /// BIR: `TaxTypeCode9` (sample: `true`)
-    pub tax_type_code9: bool,
+    // Unknown future/source transport keys are retained, while every modeled
+    // value overwrites the same key during export.
+    #[serde(default)]
+    pub preserved_unmodeled_xml_fields: BTreeMap<String, String>,
 
-    // === schedule_atc ===
-    /// BIR: `txtATCCode` (sample: `II011`)
-    pub txt_atccode: String,
-
-    // === shared_text ===
-    /// BIR: `txtTaxTypeCode` (sample: `IT`)
-    pub txt_tax_type_code: String,
-
-    // === text_fields ===
-    /// BIR: `frm0605:txtAddress` (sample: `OLONGAPO`)
-    pub txt_address: String,
-    /// BIR: `frm0605:txtDueDateDay` (sample: `31`)
-    pub txt_due_date_day: u32,
-    /// BIR: `frm0605:txtLineBus` (sample: `SOFTWARE DEVELOPMENT`)
-    pub txt_line_bus: String,
-    /// BIR: `frm0605:txtNoOfSheets` (sample: `10`)
-    pub txt_no_of_sheets: u32,
-    /// BIR: `frm0605:txtNumOfInstallment` (sample: `10`)
-    pub txt_num_of_installment: u32,
-    /// BIR: `frm0605:txtOthersName` (sample: `CANT CHOOSE PRELIMINARY OR ACC`)
-    pub txt_others_name: String,
-    /// BIR: `frm0605:txtReturnPeriodDay` (sample: `31`)
-    pub txt_return_period_day: u32,
-    /// BIR: `frm0605:txtTax19` (sample: `1,000.00`)
-    pub txt_tax19: f64,
-    /// BIR: `frm0605:txtTax20A` (sample: `10.00`)
-    pub txt_tax20a: f64,
-    /// BIR: `frm0605:txtTax20B` (sample: `20.00`)
-    pub txt_tax20b: f64,
-    /// BIR: `frm0605:txtTax20C` (sample: `1,000.00`)
-    pub txt_tax20c: f64,
-    /// BIR: `frm0605:txtTax20D` (sample: `1,030.00`)
-    pub txt_tax20d: f64,
-    /// BIR: `frm0605:txtTax21` (sample: `2,030.00`)
-    pub txt_tax21: f64,
-
-    // === txtClassification ===
-    /// BIR: `frm0605:txtClassification:_1` (sample: `false`)
-    pub txt_classification_1: bool,
-    /// BIR: `frm0605:txtClassification:_2` (sample: `true`)
-    pub txt_classification_2: bool,
-
-    // === Lifecycle ===
+    // Lifecycle.
     pub status: FilingStatus,
     pub created_at: String,
     pub updated_at: String,
@@ -485,243 +469,56 @@ pub struct Form0605Draft {
     pub last_error: Option<String>,
 }
 
-impl FormValidator for Form0605Draft {
-    fn validate(&self) -> Vec<(String, String)> {
-        let mut errors = Vec::new();
-        if self.tin.is_empty() {
-            errors.push(("tin".into(), "TIN is required".into()));
-        }
-        if self.taxpayer_name.is_empty() {
-            errors.push(("taxpayer_name".into(), "Taxpayer name is required".into()));
-        }
-        // TODO: Add form-specific validation rules
-        errors
-    }
+const fn default_quarter() -> u8 {
+    1
+}
+
+const fn default_year_end_month() -> u8 {
+    12
 }
 
 impl Form0605Draft {
-    /// Create a new draft from a taxpayer profile.
-    pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, month: u8) -> Self {
+    pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, period_slot: u8) -> Self {
         let now = chrono::Utc::now().to_rfc3339();
         Self {
             id: None,
             tin: profile.tin.full(),
             taxable_year: year,
-            month,
+            month: period_slot.clamp(1, 12),
+            filing_basis: Form0605FilingBasis::Calendar,
+            quarter: period_slot.clamp(1, 4),
+            year_end_month: 12,
+            due_date: None,
+            return_period: None,
+            number_of_sheets: 0,
+            atc: None,
+            tax_type: None,
             rdo_code: profile.rdo_code.clone(),
             taxpayer_name: profile.full_name.clone(),
+            classification: if matches!(profile.taxpayer_type, TaxpayerType::Individual) {
+                Form0605TaxpayerClassification::Individual
+            } else {
+                Form0605TaxpayerClassification::NonIndividual
+            },
+            line_of_business: profile.line_of_business.clone(),
             registered_address: profile.registered_address.clone(),
             zip_code: profile.zip_code.clone(),
             contact_number: profile.phone.clone(),
             email: profile.email.clone(),
-            item_approved_yn_1: false,
-            item_approved_yn_2: false,
-            item_manner_of_payment_1: false,
-            item_manner_of_payment_2: false,
-            item_manner_of_payment_3: false,
-            item_manner_of_payment_4: false,
-            item_manner_of_payment_5: true,
-            item_manner_of_payment_b_1: false,
-            item_manner_of_payment_b_2: false,
-            item_mode_of_payment_1: true,
-            item_mode_of_payment_2: false,
-            item_mode_of_payment_3: false,
-            atc_code1: false,
-            atc_code10: false,
-            atc_code100: false,
-            atc_code101: false,
-            atc_code102: false,
-            atc_code103: false,
-            atc_code104: false,
-            atc_code105: false,
-            atc_code106: false,
-            atc_code107: false,
-            atc_code108: false,
-            atc_code109: false,
-            atc_code11: false,
-            atc_code110: false,
-            atc_code111: false,
-            atc_code112: false,
-            atc_code113: false,
-            atc_code114: false,
-            atc_code115: false,
-            atc_code116: false,
-            atc_code117: false,
-            atc_code118: false,
-            atc_code119: false,
-            atc_code12: false,
-            atc_code120: false,
-            atc_code121: false,
-            atc_code122: false,
-            atc_code123: false,
-            atc_code124: false,
-            atc_code125: false,
-            atc_code126: false,
-            atc_code127: false,
-            atc_code128: false,
-            atc_code129: false,
-            atc_code13: false,
-            atc_code130: false,
-            atc_code131: false,
-            atc_code132: false,
-            atc_code133: false,
-            atc_code134: false,
-            atc_code135: false,
-            atc_code136: false,
-            atc_code137: false,
-            atc_code138: false,
-            atc_code139: false,
-            atc_code14: false,
-            atc_code140: false,
-            atc_code141: false,
-            atc_code142: false,
-            atc_code15: false,
-            atc_code16: false,
-            atc_code17: false,
-            atc_code18: false,
-            atc_code19: false,
-            atc_code2: false,
-            atc_code20: false,
-            atc_code21: false,
-            atc_code22: false,
-            atc_code23: false,
-            atc_code24: true,
-            atc_code25: false,
-            atc_code26: false,
-            atc_code27: false,
-            atc_code28: false,
-            atc_code29: false,
-            atc_code3: false,
-            atc_code30: false,
-            atc_code31: false,
-            atc_code32: false,
-            atc_code33: false,
-            atc_code34: false,
-            atc_code35: false,
-            atc_code36: false,
-            atc_code37: false,
-            atc_code38: false,
-            atc_code39: false,
-            atc_code4: false,
-            atc_code40: false,
-            atc_code41: false,
-            atc_code42: false,
-            atc_code43: false,
-            atc_code44: false,
-            atc_code45: false,
-            atc_code46: false,
-            atc_code47: false,
-            atc_code48: false,
-            atc_code49: false,
-            atc_code5: false,
-            atc_code50: false,
-            atc_code51: false,
-            atc_code52: false,
-            atc_code53: false,
-            atc_code54: false,
-            atc_code55: false,
-            atc_code56: false,
-            atc_code57: false,
-            atc_code58: false,
-            atc_code59: false,
-            atc_code6: false,
-            atc_code60: false,
-            atc_code61: false,
-            atc_code62: false,
-            atc_code63: false,
-            atc_code64: false,
-            atc_code65: false,
-            atc_code66: false,
-            atc_code67: false,
-            atc_code68: false,
-            atc_code69: false,
-            atc_code7: false,
-            atc_code70: false,
-            atc_code71: false,
-            atc_code72: false,
-            atc_code73: false,
-            atc_code74: false,
-            atc_code75: false,
-            atc_code76: false,
-            atc_code77: false,
-            atc_code78: false,
-            atc_code79: false,
-            atc_code8: false,
-            atc_code80: false,
-            atc_code81: false,
-            atc_code82: false,
-            atc_code83: false,
-            atc_code84: false,
-            atc_code85: false,
-            atc_code86: false,
-            atc_code87: false,
-            atc_code88: false,
-            atc_code89: false,
-            atc_code9: false,
-            atc_code90: false,
-            atc_code91: false,
-            atc_code92: false,
-            atc_code93: false,
-            atc_code94: false,
-            atc_code95: false,
-            atc_code96: false,
-            atc_code97: false,
-            atc_code98: false,
-            atc_code99: false,
-            tax_type_code1: false,
-            tax_type_code10: false,
-            tax_type_code11: false,
-            tax_type_code12: false,
-            tax_type_code13: false,
-            tax_type_code14: false,
-            tax_type_code15: false,
-            tax_type_code16: false,
-            tax_type_code17: false,
-            tax_type_code18: false,
-            tax_type_code19: false,
-            tax_type_code2: false,
-            tax_type_code20: false,
-            tax_type_code21: false,
-            tax_type_code22: false,
-            tax_type_code23: false,
-            tax_type_code24: false,
-            tax_type_code25: false,
-            tax_type_code26: false,
-            tax_type_code27: false,
-            tax_type_code28: false,
-            tax_type_code29: false,
-            tax_type_code3: false,
-            tax_type_code30: false,
-            tax_type_code31: false,
-            tax_type_code32: false,
-            tax_type_code33: false,
-            tax_type_code34: false,
-            tax_type_code35: false,
-            tax_type_code36: false,
-            tax_type_code37: false,
-            tax_type_code4: false,
-            tax_type_code5: false,
-            tax_type_code6: false,
-            tax_type_code7: false,
-            tax_type_code8: false,
-            tax_type_code9: true,
-            txt_atccode: String::new(),
-            txt_tax_type_code: String::new(),
-            txt_address: String::new(),
-            txt_due_date_day: 0,
-            txt_line_bus: String::new(),
-            txt_no_of_sheets: 0,
-            txt_num_of_installment: 0,
-            txt_others_name: String::new(),
-            txt_return_period_day: 0,
-            txt_tax19: 0.0,
-            txt_tax20a: 0.0,
-            txt_tax20b: 0.0,
-            txt_tax20c: 0.0,
-            txt_tax20d: 0.0,
-            txt_tax21: 0.0,
-            txt_classification_1: false,
-            txt_classification_2: true,
+            manner_of_payment: None,
+            other_manner_description: String::new(),
+            type_of_payment: None,
+            number_of_installments: None,
+            item_19_basic_tax_or_payment: 0.0,
+            item_20a_surcharge: 0.0,
+            item_20b_interest: 0.0,
+            item_20c_compromise: 0.0,
+            item_20d_total_penalties: 0.0,
+            item_21_total_amount_payable: 0.0,
+            approval_selection: Form0605ApprovalSelection::None,
+            signatures: Form0605SignatureDetails::default(),
+            payment_details: Form0605PaymentDetails::default(),
+            preserved_unmodeled_xml_fields: BTreeMap::new(),
             status: FilingStatus::Draft,
             created_at: now.clone(),
             updated_at: now,
@@ -735,55 +532,94 @@ impl Form0605Draft {
         }
     }
 
-    /// Recompute all derived fields per BIR 0605 computation rules.
-    ///
-    /// Computation flow (per official BIR form instructions):
-    /// - Item 20D = 20A + 20B + 20C  (Total Penalties = Surcharge + Interest + Compromise)
-    /// - Item 21 = Item 19 + Item 20D (Total Amount Due = Basic Tax + Total Penalties)
-    ///
-    /// Item 19, 20A, 20B, 20C are user-entered. Items 20D, 21 are derived.
-    pub fn recompute(&mut self) {
-        // Item 20D: Total Penalties
-        self.txt_tax20d = self.txt_tax20a + self.txt_tax20b + self.txt_tax20c;
-
-        // Item 21: Total Amount Due
-        self.txt_tax21 = self.txt_tax19 + self.txt_tax20d;
-
-        self.updated_at = chrono::Utc::now().to_rfc3339();
+    pub fn select_reviewed_atc(&mut self, value: Form0605ReviewedAtc) {
+        self.atc = Some(Form0605IndexedCode::reviewed_atc(value));
     }
 
-    // ── State Transition Methods ──
+    pub fn select_reviewed_tax_type(&mut self, value: Form0605ReviewedTaxType) {
+        self.tax_type = Some(Form0605IndexedCode::reviewed_tax_type(value));
+    }
+
+    /// Compute only the two formulas printed on the official form. No penalty
+    /// inference, non-negative clamp, or timestamp mutation occurs here.
+    pub fn recompute(&mut self) {
+        self.item_20d_total_penalties =
+            self.item_20a_surcharge + self.item_20b_interest + self.item_20c_compromise;
+        self.item_21_total_amount_payable =
+            self.item_19_basic_tax_or_payment + self.item_20d_total_penalties;
+    }
 
     pub fn is_editable(&self) -> bool {
         matches!(self.status, FilingStatus::Draft)
     }
 
-    pub fn transition_to_queued(&mut self) -> Result<(), Vec<(String, String)>> {
-        assert!(matches!(self.status, FilingStatus::Draft), "Must be Draft");
-        let errors = self.validate();
-        if errors.is_empty() {
-            self.recompute();
-            self.status = FilingStatus::Queued;
-            self.updated_at = chrono::Utc::now().to_rfc3339();
-            Ok(())
-        } else {
-            Err(errors)
-        }
+    pub const fn can_queue_for_submission(&self) -> bool {
+        QUEUE_SUBMISSION_SUPPORTED
     }
 
-    pub fn transition_to_submitted(&mut self, filename: String) {
-        assert!(
-            matches!(self.status, FilingStatus::Queued),
-            "Must be Queued"
-        );
-        let now = chrono::Utc::now();
+    pub fn evidence_warnings(&self) -> Vec<String> {
+        let mut warnings = vec![
+            "Only FP010↔AtcCode1, II011↔AtcCode24, DO↔TaxTypeCode4, and IT↔TaxTypeCode9 are source-proven editable mappings. Other imported pairs are retained but not certified."
+                .to_string(),
+            "Item 22 signatures and Part III payment details are backed by the official PDF and persist in the app draft, but the two reviewed 235-field saves contain no corresponding XML keys; they are omitted from editable-save export."
+                .to_string(),
+            "The meaning of frm0605:itemApprovedYN options 1 and 2 is not established because both reviewed saves leave both flags false."
+                .to_string(),
+        ];
+        if self
+            .atc
+            .as_ref()
+            .is_some_and(Form0605IndexedCode::requires_review)
+        {
+            warnings.push(
+                "The imported ATC/index pair requires review before safe export.".to_string(),
+            );
+        }
+        if self
+            .tax_type
+            .as_ref()
+            .is_some_and(Form0605IndexedCode::requires_review)
+        {
+            warnings.push(
+                "The imported Tax Type/index pair requires review before safe export.".to_string(),
+            );
+        }
+        if !self.preserved_unmodeled_xml_fields.is_empty() {
+            warnings.push(format!(
+                "Preserved unmodeled XML keys require review: {}",
+                self.preserved_unmodeled_xml_fields
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        warnings
+    }
+
+    /// Queueing remains unavailable until an exact submission contract exists.
+    pub fn transition_to_queued(&mut self) -> Result<(), Vec<(String, String)>> {
+        let mut errors = self.validate();
+        errors.push((
+            "submission".to_string(),
+            "0605v1999 submission is manual/external; queue transport is not certified".to_string(),
+        ));
+        Err(errors)
+    }
+
+    pub fn transition_to_submitted(&mut self, filename: String) -> Result<(), String> {
+        if !matches!(self.status, FilingStatus::Queued) {
+            return Err("0605 can transition to Submitted only from Queued".to_string());
+        }
+        let now = chrono::Utc::now().to_rfc3339();
         self.status = FilingStatus::Submitted;
-        self.submitted_at = Some(now.to_rfc3339());
+        self.submitted_at = Some(now.clone());
         self.submission_filename = Some(filename);
         self.submission_attempts = 0;
         self.next_retry_at = None;
         self.last_error = None;
-        self.updated_at = now.to_rfc3339();
+        self.updated_at = now;
+        Ok(())
     }
 
     pub fn transition_to_confirmed(
@@ -791,34 +627,33 @@ impl Form0605Draft {
         confirmed_at: String,
         receipt_id: Option<i64>,
         filename: Option<String>,
-    ) {
-        assert!(
-            matches!(self.status, FilingStatus::Submitted),
-            "Must be Submitted"
-        );
+    ) -> Result<(), String> {
+        if !matches!(self.status, FilingStatus::Submitted) {
+            return Err("0605 can transition to Confirmed only from Submitted".to_string());
+        }
         self.status = FilingStatus::Confirmed;
         self.confirmed_at = Some(confirmed_at);
         self.receipt_id = receipt_id;
-        if let Some(f) = filename {
-            self.submission_filename = Some(f);
+        if let Some(filename) = filename {
+            self.submission_filename = Some(filename);
         }
         self.updated_at = chrono::Utc::now().to_rfc3339();
+        Ok(())
     }
 
-    pub fn transition_to_paid(&mut self) {
-        assert!(
-            matches!(self.status, FilingStatus::Confirmed),
-            "Must be Confirmed"
-        );
+    pub fn transition_to_paid(&mut self) -> Result<(), String> {
+        if !matches!(self.status, FilingStatus::Confirmed) {
+            return Err("0605 can transition to Paid only from Confirmed".to_string());
+        }
         self.status = FilingStatus::Paid;
         self.updated_at = chrono::Utc::now().to_rfc3339();
+        Ok(())
     }
 
-    pub fn revert_to_draft(&mut self) {
-        assert!(
-            !matches!(self.status, FilingStatus::Paid),
-            "Cannot revert Paid"
-        );
+    pub fn revert_to_draft(&mut self) -> Result<(), String> {
+        if matches!(self.status, FilingStatus::Paid) {
+            return Err("A paid 0605 record cannot be reverted automatically".to_string());
+        }
         self.status = FilingStatus::Draft;
         self.submitted_at = None;
         self.confirmed_at = None;
@@ -828,23 +663,563 @@ impl Form0605Draft {
         self.next_retry_at = None;
         self.last_error = None;
         self.updated_at = chrono::Utc::now().to_rfc3339();
+        Ok(())
     }
 
-    pub fn record_submission_failure(&mut self, error_msg: String) {
-        assert!(
-            matches!(self.status, FilingStatus::Queued),
-            "Must be Queued"
-        );
-        self.submission_attempts += 1;
-        self.last_error = Some(error_msg);
-        if self.submission_attempts >= 5 {
-            self.status = FilingStatus::Draft;
-            self.next_retry_at = None;
-        } else {
-            let delay = 2i64.pow(self.submission_attempts - 1);
-            let next = chrono::Utc::now() + chrono::Duration::minutes(delay);
-            self.next_retry_at = Some(next.to_rfc3339());
+    pub fn record_submission_failure(&mut self, error_message: String) -> Result<(), String> {
+        if !matches!(self.status, FilingStatus::Queued) {
+            return Err("Only a queued 0605 can record a submission failure".to_string());
         }
+        self.submission_attempts = self.submission_attempts.saturating_add(1);
+        self.last_error = Some(error_message);
+        self.next_retry_at = None;
         self.updated_at = chrono::Utc::now().to_rfc3339();
+        Ok(())
+    }
+}
+
+impl FormValidator for Form0605Draft {
+    fn validate(&self) -> Vec<(String, String)> {
+        let mut errors = Vec::new();
+
+        let tin_digits: String = self
+            .tin
+            .chars()
+            .filter(|character| character.is_ascii_digit())
+            .collect();
+        if !matches!(tin_digits.len(), 12..=14)
+            || self
+                .tin
+                .chars()
+                .any(|character| !character.is_ascii_digit() && character != '-')
+        {
+            errors.push((
+                "tin".to_string(),
+                "TIN must contain 12 to 14 digits including the 3- to 5-digit branch code"
+                    .to_string(),
+            ));
+        }
+        if !(1..=12).contains(&self.month) {
+            errors.push((
+                "month".to_string(),
+                "Open-ended persistence slot must be from 1 to 12".to_string(),
+            ));
+        }
+        if !(1..=4).contains(&self.quarter) {
+            errors.push((
+                "quarter".to_string(),
+                "Quarter must be selected independently from 1 to 4".to_string(),
+            ));
+        }
+        if !(1..=12).contains(&self.year_end_month) {
+            errors.push((
+                "year_end_month".to_string(),
+                "Year Ended month must be from 1 to 12".to_string(),
+            ));
+        }
+        if !(1900..=9999).contains(&self.taxable_year) {
+            errors.push((
+                "taxable_year".to_string(),
+                "Year Ended must contain four digits".to_string(),
+            ));
+        }
+        validate_required_date("due_date", self.due_date, &mut errors);
+        validate_required_date("return_period", self.return_period, &mut errors);
+
+        for (field, label, value) in [
+            ("rdo_code", "RDO code", self.rdo_code.as_str()),
+            (
+                "taxpayer_name",
+                "Taxpayer name",
+                self.taxpayer_name.as_str(),
+            ),
+            (
+                "line_of_business",
+                "Line of business / occupation",
+                self.line_of_business.as_str(),
+            ),
+            (
+                "registered_address",
+                "Registered address",
+                self.registered_address.as_str(),
+            ),
+            ("zip_code", "ZIP code", self.zip_code.as_str()),
+            (
+                "contact_number",
+                "Telephone number",
+                self.contact_number.as_str(),
+            ),
+            ("email", "Email address", self.email.as_str()),
+        ] {
+            if value.trim().is_empty() {
+                errors.push((field.to_string(), format!("{label} is required")));
+            }
+        }
+        if !self.rdo_code.trim().is_empty()
+            && (self.rdo_code.len() != 3
+                || !self
+                    .rdo_code
+                    .chars()
+                    .all(|character| character.is_ascii_digit()))
+        {
+            errors.push((
+                "rdo_code".to_string(),
+                "RDO code must be 3 digits".to_string(),
+            ));
+        }
+        if !self.zip_code.trim().is_empty() && !validate_zip(self.zip_code.trim()) {
+            errors.push((
+                "zip_code".to_string(),
+                "ZIP code must be 4 digits".to_string(),
+            ));
+        }
+        if !self.contact_number.trim().is_empty() && !validate_ph_phone(&self.contact_number) {
+            errors.push((
+                "contact_number".to_string(),
+                "Telephone number must be a valid Philippine mobile or landline number".to_string(),
+            ));
+        }
+        if !self.email.trim().is_empty() && !validate_email(&self.email) {
+            errors.push(("email".to_string(), "Email address is invalid".to_string()));
+        }
+
+        validate_code_selection(
+            "atc",
+            self.atc.as_ref(),
+            142,
+            |selection| {
+                Form0605ReviewedAtc::ALL.iter().copied().any(|candidate| {
+                    candidate.code() == selection.code()
+                        && candidate.xml_index() == selection.xml_index()
+                })
+            },
+            &mut errors,
+        );
+        validate_code_selection(
+            "tax_type",
+            self.tax_type.as_ref(),
+            37,
+            |selection| {
+                Form0605ReviewedTaxType::ALL
+                    .iter()
+                    .copied()
+                    .any(|candidate| {
+                        candidate.code() == selection.code()
+                            && candidate.xml_index() == selection.xml_index()
+                    })
+            },
+            &mut errors,
+        );
+
+        match self.manner_of_payment {
+            None => errors.push((
+                "manner_of_payment".to_string(),
+                "Item 17 Manner of Payment is required".to_string(),
+            )),
+            Some(Form0605MannerOfPayment::Others) => {
+                if self.other_manner_description.trim().is_empty() {
+                    errors.push((
+                        "other_manner_description".to_string(),
+                        "Item 17 Others requires a description".to_string(),
+                    ));
+                }
+            }
+            Some(_) if !self.other_manner_description.trim().is_empty() => errors.push((
+                "other_manner_description".to_string(),
+                "Clear the Others description unless Item 17 Others is selected".to_string(),
+            )),
+            Some(_) => {}
+        }
+
+        match self.type_of_payment {
+            None => errors.push((
+                "type_of_payment".to_string(),
+                "Item 18 Type of Payment is required".to_string(),
+            )),
+            Some(Form0605TypeOfPayment::Installment) => {
+                if self.number_of_installments.is_none_or(|count| count == 0) {
+                    errors.push((
+                        "number_of_installments".to_string(),
+                        "Installment payment requires a positive number of installments"
+                            .to_string(),
+                    ));
+                }
+            }
+            Some(_) if self.number_of_installments.is_some() => errors.push((
+                "number_of_installments".to_string(),
+                "Number of installments applies only when Installment is selected".to_string(),
+            )),
+            Some(_) => {}
+        }
+
+        for (field, value) in [
+            (
+                "item_19_basic_tax_or_payment",
+                self.item_19_basic_tax_or_payment,
+            ),
+            ("item_20a_surcharge", self.item_20a_surcharge),
+            ("item_20b_interest", self.item_20b_interest),
+            ("item_20c_compromise", self.item_20c_compromise),
+        ] {
+            if !value.is_finite() || value < 0.0 {
+                errors.push((
+                    field.to_string(),
+                    "Amount must be a finite, non-negative number".to_string(),
+                ));
+            }
+        }
+
+        for (field, value) in [
+            (
+                "payment_23_cash_or_bank_debit_memo.amount",
+                self.payment_details.cash_or_bank_debit_memo_amount,
+            ),
+            ("payment_24_check.amount", self.payment_details.check.amount),
+            (
+                "payment_25_tax_debit_memo.amount",
+                self.payment_details.tax_debit_memo.amount,
+            ),
+            (
+                "payment_26_others.amount",
+                self.payment_details.others.amount,
+            ),
+        ] {
+            if value.is_some_and(|amount| !amount.is_finite() || amount < 0.0) {
+                errors.push((
+                    field.to_string(),
+                    "Payment amount must be a finite, non-negative number".to_string(),
+                ));
+            }
+        }
+
+        for (field, value) in [
+            (
+                "payment_24_check.date",
+                self.payment_details.check.date.as_str(),
+            ),
+            (
+                "payment_25_tax_debit_memo.date",
+                self.payment_details.tax_debit_memo.date.as_str(),
+            ),
+            (
+                "payment_26_others.date",
+                self.payment_details.others.date.as_str(),
+            ),
+        ] {
+            if !value.trim().is_empty()
+                && chrono::NaiveDate::parse_from_str(value.trim(), "%m/%d/%Y").is_err()
+            {
+                errors.push((
+                    field.to_string(),
+                    "Payment date must use MM/DD/YYYY and be a real calendar date".to_string(),
+                ));
+            }
+        }
+
+        let expected_20d =
+            self.item_20a_surcharge + self.item_20b_interest + self.item_20c_compromise;
+        let expected_21 = self.item_19_basic_tax_or_payment + expected_20d;
+        for (field, actual, expected) in [
+            (
+                "item_20d_total_penalties",
+                self.item_20d_total_penalties,
+                expected_20d,
+            ),
+            (
+                "item_21_total_amount_payable",
+                self.item_21_total_amount_payable,
+                expected_21,
+            ),
+        ] {
+            if !actual.is_finite() || actual < 0.0 || (actual - expected).abs() > 0.001 {
+                errors.push((
+                    field.to_string(),
+                    format!("Computed amount must equal {expected:.2} and be non-negative"),
+                ));
+            }
+        }
+
+        errors
+    }
+}
+
+fn validate_required_date(
+    field: &str,
+    value: Option<Form0605Date>,
+    errors: &mut Vec<(String, String)>,
+) {
+    match value {
+        None => errors.push((field.to_string(), "Date is required".to_string())),
+        Some(date) => {
+            if let Err(message) = date.validate() {
+                errors.push((field.to_string(), message));
+            }
+        }
+    }
+}
+
+fn validate_code_selection(
+    field: &str,
+    selection: Option<&Form0605IndexedCode>,
+    maximum_index: u16,
+    is_reviewed_pair: impl Fn(&Form0605IndexedCode) -> bool,
+    errors: &mut Vec<(String, String)>,
+) {
+    let Some(selection) = selection else {
+        errors.push((field.to_string(), format!("{field} selection is required")));
+        return;
+    };
+    if selection.code().trim().is_empty()
+        || selection.xml_index() == 0
+        || selection.xml_index() > maximum_index
+    {
+        errors.push((
+            field.to_string(),
+            format!("{field} code/index pair is invalid"),
+        ));
+    }
+    if selection.requires_review() {
+        errors.push((
+            field.to_string(),
+            format!(
+                "Imported {field} pair {}↔index {} is preserved but lacks reviewed mapping evidence",
+                selection.code(),
+                selection.xml_index()
+            ),
+        ));
+    } else if !is_reviewed_pair(selection) {
+        errors.push((
+            field.to_string(),
+            format!(
+                "Persisted {field} pair {}↔index {} is marked reviewed but does not match locked source evidence",
+                selection.code(),
+                selection.xml_index()
+            ),
+        ));
+    }
+}
+
+impl TypedBirForm for Form0605Draft {
+    fn form_code(&self) -> &'static str {
+        FORM_CODE
+    }
+
+    fn form_type_id(&self) -> &'static str {
+        FORM_TYPE_ID
+    }
+
+    fn filing_period(&self) -> FilingPeriod {
+        FilingPeriod::OpenEnded(u32::from(self.month))
+    }
+
+    fn recompute(&mut self) {
+        Form0605Draft::recompute(self);
+    }
+
+    fn to_bir_field_map(&self) -> BTreeMap<String, String> {
+        Form0605Draft::to_bir_field_map(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_profile() -> TaxpayerProfile {
+        serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "JUAN DELA CRUZ",
+            "tin": {
+                "segment1": "000",
+                "segment2": "000",
+                "segment3": "000",
+                "branch": "00000"
+            },
+            "rdo_code": "018",
+            "line_of_business": "SOFTWARE DEVELOPMENT",
+            "registered_address": "OLONGAPO",
+            "zip_code": "2200",
+            "phone": "09123456789",
+            "email": "codeitlikemiley@gmail.com",
+            "default_form_type": "0605v1999",
+            "taxpayer_type": "Individual"
+        }))
+        .expect("test profile must deserialize")
+    }
+
+    fn valid_draft() -> Form0605Draft {
+        let mut draft = Form0605Draft::new_from_profile(&test_profile(), 2026, 1);
+        draft.due_date = Some(Form0605Date::new(2026, 1, 1).unwrap());
+        draft.return_period = Some(Form0605Date::new(2026, 1, 31).unwrap());
+        draft.select_reviewed_atc(Form0605ReviewedAtc::Fp010);
+        draft.select_reviewed_tax_type(Form0605ReviewedTaxType::Do);
+        draft.manner_of_payment = Some(Form0605MannerOfPayment::SelfAssessment);
+        draft.type_of_payment = Some(Form0605TypeOfPayment::FullPayment);
+        draft.item_19_basic_tax_or_payment = 10.0;
+        draft.recompute();
+        draft
+    }
+
+    #[test]
+    fn exact_identity_uses_july_1999_revision() {
+        let draft = valid_draft();
+        assert_eq!(draft.form_type_id(), "0605v1999");
+        assert_eq!(FORM_VERSION_LABEL, "July 1999 (ENCS)");
+    }
+
+    #[test]
+    fn official_formulas_are_deterministic_without_timestamp_mutation() {
+        let mut draft = valid_draft();
+        draft.item_19_basic_tax_or_payment = 1_000.0;
+        draft.item_20a_surcharge = 10.0;
+        draft.item_20b_interest = 20.0;
+        draft.item_20c_compromise = 1_000.0;
+        draft.updated_at = "fixed".to_string();
+        draft.recompute();
+        assert_eq!(draft.item_20d_total_penalties, 1_030.0);
+        assert_eq!(draft.item_21_total_amount_payable, 2_030.0);
+        assert_eq!(draft.updated_at, "fixed");
+    }
+
+    #[test]
+    fn quarter_is_not_derived_from_return_period_month() {
+        let mut draft = valid_draft();
+        draft.quarter = 1;
+        draft.return_period = Some(Form0605Date::new(2025, 12, 31).unwrap());
+        assert_eq!(draft.quarter, 1);
+    }
+
+    #[test]
+    fn only_source_proven_code_pairs_are_app_selectable() {
+        let mut draft = valid_draft();
+        draft.select_reviewed_atc(Form0605ReviewedAtc::Ii011);
+        draft.select_reviewed_tax_type(Form0605ReviewedTaxType::It);
+        assert_eq!(draft.atc.as_ref().unwrap().xml_index(), 24);
+        assert_eq!(draft.tax_type.as_ref().unwrap().xml_index(), 9);
+    }
+
+    #[test]
+    fn imported_unknown_code_pair_is_preserved_but_fails_closed() {
+        let mut draft = valid_draft();
+        draft.atc = Some(Form0605IndexedCode::imported_atc(
+            "UNREVIEWED".to_string(),
+            77,
+        ));
+        assert_eq!(draft.atc.as_ref().unwrap().code(), "UNREVIEWED");
+        assert!(draft.validate().iter().any(|(field, _)| field == "atc"));
+    }
+
+    #[test]
+    fn forged_reviewed_evidence_cannot_authorize_an_unknown_code_pair() {
+        let mut draft = valid_draft();
+        draft.atc = Some(Form0605IndexedCode {
+            code: "UNREVIEWED".to_string(),
+            xml_index: 77,
+            evidence: Form0605CodeEvidence::ReviewedPair,
+        });
+
+        assert!(draft.validate().iter().any(|(field, message)| {
+            field == "atc" && message.contains("does not match locked source evidence")
+        }));
+    }
+
+    #[test]
+    fn invalid_date_is_rejected_without_panicking() {
+        assert!(Form0605Date::new(2026, 2, 30).is_err());
+        assert!(Form0605Date::parse_mm_dd_yyyy("02/30/2026").is_err());
+    }
+
+    #[test]
+    fn installment_requires_positive_count() {
+        let mut draft = valid_draft();
+        draft.type_of_payment = Some(Form0605TypeOfPayment::Installment);
+        draft.number_of_installments = None;
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "number_of_installments")
+        );
+    }
+
+    #[test]
+    fn queue_transition_is_non_panicking_and_always_disabled() {
+        let mut draft = valid_draft();
+        let errors = draft
+            .transition_to_queued()
+            .expect_err("0605 queueing must remain disabled");
+        assert_eq!(draft.status, FilingStatus::Draft);
+        assert!(errors.iter().any(|(field, _)| field == "submission"));
+    }
+
+    #[test]
+    fn invalid_lifecycle_transitions_return_errors() {
+        let mut draft = valid_draft();
+        assert!(draft.transition_to_submitted("x.xml".to_string()).is_err());
+        assert!(
+            draft
+                .transition_to_confirmed("now".to_string(), None, None)
+                .is_err()
+        );
+        assert!(draft.transition_to_paid().is_err());
+        assert!(
+            draft
+                .record_submission_failure("failure".to_string())
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn json_roundtrip_preserves_semantic_selections_and_dates() {
+        let mut draft = valid_draft();
+        draft.signatures.taxpayer_or_authorized_representative = "JUAN DELA CRUZ".to_string();
+        draft.signatures.title_or_position = "OWNER".to_string();
+        draft.payment_details.check.drawee_bank_or_agency = "AAB".to_string();
+        draft.payment_details.check.number = "000123".to_string();
+        draft.payment_details.check.date = "01/31/2026".to_string();
+        draft.payment_details.check.amount = Some(10.0);
+        let json = serde_json::to_string(&draft).expect("draft should serialize");
+        let reopened: Form0605Draft =
+            serde_json::from_str(&json).expect("draft should deserialize");
+        assert_eq!(reopened, draft);
+    }
+
+    #[test]
+    fn pdf_only_signature_and_payment_fields_do_not_expand_editable_xml_contract() {
+        let mut draft = valid_draft();
+        draft.signatures.taxpayer_or_authorized_representative = "JUAN DELA CRUZ".to_string();
+        draft.payment_details.cash_or_bank_debit_memo_amount = Some(10.0);
+        draft.payment_details.check.number = "CHECK-1".to_string();
+        draft.payment_details.check.date = "01/31/2026".to_string();
+        draft.payment_details.check.amount = Some(10.0);
+
+        let fields = draft.to_bir_field_map();
+
+        assert_eq!(fields.len(), 235);
+        assert!(
+            fields
+                .keys()
+                .all(|key| !key.contains("Signature") && !key.starts_with("payment_"))
+        );
+    }
+
+    #[test]
+    fn invalid_payment_values_fail_validation_without_panicking() {
+        let mut draft = valid_draft();
+        draft.payment_details.check.date = "02/30/2026".to_string();
+        draft.payment_details.check.amount = Some(f64::NAN);
+
+        let errors = draft.validate();
+
+        assert!(
+            errors
+                .iter()
+                .any(|(field, _)| field == "payment_24_check.date")
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|(field, _)| field == "payment_24_check.amount")
+        );
     }
 }

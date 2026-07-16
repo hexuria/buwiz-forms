@@ -1,0 +1,1794 @@
+{
+  "fields": {
+    "atc_mcit_selected": {
+      "type": "boolean",
+      "value": true
+    },
+    "atc_other_code": {
+      "type": "text",
+      "value": "IC 057"
+    },
+    "atc_other_selected": {
+      "type": "boolean",
+      "value": true
+    },
+    "authorized_representative": {
+      "type": "text",
+      "value": "REVIEWED PRESIDENT"
+    },
+    "deduction_method": {
+      "type": "text",
+      "value": "itemized"
+    },
+    "filing_basis": {
+      "type": "text",
+      "value": "calendar"
+    },
+    "incorporation_date": {
+      "type": "text",
+      "value": "01/15/2018"
+    },
+    "is_amended": {
+      "type": "boolean",
+      "value": true
+    },
+    "is_short_period": {
+      "type": "boolean",
+      "value": false
+    },
+    "item_14": {
+      "type": "integer",
+      "value": 77000
+    },
+    "item_15": {
+      "type": "integer",
+      "value": 4200
+    },
+    "item_16": {
+      "type": "integer",
+      "value": 72800
+    },
+    "item_17": {
+      "type": "integer",
+      "value": 1000
+    },
+    "item_18": {
+      "type": "integer",
+      "value": 500
+    },
+    "item_19": {
+      "type": "integer",
+      "value": 250
+    },
+    "item_20": {
+      "type": "integer",
+      "value": 1750
+    },
+    "item_21": {
+      "type": "integer",
+      "value": 74550
+    },
+    "mandatory_attachment_document_kind": {
+      "type": "text",
+      "value": "separate_two_page_conditional_companion"
+    },
+    "mandatory_attachment_has_values": {
+      "type": "boolean",
+      "value": false
+    },
+    "mandatory_attachment_page_count": {
+      "type": "integer",
+      "value": 2
+    },
+    "mandatory_attachment_source_sha256": {
+      "type": "text",
+      "value": "36c02d4c84919d2e5b94cd31b339490019be80afa622f5681ce252c8ec3dec26"
+    },
+    "mandatory_attachment_transport_supported": {
+      "type": "boolean",
+      "value": false
+    },
+    "number_of_attachments": {
+      "type": "text",
+      "value": "00"
+    },
+    "overpayment_disposition": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_23_date_or_amount": {
+      "type": "text",
+      "value": "04/15/2026 / 75,000"
+    },
+    "payment_23_drawee": {
+      "type": "text",
+      "value": "AUTHORIZED AGENT BANK"
+    },
+    "payment_23_number": {
+      "type": "text",
+      "value": "BDM-1702MX-0001"
+    },
+    "payment_23_particulars": {
+      "type": "text",
+      "value": "CASH/BANK DEBIT MEMO"
+    },
+    "payment_24_date_or_amount": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_24_drawee": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_24_number": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_24_particulars": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_25_date_or_amount": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_25_drawee": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_25_number": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_25_particulars": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_26_date_or_amount": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_26_drawee": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_26_number": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_26_particulars": {
+      "type": "text",
+      "value": ""
+    },
+    "president_tin": {
+      "type": "text",
+      "value": "12345678900000"
+    },
+    "president_title": {
+      "type": "text",
+      "value": "PRESIDENT"
+    },
+    "registered_address_line_1": {
+      "type": "text",
+      "value": "53 SANTOL EXTENSION, NEW CABALAN, OLONGAPO CITY"
+    },
+    "registered_address_line_2": {
+      "type": "text",
+      "value": ""
+    },
+    "registered_address_line_3": {
+      "type": "text",
+      "value": ""
+    },
+    "registered_name_line_1": {
+      "type": "text",
+      "value": "REVIEWED MIXED INCOME CORPORATION"
+    },
+    "registered_name_line_2": {
+      "type": "text",
+      "value": ""
+    },
+    "registered_name_line_3": {
+      "type": "text",
+      "value": ""
+    },
+    "relief_multiple_activities": {
+      "type": "boolean",
+      "value": false
+    },
+    "relief_single_activity": {
+      "type": "boolean",
+      "value": true
+    },
+    "schedule_10_description_1": {
+      "type": "text",
+      "value": "RECONCILIATION ITEM 1"
+    },
+    "schedule_10_description_10": {
+      "type": "text",
+      "value": "RECONCILIATION ITEM 10"
+    },
+    "schedule_10_description_2": {
+      "type": "text",
+      "value": "RECONCILIATION ITEM 2"
+    },
+    "schedule_10_description_3": {
+      "type": "text",
+      "value": "RECONCILIATION ITEM 3"
+    },
+    "schedule_10_description_4": {
+      "type": "text",
+      "value": "RECONCILIATION ITEM 4"
+    },
+    "schedule_10_description_5": {
+      "type": "text",
+      "value": "RECONCILIATION ITEM 5"
+    },
+    "schedule_10_description_6": {
+      "type": "text",
+      "value": "RECONCILIATION ITEM 6"
+    },
+    "schedule_10_description_7": {
+      "type": "text",
+      "value": "RECONCILIATION ITEM 7"
+    },
+    "schedule_10_description_8": {
+      "type": "text",
+      "value": "RECONCILIATION ITEM 8"
+    },
+    "schedule_10_description_9": {
+      "type": "text",
+      "value": "RECONCILIATION ITEM 9"
+    },
+    "schedule_10_item_10_exempt": {
+      "type": "integer",
+      "value": -14000
+    },
+    "schedule_10_item_10_regular": {
+      "type": "integer",
+      "value": -18000
+    },
+    "schedule_10_item_10_special": {
+      "type": "integer",
+      "value": -16000
+    },
+    "schedule_10_item_10_total": {
+      "type": "integer",
+      "value": -48000
+    },
+    "schedule_10_item_1_exempt": {
+      "type": "integer",
+      "value": 700
+    },
+    "schedule_10_item_1_regular": {
+      "type": "integer",
+      "value": 900
+    },
+    "schedule_10_item_1_special": {
+      "type": "integer",
+      "value": 800
+    },
+    "schedule_10_item_1_total": {
+      "type": "integer",
+      "value": 2400
+    },
+    "schedule_10_item_2_exempt": {
+      "type": "integer",
+      "value": 1400
+    },
+    "schedule_10_item_2_regular": {
+      "type": "integer",
+      "value": 1800
+    },
+    "schedule_10_item_2_special": {
+      "type": "integer",
+      "value": 1600
+    },
+    "schedule_10_item_2_total": {
+      "type": "integer",
+      "value": 4800
+    },
+    "schedule_10_item_3_exempt": {
+      "type": "integer",
+      "value": 2100
+    },
+    "schedule_10_item_3_regular": {
+      "type": "integer",
+      "value": 2700
+    },
+    "schedule_10_item_3_special": {
+      "type": "integer",
+      "value": 2400
+    },
+    "schedule_10_item_3_total": {
+      "type": "integer",
+      "value": 7200
+    },
+    "schedule_10_item_4_exempt": {
+      "type": "integer",
+      "value": 4200
+    },
+    "schedule_10_item_4_regular": {
+      "type": "integer",
+      "value": 5400
+    },
+    "schedule_10_item_4_special": {
+      "type": "integer",
+      "value": 4800
+    },
+    "schedule_10_item_4_total": {
+      "type": "integer",
+      "value": 14400
+    },
+    "schedule_10_item_5_exempt": {
+      "type": "integer",
+      "value": 3500
+    },
+    "schedule_10_item_5_regular": {
+      "type": "integer",
+      "value": 4500
+    },
+    "schedule_10_item_5_special": {
+      "type": "integer",
+      "value": 4000
+    },
+    "schedule_10_item_5_total": {
+      "type": "integer",
+      "value": 12000
+    },
+    "schedule_10_item_6_exempt": {
+      "type": "integer",
+      "value": 4200
+    },
+    "schedule_10_item_6_regular": {
+      "type": "integer",
+      "value": 5400
+    },
+    "schedule_10_item_6_special": {
+      "type": "integer",
+      "value": 4800
+    },
+    "schedule_10_item_6_total": {
+      "type": "integer",
+      "value": 14400
+    },
+    "schedule_10_item_7_exempt": {
+      "type": "integer",
+      "value": 4900
+    },
+    "schedule_10_item_7_regular": {
+      "type": "integer",
+      "value": 6300
+    },
+    "schedule_10_item_7_special": {
+      "type": "integer",
+      "value": 5600
+    },
+    "schedule_10_item_7_total": {
+      "type": "integer",
+      "value": 16800
+    },
+    "schedule_10_item_8_exempt": {
+      "type": "integer",
+      "value": 5600
+    },
+    "schedule_10_item_8_regular": {
+      "type": "integer",
+      "value": 7200
+    },
+    "schedule_10_item_8_special": {
+      "type": "integer",
+      "value": 6400
+    },
+    "schedule_10_item_8_total": {
+      "type": "integer",
+      "value": 19200
+    },
+    "schedule_10_item_9_exempt": {
+      "type": "integer",
+      "value": 18200
+    },
+    "schedule_10_item_9_regular": {
+      "type": "integer",
+      "value": 23400
+    },
+    "schedule_10_item_9_special": {
+      "type": "integer",
+      "value": 20800
+    },
+    "schedule_10_item_9_total": {
+      "type": "integer",
+      "value": 62400
+    },
+    "schedule_2_item_10_exempt": {
+      "type": "integer",
+      "value": 500
+    },
+    "schedule_2_item_10_regular": {
+      "type": "integer",
+      "value": 1500
+    },
+    "schedule_2_item_10_special": {
+      "type": "integer",
+      "value": 1000
+    },
+    "schedule_2_item_10_total": {
+      "type": "integer",
+      "value": 3000
+    },
+    "schedule_2_item_11_exempt": {
+      "type": "integer",
+      "value": 11500
+    },
+    "schedule_2_item_11_regular": {
+      "type": "integer",
+      "value": 34500
+    },
+    "schedule_2_item_11_special": {
+      "type": "integer",
+      "value": 23000
+    },
+    "schedule_2_item_11_total": {
+      "type": "integer",
+      "value": 69000
+    },
+    "schedule_2_item_12_exempt": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_2_item_12_regular": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_2_item_12_special": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_2_item_12_total": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_2_item_13_exempt": {
+      "type": "integer",
+      "value": 65500
+    },
+    "schedule_2_item_13_regular": {
+      "type": "integer",
+      "value": 214500
+    },
+    "schedule_2_item_13_special": {
+      "type": "integer",
+      "value": 140000
+    },
+    "schedule_2_item_13_total": {
+      "type": "integer",
+      "value": 420000
+    },
+    "schedule_2_item_14_regular_rate": {
+      "type": "decimal",
+      "value": 25.0
+    },
+    "schedule_2_item_14_special_rate": {
+      "type": "decimal",
+      "value": 10.0
+    },
+    "schedule_2_item_14_total": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_2_item_15_exempt": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_2_item_15_regular": {
+      "type": "integer",
+      "value": 65000
+    },
+    "schedule_2_item_15_special": {
+      "type": "integer",
+      "value": 12500
+    },
+    "schedule_2_item_15_total": {
+      "type": "integer",
+      "value": 77500
+    },
+    "schedule_2_item_16_exempt": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_2_item_16_regular": {
+      "type": "integer",
+      "value": 1000
+    },
+    "schedule_2_item_16_special": {
+      "type": "integer",
+      "value": 500
+    },
+    "schedule_2_item_16_total": {
+      "type": "integer",
+      "value": 1500
+    },
+    "schedule_2_item_17_exempt": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_2_item_17_regular": {
+      "type": "integer",
+      "value": 64000
+    },
+    "schedule_2_item_17_special": {
+      "type": "integer",
+      "value": 12000
+    },
+    "schedule_2_item_17_total": {
+      "type": "integer",
+      "value": 76000
+    },
+    "schedule_2_item_18_regular": {
+      "type": "integer",
+      "value": 4980
+    },
+    "schedule_2_item_18_total": {
+      "type": "integer",
+      "value": 4980
+    },
+    "schedule_2_item_19_regular": {
+      "type": "integer",
+      "value": 65000
+    },
+    "schedule_2_item_19_special": {
+      "type": "integer",
+      "value": 12000
+    },
+    "schedule_2_item_19_total": {
+      "type": "integer",
+      "value": 77000
+    },
+    "schedule_2_item_1_exempt": {
+      "type": "integer",
+      "value": 100000
+    },
+    "schedule_2_item_1_regular": {
+      "type": "integer",
+      "value": 300000
+    },
+    "schedule_2_item_1_special": {
+      "type": "integer",
+      "value": 200000
+    },
+    "schedule_2_item_1_total": {
+      "type": "integer",
+      "value": 600000
+    },
+    "schedule_2_item_2_exempt": {
+      "type": "integer",
+      "value": 5000
+    },
+    "schedule_2_item_2_regular": {
+      "type": "integer",
+      "value": 15000
+    },
+    "schedule_2_item_2_special": {
+      "type": "integer",
+      "value": 10000
+    },
+    "schedule_2_item_2_total": {
+      "type": "integer",
+      "value": 30000
+    },
+    "schedule_2_item_3_exempt": {
+      "type": "integer",
+      "value": 95000
+    },
+    "schedule_2_item_3_regular": {
+      "type": "integer",
+      "value": 285000
+    },
+    "schedule_2_item_3_special": {
+      "type": "integer",
+      "value": 190000
+    },
+    "schedule_2_item_3_total": {
+      "type": "integer",
+      "value": 570000
+    },
+    "schedule_2_item_4_exempt": {
+      "type": "integer",
+      "value": 20000
+    },
+    "schedule_2_item_4_regular": {
+      "type": "integer",
+      "value": 40000
+    },
+    "schedule_2_item_4_special": {
+      "type": "integer",
+      "value": 30000
+    },
+    "schedule_2_item_4_total": {
+      "type": "integer",
+      "value": 90000
+    },
+    "schedule_2_item_5_exempt": {
+      "type": "integer",
+      "value": 75000
+    },
+    "schedule_2_item_5_regular": {
+      "type": "integer",
+      "value": 245000
+    },
+    "schedule_2_item_5_special": {
+      "type": "integer",
+      "value": 160000
+    },
+    "schedule_2_item_5_total": {
+      "type": "integer",
+      "value": 480000
+    },
+    "schedule_2_item_6_exempt": {
+      "type": "integer",
+      "value": 2000
+    },
+    "schedule_2_item_6_regular": {
+      "type": "integer",
+      "value": 4000
+    },
+    "schedule_2_item_6_special": {
+      "type": "integer",
+      "value": 3000
+    },
+    "schedule_2_item_6_total": {
+      "type": "integer",
+      "value": 9000
+    },
+    "schedule_2_item_7_exempt": {
+      "type": "integer",
+      "value": 77000
+    },
+    "schedule_2_item_7_regular": {
+      "type": "integer",
+      "value": 249000
+    },
+    "schedule_2_item_7_special": {
+      "type": "integer",
+      "value": 163000
+    },
+    "schedule_2_item_7_total": {
+      "type": "integer",
+      "value": 489000
+    },
+    "schedule_2_item_8_exempt": {
+      "type": "integer",
+      "value": 10000
+    },
+    "schedule_2_item_8_regular": {
+      "type": "integer",
+      "value": 30000
+    },
+    "schedule_2_item_8_special": {
+      "type": "integer",
+      "value": 20000
+    },
+    "schedule_2_item_8_total": {
+      "type": "integer",
+      "value": 60000
+    },
+    "schedule_2_item_9_exempt": {
+      "type": "integer",
+      "value": 1000
+    },
+    "schedule_2_item_9_regular": {
+      "type": "integer",
+      "value": 3000
+    },
+    "schedule_2_item_9_special": {
+      "type": "integer",
+      "value": 2000
+    },
+    "schedule_2_item_9_total": {
+      "type": "integer",
+      "value": 6000
+    },
+    "schedule_3_item_10_total": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_3_item_11_exempt": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_3_item_11_regular": {
+      "type": "integer",
+      "value": 200
+    },
+    "schedule_3_item_11_special": {
+      "type": "integer",
+      "value": 100
+    },
+    "schedule_3_item_11_total": {
+      "type": "integer",
+      "value": 300
+    },
+    "schedule_3_item_12_exempt": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_3_item_12_regular": {
+      "type": "integer",
+      "value": 100
+    },
+    "schedule_3_item_12_special": {
+      "type": "integer",
+      "value": 50
+    },
+    "schedule_3_item_12_total": {
+      "type": "integer",
+      "value": 150
+    },
+    "schedule_3_item_13_exempt": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_3_item_13_regular": {
+      "type": "integer",
+      "value": 2800
+    },
+    "schedule_3_item_13_special": {
+      "type": "integer",
+      "value": 1400
+    },
+    "schedule_3_item_13_total": {
+      "type": "integer",
+      "value": 4200
+    },
+    "schedule_3_item_14_exempt": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_3_item_14_regular": {
+      "type": "integer",
+      "value": 62200
+    },
+    "schedule_3_item_14_special": {
+      "type": "integer",
+      "value": 10600
+    },
+    "schedule_3_item_14_total": {
+      "type": "integer",
+      "value": 72800
+    },
+    "schedule_3_item_1_exempt": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_3_item_1_regular": {
+      "type": "integer",
+      "value": 2000
+    },
+    "schedule_3_item_1_special": {
+      "type": "integer",
+      "value": 1000
+    },
+    "schedule_3_item_1_total": {
+      "type": "integer",
+      "value": 3000
+    },
+    "schedule_3_item_2_total": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_3_item_30_description": {
+      "type": "text",
+      "value": "OTHER REVIEWED CREDIT"
+    },
+    "schedule_3_item_31_description": {
+      "type": "text",
+      "value": "SECOND REVIEWED CREDIT"
+    },
+    "schedule_3_item_3_total": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_3_item_4_total": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_3_item_5_exempt": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_3_item_5_regular": {
+      "type": "integer",
+      "value": 500
+    },
+    "schedule_3_item_5_special": {
+      "type": "integer",
+      "value": 250
+    },
+    "schedule_3_item_5_total": {
+      "type": "integer",
+      "value": 750
+    },
+    "schedule_3_item_6_total": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_3_item_7_total": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_3_item_8_total": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_3_item_9_total": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_4_item_1_total": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_4_item_2_total": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_4_item_3_exempt": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_4_item_3_regular": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_4_item_3_special": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_4_item_3_total": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_4_item_4_total": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_4_item_5_exempt": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_4_item_5_regular": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_4_item_5_special": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_4_item_5_total": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_4_item_6_total": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_4_item_7_exempt": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_4_item_7_regular": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_4_item_7_special": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_4_item_7_total": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_5_item_10_exempt": {
+      "type": "integer",
+      "value": 1000
+    },
+    "schedule_5_item_10_regular": {
+      "type": "integer",
+      "value": 3000
+    },
+    "schedule_5_item_10_special": {
+      "type": "integer",
+      "value": 2000
+    },
+    "schedule_5_item_10_total": {
+      "type": "integer",
+      "value": 6000
+    },
+    "schedule_5_item_11_exempt": {
+      "type": "integer",
+      "value": 1100
+    },
+    "schedule_5_item_11_regular": {
+      "type": "integer",
+      "value": 3300
+    },
+    "schedule_5_item_11_special": {
+      "type": "integer",
+      "value": 2200
+    },
+    "schedule_5_item_11_total": {
+      "type": "integer",
+      "value": 6600
+    },
+    "schedule_5_item_12_exempt": {
+      "type": "integer",
+      "value": 1200
+    },
+    "schedule_5_item_12_regular": {
+      "type": "integer",
+      "value": 3600
+    },
+    "schedule_5_item_12_special": {
+      "type": "integer",
+      "value": 2400
+    },
+    "schedule_5_item_12_total": {
+      "type": "integer",
+      "value": 7200
+    },
+    "schedule_5_item_13_exempt": {
+      "type": "integer",
+      "value": 1300
+    },
+    "schedule_5_item_13_regular": {
+      "type": "integer",
+      "value": 3900
+    },
+    "schedule_5_item_13_special": {
+      "type": "integer",
+      "value": 2600
+    },
+    "schedule_5_item_13_total": {
+      "type": "integer",
+      "value": 7800
+    },
+    "schedule_5_item_14_exempt": {
+      "type": "integer",
+      "value": 1400
+    },
+    "schedule_5_item_14_regular": {
+      "type": "integer",
+      "value": 4200
+    },
+    "schedule_5_item_14_special": {
+      "type": "integer",
+      "value": 2800
+    },
+    "schedule_5_item_14_total": {
+      "type": "integer",
+      "value": 8400
+    },
+    "schedule_5_item_15_exempt": {
+      "type": "integer",
+      "value": 1500
+    },
+    "schedule_5_item_15_regular": {
+      "type": "integer",
+      "value": 4500
+    },
+    "schedule_5_item_15_special": {
+      "type": "integer",
+      "value": 3000
+    },
+    "schedule_5_item_15_total": {
+      "type": "integer",
+      "value": 9000
+    },
+    "schedule_5_item_16_exempt": {
+      "type": "integer",
+      "value": 1600
+    },
+    "schedule_5_item_16_regular": {
+      "type": "integer",
+      "value": 4800
+    },
+    "schedule_5_item_16_special": {
+      "type": "integer",
+      "value": 3200
+    },
+    "schedule_5_item_16_total": {
+      "type": "integer",
+      "value": 9600
+    },
+    "schedule_5_item_17_exempt": {
+      "type": "integer",
+      "value": 1700
+    },
+    "schedule_5_item_17_regular": {
+      "type": "integer",
+      "value": 5100
+    },
+    "schedule_5_item_17_special": {
+      "type": "integer",
+      "value": 3400
+    },
+    "schedule_5_item_17_total": {
+      "type": "integer",
+      "value": 10200
+    },
+    "schedule_5_item_18_exempt": {
+      "type": "integer",
+      "value": 1800
+    },
+    "schedule_5_item_18_regular": {
+      "type": "integer",
+      "value": 5400
+    },
+    "schedule_5_item_18_special": {
+      "type": "integer",
+      "value": 3600
+    },
+    "schedule_5_item_18_total": {
+      "type": "integer",
+      "value": 10800
+    },
+    "schedule_5_item_19_exempt": {
+      "type": "integer",
+      "value": 1900
+    },
+    "schedule_5_item_19_regular": {
+      "type": "integer",
+      "value": 5700
+    },
+    "schedule_5_item_19_special": {
+      "type": "integer",
+      "value": 3800
+    },
+    "schedule_5_item_19_total": {
+      "type": "integer",
+      "value": 11400
+    },
+    "schedule_5_item_1_exempt": {
+      "type": "integer",
+      "value": 100
+    },
+    "schedule_5_item_1_regular": {
+      "type": "integer",
+      "value": 300
+    },
+    "schedule_5_item_1_special": {
+      "type": "integer",
+      "value": 200
+    },
+    "schedule_5_item_1_total": {
+      "type": "integer",
+      "value": 600
+    },
+    "schedule_5_item_20_exempt": {
+      "type": "integer",
+      "value": 2000
+    },
+    "schedule_5_item_20_regular": {
+      "type": "integer",
+      "value": 6000
+    },
+    "schedule_5_item_20_special": {
+      "type": "integer",
+      "value": 4000
+    },
+    "schedule_5_item_20_total": {
+      "type": "integer",
+      "value": 12000
+    },
+    "schedule_5_item_21_exempt": {
+      "type": "integer",
+      "value": 2100
+    },
+    "schedule_5_item_21_regular": {
+      "type": "integer",
+      "value": 6300
+    },
+    "schedule_5_item_21_special": {
+      "type": "integer",
+      "value": 4200
+    },
+    "schedule_5_item_21_total": {
+      "type": "integer",
+      "value": 12600
+    },
+    "schedule_5_item_22_exempt": {
+      "type": "integer",
+      "value": 2200
+    },
+    "schedule_5_item_22_regular": {
+      "type": "integer",
+      "value": 6600
+    },
+    "schedule_5_item_22_special": {
+      "type": "integer",
+      "value": 4400
+    },
+    "schedule_5_item_22_total": {
+      "type": "integer",
+      "value": 13200
+    },
+    "schedule_5_item_23_exempt": {
+      "type": "integer",
+      "value": 2300
+    },
+    "schedule_5_item_23_regular": {
+      "type": "integer",
+      "value": 6900
+    },
+    "schedule_5_item_23_special": {
+      "type": "integer",
+      "value": 4600
+    },
+    "schedule_5_item_23_total": {
+      "type": "integer",
+      "value": 13800
+    },
+    "schedule_5_item_24_exempt": {
+      "type": "integer",
+      "value": 2400
+    },
+    "schedule_5_item_24_regular": {
+      "type": "integer",
+      "value": 7200
+    },
+    "schedule_5_item_24_special": {
+      "type": "integer",
+      "value": 4800
+    },
+    "schedule_5_item_24_total": {
+      "type": "integer",
+      "value": 14400
+    },
+    "schedule_5_item_25_exempt": {
+      "type": "integer",
+      "value": 2500
+    },
+    "schedule_5_item_25_regular": {
+      "type": "integer",
+      "value": 7500
+    },
+    "schedule_5_item_25_special": {
+      "type": "integer",
+      "value": 5000
+    },
+    "schedule_5_item_25_total": {
+      "type": "integer",
+      "value": 15000
+    },
+    "schedule_5_item_26_exempt": {
+      "type": "integer",
+      "value": 32500
+    },
+    "schedule_5_item_26_regular": {
+      "type": "integer",
+      "value": 97500
+    },
+    "schedule_5_item_26_special": {
+      "type": "integer",
+      "value": 65000
+    },
+    "schedule_5_item_26_total": {
+      "type": "integer",
+      "value": 195000
+    },
+    "schedule_5_item_2_exempt": {
+      "type": "integer",
+      "value": 200
+    },
+    "schedule_5_item_2_regular": {
+      "type": "integer",
+      "value": 600
+    },
+    "schedule_5_item_2_special": {
+      "type": "integer",
+      "value": 400
+    },
+    "schedule_5_item_2_total": {
+      "type": "integer",
+      "value": 1200
+    },
+    "schedule_5_item_3_exempt": {
+      "type": "integer",
+      "value": 300
+    },
+    "schedule_5_item_3_regular": {
+      "type": "integer",
+      "value": 900
+    },
+    "schedule_5_item_3_special": {
+      "type": "integer",
+      "value": 600
+    },
+    "schedule_5_item_3_total": {
+      "type": "integer",
+      "value": 1800
+    },
+    "schedule_5_item_4_exempt": {
+      "type": "integer",
+      "value": 400
+    },
+    "schedule_5_item_4_regular": {
+      "type": "integer",
+      "value": 1200
+    },
+    "schedule_5_item_4_special": {
+      "type": "integer",
+      "value": 800
+    },
+    "schedule_5_item_4_total": {
+      "type": "integer",
+      "value": 2400
+    },
+    "schedule_5_item_5_exempt": {
+      "type": "integer",
+      "value": 500
+    },
+    "schedule_5_item_5_regular": {
+      "type": "integer",
+      "value": 1500
+    },
+    "schedule_5_item_5_special": {
+      "type": "integer",
+      "value": 1000
+    },
+    "schedule_5_item_5_total": {
+      "type": "integer",
+      "value": 3000
+    },
+    "schedule_5_item_6_exempt": {
+      "type": "integer",
+      "value": 600
+    },
+    "schedule_5_item_6_regular": {
+      "type": "integer",
+      "value": 1800
+    },
+    "schedule_5_item_6_special": {
+      "type": "integer",
+      "value": 1200
+    },
+    "schedule_5_item_6_total": {
+      "type": "integer",
+      "value": 3600
+    },
+    "schedule_5_item_7_exempt": {
+      "type": "integer",
+      "value": 700
+    },
+    "schedule_5_item_7_regular": {
+      "type": "integer",
+      "value": 2100
+    },
+    "schedule_5_item_7_special": {
+      "type": "integer",
+      "value": 1400
+    },
+    "schedule_5_item_7_total": {
+      "type": "integer",
+      "value": 4200
+    },
+    "schedule_5_item_8_exempt": {
+      "type": "integer",
+      "value": 800
+    },
+    "schedule_5_item_8_regular": {
+      "type": "integer",
+      "value": 2400
+    },
+    "schedule_5_item_8_special": {
+      "type": "integer",
+      "value": 1600
+    },
+    "schedule_5_item_8_total": {
+      "type": "integer",
+      "value": 4800
+    },
+    "schedule_5_item_9_exempt": {
+      "type": "integer",
+      "value": 900
+    },
+    "schedule_5_item_9_regular": {
+      "type": "integer",
+      "value": 2700
+    },
+    "schedule_5_item_9_special": {
+      "type": "integer",
+      "value": 1800
+    },
+    "schedule_5_item_9_total": {
+      "type": "integer",
+      "value": 5400
+    },
+    "schedule_5_other_description_1": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_5_other_description_2": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_5_other_description_3": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_5_other_description_4": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_5_other_description_5": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_5_other_description_6": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_6_item_5_exempt": {
+      "type": "integer",
+      "value": 4000
+    },
+    "schedule_6_item_5_regular": {
+      "type": "integer",
+      "value": 6000
+    },
+    "schedule_6_item_5_special": {
+      "type": "integer",
+      "value": 5000
+    },
+    "schedule_6_item_5_total": {
+      "type": "integer",
+      "value": 15000
+    },
+    "schedule_6_row_1_description": {
+      "type": "text",
+      "value": "SPECIAL DEDUCTION ROW 1"
+    },
+    "schedule_6_row_1_exempt": {
+      "type": "integer",
+      "value": 400
+    },
+    "schedule_6_row_1_legal_basis": {
+      "type": "text",
+      "value": "REVIEWED LEGAL BASIS 1"
+    },
+    "schedule_6_row_1_regular": {
+      "type": "integer",
+      "value": 600
+    },
+    "schedule_6_row_1_special": {
+      "type": "integer",
+      "value": 500
+    },
+    "schedule_6_row_1_total": {
+      "type": "integer",
+      "value": 1500
+    },
+    "schedule_6_row_2_description": {
+      "type": "text",
+      "value": "SPECIAL DEDUCTION ROW 2"
+    },
+    "schedule_6_row_2_exempt": {
+      "type": "integer",
+      "value": 800
+    },
+    "schedule_6_row_2_legal_basis": {
+      "type": "text",
+      "value": "REVIEWED LEGAL BASIS 2"
+    },
+    "schedule_6_row_2_regular": {
+      "type": "integer",
+      "value": 1200
+    },
+    "schedule_6_row_2_special": {
+      "type": "integer",
+      "value": 1000
+    },
+    "schedule_6_row_2_total": {
+      "type": "integer",
+      "value": 3000
+    },
+    "schedule_6_row_3_description": {
+      "type": "text",
+      "value": "SPECIAL DEDUCTION ROW 3"
+    },
+    "schedule_6_row_3_exempt": {
+      "type": "integer",
+      "value": 1200
+    },
+    "schedule_6_row_3_legal_basis": {
+      "type": "text",
+      "value": "REVIEWED LEGAL BASIS 3"
+    },
+    "schedule_6_row_3_regular": {
+      "type": "integer",
+      "value": 1800
+    },
+    "schedule_6_row_3_special": {
+      "type": "integer",
+      "value": 1500
+    },
+    "schedule_6_row_3_total": {
+      "type": "integer",
+      "value": 4500
+    },
+    "schedule_6_row_4_description": {
+      "type": "text",
+      "value": "SPECIAL DEDUCTION ROW 4"
+    },
+    "schedule_6_row_4_exempt": {
+      "type": "integer",
+      "value": 1600
+    },
+    "schedule_6_row_4_legal_basis": {
+      "type": "text",
+      "value": "REVIEWED LEGAL BASIS 4"
+    },
+    "schedule_6_row_4_regular": {
+      "type": "integer",
+      "value": 2400
+    },
+    "schedule_6_row_4_special": {
+      "type": "integer",
+      "value": 2000
+    },
+    "schedule_6_row_4_total": {
+      "type": "integer",
+      "value": 6000
+    },
+    "schedule_7_1_item_8_total": {
+      "type": "integer",
+      "value": 3000
+    },
+    "schedule_7_1_row_4_amount": {
+      "type": "integer",
+      "value": 10000
+    },
+    "schedule_7_1_row_4_applied_current_year": {
+      "type": "integer",
+      "value": 750
+    },
+    "schedule_7_1_row_4_applied_previous_years": {
+      "type": "integer",
+      "value": 1000
+    },
+    "schedule_7_1_row_4_expired": {
+      "type": "integer",
+      "value": 500
+    },
+    "schedule_7_1_row_4_unapplied": {
+      "type": "integer",
+      "value": 7750
+    },
+    "schedule_7_1_row_4_year": {
+      "type": "text",
+      "value": "2020"
+    },
+    "schedule_7_1_row_5_amount": {
+      "type": "integer",
+      "value": 11000
+    },
+    "schedule_7_1_row_5_applied_current_year": {
+      "type": "integer",
+      "value": 750
+    },
+    "schedule_7_1_row_5_applied_previous_years": {
+      "type": "integer",
+      "value": 1000
+    },
+    "schedule_7_1_row_5_expired": {
+      "type": "integer",
+      "value": 500
+    },
+    "schedule_7_1_row_5_unapplied": {
+      "type": "integer",
+      "value": 8750
+    },
+    "schedule_7_1_row_5_year": {
+      "type": "text",
+      "value": "2021"
+    },
+    "schedule_7_1_row_6_amount": {
+      "type": "integer",
+      "value": 12000
+    },
+    "schedule_7_1_row_6_applied_current_year": {
+      "type": "integer",
+      "value": 750
+    },
+    "schedule_7_1_row_6_applied_previous_years": {
+      "type": "integer",
+      "value": 1000
+    },
+    "schedule_7_1_row_6_expired": {
+      "type": "integer",
+      "value": 500
+    },
+    "schedule_7_1_row_6_unapplied": {
+      "type": "integer",
+      "value": 9750
+    },
+    "schedule_7_1_row_6_year": {
+      "type": "text",
+      "value": "2022"
+    },
+    "schedule_7_1_row_7_amount": {
+      "type": "integer",
+      "value": 13000
+    },
+    "schedule_7_1_row_7_applied_current_year": {
+      "type": "integer",
+      "value": 750
+    },
+    "schedule_7_1_row_7_applied_previous_years": {
+      "type": "integer",
+      "value": 1000
+    },
+    "schedule_7_1_row_7_expired": {
+      "type": "integer",
+      "value": 500
+    },
+    "schedule_7_1_row_7_unapplied": {
+      "type": "integer",
+      "value": 10750
+    },
+    "schedule_7_1_row_7_year": {
+      "type": "text",
+      "value": "2023"
+    },
+    "schedule_7_item_1": {
+      "type": "integer",
+      "value": 50000
+    },
+    "schedule_7_item_2": {
+      "type": "integer",
+      "value": 60000
+    },
+    "schedule_8_1_item_8_total": {
+      "type": "integer",
+      "value": 2400
+    },
+    "schedule_8_1_row_4_amount": {
+      "type": "integer",
+      "value": 8000
+    },
+    "schedule_8_1_row_4_applied_current_year": {
+      "type": "integer",
+      "value": 600
+    },
+    "schedule_8_1_row_4_applied_previous_years": {
+      "type": "integer",
+      "value": 800
+    },
+    "schedule_8_1_row_4_expired": {
+      "type": "integer",
+      "value": 400
+    },
+    "schedule_8_1_row_4_unapplied": {
+      "type": "integer",
+      "value": 6200
+    },
+    "schedule_8_1_row_4_year": {
+      "type": "text",
+      "value": "2020"
+    },
+    "schedule_8_1_row_5_amount": {
+      "type": "integer",
+      "value": 9000
+    },
+    "schedule_8_1_row_5_applied_current_year": {
+      "type": "integer",
+      "value": 600
+    },
+    "schedule_8_1_row_5_applied_previous_years": {
+      "type": "integer",
+      "value": 800
+    },
+    "schedule_8_1_row_5_expired": {
+      "type": "integer",
+      "value": 400
+    },
+    "schedule_8_1_row_5_unapplied": {
+      "type": "integer",
+      "value": 7200
+    },
+    "schedule_8_1_row_5_year": {
+      "type": "text",
+      "value": "2021"
+    },
+    "schedule_8_1_row_6_amount": {
+      "type": "integer",
+      "value": 10000
+    },
+    "schedule_8_1_row_6_applied_current_year": {
+      "type": "integer",
+      "value": 600
+    },
+    "schedule_8_1_row_6_applied_previous_years": {
+      "type": "integer",
+      "value": 800
+    },
+    "schedule_8_1_row_6_expired": {
+      "type": "integer",
+      "value": 400
+    },
+    "schedule_8_1_row_6_unapplied": {
+      "type": "integer",
+      "value": 8200
+    },
+    "schedule_8_1_row_6_year": {
+      "type": "text",
+      "value": "2022"
+    },
+    "schedule_8_1_row_7_amount": {
+      "type": "integer",
+      "value": 11000
+    },
+    "schedule_8_1_row_7_applied_current_year": {
+      "type": "integer",
+      "value": 600
+    },
+    "schedule_8_1_row_7_applied_previous_years": {
+      "type": "integer",
+      "value": 800
+    },
+    "schedule_8_1_row_7_expired": {
+      "type": "integer",
+      "value": 400
+    },
+    "schedule_8_1_row_7_unapplied": {
+      "type": "integer",
+      "value": 9200
+    },
+    "schedule_8_1_row_7_year": {
+      "type": "text",
+      "value": "2023"
+    },
+    "schedule_8_item_1": {
+      "type": "integer",
+      "value": 30000
+    },
+    "schedule_8_item_2": {
+      "type": "integer",
+      "value": 40000
+    },
+    "schedule_9_item_4_total": {
+      "type": "integer",
+      "value": 2250
+    },
+    "schedule_9_row_1_applied_current_year": {
+      "type": "integer",
+      "value": 750
+    },
+    "schedule_9_row_1_applied_previous_years": {
+      "type": "integer",
+      "value": 500
+    },
+    "schedule_9_row_1_balance": {
+      "type": "integer",
+      "value": 3500
+    },
+    "schedule_9_row_1_excess_mcit": {
+      "type": "integer",
+      "value": 5000
+    },
+    "schedule_9_row_1_expired": {
+      "type": "integer",
+      "value": 250
+    },
+    "schedule_9_row_1_mcit": {
+      "type": "integer",
+      "value": 25000
+    },
+    "schedule_9_row_1_normal_income_tax": {
+      "type": "integer",
+      "value": 20000
+    },
+    "schedule_9_row_1_year": {
+      "type": "text",
+      "value": "2022"
+    },
+    "schedule_9_row_2_applied_current_year": {
+      "type": "integer",
+      "value": 750
+    },
+    "schedule_9_row_2_applied_previous_years": {
+      "type": "integer",
+      "value": 500
+    },
+    "schedule_9_row_2_balance": {
+      "type": "integer",
+      "value": 3500
+    },
+    "schedule_9_row_2_excess_mcit": {
+      "type": "integer",
+      "value": 5000
+    },
+    "schedule_9_row_2_expired": {
+      "type": "integer",
+      "value": 250
+    },
+    "schedule_9_row_2_mcit": {
+      "type": "integer",
+      "value": 26000
+    },
+    "schedule_9_row_2_normal_income_tax": {
+      "type": "integer",
+      "value": 21000
+    },
+    "schedule_9_row_2_year": {
+      "type": "text",
+      "value": "2023"
+    },
+    "schedule_9_row_3_applied_current_year": {
+      "type": "integer",
+      "value": 750
+    },
+    "schedule_9_row_3_applied_previous_years": {
+      "type": "integer",
+      "value": 500
+    },
+    "schedule_9_row_3_balance": {
+      "type": "integer",
+      "value": 3500
+    },
+    "schedule_9_row_3_excess_mcit": {
+      "type": "integer",
+      "value": 5000
+    },
+    "schedule_9_row_3_expired": {
+      "type": "integer",
+      "value": 250
+    },
+    "schedule_9_row_3_mcit": {
+      "type": "integer",
+      "value": 27000
+    },
+    "schedule_9_row_3_normal_income_tax": {
+      "type": "integer",
+      "value": 22000
+    },
+    "schedule_9_row_3_year": {
+      "type": "text",
+      "value": "2024"
+    },
+    "treasurer": {
+      "type": "text",
+      "value": "REVIEWED TREASURER"
+    },
+    "treasurer_tin": {
+      "type": "text",
+      "value": "98765432100000"
+    },
+    "treasurer_title": {
+      "type": "text",
+      "value": "TREASURER"
+    }
+  },
+  "form": {
+    "code": "1702MX",
+    "version": "2018C"
+  },
+  "locale": "en-PH",
+  "period": {
+    "label": "Year ended 12/2025",
+    "month": 12,
+    "taxable_year": 2025
+  },
+  "schedules": [],
+  "schema_version": "1.0",
+  "taxpayer": {
+    "contact_number": "09123456789",
+    "email": "renderer.1702mx@example.com",
+    "name": "REVIEWED MIXED INCOME CORPORATION",
+    "rdo_code": "018",
+    "registered_address": "53 SANTOL EXTENSION, NEW CABALAN, OLONGAPO CITY",
+    "tin": "12345678900000",
+    "zip_code": "2200"
+  },
+  "validation": []
+}

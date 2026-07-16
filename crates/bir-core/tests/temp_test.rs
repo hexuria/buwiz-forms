@@ -1,5 +1,6 @@
 use bir_core::integration::recurring_obligation_forms_for_profile_and_year;
 use bir_core::profile::{TaxClassification, TaxpayerProfile};
+use chrono::NaiveDate;
 
 fn profile_for_dashboard(
     classification: TaxClassification,
@@ -26,7 +27,7 @@ fn profile_for_dashboard(
         default_form_type: "2551Q".into(),
         taxpayer_type: TaxpayerType::Individual,
         is_vat_registered,
-        business_start_date: None,
+        business_start_date: NaiveDate::from_ymd_opt(2020, 1, 1),
         birth_date: None,
         tax_classification: Some(classification),
         eopt_tier: None,

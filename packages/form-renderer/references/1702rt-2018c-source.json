@@ -1,0 +1,53 @@
+{
+  "calibration_only": true,
+  "form": {
+    "code": "1702RT",
+    "dpi": 144,
+    "form_id": "1702RTv2018C",
+    "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/1702-RT%20Jan%202018%20ENCS%20Final%20v3.pdf",
+    "official_source_file": "external:1702-RT Jan 2018 ENCS Final v3.pdf",
+    "official_source_sha256": "d9a6a8a13e0114934261151c4eb269a1573042e7ce670eaf12b15f169d308d2d",
+    "page_count": 4,
+    "page_height_pt": 936.0,
+    "page_width_pt": 612.0,
+    "pages": [
+      {
+        "page": 1,
+        "reference_height_px": 1872,
+        "reference_png": "packages/form-renderer/references/1702rt-2018c-page-1.png",
+        "reference_png_sha256": "25d7d93484fa8d13735dec7f9794dbc42155187b530029afdc969f4009fc203f",
+        "reference_width_px": 1224
+      },
+      {
+        "page": 2,
+        "reference_height_px": 1872,
+        "reference_png": "packages/form-renderer/references/1702rt-2018c-page-2.png",
+        "reference_png_sha256": "9c421bcac8b3aee9faf03b243e8ff0c3054c010da48e754d30d01fde8ad4699b",
+        "reference_width_px": 1224
+      },
+      {
+        "page": 3,
+        "reference_height_px": 1872,
+        "reference_png": "packages/form-renderer/references/1702rt-2018c-page-3.png",
+        "reference_png_sha256": "d0fef4856013f4645c4bd6dc8b635b1d76e155ae544c0bf82e339035e52c2d53",
+        "reference_width_px": 1224
+      },
+      {
+        "page": 4,
+        "reference_height_px": 1872,
+        "reference_png": "packages/form-renderer/references/1702rt-2018c-page-4.png",
+        "reference_png_sha256": "f9471368a54efcbe2fcab6744dfbf616111cf690d39438998fe83f9f9fe500a9",
+        "reference_width_px": 1224
+      }
+    ],
+    "reference_provenance": {
+      "kind": "official_pdf",
+      "replacement_required": false,
+      "runtime_eligible": false
+    },
+    "revision": "2018C"
+  },
+  "generator": "prepare_official_reference.py (Poppler)",
+  "runtime_background_allowed": false,
+  "schema_version": 1
+}

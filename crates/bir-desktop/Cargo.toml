@@ -10,7 +10,6 @@ name = "bir"
 path = "src/main.rs"
 
 [features]
-layout-editor = []
 dev-tools = []
 inspector = []
 mas_build = ["bir-core/mas_build", "gpui_platform/macos_app_store"]
@@ -40,6 +39,7 @@ open = "5.3.4"
 directories = "6.0.0"
 zip = { version = "2", default-features = false, features = ["deflate", "time"] }
 uuid = { version = "1.23.1", features = ["v4"] }
+sha2 = { workspace = true }
 cron = "0.16.0"
 tray-icon = "0.24.0"
 image = "0.25.10"
@@ -57,8 +57,16 @@ url = "2"
 objc2 = "0.5.2"
 objc2-foundation = "0.2.2"
 objc2-app-kit = { version = "0.2.2", features = ["NSApplication", "NSMenu", "NSResponder", "NSRunningApplication", "NSWindow"] }
+block2 = "0.6.2"
+objc2-modern = { package = "objc2", version = "0.6.4" }
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFCGTypes"] }
+objc2-foundation-modern = { package = "objc2-foundation", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "NSData", "NSError", "NSString"] }
+objc2-app-kit-modern = { package = "objc2-app-kit", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "NSPrintInfo", "NSPrintOperation", "NSResponder", "NSWindow"] }
+objc2-web-kit-modern = { package = "objc2-web-kit", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "block2", "WKWebView", "WKPDFConfiguration"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
+webview2-com = "0.38.2"
+windows-core = "0.61"
 windows = { version = "0.62.2", features = [
     "Win32_Foundation",
     "Win32_System_Threading",
@@ -66,6 +74,19 @@ windows = { version = "0.62.2", features = [
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Wry's raw child host is X11-only.  The Linux preview uses it when the GPUI
+# window has an X11 handle and uses an application-owned GTK/WebKit window on
+# Wayland.  Both paths render the same locked-down offline document.
+gpui-wry = { git = "https://github.com/longbridge/gpui-component", rev = "be0f5488a7050f14ed90081f68f450b07761ce93" }
+wry = { version = "0.53.3", package = "lb-wry" }
+raw-window-handle = { version = "0.6", features = ["std"] }
+url = "2"
+gio = "0.18.4"
+glib = "0.18.5"
+gtk = "0.18.2"
+webkit2gtk = "2.0.1"
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
@@ -75,15 +96,13 @@ name = "ebirforms"
 maintainer = "Goldcoders Corp <support@goldcoders.dev>"
 priority = "optional"
 section = "utils"
-depends = "$auto, libvulkan1, libxkbcommon0, libwayland-client0, fontconfig, libfreetype6"
+depends = "$auto, libgtk-3-0, libwebkit2gtk-4.1-0, libvulkan1, libxkbcommon0, libwayland-client0, fontconfig, libfreetype6"
 extended-description = """eBIRForms Desktop — Philippine BIR tax return filing application.
 Supports form preparation, validation, submission via FTP, email confirmation
 tracking, and PDF generation for BIR Form 2551Q and related forms."""
 assets = [
     ["target/release/bir", "usr/bin/ebirforms", "755"],
-    ["../../target/pinned-typst/linux/typst", "usr/lib/ebirforms/typst", "755"],
     ["../../assets/**/*", "usr/share/ebirforms/assets/", "644"],
-    ["../../formtypes/**/*", "usr/share/ebirforms/formtypes/", "644"],
 ]
 
 [package.metadata.bundle]

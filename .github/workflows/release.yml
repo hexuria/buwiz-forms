@@ -70,6 +70,8 @@ jobs:
             libfreetype-dev \
             libssl-dev \
             libpolkit-gobject-1-dev \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
             mesa-vulkan-drivers
 
       - name: Install Rust toolchain
@@ -96,13 +98,6 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
-      - name: Install pinned Typst
-        run: |
-          python3 scripts/fetch_pinned_typst.py \
-            --target x86_64-unknown-linux-musl \
-            --output target/pinned-typst/release-preflight/typst
-          echo "$PWD/target/pinned-typst/release-preflight" >> "$GITHUB_PATH"
-
       - name: Verify Rust workspace
         run: |
           cargo fmt --all -- --check
@@ -117,13 +112,14 @@ jobs:
           npm run typecheck:forms
           npm run test:forms
           python3 -m unittest discover -s scripts/tests -v
-          npm run audit:forms:migration
+          npm run audit:forms:migration -- --require-release-ready 2551Q:2018
+          npm run audit:no-legacy
           npm run build:forms
           npm run verify:forms:offline
 
-      - name: Verify renderer geometry on the tagged source
+      - name: Enforce strict complete-page visual parity on the tagged source (<= 1%)
         env:
-          FORM_VISUAL_MAX_CHANGED_PERCENT: '100'
+          FORM_VISUAL_MAX_CHANGED_PERCENT: '1'
         run: npm run test:forms:visual
 
   # ── macOS Universal ───────────────────────────────────────────────────────
@@ -172,7 +168,8 @@ jobs:
         run: |
           npm ci
           npm run contracts:check
-          npm run audit:forms:migration
+          npm run audit:forms:migration -- --require-release-ready 2551Q:2018
+          npm run audit:no-legacy
           npm run build:forms
           npm run verify:forms:offline
 
@@ -181,24 +178,6 @@ jobs:
 
       - name: Build x86_64
         run: cargo build --locked --release --target x86_64-apple-darwin
-
-      - name: Prepare pinned universal Typst
-        run: |
-          python3 scripts/fetch_pinned_typst.py \
-            --target aarch64-apple-darwin \
-            --output target/pinned-typst/macos/aarch64/typst
-          python3 scripts/fetch_pinned_typst.py \
-            --target x86_64-apple-darwin \
-            --output target/pinned-typst/macos/x86_64/typst
-          mkdir -p target/pinned-typst/macos/universal
-          lipo -create \
-            target/pinned-typst/macos/aarch64/typst \
-            target/pinned-typst/macos/x86_64/typst \
-            -output target/pinned-typst/macos/universal/typst
-          chmod +x target/pinned-typst/macos/universal/typst
-          test "$(target/pinned-typst/macos/universal/typst --version | awk '{print $2}')" = "0.13.1"
-          lipo -archs target/pinned-typst/macos/universal/typst | grep -q arm64
-          lipo -archs target/pinned-typst/macos/universal/typst | grep -q x86_64
 
       - name: Create Universal Binary
         run: |
@@ -216,11 +195,9 @@ jobs:
           mkdir -p "$APP/Contents/Resources"
 
           cp target/release-artifacts/bir "$APP/Contents/MacOS/"
-          cp target/pinned-typst/macos/universal/typst "$APP/Contents/MacOS/"
           cp -R assets "$APP/Contents/Resources/"
           rm -rf "$APP/Contents/Resources/assets/macos"
           cp assets/AppIcon.icns "$APP/Contents/Resources/"
-          cp -R formtypes "$APP/Contents/Resources/"
 
           cp assets/macos/Info.plist "$APP/Contents/Info.plist"
           VERSION="${GITHUB_REF_NAME#v}"
@@ -230,6 +207,7 @@ jobs:
           sed -i '' "s/BUILD_NUMBER_PLACEHOLDER/${BUILD_NUMBER}/g" "$APP/Contents/Info.plist"
           sed -i '' "s/BUNDLE_ID_PLACEHOLDER/dev.goldcoders.bir/g" "$APP/Contents/Info.plist"
           sed -i '' "s/APP_NAME_PLACEHOLDER/${{ env.APP_NAME }}/g" "$APP/Contents/Info.plist"
+          python3 scripts/audit_no_legacy.py --package-root "$APP"
 
       - name: Codesign
         env:
@@ -273,41 +251,13 @@ jobs:
           esac
           SIGNING_IDENTITY="$(printf '%s\n' "$IDENTITY_LINE" | awk '{ print $2 }')"
 
-          # Sign the nested helper before sealing the .app bundle.
           APP="target/release-artifacts/${{ env.APP_NAME }}.app"
-          TYPST="$APP/Contents/MacOS/typst"
-          codesign --force --options runtime \
-            --keychain "$KEYCHAIN_PATH" \
-            --sign "$SIGNING_IDENTITY" \
-            --entitlements assets/macos/typst.entitlements.dev.plist \
-            "$TYPST"
-          # Sign the outer application last. Do not use --deep: it can replace
-          # the nested helper's deliberately separate entitlement signature.
           codesign --force --options runtime \
             --keychain "$KEYCHAIN_PATH" \
             --sign "$SIGNING_IDENTITY" \
             --entitlements assets/macos/entitlements.mac.plist \
             "$APP"
 
-          # Verify the final nested signature, version, and non-sandboxed
-          # entitlement set after the outer application has been sealed.
-          codesign --verify --strict --verbose=2 "$TYPST"
-          TYPST_ENTITLEMENTS="$RUNNER_TEMP/typst-signed-entitlements.plist"
-          codesign --display --xml --entitlements "$TYPST_ENTITLEMENTS" "$TYPST"
-          plutil -lint "$TYPST_ENTITLEMENTS"
-          if /usr/libexec/PlistBuddy -c \
-            "Print :com.apple.security.app-sandbox" \
-            "$TYPST_ENTITLEMENTS" >/dev/null 2>&1; then
-            echo "Direct-download Typst helper must not be sandboxed" >&2
-            exit 1
-          fi
-          if /usr/libexec/PlistBuddy -c \
-            "Print :com.apple.security.inherit" \
-            "$TYPST_ENTITLEMENTS" >/dev/null 2>&1; then
-            echo "Direct-download Typst helper must not inherit sandbox entitlements" >&2
-            exit 1
-          fi
-          test "$("$TYPST" --version | awk '{print $2}')" = "0.13.1"
           codesign --verify --strict --verbose=2 "$APP"
 
       - name: Create DMG
@@ -356,9 +306,20 @@ jobs:
           DMG="target/release-artifacts/${{ env.APP_NAME }}-macOS-universal-${VERSION}.dmg"
           test -f "$DMG"
           codesign --verify --strict --verbose=2 "$APP"
-          codesign --verify --strict --verbose=2 "$APP/Contents/MacOS/typst"
           xcrun stapler validate "$DMG"
           spctl --assess --type execute --verbose=2 "$APP"
+
+          MOUNT_POINT="$(mktemp -d)"
+          cleanup_mount() {
+            hdiutil detach "$MOUNT_POINT" >/dev/null 2>&1 || true
+            rm -rf "$MOUNT_POINT"
+          }
+          trap cleanup_mount EXIT
+          hdiutil attach "$DMG" -nobrowse -readonly -mountpoint "$MOUNT_POINT"
+          MOUNTED_APP="$MOUNT_POINT/${{ env.APP_NAME }}.app"
+          test -d "$MOUNTED_APP"
+          codesign --verify --strict --verbose=2 "$MOUNTED_APP"
+          python3 scripts/audit_no_legacy.py --package-root "$MOUNTED_APP"
 
       - name: Upload macOS Artifact
         uses: actions/upload-artifact@v4
@@ -390,7 +351,7 @@ jobs:
       - name: Install Windows Dependencies
         shell: pwsh
         run: |
-          choco install openssl innosetup -y
+          choco install openssl innosetup 7zip -y
           choco install wixtoolset --version=3.11.2 -y
           $openssl_dir = ""
           if (Test-Path "C:\Program Files\OpenSSL\include") {
@@ -461,24 +422,13 @@ jobs:
         run: |
           npm ci
           npm run contracts:check
-          npm run audit:forms:migration
+          npm run audit:forms:migration -- --require-release-ready 2551Q:2018
+          npm run audit:no-legacy
           npm run build:forms
           npm run verify:forms:offline
 
       - name: Build
         run: cargo build --locked --release --target x86_64-pc-windows-msvc
-
-      - name: Prepare pinned Typst
-        shell: pwsh
-        run: |
-          python scripts/fetch_pinned_typst.py `
-            --target x86_64-pc-windows-msvc `
-            --output target/pinned-typst/windows/typst.exe
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $version = & "target/pinned-typst/windows/typst.exe" --version
-          if ($version -notmatch '^typst 0\.13\.1(?:\s|$)') {
-            throw "Unexpected Typst version: $version"
-          }
 
       - name: Sign and verify Windows executable payloads
         shell: pwsh
@@ -486,8 +436,7 @@ jobs:
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
           $payloads = @(
-            "target/x86_64-pc-windows-msvc/release/bir.exe",
-            "target/pinned-typst/windows/typst.exe"
+            "target/x86_64-pc-windows-msvc/release/bir.exe"
           )
           foreach ($payload in $payloads) {
             & $env:WINDOWS_SIGNTOOL sign /fd SHA256 /td SHA256 `
@@ -507,9 +456,9 @@ jobs:
           $PKG = "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}"
           New-Item -ItemType Directory -Force -Path $PKG
           Copy-Item "target/x86_64-pc-windows-msvc/release/bir.exe" "$PKG/"
-          Copy-Item "target/pinned-typst/windows/typst.exe" "$PKG/"
           Copy-Item -Recurse "assets" "$PKG/"
-          Copy-Item -Recurse "formtypes" "$PKG/"
+          python scripts/audit_no_legacy.py --package-root $PKG
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Create EXE Installer
         shell: pwsh
@@ -558,6 +507,36 @@ jobs:
             }
           }
 
+      - name: Audit final Windows installer payloads
+        shell: pwsh
+        run: |
+          $VERSION = "${{ github.ref_name }}".TrimStart('v')
+          $setup = (Resolve-Path "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}-Setup.exe").Path
+          $msi = (Resolve-Path "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}.msi").Path
+          $extractRoot = Join-Path $env:RUNNER_TEMP "ebirforms-final-installers"
+          $setupRoot = Join-Path $extractRoot "setup"
+          $msiRoot = Join-Path $extractRoot "msi"
+          Remove-Item $extractRoot -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $setupRoot, $msiRoot | Out-Null
+
+          $sevenZip = (Get-Command 7z.exe -ErrorAction Stop).Source
+          & $sevenZip x -y "-o$setupRoot" $setup
+          if ($LASTEXITCODE -ne 0) { throw "Could not extract final Inno Setup installer" }
+          python scripts/audit_no_legacy.py --package-root $setupRoot
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $msiProcess = Start-Process msiexec.exe -Wait -PassThru -ArgumentList @(
+            "/a",
+            "`"$msi`"",
+            "/qn",
+            "TARGETDIR=`"$msiRoot`""
+          )
+          if ($msiProcess.ExitCode -ne 0) {
+            throw "Could not administratively extract final MSI: $($msiProcess.ExitCode)"
+          }
+          python scripts/audit_no_legacy.py --package-root $msiRoot
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -595,6 +574,8 @@ jobs:
             libfreetype-dev \
             libssl-dev \
             libpolkit-gobject-1-dev \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
             mesa-vulkan-drivers
 
       - name: Install Rust Toolchain
@@ -620,19 +601,13 @@ jobs:
         run: |
           npm ci
           npm run contracts:check
-          npm run audit:forms:migration
+          npm run audit:forms:migration -- --require-release-ready 2551Q:2018
+          npm run audit:no-legacy
           npm run build:forms
           npm run verify:forms:offline
 
       - name: Build
         run: cargo build --locked --release --target x86_64-unknown-linux-gnu
-
-      - name: Prepare pinned Typst
-        run: |
-          python3 scripts/fetch_pinned_typst.py \
-            --target x86_64-unknown-linux-musl \
-            --output target/pinned-typst/linux/typst
-          test "$(target/pinned-typst/linux/typst --version | awk '{print $2}')" = "0.13.1"
 
       - name: Install cargo-deb
         run: cargo install --locked cargo-deb --version 3.7.0
@@ -650,12 +625,27 @@ jobs:
           PKG="target/release-artifacts/${{ env.APP_NAME }}-Linux-x64-${VERSION}"
           mkdir -p "$PKG"
           cp target/x86_64-unknown-linux-gnu/release/bir "$PKG/"
-          cp target/pinned-typst/linux/typst "$PKG/"
           cp -R assets "$PKG/"
-          cp -R formtypes "$PKG/"
+          python3 scripts/audit_no_legacy.py --package-root "$PKG"
           cd target/release-artifacts
           tar czf "${{ env.APP_NAME }}-Linux-x64-${VERSION}.tar.gz" \
             "${{ env.APP_NAME }}-Linux-x64-${VERSION}"
+
+      - name: Audit final Linux package payloads
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          DEB="target/release-artifacts/${{ env.APP_NAME }}-Linux-x64-${VERSION}.deb"
+          TARBALL="target/release-artifacts/${{ env.APP_NAME }}-Linux-x64-${VERSION}.tar.gz"
+          DEB_ROOT="$(mktemp -d)"
+          TAR_ROOT="$(mktemp -d)"
+          cleanup_packages() {
+            rm -rf "$DEB_ROOT" "$TAR_ROOT"
+          }
+          trap cleanup_packages EXIT
+          dpkg-deb --extract "$DEB" "$DEB_ROOT"
+          tar xzf "$TARBALL" -C "$TAR_ROOT"
+          python3 scripts/audit_no_legacy.py --package-root "$DEB_ROOT"
+          python3 scripts/audit_no_legacy.py --package-root "$TAR_ROOT"
 
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4

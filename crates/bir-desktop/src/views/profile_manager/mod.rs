@@ -77,6 +77,9 @@ pub struct ProfileManagerView {
     errors: Vec<ValidationError>,
     save_message: Option<String>,
     pending_notification: Option<(gpui_component::notification::NotificationType, String)>,
+    has_unsaved_profile_changes: bool,
+    profile_change_revision: u64,
+    persisted_profile_tin: Option<String>,
     rdo_options: Vec<String>,
     zip_options: Vec<String>,
 
@@ -99,6 +102,7 @@ pub struct ProfileManagerView {
     stored_test_notification_enabled: bool,
     stored_is_archived: bool,
     stored_profile_pin_hash: Option<String>,
+    stored_atc_codes: Vec<String>,
     stored_tax_elections: Vec<bir_core::profile::TaxElectionHistory>,
     stored_profile_versions: Vec<bir_core::profile::TaxProfileVersion>,
     compliance_source_mode: ComplianceSourceMode,
@@ -124,9 +128,6 @@ pub struct ProfileManagerView {
     cor_registration_status_select: Entity<ComboboxState>,
     cor_extracted_forms: Vec<String>,
     cor_extracted_forms_select: Entity<MultiSelectState>,
-    cor_obligation_form_input: Entity<InputState>,
-    cor_obligation_reason_input: Entity<InputState>,
-    cor_obligation_source_input: Entity<InputState>,
     cor_deadline_title_input: Entity<InputState>,
     cor_deadline_source_input: Entity<InputState>,
     cor_deadline_forms_input: Entity<InputState>,
@@ -171,6 +172,33 @@ pub struct ProfileManagerView {
 }
 
 impl EventEmitter<ProfileEvent> for ProfileManagerView {}
+
+fn compliance_affected_years(profile: &TaxpayerProfile) -> Vec<u16> {
+    let current_year = chrono::Local::now().year().clamp(0, i32::from(u16::MAX)) as u16;
+    let mut years = std::collections::BTreeSet::from([current_year]);
+    years.extend(profile.per_year_forms.keys().copied());
+    years.extend(
+        profile
+            .tax_elections
+            .iter()
+            .map(|election| election.taxable_year),
+    );
+
+    for version in &profile.profile_versions {
+        let Some(start) = version.effective_from else {
+            continue;
+        };
+        let start_year = start.year().clamp(0, i32::from(u16::MAX)) as u16;
+        let raw_end_year = version
+            .effective_until
+            .map(|date| date.year())
+            .unwrap_or_else(|| i32::from(current_year).max(start.year()));
+        let end_year = raw_end_year.clamp(i32::from(start_year), i32::from(u16::MAX)) as u16;
+        years.extend(start_year..=end_year);
+    }
+
+    years.into_iter().collect()
+}
 
 impl ProfileManagerView {
     pub fn new(db: Arc<Mutex<Database>>, window: &mut Window, cx: &mut Context<'_, Self>) -> Self {
@@ -407,12 +435,6 @@ impl ProfileManagerView {
                 .placeholder("Add form code...")
                 .hide_trigger_chips(true)
         });
-        let cor_obligation_form_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Form code (e.g. 2551Q)"));
-        let cor_obligation_reason_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Reason required"));
-        let cor_obligation_source_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Source required"));
         let cor_deadline_title_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Title"));
         let cor_deadline_source_input =
@@ -546,6 +568,10 @@ impl ProfileManagerView {
             cx.subscribe(&excise_select, Self::on_multi_select_event),
             cx.subscribe(&business_start_input, Self::on_date_event),
             cx.subscribe(&birth_date_input, Self::on_date_event),
+            cx.subscribe(
+                &registration_activity_status_select,
+                Self::on_combobox_event,
+            ),
             cx.subscribe_in(&cor_preview_year_input, window, Self::on_input_event),
             cx.subscribe_in(
                 &setup_totp_state,
@@ -616,11 +642,15 @@ impl ProfileManagerView {
                             if let Some(entry) =
                                 set.entries.iter_mut().find(|e| e.form_code == *code)
                             {
-                                entry.reason = if val.trim().is_empty() {
+                                let next_reason = if val.trim().is_empty() {
                                     None
                                 } else {
                                     Some(val)
                                 };
+                                if entry.reason != next_reason {
+                                    entry.reason = next_reason;
+                                    this.mark_profile_changed();
+                                }
                             }
                         }
                     }
@@ -680,6 +710,7 @@ impl ProfileManagerView {
             stored_test_notification_enabled: false,
             stored_is_archived: false,
             stored_profile_pin_hash: None,
+            stored_atc_codes: vec![],
             stored_tax_elections: vec![],
             stored_profile_versions: vec![],
             compliance_source_mode: ComplianceSourceMode::TemporalSuggestion,
@@ -705,9 +736,6 @@ impl ProfileManagerView {
             cor_registration_status_select,
             cor_extracted_forms: Vec::new(),
             cor_extracted_forms_select,
-            cor_obligation_form_input,
-            cor_obligation_reason_input,
-            cor_obligation_source_input,
             cor_deadline_title_input,
             cor_deadline_source_input,
             cor_deadline_forms_input,
@@ -734,6 +762,9 @@ impl ProfileManagerView {
             pending_cor_editor_load: None,
             is_uploading_cor: false,
             pending_notification: None,
+            has_unsaved_profile_changes: false,
+            profile_change_revision: 0,
+            persisted_profile_tin: None,
             stored_per_year_forms: std::collections::BTreeMap::new(),
             forms_editor_year,
             forms_editor_year_select,
@@ -746,6 +777,70 @@ impl ProfileManagerView {
             calendar_action_message: None,
             _subscriptions: subscriptions,
         }
+    }
+
+    /// Whether the in-memory profile, compliance ledger, or yearly Forms Set
+    /// contains changes that have not completed a database save.
+    pub fn has_unsaved_compliance_changes(&self) -> bool {
+        self.has_unsaved_profile_changes
+    }
+
+    /// Shows the reason cross-view navigation was refused. App-level callers
+    /// can use this together with [`Self::has_unsaved_compliance_changes`]
+    /// before opening a filing form or replacing the edited profile.
+    pub fn notify_unsaved_compliance_blocked(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        window.push_notification(
+            Notification::error("Navigation blocked")
+                .message(
+                    "Save or discard the pending profile and Forms Set changes before opening another profile or filing form.",
+                )
+                .title("Unsaved profile changes"),
+            cx,
+        );
+        cx.notify();
+    }
+
+    fn mark_profile_changed(&mut self) {
+        self.has_unsaved_profile_changes = true;
+        self.profile_change_revision = self.profile_change_revision.wrapping_add(1);
+    }
+
+    fn clear_profile_changed(&mut self) {
+        self.has_unsaved_profile_changes = false;
+    }
+
+    fn discard_profile_changes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let persisted_profile = self.persisted_profile_tin.as_deref().and_then(|tin| {
+            self.db
+                .lock()
+                .ok()
+                .and_then(|db| db.get_profile(tin).ok().flatten())
+        });
+
+        if let Some(profile) = persisted_profile {
+            self.edit_profile(profile, window, cx);
+            self.pending_notification = Some((
+                NotificationType::Success,
+                "Unsaved profile and Forms Set changes were discarded.".to_string(),
+            ));
+        } else if self.editing_id.is_none() {
+            self.reset_for_new(window, cx);
+            self.pending_notification = Some((
+                NotificationType::Success,
+                "Unsaved new profile was cleared.".to_string(),
+            ));
+        } else {
+            self.pending_notification = Some((
+                NotificationType::Error,
+                "The saved profile could not be reloaded; no in-memory changes were discarded."
+                    .to_string(),
+            ));
+        }
+        cx.notify();
     }
 
     pub fn sync_document_viewer(&mut self, cx: &mut Context<Self>) {
@@ -791,6 +886,7 @@ impl ProfileManagerView {
 
     pub fn reset_for_new(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.editing_id = None;
+        self.persisted_profile_tin = None;
         self.tin_duplicate_error = None;
         self.is_vat_registered = false;
         self.withholds_compensation = false;
@@ -819,6 +915,7 @@ impl ProfileManagerView {
         self.pending_notification = None;
         self.is_editing_password = true;
         self.stored_profile_pin_hash = None;
+        self.stored_atc_codes.clear();
         self.stored_tax_elections = vec![];
         self.stored_profile_versions = vec![];
         self.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
@@ -911,6 +1008,8 @@ impl ProfileManagerView {
         self.eopt_tier_select.update(cx, |select, cx| {
             select.set_selected_value("", window, cx);
         });
+        self.profile_change_revision = 0;
+        self.clear_profile_changed();
         cx.notify();
     }
 
@@ -918,6 +1017,7 @@ impl ProfileManagerView {
         self.name_input.update(cx, |input, cx| {
             input.set_value(name.to_string(), window, cx);
         });
+        self.mark_profile_changed();
         cx.notify();
     }
 
@@ -932,6 +1032,7 @@ impl ProfileManagerView {
         self.tin_input.update(cx, |input, cx| {
             input.set_from_tin(&tin, window, cx);
         });
+        self.mark_profile_changed();
         cx.notify();
     }
 
@@ -941,6 +1042,7 @@ impl ProfileManagerView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.persisted_profile_tin = Some(profile.tin.full());
         self.editing_id = profile.id;
         self.is_vat_registered = profile.is_vat_registered;
         self.withholds_compensation = profile.withholds_compensation;
@@ -951,6 +1053,7 @@ impl ProfileManagerView {
         self.has_single_employer = profile.has_single_employer;
         self.is_dormant = profile.is_dormant;
         self.is_gpp_partner = profile.is_gpp_partner;
+        self.stored_atc_codes = profile.atc_codes.clone();
         self.stored_tax_elections = profile.tax_elections.clone();
         self.stored_profile_versions = profile.profile_versions.clone();
         self.compliance_source_mode =
@@ -1168,6 +1271,8 @@ impl ProfileManagerView {
         }
         self.forms_editor_selected_code = None;
 
+        self.profile_change_revision = 0;
+        self.clear_profile_changed();
         cx.notify();
     }
 
@@ -1301,9 +1406,12 @@ impl ProfileManagerView {
     fn on_tin_event(
         &mut self,
         _state: Entity<TinInput>,
-        _event: &gpui_component::input::InputEvent,
+        event: &gpui_component::input::InputEvent,
         cx: &mut Context<Self>,
     ) {
+        if matches!(event, InputEvent::Change) {
+            self.mark_profile_changed();
+        }
         let tin_val = self.tin_input.read(cx).value(cx);
         let is_valid_format = tin_val.len() == 12 || tin_val.len() == 13;
 
@@ -1364,6 +1472,7 @@ impl ProfileManagerView {
 
             if let Some(field) = field_to_validate {
                 self.validate_field(field, &value);
+                self.mark_profile_changed();
                 cx.notify();
             }
         }
@@ -1379,6 +1488,7 @@ impl ProfileManagerView {
         if matches!(event, InputEvent::Change) {
             let phone = self.tel_input.read(cx).value();
             self.validate_field("phone", &phone);
+            self.mark_profile_changed();
             cx.notify();
         }
     }
@@ -1392,6 +1502,13 @@ impl ProfileManagerView {
         if let Some(val) = event.selected.as_ref() {
             let mut field_to_validate = None;
             let mut value = val.clone();
+            let changes_profile = state == self.rdo_select
+                || state == self.zip_select
+                || state == self.type_select
+                || state == self.tax_classification_select
+                || state == self.eopt_tier_select
+                || state == self.cooperative_treatment_select
+                || state == self.registration_activity_status_select;
 
             if state == self.rdo_select {
                 field_to_validate = Some("rdo_code");
@@ -1408,6 +1525,9 @@ impl ProfileManagerView {
 
             if let Some(field) = field_to_validate {
                 self.validate_field(field, &value);
+            }
+            if changes_profile {
+                self.mark_profile_changed();
                 cx.notify();
             }
         }
@@ -1417,9 +1537,10 @@ impl ProfileManagerView {
         &mut self,
         _state: Entity<DateInputState>,
         _event: &DateInputEvent,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) {
-        // Handle date event if needed
+        self.mark_profile_changed();
+        cx.notify();
     }
 
     fn on_multi_select_event(
@@ -1428,7 +1549,7 @@ impl ProfileManagerView {
         _event: &MultiSelectEvent,
         cx: &mut Context<Self>,
     ) {
-        // Just notify to refresh the UI when multi-select changes
+        self.mark_profile_changed();
         cx.notify();
     }
 
@@ -1617,7 +1738,7 @@ impl ProfileManagerView {
             is_expanded_withholding_agent: self.withholds_expanded
                 || self.is_top_withholding_agent
                 || self.is_government_withholding_entity,
-            atc_codes: vec![],
+            atc_codes: self.stored_atc_codes.clone(),
             excise_tax_categories: {
                 let selected = self.excise_select.read(cx).selected_ids();
                 let mut cats = vec![];
@@ -2162,24 +2283,18 @@ impl ProfileManagerView {
 
             use chrono::Datelike as _;
             let year = effective_from.year() as u16;
-            let confirmed_version = profile
-                .profile_versions
-                .iter()
-                .find(|version| version.id == version_id)
-                .ok_or_else(|| "Confirmed COR version was not found.".to_string())?;
-            let form_codes = bir_core::integration::registered_form_codes_for_version(
-                &profile,
-                confirmed_version,
+            let suggestions =
+                bir_core::integration::form_suggestions_for_profile_year(&profile, year);
+            let reconciliation = bir_core::forms::reconcile_forms_set_for_year(
                 year,
+                self.stored_per_year_forms.get(&year),
+                &suggestions,
             );
-            let forms_set = bir_core::forms::PerYearFormsSet::from_codes(
-                year,
-                form_codes,
-                bir_core::forms::FormSetSource::CorAi,
-            );
-            self.stored_per_year_forms.insert(year, forms_set);
+            self.stored_per_year_forms
+                .insert(year, reconciliation.forms_set);
             profile.per_year_forms = self.stored_per_year_forms.clone();
 
+            self.mark_profile_changed();
             self.save_profile(cx);
 
             Ok(())
@@ -2190,9 +2305,6 @@ impl ProfileManagerView {
 
     fn clear_cor_override_inputs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         for input in [
-            &self.cor_obligation_form_input,
-            &self.cor_obligation_reason_input,
-            &self.cor_obligation_source_input,
             &self.cor_deadline_title_input,
             &self.cor_deadline_source_input,
             &self.cor_deadline_forms_input,
@@ -2690,92 +2802,6 @@ impl ProfileManagerView {
         }
     }
 
-    fn add_cor_obligation_override(
-        &mut self,
-        action: bir_core::profile::ManualObligationOverrideAction,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Result<(), String> {
-        let form_code = self
-            .cor_obligation_form_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_ascii_uppercase()
-            .replace(' ', "");
-        let reason = self
-            .cor_obligation_reason_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
-        let source_reference = self
-            .cor_obligation_source_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
-
-        if form_code.is_empty() {
-            return Err("Set a form code for the obligation override.".to_string());
-        }
-        if reason.is_empty() || source_reference.is_empty() {
-            return Err("Obligation overrides require both a reason and source.".to_string());
-        }
-
-        let Some(target_version_id) = self.cor_override_target_version_id() else {
-            return Err("Create a COR/manual version before adding profile overrides.".to_string());
-        };
-        let Some(version) = self
-            .stored_profile_versions
-            .iter_mut()
-            .find(|version| version.id == target_version_id)
-        else {
-            return Err("COR version was not found.".to_string());
-        };
-
-        version
-            .obligation_overrides
-            .retain(|override_rule| override_rule.form_code.to_ascii_uppercase() != form_code);
-        version
-            .obligation_overrides
-            .push(bir_core::profile::ManualObligationOverride {
-                form_code: form_code.clone(),
-                action,
-                reason,
-                source_reference: Some(source_reference),
-            });
-        self.clear_cor_override_inputs(window, cx);
-        self.save_profile(cx);
-        self.save_message = Some(format!(
-            "Profile obligation override for {form_code} added and saved."
-        ));
-        Ok(())
-    }
-
-    fn remove_cor_obligation_override(
-        &mut self,
-        version_id: &str,
-        index: usize,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(version) = self
-            .stored_profile_versions
-            .iter_mut()
-            .find(|version| version.id == version_id)
-        else {
-            self.save_message = Some("COR version was not found.".to_string());
-            return;
-        };
-        if index >= version.obligation_overrides.len() {
-            self.save_message = Some("Profile obligation override was not found.".to_string());
-            return;
-        }
-        version.obligation_overrides.remove(index);
-        self.save_profile(cx);
-        self.save_message = Some("Profile obligation override removed.".to_string());
-    }
-
     fn add_cor_deadline_override(
         &mut self,
         window: &mut Window,
@@ -2977,6 +3003,7 @@ impl ProfileManagerView {
         self.save_message = Some("Saving...".to_string());
         cx.notify();
 
+        let save_revision = self.profile_change_revision;
         let db_arc_clone = db_arc.clone();
         cx.spawn(async move |this, cx| {
             let is_email_tracking_active = profile.is_email_tracking_active();
@@ -2994,16 +3021,41 @@ impl ProfileManagerView {
             let _ = this.update(cx, |this, cx| {
                 match save_result {
                     Ok(saved) => {
-                        let saved_id = saved.id.unwrap();
+                        let Some(saved_id) = saved.id else {
+                            this.save_message = None;
+                            this.pending_notification = Some((
+                                NotificationType::Error,
+                                "Save failed: database did not return a profile id".to_string(),
+                            ));
+                            cx.notify();
+                            return;
+                        };
+                        let tin_val = saved.tin.full();
+                        let affected_years = compliance_affected_years(&saved);
                         this.editing_id = Some(saved_id);
+                        this.persisted_profile_tin = Some(tin_val.clone());
+                        this.stored_atc_codes.clone_from(&saved.atc_codes);
+                        this.stored_tax_elections.clone_from(&saved.tax_elections);
+                        this.stored_profile_versions
+                            .clone_from(&saved.profile_versions);
+                        this.stored_per_year_forms.clone_from(&saved.per_year_forms);
+                        if this.profile_change_revision == save_revision {
+                            this.clear_profile_changed();
+                        }
                         this.save_message = None;
                         this.pending_notification = Some((
                             gpui_component::notification::NotificationType::Success,
                             "Profile saved".to_string(),
                         ));
 
-                        let tin_val = this.tin_input.read(cx).value(cx).to_string();
                         cx.emit(ProfileEvent::Saved(tin_val.clone()));
+                        let bus = cx.global::<crate::events::GlobalEventBus>().0.clone();
+                        bus.update(cx, |_, cx| {
+                            cx.emit(crate::events::AppEvent::ProfileComplianceChanged {
+                                tin: tin_val.clone(),
+                                affected_years: affected_years.clone(),
+                            });
+                        });
 
                         // Retroactively schedule email polling for any pending submissions
                         if is_email_tracking_active {
@@ -3049,6 +3101,67 @@ impl ProfileManagerView {
             .text_color(cx.theme().muted_foreground)
             .mb_1()
             .child(text.to_string())
+    }
+
+    fn render_unsaved_profile_banner(&self, cx: &Context<Self>) -> gpui::AnyElement {
+        if !self.has_unsaved_profile_changes {
+            return div().into_any_element();
+        }
+
+        div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_4()
+            .px_4()
+            .py_3()
+            .rounded_lg()
+            .border_1()
+            .border_color(gpui::rgba(0xd97706a0))
+            .bg(gpui::rgba(0xfef3c730))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(gpui::rgb(0x92400e))
+                            .child("Unsaved profile and Forms Set changes"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(gpui::rgb(0x92400e))
+                            .child(
+                                "Save or discard these changes before switching profiles or opening a filing form.",
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        gpui_component::button::Button::new("discard_profile_changes")
+                            .label("Discard")
+                            .ghost()
+                            .on_click(cx.listener(|this, _event, window, cx| {
+                                this.discard_profile_changes(window, cx);
+                            })),
+                    )
+                    .child(
+                        gpui_component::button::Button::new("save_profile_changes")
+                            .label("Save Changes")
+                            .on_click(cx.listener(|this, _event, _window, cx| {
+                                this.save_profile(cx);
+                            })),
+                    ),
+            )
+            .into_any_element()
     }
 
     fn field_error(&self, field: &'static str, _cx: &Context<Self>) -> gpui::Div {
@@ -3238,6 +3351,7 @@ impl Render for ProfileManagerView {
                                             ),
                                     ),
                             )
+                            .child(self.render_unsaved_profile_banner(cx))
                             .child(
                                 div()
                                     .flex()
@@ -3400,7 +3514,7 @@ impl Render for ProfileManagerView {
                                                             this.active_tab = 5;
                                                             cx.notify();
                                                         }))
-                                                        .child(div().text_sm().child("Active Forms")),
+                                                        .child(div().text_sm().child("Forms Set")),
                                                 )
                                                 .child(
                                                     div()

@@ -1,0 +1,571 @@
+{
+  "fields": {
+    "filing_basis": {
+      "type": "text",
+      "value": "calendar"
+    },
+    "is_amended": {
+      "type": "boolean",
+      "value": false
+    },
+    "is_availing_tax_relief": {
+      "type": "boolean",
+      "value": false
+    },
+    "is_short_period_return": {
+      "type": "boolean",
+      "value": false
+    },
+    "item_16": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_17": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_18": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_19": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_19_description": {
+      "type": "text",
+      "value": ""
+    },
+    "item_20": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_22": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_23": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_24": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_25": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_32a": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_33a": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_35b": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_36b": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_38b": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_39b": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_40b": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_41b": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_42_description": {
+      "type": "text",
+      "value": ""
+    },
+    "item_42b": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_43b": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_44a": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_44b": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_45a": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_45b": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_46a": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_46b": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_47_description": {
+      "type": "text",
+      "value": ""
+    },
+    "item_47a": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_47b": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_48a": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_49a": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_50a": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_50b": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_51b": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_52b": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_54b": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_55b": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_56_description": {
+      "type": "text",
+      "value": ""
+    },
+    "item_56b": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "item_58b": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "machine_validation_or_receipt_details": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_check_bank": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_check_date": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_check_number": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_other_bank": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_other_date": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_other_description": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_other_number": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_tax_debit_memo_date": {
+      "type": "text",
+      "value": ""
+    },
+    "payment_tax_debit_memo_number": {
+      "type": "text",
+      "value": ""
+    },
+    "quarter": {
+      "type": "integer",
+      "value": 1
+    },
+    "return_period_from": {
+      "type": "text",
+      "value": "1/01/2026"
+    },
+    "return_period_to": {
+      "type": "text",
+      "value": "3/31/2026"
+    },
+    "schedule_1_1_allowable_input_tax": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "schedule_1_1_amount": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "schedule_1_1_balance": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "schedule_1_1_date": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_1_1_description": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_1_1_estimated_life_months": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_1_1_input_tax": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "schedule_1_1_recognized_life_months": {
+      "type": "integer",
+      "value": 0
+    },
+    "schedule_1_1_source": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_1_2_date": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_1_2_description": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_1_2_source": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_2_direct_input_tax": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "schedule_2_exempt_sales": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "schedule_2_indirect_input_tax": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "schedule_3_1_agent": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_3_1_from": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_3_1_income_payment": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "schedule_3_1_tax_withheld": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "schedule_3_1_to": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_3_2_agent": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_3_2_from": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_3_2_income_payment": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "schedule_3_2_tax_withheld": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "schedule_3_2_to": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_3_total_income_payment": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "schedule_3_total_tax_withheld": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "schedule_4_1_amount": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "schedule_4_1_from": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_4_1_miller": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_4_1_receipt": {
+      "type": "text",
+      "value": "0.00"
+    },
+    "schedule_4_1_taxpayer": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_4_1_to": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_4_2_amount": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "schedule_4_2_from": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_4_2_miller": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_4_2_receipt": {
+      "type": "text",
+      "value": "0.00"
+    },
+    "schedule_4_2_taxpayer": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_4_2_to": {
+      "type": "text",
+      "value": ""
+    },
+    "schedule_4_total_amount": {
+      "type": "decimal",
+      "value": 0.0
+    },
+    "signature_non_individual_officer": {
+      "type": "text",
+      "value": ""
+    },
+    "signature_representative_title": {
+      "type": "text",
+      "value": ""
+    },
+    "signature_taxpayer_or_representative": {
+      "type": "text",
+      "value": ""
+    },
+    "tax_agent_accreditation_or_roll_number": {
+      "type": "text",
+      "value": ""
+    },
+    "tax_agent_date_of_expiry": {
+      "type": "text",
+      "value": ""
+    },
+    "tax_agent_date_of_issue": {
+      "type": "text",
+      "value": ""
+    },
+    "tax_relief_details": {
+      "type": "text",
+      "value": ""
+    },
+    "year_end_month": {
+      "type": "integer",
+      "value": 12
+    }
+  },
+  "form": {
+    "code": "2550Q",
+    "version": "2024"
+  },
+  "locale": "en-PH",
+  "period": {
+    "label": "Q1 year ended 12/2026",
+    "month": 12,
+    "quarter": 1,
+    "taxable_year": 2026
+  },
+  "schedules": [],
+  "schema_version": "1.0",
+  "taxpayer": {
+    "contact_number": "09123456789",
+    "email": "not-an-email",
+    "name": "",
+    "rdo_code": "018",
+    "registered_address": "53 SANTOL EXTENSION, NEW CABALAN, OLONGAPO CITY",
+    "tin": "12345678900000",
+    "zip_code": "2200"
+  },
+  "validation": [
+    {
+      "code": "invalid",
+      "field_path": "taxpayer_name",
+      "message": "Taxpayer name is required",
+      "rule_version": "2550q-2024-domain-v1",
+      "severity": "error"
+    },
+    {
+      "code": "invalid",
+      "field_path": "email",
+      "message": "Email address is invalid",
+      "rule_version": "2550q-2024-domain-v1",
+      "severity": "error"
+    },
+    {
+      "code": "invalid",
+      "field_path": "taxpayer_classification",
+      "message": "Item 13 taxpayer classification is required",
+      "rule_version": "2550q-2024-domain-v1",
+      "severity": "error"
+    },
+    {
+      "code": "invalid",
+      "field_path": "item_31a_vatable_sales",
+      "message": "Amount is blank; enter 0.00 explicitly when there is no amount",
+      "rule_version": "2550q-2024-domain-v1",
+      "severity": "error"
+    },
+    {
+      "code": "invalid",
+      "field_path": "schedules",
+      "message": "The reviewed 2550Q editable-save contract contains exactly two rows in each schedule",
+      "rule_version": "2550q-2024-domain-v1",
+      "severity": "error"
+    },
+    {
+      "code": "invalid",
+      "field_path": "item_15",
+      "message": "Computed amount is unresolved because an input is blank or invalid",
+      "rule_version": "2550q-2024-domain-v1",
+      "severity": "error"
+    },
+    {
+      "code": "invalid",
+      "field_path": "item_21",
+      "message": "Computed amount is unresolved because an input is blank or invalid",
+      "rule_version": "2550q-2024-domain-v1",
+      "severity": "error"
+    },
+    {
+      "code": "invalid",
+      "field_path": "item_26",
+      "message": "Computed amount is unresolved because an input is blank or invalid",
+      "rule_version": "2550q-2024-domain-v1",
+      "severity": "error"
+    },
+    {
+      "code": "invalid",
+      "field_path": "item_31b",
+      "message": "Computed amount is unresolved because an input is blank or invalid",
+      "rule_version": "2550q-2024-domain-v1",
+      "severity": "error"
+    },
+    {
+      "code": "invalid",
+      "field_path": "item_34a",
+      "message": "Computed amount is unresolved because an input is blank or invalid",
+      "rule_version": "2550q-2024-domain-v1",
+      "severity": "error"
+    },
+    {
+      "code": "invalid",
+      "field_path": "item_34b",
+      "message": "Computed amount is unresolved because an input is blank or invalid",
+      "rule_version": "2550q-2024-domain-v1",
+      "severity": "error"
+    },
+    {
+      "code": "invalid",
+      "field_path": "item_37b",
+      "message": "Computed amount is unresolved because an input is blank or invalid",
+      "rule_version": "2550q-2024-domain-v1",
+      "severity": "error"
+    },
+    {
+      "code": "invalid",
+      "field_path": "item_53b",
+      "message": "Computed amount is unresolved because an input is blank or invalid",
+      "rule_version": "2550q-2024-domain-v1",
+      "severity": "error"
+    },
+    {
+      "code": "invalid",
+      "field_path": "item_57b",
+      "message": "Computed amount is unresolved because an input is blank or invalid",
+      "rule_version": "2550q-2024-domain-v1",
+      "severity": "error"
+    },
+    {
+      "code": "invalid",
+      "field_path": "item_59b",
+      "message": "Computed amount is unresolved because an input is blank or invalid",
+      "rule_version": "2550q-2024-domain-v1",
+      "severity": "error"
+    },
+    {
+      "code": "invalid",
+      "field_path": "item_60b",
+      "message": "Computed amount is unresolved because an input is blank or invalid",
+      "rule_version": "2550q-2024-domain-v1",
+      "severity": "error"
+    },
+    {
+      "code": "invalid",
+      "field_path": "item_61b",
+      "message": "Computed amount is unresolved because an input is blank or invalid",
+      "rule_version": "2550q-2024-domain-v1",
+      "severity": "error"
+    }
+  ]
+}

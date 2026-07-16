@@ -20,7 +20,11 @@ pub use atc::{ATC_TABLE_2551Q, AtcEntry, AtcRateResolution, find_atc, resolve_25
 pub use form_1601c::Form1601CDraft;
 pub use form_1701q::Form1701QDraft;
 pub use form_2551q::{Form2551QDraft, Schedule1Row};
-pub use forms_set::{FormCardData, FormSetEntry, FormSetSource, PerYearFormsSet};
+pub use forms_set::{
+    FormCardData, FormSetConflict, FormSetEntry, FormSetReviewStatus, FormSetSource,
+    FormSuggestion, FormSuggestionSource, FormsSetReconcileResult, PerYearFormsSet,
+    reconcile_forms_set_for_year,
+};
 #[allow(deprecated)]
 // re-exporting deprecated forms_for_taxpayer / forms_for_profile for backward compat only
 pub use registry::{
@@ -28,7 +32,9 @@ pub use registry::{
     forms_for_taxpayer,
 };
 pub use support_level::{
-    FormSupportLevel, can_queue_for_submission, fileable_form_type_id, form_support_level,
+    FORM_CAPABILITY_REGISTRY, FormCapabilities, FormCapabilityRecord, FormSupportLevel,
+    can_open_certification_draft, can_queue_for_submission, fileable_form_type_id,
+    find_form_capability, find_form_capability_by_id, form_support_level,
 };
 
 pub mod form_0605_xml;

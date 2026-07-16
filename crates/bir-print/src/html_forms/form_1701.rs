@@ -1,0 +1,809 @@
+use bir_core::forms::form_1701::{
+    Form1701AmountSection, Form1701Atc, Form1701CivilStatus, Form1701DeductionMethod,
+    Form1701Draft, Form1701EmployerRow, Form1701JointFilingStatus, Form1701OverpaymentDisposition,
+    Form1701Party, Form1701PaymentRow, Form1701SpouseType, Form1701TaxRate, Form1701TaxpayerType,
+};
+use bir_core::forms::FormValidator;
+use serde_json::json;
+
+use crate::html::{
+    RenderEnvelopeV1, RenderFormIdentity, RenderPeriod, RenderTaxpayer, RenderValidationMessage,
+    RenderValidationSeverity, RenderValue,
+};
+
+use super::{
+    GeneratedContractArtifact, RenderContractFixture, RenderFixtureKind, RenderFormProvider,
+    RenderPageGeometry, RenderProviderError, VisualReferencePage,
+};
+
+const VISUAL_REFERENCE_PAGES: &[VisualReferencePage] = &[
+    VisualReferencePage {
+        page: 1,
+        file_name: "1701-2018-page-1.png",
+        sha256: "37afb5ac1cfb36970601650e3d24a856e61fd0abc7afd0f36d6af9be48d5dd4a",
+    },
+    VisualReferencePage {
+        page: 2,
+        file_name: "1701-2018-page-2.png",
+        sha256: "51a210c01bd188a7ad92dc52136afa98d2469810bf9cc0cfa2b95f7f69b23400",
+    },
+    VisualReferencePage {
+        page: 3,
+        file_name: "1701-2018-page-3.png",
+        sha256: "d9f565209adafb59f71befef2a4523416f71abcd37d0d41ca5c16a490e5bb52c",
+    },
+    VisualReferencePage {
+        page: 4,
+        file_name: "1701-2018-page-4.png",
+        sha256: "8597a626381d0a45164fcdc274e3706965b6290870bd320a2ef87723c2b930a0",
+    },
+];
+
+/// Preview-only provider for the exact January 2018 four-page main return.
+///
+/// The reviewed source pack proves an exact 837-key editable-save round trip,
+/// but not queue/final-flag semantics. The separate Part X attachment stays a
+/// separate, fail-closed workflow and is never appended by this provider.
+pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
+    code: "1701",
+    revision: "2018",
+    form_id: "1701v2018",
+    title: "Annual Income Tax Return for Individuals, Estates and Trusts",
+    page_width_pt: RenderPageGeometry::LEGAL.width_points,
+    page_height_pt: RenderPageGeometry::LEGAL.height_points,
+    expected_base_page_count: 4,
+    schedules: &[],
+    visual_fixture_file_name: "1701-normal.json",
+    visual_fixture_sha256: "469be004c4f32ee8e27a4589731cedeb9b6dab61410be831ff0ff001f30dfe58",
+    official_source:
+        "https://bir-cdn.bir.gov.ph/local/pdf/1701%20Jan%202018%20final%20with%20rates.pdf",
+    official_source_sha256: "19be91d78258eb7c255f2615610db2739f10c378f8ac97adc0887c1bf40d1b2e",
+    reference_dpi: 144,
+    reference_width_px: 1_224,
+    reference_height_px: 1_872,
+    visual_reference_pages: VISUAL_REFERENCE_PAGES,
+    runtime_discrete_assets,
+    fixtures,
+    generated_artifacts,
+};
+
+fn runtime_discrete_assets() -> Vec<serde_json::Value> {
+    vec![
+        json!({
+            "asset": "government_seal",
+            "crop_box_px": [485, 30, 539, 87],
+            "derived_png_sha256": "eda4415f9587d26ff520f14e9796405d26f2479a271af33bde596a6a12f3a9ce",
+            "embedded_in": "packages/form-renderer/src/forms/assets/1701-seal.png",
+            "source_page": 1,
+            "treatment": "exact lossless crop from official 144 DPI source raster"
+        }),
+        json!({
+            "asset": "static_form_barcode_page_1",
+            "crop_box_px": [874, 95, 1199, 191],
+            "derived_png_sha256": "de40bf4ef293de4926073c6b96b5d16719f1ebf7c72d13f51862e51741739720",
+            "embedded_in": "packages/form-renderer/src/forms/assets/1701-barcode-page-1.png",
+            "source_page": 1,
+            "treatment": "exact lossless crop from official 144 DPI source raster"
+        }),
+        json!({
+            "asset": "static_form_barcode_page_2",
+            "crop_box_px": [870, 38, 1199, 132],
+            "derived_png_sha256": "fad49f7f9ef41a4ffb83384d44f3d5f6568ce4388aa59bd49540940fa62d2b61",
+            "embedded_in": "packages/form-renderer/src/forms/assets/1701-barcode-page-2.png",
+            "source_page": 2,
+            "treatment": "exact lossless crop from official 144 DPI source raster"
+        }),
+        json!({
+            "asset": "static_form_barcode_page_3",
+            "crop_box_px": [864, 38, 1199, 132],
+            "derived_png_sha256": "382bc418aab01a5236d02004706c3aa9fd41e10b9cd4b3f54fdba7edae034fc4",
+            "embedded_in": "packages/form-renderer/src/forms/assets/1701-barcode-page-3.png",
+            "source_page": 3,
+            "treatment": "exact lossless crop from official 144 DPI source raster"
+        }),
+        json!({
+            "asset": "static_form_barcode_page_4",
+            "crop_box_px": [868, 38, 1199, 132],
+            "derived_png_sha256": "705a9eba84e1b163588b161657e9ad9422213cc0a56ce5a5d80ab4055c4f61c2",
+            "embedded_in": "packages/form-renderer/src/forms/assets/1701-barcode-page-4.png",
+            "source_page": 4,
+            "treatment": "exact lossless crop from official 144 DPI source raster"
+        }),
+    ]
+}
+
+impl From<&Form1701Draft> for RenderEnvelopeV1 {
+    fn from(draft: &Form1701Draft) -> Self {
+        let mut envelope = Self::new(
+            RenderFormIdentity {
+                code: PROVIDER.code.to_string(),
+                version: PROVIDER.revision.to_string(),
+            },
+            RenderTaxpayer {
+                tin: draft.tin.clone(),
+                name: draft.taxpayer_name.clone(),
+                rdo_code: draft.rdo_code.clone(),
+                registered_address: draft.registered_address.clone(),
+                zip_code: draft.zip_code.clone(),
+                contact_number: draft.contact_number.clone(),
+                email: draft.email.clone(),
+            },
+            RenderPeriod {
+                taxable_year: draft.taxable_year,
+                month: Some(draft.period_end_month),
+                quarter: None,
+                label: format!("{:04}-{:02}", draft.taxable_year, draft.period_end_month),
+            },
+        );
+
+        insert_bool(&mut envelope, "is_amended", draft.is_amended);
+        insert_bool(&mut envelope, "is_short_period", draft.is_short_period);
+        insert_text(&mut envelope, "date_of_birth", &draft.date_of_birth);
+        insert_text(&mut envelope, "citizenship", &draft.citizenship);
+        insert_text(
+            &mut envelope,
+            "foreign_tax_number",
+            &draft.foreign_tax_number,
+        );
+        insert_optional_bool(
+            &mut envelope,
+            "claims_foreign_tax_credits",
+            draft.claims_foreign_tax_credits,
+        );
+        insert_optional_bool(&mut envelope, "has_exempt_income", draft.has_exempt_income);
+        insert_optional_bool(
+            &mut envelope,
+            "has_special_rate_income",
+            draft.has_special_rate_income,
+        );
+        insert_optional_bool(&mut envelope, "spouse_has_income", draft.spouse_has_income);
+        insert_optional_decimal(
+            &mut envelope,
+            "number_of_attachments",
+            draft.number_of_attachments.map(f64::from),
+        );
+        if let Some(value) = draft.taxpayer_type {
+            insert_text(&mut envelope, "taxpayer_type", taxpayer_type_key(value));
+        }
+        if let Some(value) = draft.atc {
+            insert_text(&mut envelope, "atc", value.code());
+        }
+        if let Some(value) = draft.civil_status {
+            insert_text(&mut envelope, "civil_status", civil_status_key(value));
+        }
+        if let Some(value) = draft.joint_filing_status {
+            insert_text(
+                &mut envelope,
+                "joint_filing_status",
+                match value {
+                    Form1701JointFilingStatus::Joint => "joint",
+                    Form1701JointFilingStatus::Separate => "separate",
+                },
+            );
+        }
+        insert_optional_tax_rate(&mut envelope, "tax_rate", draft.tax_rate);
+        insert_optional_deduction(&mut envelope, "deduction_method", draft.deduction_method);
+        insert_text(
+            &mut envelope,
+            "overpayment_disposition",
+            match draft.overpayment_disposition {
+                Form1701OverpaymentDisposition::None => "none",
+                Form1701OverpaymentDisposition::Refund => "refund",
+                Form1701OverpaymentDisposition::TaxCreditCertificate => "tax_credit_certificate",
+                Form1701OverpaymentDisposition::CarryOver => "carry_over",
+            },
+        );
+
+        insert_bool(&mut envelope, "spouse_enabled", draft.spouse.enabled);
+        insert_text(&mut envelope, "spouse_tin", &draft.spouse.tin);
+        insert_text(&mut envelope, "spouse_rdo_code", &draft.spouse.rdo_code);
+        insert_text(&mut envelope, "spouse_name", &draft.spouse.name);
+        insert_text(
+            &mut envelope,
+            "spouse_contact_number",
+            &draft.spouse.contact_number,
+        );
+        insert_text(
+            &mut envelope,
+            "spouse_citizenship",
+            &draft.spouse.citizenship,
+        );
+        insert_text(
+            &mut envelope,
+            "spouse_foreign_tax_number",
+            &draft.spouse.foreign_tax_number,
+        );
+        insert_optional_bool(
+            &mut envelope,
+            "spouse_claims_foreign_tax_credits",
+            draft.spouse.claims_foreign_tax_credits,
+        );
+        insert_optional_bool(
+            &mut envelope,
+            "spouse_has_exempt_income",
+            draft.spouse.has_exempt_income,
+        );
+        insert_optional_bool(
+            &mut envelope,
+            "spouse_has_special_rate_income",
+            draft.spouse.has_special_rate_income,
+        );
+        if let Some(value) = draft.spouse.filer_type {
+            insert_text(&mut envelope, "spouse_type", spouse_type_key(value));
+        }
+        if let Some(value) = draft.spouse.atc {
+            insert_text(&mut envelope, "spouse_atc", value.code());
+        }
+        insert_optional_tax_rate(&mut envelope, "spouse_tax_rate", draft.spouse.tax_rate);
+        insert_optional_deduction(
+            &mut envelope,
+            "spouse_deduction_method",
+            draft.spouse.deduction_method,
+        );
+
+        for (index, row) in draft.employers.iter().enumerate() {
+            insert_employer(&mut envelope, index + 1, row);
+        }
+        for (section, table) in [
+            ("part_ii", &draft.computations.part_ii),
+            ("schedule_2", &draft.computations.schedule_2),
+            ("schedule_3", &draft.computations.schedule_3),
+            ("schedule_4", &draft.computations.schedule_4),
+            ("schedule_6", &draft.computations.schedule_6_summary),
+            ("part_vi", &draft.computations.part_vi),
+            ("part_vii", &draft.computations.part_vii),
+            ("part_viii", &draft.computations.part_viii),
+            ("part_ix", &draft.computations.part_ix),
+        ] {
+            for (item, pair) in table {
+                insert_optional_decimal(
+                    &mut envelope,
+                    &format!("{section}_{item}_taxpayer"),
+                    pair.taxpayer,
+                );
+                insert_optional_decimal(
+                    &mut envelope,
+                    &format!("{section}_{item}_spouse"),
+                    pair.spouse,
+                );
+            }
+        }
+        insert_optional_decimal(
+            &mut envelope,
+            "part_ii_32_aggregate",
+            draft.computations.part_ii_item_32_aggregate,
+        );
+        for (index, pair) in draft.computations.schedule_4_item_17.iter().enumerate() {
+            let suffix = char::from(b'a' + index as u8);
+            insert_optional_decimal(
+                &mut envelope,
+                &format!("schedule_4_17{suffix}_taxpayer"),
+                pair.taxpayer,
+            );
+            insert_optional_decimal(
+                &mut envelope,
+                &format!("schedule_4_17{suffix}_spouse"),
+                pair.spouse,
+            );
+        }
+        insert_text(
+            &mut envelope,
+            "schedule_4_17d_description",
+            &draft.computations.schedule_4_item_17d_description,
+        );
+        for (party, rows) in [
+            ("taxpayer", &draft.computations.schedule_5_taxpayer),
+            ("spouse", &draft.computations.schedule_5_spouse),
+        ] {
+            for (index, row) in rows.iter().enumerate() {
+                let key = format!("schedule_5_{party}_{}", index + 1);
+                insert_text(
+                    &mut envelope,
+                    &format!("{key}_description"),
+                    &row.description,
+                );
+                insert_text(
+                    &mut envelope,
+                    &format!("{key}_legal_basis"),
+                    &row.legal_basis,
+                );
+                insert_optional_decimal(&mut envelope, &format!("{key}_amount"), row.amount);
+            }
+        }
+        insert_optional_decimal(
+            &mut envelope,
+            "schedule_5_total_taxpayer",
+            draft.computations.schedule_5_total_taxpayer,
+        );
+        insert_optional_decimal(
+            &mut envelope,
+            "schedule_5_total_spouse",
+            draft.computations.schedule_5_total_spouse,
+        );
+        for (party, rows) in [
+            ("taxpayer", &draft.computations.schedule_6_taxpayer_nolco),
+            ("spouse", &draft.computations.schedule_6_spouse_nolco),
+        ] {
+            for (index, row) in rows.iter().enumerate() {
+                let key = format!("schedule_6_{party}_{}", index + 1);
+                insert_text(&mut envelope, &format!("{key}_year"), &row.year_incurred);
+                insert_optional_decimal(&mut envelope, &format!("{key}_amount"), row.amount);
+                insert_optional_decimal(
+                    &mut envelope,
+                    &format!("{key}_previous"),
+                    row.applied_previous_years,
+                );
+                insert_optional_decimal(&mut envelope, &format!("{key}_expired"), row.expired);
+                insert_optional_decimal(
+                    &mut envelope,
+                    &format!("{key}_current"),
+                    row.applied_current_year,
+                );
+                insert_optional_decimal(&mut envelope, &format!("{key}_unapplied"), row.unapplied);
+            }
+        }
+        insert_optional_decimal(
+            &mut envelope,
+            "schedule_6_total_taxpayer",
+            draft.computations.schedule_6_total_taxpayer,
+        );
+        insert_optional_decimal(
+            &mut envelope,
+            "schedule_6_total_spouse",
+            draft.computations.schedule_6_total_spouse,
+        );
+        for (item, description) in &draft.computations.schedule_3_descriptions {
+            insert_text(
+                &mut envelope,
+                &format!("schedule_3_{item}_description"),
+                description,
+            );
+        }
+        insert_text(
+            &mut envelope,
+            "part_vii_9_description",
+            &draft.computations.part_vii_item_9_description,
+        );
+        for (item, description) in &draft.computations.part_ix_descriptions {
+            insert_text(
+                &mut envelope,
+                &format!("part_ix_{item}_description"),
+                description,
+            );
+        }
+
+        insert_payment_row(
+            &mut envelope,
+            "payment_34",
+            &draft.payment_details.item_34_cash_or_bank_debit_memo,
+        );
+        insert_payment_row(
+            &mut envelope,
+            "payment_35",
+            &draft.payment_details.item_35_check,
+        );
+        insert_payment_row(
+            &mut envelope,
+            "payment_36",
+            &draft.payment_details.item_36_tax_debit_memo,
+        );
+        insert_payment_row(
+            &mut envelope,
+            "payment_37",
+            &draft.payment_details.item_37_others,
+        );
+        insert_text(
+            &mut envelope,
+            "payment_37_description",
+            &draft.payment_details.item_37_others_description,
+        );
+        insert_text(
+            &mut envelope,
+            "machine_validation_or_receipt_details",
+            &draft.machine_validation_or_receipt_details,
+        );
+
+        envelope.validation = draft
+            .validate()
+            .into_iter()
+            .map(|(field_path, message)| RenderValidationMessage {
+                field_path,
+                code: "invalid".to_string(),
+                message,
+                severity: RenderValidationSeverity::Error,
+                rule_version: "1701-2018-domain-v1".to_string(),
+            })
+            .collect();
+        envelope
+    }
+}
+
+fn insert_text(envelope: &mut RenderEnvelopeV1, key: &str, value: impl Into<String>) {
+    envelope
+        .fields
+        .insert(key.to_string(), RenderValue::Text(value.into()));
+}
+
+fn insert_bool(envelope: &mut RenderEnvelopeV1, key: &str, value: bool) {
+    envelope
+        .fields
+        .insert(key.to_string(), RenderValue::Boolean(value));
+}
+
+fn insert_optional_bool(envelope: &mut RenderEnvelopeV1, key: &str, value: Option<bool>) {
+    if let Some(value) = value {
+        insert_bool(envelope, key, value);
+    }
+}
+
+fn insert_decimal(envelope: &mut RenderEnvelopeV1, key: &str, value: f64) {
+    envelope
+        .fields
+        .insert(key.to_string(), RenderValue::Decimal(value));
+}
+
+fn insert_optional_decimal(envelope: &mut RenderEnvelopeV1, key: &str, value: Option<f64>) {
+    if let Some(value) = value {
+        insert_decimal(envelope, key, value);
+    }
+}
+
+fn insert_optional_tax_rate(
+    envelope: &mut RenderEnvelopeV1,
+    key: &str,
+    value: Option<Form1701TaxRate>,
+) {
+    if let Some(value) = value {
+        insert_text(
+            envelope,
+            key,
+            match value {
+                Form1701TaxRate::Graduated => "graduated",
+                Form1701TaxRate::EightPercent => "eight_percent",
+            },
+        );
+    }
+}
+
+fn insert_optional_deduction(
+    envelope: &mut RenderEnvelopeV1,
+    key: &str,
+    value: Option<Form1701DeductionMethod>,
+) {
+    if let Some(value) = value {
+        insert_text(
+            envelope,
+            key,
+            match value {
+                Form1701DeductionMethod::Itemized => "itemized",
+                Form1701DeductionMethod::Osd => "osd",
+            },
+        );
+    }
+}
+
+const fn taxpayer_type_key(value: Form1701TaxpayerType) -> &'static str {
+    match value {
+        Form1701TaxpayerType::SingleProprietor => "single_proprietor",
+        Form1701TaxpayerType::Professional => "professional",
+        Form1701TaxpayerType::Estate => "estate",
+        Form1701TaxpayerType::Trust => "trust",
+        Form1701TaxpayerType::CompensationEarner => "compensation_earner",
+    }
+}
+
+const fn spouse_type_key(value: Form1701SpouseType) -> &'static str {
+    match value {
+        Form1701SpouseType::SingleProprietor => "single_proprietor",
+        Form1701SpouseType::Professional => "professional",
+        Form1701SpouseType::CompensationEarner => "compensation_earner",
+    }
+}
+
+const fn civil_status_key(value: Form1701CivilStatus) -> &'static str {
+    match value {
+        Form1701CivilStatus::Single => "single",
+        Form1701CivilStatus::Married => "married",
+        Form1701CivilStatus::LegallySeparated => "legally_separated",
+        Form1701CivilStatus::Widowed => "widowed",
+    }
+}
+
+fn insert_employer(envelope: &mut RenderEnvelopeV1, index: usize, row: &Form1701EmployerRow) {
+    if let Some(owner) = row.owner {
+        insert_text(
+            envelope,
+            &format!("employer_{index}_owner"),
+            match owner {
+                Form1701Party::Taxpayer => "taxpayer",
+                Form1701Party::Spouse => "spouse",
+            },
+        );
+    }
+    insert_text(
+        envelope,
+        &format!("employer_{index}_name"),
+        &row.employer_name,
+    );
+    insert_text(
+        envelope,
+        &format!("employer_{index}_tin"),
+        &row.employer_tin,
+    );
+    insert_optional_decimal(
+        envelope,
+        &format!("employer_{index}_compensation"),
+        row.compensation_income,
+    );
+    insert_optional_decimal(
+        envelope,
+        &format!("employer_{index}_withheld"),
+        row.tax_withheld,
+    );
+}
+
+fn insert_payment_row(envelope: &mut RenderEnvelopeV1, key: &str, row: &Form1701PaymentRow) {
+    insert_text(envelope, &format!("{key}_bank"), &row.drawee_bank_or_agency);
+    insert_text(envelope, &format!("{key}_number"), &row.number);
+    insert_text(envelope, &format!("{key}_date"), &row.date);
+    insert_optional_decimal(envelope, &format!("{key}_amount"), row.amount);
+}
+
+fn fixtures() -> Result<Vec<RenderContractFixture>, RenderProviderError> {
+    Ok(vec![
+        fixture(
+            "1701-minimum.json",
+            RenderFixtureKind::Minimum,
+            true,
+            minimum_fixture(),
+        ),
+        fixture(
+            "1701-normal.json",
+            RenderFixtureKind::Normal,
+            true,
+            normal_fixture(),
+        ),
+        fixture(
+            "1701-long-values.json",
+            RenderFixtureKind::LongValues,
+            true,
+            long_values_fixture(),
+        ),
+        fixture(
+            "1701-validation-edge.json",
+            RenderFixtureKind::ValidationEdge,
+            false,
+            validation_edge_fixture(),
+        ),
+        fixture(
+            "1701-fixed-capacity.json",
+            RenderFixtureKind::ScheduleCapacity,
+            true,
+            fixed_capacity_fixture(),
+        ),
+    ])
+}
+
+fn fixture(
+    file_name: &'static str,
+    kind: RenderFixtureKind,
+    expected_form_valid: bool,
+    draft: Form1701Draft,
+) -> RenderContractFixture {
+    RenderContractFixture {
+        file_name,
+        kind,
+        expected_form_valid,
+        envelope: RenderEnvelopeV1::from(&draft),
+    }
+}
+
+fn base_fixture() -> Form1701Draft {
+    let mut draft = Form1701Draft {
+        tin: "12345678900000".to_string(),
+        taxable_year: 2026,
+        period_end_month: 12,
+        rdo_code: "018".to_string(),
+        taxpayer_type: Some(Form1701TaxpayerType::SingleProprietor),
+        atc: Some(Form1701Atc::Ii012),
+        taxpayer_name: "JUAN MIGUEL DELA CRUZ".to_string(),
+        registered_address: "53 SANTOL EXTENSION, NEW CABALAN, OLONGAPO CITY".to_string(),
+        zip_code: "2200".to_string(),
+        date_of_birth: "01/15/1990".to_string(),
+        email: "renderer.1701@example.com".to_string(),
+        citizenship: "FILIPINO".to_string(),
+        claims_foreign_tax_credits: Some(false),
+        contact_number: "09123456789".to_string(),
+        civil_status: Some(Form1701CivilStatus::Single),
+        has_exempt_income: Some(false),
+        has_special_rate_income: Some(false),
+        tax_rate: Some(Form1701TaxRate::Graduated),
+        deduction_method: Some(Form1701DeductionMethod::Osd),
+        number_of_attachments: Some(0),
+        status: bir_core::forms::FilingStatus::Draft,
+        ..Default::default()
+    };
+    draft.set_amount(
+        Form1701AmountSection::Schedule3,
+        8,
+        Form1701Party::Taxpayer,
+        Some(750_000.0),
+    );
+    draft.recompute();
+    draft
+}
+
+fn minimum_fixture() -> Form1701Draft {
+    base_fixture()
+}
+
+fn normal_fixture() -> Form1701Draft {
+    let mut draft = base_fixture();
+    draft.civil_status = Some(Form1701CivilStatus::Married);
+    draft.spouse_has_income = Some(true);
+    draft.joint_filing_status = Some(Form1701JointFilingStatus::Joint);
+    draft.spouse.enabled = true;
+    draft.spouse.tin = "98765432100000".to_string();
+    draft.spouse.rdo_code = "018".to_string();
+    draft.spouse.filer_type = Some(Form1701SpouseType::Professional);
+    draft.spouse.atc = Some(Form1701Atc::Ii014);
+    draft.spouse.name = "MARIA CONSOLACION DELA CRUZ".to_string();
+    draft.spouse.contact_number = "09171234567".to_string();
+    draft.spouse.citizenship = "FILIPINO".to_string();
+    draft.spouse.claims_foreign_tax_credits = Some(false);
+    draft.spouse.has_exempt_income = Some(false);
+    draft.spouse.has_special_rate_income = Some(false);
+    draft.spouse.tax_rate = Some(Form1701TaxRate::Graduated);
+    draft.spouse.deduction_method = Some(Form1701DeductionMethod::Itemized);
+    draft.employers[0] = Form1701EmployerRow {
+        owner: Some(Form1701Party::Taxpayer),
+        employer_name: "GOLDCODERS CORPORATION".to_string(),
+        employer_tin: "00000000000000".to_string(),
+        compensation_income: Some(480_000.0),
+        tax_withheld: Some(21_000.0),
+    };
+    draft.employers[1] = Form1701EmployerRow {
+        owner: Some(Form1701Party::Spouse),
+        employer_name: "REVIEWED PROFESSIONAL PARTNERSHIP".to_string(),
+        employer_tin: "11122233300000".to_string(),
+        compensation_income: Some(320_000.0),
+        tax_withheld: Some(12_000.0),
+    };
+    draft.set_amount(
+        Form1701AmountSection::Schedule3,
+        8,
+        Form1701Party::Spouse,
+        Some(420_000.0),
+    );
+    draft.set_amount(
+        Form1701AmountSection::Schedule3,
+        13,
+        Form1701Party::Spouse,
+        Some(75_000.0),
+    );
+    draft
+        .computations
+        .schedule_3_descriptions
+        .insert(19, "ROYALTY INCOME NOT SUBJECT TO FINAL TAX".to_string());
+    draft.set_amount(
+        Form1701AmountSection::Schedule3,
+        19,
+        Form1701Party::Taxpayer,
+        Some(15_000.0),
+    );
+    draft.recompute();
+    draft
+}
+
+fn long_values_fixture() -> Form1701Draft {
+    let mut draft = normal_fixture();
+    draft.taxpayer_name = "JUAN MIGUEL ALEJANDRO REYES DELA CRUZ-SANTOS WITH A VALID REGISTERED NAME LONGER THAN THE OFFICIAL COMB".to_string();
+    draft.registered_address = "UNIT 1201, A DELIBERATELY LONG REGISTERED ADDRESS USED TO PROVE THE ANNUAL RETURN PRESERVES EVERY VALID CHARACTER, NEW CABALAN, OLONGAPO CITY".to_string();
+    draft.email = "long.annual.income.tax.renderer.verification.address@example.test".to_string();
+    draft.spouse.name = "MARIA CONSOLACION REYES DELA CRUZ-SANTOS WITH A VALID REGISTERED NAME LONGER THAN THE OFFICIAL COMB".to_string();
+    draft.employers[0].employer_name =
+        "AUTHORIZED EMPLOYER WITH A DELIBERATELY LONG REGISTERED LEGAL NAME".to_string();
+    draft.computations.schedule_3_descriptions.insert(
+        20,
+        "A VALID NON-OPERATING INCOME DESCRIPTION LONGER THAN THE OFFICIAL COMB CAPACITY"
+            .to_string(),
+    );
+    draft.recompute();
+    draft
+}
+
+fn fixed_capacity_fixture() -> Form1701Draft {
+    let mut draft = normal_fixture();
+    for (index, row) in draft
+        .computations
+        .schedule_5_taxpayer
+        .iter_mut()
+        .enumerate()
+    {
+        row.description = format!("SPECIAL TAXPAYER DEDUCTION {}", index + 1);
+        row.legal_basis = format!("REVIEWED LEGAL BASIS {}", index + 1);
+        row.amount = Some((index as f64 + 1.0) * 10_000.0);
+    }
+    for (index, row) in draft.computations.schedule_5_spouse.iter_mut().enumerate() {
+        row.description = format!("SPECIAL SPOUSE DEDUCTION {}", index + 1);
+        row.legal_basis = format!("REVIEWED LEGAL BASIS {}", index + 3);
+        row.amount = Some((index as f64 + 1.0) * 5_000.0);
+    }
+    for (party_index, rows) in [
+        &mut draft.computations.schedule_6_taxpayer_nolco,
+        &mut draft.computations.schedule_6_spouse_nolco,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        for (index, row) in rows.iter_mut().enumerate() {
+            row.year_incurred = (2021 + index).to_string();
+            row.amount = Some((party_index as f64 + 1.0) * (index as f64 + 1.0) * 20_000.0);
+            row.applied_previous_years = Some(1_000.0);
+            row.expired = Some(0.0);
+            row.applied_current_year = Some(2_000.0);
+        }
+    }
+    draft.recompute();
+    draft
+}
+
+fn validation_edge_fixture() -> Form1701Draft {
+    Form1701Draft {
+        taxable_year: 2018,
+        period_end_month: 12,
+        status: bir_core::forms::FilingStatus::Draft,
+        ..Default::default()
+    }
+}
+
+fn generated_artifacts() -> Result<Vec<GeneratedContractArtifact>, RenderProviderError> {
+    Ok(Vec::new())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn adapter_maps_rust_owned_identity_calculations_and_fixed_rows() {
+        let draft = normal_fixture();
+        let envelope = RenderEnvelopeV1::from(&draft);
+        assert_eq!(envelope.form.code, "1701");
+        assert_eq!(envelope.form.version, "2018");
+        assert_eq!(envelope.period.month, Some(12));
+        assert_eq!(
+            envelope.fields["schedule_3_8_taxpayer"],
+            RenderValue::Decimal(750_000.0)
+        );
+        assert_eq!(
+            envelope.fields["employer_1_name"],
+            RenderValue::Text("GOLDCODERS CORPORATION".to_string())
+        );
+        assert!(envelope.schedules.is_empty());
+    }
+
+    #[test]
+    fn fixtures_cover_four_page_layout_and_validation_states() {
+        let fixtures = fixtures().expect("fixtures");
+        for required in [
+            RenderFixtureKind::Minimum,
+            RenderFixtureKind::Normal,
+            RenderFixtureKind::LongValues,
+            RenderFixtureKind::ValidationEdge,
+            RenderFixtureKind::ScheduleCapacity,
+        ] {
+            assert!(fixtures.iter().any(|fixture| fixture.kind == required));
+        }
+        for fixture in &fixtures {
+            assert_eq!(PROVIDER.expected_page_count(&fixture.envelope).unwrap(), 4);
+            assert_eq!(
+                fixture.expected_form_valid,
+                fixture.envelope.validation.is_empty(),
+                "{}: {:?}",
+                fixture.file_name,
+                fixture.envelope.validation
+            );
+        }
+    }
+}

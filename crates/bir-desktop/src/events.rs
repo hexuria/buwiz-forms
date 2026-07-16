@@ -13,6 +13,13 @@ use std::sync::{Arc, Mutex};
 pub enum AppEvent {
     /// Fired when a different process (like bir_daemon) modifies the SQLite database.
     DatabaseChanged,
+    /// Fired only after a taxpayer profile and its reconciled Forms Sets have
+    /// committed successfully. Open form views use this targeted event to
+    /// refresh editable drafts without rewriting filed snapshots.
+    ProfileComplianceChanged {
+        tin: String,
+        affected_years: Vec<u16>,
+    },
 }
 
 pub struct EventBus {}

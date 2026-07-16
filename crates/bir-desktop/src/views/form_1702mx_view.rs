@@ -1,18 +1,23 @@
-//! BIR Form 1702MX — Full in-app form view.
+//! Exact-revision local editor for BIR Form 1702-MX, January 2018 (ENCS).
 //!
-//! Annual Income Tax Return for Corporations with Mixed Income.
-//! 3-column (Regular/Special/Total) income computation.
-#![allow(dead_code)]
+//! The view edits checked source fields and reparses the exact 210-key XML
+//! contract. It never queues or submits this form: encrypted transport and the
+//! separate two-page mandatory attachment have not been reviewed.
 
+use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex};
+
+use bir_core::db::Database;
+use bir_core::forms::form_1702mx::{
+    Form1702MXDeductionMethod, Form1702MXDraft, Form1702MXOverpaymentDisposition,
+    QUEUE_SUBMISSION_SUPPORTED,
+};
+use bir_core::forms::{FilingStatus, FormValidator};
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::button::ButtonVariants;
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
-use std::sync::{Arc, Mutex};
-
-use bir_core::db::Database;
-use bir_core::forms::FilingStatus;
-use bir_core::forms::form_1702mx::Form1702MXDraft;
 
 use crate::components::form_engine::FormViewTrait;
 
@@ -23,23 +28,116 @@ pub enum Form1702MXEvent {
     Confirmed,
     PushNotification(String, String, String),
 }
+
 impl EventEmitter<Form1702MXEvent> for Form1702MXView {}
+
+const PART_IV_INPUTS: &[(&str, &str)] = &[
+    (
+        "frm1702MX:txtPg2Pt4I34SpecialTaxRate",
+        "Reviewed special/preferential rate (%)",
+    ),
+    (
+        "frm1702MX:txtPg2Sc2It14B",
+        "Schedule 2 Item 14B — Special rate (%)",
+    ),
+    (
+        "frm1702MX:txtPg2Sc2It14C",
+        "Schedule 2 Item 14C — Regular rate (%)",
+    ),
+    (
+        "frm1702MX:txtPg2Sc3It30",
+        "Schedule 3 Item 30 — Other credit description",
+    ),
+    (
+        "frm1702MX:txtPg2Sc3It31",
+        "Schedule 3 Item 31 — Other credit description",
+    ),
+    (
+        "frm1702MX:txtPg2Pt4I31CA",
+        "Schedule 3 Item 31A — Exempt column",
+    ),
+    (
+        "frm1702MX:txtPg2Pt4I31CB",
+        "Schedule 3 Item 31B — Special column",
+    ),
+    (
+        "frm1702MX:txtPg2Pt4I31CC",
+        "Schedule 3 Item 31C — Regular column",
+    ),
+];
+
+const PENALTY_INPUTS: &[(&str, &str)] = &[
+    ("frm1702MX:txtPg1Pt2I17", "Item 17 — Surcharge"),
+    ("frm1702MX:txtPg1Pt2I18", "Item 18 — Interest"),
+    ("frm1702MX:txtPg1Pt2I19", "Item 19 — Compromise"),
+];
+
+const SCHEDULE_TEXT_INPUTS: &[(&str, &str)] = &[
+    (
+        "frm1702MX:txtPg3Sc5It17d",
+        "Schedule 5 Item 17d — Other deduction",
+    ),
+    (
+        "frm1702MX:txtPg3Sc5It17e",
+        "Schedule 5 Item 17e — Other deduction",
+    ),
+    (
+        "frm1702MX:txtPg3Sc5It17f",
+        "Schedule 5 Item 17f — Other deduction",
+    ),
+    (
+        "frm1702MX:txtPg3Sc5It17g",
+        "Schedule 5 Item 17g — Other deduction",
+    ),
+    (
+        "frm1702MX:txtPg3Sc5It17h",
+        "Schedule 5 Item 17h — Other deduction",
+    ),
+    (
+        "frm1702MX:txtPg3Sc5It17i",
+        "Schedule 5 Item 17i — Other deduction",
+    ),
+    (
+        "frm1702MX:txtPg6Sc6I1description",
+        "Schedule 6 Row 1 — Description",
+    ),
+    (
+        "frm1702MX:txtPg6Sc6I1legal",
+        "Schedule 6 Row 1 — Legal basis",
+    ),
+    (
+        "frm1702MX:txtPg6Sc6I2description",
+        "Schedule 6 Row 2 — Description",
+    ),
+    (
+        "frm1702MX:txtPg6Sc6I2legal",
+        "Schedule 6 Row 2 — Legal basis",
+    ),
+    (
+        "frm1702MX:txtPg6Sc6I3description",
+        "Schedule 6 Row 3 — Description",
+    ),
+    (
+        "frm1702MX:txtPg6Sc6I3legal",
+        "Schedule 6 Row 3 — Legal basis",
+    ),
+    (
+        "frm1702MX:txtPg3Sc6I4description",
+        "Schedule 6 Row 4 — Description",
+    ),
+    (
+        "frm1702MX:txtPg3Sc6I4legal",
+        "Schedule 6 Row 4 — Legal basis",
+    ),
+];
 
 pub struct Form1702MXView {
     draft: Form1702MXDraft,
     db: Arc<Mutex<Database>>,
     scroll_handle: ScrollHandle,
-    is_validated: bool,
+    inputs: BTreeMap<&'static str, Entity<InputState>>,
     validation_errors: Vec<(String, String)>,
-    // 3-column inputs: CA (Regular), CB (Special)
-    sales_ca: Entity<InputState>,
-    sales_cb: Entity<InputState>,
-    cost_ca: Entity<InputState>,
-    cost_cb: Entity<InputState>,
-    // Penalties
-    surcharge: Entity<InputState>,
-    interest: Entity<InputState>,
-    compromise: Entity<InputState>,
+    parse_errors: Vec<(String, String)>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -50,154 +148,195 @@ impl Form1702MXView {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Self {
-        let mut subs = Vec::new();
-        let ci = |cx: &mut Context<Self>, val: &str, window: &mut Window| {
-            let input = cx.new(|cx| InputState::new(window, cx).placeholder("0"));
-            if !val.is_empty() {
-                input.update(cx, |i, cx| i.set_value(val.to_string(), window, cx));
+        let field_map = draft.to_bir_field_map();
+        let mut inputs = BTreeMap::new();
+        let mut subscriptions = Vec::new();
+        for (key, _) in PART_IV_INPUTS
+            .iter()
+            .chain(PENALTY_INPUTS.iter())
+            .chain(SCHEDULE_TEXT_INPUTS.iter())
+        {
+            let input = cx.new(|cx| InputState::new(window, cx));
+            if let Some(value) = field_map.get(*key) {
+                input.update(cx, |state, cx| state.set_value(value.clone(), window, cx));
             }
-            input
-        };
-        let sales_ca = ci(cx, &draft.txt_pg2pt4i31ca, window);
-        let sales_cb = ci(cx, &draft.txt_pg2pt4i31cb, window);
-        let cost_ca = ci(cx, &draft.txt_pg2pt4i32ca, window);
-        let cost_cb = ci(cx, &draft.txt_pg2pt4i32cb, window);
-        let surcharge = ci(cx, &draft.txt_pg1pt2i17.to_string(), window);
-        let interest = ci(cx, &draft.txt_pg1pt2i18.to_string(), window);
-        let compromise = ci(cx, &draft.txt_pg1pt2i19.to_string(), window);
-
-        let inputs = vec![
-            sales_ca.clone(),
-            sales_cb.clone(),
-            cost_ca.clone(),
-            cost_cb.clone(),
-            surcharge.clone(),
-            interest.clone(),
-            compromise.clone(),
-        ];
-        for input in inputs {
-            subs.push(cx.subscribe_in(
+            subscriptions.push(cx.subscribe_in(
                 &input,
                 window,
                 |this: &mut Self, _, event: &InputEvent, _, cx| {
-                    if let InputEvent::Change = event {
-                        this.is_validated = false;
+                    if matches!(event, InputEvent::Change) {
                         this.sync_from_inputs(cx);
                     }
                 },
             ));
+            inputs.insert(*key, input);
         }
+        let validation_errors = draft.validate();
         Self {
             draft,
             db,
             scroll_handle: ScrollHandle::new(),
-            is_validated: false,
-            validation_errors: Vec::new(),
-            sales_ca,
-            sales_cb,
-            cost_ca,
-            cost_cb,
-            surcharge,
-            interest,
-            compromise,
-            _subscriptions: subs,
+            inputs,
+            validation_errors,
+            parse_errors: Vec::new(),
+            _subscriptions: subscriptions,
         }
     }
 
     fn sync_from_inputs(&mut self, cx: &mut Context<Self>) {
-        let gv =
-            |input: &Entity<InputState>, cx: &Context<Self>| input.read(cx).value().to_string();
-        let gu = |input: &Entity<InputState>, cx: &Context<Self>| {
-            input.read(cx).value().parse::<u32>().unwrap_or(0)
-        };
-        self.draft.txt_pg2pt4i31ca = gv(&self.sales_ca, cx);
-        self.draft.txt_pg2pt4i31cb = gv(&self.sales_cb, cx);
-        self.draft.txt_pg2pt4i32ca = gv(&self.cost_ca, cx);
-        self.draft.txt_pg2pt4i32cb = gv(&self.cost_cb, cx);
-        self.draft.txt_pg1pt2i17 = gu(&self.surcharge, cx);
-        self.draft.txt_pg1pt2i18 = gu(&self.interest, cx);
-        self.draft.txt_pg1pt2i19 = gu(&self.compromise, cx);
+        let mut fields = self.draft.to_bir_field_map();
+        for (key, input) in &self.inputs {
+            fields.insert((*key).to_string(), input.read(cx).value().to_string());
+        }
+        match Form1702MXDraft::from_bir_field_map(&fields) {
+            Ok(mut parsed) => {
+                parsed.id = self.draft.id;
+                parsed.status = self.draft.status.clone();
+                parsed.created_at = self.draft.created_at.clone();
+                parsed.submitted_at = self.draft.submitted_at.clone();
+                parsed.confirmed_at = self.draft.confirmed_at.clone();
+                parsed.submission_filename = self.draft.submission_filename.clone();
+                parsed.receipt_id = self.draft.receipt_id;
+                parsed.submission_attempts = self.draft.submission_attempts;
+                parsed.next_retry_at = self.draft.next_retry_at.clone();
+                parsed.last_error = self.draft.last_error.clone();
+                parsed.schedule_2.items = self.draft.schedule_2.items.clone();
+                parsed.schedule_3.items_20_to_33[..11]
+                    .clone_from_slice(&self.draft.schedule_3.items_20_to_33[..11]);
+                parsed.schedule_4 = self.draft.schedule_4.clone();
+                parsed.schedule_5.amounts = self.draft.schedule_5.amounts.clone();
+                parsed.schedule_6.item_5_total = self.draft.schedule_6.item_5_total.clone();
+                for (target, source) in parsed
+                    .schedule_6
+                    .rows
+                    .iter_mut()
+                    .zip(self.draft.schedule_6.rows.iter())
+                {
+                    target.amounts = source.amounts.clone();
+                }
+                parsed.regular_nolco = self.draft.regular_nolco.clone();
+                parsed.special_nolco = self.draft.special_nolco.clone();
+                parsed
+                    .schedule_9
+                    .rows
+                    .iter_mut()
+                    .zip(self.draft.schedule_9.rows.iter())
+                    .for_each(|(target, source)| {
+                        target.normal_income_tax = source.normal_income_tax.clone();
+                        target.mcit = source.mcit.clone();
+                        target.excess_mcit = source.excess_mcit.clone();
+                        target.applied_previous_years = source.applied_previous_years.clone();
+                        target.expired = source.expired.clone();
+                        target.applied_current_year = source.applied_current_year.clone();
+                        target.balance = source.balance.clone();
+                    });
+                parsed.schedule_10.items = self.draft.schedule_10.items.clone();
+                parsed.recompute();
+                self.validation_errors = parsed.validate();
+                self.parse_errors.clear();
+                self.draft = parsed;
+            }
+            Err(errors) => self.parse_errors = errors,
+        }
+        cx.notify();
+    }
+
+    fn set_deduction_method(&mut self, method: Form1702MXDeductionMethod, cx: &mut Context<Self>) {
+        self.draft.deduction_method = method;
         self.draft.recompute();
-        use bir_core::forms::FormValidator;
         self.validation_errors = self.draft.validate();
         cx.notify();
     }
 
-    fn render_input_row(
-        &self,
-        label: &str,
-        input: &Entity<InputState>,
-        _cx: &Context<Self>,
-    ) -> impl IntoElement {
-        let disabled = !matches!(self.draft.status, FilingStatus::Draft);
+    fn set_relief_instruction(&mut self, multiple: bool, cx: &mut Context<Self>) {
+        self.draft.relief_basis.instruction_single_activity = !multiple;
+        self.draft.relief_basis.instruction_multiple_activities = multiple;
+        self.validation_errors = self.draft.validate();
+        cx.notify();
+    }
+
+    fn set_overpayment_disposition(
+        &mut self,
+        disposition: Form1702MXOverpaymentDisposition,
+        cx: &mut Context<Self>,
+    ) {
+        self.draft.part_ii.overpayment_disposition = Some(disposition);
+        self.validation_errors = self.draft.validate();
+        cx.notify();
+    }
+
+    fn render_input_row(&self, key: &'static str, label: &'static str) -> AnyElement {
+        let input = self
+            .inputs
+            .get(key)
+            .expect("1702MX editor input registry is complete");
         div()
             .flex()
-            .justify_between()
             .items_center()
+            .justify_between()
             .gap_4()
             .child(
                 div()
                     .w_1_2()
                     .text_sm()
                     .font_weight(FontWeight::MEDIUM)
-                    .child(label.to_string()),
+                    .child(label),
             )
-            .child(div().w_1_2().child(Input::new(input).disabled(disabled)))
+            .child(
+                div()
+                    .w_1_2()
+                    .child(Input::new(input).disabled(!self.draft.is_editable())),
+            )
+            .into_any_element()
     }
+
     fn render_computed_row(
         &self,
-        label: &str,
-        value: &str,
+        label: impl Into<SharedString>,
+        value: impl Into<SharedString>,
         cx: &Context<Self>,
-    ) -> impl IntoElement {
+    ) -> AnyElement {
         div()
             .flex()
-            .justify_between()
             .items_center()
+            .justify_between()
             .gap_4()
             .p_2()
             .bg(cx.theme().muted.opacity(0.5))
             .rounded_md()
             .child(
                 div()
-                    .w_1_2()
                     .text_sm()
-                    .font_weight(FontWeight::BOLD)
-                    .child(label.to_string()),
+                    .font_weight(FontWeight::MEDIUM)
+                    .child(label.into()),
             )
             .child(
                 div()
-                    .w_1_2()
                     .text_right()
                     .font_weight(FontWeight::BOLD)
-                    .child(if value.is_empty() {
-                        "0".to_string()
-                    } else {
-                        value.to_string()
-                    }),
+                    .child(value.into()),
             )
+            .into_any_element()
     }
+
     fn render_section(
         &self,
-        title: &str,
+        title: &'static str,
         children: Vec<AnyElement>,
         cx: &Context<Self>,
-    ) -> impl IntoElement {
-        let mut col = div().flex().flex_col().gap_4().p_4().child(
-            div()
-                .text_xl()
-                .font_weight(FontWeight::BOLD)
-                .child(title.to_string()),
-        );
-        for child in children {
-            col = col.child(child);
-        }
+    ) -> AnyElement {
         div()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .p_5()
             .bg(cx.theme().background)
             .border_1()
             .border_color(cx.theme().border)
             .rounded_lg()
-            .child(col)
+            .child(div().text_xl().font_weight(FontWeight::BOLD).child(title))
+            .children(children)
+            .into_any_element()
     }
 }
 
@@ -205,71 +344,152 @@ impl FormViewTrait for Form1702MXView {
     fn form_title(&self) -> &'static str {
         "BIR Form No. 1702-MX"
     }
+
     fn form_subtitle(&self) -> &'static str {
-        "Annual ITR for Corporations (Mixed Income)"
+        "Annual ITR — Mixed Income / Multiple or Special Tax Rates"
     }
+
     fn form_version(&self) -> &'static str {
-        "2018C (ENCS)"
+        "January 2018 (ENCS)"
     }
+
     fn current_status(&self) -> FilingStatus {
         self.draft.status.clone()
     }
+
     fn submitted_at(&self) -> Option<&str> {
         self.draft.submitted_at.as_deref()
     }
+
     fn confirmed_at(&self) -> Option<&str> {
         self.draft.confirmed_at.as_deref()
     }
+
     fn save_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.sync_from_inputs(cx);
+        if !self.parse_errors.is_empty() {
+            window.push_notification(
+                gpui_component::notification::Notification::new()
+                    .message("Fix malformed 1702-MX fields before saving.".to_string())
+                    .with_type(gpui_component::notification::NotificationType::Error)
+                    .autohide(true),
+                cx,
+            );
+            return;
+        }
         if let Ok(db) = self.db.lock() {
-            let _ = db.save_form_draft(
+            match db.save_form_draft(
                 &self.draft.tin,
                 "1702MX",
                 self.draft.taxable_year,
                 None,
                 &self.draft.status,
                 &self.draft,
-            );
-            use gpui_component::WindowExt;
-            window.push_notification(
-                gpui_component::notification::Notification::new()
-                    .message("Form saved.".to_string())
-                    .with_type(gpui_component::notification::NotificationType::Success)
-                    .autohide(true),
-                cx,
-            );
-            cx.emit(Form1702MXEvent::Saved);
+            ) {
+                Ok(_) => {
+                    window.push_notification(
+                        gpui_component::notification::Notification::new()
+                            .message("1702-MX local draft saved.".to_string())
+                            .with_type(gpui_component::notification::NotificationType::Success)
+                            .autohide(true),
+                        cx,
+                    );
+                    cx.emit(Form1702MXEvent::Saved);
+                }
+                Err(error) => cx.emit(Form1702MXEvent::PushNotification(
+                    "error".into(),
+                    "Save failed".into(),
+                    error.to_string(),
+                )),
+            }
         }
     }
+
     fn mark_submitted(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         cx.emit(Form1702MXEvent::PushNotification(
             "warning".into(),
-            "Preview Only".into(),
-            "Form 1702MX is scaffold-only and cannot be queued for submission yet.".into(),
+            "Submission unavailable".into(),
+            "1702MXv2018C supports local editable-save XML only. Encrypted submission and mandatory-attachment transport remain unreviewed.".into(),
         ));
-        cx.notify();
     }
+
     fn mark_paid(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.draft.status = FilingStatus::Paid;
-        self.save_draft(window, cx);
-        cx.notify();
+        match self.draft.transition_to_paid() {
+            Ok(()) => self.save_draft(window, cx),
+            Err(error) => cx.emit(Form1702MXEvent::PushNotification(
+                "warning".into(),
+                "Cannot mark paid".into(),
+                error,
+            )),
+        }
     }
+
     fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.draft.status = FilingStatus::Draft;
-        self.draft.submitted_at = None;
-        self.draft.confirmed_at = None;
-        self.draft.receipt_id = None;
-        self.draft.submission_filename = None;
-        self.save_draft(window, cx);
-        cx.notify();
+        match self.draft.revert_to_draft() {
+            Ok(()) => self.save_draft(window, cx),
+            Err(error) => cx.emit(Form1702MXEvent::PushNotification(
+                "warning".into(),
+                "Cannot revert".into(),
+                error,
+            )),
+        }
     }
-    fn preview_pdf(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {}
+
+    fn preview_pdf(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        // Reparse every current editor field before freezing the immutable
+        // envelope. Never preview a stale draft after a parse failure.
+        self.sync_from_inputs(cx);
+        if !self.parse_errors.is_empty() {
+            cx.emit(Form1702MXEvent::PushNotification(
+                "error".into(),
+                "Experimental HTML Preview Failed".into(),
+                format!(
+                    "{} current 1702-MX editor value(s) could not be parsed, so no preview was opened. No filing state was changed.",
+                    self.parse_errors.len()
+                ),
+            ));
+            return;
+        }
+
+        let render_draft = self.draft.clone();
+        let envelope = bir_print::html::RenderEnvelopeV1::from(&render_draft);
+        match super::form_html_preview_launcher::launch_html_form_preview(&envelope, cx) {
+            Ok(launch_kind) => cx.emit(Form1702MXEvent::PushNotification(
+                "info".into(),
+                "Experimental HTML Preview".into(),
+                format!(
+                    "{} 1702-MX HTML parity remains experimental and the mandatory attachment remains external. No filing state was changed.",
+                    launch_kind.status_message()
+                ),
+            )),
+            Err(error) => cx.emit(Form1702MXEvent::PushNotification(
+                "error".into(),
+                "Experimental HTML Preview Failed".into(),
+                format!(
+                    "HTML print preview could not be opened: {error}. No filing state was changed."
+                ),
+            )),
+        }
+    }
 }
 
 impl Render for Form1702MXView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let is_draft = matches!(self.draft.status, FilingStatus::Draft);
+        let editable = self.draft.is_editable();
+        let method = self.draft.deduction_method;
+        let disposition = self.draft.part_ii.overpayment_disposition;
+        let part_iv_rows = PART_IV_INPUTS
+            .iter()
+            .map(|(key, label)| self.render_input_row(key, label))
+            .collect::<Vec<_>>();
+        let penalty_rows = PENALTY_INPUTS
+            .iter()
+            .map(|(key, label)| self.render_input_row(key, label))
+            .collect::<Vec<_>>();
+        let schedule_text_rows = SCHEDULE_TEXT_INPUTS
+            .iter()
+            .map(|(key, label)| self.render_input_row(key, label))
+            .collect::<Vec<_>>();
 
         div()
             .flex()
@@ -284,17 +504,14 @@ impl Render for Form1702MXView {
                     .justify_between()
                     .px_8()
                     .py_4()
-                    .bg(cx.theme().background)
                     .border_b_1()
                     .border_color(cx.theme().border)
                     .child(
-                        gpui_component::button::Button::new("back_btn")
+                        gpui_component::button::Button::new("1702mx_back")
                             .label("← Back")
-                            .on_click(
-                                cx.listener(|_, _, _, cx| {
-                                    cx.emit(Form1702MXEvent::BackToDashboard)
-                                }),
-                            ),
+                            .on_click(cx.listener(|_, _, _, cx| {
+                                cx.emit(Form1702MXEvent::BackToDashboard)
+                            })),
                     )
                     .child(
                         div()
@@ -302,20 +519,23 @@ impl Render for Form1702MXView {
                             .items_center()
                             .gap_3()
                             .child(
-                                gpui_component::button::Button::new("save_btn")
-                                    .label("Save Draft")
+                                gpui_component::button::Button::new("1702mx_save")
+                                    .label("Save Local Draft")
                                     .outline()
-                                    .disabled(!is_draft)
-                                    .on_click(cx.listener(|this, _, w, cx| this.save_draft(w, cx))),
+                                    .disabled(!editable)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.save_draft(window, cx)
+                                    })),
                             )
                             .child(
-                                gpui_component::button::Button::new("submit_btn")
-                                    .label("Preview Only")
+                                gpui_component::button::Button::new("1702mx_submit")
+                                    .label(if QUEUE_SUBMISSION_SUPPORTED {
+                                        "Queue"
+                                    } else {
+                                        "XML save only"
+                                    })
                                     .primary()
-                                    .disabled(true)
-                                    .on_click(
-                                        cx.listener(|this, _, w, cx| this.mark_submitted(w, cx)),
-                                    ),
+                                    .disabled(true),
                             ),
                     ),
             )
@@ -330,7 +550,7 @@ impl Render for Form1702MXView {
             )
             .child(
                 div()
-                    .id("scroll")
+                    .id("1702mx_scroll")
                     .flex_1()
                     .w_full()
                     .overflow_y_scroll()
@@ -338,192 +558,308 @@ impl Render for Form1702MXView {
                     .p_8()
                     .child(
                         div()
-                            .max_w(px(800.))
+                            .max_w(px(960.))
                             .mx_auto()
                             .flex()
                             .flex_col()
                             .gap_6()
                             .child(self.render_section(
-                                "Taxpayer Profile",
+                                "Part I — Background Information",
                                 vec![
-                                        div()
-                                            .flex()
-                                            .flex_col()
-                                            .child(
-                                                div()
-                                                    .text_xl()
-                                                    .font_weight(FontWeight::BOLD)
-                                                    .child(self.draft.taxpayer_name.clone()),
+                                    div()
+                                        .text_lg()
+                                        .font_weight(FontWeight::BOLD)
+                                        .child(self.draft.taxpayer_name.clone())
+                                        .into_any_element(),
+                                    div()
+                                        .text_sm()
+                                        .child(format!(
+                                            "TIN {} · RDO {} · Year ended {:02}/{}",
+                                            self.draft.tin,
+                                            self.draft.rdo_code,
+                                            self.draft.month,
+                                            self.draft.taxable_year
+                                        ))
+                                        .into_any_element(),
+                                    div()
+                                        .text_sm()
+                                        .child(format!(
+                                            "{} · ATC {}",
+                                            method.label(),
+                                            if self.draft.atc.other_code.is_empty() {
+                                                "needs review"
+                                            } else {
+                                                &self.draft.atc.other_code
+                                            }
+                                        ))
+                                        .into_any_element(),
+                                    div()
+                                        .flex()
+                                        .gap_2()
+                                        .child(
+                                            gpui_component::button::Button::new(
+                                                "1702mx_itemized",
                                             )
-                                            .child(div().mt_1().text_sm().child(format!(
-                                                "TIN: {} | RDO: {}",
-                                                self.draft.tin, self.draft.rdo_code
-                                            )))
-                                            .child(div().mt_1().text_sm().child(format!(
-                                                "Deduction: {} | Special Rate: {}%",
-                                                if self.draft.rdo_pg1pt1i13method_of_deduc_optional
-                                                {
-                                                    "OSD (40%)"
+                                            .label(if matches!(
+                                                method,
+                                                Form1702MXDeductionMethod::Itemized
+                                            ) {
+                                                "✓ Itemized"
+                                            } else {
+                                                "Itemized"
+                                            })
+                                            .outline()
+                                            .disabled(!editable)
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.set_deduction_method(
+                                                    Form1702MXDeductionMethod::Itemized,
+                                                    cx,
+                                                )
+                                            })),
+                                        )
+                                        .child(
+                                            gpui_component::button::Button::new("1702mx_osd")
+                                                .label(if matches!(
+                                                    method,
+                                                    Form1702MXDeductionMethod::OptionalStandard
+                                                ) {
+                                                    "✓ OSD 40%"
                                                 } else {
-                                                    "Itemized"
-                                                },
-                                                self.draft.txt_pg2pt4i34special_tax_rate
-                                            )))
-                                            .into_any_element(),
-                                    ],
+                                                    "OSD 40%"
+                                                })
+                                                .outline()
+                                                .disabled(!editable)
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.set_deduction_method(
+                                                        Form1702MXDeductionMethod::OptionalStandard,
+                                                        cx,
+                                                    )
+                                                })),
+                                        )
+                                        .into_any_element(),
+                                ],
                                 cx,
                             ))
                             .child(self.render_section(
-                                "Part 4 — Regular Income (Col A)",
-                                vec![
-                                        self.render_input_row(
-                                            "Item 31A: Net Sales (Regular)",
-                                            &self.sales_ca,
-                                            cx,
-                                        )
-                                        .into_any_element(),
-                                        self.render_input_row(
-                                            "Item 32A: Less: Cost of Sales",
-                                            &self.cost_ca,
-                                            cx,
-                                        )
-                                        .into_any_element(),
-                                        self.render_computed_row(
-                                            "Item 33A: Gross Income (Regular)",
-                                            &self.draft.txt_pg2pt4i33ca,
-                                            cx,
-                                        )
-                                        .into_any_element(),
-                                        self.render_computed_row(
-                                            "Item 35A: Deductions (Regular)",
-                                            &self.draft.txt_pg2pt4i35ca,
-                                            cx,
-                                        )
-                                        .into_any_element(),
-                                        self.render_computed_row(
-                                            "Item 36A: Net Taxable (Regular)",
-                                            &self.draft.txt_pg2pt4i36ca,
-                                            cx,
-                                        )
-                                        .into_any_element(),
-                                    ],
+                                "Part IV — Basis and Tax Credits",
+                                part_iv_rows,
                                 cx,
                             ))
                             .child(self.render_section(
-                                "Part 4 — Special Income (Col B)",
+                                "Part IV — Computed Summary",
                                 vec![
-                                        self.render_input_row(
-                                            "Item 31B: Net Sales (Special)",
-                                            &self.sales_cb,
-                                            cx,
-                                        )
-                                        .into_any_element(),
-                                        self.render_input_row(
-                                            "Item 32B: Less: Cost of Sales",
-                                            &self.cost_cb,
-                                            cx,
-                                        )
-                                        .into_any_element(),
-                                        self.render_computed_row(
-                                            "Item 33B: Gross Income (Special)",
-                                            &self.draft.txt_pg2pt4i33cb,
-                                            cx,
-                                        )
-                                        .into_any_element(),
-                                        self.render_computed_row(
-                                            "Item 36B: Net Taxable (Special)",
-                                            &self.draft.txt_pg2pt4i36cb,
-                                            cx,
-                                        )
-                                        .into_any_element(),
-                                    ],
+                                    self.render_computed_row(
+                                        "Schedule 2 Item 19D — Total Income Tax Due/(Overpayment)",
+                                        self.draft.part_ii.item_14_total_tax_due_or_overpayment.to_string(),
+                                        cx,
+                                    ),
+                                    self.render_computed_row(
+                                        "Schedule 3 Item 32D — Total Tax Credits/Payments",
+                                        self.draft.part_ii.item_15_total_tax_credits.to_string(),
+                                        cx,
+                                    ),
+                                    self.render_computed_row(
+                                        "Schedule 3 Item 33D — Net Tax Payable/(Overpayment)",
+                                        self.draft.part_ii.item_16_net_tax_payable_or_overpayment.to_string(),
+                                        cx,
+                                    ),
+                                ],
                                 cx,
                             ))
                             .child(self.render_section(
-                                "Tax Computation",
-                                vec![
+                                "Part II — Penalties",
+                                penalty_rows
+                                    .into_iter()
+                                    .chain([
                                         self.render_computed_row(
-                                            "RCIT/MCIT on Regular",
-                                            &format!("{:.0}", self.draft.txt_pg2sc2it14b),
+                                            "Item 20 — Total Penalties",
+                                            self.draft
+                                                .part_ii
+                                                .item_20_total_penalties
+                                                .value_or_zero()
+                                                .to_string(),
                                             cx,
-                                        )
-                                        .into_any_element(),
+                                        ),
                                         self.render_computed_row(
-                                            "Special Tax",
-                                            &format!("{:.0}", self.draft.txt_pg2sc2it14c),
+                                            "Item 21 — Total Amount Payable/(Overpayment)",
+                                            self.draft
+                                                .part_ii
+                                                .item_21_total_amount_payable_or_overpayment
+                                                .value_or_zero()
+                                                .to_string(),
                                             cx,
-                                        )
-                                        .into_any_element(),
-                                        self.render_computed_row(
-                                            "Total Column (CC)",
-                                            &self.draft.txt_pg2pt4i36cc,
-                                            cx,
-                                        )
-                                        .into_any_element(),
-                                    ],
-                                cx,
-                            ))
-                            .child(self.render_section(
-                                "Add: Penalties",
-                                vec![
-                                        self.render_input_row(
-                                            "Item 17: Surcharge",
-                                            &self.surcharge,
-                                            cx,
-                                        )
-                                        .into_any_element(),
-                                        self.render_input_row(
-                                            "Item 18: Interest",
-                                            &self.interest,
-                                            cx,
-                                        )
-                                        .into_any_element(),
-                                        self.render_input_row(
-                                            "Item 19: Compromise",
-                                            &self.compromise,
-                                            cx,
-                                        )
-                                        .into_any_element(),
-                                        self.render_computed_row(
-                                            "Item 20: Total Penalties",
-                                            &self.draft.txt_pg1pt2i20total_penalties.to_string(),
-                                            cx,
-                                        )
-                                        .into_any_element(),
-                                    ],
+                                        ),
+                                    ])
+                                    .collect(),
                                 cx,
                             ))
                             .child(
                                 div()
-                                    .bg(cx.theme().primary.opacity(0.1))
-                                    .border_1()
-                                    .border_color(cx.theme().primary.opacity(0.2))
-                                    .rounded_lg()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_2()
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .font_weight(FontWeight::BOLD)
+                                            .child("Overpayment disposition (one only)"),
+                                    )
                                     .child(
                                         div()
                                             .flex()
-                                            .justify_between()
-                                            .items_center()
-                                            .p_6()
+                                            .gap_2()
                                             .child(
-                                                div()
-                                                    .text_2xl()
-                                                    .font_weight(FontWeight::BOLD)
-                                                    .text_color(cx.theme().primary)
-                                                    .child("Item 21: Total Amount Payable"),
+                                                gpui_component::button::Button::new(
+                                                    "1702mx_refund",
+                                                )
+                                                .label(if matches!(
+                                                    disposition,
+                                                    Some(Form1702MXOverpaymentDisposition::Refund)
+                                                ) {
+                                                    "✓ Refund"
+                                                } else {
+                                                    "Refund"
+                                                })
+                                                .outline()
+                                                .disabled(!editable)
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.set_overpayment_disposition(
+                                                        Form1702MXOverpaymentDisposition::Refund,
+                                                        cx,
+                                                    )
+                                                })),
                                             )
                                             .child(
-                                                div()
-                                                    .text_2xl()
-                                                    .font_weight(FontWeight::BLACK)
-                                                    .text_color(cx.theme().primary)
-                                                    .child(format!(
-                                                        "₱ {}",
-                                                        self.draft.txt_pg1pt2i21total_amount
-                                                    )),
+                                                gpui_component::button::Button::new("1702mx_tcc")
+                                                    .label(if matches!(
+                                                        disposition,
+                                                        Some(Form1702MXOverpaymentDisposition::TaxCreditCertificate)
+                                                    ) {
+                                                        "✓ TCC"
+                                                    } else {
+                                                        "TCC"
+                                                    })
+                                                    .outline()
+                                                    .disabled(!editable)
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.set_overpayment_disposition(
+                                                            Form1702MXOverpaymentDisposition::TaxCreditCertificate,
+                                                            cx,
+                                                        )
+                                                    })),
+                                            )
+                                            .child(
+                                                gpui_component::button::Button::new(
+                                                    "1702mx_carry",
+                                                )
+                                                .label(if matches!(
+                                                    disposition,
+                                                    Some(Form1702MXOverpaymentDisposition::CarryOver)
+                                                ) {
+                                                    "✓ Carry over"
+                                                } else {
+                                                    "Carry over"
+                                                })
+                                                .outline()
+                                                .disabled(!editable)
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.set_overpayment_disposition(
+                                                        Form1702MXOverpaymentDisposition::CarryOver,
+                                                        cx,
+                                                    )
+                                                })),
                                             ),
                                     ),
-                            ),
+                            )
+                            .child(self.render_section(
+                                "Schedules 5 and 6 — Fixed Description Rows",
+                                schedule_text_rows,
+                                cx,
+                            ))
+                            .child(self.render_section(
+                                "Part IV Instruction and Separate Attachment",
+                                vec![
+                                    div()
+                                        .flex()
+                                        .gap_2()
+                                        .child(
+                                            gpui_component::button::Button::new(
+                                                "1702mx_single_activity",
+                                            )
+                                            .label(if self
+                                                .draft
+                                                .relief_basis
+                                                .instruction_single_activity
+                                            {
+                                                "✓ One activity/project"
+                                            } else {
+                                                "One activity/project"
+                                            })
+                                            .outline()
+                                            .disabled(!editable)
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.set_relief_instruction(false, cx)
+                                            })),
+                                        )
+                                        .child(
+                                            gpui_component::button::Button::new(
+                                                "1702mx_multiple_activity",
+                                            )
+                                            .label(if self
+                                                .draft
+                                                .relief_basis
+                                                .instruction_multiple_activities
+                                            {
+                                                "✓ Two or more activities/projects"
+                                            } else {
+                                                "Two or more activities/projects"
+                                            })
+                                            .outline()
+                                            .disabled(!editable)
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.set_relief_instruction(true, cx)
+                                            })),
+                                        )
+                                        .into_any_element(),
+                                    div()
+                                        .text_sm()
+                                        .child("The official mandatory attachment is a separate two-page document. Its reviewed raw fields are preserved, but this app does not yet edit, print, attach, or submit it.")
+                                        .into_any_element(),
+                                ],
+                                cx,
+                            ))
+                            .when(
+                                !self.parse_errors.is_empty()
+                                    || !self.validation_errors.is_empty(),
+                                |container| {
+                                    let errors = self
+                                        .parse_errors
+                                        .iter()
+                                        .chain(self.validation_errors.iter())
+                                        .take(16)
+                                        .map(|(field, message)| {
+                                            div()
+                                                .text_sm()
+                                                .text_color(cx.theme().danger)
+                                                .child(format!("{field}: {message}"))
+                                                .into_any_element()
+                                        })
+                                        .collect::<Vec<_>>();
+                                    container.child(self.render_section("Needs Review", errors, cx))
+                                },
+                            )
+                            .child(self.render_section(
+                                "Official Fixed Schedule Capacity",
+                                vec![
+                                    div().text_sm().child("Schedule 2: 19 rows × four tax-regime columns").into_any_element(),
+                                    div().text_sm().child("Schedule 3: Items 20–33 × four columns").into_any_element(),
+                                    div().text_sm().child("Schedule 5: six fixed Others rows (17d–17i)").into_any_element(),
+                                    div().text_sm().child("Schedule 6: four fixed special-deduction rows").into_any_element(),
+                                    div().text_sm().child("Schedules 7.1 and 8.1: four NOLCO rows each; Schedule 9: three MCIT rows").into_any_element(),
+                                    div().text_sm().child("The semantic Rust draft preserves every typed schedule value in local JSON even where the reviewed editable XML stores only descriptions or derived inputs.").into_any_element(),
+                                ],
+                                cx,
+                            )),
                     ),
             )
     }

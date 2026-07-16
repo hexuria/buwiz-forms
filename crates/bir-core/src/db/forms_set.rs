@@ -3,11 +3,28 @@
 //! The Forms Set is the user-owned, authoritative list of which BIR forms a taxpayer
 //! files in a given taxable year (replacing the temporal suggestion engine).
 
-use rusqlite::params;
+use chrono::NaiveDate;
+use rusqlite::{Connection, params};
 
 use super::{Database, DbError};
-use crate::forms::forms_set::{FormSetEntry, FormSetSource, PerYearFormsSet};
+use crate::forms::forms_set::{
+    FormSetConflict, FormSetEntry, FormSetReviewStatus, FormSetSource, PerYearFormsSet,
+};
 use crate::forms::registry::FilingFrequency;
+
+struct StoredFormSetEntry {
+    form_code: String,
+    frequency: String,
+    active: i64,
+    source: String,
+    custom: i64,
+    reason: Option<String>,
+    source_reference: Option<String>,
+    effective_from: Option<String>,
+    effective_until: Option<String>,
+    review_status: String,
+    conflict_json: Option<String>,
+}
 
 pub(crate) fn frequency_to_str(f: &FilingFrequency) -> &'static str {
     match f {
@@ -27,35 +44,113 @@ fn frequency_from_str(s: &str) -> FilingFrequency {
     }
 }
 
+fn parse_optional_date(value: Option<String>, field: &str) -> Result<Option<NaiveDate>, DbError> {
+    value
+        .map(|value| {
+            NaiveDate::parse_from_str(&value, "%Y-%m-%d").map_err(|error| {
+                DbError::Other(format!(
+                    "Invalid per_year_forms {field} date `{value}`: {error}"
+                ))
+            })
+        })
+        .transpose()
+}
+
+fn date_to_db(value: Option<NaiveDate>) -> Option<String> {
+    value.map(|date| date.format("%Y-%m-%d").to_string())
+}
+
+pub(crate) fn execute_replace_per_year_forms(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+    set: &PerYearFormsSet,
+) -> Result<(), DbError> {
+    conn.execute(
+        "DELETE FROM per_year_forms WHERE tin = ?1 AND taxable_year = ?2",
+        params![tin, year],
+    )?;
+    for entry in &set.entries {
+        let conflict_json = entry
+            .conflict
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()?;
+        conn.execute(
+            "INSERT INTO per_year_forms
+                (tin, taxable_year, form_code, frequency, active, source, custom, reason,
+                 source_reference, effective_from, effective_until, review_status,
+                 conflict_json, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
+                     datetime('now'))",
+            params![
+                tin,
+                year,
+                entry.form_code,
+                frequency_to_str(&entry.frequency),
+                entry.active as i64,
+                entry.source.as_str(),
+                entry.custom as i64,
+                entry.reason,
+                entry.source_reference,
+                date_to_db(entry.effective_from),
+                date_to_db(entry.effective_until),
+                entry.review_status.as_str(),
+                conflict_json,
+            ],
+        )?;
+    }
+    Ok(())
+}
+
 impl Database {
     /// Load the Forms Set for `(tin, year)`. Returns an empty set if none is stored.
     pub fn get_per_year_forms(&self, tin: &str, year: u16) -> Result<PerYearFormsSet, DbError> {
         let mut stmt = self.conn.prepare(
-            "SELECT form_code, frequency, active, source, custom, reason
+            "SELECT form_code, frequency, active, source, custom, reason,
+                    source_reference, effective_from, effective_until, review_status,
+                    conflict_json
              FROM per_year_forms
              WHERE tin = ?1 AND taxable_year = ?2
              ORDER BY form_code ASC",
         )?;
         let rows = stmt.query_map(params![tin, year], |row| {
-            let form_code: String = row.get(0)?;
-            let frequency: String = row.get(1)?;
-            let active: i64 = row.get(2)?;
-            let source: String = row.get(3)?;
-            let custom: i64 = row.get(4)?;
-            let reason: Option<String> = row.get(5)?;
-            Ok(FormSetEntry {
-                form_code,
-                frequency: frequency_from_str(&frequency),
-                active: active != 0,
-                source: FormSetSource::from_str_lossy(&source),
-                custom: custom != 0,
-                reason,
+            Ok(StoredFormSetEntry {
+                form_code: row.get(0)?,
+                frequency: row.get(1)?,
+                active: row.get(2)?,
+                source: row.get(3)?,
+                custom: row.get(4)?,
+                reason: row.get(5)?,
+                source_reference: row.get(6)?,
+                effective_from: row.get(7)?,
+                effective_until: row.get(8)?,
+                review_status: row.get(9)?,
+                conflict_json: row.get(10)?,
             })
         })?;
 
         let mut entries = Vec::new();
         for row in rows {
-            entries.push(row?);
+            let stored = row?;
+            let conflict = stored
+                .conflict_json
+                .as_deref()
+                .map(serde_json::from_str::<FormSetConflict>)
+                .transpose()?;
+            entries.push(FormSetEntry {
+                form_code: stored.form_code,
+                frequency: frequency_from_str(&stored.frequency),
+                active: stored.active != 0,
+                source: FormSetSource::from_str_lossy(&stored.source),
+                custom: stored.custom != 0,
+                reason: stored.reason,
+                source_reference: stored.source_reference,
+                effective_from: parse_optional_date(stored.effective_from, "effective_from")?,
+                effective_until: parse_optional_date(stored.effective_until, "effective_until")?,
+                review_status: FormSetReviewStatus::from_str_lossy(&stored.review_status),
+                conflict,
+            });
         }
         Ok(PerYearFormsSet {
             taxable_year: year,
@@ -71,27 +166,7 @@ impl Database {
         set: &PerYearFormsSet,
     ) -> Result<(), DbError> {
         let tx = self.conn.unchecked_transaction()?;
-        tx.execute(
-            "DELETE FROM per_year_forms WHERE tin = ?1 AND taxable_year = ?2",
-            params![tin, year],
-        )?;
-        for entry in &set.entries {
-            tx.execute(
-                "INSERT INTO per_year_forms
-                    (tin, taxable_year, form_code, frequency, active, source, custom, reason, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))",
-                params![
-                    tin,
-                    year,
-                    entry.form_code,
-                    frequency_to_str(&entry.frequency),
-                    entry.active as i64,
-                    entry.source.as_str(),
-                    entry.custom as i64,
-                    entry.reason,
-                ],
-            )?;
-        }
+        execute_replace_per_year_forms(&tx, tin, year, set)?;
         tx.commit()?;
         let _ = self.request_google_calendar_sync();
         Ok(())
@@ -142,6 +217,7 @@ impl Database {
 mod tests {
     use super::*;
     use crate::db::Database;
+    use crate::forms::{FormSuggestion, FormSuggestionSource, reconcile_forms_set_for_year};
     use tempfile::NamedTempFile;
 
     #[test]
@@ -195,5 +271,40 @@ mod tests {
         db.delete_per_year_forms(tin, 2026).unwrap();
         assert!(!db.has_per_year_forms(tin, 2026).unwrap());
         assert_eq!(db.list_forms_set_years(tin).unwrap(), vec![2025]);
+    }
+
+    #[test]
+    fn per_year_forms_round_trip_preserves_provenance_and_conflicts() {
+        let db_file = NamedTempFile::new().unwrap();
+        let db = match Database::open(db_file.path()) {
+            Ok(db) => db,
+            Err(error) => {
+                println!("Skipping (keyring unavailable): {error:?}");
+                return;
+            }
+        };
+        let tin = "010558054000";
+        let mut reviewed = FormSuggestion::active("2551Q", FormSuggestionSource::ReviewedCor);
+        reviewed.source_reference = Some("cor:sha256:reviewed".into());
+        reviewed.effective_from = NaiveDate::from_ymd_opt(2026, 1, 1);
+        reviewed.effective_until = NaiveDate::from_ymd_opt(2026, 12, 31);
+        let mut include = FormSuggestion::active("2550Q", FormSuggestionSource::ReviewedCor);
+        include.source_reference = Some("cor:page:1".into());
+        let mut exclude = include.clone();
+        exclude.active = false;
+        exclude.source_reference = Some("cor:page:2".into());
+        let mut set = reconcile_forms_set_for_year(2026, None, &[reviewed]).forms_set;
+        set.entries.extend(
+            reconcile_forms_set_for_year(2026, None, &[include, exclude])
+                .forms_set
+                .entries,
+        );
+        set.entries
+            .sort_by(|left, right| left.form_code.cmp(&right.form_code));
+
+        db.save_per_year_forms(tin, 2026, &set).unwrap();
+        let loaded = db.get_per_year_forms(tin, 2026).unwrap();
+
+        assert_eq!(loaded, set);
     }
 }

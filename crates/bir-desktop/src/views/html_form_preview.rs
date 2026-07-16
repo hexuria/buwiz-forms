@@ -1,32 +1,41 @@
-//! Experimental native host for the owned HTML renderer.
-//!
-//! This view is intentionally not the normal Print Preview path. It exists so
-//! the 2551Q renderer can be calibrated in a real native WebView while the
-//! manifest still has `release_ready: false`.
+//! Native preview, system-print, and direct-PDF host for owned HTML forms.
 
 use bir_print::html::RenderEnvelopeV1;
+use bir_print::html_forms::RenderLayoutPlan;
+#[cfg(target_os = "macos")]
+use bir_print::html_output::merge_single_page_pdfs;
+use bir_print::html_output::{
+    HtmlOutputKind, HtmlOutputState, PdfExpectation, create_pdf_export_temp,
+    discard_pdf_export_temp, finalize_pdf_export,
+};
 use bir_print::html_support::{
     RendererGeometryReport, RendererPageRect, RendererReadinessDecision,
-    bundled_html_renderer_support, expected_2551q_page_count, renderer_readiness_decision,
-    validate_2551q_renderer_geometry,
+    bundled_html_renderer_support, renderer_host_plan, renderer_readiness_decision,
+    validate_renderer_geometry,
 };
 use std::path::PathBuf;
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 use {
     bir_print::html::serialize_envelope,
+    serde::Deserialize,
+    sha2::{Digest, Sha256},
+    std::borrow::Cow,
+    std::path::Path,
+};
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use {
     gpui::prelude::FluentBuilder,
     gpui::{
-        AppContext, Context, Entity, EventEmitter, IntoElement, ParentElement, Render, Styled,
-        Task, Window, div, px,
+        AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled, Task, Window, div,
+        px,
     },
     gpui_component::ActiveTheme,
     gpui_component::Disableable,
     gpui_component::button::{Button, ButtonVariants},
     gpui_wry::WebView,
-    serde::Deserialize,
-    std::borrow::Cow,
-    std::path::Path,
+    std::collections::{HashMap, HashSet},
     std::sync::{Arc, Mutex},
     std::time::{Duration, Instant},
 };
@@ -34,13 +43,133 @@ use {
 #[cfg(target_os = "windows")]
 use wry::WebViewBuilderExtWindows;
 
+#[cfg(target_os = "macos")]
+use {
+    block2::RcBlock,
+    objc2_app_kit_modern::{
+        NSPaperOrientation, NSPrintInfo, NSPrintOperation, NSPrintingPaginationMode,
+    },
+    objc2_core_foundation::{CGPoint, CGRect, CGSize},
+    objc2_foundation_modern::{NSData, NSError, NSObjectProtocol},
+    objc2_modern::{
+        DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, rc::Retained,
+        runtime::NSObject,
+    },
+    objc2_web_kit_modern::WKPDFConfiguration,
+    std::ffi::c_void,
+    wry::WebViewExtMacOS,
+};
+
+#[cfg(target_os = "windows")]
+use {
+    std::os::windows::ffi::OsStrExt,
+    webview2_com::{
+        Microsoft::Web::WebView2::Win32::{
+            COREWEBVIEW2_PRINT_ORIENTATION_PORTRAIT, COREWEBVIEW2_PRINT_STATUS,
+            COREWEBVIEW2_PRINT_STATUS_OTHER_ERROR, COREWEBVIEW2_PRINT_STATUS_PRINTER_UNAVAILABLE,
+            COREWEBVIEW2_PRINT_STATUS_SUCCEEDED, ICoreWebView2_7, ICoreWebView2_16,
+            ICoreWebView2Environment6, ICoreWebView2PrintSettings,
+        },
+        PrintCompletedHandler, PrintToPdfCompletedHandler,
+    },
+    windows_core::{Interface, PCWSTR},
+    wry::WebViewExtWindows,
+};
+
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 const READINESS_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
-const RENDERER_WEBVIEW_IS_INCOGNITO: bool = true;
+const OUTPUT_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
+const RENDERER_WEBVIEW_IS_INCOGNITO: bool = true;
+
+#[cfg(any(test, target_os = "windows"))]
+const POINTS_PER_INCH: f64 = 72.0;
+
+#[cfg(any(test, target_os = "windows"))]
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct WindowsNativePrintSettingsSpec {
+    page_width_inches: f64,
+    page_height_inches: f64,
+    scale_factor: f64,
+    margin_top_inches: f64,
+    margin_bottom_inches: f64,
+    margin_left_inches: f64,
+    margin_right_inches: f64,
+    should_print_backgrounds: bool,
+    should_print_selection_only: bool,
+    should_print_header_and_footer: bool,
+}
+
+#[cfg(any(test, target_os = "windows"))]
+fn windows_native_print_settings_spec(
+    expectation: &PdfExpectation,
+) -> Result<WindowsNativePrintSettingsSpec, String> {
+    expectation
+        .validate()
+        .map_err(|error| format!("invalid native print expectation: {error}"))?;
+    Ok(WindowsNativePrintSettingsSpec {
+        page_width_inches: expectation.width_points / POINTS_PER_INCH,
+        page_height_inches: expectation.height_points / POINTS_PER_INCH,
+        scale_factor: 1.0,
+        margin_top_inches: 0.0,
+        margin_bottom_inches: 0.0,
+        margin_left_inches: 0.0,
+        margin_right_inches: 0.0,
+        should_print_backgrounds: true,
+        should_print_selection_only: false,
+        should_print_header_and_footer: false,
+    })
+}
+
+#[cfg(any(test, target_os = "windows"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WindowsNativePrintStatus {
+    Succeeded,
+    PrinterUnavailable,
+    OtherError,
+    Unknown(i32),
+}
+
+#[cfg(any(test, target_os = "windows"))]
+fn webview2_print_completion_decision(
+    hresult_succeeded: bool,
+    status: WindowsNativePrintStatus,
+) -> Result<(), String> {
+    if !hresult_succeeded {
+        return Err("WebView2 Print completion returned a failing HRESULT".to_string());
+    }
+    match status {
+        WindowsNativePrintStatus::Succeeded => Ok(()),
+        WindowsNativePrintStatus::PrinterUnavailable => {
+            Err("WebView2 Print reported that the printer is unavailable".to_string())
+        }
+        WindowsNativePrintStatus::OtherError => {
+            Err("WebView2 Print reported a native printing error".to_string())
+        }
+        WindowsNativePrintStatus::Unknown(status) => Err(format!(
+            "WebView2 Print returned unknown completion status {status}"
+        )),
+    }
+}
+
+#[cfg(any(test, target_os = "windows"))]
+fn webview2_pdf_completion_decision(
+    hresult_succeeded: bool,
+    result_succeeded: bool,
+) -> Result<(), String> {
+    if !hresult_succeeded {
+        return Err("WebView2 PrintToPdf completion returned a failing HRESULT".to_string());
+    }
+    if !result_succeeded {
+        return Err("WebView2 PrintToPdf reported an unsuccessful result".to_string());
+    }
+    Ok(())
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 const RENDERER_CONTENT_SECURITY_POLICY: &str = concat!(
     "default-src 'self'; ",
     "connect-src 'none'; ",
@@ -57,7 +186,7 @@ const RENDERER_CONTENT_SECURITY_POLICY: &str = concat!(
     "frame-ancestors 'none'",
 );
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 const RENDERER_PERMISSIONS_POLICY: &str = concat!(
     "accelerometer=(), ambient-light-sensor=(), autoplay=(), bluetooth=(), ",
     "browsing-topics=(), camera=(), clipboard-read=(), clipboard-write=(), ",
@@ -69,23 +198,6 @@ const RENDERER_PERMISSIONS_POLICY: &str = concat!(
     "speaker-selection=(), storage-access=(), usb=(), web-share=(), ",
     "window-management=(), xr-spatial-tracking=()",
 );
-
-#[derive(Debug, Clone)]
-pub enum HtmlFormPreviewEvent {
-    LegacyFallbackRequested(String),
-}
-
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-fn emit_legacy_fallback_then_close<T>(reason: String, window: &mut Window, cx: &mut Context<T>)
-where
-    T: EventEmitter<HtmlFormPreviewEvent> + 'static,
-{
-    cx.emit(HtmlFormPreviewEvent::LegacyFallbackRequested(reason));
-    // `Context::emit` is dispatched at the end of GPUI's current effect cycle.
-    // Removing this window synchronously drops the emitter before its parent
-    // can receive the fallback event, so close it only after that event runs.
-    cx.defer_in(window, |_, window, _| window.remove_window());
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum NativePrintDecision {
@@ -138,30 +250,35 @@ pub enum HtmlPreviewError {
     Serialization(#[from] bir_print::html::HtmlRendererError),
     #[error("failed to encode the renderer envelope for WebView injection: {0}")]
     EnvelopeEncoding(#[source] serde_json::Error),
+    #[error("HTML renderer layout could not be resolved: {0}")]
+    Layout(#[from] bir_print::html_forms::RenderLayoutError),
     #[error("HTML preview is not enabled on this platform")]
     UnsupportedPlatform,
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-pub struct PreparedHtmlPreview {
-    entry: PathBuf,
-    url: String,
-    initialization_script: String,
-    print_authorization_token: String,
-    expected_page_count: usize,
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+#[derive(Clone)]
+pub(crate) struct PreparedHtmlPreview {
+    pub(crate) entry: PathBuf,
+    pub(crate) url: String,
+    pub(crate) initialization_script: String,
+    pub(crate) layout_plan: RenderLayoutPlan,
+    pub(crate) pdf_expectation: PdfExpectation,
+    pub(crate) default_pdf_name: String,
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-pub fn prepare_html_form_preview(
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+pub(crate) fn prepare_html_form_preview(
     envelope: &RenderEnvelopeV1,
 ) -> Result<PreparedHtmlPreview, HtmlPreviewError> {
     let support = bundled_html_renderer_support(&envelope.form.code, &envelope.form.version);
-    if !support.permits_experimental_preview() {
+    if !support.permits_preview() {
         return Err(HtmlPreviewError::Disabled {
             code: envelope.form.code.clone(),
             revision: envelope.form.version.clone(),
         });
     }
+    let layout_plan = renderer_host_plan(envelope)?;
 
     let renderer_dir = crate::platform::find_resource_dir("assets").join("form-renderer");
     if !renderer_dir.is_dir() {
@@ -173,31 +290,42 @@ pub fn prepare_html_form_preview(
     }
 
     let envelope_json = serialize_envelope(envelope)?;
+    let envelope_hash = format!("{:x}", Sha256::digest(envelope_json.as_bytes()));
     let encoded_json =
         serde_json::to_string(&envelope_json).map_err(HtmlPreviewError::EnvelopeEncoding)?;
-    let print_authorization_token = uuid::Uuid::new_v4().simple().to_string();
-    let initialization_script =
-        renderer_initialization_script(&encoded_json, &print_authorization_token);
+    let initialization_script = renderer_initialization_script(&encoded_json);
+    let expected_page_count = layout_plan.expected_page_count;
+    let pdf_expectation = PdfExpectation {
+        form_code: envelope.form.code.clone(),
+        revision: envelope.form.version.clone(),
+        envelope_hash,
+        expected_page_count,
+        width_points: layout_plan.page_geometry.width_points,
+        height_points: layout_plan.page_geometry.height_points,
+    };
+    let period_suffix = envelope
+        .period
+        .quarter
+        .map(|quarter| format!("-Q{quarter}"))
+        .or_else(|| envelope.period.month.map(|month| format!("-M{month:02}")))
+        .unwrap_or_default();
+    let default_pdf_name = format!(
+        "BIR-{}-{}{}.pdf",
+        envelope.form.code, envelope.period.taxable_year, period_suffix
+    );
 
     Ok(PreparedHtmlPreview {
         entry,
         url: "ebirforms://localhost/index.html".to_string(),
         initialization_script,
-        print_authorization_token,
-        expected_page_count: expected_2551q_page_count(
-            envelope
-                .schedules
-                .iter()
-                .find(|schedule| schedule.id == "schedule_1")
-                .map_or(0, |schedule| schedule.rows.len()),
-        ),
+        layout_plan,
+        pdf_expectation,
+        default_pdf_name,
     })
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-fn renderer_initialization_script(encoded_json: &str, print_authorization_token: &str) -> String {
-    let encoded_print_authorization_token = serde_json::to_string(print_authorization_token)
-        .expect("a string is always JSON encodable");
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+fn renderer_initialization_script(encoded_json: &str) -> String {
     format!(
         r#"
         window.__EBIR_RENDER_ENVELOPE__ = JSON.parse({encoded_json});
@@ -211,37 +339,13 @@ fn renderer_initialization_script(encoded_json: &str, print_authorization_token:
         let printGuardInstallationFailed = false;
         (() => {{
             try {{
-                const originalRendererPrint = window.print.bind(window);
-                const nativePrintAuthorizationToken = {encoded_print_authorization_token};
-                let authorizedNativePrintNonce = null;
-                const authorizeEbirNativePrint = (token, nonce) => {{
-                    if (token !== nativePrintAuthorizationToken
-                        || !Number.isSafeInteger(nonce)
-                        || nonce < 1) {{
-                        const message = "Native print authorization was rejected";
-                        postRendererHostMessage({{ type: "renderer_error", message }});
-                        throw new Error(message);
-                    }}
-                    authorizedNativePrintNonce = nonce;
-                }};
                 const guardedRendererPrint = () => {{
-                    if (!Number.isSafeInteger(authorizedNativePrintNonce)) {{
-                        const message = "Script-initiated printing is disabled; use the native validated Print button";
-                        postRendererHostMessage({{ type: "renderer_error", message }});
-                        throw new Error(message);
-                    }}
-                    authorizedNativePrintNonce = null;
-                    return originalRendererPrint();
+                    const message = "Script-initiated printing is disabled; use the native validated Print button";
+                    postRendererHostMessage({{ type: "renderer_error", message }});
+                    throw new Error(message);
                 }};
-                // Install the guard first. If the authorization hook cannot be
-                // installed afterward, direct printing remains blocked.
                 Object.defineProperty(window, "print", {{
                     value: guardedRendererPrint,
-                    writable: false,
-                    configurable: false
-                }});
-                Object.defineProperty(window, "authorizeEbirNativePrint", {{
-                    value: authorizeEbirNativePrint,
                     writable: false,
                     configurable: false
                 }});
@@ -434,8 +538,8 @@ fn renderer_initialization_script(encoded_json: &str, print_authorization_token:
     )
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-fn native_print_preflight_script(nonce: u64) -> String {
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+pub(crate) fn native_print_preflight_script(nonce: u64) -> String {
     format!(
         r#"
         void (() => {{
@@ -448,28 +552,342 @@ fn native_print_preflight_script(nonce: u64) -> String {
     )
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-fn native_authorized_print_script(print_authorization_token: &str, nonce: u64) -> String {
-    let encoded_token = serde_json::to_string(print_authorization_token)
-        .expect("a native print authorization token is always JSON encodable");
-    format!(
-        r#"
-        void (() => {{
-            if (typeof window.authorizeEbirNativePrint !== "function") {{
-                throw new Error("HTML renderer native print authorization is unavailable");
-            }}
-            window.authorizeEbirNativePrint({encoded_token}, {nonce});
-            window.print();
-        }})();
-        "#
-    )
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+pub(crate) fn native_output_cleanup_script() -> &'static str {
+    r#"
+    void (() => {
+        document.documentElement.classList.remove("ebir-native-print-mode");
+        window.dispatchEvent(new Event("resize"));
+    })();
+    "#
+}
+
+#[cfg(target_os = "macos")]
+fn macos_system_print_completion_decision(success: bool) -> Result<(), String> {
+    if success {
+        Ok(())
+    } else {
+        // AppKit deliberately uses the same `NO` result for a cancelled print
+        // panel and for an operation error. Do not claim either one more
+        // specifically than the native API can prove.
+        Err("the macOS print operation was cancelled or failed".to_string())
+    }
+}
+
+#[cfg(target_os = "macos")]
+struct MacPrintCompletionDelegateIvars {
+    nonce: u64,
+    bridge: Arc<Mutex<NativeBackendBridge>>,
+}
+
+#[cfg(target_os = "macos")]
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[name = "EbirHtmlPrintCompletionDelegate"]
+    #[thread_kind = MainThreadOnly]
+    #[ivars = MacPrintCompletionDelegateIvars]
+    struct MacPrintCompletionDelegate;
+
+    unsafe impl NSObjectProtocol for MacPrintCompletionDelegate {}
+
+    impl MacPrintCompletionDelegate {
+        #[unsafe(method(printOperationDidRun:success:contextInfo:))]
+        fn print_operation_did_run(
+            &self,
+            _print_operation: &NSPrintOperation,
+            success: bool,
+            context_info: *mut c_void,
+        ) {
+            if let Ok(mut bridge) = self.ivars().bridge.lock() {
+                bridge.record_completion(NativeBackendCompletion::SystemPrint {
+                    nonce: self.ivars().nonce,
+                    result: macos_system_print_completion_decision(success),
+                });
+            }
+
+            if !context_info.is_null() {
+                // SAFETY: `start_macos_system_print` passes exactly one +1
+                // retain of this delegate as contextInfo. AppKit documents
+                // exactly one completion callback for each print operation.
+                drop(unsafe {
+                    Retained::<MacPrintCompletionDelegate>::from_raw(context_info.cast())
+                });
+            }
+        }
+    }
+);
+
+#[cfg(target_os = "macos")]
+impl MacPrintCompletionDelegate {
+    fn new(
+        main_thread: MainThreadMarker,
+        nonce: u64,
+        bridge: Arc<Mutex<NativeBackendBridge>>,
+    ) -> Retained<Self> {
+        let delegate = main_thread
+            .alloc::<Self>()
+            .set_ivars(MacPrintCompletionDelegateIvars { nonce, bridge });
+        // SAFETY: the allocated object has its complete Rust ivars installed
+        // and NSObject's initializer returns the retained instance.
+        unsafe { msg_send![super(delegate), init] }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn start_macos_system_print(
+    raw_webview: &wry::WebView,
+    expectation: &PdfExpectation,
+    nonce: u64,
+    bridge: Arc<Mutex<NativeBackendBridge>>,
+) -> Result<(), String> {
+    expectation
+        .validate()
+        .map_err(|error| format!("invalid macOS print expectation: {error}"))?;
+    let Some(main_thread) = MainThreadMarker::new() else {
+        return Err("WKWebView system print must start on the macOS main thread".to_string());
+    };
+    if NSPrintOperation::currentOperation(main_thread).is_some() {
+        return Err("another macOS print operation is already active".to_string());
+    }
+
+    let webview = raw_webview.webview();
+    // SAFETY: this runtime availability query sends no state-changing message
+    // and protects installations older than WKWebView printing support.
+    let can_print =
+        unsafe { webview.respondsToSelector(objc2_modern::sel!(printOperationWithPrintInfo:)) };
+    if !can_print {
+        return Err("this macOS WKWebView does not support native print operations".to_string());
+    }
+    let window = webview
+        .window()
+        .ok_or_else(|| "WKWebView is not attached to a macOS window".to_string())?;
+
+    let print_info = NSPrintInfo::sharedPrintInfo();
+    print_info.setPaperSize(CGSize::new(
+        expectation.width_points,
+        expectation.height_points,
+    ));
+    print_info.setOrientation(NSPaperOrientation::Portrait);
+    print_info.setScalingFactor(1.0);
+    print_info.setTopMargin(0.0);
+    print_info.setRightMargin(0.0);
+    print_info.setBottomMargin(0.0);
+    print_info.setLeftMargin(0.0);
+    print_info.setHorizontallyCentered(false);
+    print_info.setVerticallyCentered(false);
+    print_info.setHorizontalPagination(NSPrintingPaginationMode::Automatic);
+    print_info.setVerticalPagination(NSPrintingPaginationMode::Automatic);
+
+    // SAFETY: `webview` is the live WKWebView returned by Wry and the method
+    // availability was checked immediately above on the main thread.
+    let print_operation = unsafe { webview.printOperationWithPrintInfo(&print_info) };
+    print_operation.setCanSpawnSeparateThread(true);
+
+    let delegate = MacPrintCompletionDelegate::new(main_thread, nonce, bridge);
+    let retained_context = Retained::into_raw(delegate.clone()).cast::<c_void>();
+    // SAFETY: the window, operation, and delegate are main-thread AppKit
+    // objects. The selector has AppKit's documented
+    // `(NSPrintOperation *, BOOL, void *)` callback signature. The +1 context
+    // retain keeps the delegate alive until that callback consumes it.
+    unsafe {
+        print_operation.runOperationModalForWindow_delegate_didRunSelector_contextInfo(
+            &window,
+            Some(&delegate),
+            Some(objc2_modern::sel!(
+                printOperationDidRun:success:contextInfo:
+            )),
+            retained_context,
+        );
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn start_macos_pdf_capture(
+    raw_webview: &wry::WebView,
+    page_rects: &[RendererPageRect],
+    nonce: u64,
+    bridge: Arc<Mutex<NativeBackendBridge>>,
+) -> Result<(), String> {
+    let Some(main_thread) = MainThreadMarker::new() else {
+        return Err("WKWebView PDF capture must start on the macOS main thread".to_string());
+    };
+    if page_rects.is_empty() {
+        return Err("WKWebView PDF capture received no validated page rectangles".to_string());
+    }
+    if let Ok(mut bridge) = bridge.lock() {
+        bridge.begin_macos_capture(nonce, page_rects.len());
+    } else {
+        return Err("WKWebView PDF capture state is unavailable".to_string());
+    }
+
+    let webview = raw_webview.webview();
+    for (page_index, page) in page_rects.iter().copied().enumerate() {
+        // SAFETY: the marker proves this is the main thread; the rectangle
+        // contains finite, validated DOM coordinates.
+        let configuration = unsafe {
+            let configuration = WKPDFConfiguration::new(main_thread);
+            configuration.setRect(CGRect::new(
+                CGPoint::new(page.x, page.y),
+                CGSize::new(page.width, page.height),
+            ));
+            configuration.setAllowTransparentBackground(false);
+            configuration
+        };
+        let callback_bridge = bridge.clone();
+        let callback = RcBlock::new(move |data: *mut NSData, error: *mut NSError| {
+            let result = if let Some(error) = unsafe { error.as_ref() } {
+                Err(format!(
+                    "WKWebView page {} capture failed: {}",
+                    page_index + 1,
+                    error.localizedDescription()
+                ))
+            } else if let Some(data) = unsafe { data.as_ref() } {
+                Ok(data.to_vec())
+            } else {
+                Err(format!(
+                    "WKWebView page {} capture returned neither PDF data nor an error",
+                    page_index + 1
+                ))
+            };
+            if let Ok(mut bridge) = callback_bridge.lock() {
+                bridge.record_macos_page(nonce, page_index, result);
+            }
+        });
+        // SAFETY: `webview` and `configuration` are live Objective-C objects,
+        // the escaping block owns its Arc state, and WebKit copies completion
+        // handlers for the asynchronous operation.
+        unsafe {
+            webview.createPDFWithConfiguration_completionHandler(Some(&configuration), &callback);
+        }
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn create_windows_print_settings(
+    raw_webview: &wry::WebView,
+    expectation: &PdfExpectation,
+) -> Result<ICoreWebView2PrintSettings, String> {
+    let spec = windows_native_print_settings_spec(expectation)?;
+    let environment = raw_webview
+        .environment()
+        .cast::<ICoreWebView2Environment6>()
+        .map_err(|error| format!("WebView2 print settings are unavailable: {error}"))?;
+    let settings = unsafe { environment.CreatePrintSettings() }
+        .map_err(|error| format!("WebView2 could not create print settings: {error}"))?;
+    // SAFETY: every setter is invoked on a live WebView2 print-settings COM
+    // object on the UI thread. Dimensions and margins are in inches.
+    unsafe {
+        settings
+            .SetOrientation(COREWEBVIEW2_PRINT_ORIENTATION_PORTRAIT)
+            .and_then(|_| settings.SetScaleFactor(spec.scale_factor))
+            .and_then(|_| settings.SetPageWidth(spec.page_width_inches))
+            .and_then(|_| settings.SetPageHeight(spec.page_height_inches))
+            .and_then(|_| settings.SetMarginTop(spec.margin_top_inches))
+            .and_then(|_| settings.SetMarginBottom(spec.margin_bottom_inches))
+            .and_then(|_| settings.SetMarginLeft(spec.margin_left_inches))
+            .and_then(|_| settings.SetMarginRight(spec.margin_right_inches))
+            .and_then(|_| settings.SetShouldPrintBackgrounds(spec.should_print_backgrounds))
+            .and_then(|_| settings.SetShouldPrintSelectionOnly(spec.should_print_selection_only))
+            .and_then(|_| {
+                settings.SetShouldPrintHeaderAndFooter(spec.should_print_header_and_footer)
+            })
+    }
+    .map_err(|error| format!("WebView2 rejected print settings: {error}"))?;
+    Ok(settings)
+}
+
+#[cfg(target_os = "windows")]
+fn windows_native_print_status(status: COREWEBVIEW2_PRINT_STATUS) -> WindowsNativePrintStatus {
+    if status.0 == COREWEBVIEW2_PRINT_STATUS_SUCCEEDED.0 {
+        WindowsNativePrintStatus::Succeeded
+    } else if status.0 == COREWEBVIEW2_PRINT_STATUS_PRINTER_UNAVAILABLE.0 {
+        WindowsNativePrintStatus::PrinterUnavailable
+    } else if status.0 == COREWEBVIEW2_PRINT_STATUS_OTHER_ERROR.0 {
+        WindowsNativePrintStatus::OtherError
+    } else {
+        WindowsNativePrintStatus::Unknown(status.0)
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn start_windows_system_print(
+    raw_webview: &wry::WebView,
+    expectation: &PdfExpectation,
+    nonce: u64,
+    bridge: Arc<Mutex<NativeBackendBridge>>,
+) -> Result<(), String> {
+    let settings = create_windows_print_settings(raw_webview, expectation)?;
+    let webview = raw_webview
+        .webview()
+        .cast::<ICoreWebView2_16>()
+        .map_err(|error| format!("WebView2 native Print is unavailable: {error}"))?;
+    let callback = PrintCompletedHandler::create(Box::new(move |hresult, status| {
+        let result = match hresult {
+            Ok(()) => webview2_print_completion_decision(true, windows_native_print_status(status)),
+            Err(error) => Err(format!(
+                "WebView2 Print completion failed before its status: {error}"
+            )),
+        };
+        if let Ok(mut bridge) = bridge.lock() {
+            bridge.record_completion(NativeBackendCompletion::SystemPrint { nonce, result });
+        }
+        Ok(())
+    }));
+
+    // SAFETY: the settings and callback are live COM objects on the WebView2
+    // UI thread; the callback owns all state needed after this call returns.
+    unsafe { webview.Print(&settings, &callback) }
+        .map_err(|error| format!("WebView2 native Print failed to start: {error}"))
+}
+
+#[cfg(target_os = "windows")]
+fn start_windows_pdf_export(
+    raw_webview: &wry::WebView,
+    temp_path: &Path,
+    expectation: &PdfExpectation,
+    nonce: u64,
+    bridge: Arc<Mutex<NativeBackendBridge>>,
+) -> Result<(), String> {
+    let settings = create_windows_print_settings(raw_webview, expectation)?;
+
+    let webview = raw_webview
+        .webview()
+        .cast::<ICoreWebView2_7>()
+        .map_err(|error| format!("WebView2 PrintToPdf is unavailable: {error}"))?;
+    let mut wide_path = temp_path.as_os_str().encode_wide().collect::<Vec<_>>();
+    if wide_path.contains(&0) {
+        return Err("WebView2 PDF output path contains an embedded NUL".to_string());
+    }
+    wide_path.push(0);
+
+    let callback_bridge = bridge;
+    let callback = PrintToPdfCompletedHandler::create(Box::new(move |hresult, succeeded| {
+        let result = match hresult {
+            Ok(()) => webview2_pdf_completion_decision(true, succeeded),
+            Err(error) => Err(format!(
+                "WebView2 PrintToPdf completion failed before its result flag: {error}"
+            )),
+        };
+        if let Ok(mut bridge) = callback_bridge.lock() {
+            bridge.record_completion(NativeBackendCompletion::PdfFile { nonce, result });
+        }
+        Ok(())
+    }));
+
+    // SAFETY: the UTF-16 path remains alive for the synchronous COM call and
+    // the callback owns all state required after the call returns.
+    unsafe { webview.PrintToPdf(PCWSTR(wide_path.as_ptr()), &settings, &callback) }
+        .map_err(|error| format!("WebView2 PrintToPdf failed to start: {error}"))
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 struct RendererState {
     ready: bool,
     page_count: Option<usize>,
+    page_rects: Vec<RendererPageRect>,
     geometry_print_mode: bool,
     error: Option<String>,
     readiness_revision: u64,
@@ -481,6 +899,7 @@ impl RendererState {
     fn invalidate(&mut self) {
         self.ready = false;
         self.page_count = None;
+        self.page_rects.clear();
         self.geometry_print_mode = false;
         self.print_ready_nonce = None;
         self.readiness_revision = self.readiness_revision.saturating_add(1);
@@ -495,12 +914,232 @@ impl RendererState {
         }
         match renderer_readiness_decision(self.ready, self.page_count, self.error.as_deref(), false)
         {
+            RendererReadinessDecision::Ready { .. }
+                if self.page_count != Some(self.page_rects.len()) || self.page_rects.is_empty() =>
+            {
+                self.print_ready_nonce = None;
+                self.error = Some(
+                    "native print preflight did not retain every validated page rectangle"
+                        .to_string(),
+                );
+            }
             RendererReadinessDecision::Ready { .. } => self.print_ready_nonce = Some(nonce),
             RendererReadinessDecision::Pending => {
                 self.error =
                     Some("native print preflight completed before renderer readiness".to_string())
             }
             RendererReadinessDecision::Fallback(reason) => self.error = Some(reason),
+        }
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[derive(Debug)]
+struct PendingNativeOutput {
+    kind: HtmlOutputKind,
+    nonce: u64,
+    destination: Option<PathBuf>,
+    temp_path: Option<PathBuf>,
+    started_at: Instant,
+    backend_started: bool,
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+impl PendingNativeOutput {
+    fn validating(kind: HtmlOutputKind, nonce: u64, destination: Option<PathBuf>) -> Self {
+        Self {
+            kind,
+            nonce,
+            destination,
+            temp_path: None,
+            started_at: Instant::now(),
+            backend_started: false,
+        }
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn native_output_timeout_reason(
+    _kind: HtmlOutputKind,
+    backend_started: bool,
+    elapsed: Duration,
+) -> Option<String> {
+    if !backend_started && elapsed >= READINESS_TIMEOUT {
+        return Some("HTML renderer native output preflight timed out".to_string());
+    }
+    if elapsed >= OUTPUT_TIMEOUT {
+        return Some("native HTML output backend did not complete before its deadline".to_string());
+    }
+    None
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[derive(Debug)]
+enum NativeBackendCompletion {
+    SystemPrint {
+        nonce: u64,
+        result: Result<(), String>,
+    },
+    #[cfg(target_os = "macos")]
+    CapturedPages {
+        nonce: u64,
+        pages: Vec<Result<Vec<u8>, String>>,
+    },
+    #[cfg(target_os = "windows")]
+    PdfFile {
+        nonce: u64,
+        result: Result<(), String>,
+    },
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug)]
+struct MacCaptureBatch {
+    nonce: u64,
+    pages: Vec<Option<Result<Vec<u8>, String>>>,
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[derive(Debug, Default)]
+struct NativeBackendBridge {
+    completion: Option<NativeBackendCompletion>,
+    cancelled_nonces: HashSet<u64>,
+    registered_temp_paths: HashMap<u64, PathBuf>,
+    cancelled_temp_paths: HashMap<u64, PathBuf>,
+    #[cfg(target_os = "macos")]
+    mac_capture: Option<MacCaptureBatch>,
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+impl NativeBackendBridge {
+    fn prepare_for_output(&mut self) {
+        self.completion = None;
+        #[cfg(target_os = "macos")]
+        {
+            self.mac_capture = None;
+        }
+    }
+
+    fn register_temp_path(&mut self, nonce: u64, path: PathBuf) -> Result<(), String> {
+        if self.cancelled_nonces.contains(&nonce) {
+            let _ = discard_pdf_export_temp(&path);
+            return Err("native output was cancelled before its backend started".to_string());
+        }
+        self.registered_temp_paths.insert(nonce, path);
+        Ok(())
+    }
+
+    fn record_completion(&mut self, completion: NativeBackendCompletion) {
+        let nonce = native_backend_completion_nonce(&completion);
+        if self.cancelled_nonces.remove(&nonce) {
+            self.discard_registered_temp(nonce);
+            self.discard_cancelled_temp(nonce);
+            return;
+        }
+        self.completion = Some(completion);
+    }
+
+    fn cancel_output(&mut self, nonce: u64) {
+        self.cancelled_nonces.insert(nonce);
+        if self
+            .completion
+            .as_ref()
+            .is_some_and(|completion| native_backend_completion_nonce(completion) == nonce)
+        {
+            self.completion = None;
+        }
+        #[cfg(target_os = "macos")]
+        if self
+            .mac_capture
+            .as_ref()
+            .is_some_and(|capture| capture.nonce == nonce)
+        {
+            self.mac_capture = None;
+        }
+        if let Some(path) = self.registered_temp_paths.remove(&nonce) {
+            let _ = discard_pdf_export_temp(&path);
+            self.cancelled_temp_paths.insert(nonce, path);
+        }
+    }
+
+    fn finish_output(&mut self, nonce: u64) {
+        self.registered_temp_paths.remove(&nonce);
+        self.cancelled_nonces.remove(&nonce);
+        self.cancelled_temp_paths.remove(&nonce);
+    }
+
+    fn discard_registered_temp(&mut self, nonce: u64) {
+        if let Some(path) = self.registered_temp_paths.remove(&nonce) {
+            let _ = discard_pdf_export_temp(&path);
+        }
+    }
+
+    fn discard_cancelled_temp(&mut self, nonce: u64) {
+        if let Some(path) = self.cancelled_temp_paths.remove(&nonce) {
+            let _ = discard_pdf_export_temp(&path);
+        }
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+impl Drop for NativeBackendBridge {
+    fn drop(&mut self) {
+        for (_, path) in self.registered_temp_paths.drain() {
+            let _ = discard_pdf_export_temp(&path);
+        }
+        for (_, path) in self.cancelled_temp_paths.drain() {
+            let _ = discard_pdf_export_temp(&path);
+        }
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn native_backend_completion_nonce(completion: &NativeBackendCompletion) -> u64 {
+    match completion {
+        NativeBackendCompletion::SystemPrint { nonce, .. } => *nonce,
+        #[cfg(target_os = "macos")]
+        NativeBackendCompletion::CapturedPages { nonce, .. } => *nonce,
+        #[cfg(target_os = "windows")]
+        NativeBackendCompletion::PdfFile { nonce, .. } => *nonce,
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl NativeBackendBridge {
+    fn begin_macos_capture(&mut self, nonce: u64, page_count: usize) {
+        self.completion = None;
+        self.mac_capture = Some(MacCaptureBatch {
+            nonce,
+            pages: (0..page_count).map(|_| None).collect(),
+        });
+    }
+
+    fn record_macos_page(
+        &mut self,
+        nonce: u64,
+        page_index: usize,
+        result: Result<Vec<u8>, String>,
+    ) {
+        if self.cancelled_nonces.remove(&nonce) {
+            self.discard_registered_temp(nonce);
+            self.discard_cancelled_temp(nonce);
+            return;
+        }
+        let Some(batch) = self.mac_capture.as_mut() else {
+            return;
+        };
+        if batch.nonce != nonce || page_index >= batch.pages.len() {
+            return;
+        }
+        batch.pages[page_index] = Some(result);
+        if batch.pages.iter().all(Option::is_some) {
+            let Some(batch) = self.mac_capture.take() else {
+                return;
+            };
+            let Some(pages) = batch.pages.into_iter().collect::<Option<Vec<_>>>() else {
+                return;
+            };
+            self.record_completion(NativeBackendCompletion::CapturedPages { nonce, pages });
         }
     }
 }
@@ -546,29 +1185,32 @@ struct RendererPageRectMessage {
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub struct HtmlFormPreviewView {
+    prepared: PreparedHtmlPreview,
     webview: Option<Entity<WebView>>,
+    bridge_state: Arc<Mutex<RendererState>>,
+    native_backend_bridge: Arc<Mutex<NativeBackendBridge>>,
     renderer_state: RendererState,
     status: String,
-    print_authorization_token: String,
-    next_print_nonce: u64,
-    pending_print_nonce: Option<u64>,
-    pending_print_started_at: Option<Instant>,
+    pdf_expectation: PdfExpectation,
+    default_pdf_name: String,
+    output_state: HtmlOutputState,
+    next_output_nonce: u64,
+    pending_output: Option<PendingNativeOutput>,
     _readiness_task: Task<()>,
 }
-
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-impl EventEmitter<HtmlFormPreviewEvent> for HtmlFormPreviewView {}
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 impl HtmlFormPreviewView {
     pub fn new(prepared: PreparedHtmlPreview, window: &mut Window, cx: &mut Context<Self>) -> Self {
         use raw_window_handle::HasWindowHandle;
 
+        let retry_prepared = prepared.clone();
         let bridge_state = Arc::new(Mutex::new(RendererState::default()));
+        let native_backend_bridge = Arc::new(Mutex::new(NativeBackendBridge::default()));
         let ipc_state = bridge_state.clone();
         let protocol_root = prepared.entry.parent().map(PathBuf::from);
-        let preview_window_handle = gpui::Window::window_handle(window);
-        let expected_page_count = prepared.expected_page_count;
+        let layout_plan = prepared.layout_plan;
+        let expected_page_count = layout_plan.expected_page_count;
 
         let result = window
             .window_handle()
@@ -647,14 +1289,15 @@ impl HtmlFormPreviewView {
                                         })
                                         .collect(),
                                 };
-                                match validate_2551q_renderer_geometry(&report, expected_page_count)
-                                {
+                                match validate_renderer_geometry(&report, &layout_plan) {
                                     Ok(()) => {
                                         state.page_count = Some(page_count);
+                                        state.page_rects = report.pages;
                                         state.geometry_print_mode = print_mode;
                                     }
                                     Err(error) => {
                                         state.page_count = None;
+                                        state.page_rects.clear();
                                         state.geometry_print_mode = false;
                                         state.error = Some(error);
                                     }
@@ -669,23 +1312,24 @@ impl HtmlFormPreviewView {
         let (webview, status) = match result {
             Ok(webview) => (
                 Some(cx.new(|cx| WebView::new(webview, window, cx))),
-                "Experimental HTML renderer: preparing preview...".to_string(),
+                "Preparing HTML print preview...".to_string(),
             ),
             Err(error) => {
                 tracing::error!(
                     error_bytes = error.len(),
-                    "experimental HTML WebView construction failed"
+                    "HTML print-preview WebView construction failed"
                 );
                 if let Ok(mut state) = bridge_state.lock() {
                     state.error = Some(format!("WebView construction failed: {error}"));
                 }
-                (None, format!("Experimental HTML renderer failed: {error}"))
+                (None, format!("HTML print preview failed: {error}"))
             }
         };
 
         let initial_readiness_deadline = Instant::now() + READINESS_TIMEOUT;
         let overall_initial_readiness_deadline = initial_readiness_deadline;
-        let poll_state = bridge_state;
+        let poll_state = bridge_state.clone();
+        let poll_native_backend = native_backend_bridge.clone();
         let readiness_task = cx.spawn(async move |this, cx| {
             let mut reported_page_count = None;
             let mut initial_readiness_completed = false;
@@ -696,6 +1340,10 @@ impl HtmlFormPreviewView {
                     .timer(Duration::from_millis(100))
                     .await;
                 let snapshot = poll_state.lock().ok().map(|state| state.clone());
+                let backend_completion = poll_native_backend
+                    .lock()
+                    .ok()
+                    .and_then(|mut bridge| bridge.completion.take());
                 let readiness_was_invalidated = snapshot.as_ref().is_some_and(|snapshot| {
                     snapshot.readiness_revision != observed_readiness_revision
                 });
@@ -717,7 +1365,6 @@ impl HtmlFormPreviewView {
                     initial_readiness_completed,
                     now >= overall_initial_readiness_deadline,
                 );
-                let mut fallback_reason = None;
                 let update_result = this.update(cx, |this, cx| {
                     let mut should_notify = false;
                     if let Some(snapshot) = snapshot {
@@ -727,9 +1374,7 @@ impl HtmlFormPreviewView {
                         }
                     }
                     if readiness_was_invalidated {
-                        this.status =
-                            "Experimental HTML renderer — layout changed; revalidating"
-                                .to_string();
+                        this.status = "Layout changed; validating print geometry again".to_string();
                         should_notify = true;
                     }
                     match renderer_readiness_decision(
@@ -741,38 +1386,49 @@ impl HtmlFormPreviewView {
                         RendererReadinessDecision::Pending => {
                             if reported_page_count.is_some() {
                                 reported_page_count = None;
-                                this.status = "Experimental HTML renderer — layout changed; revalidating"
-                                    .to_string();
+                                this.status =
+                                    "Layout changed; validating print geometry again".to_string();
                                 should_notify = true;
                             }
                         }
                         RendererReadinessDecision::Ready { page_count } => {
                             initial_readiness_completed = true;
                             if reported_page_count != Some(page_count) {
-                                this.status = format!(
-                                    "Experimental HTML renderer — {page_count} page(s) ready; not release-ready"
-                                );
+                                this.status = format!("{page_count} printable page(s) ready");
                                 reported_page_count = Some(page_count);
                                 should_notify = true;
                             }
                         }
                         RendererReadinessDecision::Fallback(reason) => {
-                            this.status = reason.clone();
-                            fallback_reason = Some(reason);
-                            should_notify = true;
+                            if this.pending_output.is_some() {
+                                this.fail_pending_output(reason, cx);
+                                should_notify = true;
+                            } else if this.status != reason {
+                                this.status = reason;
+                                should_notify = true;
+                            }
                         }
                     }
 
-                    if let Some(started_at) = this.pending_print_started_at
-                        && started_at.elapsed() >= READINESS_TIMEOUT
-                    {
-                        fallback_reason = Some(
-                            "HTML renderer native print preflight timed out".to_string(),
-                        );
+                    if let Some(completion) = backend_completion {
+                        this.finish_native_backend(completion, cx);
+                        should_notify = true;
                     }
 
-                    if fallback_reason.is_none()
-                        && let Some(pending_nonce) = this.pending_print_nonce
+                    let timeout_reason = this.pending_output.as_ref().and_then(|pending| {
+                        native_output_timeout_reason(
+                            pending.kind,
+                            pending.backend_started,
+                            pending.started_at.elapsed(),
+                        )
+                    });
+                    if let Some(reason) = timeout_reason {
+                        this.fail_pending_output(reason, cx);
+                        should_notify = true;
+                    }
+
+                    if let Some(pending_nonce) =
+                        this.pending_output.as_ref().map(|pending| pending.nonce)
                         && this.renderer_state.print_ready_nonce == Some(pending_nonce)
                     {
                         match native_print_decision(
@@ -782,47 +1438,15 @@ impl HtmlFormPreviewView {
                             this.webview.is_some(),
                         ) {
                             NativePrintDecision::StartPrint => {
-                                let Some(webview) = this.webview.clone() else {
-                                    fallback_reason = Some(
-                                        "HTML renderer WebView disappeared before printing"
-                                            .to_string(),
-                                    );
-                                    if should_notify {
-                                        cx.notify();
-                                    }
-                                    return;
-                                };
-                                #[cfg(target_os = "windows")]
-                                let print_result = {
-                                    let script = native_authorized_print_script(
-                                        &this.print_authorization_token,
-                                        pending_nonce,
-                                    );
-                                    webview.update(cx, move |webview, _| {
-                                        webview.raw().evaluate_script(&script)
-                                    })
-                                };
-                                #[cfg(target_os = "macos")]
-                                let print_result =
-                                    webview.update(cx, |webview, _| webview.raw().print());
-                                match print_result {
-                                    Ok(()) => {
-                                        this.pending_print_nonce = None;
-                                        this.pending_print_started_at = None;
-                                        this.status = "Experimental HTML renderer — freshly validated native print dialog requested; not release-ready"
-                                            .to_string();
-                                        should_notify = true;
-                                    }
-                                    Err(error) => {
-                                        fallback_reason = Some(format!(
-                                            "HTML renderer native print failed to start: {error}"
-                                        ));
-                                    }
+                                if let Err(error) = this.start_validated_native_output(cx) {
+                                    this.fail_pending_output(error, cx);
                                 }
+                                should_notify = true;
                             }
                             NativePrintDecision::WaitForRenderer => {}
                             NativePrintDecision::Fallback(reason) => {
-                                fallback_reason = Some(reason)
+                                this.fail_pending_output(reason, cx);
+                                should_notify = true;
                             }
                         }
                     }
@@ -833,46 +1457,415 @@ impl HtmlFormPreviewView {
                 if update_result.is_err() {
                     break;
                 }
-                if let Some(reason) = fallback_reason {
-                    let _ = this.update(cx, |_, cx| {
-                        cx.emit(HtmlFormPreviewEvent::LegacyFallbackRequested(reason));
-                    });
-                    let _ = cx.update_window(preview_window_handle, |_, window, _| {
-                        window.remove_window();
-                    });
-                    break;
-                }
             }
         });
 
         Self {
+            prepared: retry_prepared,
             webview,
+            bridge_state,
+            native_backend_bridge,
             renderer_state: RendererState::default(),
             status,
-            print_authorization_token: prepared.print_authorization_token,
-            next_print_nonce: 0,
-            pending_print_nonce: None,
-            pending_print_started_at: None,
+            pdf_expectation: prepared.pdf_expectation,
+            default_pdf_name: prepared.default_pdf_name,
+            output_state: HtmlOutputState::Idle,
+            next_output_nonce: 0,
+            pending_output: None,
             _readiness_task: readiness_task,
         }
     }
 
-    fn request_legacy_fallback(
+    fn begin_native_output(
         &mut self,
-        reason: String,
-        window: &mut Window,
+        kind: HtmlOutputKind,
+        destination: Option<PathBuf>,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        if self.pending_output.is_some() {
+            return Err("another native HTML output operation is already running".to_string());
+        }
+        match native_print_decision(
+            self.renderer_state.ready,
+            self.renderer_state.page_count,
+            self.renderer_state.error.as_deref(),
+            self.webview.is_some(),
+        ) {
+            NativePrintDecision::WaitForRenderer => {
+                return Err("HTML renderer is not ready for native output".to_string());
+            }
+            NativePrintDecision::Fallback(reason) => return Err(reason),
+            NativePrintDecision::StartPrint => {}
+        }
+        let Some(webview) = self.webview.clone() else {
+            return Err("HTML renderer WebView disappeared before native output".to_string());
+        };
+
+        self.next_output_nonce = self.next_output_nonce.checked_add(1).unwrap_or(1);
+        let nonce = self.next_output_nonce;
+        self.renderer_state.print_ready_nonce = None;
+        if let Ok(mut state) = self.bridge_state.lock() {
+            state.print_ready_nonce = None;
+        }
+        if let Ok(mut bridge) = self.native_backend_bridge.lock() {
+            bridge.prepare_for_output();
+        }
+        self.output_state = HtmlOutputState::Validating {
+            kind,
+            nonce: nonce.to_string(),
+            destination: destination.clone(),
+        };
+        self.pending_output = Some(PendingNativeOutput::validating(kind, nonce, destination));
+        self.status = match kind {
+            HtmlOutputKind::SystemPrint => {
+                "Validating fonts and geometry for system print...".to_string()
+            }
+            HtmlOutputKind::PdfExport => {
+                "Validating fonts and geometry for PDF export...".to_string()
+            }
+        };
+
+        match webview.update(cx, |webview, _| {
+            webview
+                .raw()
+                .evaluate_script(&native_print_preflight_script(nonce))
+        }) {
+            Ok(()) => {
+                cx.notify();
+                Ok(())
+            }
+            Err(error) => Err(format!(
+                "HTML renderer native output preflight failed to start: {error}"
+            )),
+        }
+    }
+
+    fn choose_pdf_destination(&mut self, cx: &mut Context<Self>) {
+        if self.pending_output.is_some() {
+            return;
+        }
+        let default_name = self.default_pdf_name.clone();
+        cx.spawn(async move |this, cx| {
+            let Some(target_handle) = rfd::AsyncFileDialog::new()
+                .set_file_name(&default_name)
+                .add_filter("PDF", &["pdf"])
+                .save_file()
+                .await
+            else {
+                return;
+            };
+            let destination = target_handle.path().to_path_buf();
+            let _ = this.update(cx, |this, cx| {
+                if let Err(error) =
+                    this.begin_native_output(HtmlOutputKind::PdfExport, Some(destination), cx)
+                {
+                    this.fail_pending_output(error, cx);
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
+
+    fn start_validated_native_output(&mut self, cx: &mut Context<Self>) -> Result<(), String> {
+        let Some(pending) = self.pending_output.as_ref() else {
+            return Err(
+                "native output preflight completed without a pending operation".to_string(),
+            );
+        };
+        if pending.backend_started {
+            return Ok(());
+        }
+        let kind = pending.kind;
+        let nonce = pending.nonce;
+        let destination = pending.destination.clone();
+        let Some(webview) = self.webview.clone() else {
+            return Err("HTML renderer WebView disappeared before native output".to_string());
+        };
+
+        match kind {
+            HtmlOutputKind::SystemPrint => {
+                if let Some(pending) = self.pending_output.as_mut() {
+                    pending.backend_started = true;
+                }
+                self.output_state = HtmlOutputState::Running {
+                    kind,
+                    temp_path: None,
+                };
+                #[cfg(target_os = "windows")]
+                {
+                    let expectation = self.pdf_expectation.clone();
+                    let bridge = self.native_backend_bridge.clone();
+                    webview
+                        .update(cx, move |webview, _| {
+                            start_windows_system_print(webview.raw(), &expectation, nonce, bridge)
+                        })
+                        .map_err(|error| {
+                            format!("HTML renderer native print failed to start: {error}")
+                        })?;
+                    self.status =
+                        "Sending validated form to the Windows print service...".to_string();
+                    Ok(())
+                }
+                #[cfg(target_os = "macos")]
+                {
+                    let expectation = self.pdf_expectation.clone();
+                    let bridge = self.native_backend_bridge.clone();
+                    webview
+                        .update(cx, move |webview, _| {
+                            start_macos_system_print(webview.raw(), &expectation, nonce, bridge)
+                        })
+                        .map_err(|error| {
+                            format!("HTML renderer native print failed to start: {error}")
+                        })?;
+                    self.status =
+                        "macOS print dialog opened; waiting for native completion...".to_string();
+                    Ok(())
+                }
+            }
+            HtmlOutputKind::PdfExport => {
+                let destination = destination.ok_or_else(|| {
+                    "PDF export preflight completed without a destination".to_string()
+                })?;
+                let temp_path = create_pdf_export_temp(&destination).map_err(|error| {
+                    format!("PDF export temp file could not be created: {error}")
+                })?;
+                let registration = self
+                    .native_backend_bridge
+                    .lock()
+                    .map_err(|_| "native PDF backend state is unavailable".to_string())
+                    .and_then(|mut bridge| bridge.register_temp_path(nonce, temp_path.clone()));
+                if let Err(error) = registration {
+                    let _ = discard_pdf_export_temp(&temp_path);
+                    return Err(error);
+                }
+                if let Some(pending) = self.pending_output.as_mut() {
+                    pending.backend_started = true;
+                    pending.temp_path = Some(temp_path.clone());
+                }
+                self.output_state = HtmlOutputState::Running {
+                    kind,
+                    temp_path: Some(temp_path.clone()),
+                };
+                self.status = "Generating validated PDF...".to_string();
+
+                let bridge = self.native_backend_bridge.clone();
+                #[cfg(target_os = "macos")]
+                let start_result = {
+                    let page_rects = self.renderer_state.page_rects.clone();
+                    webview.update(cx, move |webview, _| {
+                        start_macos_pdf_capture(webview.raw(), &page_rects, nonce, bridge)
+                    })
+                };
+                #[cfg(target_os = "windows")]
+                let start_result = {
+                    let expectation = self.pdf_expectation.clone();
+                    webview.update(cx, move |webview, _| {
+                        start_windows_pdf_export(
+                            webview.raw(),
+                            &temp_path,
+                            &expectation,
+                            nonce,
+                            bridge,
+                        )
+                    })
+                };
+                start_result
+                    .map_err(|error| format!("native PDF backend could not start: {error}"))?;
+                Ok(())
+            }
+        }
+    }
+
+    fn finish_native_backend(
+        &mut self,
+        completion: NativeBackendCompletion,
         cx: &mut Context<Self>,
     ) {
-        self.status = reason.clone();
-        emit_legacy_fallback_then_close(reason, window, cx);
+        let completion_nonce = match &completion {
+            NativeBackendCompletion::SystemPrint { nonce, .. } => *nonce,
+            #[cfg(target_os = "macos")]
+            NativeBackendCompletion::CapturedPages { nonce, .. } => *nonce,
+            #[cfg(target_os = "windows")]
+            NativeBackendCompletion::PdfFile { nonce, .. } => *nonce,
+        };
+        let completion_kind = match &completion {
+            NativeBackendCompletion::SystemPrint { .. } => HtmlOutputKind::SystemPrint,
+            #[cfg(target_os = "macos")]
+            NativeBackendCompletion::CapturedPages { .. } => HtmlOutputKind::PdfExport,
+            #[cfg(target_os = "windows")]
+            NativeBackendCompletion::PdfFile { .. } => HtmlOutputKind::PdfExport,
+        };
+        let Some((pending_nonce, pending_kind)) = self
+            .pending_output
+            .as_ref()
+            .map(|pending| (pending.nonce, pending.kind))
+        else {
+            return;
+        };
+        if pending_nonce != completion_nonce || pending_kind != completion_kind {
+            return;
+        }
+
+        let completion = match completion {
+            NativeBackendCompletion::SystemPrint { result, .. } => {
+                match result {
+                    Ok(()) => {
+                        self.finish_native_output_state(completion_nonce);
+                        self.pending_output = None;
+                        self.output_state = HtmlOutputState::Idle;
+                        self.status = if cfg!(target_os = "macos") {
+                            "Validated form completed the macOS print operation".to_string()
+                        } else {
+                            "Validated form was accepted by the Windows print service".to_string()
+                        };
+                        self.leave_native_output_mode(cx);
+                    }
+                    Err(error) => self.fail_pending_output(
+                        format!("HTML renderer system print failed: {error}"),
+                        cx,
+                    ),
+                }
+                return;
+            }
+            #[cfg(target_os = "macos")]
+            completion @ NativeBackendCompletion::CapturedPages { .. } => completion,
+            #[cfg(target_os = "windows")]
+            completion @ NativeBackendCompletion::PdfFile { .. } => completion,
+        };
+
+        let Some(temp_path) = self
+            .pending_output
+            .as_ref()
+            .and_then(|pending| pending.temp_path.clone())
+        else {
+            self.fail_pending_output(
+                "native PDF backend completed without a temporary file".to_string(),
+                cx,
+            );
+            return;
+        };
+        let Some(destination) = self
+            .pending_output
+            .as_ref()
+            .and_then(|pending| pending.destination.clone())
+        else {
+            self.fail_pending_output(
+                "native PDF backend completed without a destination".to_string(),
+                cx,
+            );
+            return;
+        };
+
+        #[cfg(target_os = "macos")]
+        let backend_result = match completion {
+            NativeBackendCompletion::CapturedPages { pages, .. } => {
+                let page_bytes = pages.into_iter().collect::<Result<Vec<_>, _>>();
+                page_bytes
+                    .and_then(|pages| {
+                        merge_single_page_pdfs(&pages).map_err(|error| error.to_string())
+                    })
+                    .and_then(|merged| {
+                        std::fs::write(&temp_path, merged).map_err(|error| error.to_string())
+                    })
+            }
+            NativeBackendCompletion::SystemPrint { .. } => {
+                Err("system print completion reached the PDF export finalizer".to_string())
+            }
+        };
+        #[cfg(target_os = "windows")]
+        let backend_result = match completion {
+            NativeBackendCompletion::PdfFile { result, .. } => result,
+            NativeBackendCompletion::SystemPrint { .. } => {
+                Err("system print completion reached the PDF export finalizer".to_string())
+            }
+        };
+
+        let export_result = backend_result.and_then(|()| {
+            finalize_pdf_export(&temp_path, &destination, &self.pdf_expectation)
+                .map(|_| ())
+                .map_err(|error| error.to_string())
+        });
+        self.leave_native_output_mode(cx);
+        match export_result {
+            Ok(()) => {
+                self.finish_native_output_state(completion_nonce);
+                self.pending_output = None;
+                self.output_state = HtmlOutputState::Idle;
+                self.status = format!("PDF exported to {}", destination.display());
+            }
+            Err(error) => {
+                self.fail_pending_output(format!("HTML renderer PDF export failed: {error}"), cx)
+            }
+        }
+    }
+
+    fn leave_native_output_mode(&self, cx: &mut Context<Self>) {
+        if let Some(webview) = self.webview.clone() {
+            let _ = webview.update(cx, |webview, _| {
+                webview
+                    .raw()
+                    .evaluate_script(native_output_cleanup_script())
+            });
+        }
+    }
+
+    fn finish_native_output_state(&self, nonce: u64) {
+        if let Ok(mut bridge) = self.native_backend_bridge.lock() {
+            bridge.finish_output(nonce);
+        }
+    }
+
+    fn cancel_pending_output_state(&mut self) {
+        let Some(pending) = self.pending_output.take() else {
+            return;
+        };
+        if let Some(temp_path) = pending.temp_path.as_deref() {
+            let _ = discard_pdf_export_temp(temp_path);
+        }
+        if let Ok(mut bridge) = self.native_backend_bridge.lock() {
+            bridge.cancel_output(pending.nonce);
+            #[cfg(target_os = "macos")]
+            if pending.kind == HtmlOutputKind::SystemPrint {
+                // The current macOS host has no callback that could arrive
+                // after cancellation, so this nonce needs no tombstone.
+                bridge.finish_output(pending.nonce);
+            }
+        }
+        self.renderer_state.print_ready_nonce = None;
+        if let Ok(mut renderer) = self.bridge_state.lock() {
+            renderer.print_ready_nonce = None;
+        }
+    }
+
+    fn fail_pending_output(&mut self, error: String, cx: &mut Context<Self>) {
+        self.cancel_pending_output_state();
+        self.output_state = HtmlOutputState::Failed(error.clone());
+        self.status = error;
+        self.leave_native_output_mode(cx);
+    }
+
+    fn request_retry(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.cancel_pending_output_state();
+        self.leave_native_output_mode(cx);
+        self.webview.take();
+        let prepared = self.prepared.clone();
+        *self = Self::new(prepared, window, cx);
         cx.notify();
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+impl Drop for HtmlFormPreviewView {
+    fn drop(&mut self) {
+        self.cancel_pending_output_state();
     }
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 impl Render for HtmlFormPreviewView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let print_enabled = matches!(
+        let native_output_enabled = matches!(
             native_print_decision(
                 self.renderer_state.ready,
                 self.renderer_state.page_count,
@@ -880,7 +1873,11 @@ impl Render for HtmlFormPreviewView {
                 self.webview.is_some(),
             ),
             NativePrintDecision::StartPrint
-        ) && self.pending_print_nonce.is_none();
+        ) && self.pending_output.is_none()
+            && !matches!(
+                &self.output_state,
+                HtmlOutputState::Validating { .. } | HtmlOutputState::Running { .. }
+            );
 
         div()
             .size_full()
@@ -902,9 +1899,17 @@ impl Render for HtmlFormPreviewView {
                             .items_center()
                             .gap_2()
                             .child(
-                                Button::new("experimental-html-print")
-                                    .label("Print (Experimental)")
-                                    .disabled(!print_enabled)
+                                Button::new("html-export-pdf")
+                                    .label("Export PDF")
+                                    .disabled(!native_output_enabled)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.choose_pdf_destination(cx);
+                                    })),
+                            )
+                            .child(
+                                Button::new("html-print")
+                                    .label("Print")
+                                    .disabled(!native_output_enabled)
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         match native_print_decision(
                                             this.renderer_state.ready,
@@ -913,70 +1918,42 @@ impl Render for HtmlFormPreviewView {
                                             this.webview.is_some(),
                                         ) {
                                             NativePrintDecision::WaitForRenderer => {
-                                                this.status = "Experimental HTML renderer is not ready to print"
+                                                this.status = "HTML renderer is not ready to print"
                                                     .to_string();
                                                 cx.notify();
                                             }
                                             NativePrintDecision::Fallback(reason) => {
-                                                this.request_legacy_fallback(reason, window, cx);
+                                                this.status = reason;
+                                                cx.notify();
                                             }
                                             NativePrintDecision::StartPrint => {
-                                                let Some(webview) = this.webview.clone() else {
-                                                    this.request_legacy_fallback(
-                                                        "HTML renderer WebView disappeared before printing"
-                                                            .to_string(),
-                                                        window,
-                                                        cx,
-                                                    );
-                                                    return;
-                                                };
-                                                this.next_print_nonce = this
-                                                    .next_print_nonce
-                                                    .checked_add(1)
-                                                    .unwrap_or(1);
-                                                let nonce = this.next_print_nonce;
-                                                this.pending_print_nonce = Some(nonce);
-                                                this.pending_print_started_at = Some(Instant::now());
-                                                this.status = "Experimental HTML renderer — validating fonts and layout for native print..."
-                                                    .to_string();
-                                                match webview.update(cx, |webview, _| {
-                                                    webview.raw().evaluate_script(
-                                                        &native_print_preflight_script(nonce),
-                                                    )
-                                                }) {
-                                                    Ok(()) => {
-                                                        cx.notify();
-                                                    }
-                                                    Err(error) => {
-                                                        this.pending_print_nonce = None;
-                                                        this.pending_print_started_at = None;
-                                                        this.request_legacy_fallback(
-                                                            format!(
-                                                                "HTML renderer native print preflight failed to start: {error}"
-                                                            ),
-                                                            window,
-                                                            cx,
-                                                        );
-                                                    }
+                                                if let Err(error) = this.begin_native_output(
+                                                    HtmlOutputKind::SystemPrint,
+                                                    None,
+                                                    cx,
+                                                ) {
+                                                    this.fail_pending_output(error, cx);
+                                                    cx.notify();
                                                 }
                                             }
                                         }
                                     })),
                             )
                             .child(
-                                Button::new("experimental-html-open-legacy")
-                                    .label("Open Legacy Preview")
+                                Button::new("html-preview-retry")
+                                    .label("Retry")
                                     .outline()
                                     .on_click(cx.listener(|this, _, window, cx| {
-                                        let reason = "Legacy preview requested from the experimental HTML toolbar".to_string();
-                                        this.request_legacy_fallback(reason, window, cx);
+                                        this.request_retry(window, cx);
                                     })),
                             )
-                            .child(
-                                Button::new("experimental-html-close")
-                                    .label("Close")
-                                    .on_click(|_, window, _| window.remove_window()),
-                            ),
+                            .child(Button::new("html-preview-close").label("Close").on_click(
+                                cx.listener(|this, _, window, cx| {
+                                    this.cancel_pending_output_state();
+                                    this.leave_native_output_mode(cx);
+                                    window.remove_window();
+                                }),
+                            )),
                     ),
             )
             .child(
@@ -996,8 +1973,8 @@ impl Render for HtmlFormPreviewView {
     }
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-fn renderer_protocol_response(
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+pub(crate) fn renderer_protocol_response(
     root: Option<&Path>,
     request: wry::http::Request<Vec<u8>>,
 ) -> wry::http::Response<Cow<'static, [u8]>> {
@@ -1035,7 +2012,7 @@ fn renderer_protocol_response(
         .unwrap_or_else(|_| renderer_error_response(500, "renderer response could not be built"))
 }
 
-fn renderer_relative_path(uri_path: &str) -> Option<PathBuf> {
+pub(crate) fn renderer_relative_path(uri_path: &str) -> Option<PathBuf> {
     let path = uri_path.trim_start_matches('/');
     let path = if path.is_empty() { "index.html" } else { path };
     let relative = PathBuf::from(path);
@@ -1049,7 +2026,7 @@ fn renderer_relative_path(uri_path: &str) -> Option<PathBuf> {
     .then_some(relative)
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 fn renderer_content_type(path: &Path) -> &'static str {
     match path.extension().and_then(|extension| extension.to_str()) {
         Some("html") => "text/html; charset=utf-8",
@@ -1063,7 +2040,7 @@ fn renderer_content_type(path: &Path) -> &'static str {
     }
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 fn renderer_error_response(
     status: u16,
     message: &'static str,
@@ -1081,10 +2058,10 @@ fn renderer_error_response(
         .expect("static renderer error response is valid")
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 pub struct PreparedHtmlPreview;
 
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 pub fn prepare_html_form_preview(
     _envelope: &RenderEnvelopeV1,
 ) -> Result<PreparedHtmlPreview, HtmlPreviewError> {
@@ -1096,57 +2073,21 @@ mod tests {
     use super::*;
 
     #[cfg(any(target_os = "macos", target_os = "windows"))]
-    struct FallbackTestEmitter;
-
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
-    impl EventEmitter<HtmlFormPreviewEvent> for FallbackTestEmitter {}
-
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
-    impl Render for FallbackTestEmitter {
-        fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-            div()
+    fn validated_page_rect(y: f64) -> RendererPageRect {
+        RendererPageRect {
+            x: 0.0,
+            y,
+            width: 816.0,
+            height: 1248.0,
+            client_width: 816.0,
+            client_height: 1248.0,
+            scroll_width: 816.0,
+            scroll_height: 1248.0,
+            descendant_overflow_x: 0,
+            descendant_overflow_y: 0,
+            descendant_clipped_x: 0,
+            descendant_clipped_y: 0,
         }
-    }
-
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
-    struct FallbackTestObserver {
-        _subscription: gpui::Subscription,
-    }
-
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
-    #[gpui::test]
-    fn legacy_fallback_event_is_delivered_before_the_preview_window_closes(
-        cx: &mut gpui::TestAppContext,
-    ) {
-        use std::sync::atomic::{AtomicBool, Ordering};
-
-        let preview_window = cx.add_window(|_, _| FallbackTestEmitter);
-        let emitter = preview_window
-            .root(cx)
-            .expect("fallback test preview has a root emitter");
-        let event_delivered = Arc::new(AtomicBool::new(false));
-        let delivered_for_subscription = event_delivered.clone();
-        let _observer = cx.new(|cx| {
-            let subscription =
-                cx.subscribe(&emitter, move |_, _, event: &HtmlFormPreviewEvent, _| {
-                    let HtmlFormPreviewEvent::LegacyFallbackRequested(reason) = event;
-                    assert_eq!(reason, "manual fallback");
-                    delivered_for_subscription.store(true, Ordering::SeqCst);
-                });
-            FallbackTestObserver {
-                _subscription: subscription,
-            }
-        });
-
-        preview_window
-            .update(cx, |_, window, cx| {
-                emit_legacy_fallback_then_close("manual fallback".to_string(), window, cx);
-            })
-            .expect("fallback test preview remains open for the event update");
-        cx.run_until_parked();
-
-        assert!(event_delivered.load(Ordering::SeqCst));
-        assert!(preview_window.root(cx).is_err());
     }
 
     #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -1189,7 +2130,7 @@ mod tests {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     #[test]
     fn renderer_initialization_blocks_worker_capabilities() {
-        let script = renderer_initialization_script("\"{}\"", "test-token");
+        let script = renderer_initialization_script("\"{}\"");
         assert!(script.contains("installBlockedWorkerConstructor(\"Worker\")"));
         assert!(script.contains("installBlockedWorkerConstructor(\"SharedWorker\")"));
         assert!(script.contains("Object.defineProperty(window.navigator, \"serviceWorker\""));
@@ -1199,7 +2140,7 @@ mod tests {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     #[test]
     fn renderer_initialization_blocks_peer_media_and_device_capabilities() {
-        let script = renderer_initialization_script("\"{}\"", "test-token");
+        let script = renderer_initialization_script("\"{}\"");
         assert!(script.contains("\"RTCPeerConnection\""));
         assert!(script.contains("\"webkitRTCPeerConnection\""));
         assert!(script.contains("\"mozRTCPeerConnection\""));
@@ -1211,21 +2152,17 @@ mod tests {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     #[test]
     fn renderer_initialization_blocks_unvalidated_print_entry_points() {
-        let script = renderer_initialization_script("\"{}\"", "test-token");
+        let script = renderer_initialization_script("\"{}\"");
         assert!(script.contains("Object.defineProperty(window, \"print\""));
-        assert!(script.contains("const originalRendererPrint = window.print.bind(window)"));
-        assert!(script.contains("Object.defineProperty(window, \"authorizeEbirNativePrint\""));
-        assert!(script.contains("authorizedNativePrintNonce = null"));
+        assert!(script.contains("Script-initiated printing is disabled"));
+        assert!(!script.contains("authorizeEbirNativePrint"));
+        assert!(!script.contains("window.print()"));
         assert!(script.contains("printGuardInstallationFailed = true"));
         assert!(script.contains("Native print guard installation failed"));
         assert!(script.contains("window.addEventListener(\"DOMContentLoaded\""));
         assert!(script.contains("event.key.toLowerCase() === \"p\""));
         assert!(script.contains("document.addEventListener(\"contextmenu\""));
         assert!(script.contains("event.stopImmediatePropagation()"));
-
-        let authorized_print = native_authorized_print_script("test-token", 42);
-        assert!(authorized_print.contains("window.authorizeEbirNativePrint(\"test-token\", 42)"));
-        assert!(authorized_print.contains("window.print()"));
     }
 
     #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -1254,6 +2191,7 @@ mod tests {
         let mut state = RendererState {
             ready: true,
             page_count: Some(2),
+            page_rects: vec![validated_page_rect(0.0), validated_page_rect(1248.0)],
             geometry_print_mode: true,
             ..RendererState::default()
         };
@@ -1265,6 +2203,185 @@ mod tests {
         assert!(!state.geometry_print_mode);
         assert_eq!(state.print_ready_nonce, None);
         assert_eq!(state.readiness_revision, 1);
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[test]
+    fn native_output_cleanup_leaves_print_mode_and_revalidates_geometry() {
+        let script = native_output_cleanup_script();
+        assert!(script.contains("classList.remove(\"ebir-native-print-mode\")"));
+        assert!(script.contains("dispatchEvent(new Event(\"resize\"))"));
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[test]
+    fn native_output_backend_remains_bounded_after_it_starts() {
+        let reason = native_output_timeout_reason(HtmlOutputKind::PdfExport, true, OUTPUT_TIMEOUT);
+        assert_eq!(
+            reason.as_deref(),
+            Some("native HTML output backend did not complete before its deadline")
+        );
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[test]
+    fn native_output_preflight_uses_the_shorter_readiness_deadline() {
+        let reason =
+            native_output_timeout_reason(HtmlOutputKind::PdfExport, false, READINESS_TIMEOUT);
+        assert_eq!(
+            reason.as_deref(),
+            Some("HTML renderer native output preflight timed out")
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_system_print_completion_fails_closed_for_cancel_or_error() {
+        assert_eq!(macos_system_print_completion_decision(true), Ok(()));
+        assert_eq!(
+            macos_system_print_completion_decision(false),
+            Err("the macOS print operation was cancelled or failed".to_string())
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_page_capture_waits_for_every_page_and_preserves_order() {
+        let mut bridge = NativeBackendBridge::default();
+        bridge.begin_macos_capture(9, 2);
+        bridge.record_macos_page(9, 1, Ok(vec![2]));
+        assert!(bridge.completion.is_none());
+        bridge.record_macos_page(9, 0, Ok(vec![1]));
+        let Some(NativeBackendCompletion::CapturedPages { nonce, pages }) =
+            bridge.completion.take()
+        else {
+            panic!("macOS capture should complete after all page callbacks");
+        };
+        assert_eq!(nonce, 9);
+        assert_eq!(pages, vec![Ok(vec![1]), Ok(vec![2])]);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn cancelled_native_output_discards_temp_and_ignores_late_completion() {
+        let temp_path = std::env::temp_dir().join(format!(
+            "ebirforms-cancelled-output-{}.pdf",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::write(&temp_path, b"partial").expect("write test temp");
+        let mut bridge = NativeBackendBridge::default();
+        bridge
+            .register_temp_path(9, temp_path.clone())
+            .expect("register test temp");
+        bridge.begin_macos_capture(9, 1);
+
+        bridge.cancel_output(9);
+        bridge.prepare_for_output();
+        bridge.record_macos_page(9, 0, Ok(vec![1]));
+
+        assert!(!temp_path.exists());
+        assert!(bridge.completion.is_none());
+    }
+
+    #[test]
+    fn webview2_pdf_requires_both_hresult_and_success_result() {
+        assert!(webview2_pdf_completion_decision(true, true).is_ok());
+        assert!(webview2_pdf_completion_decision(false, true).is_err());
+        assert!(webview2_pdf_completion_decision(true, false).is_err());
+        assert!(webview2_pdf_completion_decision(false, false).is_err());
+    }
+
+    fn pdf_expectation_with_geometry(width_points: f64, height_points: f64) -> PdfExpectation {
+        PdfExpectation {
+            form_code: "TEST".to_string(),
+            revision: "2018".to_string(),
+            envelope_hash: "a".repeat(64),
+            expected_page_count: 1,
+            width_points,
+            height_points,
+        }
+    }
+
+    #[test]
+    fn windows_print_settings_convert_legal_points_to_exact_inches() {
+        let expectation = pdf_expectation_with_geometry(612.0, 936.0);
+        let settings = windows_native_print_settings_spec(&expectation)
+            .expect("legal paper geometry should produce WebView2 settings");
+        assert_eq!(
+            settings,
+            WindowsNativePrintSettingsSpec {
+                page_width_inches: 8.5,
+                page_height_inches: 13.0,
+                scale_factor: 1.0,
+                margin_top_inches: 0.0,
+                margin_bottom_inches: 0.0,
+                margin_left_inches: 0.0,
+                margin_right_inches: 0.0,
+                should_print_backgrounds: true,
+                should_print_selection_only: false,
+                should_print_header_and_footer: false,
+            }
+        );
+    }
+
+    #[test]
+    fn windows_print_settings_follow_provider_specific_paper_height() {
+        let letter =
+            windows_native_print_settings_spec(&pdf_expectation_with_geometry(612.0, 792.0))
+                .expect("letter geometry should produce WebView2 settings");
+        let fourteen_inch =
+            windows_native_print_settings_spec(&pdf_expectation_with_geometry(612.0, 1_008.0))
+                .expect("fourteen-inch geometry should produce WebView2 settings");
+        assert_eq!(
+            (letter.page_height_inches, fourteen_inch.page_height_inches),
+            (11.0, 14.0)
+        );
+    }
+
+    #[test]
+    fn windows_print_settings_reject_invalid_expectations() {
+        let expectation = pdf_expectation_with_geometry(f64::NAN, 936.0);
+        assert!(windows_native_print_settings_spec(&expectation).is_err());
+    }
+
+    #[test]
+    fn webview2_system_print_requires_successful_hresult_and_status() {
+        assert!(
+            webview2_print_completion_decision(true, WindowsNativePrintStatus::Succeeded).is_ok()
+        );
+        assert!(
+            webview2_print_completion_decision(false, WindowsNativePrintStatus::Succeeded).is_err()
+        );
+        assert!(
+            webview2_print_completion_decision(true, WindowsNativePrintStatus::PrinterUnavailable)
+                .is_err()
+        );
+        assert!(
+            webview2_print_completion_decision(true, WindowsNativePrintStatus::OtherError).is_err()
+        );
+        assert!(
+            webview2_print_completion_decision(true, WindowsNativePrintStatus::Unknown(99))
+                .is_err()
+        );
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[test]
+    fn print_ready_rejects_missing_page_rectangles() {
+        let mut state = RendererState {
+            ready: true,
+            page_count: Some(2),
+            geometry_print_mode: true,
+            ..RendererState::default()
+        };
+        state.accept_print_ready(42, true);
+        assert_eq!(state.print_ready_nonce, None);
+        assert!(
+            state
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("page rectangle"))
+        );
     }
 
     #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -1376,7 +2493,7 @@ mod tests {
     }
 
     #[test]
-    fn native_print_failures_route_to_the_legacy_fallback() {
+    fn native_print_failures_remain_fail_closed() {
         assert!(matches!(
             native_print_decision(true, Some(2), Some("late renderer failure"), true),
             NativePrintDecision::Fallback(reason) if reason.contains("late renderer failure")

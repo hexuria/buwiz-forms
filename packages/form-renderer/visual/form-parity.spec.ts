@@ -4,16 +4,20 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
+import { compareCompleteOfficialPage } from "./official-page-diff";
+import { parsePromotionVisualThreshold } from "./release-visual-threshold";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "../../..");
-const MAX_CHANGED_PERCENT = Number(
-  process.env.FORM_VISUAL_MAX_CHANGED_PERCENT ?? "1"
+const MAX_CHANGED_PERCENT = parsePromotionVisualThreshold(
+  process.env.FORM_VISUAL_MAX_CHANGED_PERCENT
 );
 const PIXELMATCH_THRESHOLD = 0.1;
 const DEVICE_SCALE_FACTOR = 1.5;
+const STRUCTURAL_INK_THRESHOLD = 100;
+const STRUCTURAL_LINE_MIN_RUN = 20;
+const STRUCTURAL_TOLERANCE_RADIUS = 4;
 const VISUAL_EVIDENCE_PRODUCER = "playwright-form-parity-v1";
 const VISUAL_EVIDENCE_PRODUCER_PATH =
   "packages/form-renderer/visual/form-parity.spec.ts";
@@ -53,6 +57,16 @@ interface VisualPageMetric {
   changed_percent: number | null;
   max_changed_percent: number;
   pixelmatch_threshold: number;
+  comparison: "official-complete-page-v1";
+  expected_ink_missing_percent: number | null;
+  unexpected_actual_ink_percent: number | null;
+  structural_changed_pixels: number | null;
+  structural_changed_percent: number | null;
+  structural_diff: string | null;
+  structural_diff_sha256: string | null;
+  structural_ink_threshold: number;
+  structural_line_min_run: number;
+  structural_tolerance_radius: number;
   passed: boolean;
 }
 
@@ -129,6 +143,39 @@ for (const parityCase of cases) {
       "Agents of Foreign Insurance Companies"
     );
     expect(await pageHasNoOverflow(officialSchedulePage)).toBe(true);
+
+    await expectCriticalRegionGeometry(pages.nth(0), [
+      { name: "Items 1-5", selector: ".official-header-options", x: 45, y: 223, width: 1137, height: 67 },
+      { name: "Items 1-2 filing basis", selector: ".filing-basis", x: 45, y: 223, width: 398, height: 67 },
+      { name: "Item 3 quarter", selector: ".quarter-options", x: 443, y: 223, width: 369, height: 67 },
+      { name: "Item 4 amended", selector: ".amended-options", x: 812, y: 223, width: 199, height: 67 },
+      { name: "Item 5 sheets", selector: ".sheets-options", x: 1011, y: 223, width: 168, height: 67 },
+      { name: "Items 6-13", selector: ".background-information", x: 45, y: 295, width: 1137, height: 399 },
+      { name: "Items 6-7", selector: ".tin-rdo-row", x: 45, y: 320, width: 1137, height: 36 },
+      { name: "Item 8", selector: ".name-field", x: 45, y: 356, width: 1137, height: 58 },
+      { name: "Items 9-9A", selector: ".address-field", x: 45, y: 414, width: 1137, height: 96 },
+      { name: "Items 10-11", selector: ".contact-email-field", x: 45, y: 510, width: 1137, height: 59 },
+      { name: "Items 12-12A", selector: ".tax-relief-field", x: 45, y: 569, width: 1137, height: 40 },
+      { name: "Item 13", selector: ".income-rate-field", x: 45, y: 609, width: 1137, height: 83 },
+      { name: "Items 14-24 totals", selector: ".tax-payable", x: 45, y: 696, width: 1137, height: 506 },
+      { name: "Item 14 total", selector: ".official-tax-line[data-item='14']", x: 45, y: 723, width: 1137, height: 36 },
+      { name: "signatures", selector: ".official-declaration", x: 45, y: 1206, width: 1137, height: 232 },
+      { name: "signature boxes", selector: ".official-signature-grid", x: 45, y: 1263, width: 1133, height: 134 }
+    ]);
+    await expectCriticalRegionGeometry(pages.nth(1), [
+      { name: "Schedule 1 masthead", selector: ".page-two-masthead", x: 45, y: 78, width: 1137, height: 117 },
+      { name: "Schedule 1 identity", selector: ".page-two-identity", x: 45, y: 193, width: 1137, height: 60 },
+      { name: "Schedule 1", selector: ".official-schedule", x: 45, y: 256, width: 1137, height: 327 },
+      { name: "Schedule 1 ATC table", selector: ".official-atc-table", x: 45, y: 587, width: 1137, height: 677 }
+    ]);
+    await expectCriticalRegionContent(pages.nth(0), pages.nth(1));
+
+    // The pinned official PDF is an unfilled form while our authoritative
+    // fixture exercises all six Schedule 1 rows.  Compare the owned document
+    // geometry with only fixture-provided glyphs suppressed: borders, comb
+    // cells, check boxes, labels, artwork, fills, and pagination remain in the
+    // captured image and therefore remain inside the strict pixel gate.
+    await prepareOfficialBlankComparison(page);
 
     for (const [pageIndex, referencePath] of parityCase.references.entries()) {
       const renderedPage = pages.nth(pageIndex);
@@ -504,6 +551,118 @@ async function renderEnvelope(page: Page, envelope: unknown) {
   await page.evaluate(() => document.fonts.ready);
 }
 
+async function prepareOfficialBlankComparison(page: Page) {
+  await page.addStyleTag({
+    content: `
+      .form-page[data-visual-blank-values="true"] .comb-value > span,
+      .form-page[data-visual-blank-values="true"] .adaptive-plain-value,
+      .form-page[data-visual-blank-values="true"] .check-box,
+      .form-page[data-visual-blank-values="true"] .tax-credit-description {
+        color: transparent !important;
+        text-shadow: none !important;
+      }
+    `
+  });
+  await page.locator(".form-page").evaluateAll((pages) => {
+    for (const formPage of pages) {
+      formPage.setAttribute("data-visual-blank-values", "true");
+    }
+  });
+}
+
+interface CriticalRegion {
+  name: string;
+  selector: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+async function expectCriticalRegionGeometry(
+  formPage: Locator,
+  regions: readonly CriticalRegion[]
+) {
+  const pageBox = await formPage.boundingBox();
+  expect(pageBox, "critical-region page must have geometry").not.toBeNull();
+  if (!pageBox) return;
+
+  const failures: Array<{ region: string; dimension: string; difference_css_px: number }> = [];
+  for (const region of regions) {
+    const box = await formPage.locator(region.selector).boundingBox();
+    expect(box, `${region.name} must render`).not.toBeNull();
+    if (!box) continue;
+    const actual = {
+      x: box.x - pageBox.x,
+      y: box.y - pageBox.y,
+      width: box.width,
+      height: box.height
+    };
+    const expected = {
+      x: region.x / DEVICE_SCALE_FACTOR,
+      y: region.y / DEVICE_SCALE_FACTOR,
+      width: region.width / DEVICE_SCALE_FACTOR,
+      height: region.height / DEVICE_SCALE_FACTOR
+    };
+    for (const key of ["x", "y", "width", "height"] as const) {
+      const difference = Math.abs(actual[key] - expected[key]);
+      if (difference > 2 / DEVICE_SCALE_FACTOR) {
+        failures.push({
+          region: region.name,
+          dimension: key,
+          difference_css_px: difference
+        });
+      }
+    }
+  }
+  expect(
+    failures,
+    "critical regions must match the pinned 144 DPI reference within two pixels"
+  ).toEqual([]);
+}
+
+async function expectCriticalRegionContent(pageOne: Locator, pageTwo: Locator) {
+  for (const label of [
+    "For the",
+    "Year Ended",
+    "Quarter",
+    "Amended Return?",
+    "Number of Sheet/s"
+  ]) {
+    await expect(pageOne.locator(".official-header-options")).toContainText(label);
+  }
+  for (const label of [
+    "Taxpayer Identification Number (TIN)",
+    "RDO Code",
+    "Taxpayer’s Name",
+    "Registered Address",
+    "Contact Number",
+    "Email Address",
+    "Special Law or International Tax Treaty?",
+    "What income tax rates are you availing?"
+  ]) {
+    await expect(pageOne.locator(".background-information")).toContainText(label);
+  }
+  const taxLines = pageOne.locator(".official-tax-line");
+  await expect(taxLines).toHaveCount(11);
+  expect(
+    await taxLines.evaluateAll((lines) =>
+      lines.map((line) => line.getAttribute("data-item"))
+    )
+  ).toEqual(
+    ["14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24"]
+  );
+  await expect(pageOne.locator(".official-declaration")).toContainText(
+    "Signature over Printed Name of Taxpayer/Authorized Representative/Tax Agent"
+  );
+  await expect(pageTwo.locator(".official-schedule > h2")).toContainText(
+    "Schedule 1 – Computation of Tax"
+  );
+  await expect(pageTwo.locator(".official-schedule-total")).toContainText(
+    "Total Tax Due"
+  );
+}
+
 async function expectRealRowKeys(page: Page, expected: string[]) {
   const keys = await page
     .locator("[data-row-key]")
@@ -572,25 +731,30 @@ function assertVisualParity({
       changed_percent: null,
       max_changed_percent: MAX_CHANGED_PERCENT,
       pixelmatch_threshold: PIXELMATCH_THRESHOLD,
+      comparison: "official-complete-page-v1",
+      expected_ink_missing_percent: null,
+      unexpected_actual_ink_percent: null,
+      structural_changed_pixels: null,
+      structural_changed_percent: null,
+      structural_diff: null,
+      structural_diff_sha256: null,
+      structural_ink_threshold: STRUCTURAL_INK_THRESHOLD,
+      structural_line_min_run: STRUCTURAL_LINE_MIN_RUN,
+      structural_tolerance_radius: STRUCTURAL_TOLERANCE_RADIUS,
       passed: false
     });
     return;
   }
 
-  const diff = new PNG({ width: expected.width, height: expected.height });
-  const changedPixels = pixelmatch(
-    expected.data,
-    actual.data,
-    diff.data,
-    expected.width,
-    expected.height,
-    { threshold: PIXELMATCH_THRESHOLD, diffMask: true }
-  );
-  const changedPercent =
-    (changedPixels / (expected.width * expected.height)) * 100;
-  const passed = changedPercent <= MAX_CHANGED_PERCENT;
+  const structural = compareOfficialStructure(expected, actual);
+  const structuralChangedPercent =
+    (structural.changedPixels / (expected.width * expected.height)) * 100;
+  const completePage = compareCompleteOfficialPage(expected, actual, {
+    pixelThreshold: PIXELMATCH_THRESHOLD
+  });
+  const passed = completePage.fullPageChangedPercent <= MAX_CHANGED_PERCENT;
 
-  const diffBuffer = PNG.sync.write(diff);
+  const diffBuffer = PNG.sync.write(completePage.diff);
   const artifacts = writeVisualArtifacts({
     actualBuffer,
     expectedBuffer,
@@ -598,6 +762,12 @@ function assertVisualParity({
     artifactStem,
     outputDir
   });
+  const structuralDiffBuffer = PNG.sync.write(structural.diff);
+  const structuralDiffPath = path.join(
+    outputDir,
+    `${artifactStem}-structure-diff.png`
+  );
+  fs.writeFileSync(structuralDiffPath, structuralDiffBuffer);
 
   visualPageMetrics.push({
     form_code: parityCase.code,
@@ -615,12 +785,147 @@ function assertVisualParity({
     expected_height: expected.height,
     actual_width: actual.width,
     actual_height: actual.height,
-    changed_pixels: changedPixels,
-    changed_percent: changedPercent,
+    changed_pixels: completePage.fullPageChangedPixels,
+    changed_percent: completePage.fullPageChangedPercent,
     max_changed_percent: MAX_CHANGED_PERCENT,
     pixelmatch_threshold: PIXELMATCH_THRESHOLD,
+    comparison: "official-complete-page-v1",
+    expected_ink_missing_percent: completePage.expectedInkMissingPercent,
+    unexpected_actual_ink_percent: completePage.unexpectedActualInkPercent,
+    structural_changed_pixels: structural.changedPixels,
+    structural_changed_percent: structuralChangedPercent,
+    structural_diff: repositoryRelativePath(structuralDiffPath),
+    structural_diff_sha256: sha256(structuralDiffBuffer),
+    structural_ink_threshold: STRUCTURAL_INK_THRESHOLD,
+    structural_line_min_run: STRUCTURAL_LINE_MIN_RUN,
+    structural_tolerance_radius: STRUCTURAL_TOLERANCE_RADIUS,
     passed
   });
+}
+
+/**
+ * Compare the semantic form's ruled structure while tolerating the rasterizer
+ * differences between Poppler's pinned-PDF output and Chromium's HTML output.
+ * Only continuous rule segments participate; text and discrete artwork have
+ * independent content/hash assertions and fixture-provided glyphs are blanked
+ * before capture.  A four-pixel radius is two typographic points at 144 DPI.
+ */
+function compareOfficialStructure(expected: PNG, actual: PNG) {
+  const expectedLines = structuralLineMask(expected);
+  const actualLines = structuralLineMask(actual);
+  const width = expected.width;
+  const height = expected.height;
+  const changed = new Uint8Array(width * height);
+
+  markUnmatchedStructure(
+    expectedLines,
+    actualLines,
+    changed,
+    width,
+    height,
+    STRUCTURAL_TOLERANCE_RADIUS
+  );
+  markUnmatchedStructure(
+    actualLines,
+    expectedLines,
+    changed,
+    width,
+    height,
+    STRUCTURAL_TOLERANCE_RADIUS
+  );
+
+  const diff = new PNG({ width, height });
+  let changedPixels = 0;
+  for (let index = 0; index < changed.length; index += 1) {
+    const offset = index * 4;
+    if (changed[index] === 1) {
+      changedPixels += 1;
+      diff.data[offset] = 255;
+      diff.data[offset + 1] = 0;
+      diff.data[offset + 2] = 0;
+      diff.data[offset + 3] = 255;
+    } else {
+      diff.data[offset] = 0;
+      diff.data[offset + 1] = 0;
+      diff.data[offset + 2] = 0;
+      diff.data[offset + 3] = 0;
+    }
+  }
+  return { changedPixels, diff };
+}
+
+function structuralLineMask(image: PNG) {
+  const { width, height } = image;
+  const dark = new Uint8Array(width * height);
+  const lines = new Uint8Array(width * height);
+  for (let index = 0; index < dark.length; index += 1) {
+    const offset = index * 4;
+    dark[index] =
+      image.data[offset] < STRUCTURAL_INK_THRESHOLD &&
+      image.data[offset + 1] < STRUCTURAL_INK_THRESHOLD &&
+      image.data[offset + 2] < STRUCTURAL_INK_THRESHOLD
+        ? 1
+        : 0;
+  }
+
+  for (let y = 0; y < height; y += 1) {
+    let runStart = -1;
+    for (let x = 0; x <= width; x += 1) {
+      const isDark = x < width && dark[y * width + x] === 1;
+      if (isDark && runStart < 0) runStart = x;
+      if (!isDark && runStart >= 0) {
+        if (x - runStart >= STRUCTURAL_LINE_MIN_RUN) {
+          for (let fillX = runStart; fillX < x; fillX += 1) {
+            lines[y * width + fillX] = 1;
+          }
+        }
+        runStart = -1;
+      }
+    }
+  }
+
+  for (let x = 0; x < width; x += 1) {
+    let runStart = -1;
+    for (let y = 0; y <= height; y += 1) {
+      const isDark = y < height && dark[y * width + x] === 1;
+      if (isDark && runStart < 0) runStart = y;
+      if (!isDark && runStart >= 0) {
+        if (y - runStart >= STRUCTURAL_LINE_MIN_RUN) {
+          for (let fillY = runStart; fillY < y; fillY += 1) {
+            lines[fillY * width + x] = 1;
+          }
+        }
+        runStart = -1;
+      }
+    }
+  }
+  return lines;
+}
+
+function markUnmatchedStructure(
+  source: Uint8Array,
+  target: Uint8Array,
+  changed: Uint8Array,
+  width: number,
+  height: number,
+  radius: number
+) {
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      if (source[index] !== 1) continue;
+      let matched = false;
+      for (let targetY = Math.max(0, y - radius); targetY <= Math.min(height - 1, y + radius) && !matched; targetY += 1) {
+        for (let targetX = Math.max(0, x - radius); targetX <= Math.min(width - 1, x + radius); targetX += 1) {
+          if (target[targetY * width + targetX] === 1) {
+            matched = true;
+            break;
+          }
+        }
+      }
+      if (!matched) changed[index] = 1;
+    }
+  }
 }
 
 function writeVisualArtifacts({
@@ -645,7 +950,7 @@ function writeVisualArtifacts({
   );
   let diffArtifact: { path: string; sha256: string } | null = null;
   if (diffBuffer) {
-    const diffPath = path.join(outputDir, `${artifactStem}-diff.png`);
+    const diffPath = path.join(outputDir, `${artifactStem}-full-page-diff.png`);
     fs.writeFileSync(diffPath, diffBuffer);
     diffArtifact = {
       path: repositoryRelativePath(diffPath),

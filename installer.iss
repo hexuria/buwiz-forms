@@ -21,9 +21,7 @@ WizardStyle=modern
 
 [Files]
 Source: "target\x86_64-pc-windows-msvc\release\bir.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "target\pinned-typst\windows\typst.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "formtypes\*"; DestDir: "{app}\formtypes"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\eBIRForms"; Filename: "{app}\bir.exe"; IconFilename: "{app}\assets\icon.ico"

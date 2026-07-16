@@ -10,20 +10,26 @@ import continuationFixture from "../../form-contracts/fixtures/2551q-10-rows.jso
 import sixRowFixture from "../../form-contracts/fixtures/2551q-6-rows.json";
 import fiscalFixture from "../../form-contracts/fixtures/2551q-fiscal-period.json";
 import item13Fixture from "../../form-contracts/fixtures/2551q-item13-eight-percent.json";
+import longValuesFixture from "../../form-contracts/fixtures/2551q-long-values.json";
 import minimumFixture from "../../form-contracts/fixtures/2551q-minimum.json";
+import normalFixture from "../../form-contracts/fixtures/2551q-normal.json";
 import refundFixture from "../../form-contracts/fixtures/2551q-overpayment-refund.json";
 import tccFixture from "../../form-contracts/fixtures/2551q-overpayment-tcc.json";
 import reliefFixture from "../../form-contracts/fixtures/2551q-tax-relief.json";
+import validationEdgeFixture from "../../form-contracts/fixtures/2551q-validation-edge.json";
 
 const canonicalFixtures = [
   continuationFixture,
   sixRowFixture,
   fiscalFixture,
   item13Fixture,
+  longValuesFixture,
   minimumFixture,
+  normalFixture,
   refundFixture,
   tccFixture,
-  reliefFixture
+  reliefFixture,
+  validationEdgeFixture
 ] as const;
 
 function validEnvelope(): Record<string, any> {
@@ -100,6 +106,24 @@ describe("2551Q runtime render contract", () => {
     );
     expect(markup.match(/data-overflow-mode="plain"/g)?.length).toBeGreaterThanOrEqual(6);
     expect(markup).toContain(`aria-label="${"A".repeat(72)}"`);
+  });
+
+  it("renders the Rust-owned long-value fixture without truncation", () => {
+    const fixture = structuredClone(longValuesFixture) as RenderEnvelope;
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: fixture })
+    );
+    const relief = fixture.fields.tax_relief_specification;
+    if (relief.type !== "text") throw new Error("fixture relief must be text");
+
+    for (const value of [
+      fixture.taxpayer.name,
+      fixture.taxpayer.registered_address,
+      fixture.taxpayer.email,
+      relief.value
+    ]) {
+      expect(markup).toContain(`aria-label="${value.toUpperCase()}"`);
+    }
   });
 
   it("fails closed beyond defensive document-rendering limits", () => {

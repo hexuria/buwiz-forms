@@ -7,7 +7,7 @@ use bir_core::profile::{
     ManualObligationOverrideAction, RegisteredTaxType, TaxClassification, TaxProfileVersion,
     TaxProfileVersionSource, TaxProfileVersionStatus, TaxpayerProfile, TaxpayerType,
 };
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
 use tempfile::NamedTempFile;
 
 fn parse_tin(tin_str: &str) -> Tin {
@@ -104,7 +104,136 @@ fn closest_prior_forms_year_is_hidden_when_destination_has_entries() {
 }
 
 #[test]
-fn test_per_year_forms_as_single_source_of_truth() {
+fn profile_save_preserves_existing_atc_codes_when_editor_omits_them() {
+    temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db = Database::open(temp_file.path()).expect("Failed to open DB");
+        let mut profile = create_test_profile("010558054000");
+        profile.atc_codes = vec!["PT010".into(), "PT040".into()];
+        let saved = db.save_profile(profile).expect("initial profile save");
+
+        let mut editor_payload = saved;
+        editor_payload.atc_codes.clear();
+        db.save_profile(editor_payload).expect("profile edit save");
+
+        let reloaded = db
+            .get_profile("010558054000")
+            .expect("profile lookup")
+            .expect("stored profile");
+        assert_eq!(reloaded.atc_codes, vec!["PT010", "PT040"]);
+    });
+}
+
+#[test]
+fn profile_save_reconciles_generated_forms_and_preserves_manual_entry() {
+    temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db = Database::open(temp_file.path()).expect("Failed to open DB");
+        let mut profile = create_test_profile("010558054000");
+        profile.profile_versions[0].id = "confirmed-cor".into();
+        profile.profile_versions[0].source = TaxProfileVersionSource::ManualCor;
+        profile.profile_versions[0].registered_tax_types = vec![
+            RegisteredTaxType::IncomeTax,
+            RegisteredTaxType::PercentageTax,
+        ];
+        let saved = db.save_profile(profile).expect("initial profile save");
+        let year = chrono::Utc::now().year() as u16;
+
+        let mut set = saved
+            .per_year_forms
+            .get(&year)
+            .cloned()
+            .expect("generated current-year Forms Set");
+        set.entries.push(FormSetEntry::from_code(
+            "CUSTOM_FORM",
+            FormSetSource::Manual,
+        ));
+        db.save_per_year_forms(&saved.tin.full(), year, &set)
+            .expect("manual forms save");
+
+        let mut changed = db
+            .get_profile(&saved.tin.full())
+            .expect("profile lookup")
+            .expect("stored profile");
+        changed.profile_versions[0].is_vat_registered = true;
+        changed.profile_versions[0].registered_tax_types = vec![
+            RegisteredTaxType::IncomeTax,
+            RegisteredTaxType::ValueAddedTax,
+        ];
+        let changed = db.save_profile(changed).expect("VAT profile save");
+        let reconciled = changed
+            .per_year_forms
+            .get(&year)
+            .expect("reconciled Forms Set");
+
+        assert!(reconciled.contains_active("CUSTOM_FORM"));
+        assert!(reconciled.contains_active("2550Q"));
+        assert!(!reconciled.contains_active("2551Q"));
+        assert!(reconciled.entry("2551Q").is_some());
+    });
+}
+
+#[test]
+fn undated_migration_backfill_preserves_existing_forms_set() {
+    temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db = Database::open(temp_file.path()).expect("Failed to open DB");
+        let mut profile = create_test_profile("010558054000");
+        profile.business_start_date = None;
+        profile.profile_versions.clear();
+        profile.ensure_profile_version_ledger();
+        let saved = db.save_profile(profile).expect("undated profile save");
+        let year = chrono::Utc::now().year() as u16;
+        let manual = PerYearFormsSet::from_codes(year, ["1701"], FormSetSource::Manual);
+        db.save_per_year_forms(&saved.tin.full(), year, &manual)
+            .expect("manual Forms Set save");
+
+        let profile = db
+            .get_profile(&saved.tin.full())
+            .expect("profile lookup")
+            .expect("stored profile");
+        let saved_again = db.save_profile(profile).expect("repeat profile save");
+
+        assert_eq!(
+            saved_again
+                .per_year_forms
+                .get(&year)
+                .expect("preserved Forms Set")
+                .active_form_codes(),
+            vec!["1701"]
+        );
+    });
+}
+
+#[test]
+fn profile_save_rejects_overlapping_confirmed_versions() {
+    temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db = Database::open(temp_file.path()).expect("Failed to open DB");
+        let mut profile = create_test_profile("010558054000");
+        profile.profile_versions[0].id = "first".into();
+        profile.profile_versions[0].source = TaxProfileVersionSource::ManualCor;
+        profile.profile_versions[0].effective_until = NaiveDate::from_ymd_opt(2026, 12, 31);
+        let saved = db.save_profile(profile).expect("initial profile save");
+
+        let mut overlapping = TaxProfileVersion::from_profile_backfill(&saved);
+        overlapping.id = "overlapping".into();
+        overlapping.source = TaxProfileVersionSource::ManualCor;
+        overlapping.effective_from = NaiveDate::from_ymd_opt(2026, 6, 1);
+        overlapping.effective_until = None;
+        let mut changed = saved;
+        changed.profile_versions.push(overlapping);
+
+        let error = db
+            .save_profile(changed)
+            .expect_err("overlap must be rejected");
+
+        assert!(error.to_string().contains("overlap"));
+    });
+}
+
+#[test]
+fn missing_per_year_forms_set_fails_closed_until_user_saves_one() {
     temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
         let temp_file = NamedTempFile::new().unwrap();
         let db = Database::open(temp_file.path()).expect("Failed to open DB");
@@ -112,14 +241,6 @@ fn test_per_year_forms_as_single_source_of_truth() {
         let profile = create_test_profile("010558054000");
         let tin_str = profile.tin.full();
 
-        // Save profile. Initially no custom forms set is saved in per_year_forms table,
-        // so it falls back to generating it from the confirmed version on save.
-        // Wait, on initial save, because there's a confirmed version (the legacy backfill),
-        // save_profile scans for missing per_year_forms rows and populates them!
-        // Let's first save with empty versions to verify the absolute fallback.
-        // Wait, `db.save_profile` calls `profile.ensure_profile_version_ledger()`, which adds a legacy confirmed version.
-        // So `save_profile` will populate `per_year_forms`.
-        // Let's delete the generated forms set to simulate the database fallback when per_year_forms is absent.
         let _saved_profile = db.save_profile(profile).expect("Failed to save profile");
 
         db.delete_per_year_forms(&tin_str, 2026).unwrap();
@@ -128,13 +249,16 @@ fn test_per_year_forms_as_single_source_of_truth() {
         let profile_no_forms = db.get_profile(&tin_str).unwrap().unwrap();
         assert!(!db.has_per_year_forms(&tin_str, 2026).unwrap());
 
-        // Under fallback, we derive obligations from the confirmed profile version:
-        let fallback_resolved = resolve_profile_obligations_for_year(&profile_no_forms, 2026);
+        let unresolved = resolve_profile_obligations_for_year(&profile_no_forms, 2026);
+        assert!(unresolved.form_codes.is_empty());
+        assert!(profile_no_forms.active_form_codes_for_year(2026).is_empty());
         assert!(
-            !fallback_resolved.form_codes.is_empty(),
-            "Fallback should return default suggestions"
+            unresolved
+                .consistency_report
+                .issues
+                .iter()
+                .any(|issue| issue.code == "FORMS_SET_NOT_CONFIGURED")
         );
-        assert!(fallback_resolved.form_codes.contains(&"1701".to_string()));
 
         // Now, save a custom forms set to the database for 2026 (precisely containing ONLY ["1701"])
         let forms_set =
@@ -153,7 +277,6 @@ fn test_per_year_forms_as_single_source_of_truth() {
             vec!["1701".to_string()]
         );
 
-        // Resolve obligations again. It MUST precisely match the forms set (only ["1701"]), bypassing all fallback logic.
         let resolved = resolve_profile_obligations_for_year(&profile_with_forms, 2026);
         assert_eq!(
             resolved.form_codes,
@@ -175,14 +298,10 @@ fn test_custom_form_added_and_removed() {
 
         // 1. Manually add custom form code "CUSTOM_FORM" to the forms set
         let mut set = db.get_per_year_forms(&tin_str, 2026).unwrap();
-        set.entries.push(FormSetEntry {
-            form_code: "CUSTOM_FORM".to_string(),
-            frequency: bir_core::forms::registry::FilingFrequency::Quarterly,
-            active: true,
-            source: FormSetSource::Manual,
-            custom: true,
-            reason: Some("Manual addition of custom form".to_string()),
-        });
+        let mut custom_entry = FormSetEntry::from_code("CUSTOM_FORM", FormSetSource::Manual);
+        custom_entry.frequency = bir_core::forms::registry::FilingFrequency::Quarterly;
+        custom_entry.reason = Some("Manual addition of custom form".to_string());
+        set.entries.push(custom_entry);
 
         // Save the updated forms set back
         db.save_per_year_forms(&tin_str, 2026, &set).unwrap();
@@ -303,10 +422,10 @@ fn test_cor_confirmation_flow_populates_forms_set() {
             "Generated forms set should not be empty"
         );
 
-        // It should contain the active form "1701" with source CorAi since the draft version source was OcrCor
+        // The explicit sourced include is authoritative over OCR/tax-type inference.
         let entry = generated_set.entry("1701").unwrap();
         assert!(entry.active);
-        assert_eq!(entry.source, FormSetSource::CorAi);
+        assert_eq!(entry.source, FormSetSource::Manual);
     });
 }
 

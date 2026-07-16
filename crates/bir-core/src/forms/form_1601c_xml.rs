@@ -1,4 +1,5 @@
-use super::form_1601c::Form1601CDraft;
+use super::FormValidator;
+use super::form_1601c::{Form1601CDraft, Form1601CSchedule1Row, MAX_SCHEDULE_1_ROWS};
 use chrono::Local;
 use std::collections::BTreeMap;
 
@@ -59,6 +60,11 @@ impl Form1601CDraft {
             "frm1601c:txtAddress",
             self.registered_address.clone(),
         );
+        insert(
+            &mut fields,
+            "frm1601c:txtAddress2",
+            self.registered_address_2.clone(),
+        );
         insert(&mut fields, "frm1601c:txtZipCode", self.zip_code.clone());
         insert(
             &mut fields,
@@ -79,9 +85,17 @@ impl Form1601CDraft {
 
         insert(&mut fields, "txtEmail", self.email_address.clone());
 
-        // Tax Relief / Treaty
-        insert_bool_1_2(&mut fields, "frm1601c:SpecialTax", false);
-        insert(&mut fields, "frm1601c:selTreaty", "0");
+        // Item 13 — Tax Relief / Treaty
+        insert_bool_1_2(&mut fields, "frm1601c:SpecialTax", self.tax_relief);
+        insert(
+            &mut fields,
+            "frm1601c:selTreaty",
+            if self.tax_relief {
+                self.tax_relief_specification.clone()
+            } else {
+                "0".to_string()
+            },
+        );
 
         // Part II - Computation
         insert_money(
@@ -168,7 +182,9 @@ impl Form1601CDraft {
         insert(&mut fields, "txtDateExpiry", "");
 
         for i in 37..=40 {
-            insert(&mut fields, &format!("frm1601c:txtAgency{}", i), "");
+            if i != 39 {
+                insert(&mut fields, &format!("frm1601c:txtAgency{}", i), "");
+            }
             insert(&mut fields, &format!("frm1601c:txtNumber{}", i), "");
             insert(&mut fields, &format!("frm1601c:txtDate{}", i), "");
             insert(&mut fields, &format!("frm1601c:txtAmount{}", i), "");
@@ -186,42 +202,52 @@ impl Form1601CDraft {
             self.taxpayer_name.clone(),
         );
 
-        // Schedule 1
-        for i in 0..3 {
+        // Schedule I — the verified 1601-C payload exposes three rows.
+        for i in 0..MAX_SCHEDULE_1_ROWS {
+            let row = self.schedule_1.get(i);
             insert(&mut fields, &format!("chkScheduleDelete{}", i), "false");
             insert(
                 &mut fields,
                 &format!("frm1601c:sched1:txtMonthYear{}", i),
-                "",
+                row.map(|value| value.previous_month.as_str()).unwrap_or(""),
             );
             insert(
                 &mut fields,
                 &format!("frm1601c:sched1:txtDatePaid{}", i),
-                "",
+                row.map(|value| value.date_paid.as_str()).unwrap_or(""),
             );
             insert(
                 &mut fields,
                 &format!("frm1601c:sched1:txtBankCode{}", i),
-                "",
+                row.map(|value| value.drawee_bank_code_or_agency.as_str())
+                    .unwrap_or(""),
             );
-            insert(&mut fields, &format!("frm1601c:sched1:txtNumber{}", i), "");
             insert(
+                &mut fields,
+                &format!("frm1601c:sched1:txtNumber{}", i),
+                row.map(|value| value.payment_number.as_str()).unwrap_or(""),
+            );
+            insert_money(
                 &mut fields,
                 &format!("frm1601c:sched1:txtTaxPaid{}", i),
-                "0.00",
+                row.map(|value| value.tax_paid).unwrap_or(0.0),
             );
-            insert(
+            insert_money(
                 &mut fields,
                 &format!("frm1601c:sched1:txtShouldTaxDue{}", i),
-                "0.00",
+                row.map(|value| value.should_be_tax_due).unwrap_or(0.0),
             );
-            insert(
+            insert_money(
                 &mut fields,
                 &format!("frm1601c:sched1:txtAdjustments{}", i),
-                "0.00",
+                row.map(|value| value.adjustment).unwrap_or(0.0),
             );
         }
-        insert(&mut fields, "frm1601c:sched1:txtTotal1", "0.00");
+        insert_money(
+            &mut fields,
+            "frm1601c:sched1:txtTotal1",
+            self.tax_26_adjustment,
+        );
 
         // Pagination
         insert(&mut fields, "frm1601c:txtCurrentPage", "1");
@@ -237,6 +263,360 @@ impl Form1601CDraft {
 
     pub fn to_bir_xml_payload(&self) -> String {
         crate::bir_xml::generate_bir_xml(&self.to_bir_field_map())
+    }
+
+    /// Generate XML only when the draft satisfies the verified model and
+    /// three-row Schedule I capacity. Submission remains separately governed
+    /// by the form capability registry.
+    pub fn try_to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
+        let errors = self.validate();
+        if errors.is_empty() {
+            Ok(crate::bir_xml::generate_bir_xml(&self.to_bir_field_map()))
+        } else {
+            Err(errors)
+        }
+    }
+
+    /// Parse a 1601-C January 2018 save payload into typed Rust state.
+    pub fn from_bir_xml_payload(xml: &str) -> Result<Self, Vec<(String, String)>> {
+        let fields = crate::bir_xml::parse_bir_xml_checked(xml).map_err(|error| {
+            vec![(
+                "xml_payload".to_string(),
+                format!("invalid 1601-C save payload: {error}"),
+            )]
+        })?;
+        Self::from_bir_field_map(&fields)
+    }
+
+    /// Parse the reviewed 1601-C field contract and verify every official
+    /// computed value represented by the source payload.
+    pub fn from_bir_field_map(
+        fields: &BTreeMap<String, String>,
+    ) -> Result<Self, Vec<(String, String)>> {
+        let mut errors = Vec::new();
+        let month = parse_required::<u8>(fields, "frm1601c:txtMonth", &mut errors);
+        let taxable_year = parse_required::<u16>(fields, "frm1601c:txtYear", &mut errors);
+        let is_amended = parse_bool_pair(fields, "frm1601c:AmendedRtn", &mut errors);
+        let any_taxes_withheld = parse_bool_pair(fields, "frm1601c:TaxWithheld", &mut errors);
+        let tax_relief = parse_bool_pair(fields, "frm1601c:SpecialTax", &mut errors);
+
+        let category_private = parse_bool(fields, "frm1601c:CatAgent_P", &mut errors);
+        let category_government = parse_bool(fields, "frm1601c:CatAgent_G", &mut errors);
+        let category_of_agent = match (category_private, category_government) {
+            (Some(true), Some(false)) => Some("P".to_string()),
+            (Some(false), Some(true)) => Some("G".to_string()),
+            (Some(_), Some(_)) => {
+                errors.push((
+                    "category_of_agent".to_string(),
+                    "1601-C requires exactly one category of withholding agent".to_string(),
+                ));
+                None
+            }
+            _ => None,
+        };
+
+        let mut schedule_1 = Vec::new();
+        let mut source_adjustments = Vec::new();
+        for index in 0..MAX_SCHEDULE_1_ROWS {
+            let previous_month = field(fields, &format!("frm1601c:sched1:txtMonthYear{index}"));
+            let date_paid = field(fields, &format!("frm1601c:sched1:txtDatePaid{index}"));
+            let bank = field(fields, &format!("frm1601c:sched1:txtBankCode{index}"));
+            let number = field(fields, &format!("frm1601c:sched1:txtNumber{index}"));
+            let tax_paid = parse_optional_money(
+                fields,
+                &format!("frm1601c:sched1:txtTaxPaid{index}"),
+                &mut errors,
+            );
+            let should_be_tax_due = parse_optional_money(
+                fields,
+                &format!("frm1601c:sched1:txtShouldTaxDue{index}"),
+                &mut errors,
+            );
+            let source_adjustment = parse_optional_money(
+                fields,
+                &format!("frm1601c:sched1:txtAdjustments{index}"),
+                &mut errors,
+            );
+
+            let occupied = [previous_month, date_paid, bank, number]
+                .iter()
+                .any(|value| !value.trim().is_empty())
+                || tax_paid != 0.0
+                || should_be_tax_due != 0.0
+                || source_adjustment != 0.0;
+            if occupied {
+                schedule_1.push(Form1601CSchedule1Row {
+                    previous_month: previous_month.to_string(),
+                    date_paid: date_paid.to_string(),
+                    drawee_bank_code_or_agency: bank.to_string(),
+                    payment_number: number.to_string(),
+                    tax_paid,
+                    should_be_tax_due,
+                    adjustment: source_adjustment,
+                });
+                source_adjustments.push(source_adjustment);
+            }
+        }
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        let now = chrono::Utc::now().to_rfc3339();
+        let treaty = field(fields, "frm1601c:selTreaty");
+        let mut draft = Form1601CDraft {
+            id: None,
+            tin: format!(
+                "{}{}{}{}",
+                field(fields, "frm1601c:txtTIN1"),
+                field(fields, "frm1601c:txtTIN2"),
+                field(fields, "frm1601c:txtTIN3"),
+                field(fields, "frm1601c:txtBranchCode")
+            ),
+            taxable_year: taxable_year.unwrap_or_default(),
+            month: month.unwrap_or_default(),
+            is_amended: is_amended.unwrap_or(false),
+            any_taxes_withheld: any_taxes_withheld.unwrap_or(false),
+            number_of_sheets: parse_optional::<u32>(fields, "frm1601c:txtSheets", &mut errors),
+            atc: field(fields, "frm1601c:txtATC").to_string(),
+            rdo_code: field(fields, "frm1601c:txtRDOCode").to_string(),
+            line_of_business: field(fields, "frm1601c:txtLineBus").to_string(),
+            taxpayer_name: field(fields, "frm1601c:txtTaxpayerName").to_string(),
+            contact_number: field(fields, "frm1601c:txtTelNum").to_string(),
+            registered_address: field(fields, "frm1601c:txtAddress").to_string(),
+            registered_address_2: field(fields, "frm1601c:txtAddress2").to_string(),
+            zip_code: field(fields, "frm1601c:txtZipCode").to_string(),
+            category_of_agent: category_of_agent.unwrap_or_default(),
+            email_address: field(fields, "txtEmail").to_string(),
+            tax_relief: tax_relief.unwrap_or(false),
+            tax_relief_specification: if tax_relief.unwrap_or(false) && treaty != "0" {
+                treaty.to_string()
+            } else {
+                String::new()
+            },
+            tax_14_total_compensation: parse_optional_money(
+                fields,
+                "frm1601c:txtTax14",
+                &mut errors,
+            ),
+            tax_15_statutory_minimum_wage: parse_optional_money(
+                fields,
+                "frm1601c:txtTax15",
+                &mut errors,
+            ),
+            tax_16_holiday_pay: parse_optional_money(fields, "frm1601c:txtTax16", &mut errors),
+            tax_17_13th_month_pay: parse_optional_money(fields, "frm1601c:txtTax17", &mut errors),
+            tax_18_de_minimis: parse_optional_money(fields, "frm1601c:txtTax18", &mut errors),
+            tax_19_sss_gsis: parse_optional_money(fields, "frm1601c:txtTax19", &mut errors),
+            tax_20_other_name: field(fields, "frm1601c:txt20Other").to_string(),
+            tax_20_other_amount: parse_optional_money(fields, "frm1601c:txtTax20", &mut errors),
+            tax_21_total_non_taxable: 0.0,
+            tax_22_total_taxable: 0.0,
+            tax_23_not_subject: parse_optional_money(fields, "frm1601c:txtTax23", &mut errors),
+            tax_24_net_taxable: 0.0,
+            tax_25_total_taxes_withheld: parse_optional_money(
+                fields,
+                "frm1601c:txtTax25",
+                &mut errors,
+            ),
+            tax_26_adjustment: 0.0,
+            schedule_1,
+            tax_27_taxes_withheld_for_remittance: 0.0,
+            tax_28_tax_remitted_previously: parse_optional_money(
+                fields,
+                "frm1601c:txtTax28",
+                &mut errors,
+            ),
+            tax_29_other_remittances_name: field(fields, "frm1601c:txt29Other").to_string(),
+            tax_29_other_remittances_amount: parse_optional_money(
+                fields,
+                "frm1601c:txtTax29",
+                &mut errors,
+            ),
+            tax_30_total_tax_remittances: 0.0,
+            tax_31_tax_still_due: 0.0,
+            auto_compute_penalties: false,
+            tax_32_surcharge: parse_optional_money(fields, "frm1601c:txtTax32", &mut errors),
+            tax_33_interest: parse_optional_money(fields, "frm1601c:txtTax33", &mut errors),
+            tax_34_compromise: parse_optional_money(fields, "frm1601c:txtTax34", &mut errors),
+            tax_35_total_penalties: 0.0,
+            tax_36_total_amount_payable: 0.0,
+            status: super::FilingStatus::Draft,
+            created_at: now.clone(),
+            updated_at: now,
+            submission_attempts: 0,
+            submission_error: None,
+            next_retry_at: None,
+        };
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        draft.compute();
+        for (index, source_adjustment) in source_adjustments.into_iter().enumerate() {
+            if (draft.schedule_1[index].adjustment - source_adjustment).abs() > 0.001 {
+                errors.push((
+                    format!("schedule_1_row_{}", index + 1),
+                    format!(
+                        "Schedule I row {} source adjustment does not equal Item 6 less Item 5",
+                        index + 1
+                    ),
+                ));
+            }
+        }
+        verify_source_money(
+            fields,
+            "frm1601c:sched1:txtTotal1",
+            draft.tax_26_adjustment,
+            &mut errors,
+        );
+        for (key, computed) in [
+            ("frm1601c:txtTax21", draft.tax_21_total_non_taxable),
+            ("frm1601c:txtTax22", draft.tax_22_total_taxable),
+            ("frm1601c:txtTax24", draft.tax_24_net_taxable),
+            ("frm1601c:txtTax26", draft.tax_26_adjustment),
+            (
+                "frm1601c:txtTax27",
+                draft.tax_27_taxes_withheld_for_remittance,
+            ),
+            ("frm1601c:txtTax30", draft.tax_30_total_tax_remittances),
+            ("frm1601c:txtTax31", draft.tax_31_tax_still_due),
+            ("frm1601c:txtTax35", draft.tax_35_total_penalties),
+            ("frm1601c:txtTax36", draft.tax_36_total_amount_payable),
+        ] {
+            verify_source_money(fields, key, computed, &mut errors);
+        }
+
+        errors.extend(draft.validate());
+
+        if errors.is_empty() {
+            Ok(draft)
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+fn field<'a>(fields: &'a BTreeMap<String, String>, key: &str) -> &'a str {
+    fields.get(key).map(String::as_str).unwrap_or("")
+}
+
+fn parse_required<T: std::str::FromStr>(
+    fields: &BTreeMap<String, String>,
+    key: &str,
+    errors: &mut Vec<(String, String)>,
+) -> Option<T> {
+    let value = field(fields, key);
+    if value.trim().is_empty() {
+        errors.push((
+            key.to_string(),
+            format!("Required 1601-C field {key} is missing"),
+        ));
+        return None;
+    }
+    match value.parse::<T>() {
+        Ok(parsed) => Some(parsed),
+        Err(_) => {
+            errors.push((
+                key.to_string(),
+                format!("1601-C field {key} has invalid value {value:?}"),
+            ));
+            None
+        }
+    }
+}
+
+fn parse_optional<T: std::str::FromStr + Default>(
+    fields: &BTreeMap<String, String>,
+    key: &str,
+    errors: &mut Vec<(String, String)>,
+) -> T {
+    let value = field(fields, key);
+    if value.trim().is_empty() {
+        return T::default();
+    }
+    value.parse::<T>().unwrap_or_else(|_| {
+        errors.push((
+            key.to_string(),
+            format!("1601-C field {key} has invalid value {value:?}"),
+        ));
+        T::default()
+    })
+}
+
+fn parse_optional_money(
+    fields: &BTreeMap<String, String>,
+    key: &str,
+    errors: &mut Vec<(String, String)>,
+) -> f64 {
+    let value = parse_optional::<f64>(fields, key, errors);
+    if !value.is_finite() {
+        errors.push((
+            key.to_string(),
+            format!("1601-C money field {key} must be finite"),
+        ));
+        0.0
+    } else {
+        value
+    }
+}
+
+fn parse_bool(
+    fields: &BTreeMap<String, String>,
+    key: &str,
+    errors: &mut Vec<(String, String)>,
+) -> Option<bool> {
+    match field(fields, key).trim().to_ascii_lowercase().as_str() {
+        "true" => Some(true),
+        "false" => Some(false),
+        value => {
+            errors.push((
+                key.to_string(),
+                format!("1601-C boolean field {key} has invalid value {value:?}"),
+            ));
+            None
+        }
+    }
+}
+
+fn parse_bool_pair(
+    fields: &BTreeMap<String, String>,
+    base: &str,
+    errors: &mut Vec<(String, String)>,
+) -> Option<bool> {
+    let yes = parse_bool(fields, &format!("{base}_1"), errors);
+    let no = parse_bool(fields, &format!("{base}_2"), errors);
+    match (yes, no) {
+        (Some(true), Some(false)) => Some(true),
+        (Some(false), Some(true)) => Some(false),
+        (Some(_), Some(_)) => {
+            errors.push((
+                base.to_string(),
+                format!("1601-C choice {base} must contain exactly one selected value"),
+            ));
+            None
+        }
+        _ => None,
+    }
+}
+
+fn verify_source_money(
+    fields: &BTreeMap<String, String>,
+    key: &str,
+    computed: f64,
+    errors: &mut Vec<(String, String)>,
+) {
+    if !fields.contains_key(key) {
+        return;
+    }
+    let source = parse_optional_money(fields, key, errors);
+    if (source - computed).abs() > 0.001 {
+        errors.push((
+            key.to_string(),
+            format!(
+                "1601-C source value {source:.2} does not match the official computed value {computed:.2}"
+            ),
+        ));
     }
 }
 
@@ -301,9 +681,8 @@ mod tests {
     use crate::naming::Tin;
     use crate::profile::{TaxpayerProfile, TaxpayerType};
 
-    #[test]
-    fn test_1601c_xml_generation() {
-        let profile = TaxpayerProfile {
+    fn test_profile() -> TaxpayerProfile {
+        TaxpayerProfile {
             id: None,
             full_name: "Test Corp".into(),
             tin: Tin {
@@ -355,7 +734,12 @@ mod tests {
             registration_activity_status: Default::default(),
             profile_pin_hash: None,
             totp_secret: None,
-        };
+        }
+    }
+
+    #[test]
+    fn test_1601c_xml_generation() {
+        let profile = test_profile();
 
         let mut draft = Form1601CDraft::new_from_profile(&profile, 2026, 5);
         draft.auto_compute_penalties = false;
@@ -375,5 +759,186 @@ mod tests {
 
         let xml = draft.to_bir_xml_payload();
         assert!(xml.contains("<div>frm1601c:txtTax22=80000.00frm1601c:txtTax22=</div>"));
+    }
+
+    fn valid_schedule_row(index: usize) -> Form1601CSchedule1Row {
+        Form1601CSchedule1Row {
+            previous_month: format!("{:02}/2026", index + 1),
+            date_paid: format!("{:02}/10/2026", index + 1),
+            drawee_bank_code_or_agency: format!("AAB-{}", index + 1),
+            payment_number: format!("REF-{}", index + 1),
+            tax_paid: (index as f64 + 1.0) * 100.0,
+            should_be_tax_due: (index as f64 + 1.0) * 125.0,
+            adjustment: 0.0,
+        }
+    }
+
+    #[test]
+    fn item_13_and_three_schedule_rows_round_trip_through_xml() {
+        let mut profile = test_profile();
+        profile.registered_address = "First address line".into();
+        let mut draft = Form1601CDraft::new_from_profile(&profile, 2026, 4);
+        draft.registered_address_2 = "Second address line".into();
+        draft.tax_relief = true;
+        draft.tax_relief_specification = "International Tax Treaty".into();
+        draft.auto_compute_penalties = false;
+        draft.tax_14_total_compensation = 100_000.0;
+        draft.tax_25_total_taxes_withheld = 1_000.0;
+        draft.schedule_1 = (0..MAX_SCHEDULE_1_ROWS).map(valid_schedule_row).collect();
+        draft.compute();
+
+        let xml = draft
+            .try_to_bir_xml_payload()
+            .expect("a valid three-row draft should generate XML");
+        let parsed = Form1601CDraft::from_bir_xml_payload(&xml)
+            .expect("generated 1601-C XML should parse back into typed state");
+
+        assert!(parsed.tax_relief);
+        assert_eq!(parsed.tax_relief_specification, "International Tax Treaty");
+        assert_eq!(parsed.registered_address_2, "Second address line");
+        assert_eq!(parsed.schedule_1, draft.schedule_1);
+        assert_eq!(parsed.tax_26_adjustment, 150.0);
+        assert_eq!(parsed.tax_27_taxes_withheld_for_remittance, 1_150.0);
+    }
+
+    #[test]
+    fn checked_xml_generation_rejects_schedule_overflow_instead_of_truncating() {
+        let profile = test_profile();
+        let mut draft = Form1601CDraft::new_from_profile(&profile, 2026, 4);
+        draft.any_taxes_withheld = false;
+        draft.auto_compute_penalties = false;
+        draft.schedule_1 = (0..=MAX_SCHEDULE_1_ROWS).map(valid_schedule_row).collect();
+        draft.compute();
+
+        let errors = draft
+            .try_to_bir_xml_payload()
+            .expect_err("a fourth XML row must be rejected");
+        assert!(errors.iter().any(|(field, _)| field == "schedule_1"));
+    }
+
+    #[test]
+    fn generated_map_covers_plain_and_encrypted_source_sample_keys() {
+        // Source evidence:
+        // 794892fc33c0fd7882a91327095f396fb1683d5b3c0d4cb1cb63916f981cad4c
+        // (plain) and
+        // 4501f3514a1883d0137d126101d02b3f0fa94daf7f6e39398b3729c9104c51d3
+        // (encrypted). The encrypted payload adds txtAddress2.
+        const PLAIN_SAMPLE_KEYS: &str = r#"
+frm1601c:txtMonth
+frm1601c:txtYear
+frm1601c:AmendedRtn_1
+frm1601c:AmendedRtn_2
+frm1601c:TaxWithheld_1
+frm1601c:TaxWithheld_2
+frm1601c:txtSheets
+frm1601c:txtATC
+frm1601c:txtTIN1
+frm1601c:txtTIN2
+frm1601c:txtTIN3
+frm1601c:txtBranchCode
+frm1601c:txtRDOCode
+frm1601c:txtTaxpayerName
+frm1601c:txtAddress
+frm1601c:txtZipCode
+frm1601c:txtTelNum
+frm1601c:CatAgent_P
+frm1601c:CatAgent_G
+txtEmail
+frm1601c:SpecialTax_1
+frm1601c:SpecialTax_2
+frm1601c:selTreaty
+frm1601c:txtTax14
+frm1601c:txtTax15
+frm1601c:txtTax16
+frm1601c:txtTax17
+frm1601c:txtTax18
+frm1601c:txtTax19
+frm1601c:txt20Other
+frm1601c:txtTax20
+frm1601c:txtTax21
+frm1601c:txtTax22
+frm1601c:txtTax23
+frm1601c:txtTax24
+frm1601c:txtTax25
+frm1601c:txtTax26
+frm1601c:txtTax27
+frm1601c:txtTax28
+frm1601c:txt29Other
+frm1601c:txtTax29
+frm1601c:txtTax30
+frm1601c:txtTax31
+frm1601c:txtTax32
+frm1601c:txtTax33
+frm1601c:txtTax34
+frm1601c:txtTax35
+frm1601c:txtTax36
+txtTaxAgentNo
+txtDateIssue
+txtDateExpiry
+frm1601c:txtAgency37
+frm1601c:txtNumber37
+frm1601c:txtDate37
+frm1601c:txtAmount37
+frm1601c:txtAgency38
+frm1601c:txtNumber38
+frm1601c:txtDate38
+frm1601c:txtAmount38
+frm1601c:txtNumber39
+frm1601c:txtDate39
+frm1601c:txtAmount39
+frm1601c:txtParticular40
+frm1601c:txtAgency40
+frm1601c:txtNumber40
+frm1601c:txtDate40
+frm1601c:txtAmount40
+frm1601c:txtPg2TIN1
+frm1601c:txtPg2TIN2
+frm1601c:txtPg2TIN3
+frm1601c:txtPg2BranchCode
+frm1601c:txtPg2TaxpayerName
+chkScheduleDelete0
+frm1601c:sched1:txtMonthYear0
+frm1601c:sched1:txtDatePaid0
+frm1601c:sched1:txtBankCode0
+frm1601c:sched1:txtNumber0
+frm1601c:sched1:txtTaxPaid0
+chkScheduleDelete1
+frm1601c:sched1:txtMonthYear1
+frm1601c:sched1:txtDatePaid1
+frm1601c:sched1:txtBankCode1
+frm1601c:sched1:txtNumber1
+frm1601c:sched1:txtTaxPaid1
+chkScheduleDelete2
+frm1601c:sched1:txtMonthYear2
+frm1601c:sched1:txtDatePaid2
+frm1601c:sched1:txtBankCode2
+frm1601c:sched1:txtNumber2
+frm1601c:sched1:txtTaxPaid2
+frm1601c:sched1:txtShouldTaxDue0
+frm1601c:sched1:txtAdjustments0
+frm1601c:sched1:txtShouldTaxDue1
+frm1601c:sched1:txtAdjustments1
+frm1601c:sched1:txtShouldTaxDue2
+frm1601c:sched1:txtAdjustments2
+frm1601c:sched1:txtTotal1
+frm1601c:txtCurrentPage
+frm1601c:txtMaxPage
+frm1601c:txtLineBus
+"#;
+
+        let profile = test_profile();
+        let fields = Form1601CDraft::new_from_profile(&profile, 2026, 4).to_bir_field_map();
+
+        let missing = PLAIN_SAMPLE_KEYS
+            .lines()
+            .map(str::trim)
+            .filter(|key| !key.is_empty())
+            .filter(|key| !fields.contains_key(*key))
+            .collect::<Vec<_>>();
+        assert!(
+            missing.is_empty(),
+            "missing source sample keys: {missing:?}"
+        );
+        assert!(fields.contains_key("frm1601c:txtAddress2"));
     }
 }

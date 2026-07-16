@@ -16,7 +16,7 @@ import json
 import re
 import sys
 from html.parser import HTMLParser
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
 
 
@@ -54,6 +54,7 @@ ALLOWED_RUNTIME_SUFFIXES = {
     ".woff2",
     ".ttf",
     ".otf",
+    ".png",
 }
 
 # The native renderer is loaded from this pinned local origin/custom protocol.
@@ -106,17 +107,139 @@ RASTER_SUFFIXES = {
     ".bmp",
     ".ico",
 }
-# Full-page/runtime raster files remain forbidden. These three reviewed hashes
-# are discrete embedded 2551Q artwork only: the government seal and the static
-# page-specific form barcodes recorded in the visual-reference manifest.
-AUTHORIZED_RUNTIME_RASTER_SHA256: frozenset[str] = frozenset()
-AUTHORIZED_EMBEDDED_IMAGE_SHA256: frozenset[str] = frozenset(
-    {
-        "d532deb6eff07393f0dd2360526805bbcf2680c727baedbb4510ed63c58fb3f4",
-        "ddb2025f8630575db15d43b855511f50821b25bc5fa05f767b2439bd9bc45279",
-        "dd1e8dd49782640a51fb7a69bae6662ca595f73384c371d9344a1448e3530e77",
-    }
+# Only reviewed, cropped runtime artwork recorded by the generated reference
+# manifest may be shipped. Keeping this allowlist derived avoids a second,
+# stale authorization source whenever a form renderer is added or artwork is
+# re-reviewed.
+REFERENCE_MANIFEST_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "packages/form-renderer/references/manifest.json"
 )
+RUNTIME_ARTWORK_SOURCE_ROOT = PurePosixPath("packages/form-renderer/src/forms")
+SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
+
+
+def _load_runtime_artwork_authorization(
+    manifest_path: Path = REFERENCE_MANIFEST_PATH,
+    workspace_root: Path | None = None,
+) -> tuple[frozenset[str], tuple[str, ...]]:
+    workspace = (workspace_root or manifest_path.resolve().parents[3]).resolve()
+    errors: list[str] = []
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        return frozenset(), (f"cannot read runtime artwork manifest: {error}",)
+
+    forms = manifest.get("forms") if isinstance(manifest, dict) else None
+    if not isinstance(forms, list) or not forms:
+        return frozenset(), ("runtime artwork manifest has no forms",)
+
+    reference_hashes: set[str] = set()
+    for form in forms:
+        if not isinstance(form, dict):
+            continue
+        pages = form.get("pages")
+        if not isinstance(pages, list):
+            continue
+        for page in pages:
+            if isinstance(page, dict) and isinstance(page.get("reference_png_sha256"), str):
+                reference_hashes.add(page["reference_png_sha256"])
+
+    authorized: set[str] = set()
+    seen_assets: set[tuple[str, str, str]] = set()
+    for form_index, form in enumerate(forms):
+        if not isinstance(form, dict):
+            errors.append(f"forms[{form_index}] is not an object")
+            continue
+        code = form.get("code")
+        revision = form.get("revision")
+        width = form.get("pages", [{}])[0].get("reference_width_px") if isinstance(form.get("pages"), list) and form.get("pages") else None
+        height = form.get("pages", [{}])[0].get("reference_height_px") if isinstance(form.get("pages"), list) and form.get("pages") else None
+        page_count = form.get("page_count")
+        if not isinstance(code, str) or not code or not isinstance(revision, str) or not revision:
+            errors.append(f"forms[{form_index}] has an invalid code or revision")
+            continue
+        assets = form.get("runtime_discrete_assets")
+        if not isinstance(assets, list):
+            errors.append(f"{code}:{revision} is missing runtime_discrete_assets")
+            continue
+
+        for asset_index, asset in enumerate(assets):
+            context = f"{code}:{revision} runtime_discrete_assets[{asset_index}]"
+            if not isinstance(asset, dict):
+                errors.append(f"{context} is not an object")
+                continue
+            asset_name = asset.get("asset")
+            digest = asset.get("derived_png_sha256")
+            source = asset.get("embedded_in")
+            crop = asset.get("crop_box_px")
+            source_page = asset.get("source_page")
+            if not isinstance(asset_name, str) or not asset_name:
+                errors.append(f"{context} is missing asset")
+            else:
+                asset_key = (code, revision, asset_name)
+                if asset_key in seen_assets:
+                    errors.append(f"{context} duplicates asset {asset_name}")
+                seen_assets.add(asset_key)
+            if not isinstance(digest, str) or SHA256_PATTERN.fullmatch(digest) is None:
+                errors.append(f"{context} has an invalid derived_png_sha256")
+                continue
+            if digest in authorized:
+                errors.append(f"{context} duplicates runtime artwork hash {digest}")
+            if digest in reference_hashes:
+                errors.append(f"{context} attempts to authorize a full-page reference hash")
+
+            source_path = PurePosixPath(source) if isinstance(source, str) else None
+            if (
+                source_path is None
+                or source_path.is_absolute()
+                or ".." in source_path.parts
+                or source_path == RUNTIME_ARTWORK_SOURCE_ROOT
+                or RUNTIME_ARTWORK_SOURCE_ROOT not in source_path.parents
+                or any(part in {"reference", "references", "calibration"} for part in source_path.parts)
+            ):
+                errors.append(f"{context} has an invalid runtime source path")
+            else:
+                resolved_source = (workspace / Path(*source_path.parts)).resolve()
+                try:
+                    resolved_source.relative_to(workspace)
+                except ValueError:
+                    errors.append(f"{context} runtime source path escapes the workspace")
+                else:
+                    if not resolved_source.is_file():
+                        errors.append(f"{context} runtime source path does not exist")
+                    elif (
+                        resolved_source.suffix.lower() == ".png"
+                        and hashlib.sha256(resolved_source.read_bytes()).hexdigest() != digest
+                    ):
+                        errors.append(f"{context} runtime PNG hash does not match the manifest")
+
+            valid_crop = (
+                isinstance(crop, list)
+                and len(crop) == 4
+                and all(isinstance(value, int) and not isinstance(value, bool) for value in crop)
+                and isinstance(width, int)
+                and isinstance(height, int)
+                and 0 <= crop[0] < crop[2] <= width
+                and 0 <= crop[1] < crop[3] <= height
+                and (crop[2] - crop[0]) * (crop[3] - crop[1]) < width * height / 4
+            )
+            if not valid_crop:
+                errors.append(f"{context} has an invalid or full-page crop_box_px")
+            if not isinstance(source_page, int) or isinstance(source_page, bool) or not isinstance(page_count, int) or not 1 <= source_page <= page_count:
+                errors.append(f"{context} has an invalid source_page")
+
+            authorized.add(digest)
+
+    if errors:
+        return frozenset(), tuple(sorted(set(errors)))
+    return frozenset(authorized), ()
+
+
+AUTHORIZED_RUNTIME_RASTER_SHA256, RUNTIME_ARTWORK_MANIFEST_ERRORS = (
+    _load_runtime_artwork_authorization()
+)
+AUTHORIZED_EMBEDDED_IMAGE_SHA256: frozenset[str] = AUTHORIZED_RUNTIME_RASTER_SHA256
 EMBEDDED_IMAGE_DATA = re.compile(
     rb"data\s*:\s*image(?:/|%2f)",
     re.IGNORECASE,
@@ -397,7 +520,10 @@ def _scan_forbidden_runtime_sources(root: Path, files: list[Path]) -> list[str]:
 
 def verify_renderer(renderer_dir: Path) -> list[str]:
     root = renderer_dir.resolve()
-    errors: list[str] = []
+    errors = [
+        f"runtime artwork authorization manifest invalid: {error}"
+        for error in RUNTIME_ARTWORK_MANIFEST_ERRORS
+    ]
     if not root.is_dir():
         return [f"renderer directory does not exist: {renderer_dir}"]
 

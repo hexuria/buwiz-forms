@@ -596,7 +596,7 @@ function TaxPayable({
       <OfficialTaxLine
         number={17}
         indent
-        label={<>Other Tax Credit/Payment <em>(specify)</em>{otherTaxCreditDescription ? `: ${otherTaxCreditDescription}` : ""}</>}
+        label={<>Other Tax Credit/Payment <em>(specify)</em>{otherTaxCreditDescription && <span className="tax-credit-description">: {otherTaxCreditDescription}</span>}</>}
         value={decimal(envelope, "other_tax_credit")}
         className="specify-line"
       />

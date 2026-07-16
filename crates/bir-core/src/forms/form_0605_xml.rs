@@ -1,349 +1,115 @@
-//! BIR field mapping for Form 0605.
+//! Checked 235-field editable-save contract for exact form `0605v1999`.
 //!
-//! Auto-generated from savefile: 00000000000000-0605-12312025143024.xml
-//! Maps Rust struct fields to BIR pseudo-XML field IDs.
+//! The contract is the intersection of the official July 1999 form and two
+//! reviewed plain saves paired with encrypted application outputs. The plain
+//! saves establish editable persistence only; they do not authorize queueing.
 
-use super::form_0605::Form0605Draft;
+use std::collections::{BTreeMap, BTreeSet};
 
-use std::collections::BTreeMap;
+use super::FormValidator;
+use super::form_0605::{
+    Form0605ApprovalSelection, Form0605Date, Form0605Draft, Form0605FilingBasis,
+    Form0605IndexedCode, Form0605MannerOfPayment, Form0605PaymentDetails, Form0605SignatureDetails,
+    Form0605TaxpayerClassification, Form0605TypeOfPayment,
+};
+
+const ATC_INDEX_COUNT: u16 = 142;
+const TAX_TYPE_INDEX_COUNT: u16 = 37;
+const EXACT_SOURCE_FIELD_COUNT: usize = 235;
 
 impl Form0605Draft {
+    /// Serialize every reviewed source key. Unknown imported keys are retained,
+    /// while modeled values always replace their source counterparts.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
-        let mut fields = BTreeMap::new();
+        let mut fields = self.preserved_unmodeled_xml_fields.clone();
         let (tin1, tin2, tin3, branch) = split_tin(&self.tin);
 
-        // === Common fields (all forms) ===
-        insert(&mut fields, "driveSelectTPExport", "0");
-        insert(&mut fields, "ebirOnlineConfirmUsername", "");
-        insert(&mut fields, "ebirOnlineSecret", "");
-        insert(&mut fields, "ebirOnlineUsername", "");
+        for (key, default) in [
+            ("driveSelectTPExport", "0"),
+            ("ebirOnlineConfirmUsername", ""),
+            ("ebirOnlineSecret", ""),
+            ("ebirOnlineUsername", ""),
+            ("txtEnroll", "Y"),
+            ("txtFinalFlag", "1"),
+        ] {
+            fields
+                .entry(key.to_string())
+                .or_insert_with(|| default.to_string());
+        }
         insert(&mut fields, "txtEmail", self.email.clone());
-        insert(&mut fields, "txtEnroll", "Y");
-        insert(&mut fields, "txtFinalFlag", "1");
 
-        // === Form-specific fields ===
-        insert_bool(&mut fields, "AtcCode1", self.atc_code1);
-        insert_bool(&mut fields, "AtcCode10", self.atc_code10);
-        insert_bool(&mut fields, "AtcCode100", self.atc_code100);
-        insert_bool(&mut fields, "AtcCode101", self.atc_code101);
-        insert_bool(&mut fields, "AtcCode102", self.atc_code102);
-        insert_bool(&mut fields, "AtcCode103", self.atc_code103);
-        insert_bool(&mut fields, "AtcCode104", self.atc_code104);
-        insert_bool(&mut fields, "AtcCode105", self.atc_code105);
-        insert_bool(&mut fields, "AtcCode106", self.atc_code106);
-        insert_bool(&mut fields, "AtcCode107", self.atc_code107);
-        insert_bool(&mut fields, "AtcCode108", self.atc_code108);
-        insert_bool(&mut fields, "AtcCode109", self.atc_code109);
-        insert_bool(&mut fields, "AtcCode11", self.atc_code11);
-        insert_bool(&mut fields, "AtcCode110", self.atc_code110);
-        insert_bool(&mut fields, "AtcCode111", self.atc_code111);
-        insert_bool(&mut fields, "AtcCode112", self.atc_code112);
-        insert_bool(&mut fields, "AtcCode113", self.atc_code113);
-        insert_bool(&mut fields, "AtcCode114", self.atc_code114);
-        insert_bool(&mut fields, "AtcCode115", self.atc_code115);
-        insert_bool(&mut fields, "AtcCode116", self.atc_code116);
-        insert_bool(&mut fields, "AtcCode117", self.atc_code117);
-        insert_bool(&mut fields, "AtcCode118", self.atc_code118);
-        insert_bool(&mut fields, "AtcCode119", self.atc_code119);
-        insert_bool(&mut fields, "AtcCode12", self.atc_code12);
-        insert_bool(&mut fields, "AtcCode120", self.atc_code120);
-        insert_bool(&mut fields, "AtcCode121", self.atc_code121);
-        insert_bool(&mut fields, "AtcCode122", self.atc_code122);
-        insert_bool(&mut fields, "AtcCode123", self.atc_code123);
-        insert_bool(&mut fields, "AtcCode124", self.atc_code124);
-        insert_bool(&mut fields, "AtcCode125", self.atc_code125);
-        insert_bool(&mut fields, "AtcCode126", self.atc_code126);
-        insert_bool(&mut fields, "AtcCode127", self.atc_code127);
-        insert_bool(&mut fields, "AtcCode128", self.atc_code128);
-        insert_bool(&mut fields, "AtcCode129", self.atc_code129);
-        insert_bool(&mut fields, "AtcCode13", self.atc_code13);
-        insert_bool(&mut fields, "AtcCode130", self.atc_code130);
-        insert_bool(&mut fields, "AtcCode131", self.atc_code131);
-        insert_bool(&mut fields, "AtcCode132", self.atc_code132);
-        insert_bool(&mut fields, "AtcCode133", self.atc_code133);
-        insert_bool(&mut fields, "AtcCode134", self.atc_code134);
-        insert_bool(&mut fields, "AtcCode135", self.atc_code135);
-        insert_bool(&mut fields, "AtcCode136", self.atc_code136);
-        insert_bool(&mut fields, "AtcCode137", self.atc_code137);
-        insert_bool(&mut fields, "AtcCode138", self.atc_code138);
-        insert_bool(&mut fields, "AtcCode139", self.atc_code139);
-        insert_bool(&mut fields, "AtcCode14", self.atc_code14);
-        insert_bool(&mut fields, "AtcCode140", self.atc_code140);
-        insert_bool(&mut fields, "AtcCode141", self.atc_code141);
-        insert_bool(&mut fields, "AtcCode142", self.atc_code142);
-        insert_bool(&mut fields, "AtcCode15", self.atc_code15);
-        insert_bool(&mut fields, "AtcCode16", self.atc_code16);
-        insert_bool(&mut fields, "AtcCode17", self.atc_code17);
-        insert_bool(&mut fields, "AtcCode18", self.atc_code18);
-        insert_bool(&mut fields, "AtcCode19", self.atc_code19);
-        insert_bool(&mut fields, "AtcCode2", self.atc_code2);
-        insert_bool(&mut fields, "AtcCode20", self.atc_code20);
-        insert_bool(&mut fields, "AtcCode21", self.atc_code21);
-        insert_bool(&mut fields, "AtcCode22", self.atc_code22);
-        insert_bool(&mut fields, "AtcCode23", self.atc_code23);
-        insert_bool(&mut fields, "AtcCode24", self.atc_code24);
-        insert_bool(&mut fields, "AtcCode25", self.atc_code25);
-        insert_bool(&mut fields, "AtcCode26", self.atc_code26);
-        insert_bool(&mut fields, "AtcCode27", self.atc_code27);
-        insert_bool(&mut fields, "AtcCode28", self.atc_code28);
-        insert_bool(&mut fields, "AtcCode29", self.atc_code29);
-        insert_bool(&mut fields, "AtcCode3", self.atc_code3);
-        insert_bool(&mut fields, "AtcCode30", self.atc_code30);
-        insert_bool(&mut fields, "AtcCode31", self.atc_code31);
-        insert_bool(&mut fields, "AtcCode32", self.atc_code32);
-        insert_bool(&mut fields, "AtcCode33", self.atc_code33);
-        insert_bool(&mut fields, "AtcCode34", self.atc_code34);
-        insert_bool(&mut fields, "AtcCode35", self.atc_code35);
-        insert_bool(&mut fields, "AtcCode36", self.atc_code36);
-        insert_bool(&mut fields, "AtcCode37", self.atc_code37);
-        insert_bool(&mut fields, "AtcCode38", self.atc_code38);
-        insert_bool(&mut fields, "AtcCode39", self.atc_code39);
-        insert_bool(&mut fields, "AtcCode4", self.atc_code4);
-        insert_bool(&mut fields, "AtcCode40", self.atc_code40);
-        insert_bool(&mut fields, "AtcCode41", self.atc_code41);
-        insert_bool(&mut fields, "AtcCode42", self.atc_code42);
-        insert_bool(&mut fields, "AtcCode43", self.atc_code43);
-        insert_bool(&mut fields, "AtcCode44", self.atc_code44);
-        insert_bool(&mut fields, "AtcCode45", self.atc_code45);
-        insert_bool(&mut fields, "AtcCode46", self.atc_code46);
-        insert_bool(&mut fields, "AtcCode47", self.atc_code47);
-        insert_bool(&mut fields, "AtcCode48", self.atc_code48);
-        insert_bool(&mut fields, "AtcCode49", self.atc_code49);
-        insert_bool(&mut fields, "AtcCode5", self.atc_code5);
-        insert_bool(&mut fields, "AtcCode50", self.atc_code50);
-        insert_bool(&mut fields, "AtcCode51", self.atc_code51);
-        insert_bool(&mut fields, "AtcCode52", self.atc_code52);
-        insert_bool(&mut fields, "AtcCode53", self.atc_code53);
-        insert_bool(&mut fields, "AtcCode54", self.atc_code54);
-        insert_bool(&mut fields, "AtcCode55", self.atc_code55);
-        insert_bool(&mut fields, "AtcCode56", self.atc_code56);
-        insert_bool(&mut fields, "AtcCode57", self.atc_code57);
-        insert_bool(&mut fields, "AtcCode58", self.atc_code58);
-        insert_bool(&mut fields, "AtcCode59", self.atc_code59);
-        insert_bool(&mut fields, "AtcCode6", self.atc_code6);
-        insert_bool(&mut fields, "AtcCode60", self.atc_code60);
-        insert_bool(&mut fields, "AtcCode61", self.atc_code61);
-        insert_bool(&mut fields, "AtcCode62", self.atc_code62);
-        insert_bool(&mut fields, "AtcCode63", self.atc_code63);
-        insert_bool(&mut fields, "AtcCode64", self.atc_code64);
-        insert_bool(&mut fields, "AtcCode65", self.atc_code65);
-        insert_bool(&mut fields, "AtcCode66", self.atc_code66);
-        insert_bool(&mut fields, "AtcCode67", self.atc_code67);
-        insert_bool(&mut fields, "AtcCode68", self.atc_code68);
-        insert_bool(&mut fields, "AtcCode69", self.atc_code69);
-        insert_bool(&mut fields, "AtcCode7", self.atc_code7);
-        insert_bool(&mut fields, "AtcCode70", self.atc_code70);
-        insert_bool(&mut fields, "AtcCode71", self.atc_code71);
-        insert_bool(&mut fields, "AtcCode72", self.atc_code72);
-        insert_bool(&mut fields, "AtcCode73", self.atc_code73);
-        insert_bool(&mut fields, "AtcCode74", self.atc_code74);
-        insert_bool(&mut fields, "AtcCode75", self.atc_code75);
-        insert_bool(&mut fields, "AtcCode76", self.atc_code76);
-        insert_bool(&mut fields, "AtcCode77", self.atc_code77);
-        insert_bool(&mut fields, "AtcCode78", self.atc_code78);
-        insert_bool(&mut fields, "AtcCode79", self.atc_code79);
-        insert_bool(&mut fields, "AtcCode8", self.atc_code8);
-        insert_bool(&mut fields, "AtcCode80", self.atc_code80);
-        insert_bool(&mut fields, "AtcCode81", self.atc_code81);
-        insert_bool(&mut fields, "AtcCode82", self.atc_code82);
-        insert_bool(&mut fields, "AtcCode83", self.atc_code83);
-        insert_bool(&mut fields, "AtcCode84", self.atc_code84);
-        insert_bool(&mut fields, "AtcCode85", self.atc_code85);
-        insert_bool(&mut fields, "AtcCode86", self.atc_code86);
-        insert_bool(&mut fields, "AtcCode87", self.atc_code87);
-        insert_bool(&mut fields, "AtcCode88", self.atc_code88);
-        insert_bool(&mut fields, "AtcCode89", self.atc_code89);
-        insert_bool(&mut fields, "AtcCode9", self.atc_code9);
-        insert_bool(&mut fields, "AtcCode90", self.atc_code90);
-        insert_bool(&mut fields, "AtcCode91", self.atc_code91);
-        insert_bool(&mut fields, "AtcCode92", self.atc_code92);
-        insert_bool(&mut fields, "AtcCode93", self.atc_code93);
-        insert_bool(&mut fields, "AtcCode94", self.atc_code94);
-        insert_bool(&mut fields, "AtcCode95", self.atc_code95);
-        insert_bool(&mut fields, "AtcCode96", self.atc_code96);
-        insert_bool(&mut fields, "AtcCode97", self.atc_code97);
-        insert_bool(&mut fields, "AtcCode98", self.atc_code98);
-        insert_bool(&mut fields, "AtcCode99", self.atc_code99);
-        insert_bool(&mut fields, "TaxTypeCode1", self.tax_type_code1);
-        insert_bool(&mut fields, "TaxTypeCode10", self.tax_type_code10);
-        insert_bool(&mut fields, "TaxTypeCode11", self.tax_type_code11);
-        insert_bool(&mut fields, "TaxTypeCode12", self.tax_type_code12);
-        insert_bool(&mut fields, "TaxTypeCode13", self.tax_type_code13);
-        insert_bool(&mut fields, "TaxTypeCode14", self.tax_type_code14);
-        insert_bool(&mut fields, "TaxTypeCode15", self.tax_type_code15);
-        insert_bool(&mut fields, "TaxTypeCode16", self.tax_type_code16);
-        insert_bool(&mut fields, "TaxTypeCode17", self.tax_type_code17);
-        insert_bool(&mut fields, "TaxTypeCode18", self.tax_type_code18);
-        insert_bool(&mut fields, "TaxTypeCode19", self.tax_type_code19);
-        insert_bool(&mut fields, "TaxTypeCode2", self.tax_type_code2);
-        insert_bool(&mut fields, "TaxTypeCode20", self.tax_type_code20);
-        insert_bool(&mut fields, "TaxTypeCode21", self.tax_type_code21);
-        insert_bool(&mut fields, "TaxTypeCode22", self.tax_type_code22);
-        insert_bool(&mut fields, "TaxTypeCode23", self.tax_type_code23);
-        insert_bool(&mut fields, "TaxTypeCode24", self.tax_type_code24);
-        insert_bool(&mut fields, "TaxTypeCode25", self.tax_type_code25);
-        insert_bool(&mut fields, "TaxTypeCode26", self.tax_type_code26);
-        insert_bool(&mut fields, "TaxTypeCode27", self.tax_type_code27);
-        insert_bool(&mut fields, "TaxTypeCode28", self.tax_type_code28);
-        insert_bool(&mut fields, "TaxTypeCode29", self.tax_type_code29);
-        insert_bool(&mut fields, "TaxTypeCode3", self.tax_type_code3);
-        insert_bool(&mut fields, "TaxTypeCode30", self.tax_type_code30);
-        insert_bool(&mut fields, "TaxTypeCode31", self.tax_type_code31);
-        insert_bool(&mut fields, "TaxTypeCode32", self.tax_type_code32);
-        insert_bool(&mut fields, "TaxTypeCode33", self.tax_type_code33);
-        insert_bool(&mut fields, "TaxTypeCode34", self.tax_type_code34);
-        insert_bool(&mut fields, "TaxTypeCode35", self.tax_type_code35);
-        insert_bool(&mut fields, "TaxTypeCode36", self.tax_type_code36);
-        insert_bool(&mut fields, "TaxTypeCode37", self.tax_type_code37);
-        insert_bool(&mut fields, "TaxTypeCode4", self.tax_type_code4);
-        insert_bool(&mut fields, "TaxTypeCode5", self.tax_type_code5);
-        insert_bool(&mut fields, "TaxTypeCode6", self.tax_type_code6);
-        insert_bool(&mut fields, "TaxTypeCode7", self.tax_type_code7);
-        insert_bool(&mut fields, "TaxTypeCode8", self.tax_type_code8);
-        insert_bool(&mut fields, "TaxTypeCode9", self.tax_type_code9);
-        insert_bool(
-            &mut fields,
-            "frm0605:itemApprovedYN:_1",
-            self.item_approved_yn_1,
-        );
-        insert_bool(
-            &mut fields,
-            "frm0605:itemApprovedYN:_2",
-            self.item_approved_yn_2,
-        );
-        insert(
+        insert_bool_pair(
             &mut fields,
             "frm0605:itemFiscalStartMonth:_1",
-            format!("{:02}", self.month),
+            "frm0605:itemFiscalStartMonth:_2",
+            matches!(self.filing_basis, Form0605FilingBasis::Calendar),
+        );
+        insert_one_of_four(&mut fields, "itemQuarter_", self.quarter);
+        insert_date(&mut fields, "frm0605:txtDueDate", self.due_date);
+        insert(
+            &mut fields,
+            "frm0605:txtNoOfSheets",
+            self.number_of_sheets.to_string(),
         );
         insert(
             &mut fields,
-            "frm0605:itemFiscalStartMonth:_2",
-            format!("{:02}", self.month),
+            "txtATCCode",
+            self.atc
+                .as_ref()
+                .map(Form0605IndexedCode::code)
+                .unwrap_or_default(),
         );
-        insert_bool(
+        insert_index_matrix(
             &mut fields,
-            "frm0605:itemMannerOfPayment:_1",
-            self.item_manner_of_payment_1,
-        );
-        insert_bool(
-            &mut fields,
-            "frm0605:itemMannerOfPayment:_2",
-            self.item_manner_of_payment_2,
-        );
-        insert_bool(
-            &mut fields,
-            "frm0605:itemMannerOfPayment:_3",
-            self.item_manner_of_payment_3,
-        );
-        insert_bool(
-            &mut fields,
-            "frm0605:itemMannerOfPayment:_4",
-            self.item_manner_of_payment_4,
-        );
-        insert_bool(
-            &mut fields,
-            "frm0605:itemMannerOfPayment:_5",
-            self.item_manner_of_payment_5,
-        );
-        insert_bool(
-            &mut fields,
-            "frm0605:itemMannerOfPaymentB:_1",
-            self.item_manner_of_payment_b_1,
-        );
-        insert_bool(
-            &mut fields,
-            "frm0605:itemMannerOfPaymentB:_2",
-            self.item_manner_of_payment_b_2,
-        );
-        insert_bool(
-            &mut fields,
-            "frm0605:itemModeOfPayment:_1",
-            self.item_mode_of_payment_1,
-        );
-        insert_bool(
-            &mut fields,
-            "frm0605:itemModeOfPayment:_2",
-            self.item_mode_of_payment_2,
-        );
-        insert_bool(
-            &mut fields,
-            "frm0605:itemModeOfPayment:_3",
-            self.item_mode_of_payment_3,
+            "AtcCode",
+            ATC_INDEX_COUNT,
+            self.atc.as_ref().map(Form0605IndexedCode::xml_index),
         );
         insert(
             &mut fields,
             "frm0605:itemYearEndMonth",
-            format!("{:02}", self.month),
+            format!("{:02}", self.year_end_month),
         );
-        insert(&mut fields, "frm0605:txtAddress", self.txt_address.clone());
-        insert(&mut fields, "frm0605:txtBranchCode", branch.clone());
-        insert_bool(
+        insert(
+            &mut fields,
+            "frm0605:txtYearEnded",
+            self.taxable_year.to_string(),
+        );
+        insert_date(&mut fields, "frm0605:txtReturnPeriod", self.return_period);
+        insert(
+            &mut fields,
+            "txtTaxTypeCode",
+            self.tax_type
+                .as_ref()
+                .map(Form0605IndexedCode::code)
+                .unwrap_or_default(),
+        );
+        insert_index_matrix(
+            &mut fields,
+            "TaxTypeCode",
+            TAX_TYPE_INDEX_COUNT,
+            self.tax_type.as_ref().map(Form0605IndexedCode::xml_index),
+        );
+
+        insert(&mut fields, "frm0605:txtTIN1", tin1);
+        insert(&mut fields, "frm0605:txtTIN2", tin2);
+        insert(&mut fields, "frm0605:txtTIN3", tin3);
+        insert(&mut fields, "frm0605:txtBranchCode", branch);
+        insert(&mut fields, "frm0605:txtRDOCode", self.rdo_code.clone());
+        insert_bool_pair(
             &mut fields,
             "frm0605:txtClassification:_1",
-            self.txt_classification_1,
-        );
-        insert_bool(
-            &mut fields,
             "frm0605:txtClassification:_2",
-            self.txt_classification_2,
+            matches!(
+                self.classification,
+                Form0605TaxpayerClassification::Individual
+            ),
         );
         insert(
             &mut fields,
-            "frm0605:txtDueDateDay",
-            self.txt_due_date_day.to_string(),
+            "frm0605:txtLineBus",
+            self.line_of_business.clone(),
         );
-        insert(
-            &mut fields,
-            "frm0605:txtDueDateMonth",
-            format!("{:02}", self.month),
-        );
-        insert(
-            &mut fields,
-            "frm0605:txtDueDateYear",
-            self.taxable_year.to_string(),
-        );
-        insert(&mut fields, "frm0605:txtLineBus", self.txt_line_bus.clone());
-        insert(
-            &mut fields,
-            "frm0605:txtNoOfSheets",
-            self.txt_no_of_sheets.to_string(),
-        );
-        insert(
-            &mut fields,
-            "frm0605:txtNumOfInstallment",
-            self.txt_num_of_installment.to_string(),
-        );
-        insert(
-            &mut fields,
-            "frm0605:txtOthersName",
-            self.txt_others_name.clone(),
-        );
-        insert(&mut fields, "frm0605:txtRDOCode", self.rdo_code.clone());
-        insert(
-            &mut fields,
-            "frm0605:txtReturnPeriodDay",
-            self.txt_return_period_day.to_string(),
-        );
-        insert(
-            &mut fields,
-            "frm0605:txtReturnPeriodMonth",
-            format!("{:02}", self.month),
-        );
-        insert(
-            &mut fields,
-            "frm0605:txtReturnPeriodYear",
-            self.taxable_year.to_string(),
-        );
-        insert(&mut fields, "frm0605:txtTIN1", tin1.clone());
-        insert(&mut fields, "frm0605:txtTIN2", tin2.clone());
-        insert(&mut fields, "frm0605:txtTIN3", tin3.clone());
-        insert_money(&mut fields, "frm0605:txtTax19", self.txt_tax19);
-        insert_money(&mut fields, "frm0605:txtTax20A", self.txt_tax20a);
-        insert_money(&mut fields, "frm0605:txtTax20B", self.txt_tax20b);
-        insert_money(&mut fields, "frm0605:txtTax20C", self.txt_tax20c);
-        insert_money(&mut fields, "frm0605:txtTax20D", self.txt_tax20d);
-        insert_money(&mut fields, "frm0605:txtTax21", self.txt_tax21);
         insert(
             &mut fields,
             "frm0605:txtTaxPayerName",
@@ -356,22 +122,82 @@ impl Form0605Draft {
         );
         insert(
             &mut fields,
-            "frm0605:txtYearEnded",
-            self.taxable_year.to_string(),
+            "frm0605:txtAddress",
+            self.registered_address.clone(),
         );
         insert(&mut fields, "frm0605:txtZipCode", self.zip_code.clone());
-        // Quarter radio buttons — derive from month
-        let q = ((self.month.saturating_sub(1)) / 3) + 1;
-        insert_bool(&mut fields, "itemQuarter_1", q == 1);
-        insert_bool(&mut fields, "itemQuarter_2", q == 2);
-        insert_bool(&mut fields, "itemQuarter_3", q == 3);
-        insert_bool(&mut fields, "itemQuarter_4", q == 4);
-        insert(&mut fields, "txtATCCode", self.txt_atccode.clone());
+
+        let payment_mode_index = self.type_of_payment.map(|value| match value {
+            Form0605TypeOfPayment::Installment => 1,
+            Form0605TypeOfPayment::PartialPayment => 2,
+            Form0605TypeOfPayment::FullPayment => 3,
+        });
+        insert_index_matrix(
+            &mut fields,
+            "frm0605:itemModeOfPayment:_",
+            3,
+            payment_mode_index,
+        );
         insert(
             &mut fields,
-            "txtTaxTypeCode",
-            self.txt_tax_type_code.clone(),
+            "frm0605:txtNumOfInstallment",
+            self.number_of_installments
+                .map(|value| value.to_string())
+                .unwrap_or_default(),
         );
+
+        let manner_index = self.manner_of_payment.map(|value| match value {
+            Form0605MannerOfPayment::SelfAssessment => 1,
+            Form0605MannerOfPayment::TaxDepositOrAdvancePayment => 2,
+            Form0605MannerOfPayment::IncomeTaxSecondInstallmentIndividual => 3,
+            Form0605MannerOfPayment::Penalties => 4,
+            Form0605MannerOfPayment::Others => 5,
+            Form0605MannerOfPayment::PreliminaryOrFinalAssessmentOrDeficiencyTax => 6,
+            Form0605MannerOfPayment::AccountsReceivableOrDelinquentAccount => 7,
+        });
+        insert_index_matrix(
+            &mut fields,
+            "frm0605:itemMannerOfPayment:_",
+            5,
+            manner_index.filter(|index| *index <= 5),
+        );
+        insert_index_matrix(
+            &mut fields,
+            "frm0605:itemMannerOfPaymentB:_",
+            2,
+            manner_index.and_then(|index| index.checked_sub(5)),
+        );
+        insert(
+            &mut fields,
+            "frm0605:txtOthersName",
+            self.other_manner_description.clone(),
+        );
+
+        insert_money(
+            &mut fields,
+            "frm0605:txtTax19",
+            self.item_19_basic_tax_or_payment,
+        );
+        insert_money(&mut fields, "frm0605:txtTax20A", self.item_20a_surcharge);
+        insert_money(&mut fields, "frm0605:txtTax20B", self.item_20b_interest);
+        insert_money(&mut fields, "frm0605:txtTax20C", self.item_20c_compromise);
+        insert_money(
+            &mut fields,
+            "frm0605:txtTax20D",
+            self.item_20d_total_penalties,
+        );
+        insert_money(
+            &mut fields,
+            "frm0605:txtTax21",
+            self.item_21_total_amount_payable,
+        );
+
+        let approval_index = match self.approval_selection {
+            Form0605ApprovalSelection::None => None,
+            Form0605ApprovalSelection::XmlOption1 => Some(1),
+            Form0605ApprovalSelection::XmlOption2 => Some(2),
+        };
+        insert_index_matrix(&mut fields, "frm0605:itemApprovedYN:_", 2, approval_index);
 
         fields
     }
@@ -379,36 +205,962 @@ impl Form0605Draft {
     pub fn to_bir_xml_payload(&self) -> String {
         crate::bir_xml::generate_bir_xml(&self.to_bir_field_map())
     }
+
+    /// Produce an editable-save payload only after all semantic and evidence
+    /// checks pass. This is not a submission API.
+    pub fn try_to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
+        let errors = self.validate();
+        if errors.is_empty() {
+            Ok(self.to_bir_xml_payload())
+        } else {
+            Err(errors)
+        }
+    }
+
+    /// Parse the non-standard BIR div payload and reject malformed, duplicate,
+    /// missing, or contradictory fields.
+    pub fn from_bir_xml_payload(xml: &str) -> Result<Self, Vec<(String, String)>> {
+        let fields = crate::bir_xml::parse_bir_xml_checked(xml).map_err(|error| {
+            vec![(
+                "xml_payload".to_string(),
+                format!("Invalid 0605 pseudo-XML: {error}"),
+            )]
+        })?;
+        Self::from_bir_field_map(&fields)
+    }
+
+    pub fn from_bir_field_map(
+        fields: &BTreeMap<String, String>,
+    ) -> Result<Self, Vec<(String, String)>> {
+        let mut errors = Vec::new();
+        let expected_keys = expected_xml_keys();
+        for key in &expected_keys {
+            if !fields.contains_key(key) {
+                errors.push((
+                    key.clone(),
+                    format!("Required 0605 source field {key} is missing"),
+                ));
+            }
+        }
+
+        let filing_basis = parse_required_bool_pair(
+            fields,
+            "frm0605:itemFiscalStartMonth:_1",
+            "frm0605:itemFiscalStartMonth:_2",
+            "filing_basis",
+            &mut errors,
+        )
+        .map(|first| {
+            if first {
+                Form0605FilingBasis::Calendar
+            } else {
+                Form0605FilingBasis::Fiscal
+            }
+        });
+        let quarter = parse_required_one_index(fields, "itemQuarter_", 4, "quarter", &mut errors);
+        let due_date = parse_required_date(fields, "frm0605:txtDueDate", &mut errors);
+        let number_of_sheets = parse_required::<u16>(fields, "frm0605:txtNoOfSheets", &mut errors);
+        let atc_index =
+            parse_required_one_index(fields, "AtcCode", ATC_INDEX_COUNT, "atc", &mut errors);
+        let atc_code = required_text(fields, "txtATCCode", &mut errors);
+        let year_end_month = parse_required::<u8>(fields, "frm0605:itemYearEndMonth", &mut errors);
+        let taxable_year = parse_required::<u16>(fields, "frm0605:txtYearEnded", &mut errors);
+        let return_period = parse_required_date(fields, "frm0605:txtReturnPeriod", &mut errors);
+        let tax_type_index = parse_required_one_index(
+            fields,
+            "TaxTypeCode",
+            TAX_TYPE_INDEX_COUNT,
+            "tax_type",
+            &mut errors,
+        );
+        let tax_type_code = required_text(fields, "txtTaxTypeCode", &mut errors);
+        let classification = parse_required_bool_pair(
+            fields,
+            "frm0605:txtClassification:_1",
+            "frm0605:txtClassification:_2",
+            "classification",
+            &mut errors,
+        )
+        .map(|first| {
+            if first {
+                Form0605TaxpayerClassification::Individual
+            } else {
+                Form0605TaxpayerClassification::NonIndividual
+            }
+        });
+
+        let payment_mode_index = parse_required_one_index(
+            fields,
+            "frm0605:itemModeOfPayment:_",
+            3,
+            "type_of_payment",
+            &mut errors,
+        );
+        let type_of_payment = payment_mode_index.map(|index| match index {
+            1 => Form0605TypeOfPayment::Installment,
+            2 => Form0605TypeOfPayment::PartialPayment,
+            _ => Form0605TypeOfPayment::FullPayment,
+        });
+
+        let manner_a = parse_true_indexes(fields, "frm0605:itemMannerOfPayment:_", 5, &mut errors);
+        let manner_b = parse_true_indexes(fields, "frm0605:itemMannerOfPaymentB:_", 2, &mut errors);
+        let manner_of_payment = match manner_a.len() + manner_b.len() {
+            1 => {
+                let index = manner_a
+                    .first()
+                    .copied()
+                    .or_else(|| manner_b.first().copied().map(|index| index + 5));
+                index.map(|index| match index {
+                    1 => Form0605MannerOfPayment::SelfAssessment,
+                    2 => Form0605MannerOfPayment::TaxDepositOrAdvancePayment,
+                    3 => Form0605MannerOfPayment::IncomeTaxSecondInstallmentIndividual,
+                    4 => Form0605MannerOfPayment::Penalties,
+                    5 => Form0605MannerOfPayment::Others,
+                    6 => Form0605MannerOfPayment::PreliminaryOrFinalAssessmentOrDeficiencyTax,
+                    _ => Form0605MannerOfPayment::AccountsReceivableOrDelinquentAccount,
+                })
+            }
+            0 => {
+                errors.push((
+                    "manner_of_payment".to_string(),
+                    "Exactly one Item 17 Manner of Payment flag must be true".to_string(),
+                ));
+                None
+            }
+            _ => {
+                errors.push((
+                    "manner_of_payment".to_string(),
+                    "Item 17 contains conflicting true flags".to_string(),
+                ));
+                None
+            }
+        };
+
+        let approval_indexes =
+            parse_true_indexes(fields, "frm0605:itemApprovedYN:_", 2, &mut errors);
+        let approval_selection = match approval_indexes.as_slice() {
+            [] => Form0605ApprovalSelection::None,
+            [1] => Form0605ApprovalSelection::XmlOption1,
+            [2] => Form0605ApprovalSelection::XmlOption2,
+            _ => {
+                errors.push((
+                    "approval_selection".to_string(),
+                    "The two BIR approval flags cannot both be true".to_string(),
+                ));
+                Form0605ApprovalSelection::None
+            }
+        };
+
+        let number_of_installments =
+            parse_optional::<u16>(fields, "frm0605:txtNumOfInstallment", &mut errors);
+        let item_19_basic_tax_or_payment = parse_money(fields, "frm0605:txtTax19", &mut errors);
+        let item_20a_surcharge = parse_money(fields, "frm0605:txtTax20A", &mut errors);
+        let item_20b_interest = parse_money(fields, "frm0605:txtTax20B", &mut errors);
+        let item_20c_compromise = parse_money(fields, "frm0605:txtTax20C", &mut errors);
+        let source_20d = parse_money(fields, "frm0605:txtTax20D", &mut errors);
+        let source_21 = parse_money(fields, "frm0605:txtTax21", &mut errors);
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        let now = chrono::Utc::now().to_rfc3339();
+        let mut draft = Form0605Draft {
+            id: None,
+            tin: format!(
+                "{}{}{}{}",
+                field(fields, "frm0605:txtTIN1"),
+                field(fields, "frm0605:txtTIN2"),
+                field(fields, "frm0605:txtTIN3"),
+                field(fields, "frm0605:txtBranchCode")
+            ),
+            taxable_year: taxable_year.unwrap_or_default(),
+            month: return_period.map(|date| date.month).unwrap_or(1),
+            filing_basis: filing_basis.unwrap_or_default(),
+            quarter: quarter
+                .and_then(|value| u8::try_from(value).ok())
+                .unwrap_or(1),
+            year_end_month: year_end_month.unwrap_or_default(),
+            due_date,
+            return_period,
+            number_of_sheets: number_of_sheets.unwrap_or_default(),
+            atc: atc_index.map(|index| Form0605IndexedCode::imported_atc(atc_code.clone(), index)),
+            tax_type: tax_type_index
+                .map(|index| Form0605IndexedCode::imported_tax_type(tax_type_code.clone(), index)),
+            rdo_code: field(fields, "frm0605:txtRDOCode").to_string(),
+            taxpayer_name: field(fields, "frm0605:txtTaxPayerName").to_string(),
+            classification: classification.unwrap_or_default(),
+            line_of_business: field(fields, "frm0605:txtLineBus").to_string(),
+            registered_address: field(fields, "frm0605:txtAddress").to_string(),
+            zip_code: field(fields, "frm0605:txtZipCode").to_string(),
+            contact_number: field(fields, "frm0605:txtTelNum").to_string(),
+            email: field(fields, "txtEmail").to_string(),
+            manner_of_payment,
+            other_manner_description: field(fields, "frm0605:txtOthersName").to_string(),
+            type_of_payment,
+            number_of_installments,
+            item_19_basic_tax_or_payment: item_19_basic_tax_or_payment.unwrap_or_default(),
+            item_20a_surcharge: item_20a_surcharge.unwrap_or_default(),
+            item_20b_interest: item_20b_interest.unwrap_or_default(),
+            item_20c_compromise: item_20c_compromise.unwrap_or_default(),
+            item_20d_total_penalties: 0.0,
+            item_21_total_amount_payable: 0.0,
+            approval_selection,
+            signatures: Form0605SignatureDetails::default(),
+            payment_details: Form0605PaymentDetails::default(),
+            preserved_unmodeled_xml_fields: fields
+                .iter()
+                .filter(|(key, _)| !is_modeled_xml_key(key))
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
+            status: super::FilingStatus::Draft,
+            created_at: now.clone(),
+            updated_at: now,
+            submitted_at: None,
+            confirmed_at: None,
+            submission_filename: None,
+            receipt_id: None,
+            submission_attempts: 0,
+            next_retry_at: None,
+            last_error: None,
+        };
+
+        draft.recompute();
+        verify_computed_source(
+            "frm0605:txtTax20D",
+            source_20d,
+            draft.item_20d_total_penalties,
+            &mut errors,
+        );
+        verify_computed_source(
+            "frm0605:txtTax21",
+            source_21,
+            draft.item_21_total_amount_payable,
+            &mut errors,
+        );
+
+        let imported_atc_requires_review = draft
+            .atc
+            .as_ref()
+            .is_some_and(Form0605IndexedCode::requires_review);
+        let imported_tax_type_requires_review = draft
+            .tax_type
+            .as_ref()
+            .is_some_and(Form0605IndexedCode::requires_review);
+        errors.extend(draft.validate().into_iter().filter(|(field, _)| {
+            !(field == "atc" && imported_atc_requires_review
+                || field == "tax_type" && imported_tax_type_requires_review)
+        }));
+
+        if errors.is_empty() {
+            Ok(draft)
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+fn expected_xml_keys() -> BTreeSet<String> {
+    let mut keys = BTreeSet::new();
+    for key in [
+        "driveSelectTPExport",
+        "ebirOnlineConfirmUsername",
+        "ebirOnlineSecret",
+        "ebirOnlineUsername",
+        "txtEmail",
+        "txtEnroll",
+        "txtFinalFlag",
+        "frm0605:itemFiscalStartMonth:_1",
+        "frm0605:itemFiscalStartMonth:_2",
+        "frm0605:txtDueDateMonth",
+        "frm0605:txtDueDateDay",
+        "frm0605:txtDueDateYear",
+        "frm0605:txtNoOfSheets",
+        "txtATCCode",
+        "frm0605:itemYearEndMonth",
+        "frm0605:txtYearEnded",
+        "frm0605:txtReturnPeriodMonth",
+        "frm0605:txtReturnPeriodDay",
+        "frm0605:txtReturnPeriodYear",
+        "txtTaxTypeCode",
+        "frm0605:txtTIN1",
+        "frm0605:txtTIN2",
+        "frm0605:txtTIN3",
+        "frm0605:txtBranchCode",
+        "frm0605:txtRDOCode",
+        "frm0605:txtClassification:_1",
+        "frm0605:txtClassification:_2",
+        "frm0605:txtLineBus",
+        "frm0605:txtTaxPayerName",
+        "frm0605:txtTelNum",
+        "frm0605:txtAddress",
+        "frm0605:txtZipCode",
+        "frm0605:txtNumOfInstallment",
+        "frm0605:txtOthersName",
+        "frm0605:txtTax19",
+        "frm0605:txtTax20A",
+        "frm0605:txtTax20B",
+        "frm0605:txtTax20C",
+        "frm0605:txtTax20D",
+        "frm0605:txtTax21",
+    ] {
+        keys.insert(key.to_string());
+    }
+    for index in 1..=4 {
+        keys.insert(format!("itemQuarter_{index}"));
+    }
+    for index in 1..=3 {
+        keys.insert(format!("frm0605:itemModeOfPayment:_{index}"));
+    }
+    for index in 1..=5 {
+        keys.insert(format!("frm0605:itemMannerOfPayment:_{index}"));
+    }
+    for index in 1..=2 {
+        keys.insert(format!("frm0605:itemMannerOfPaymentB:_{index}"));
+        keys.insert(format!("frm0605:itemApprovedYN:_{index}"));
+    }
+    for index in 1..=ATC_INDEX_COUNT {
+        keys.insert(format!("AtcCode{index}"));
+    }
+    for index in 1..=TAX_TYPE_INDEX_COUNT {
+        keys.insert(format!("TaxTypeCode{index}"));
+    }
+    debug_assert_eq!(keys.len(), EXACT_SOURCE_FIELD_COUNT);
+    keys
+}
+
+fn is_modeled_xml_key(key: &str) -> bool {
+    // Transport fields stay in the preserved map so imports reproduce their
+    // exact values. Email is semantic and therefore modeled.
+    if matches!(
+        key,
+        "driveSelectTPExport"
+            | "ebirOnlineConfirmUsername"
+            | "ebirOnlineSecret"
+            | "ebirOnlineUsername"
+            | "txtEnroll"
+            | "txtFinalFlag"
+    ) {
+        return false;
+    }
+    expected_xml_keys().contains(key)
+}
+
+fn parse_required_date(
+    fields: &BTreeMap<String, String>,
+    prefix: &str,
+    errors: &mut Vec<(String, String)>,
+) -> Option<Form0605Date> {
+    let month = parse_required::<u8>(fields, &format!("{prefix}Month"), errors);
+    let day = parse_required::<u8>(fields, &format!("{prefix}Day"), errors);
+    let year = parse_required::<u16>(fields, &format!("{prefix}Year"), errors);
+    match (year, month, day) {
+        (Some(year), Some(month), Some(day)) => match Form0605Date::new(year, month, day) {
+            Ok(date) => Some(date),
+            Err(message) => {
+                errors.push((prefix.to_string(), message));
+                None
+            }
+        },
+        _ => None,
+    }
+}
+
+fn parse_required_bool_pair(
+    fields: &BTreeMap<String, String>,
+    first_key: &str,
+    second_key: &str,
+    semantic_field: &str,
+    errors: &mut Vec<(String, String)>,
+) -> Option<bool> {
+    let first = parse_bool(fields, first_key, errors);
+    let second = parse_bool(fields, second_key, errors);
+    match (first, second) {
+        (Some(true), Some(false)) => Some(true),
+        (Some(false), Some(true)) => Some(false),
+        (Some(false), Some(false)) => {
+            errors.push((
+                semantic_field.to_string(),
+                format!("Exactly one {semantic_field} flag must be true"),
+            ));
+            None
+        }
+        (Some(true), Some(true)) => {
+            errors.push((
+                semantic_field.to_string(),
+                format!("{semantic_field} contains conflicting true flags"),
+            ));
+            None
+        }
+        _ => None,
+    }
+}
+
+fn parse_required_one_index(
+    fields: &BTreeMap<String, String>,
+    prefix: &str,
+    count: u16,
+    semantic_field: &str,
+    errors: &mut Vec<(String, String)>,
+) -> Option<u16> {
+    let selected = parse_true_indexes(fields, prefix, count, errors);
+    match selected.as_slice() {
+        [index] => Some(*index),
+        [] => {
+            errors.push((
+                semantic_field.to_string(),
+                format!("Exactly one {semantic_field} flag must be true"),
+            ));
+            None
+        }
+        _ => {
+            errors.push((
+                semantic_field.to_string(),
+                format!("{semantic_field} contains conflicting true flags"),
+            ));
+            None
+        }
+    }
+}
+
+fn parse_true_indexes(
+    fields: &BTreeMap<String, String>,
+    prefix: &str,
+    count: u16,
+    errors: &mut Vec<(String, String)>,
+) -> Vec<u16> {
+    (1..=count)
+        .filter_map(|index| {
+            parse_bool(fields, &format!("{prefix}{index}"), errors)
+                .filter(|selected| *selected)
+                .map(|_| index)
+        })
+        .collect()
+}
+
+fn parse_bool(
+    fields: &BTreeMap<String, String>,
+    key: &str,
+    errors: &mut Vec<(String, String)>,
+) -> Option<bool> {
+    match fields.get(key).map(String::as_str) {
+        Some("true") => Some(true),
+        Some("false") => Some(false),
+        Some(value) => {
+            errors.push((
+                key.to_string(),
+                format!("0605 boolean field {key} has invalid value {value:?}"),
+            ));
+            None
+        }
+        None => None,
+    }
+}
+
+fn required_text(
+    fields: &BTreeMap<String, String>,
+    key: &str,
+    errors: &mut Vec<(String, String)>,
+) -> String {
+    let value = field(fields, key).trim();
+    if value.is_empty() {
+        errors.push((
+            key.to_string(),
+            format!("Required 0605 field {key} is empty"),
+        ));
+    }
+    value.to_string()
+}
+
+fn parse_required<T: std::str::FromStr>(
+    fields: &BTreeMap<String, String>,
+    key: &str,
+    errors: &mut Vec<(String, String)>,
+) -> Option<T> {
+    let value = field(fields, key).trim();
+    if value.is_empty() {
+        errors.push((
+            key.to_string(),
+            format!("Required 0605 field {key} is empty"),
+        ));
+        return None;
+    }
+    value.parse::<T>().map(Some).unwrap_or_else(|_| {
+        errors.push((
+            key.to_string(),
+            format!("0605 field {key} has invalid value {value:?}"),
+        ));
+        None
+    })
+}
+
+fn parse_optional<T: std::str::FromStr>(
+    fields: &BTreeMap<String, String>,
+    key: &str,
+    errors: &mut Vec<(String, String)>,
+) -> Option<T> {
+    let value = field(fields, key).trim();
+    if value.is_empty() {
+        return None;
+    }
+    value.parse::<T>().map(Some).unwrap_or_else(|_| {
+        errors.push((
+            key.to_string(),
+            format!("0605 field {key} has invalid value {value:?}"),
+        ));
+        None
+    })
+}
+
+fn parse_money(
+    fields: &BTreeMap<String, String>,
+    key: &str,
+    errors: &mut Vec<(String, String)>,
+) -> Option<f64> {
+    let normalized = field(fields, key).replace(',', "");
+    let value = normalized.trim();
+    if value.is_empty() {
+        errors.push((
+            key.to_string(),
+            format!("Required 0605 amount {key} is empty"),
+        ));
+        return None;
+    }
+    value.parse::<f64>().map(Some).unwrap_or_else(|_| {
+        errors.push((
+            key.to_string(),
+            format!("0605 amount {key} has invalid value {value:?}"),
+        ));
+        None
+    })
+}
+
+fn verify_computed_source(
+    field: &str,
+    source: Option<f64>,
+    computed: f64,
+    errors: &mut Vec<(String, String)>,
+) {
+    if source.is_some_and(|source| (source - computed).abs() > 0.001) {
+        errors.push((
+            field.to_string(),
+            format!("Source value does not equal the official computed amount {computed:.2}"),
+        ));
+    }
+}
+
+fn field<'a>(fields: &'a BTreeMap<String, String>, key: &str) -> &'a str {
+    fields.get(key).map(String::as_str).unwrap_or("")
+}
+
+fn insert_date(fields: &mut BTreeMap<String, String>, prefix: &str, date: Option<Form0605Date>) {
+    insert(
+        fields,
+        &format!("{prefix}Month"),
+        date.map(|value| format!("{:02}", value.month))
+            .unwrap_or_default(),
+    );
+    insert(
+        fields,
+        &format!("{prefix}Day"),
+        date.map(|value| format!("{:02}", value.day))
+            .unwrap_or_default(),
+    );
+    insert(
+        fields,
+        &format!("{prefix}Year"),
+        date.map(|value| value.year.to_string()).unwrap_or_default(),
+    );
+}
+
+fn insert_bool_pair(
+    fields: &mut BTreeMap<String, String>,
+    first_key: &str,
+    second_key: &str,
+    first_selected: bool,
+) {
+    insert_bool(fields, first_key, first_selected);
+    insert_bool(fields, second_key, !first_selected);
+}
+
+fn insert_one_of_four(fields: &mut BTreeMap<String, String>, prefix: &str, selected: u8) {
+    insert_index_matrix(fields, prefix, 4, Some(u16::from(selected)));
+}
+
+fn insert_index_matrix(
+    fields: &mut BTreeMap<String, String>,
+    prefix: &str,
+    count: u16,
+    selected: Option<u16>,
+) {
+    for index in 1..=count {
+        insert_bool(fields, &format!("{prefix}{index}"), selected == Some(index));
+    }
 }
 
 fn split_tin(tin: &str) -> (String, String, String, String) {
-    let digits: String = tin.chars().filter(|ch| ch.is_ascii_digit()).collect();
-    let segment = |start: usize, end: usize| -> String {
-        digits
-            .get(start..end.min(digits.len()))
-            .unwrap_or("")
-            .to_string()
-    };
+    let digits: String = tin
+        .chars()
+        .filter(|character| character.is_ascii_digit())
+        .collect();
+    let segment = |start: usize, end: usize| digits.get(start..end).unwrap_or_default().to_string();
     (
         segment(0, 3),
         segment(3, 6),
         segment(6, 9),
-        digits
-            .get(9..)
-            .filter(|s| !s.is_empty())
-            .unwrap_or("000")
-            .to_string(),
+        digits.get(9..).unwrap_or_default().to_string(),
     )
 }
 
-fn insert(map: &mut BTreeMap<String, String>, key: &str, value: impl Into<String>) {
-    map.insert(key.to_string(), value.into());
+fn insert(fields: &mut BTreeMap<String, String>, key: &str, value: impl Into<String>) {
+    fields.insert(key.to_string(), value.into());
 }
 
-fn insert_bool(map: &mut BTreeMap<String, String>, key: &str, value: bool) {
-    insert(map, key, if value { "true" } else { "false" });
+fn insert_bool(fields: &mut BTreeMap<String, String>, key: &str, value: bool) {
+    insert(fields, key, if value { "true" } else { "false" });
 }
 
-fn insert_money(map: &mut BTreeMap<String, String>, key: &str, value: f64) {
-    insert(map, key, format!("{:.2}", value));
+fn insert_money(fields: &mut BTreeMap<String, String>, key: &str, value: f64) {
+    insert(fields, key, format_money(value));
+}
+
+fn format_money(value: f64) -> String {
+    let formatted = format!("{value:.2}");
+    let (integer, decimal) = formatted.split_once('.').unwrap_or((&formatted, "00"));
+    let (sign, digits) = integer
+        .strip_prefix('-')
+        .map(|digits| ("-", digits))
+        .unwrap_or(("", integer));
+    let mut grouped_reversed = String::new();
+    for (index, character) in digits.chars().rev().enumerate() {
+        if index > 0 && index % 3 == 0 {
+            grouped_reversed.push(',');
+        }
+        grouped_reversed.push(character);
+    }
+    let grouped: String = grouped_reversed.chars().rev().collect();
+    format!("{sign}{grouped}.{decimal}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::forms::form_0605::{
+        Form0605CodeEvidence, Form0605ReviewedAtc, Form0605ReviewedTaxType, Form0605TypeOfPayment,
+    };
+    use sha2::{Digest, Sha256};
+
+    #[derive(Clone, Copy)]
+    enum ReviewedSample {
+        January2026,
+        December2025,
+    }
+
+    fn reviewed_sample_fields(sample: ReviewedSample) -> BTreeMap<String, String> {
+        let mut fields = BTreeMap::new();
+        for (key, value) in [
+            ("driveSelectTPExport", "0"),
+            ("ebirOnlineConfirmUsername", ""),
+            ("ebirOnlineSecret", ""),
+            ("ebirOnlineUsername", ""),
+            ("txtEmail", "codeitlikemiley@gmail.com"),
+            ("txtEnroll", "Y"),
+            ("txtFinalFlag", "1"),
+            ("frm0605:itemFiscalStartMonth:_1", "true"),
+            ("frm0605:itemFiscalStartMonth:_2", "false"),
+            ("itemQuarter_1", "true"),
+            ("itemQuarter_2", "false"),
+            ("itemQuarter_3", "false"),
+            ("itemQuarter_4", "false"),
+            ("frm0605:txtTIN1", "000"),
+            ("frm0605:txtTIN2", "000"),
+            ("frm0605:txtTIN3", "000"),
+            ("frm0605:txtBranchCode", "00000"),
+            ("frm0605:txtRDOCode", "018"),
+            ("frm0605:txtLineBus", "SOFTWARE DEVELOPMENT"),
+            ("frm0605:txtTaxPayerName", "JUAN DELA CRUZ"),
+            ("frm0605:txtTelNum", "09123456789"),
+            ("frm0605:txtAddress", "OLONGAPO"),
+            ("frm0605:txtZipCode", "2200"),
+            ("frm0605:itemMannerOfPaymentB:_1", "false"),
+            ("frm0605:itemMannerOfPaymentB:_2", "false"),
+            ("frm0605:itemApprovedYN:_1", "false"),
+            ("frm0605:itemApprovedYN:_2", "false"),
+        ] {
+            insert(&mut fields, key, value);
+        }
+
+        for index in 1..=ATC_INDEX_COUNT {
+            insert_bool(&mut fields, &format!("AtcCode{index}"), false);
+        }
+        for index in 1..=TAX_TYPE_INDEX_COUNT {
+            insert_bool(&mut fields, &format!("TaxTypeCode{index}"), false);
+        }
+        for index in 1..=3 {
+            insert_bool(
+                &mut fields,
+                &format!("frm0605:itemModeOfPayment:_{index}"),
+                false,
+            );
+        }
+        for index in 1..=5 {
+            insert_bool(
+                &mut fields,
+                &format!("frm0605:itemMannerOfPayment:_{index}"),
+                false,
+            );
+        }
+
+        match sample {
+            ReviewedSample::January2026 => {
+                for (key, value) in [
+                    ("frm0605:txtDueDateMonth", "01"),
+                    ("frm0605:txtDueDateDay", "01"),
+                    ("frm0605:txtDueDateYear", "2026"),
+                    ("frm0605:txtNoOfSheets", "0"),
+                    ("txtATCCode", "FP010"),
+                    ("frm0605:itemYearEndMonth", "12"),
+                    ("frm0605:txtYearEnded", "2026"),
+                    ("frm0605:txtReturnPeriodMonth", "01"),
+                    ("frm0605:txtReturnPeriodDay", "31"),
+                    ("frm0605:txtReturnPeriodYear", "2026"),
+                    ("txtTaxTypeCode", "DO"),
+                    ("frm0605:txtClassification:_1", "true"),
+                    ("frm0605:txtClassification:_2", "false"),
+                    ("frm0605:txtNumOfInstallment", ""),
+                    ("frm0605:txtOthersName", ""),
+                    ("frm0605:txtTax19", "10.00"),
+                    ("frm0605:txtTax20A", "0.00"),
+                    ("frm0605:txtTax20B", "0.00"),
+                    ("frm0605:txtTax20C", "0.00"),
+                    ("frm0605:txtTax20D", "0.00"),
+                    ("frm0605:txtTax21", "10.00"),
+                ] {
+                    insert(&mut fields, key, value);
+                }
+                insert_bool(&mut fields, "AtcCode1", true);
+                insert_bool(&mut fields, "TaxTypeCode4", true);
+                insert_bool(&mut fields, "frm0605:itemModeOfPayment:_3", true);
+                insert_bool(&mut fields, "frm0605:itemMannerOfPayment:_1", true);
+            }
+            ReviewedSample::December2025 => {
+                for (key, value) in [
+                    ("frm0605:txtDueDateMonth", "12"),
+                    ("frm0605:txtDueDateDay", "31"),
+                    ("frm0605:txtDueDateYear", "2025"),
+                    ("frm0605:txtNoOfSheets", "10"),
+                    ("txtATCCode", "II011"),
+                    ("frm0605:itemYearEndMonth", "12"),
+                    ("frm0605:txtYearEnded", "2025"),
+                    ("frm0605:txtReturnPeriodMonth", "12"),
+                    ("frm0605:txtReturnPeriodDay", "31"),
+                    ("frm0605:txtReturnPeriodYear", "2025"),
+                    ("txtTaxTypeCode", "IT"),
+                    ("frm0605:txtClassification:_1", "false"),
+                    ("frm0605:txtClassification:_2", "true"),
+                    ("frm0605:txtNumOfInstallment", "10"),
+                    (
+                        "frm0605:txtOthersName",
+                        "CANT CHOOSE PRELIMINARY OR ACCOUNT RECEIVABLE",
+                    ),
+                    ("frm0605:txtTax19", "1,000.00"),
+                    ("frm0605:txtTax20A", "10.00"),
+                    ("frm0605:txtTax20B", "20.00"),
+                    ("frm0605:txtTax20C", "1,000.00"),
+                    ("frm0605:txtTax20D", "1,030.00"),
+                    ("frm0605:txtTax21", "2,030.00"),
+                ] {
+                    insert(&mut fields, key, value);
+                }
+                insert_bool(&mut fields, "AtcCode24", true);
+                insert_bool(&mut fields, "TaxTypeCode9", true);
+                insert_bool(&mut fields, "frm0605:itemModeOfPayment:_1", true);
+                insert_bool(&mut fields, "frm0605:itemMannerOfPayment:_5", true);
+            }
+        }
+
+        assert_eq!(fields.len(), EXACT_SOURCE_FIELD_COUNT);
+        fields
+    }
+
+    #[test]
+    fn expected_contract_contains_exactly_235_source_keys() {
+        assert_eq!(expected_xml_keys().len(), EXACT_SOURCE_FIELD_COUNT);
+    }
+
+    #[test]
+    fn january_source_round_trips_all_fields_and_proven_indexes() {
+        let source = reviewed_sample_fields(ReviewedSample::January2026);
+        let draft = Form0605Draft::from_bir_field_map(&source).unwrap();
+        assert_eq!(draft.atc.as_ref().unwrap().code(), "FP010");
+        assert_eq!(draft.atc.as_ref().unwrap().xml_index(), 1);
+        assert_eq!(draft.tax_type.as_ref().unwrap().code(), "DO");
+        assert_eq!(draft.tax_type.as_ref().unwrap().xml_index(), 4);
+        assert_eq!(draft.to_bir_field_map(), source);
+    }
+
+    #[test]
+    fn december_source_round_trips_all_fields_formulas_and_independent_quarter() {
+        let source = reviewed_sample_fields(ReviewedSample::December2025);
+        let draft = Form0605Draft::from_bir_field_map(&source).unwrap();
+        assert_eq!(draft.quarter, 1);
+        assert_eq!(draft.return_period.unwrap().month, 12);
+        assert_eq!(draft.year_end_month, 12);
+        assert_eq!(draft.atc.as_ref().unwrap().xml_index(), 24);
+        assert_eq!(draft.tax_type.as_ref().unwrap().xml_index(), 9);
+        assert_eq!(draft.item_20d_total_penalties, 1_030.0);
+        assert_eq!(draft.item_21_total_amount_payable, 2_030.0);
+        assert_eq!(draft.to_bir_field_map(), source);
+    }
+
+    #[test]
+    fn checked_xml_parser_decodes_and_reencodes_semantic_text_once() {
+        let source = reviewed_sample_fields(ReviewedSample::December2025);
+        let xml = crate::bir_xml::generate_bir_xml(&source);
+        assert!(xml.contains("SOFTWARE%20DEVELOPMENT"));
+        let draft = Form0605Draft::from_bir_xml_payload(&xml).unwrap();
+        assert_eq!(draft.line_of_business, "SOFTWARE DEVELOPMENT");
+        assert_eq!(
+            crate::bir_xml::parse_bir_xml_checked(&draft.to_bir_xml_payload()).unwrap(),
+            source
+        );
+    }
+
+    #[test]
+    fn export_is_byte_deterministic() {
+        let source = reviewed_sample_fields(ReviewedSample::January2026);
+        let draft = Form0605Draft::from_bir_field_map(&source).unwrap();
+        assert_eq!(draft.to_bir_xml_payload(), draft.to_bir_xml_payload());
+    }
+
+    #[test]
+    fn parser_rejects_duplicate_or_missing_selections() {
+        let mut duplicate = reviewed_sample_fields(ReviewedSample::January2026);
+        duplicate.insert("AtcCode24".to_string(), "true".to_string());
+        let duplicate_errors = Form0605Draft::from_bir_field_map(&duplicate).unwrap_err();
+        assert!(duplicate_errors.iter().any(|(field, _)| field == "atc"));
+
+        let mut missing = reviewed_sample_fields(ReviewedSample::January2026);
+        missing.remove("TaxTypeCode37");
+        let missing_errors = Form0605Draft::from_bir_field_map(&missing).unwrap_err();
+        assert!(
+            missing_errors
+                .iter()
+                .any(|(field, _)| field == "TaxTypeCode37")
+        );
+    }
+
+    #[test]
+    fn parser_rejects_invalid_dates_negative_amounts_and_formula_mismatch() {
+        let mut invalid = reviewed_sample_fields(ReviewedSample::December2025);
+        invalid.insert("frm0605:txtReturnPeriodDay".to_string(), "32".to_string());
+        invalid.insert("frm0605:txtTax19".to_string(), "-1.00".to_string());
+        invalid.insert("frm0605:txtTax20D".to_string(), "999.00".to_string());
+        let errors = Form0605Draft::from_bir_field_map(&invalid).unwrap_err();
+        assert!(errors.iter().any(|(field, _)| {
+            field == "frm0605:txtReturnPeriod" || field == "item_19_basic_tax_or_payment"
+        }));
+    }
+
+    #[test]
+    fn unknown_imported_pair_round_trips_but_safe_export_fails_closed() {
+        let mut source = reviewed_sample_fields(ReviewedSample::January2026);
+        source.insert("AtcCode1".to_string(), "false".to_string());
+        source.insert("AtcCode77".to_string(), "true".to_string());
+        source.insert("txtATCCode".to_string(), "UNKNOWN".to_string());
+        let draft = Form0605Draft::from_bir_field_map(&source).unwrap();
+        assert_eq!(
+            draft.atc.as_ref().unwrap().evidence(),
+            Form0605CodeEvidence::ImportedExact
+        );
+        assert_eq!(draft.to_bir_field_map(), source);
+        assert!(draft.try_to_bir_xml_payload().is_err());
+    }
+
+    #[test]
+    fn reviewed_choices_export_only_the_four_proven_code_index_pairs() {
+        let source = reviewed_sample_fields(ReviewedSample::January2026);
+        let mut draft = Form0605Draft::from_bir_field_map(&source).unwrap();
+        draft.select_reviewed_atc(Form0605ReviewedAtc::Ii011);
+        draft.select_reviewed_tax_type(Form0605ReviewedTaxType::It);
+        draft.type_of_payment = Some(Form0605TypeOfPayment::FullPayment);
+        let fields = draft.to_bir_field_map();
+        assert_eq!(fields["AtcCode24"], "true");
+        assert_eq!(fields["TaxTypeCode9"], "true");
+    }
+
+    #[test]
+    fn twelve_digit_legacy_tin_preserves_three_digit_branch() {
+        let mut source = reviewed_sample_fields(ReviewedSample::January2026);
+        source.insert("frm0605:txtBranchCode".to_string(), "000".to_string());
+
+        let draft = Form0605Draft::from_bir_field_map(&source).unwrap();
+
+        assert_eq!(draft.tin, "000000000000");
+        assert_eq!(draft.to_bir_field_map(), source);
+    }
+
+    #[test]
+    #[ignore = "requires EBIRFORMS_0605_SOURCE_DIR pointing to the reviewed external source pack"]
+    fn locked_external_plain_sources_match_hashes_and_roundtrip_all_235_fields() {
+        let source_dir = std::env::var("EBIRFORMS_0605_SOURCE_DIR")
+            .expect("set EBIRFORMS_0605_SOURCE_DIR to the exact reviewed 0605 folder");
+        for (filename, expected_sha256) in [
+            (
+                "00000000000000-0605-01312026102841.xml",
+                "01992fcdaef50493e756b89728af8d107ec1a0cafa94e677edbac1e2f08dc499",
+            ),
+            (
+                "00000000000000-0605-12312025143024.xml",
+                "f8659d2011d2914073725ccef1fc4f2e74d4f315bf333d5ec3084a1fdff524f7",
+            ),
+        ] {
+            let path = std::path::Path::new(&source_dir).join(filename);
+            let bytes = std::fs::read(&path).expect("reviewed source must be readable");
+            assert_eq!(hex::encode(Sha256::digest(&bytes)), expected_sha256);
+            let xml = std::str::from_utf8(&bytes).expect("plain source must be UTF-8");
+            let source_fields = crate::bir_xml::parse_bir_xml_checked(xml)
+                .expect("reviewed source must parse through the checked parser");
+            assert_eq!(source_fields.len(), EXACT_SOURCE_FIELD_COUNT);
+
+            let draft = Form0605Draft::from_bir_field_map(&source_fields)
+                .expect("reviewed source must satisfy the semantic contract");
+            assert_eq!(draft.to_bir_field_map(), source_fields);
+            assert_eq!(
+                crate::bir_xml::parse_bir_xml_checked(&draft.to_bir_xml_payload()).unwrap(),
+                source_fields
+            );
+        }
+
+        for (filename, expected_sha256) in [
+            (
+                "00000000000000-0605-01312026102841#codeitlikemiley@gmail.com#.xml",
+                "09cd3626efd6a7490b5922c9dbb6fad98b0b066ffb5de87c3ea6a6677210620f",
+            ),
+            (
+                "00000000000000-0605-12312025143024#codeitlikemiley@gmail.com#.xml",
+                "c53a196dcfe1fb585fefc7b48c2a4f2abe9ec9114d55541e44a40e4399c39928",
+            ),
+        ] {
+            let path = std::path::Path::new(&source_dir).join(filename);
+            let bytes = std::fs::read(&path).expect("encrypted companion must be readable");
+            assert_eq!(hex::encode(Sha256::digest(&bytes)), expected_sha256);
+            assert!(
+                std::str::from_utf8(&bytes)
+                    .ok()
+                    .and_then(|text| crate::bir_xml::parse_bir_xml_checked(text).ok())
+                    .is_none(),
+                "encrypted companion must never be accepted as plain editable XML"
+            );
+        }
+
+        let pdf = std::fs::read(
+            std::path::Path::new(&source_dir).join("0605version1999_09.02.2022_copy.pdf"),
+        )
+        .expect("locked official PDF must be readable");
+        assert_eq!(
+            hex::encode(Sha256::digest(&pdf)),
+            "de04419766c59bf27fdeb854c0f7c3f98601900caa20630442e671e2313e536f"
+        );
+    }
 }
