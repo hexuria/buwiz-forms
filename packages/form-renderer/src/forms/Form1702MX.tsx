@@ -153,16 +153,7 @@ export function Form1702MX({ envelope }: { envelope: RenderEnvelope }) {
           fieldPrefix="schedule_4"
           envelope={envelope}
         />
-        <RegimeTable1702MX
-          className="schedule-five-1702mx"
-          title="Schedule 5 – Ordinary Allowable Itemized Deductions (attach additional sheet/s, if necessary)"
-          labels={SCHEDULE_FIVE_LABELS}
-          startNumber={1}
-          fieldPrefix="schedule_5"
-          envelope={envelope}
-          labelOverride={(index, label) => scheduleFiveLabel(envelope, index, label)}
-          numberOverride={scheduleFiveNumber}
-        />
+        <ScheduleFive1702MX envelope={envelope} />
         <ScheduleSix1702MX envelope={envelope} />
         <NolcoComputation1702MX
           className="schedule-seven-1702mx"
@@ -468,6 +459,58 @@ function RegimeTable1702MX({
   );
 }
 
+function ScheduleFive1702MX({ envelope }: { envelope: RenderEnvelope }) {
+  const amountRow = (index: number, number: ReactNode, label: ReactNode) => {
+    const prefix = `schedule_5_item_${index + 1}`;
+    return (
+      <div
+        key={`schedule-5-${index}`}
+        className={`regime-grid-1702mx regime-row-1702mx schedule-five-row-1702mx item-${index + 1}-1702mx`}
+      >
+        <span>{number} {label}</span>
+        <AmountCell1702MX value={amount(envelope, `${prefix}_exempt`)} />
+        <AmountCell1702MX value={amount(envelope, `${prefix}_special`)} />
+        <AmountCell1702MX value={amount(envelope, `${prefix}_regular`)} />
+        <AmountCell1702MX value={amount(envelope, `${prefix}_total`)} />
+      </div>
+    );
+  };
+
+  return (
+    <section className="schedule-five-1702mx schedule-block-1702mx regime-table-1702mx">
+      <ScheduleTitle1702MX>
+        <span>Schedule 5 – Ordinary Allowable Itemized Deductions (attach additional sheet/s, if necessary)</span>
+        <small>(If with only one activity, fill-out the applicable columns below: if with two or more activities, amount for each expense shall come from all of Part V-Schedule D)</small>
+      </ScheduleTitle1702MX>
+      {SCHEDULE_FIVE_LABELS.slice(0, 16).map((label, index) => amountRow(index, index + 1, label))}
+      <div className="schedule-five-group-row-1702mx">
+        17 Others (Deductions Subject to Withholding Tax and Other Expenses) [Specify below; Add additional sheet(s), if necessary]
+      </div>
+      {SCHEDULE_FIVE_LABELS.slice(16, 25).map((label, offset) => {
+        const index = offset + 16;
+        let displayedLabel = label;
+        if (offset < 3 && typeof label === "string") {
+          displayedLabel = label.replace(/^[a-c]\.\s*/, "");
+        } else if (offset >= 3) {
+          displayedLabel = (
+            <PlainValue1702MX
+              value={text(envelope, `schedule_5_other_description_${offset - 2}`)}
+            />
+          );
+        }
+        return amountRow(index, `${String.fromCharCode(97 + offset)}.`, displayedLabel);
+      })}
+      <div className="regime-grid-1702mx regime-row-1702mx schedule-five-row-1702mx schedule-five-total-row-1702mx item-26-1702mx">
+        <span><b>18 Total Ordinary Allowable Itemized Deductions</b><small>(Sum of Items 1 to 17i) (To Part IV-Schedule 2 Item 8)</small></span>
+        <AmountCell1702MX value={amount(envelope, "schedule_5_item_26_exempt")} />
+        <AmountCell1702MX value={amount(envelope, "schedule_5_item_26_special")} />
+        <AmountCell1702MX value={amount(envelope, "schedule_5_item_26_regular")} />
+        <AmountCell1702MX value={amount(envelope, "schedule_5_item_26_total")} />
+      </div>
+    </section>
+  );
+}
+
 function ScheduleSix1702MX({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <section className="schedule-six-1702mx schedule-block-1702mx regime-table-1702mx">
@@ -591,18 +634,6 @@ function AmountCell1702MX({ value }: { value: number | null }) {
 function PlainValue1702MX({ value, fixedFontSizePt }: { value: string; fixedFontSizePt?: number }) {
   const fontSize = fixedFontSizePt ?? Math.max(4, Math.min(7, 210 / Math.max(value.length, 30)));
   return <span className="plain-value-1702mx" aria-label={value} style={{ fontSize: `${fontSize}pt` }}>{value}</span>;
-}
-
-function scheduleFiveLabel(envelope: RenderEnvelope, index: number, label: ReactNode): ReactNode {
-  if (index < 19 || index > 24) return label;
-  const description = text(envelope, `schedule_5_other_description_${index - 18}`);
-  return <PlainValue1702MX value={description} />;
-}
-
-function scheduleFiveNumber(index: number, fallback: number): string | number {
-  if (index < 16) return fallback;
-  if (index < 25) return `17${String.fromCharCode(97 + index - 16)}`;
-  return 18;
 }
 
 function scheduleThreeLabel(envelope: RenderEnvelope, index: number, label: ReactNode): ReactNode {

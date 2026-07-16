@@ -176,6 +176,26 @@ test("1702MX January 2018C preserves the official Schedule 2 group rows", async 
   expect(await pageHasNoOverflow(pageTwo)).toBe(true);
 });
 
+test("1702MX January 2018C preserves the official Schedule 5 Item 17 band and subrows", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-normal.json"));
+  const pageThree = page.locator(".form-page").nth(2);
+  const scheduleFive = pageThree.locator(".schedule-five-1702mx");
+
+  await expect(scheduleFive.locator(":scope > .regime-header-1702mx")).toHaveCount(0);
+  await expect(scheduleFive.locator(":scope > .schedule-five-row-1702mx")).toHaveCount(26);
+  await expect(scheduleFive.locator(":scope > .schedule-five-group-row-1702mx")).toHaveText(
+    "17 Others (Deductions Subject to Withholding Tax and Other Expenses) [Specify below; Add additional sheet(s), if necessary]"
+  );
+  await expect(scheduleFive.locator(":scope > .item-17-1702mx > span:first-child")).toHaveText(
+    "a. Janitorial and Messengerial Services"
+  );
+  await expect(scheduleFive.locator(":scope > .item-25-1702mx > span:first-child")).toHaveText("i.");
+  await expect(scheduleFive.locator(":scope > .item-26-1702mx > span:first-child")).toContainText(
+    "18 Total Ordinary Allowable Itemized Deductions"
+  );
+  expect(await pageHasNoOverflow(pageThree)).toBe(true);
+});
+
 test("1702MX January 2018C matches the complete official pages", async ({ page }, testInfo) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-normal.json"));
   const pages = page.locator(".form-page");

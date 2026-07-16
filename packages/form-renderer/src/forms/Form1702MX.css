@@ -342,9 +342,48 @@
 
 .schedule-four-1702mx { height: 151.5pt; margin-top: 3pt; }
 .schedule-five-1702mx { height: 386pt; margin-top: 3pt; }
-.schedule-five-1702mx > .schedule-title-1702mx { flex-basis: 20pt; text-align: center; justify-content: center; }
+.schedule-five-1702mx > .schedule-title-1702mx {
+  flex-basis: 20pt;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 3pt;
+  font-weight: 400;
+  line-height: .92;
+  text-align: center;
+}
+.schedule-five-1702mx > .schedule-title-1702mx > small {
+  margin-top: 1pt;
+  font-size: 5.5pt;
+  line-height: .9;
+}
+.schedule-five-row-1702mx { flex: 1 1 0; }
 .schedule-five-1702mx .regime-row-1702mx > span:first-child { font-size: 6.5pt; }
+.schedule-five-1702mx .amount-cell-1702mx::after { display: none; }
 .schedule-five-1702mx .plain-value-1702mx { display: inline-flex; flex: 1; }
+.schedule-five-group-row-1702mx {
+  flex: 0 0 11pt;
+  display: flex;
+  align-items: center;
+  padding: 1pt 4pt;
+  background: #d9d9d9;
+  border-bottom: .5pt solid #111;
+  font-size: 6.5pt;
+}
+.schedule-five-total-row-1702mx {
+  flex: 0 0 18.5pt;
+  background: #d9d9d9;
+}
+.schedule-five-total-row-1702mx > span:first-child {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  line-height: .9;
+}
+.schedule-five-total-row-1702mx > span:first-child > small {
+  font-size: 5.5pt;
+  font-style: normal;
+}
 .schedule-six-1702mx { height: 107pt; margin-top: 3pt; }
 .schedule-six-1702mx > .schedule-title-1702mx { flex-basis: 18pt; justify-content: center; }
 .special-grid-1702mx { grid-template-columns: 151pt 45pt repeat(4, minmax(0, 1fr)); }
