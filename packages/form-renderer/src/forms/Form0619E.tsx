@@ -168,13 +168,18 @@ function HeaderOption0619E({
 
 function BackgroundInformation0619E({ envelope }: { envelope: RenderEnvelope }) {
   const category = text(envelope, "withholding_agent_category");
-  const tin = envelope.taxpayer.tin.replace(/\D/g, "").padEnd(14);
+  const tinSegments = [
+    printableTinSegment0619E(envelope, "printable_tin_segment_1", 3),
+    printableTinSegment0619E(envelope, "printable_tin_segment_2", 3),
+    printableTinSegment0619E(envelope, "printable_tin_segment_3", 3),
+    printableTinSegment0619E(envelope, "printable_tin_branch", 5)
+  ] as const;
   return (
     <section className="part-0619e background-0619e">
       <h2>Part I – Background Information</h2>
       <div className="tin-rdo-0619e">
         <div><b>7</b> Taxpayer Identification Number (TIN)</div>
-        <Tin0619E value={tin} />
+        <Tin0619E segments={tinSegments} />
         <div><b>8</b> RDO Code</div>
         <CombValue value={envelope.taxpayer.rdo_code} cells={3} align="right" />
       </div>
@@ -216,16 +221,38 @@ function BackgroundInformation0619E({ envelope }: { envelope: RenderEnvelope }) 
   );
 }
 
-function Tin0619E({ value }: { value: string }) {
+function printableTinSegment0619E(
+  envelope: RenderEnvelope,
+  key: string,
+  digitCount: 3 | 5
+) {
+  const value = text(envelope, key);
+  if (value.length !== digitCount || !/^\d+$/.test(value)) {
+    throw new Error(
+      `0619E ${key} must contain exactly ${digitCount} Rust-normalized digits`
+    );
+  }
+  return value;
+}
+
+function Tin0619E({
+  segments
+}: {
+  segments: readonly [string, string, string, string];
+}) {
+  const [segment1, segment2, segment3, branch] = segments;
   return (
-    <span className="tin-value-0619e">
-      <CombValue value={value.slice(0, 3)} cells={3} />
+    <span
+      className="tin-value-0619e"
+      aria-label={`${segment1}-${segment2}-${segment3}-${branch}`}
+    >
+      <CombValue value={segment1} cells={3} />
       <i>-</i>
-      <CombValue value={value.slice(3, 6)} cells={3} />
+      <CombValue value={segment2} cells={3} />
       <i>-</i>
-      <CombValue value={value.slice(6, 9)} cells={3} />
+      <CombValue value={segment3} cells={3} />
       <i>-</i>
-      <CombValue value={value.slice(9, 14)} cells={5} />
+      <CombValue value={branch} cells={5} />
     </span>
   );
 }

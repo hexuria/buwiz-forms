@@ -33,7 +33,7 @@ pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     expected_base_page_count: 1,
     schedules: &[],
     visual_fixture_file_name: "0619e-normal.json",
-    visual_fixture_sha256: "d3a55cf0bb5183c8638451426d6962a8a0f4668662c9cb0f9765f2c92a11366c",
+    visual_fixture_sha256: "f08bd7cbb1eee63fdfdab025d880094319b949cd566be2c82203385e5f0c41fe",
     official_source: "https://bir-cdn.bir.gov.ph/local/pdf/0619-E%20Jan%202018%20rev%20final.pdf",
     official_source_sha256: "0418160d63d4e6f68c34f2bad553273a5d148c3686d8562d338d35fcdd0c5215",
     reference_dpi: 144,
@@ -76,6 +76,8 @@ impl From<&Form0619EDraft> for RenderEnvelopeV1 {
             WithholdingAgentCategory::Private => "private",
             WithholdingAgentCategory::Government => "government",
         };
+        let [tin_segment_1, tin_segment_2, tin_segment_3, tin_branch] =
+            draft.printable_tin_segments().unwrap_or_default();
 
         let mut envelope = Self::new(
             RenderFormIdentity {
@@ -100,6 +102,22 @@ impl From<&Form0619EDraft> for RenderEnvelopeV1 {
         );
 
         envelope.fields.extend([
+            (
+                "printable_tin_segment_1".to_string(),
+                RenderValue::Text(tin_segment_1),
+            ),
+            (
+                "printable_tin_segment_2".to_string(),
+                RenderValue::Text(tin_segment_2),
+            ),
+            (
+                "printable_tin_segment_3".to_string(),
+                RenderValue::Text(tin_segment_3),
+            ),
+            (
+                "printable_tin_branch".to_string(),
+                RenderValue::Text(tin_branch),
+            ),
             (
                 "is_amended".to_string(),
                 RenderValue::Boolean(draft.is_amended),
@@ -424,6 +442,61 @@ mod tests {
         );
         assert!(envelope.schedules.is_empty());
         assert!(envelope.validation.is_empty());
+    }
+
+    #[test]
+    fn printable_tin_segments_match_xml_for_supported_lengths() {
+        for (raw_tin, expected) in [
+            ("123-456-789-123", ["123", "456", "789", "00123"]),
+            ("123-456-789-1234", ["123", "456", "789", "01234"]),
+            ("123-456-789-12345", ["123", "456", "789", "12345"]),
+        ] {
+            let mut draft = normal_fixture().expect("normal fixture");
+            draft.tin = raw_tin.to_string();
+            let envelope = RenderEnvelopeV1::from(&draft);
+            let xml_fields = draft.to_bir_field_map();
+
+            for ((render_key, xml_key), expected_segment) in [
+                ("printable_tin_segment_1", "frm0619E:txtTIN1"),
+                ("printable_tin_segment_2", "frm0619E:txtTIN2"),
+                ("printable_tin_segment_3", "frm0619E:txtTIN3"),
+                ("printable_tin_branch", "frm0619E:txtBranchCode"),
+            ]
+            .into_iter()
+            .zip(expected)
+            {
+                assert_eq!(
+                    envelope.fields[render_key],
+                    RenderValue::Text(expected_segment.to_string())
+                );
+                assert_eq!(xml_fields[xml_key], expected_segment);
+            }
+            assert_eq!(draft.tin, raw_tin);
+            assert!(envelope.validation.is_empty());
+        }
+    }
+
+    #[test]
+    fn invalid_tin_lengths_blank_printable_segments_and_fail_validation() {
+        for raw_tin in ["12345678912", "123456789123456"] {
+            let mut draft = normal_fixture().expect("normal fixture");
+            draft.tin = raw_tin.to_string();
+            let envelope = RenderEnvelopeV1::from(&draft);
+
+            for key in [
+                "printable_tin_segment_1",
+                "printable_tin_segment_2",
+                "printable_tin_segment_3",
+                "printable_tin_branch",
+            ] {
+                assert_eq!(envelope.fields[key], RenderValue::Text(String::new()));
+            }
+            assert!(envelope
+                .validation
+                .iter()
+                .any(|message| message.field_path == "tin"));
+            assert_eq!(draft.tin, raw_tin);
+        }
     }
 
     #[test]

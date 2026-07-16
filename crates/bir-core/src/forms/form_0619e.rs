@@ -405,17 +405,7 @@ impl Form0619EDraft {
 impl FormValidator for Form0619EDraft {
     fn validate(&self) -> Vec<(String, String)> {
         let mut errors = Vec::new();
-        let tin_digits: String = self
-            .tin
-            .chars()
-            .filter(|character| character.is_ascii_digit())
-            .collect();
-        if !matches!(tin_digits.len(), 12..=14)
-            || self
-                .tin
-                .chars()
-                .any(|character| !character.is_ascii_digit() && character != '-')
-        {
+        if self.printable_tin_segments().is_none() {
             errors.push((
                 "tin".to_string(),
                 "TIN must contain 12 to 14 digits, with optional dashes".to_string(),

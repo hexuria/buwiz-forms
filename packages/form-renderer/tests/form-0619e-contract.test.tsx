@@ -53,6 +53,21 @@ describe("0619E:2018 runtime render contract", () => {
     });
   });
 
+  it("renders the Rust-owned printable TIN instead of repairing the raw TIN", () => {
+    const fixture = structuredClone(normalFixture) as RenderEnvelope;
+    fixture.taxpayer.tin = "99999999999999";
+    fixture.fields.printable_tin_segment_1 = { type: "text", value: "123" };
+    fixture.fields.printable_tin_segment_2 = { type: "text", value: "456" };
+    fixture.fields.printable_tin_segment_3 = { type: "text", value: "789" };
+    fixture.fields.printable_tin_branch = { type: "text", value: "00123" };
+
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: fixture })
+    );
+    expect(markup).toContain('aria-label="123-456-789-00123"');
+    expect(markup).not.toContain('aria-label="999-999-999-99999"');
+  });
+
   it("renders long legal values through reviewed plain-box mode", () => {
     const fixture = structuredClone(longFixture) as RenderEnvelope;
     const markup = renderToStaticMarkup(
@@ -99,6 +114,12 @@ describe("0619E:2018 runtime render contract", () => {
     schedule.schedules.push({ id: "invented", columns: [], rows: [] });
     expect(() => assertRenderEnvelope(schedule)).toThrow(
       "0619E has no repeatable renderer schedule"
+    );
+
+    const malformedTin = structuredClone(normalFixture) as Record<string, any>;
+    malformedTin.fields.printable_tin_branch.value = "123";
+    expect(() => assertRenderEnvelope(malformedTin)).toThrow(
+      "printable_tin_branch"
     );
   });
 });

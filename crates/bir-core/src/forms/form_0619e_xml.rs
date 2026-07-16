@@ -12,6 +12,30 @@ use super::form_0619e::{
 use std::collections::BTreeMap;
 
 impl Form0619EDraft {
+    /// Canonical TIN segments for printable 0619-E output.
+    ///
+    /// The raw draft value remains unchanged.  This uses the same branch-code
+    /// left-padding as the XML boundary and returns `None` when the draft TIN
+    /// does not satisfy the supported 12-to-14-digit shape.
+    pub fn printable_tin_segments(&self) -> Option<[String; 4]> {
+        let digit_count = self
+            .tin
+            .chars()
+            .filter(|character| character.is_ascii_digit())
+            .count();
+        if !(12..=14).contains(&digit_count)
+            || self
+                .tin
+                .chars()
+                .any(|character| !character.is_ascii_digit() && character != '-')
+        {
+            return None;
+        }
+
+        let (segment_1, segment_2, segment_3, branch) = split_tin(&self.tin);
+        Some([segment_1, segment_2, segment_3, branch])
+    }
+
     /// Serialize every modeled field and preserve any unmodeled source keys.
     /// Modeled values always win, preventing preserved transport data from
     /// mutating tax truth.

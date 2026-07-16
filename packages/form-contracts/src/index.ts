@@ -177,6 +177,10 @@ const REQUIRED_1601C_SCHEDULE_CELLS: Readonly<Record<string, RenderValueType>> =
 };
 
 const REQUIRED_0619E_FIELDS: Readonly<Record<string, RenderValueType>> = {
+  printable_tin_segment_1: "text",
+  printable_tin_segment_2: "text",
+  printable_tin_segment_3: "text",
+  printable_tin_branch: "text",
   is_amended: "boolean",
   any_taxes_withheld: "boolean",
   due_date: "text",
@@ -870,6 +874,21 @@ function assert0619EEnvelope(fields: JsonObject, schedules: unknown[], period: J
 
   for (const [key, expectedType] of Object.entries(REQUIRED_0619E_FIELDS)) {
     assertRequiredField(fields, key, expectedType);
+  }
+
+  for (const [key, digitCount] of [
+    ["printable_tin_segment_1", 3],
+    ["printable_tin_segment_2", 3],
+    ["printable_tin_segment_3", 3],
+    ["printable_tin_branch", 5]
+  ] as const) {
+    const value = renderText(fields[key]);
+    if (value.length !== digitCount || !/^\d+$/.test(value)) {
+      invalid(
+        `envelope.fields.${key}.value`,
+        `expected exactly ${digitCount} Rust-normalized digits`
+      );
+    }
   }
 
   if (renderText(fields.atc) !== "WME10") {

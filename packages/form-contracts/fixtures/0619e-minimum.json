@@ -136,6 +136,22 @@
       "type": "text",
       "value": ""
     },
+    "printable_tin_branch": {
+      "type": "text",
+      "value": "00000"
+    },
+    "printable_tin_segment_1": {
+      "type": "text",
+      "value": "123"
+    },
+    "printable_tin_segment_2": {
+      "type": "text",
+      "value": "456"
+    },
+    "printable_tin_segment_3": {
+      "type": "text",
+      "value": "789"
+    },
     "registered_address_2": {
       "type": "text",
       "value": "OLONGAPO CITY, ZAMBALES"
