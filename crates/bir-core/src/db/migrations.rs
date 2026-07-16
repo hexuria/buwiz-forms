@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::db::DbError;
 
-const CURRENT_MIGRATION_VERSION: i32 = 11;
+const CURRENT_MIGRATION_VERSION: i32 = 12;
 
 pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
     let mut version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
@@ -251,6 +251,10 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         // v11: Preserve Forms Set evidence/effective dates and fail-closed review state.
         // Columns are added by Rust below so partially upgraded legacy databases remain safe.
         "SELECT 1; -- v11 marker: Forms Set provenance and conflict state (Rust-side)",
+        // v12: Persist the effective-dated profile-version ledger once for
+        // legacy profiles. Undated backfills remain review-blocked and do not
+        // replace an existing user-owned Forms Set.
+        "SELECT 1; -- v12 marker: durable profile-version ledger backfill (Rust-side)",
     ];
 
     while version < CURRENT_MIGRATION_VERSION {
@@ -284,11 +288,66 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
             if version == 11 {
                 migrate_v11_forms_set_provenance(conn)?;
             }
+
+            if version == 12 {
+                migrate_v12_profile_version_ledger(conn)?;
+            }
         } else {
             break;
         }
     }
 
+    Ok(())
+}
+
+/// Persist one compatibility profile-version record for legacy profile JSON.
+///
+/// This is deliberately a one-time migration rather than a resolver fallback.
+/// A reliable business start date becomes the effective start. Otherwise the
+/// version is retained as `needs_effective_date_review` and resolution remains
+/// fail-closed. Existing `per_year_forms` rows are left untouched.
+fn migrate_v12_profile_version_ledger(conn: &Connection) -> Result<(), DbError> {
+    use crate::profile::TaxpayerProfile;
+
+    let rows = {
+        let mut stmt = conn.prepare("SELECT id, data_json FROM profiles")?;
+        stmt.query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?
+    };
+
+    let mut backfilled = 0usize;
+    for (id, data_json) in rows {
+        let mut profile: TaxpayerProfile = match serde_json::from_str(&data_json) {
+            Ok(profile) => profile,
+            Err(error) => {
+                tracing::warn!(
+                    profile_id = id,
+                    %error,
+                    "v12 migration: profile JSON could not be backfilled"
+                );
+                continue;
+            }
+        };
+        if !profile.profile_versions.is_empty() {
+            continue;
+        }
+
+        profile.ensure_profile_version_ledger();
+        conn.execute(
+            "UPDATE profiles SET data_json = ?1 WHERE id = ?2",
+            rusqlite::params![serde_json::to_string(&profile)?, id],
+        )?;
+        backfilled += 1;
+    }
+
+    if backfilled > 0 {
+        info!(
+            "v12 migration: persisted profile-version ledgers for {} legacy profiles",
+            backfilled
+        );
+    }
     Ok(())
 }
 
@@ -576,7 +635,7 @@ fn migrate_v8_per_year_forms_backfill(conn: &Connection) -> Result<(), DbError> 
     let mut backfilled_count = 0;
 
     for (id, data_json) in rows {
-        let profile: TaxpayerProfile = match serde_json::from_str(&data_json) {
+        let mut profile: TaxpayerProfile = match serde_json::from_str(&data_json) {
             Ok(p) => p,
             Err(e) => {
                 tracing::warn!(
@@ -588,6 +647,7 @@ fn migrate_v8_per_year_forms_backfill(conn: &Connection) -> Result<(), DbError> 
             }
         };
 
+        profile.ensure_profile_version_ledger();
         let tin = profile.tin.full();
         let versions = profile.confirmed_profile_versions();
         let mut years = std::collections::BTreeSet::new();
@@ -729,7 +789,7 @@ fn migrate_v9_per_year_forms_heal(conn: &Connection) -> Result<(), DbError> {
     let mut healed_count = 0;
 
     for (_id, data_json) in rows {
-        let profile: TaxpayerProfile = match serde_json::from_str(&data_json) {
+        let mut profile: TaxpayerProfile = match serde_json::from_str(&data_json) {
             Ok(p) => p,
             Err(e) => {
                 tracing::warn!("v9 migration: failed to deserialize profile: {}", e);
@@ -737,6 +797,7 @@ fn migrate_v9_per_year_forms_heal(conn: &Connection) -> Result<(), DbError> {
             }
         };
 
+        profile.ensure_profile_version_ledger();
         let tin = profile.tin.full();
         let versions = profile.confirmed_profile_versions();
         let mut years = std::collections::BTreeSet::new();
@@ -946,7 +1007,12 @@ mod tests {
     fn test_v10_forms_set_rows_gain_resolved_provenance_defaults() {
         let conn = test_conn();
         conn.execute_batch(
-            "CREATE TABLE per_year_forms (
+            "CREATE TABLE profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tin TEXT UNIQUE NOT NULL,
+                data_json TEXT NOT NULL
+            );
+            CREATE TABLE per_year_forms (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 tin TEXT NOT NULL,
                 taxable_year INTEGER NOT NULL,
@@ -980,6 +1046,173 @@ mod tests {
             .unwrap();
 
         assert_eq!(row, ("resolved".into(), None, None, None));
+    }
+
+    #[test]
+    fn test_v12_persists_legacy_profile_ledgers_without_touching_forms_sets() {
+        use crate::profile::{TaxProfileVersionSource, TaxProfileVersionStatus, TaxpayerProfile};
+        use chrono::NaiveDate;
+
+        fn legacy_profile_json(
+            full_name: &str,
+            tin_segment: &str,
+            business_start_date: Option<&str>,
+        ) -> String {
+            serde_json::json!({
+                "id": null,
+                "full_name": full_name,
+                "tin": {
+                    "segment1": tin_segment,
+                    "segment2": "456",
+                    "segment3": "789",
+                    "branch": "000"
+                },
+                "rdo_code": "039",
+                "line_of_business": "Consulting",
+                "registered_address": "Quezon City",
+                "zip_code": "1100",
+                "phone": "09156837000",
+                "email": "profile@example.com",
+                "default_form_type": "2551Q",
+                "taxpayer_type": "Individual",
+                "is_vat_registered": false,
+                "business_start_date": business_start_date,
+                "compliance_source_mode": "CorVersioned"
+            })
+            .to_string()
+        }
+
+        let conn = test_conn();
+        conn.execute_batch(
+            "CREATE TABLE profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tin TEXT UNIQUE NOT NULL,
+                data_json TEXT NOT NULL
+            );
+            CREATE TABLE per_year_forms (
+                tin TEXT NOT NULL,
+                taxable_year INTEGER NOT NULL,
+                form_code TEXT NOT NULL,
+                reason TEXT
+            );
+            INSERT INTO per_year_forms (tin, taxable_year, form_code, reason)
+            VALUES ('111456789000', 2026, '2551Q', 'User-owned decision');
+            PRAGMA user_version = 11;",
+        )
+        .unwrap();
+
+        let dated_json = legacy_profile_json("Dated Legacy", "111", Some("2020-04-15"));
+        let undated_json = legacy_profile_json("Undated Legacy", "222", None);
+        let mut already_versioned: TaxpayerProfile = serde_json::from_str(&legacy_profile_json(
+            "Already Versioned",
+            "333",
+            Some("2021-01-01"),
+        ))
+        .unwrap();
+        already_versioned.ensure_profile_version_ledger();
+        already_versioned.profile_versions[0].id = "existing-version".to_string();
+        let already_versioned_json = serde_json::to_string(&already_versioned).unwrap();
+
+        for (tin, data_json) in [
+            ("111456789000", dated_json),
+            ("222456789000", undated_json),
+            ("333456789000", already_versioned_json.clone()),
+        ] {
+            conn.execute(
+                "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
+                rusqlite::params![tin, data_json],
+            )
+            .unwrap();
+        }
+
+        migrate_database(&conn).unwrap();
+
+        let load_profile = |tin: &str| -> TaxpayerProfile {
+            let json: String = conn
+                .query_row(
+                    "SELECT data_json FROM profiles WHERE tin = ?1",
+                    [tin],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            serde_json::from_str(&json).unwrap()
+        };
+
+        let dated = load_profile("111456789000");
+        assert_eq!(dated.profile_versions.len(), 1);
+        let dated_version = &dated.profile_versions[0];
+        assert_eq!(
+            dated_version.source,
+            TaxProfileVersionSource::MigrationBackfill
+        );
+        assert_eq!(dated_version.status, TaxProfileVersionStatus::Confirmed);
+        assert_eq!(
+            dated_version.effective_from,
+            NaiveDate::from_ymd_opt(2020, 4, 15)
+        );
+        assert!(!dated_version.needs_effective_date_review);
+
+        let undated = load_profile("222456789000");
+        assert_eq!(undated.profile_versions.len(), 1);
+        let undated_version = &undated.profile_versions[0];
+        assert_eq!(
+            undated_version.source,
+            TaxProfileVersionSource::MigrationBackfill
+        );
+        assert_eq!(undated_version.status, TaxProfileVersionStatus::Confirmed);
+        assert_eq!(undated_version.effective_from, None);
+        assert!(undated_version.needs_effective_date_review);
+
+        let stored_versioned_json: String = conn
+            .query_row(
+                "SELECT data_json FROM profiles WHERE tin = '333456789000'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(stored_versioned_json, already_versioned_json);
+
+        let forms_row: (String, i64, String, String) = conn
+            .query_row(
+                "SELECT tin, taxable_year, form_code, reason FROM per_year_forms",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            forms_row,
+            (
+                "111456789000".to_string(),
+                2026,
+                "2551Q".to_string(),
+                "User-owned decision".to_string()
+            )
+        );
+
+        let before_second_run: Vec<String> = {
+            let mut statement = conn
+                .prepare("SELECT data_json FROM profiles ORDER BY tin")
+                .unwrap();
+            statement
+                .query_map([], |row| row.get(0))
+                .unwrap()
+                .collect::<Result<_, _>>()
+                .unwrap()
+        };
+        migrate_database(&conn).unwrap();
+        let after_second_run: Vec<String> = {
+            let mut statement = conn
+                .prepare("SELECT data_json FROM profiles ORDER BY tin")
+                .unwrap();
+            statement
+                .query_map([], |row| row.get(0))
+                .unwrap()
+                .collect::<Result<_, _>>()
+                .unwrap()
+        };
+        assert_eq!(before_second_run, after_second_run);
+        assert_eq!(dated.profile_versions[0].id, "legacy-current-profile");
+        assert_eq!(undated.profile_versions[0].id, "legacy-current-profile");
     }
 
     #[test]
@@ -1320,7 +1553,7 @@ mod tests {
         let v: i32 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 11);
+        assert_eq!(v, CURRENT_MIGRATION_VERSION);
 
         // Check that per_year_forms has been backfilled
         let mut stmt = conn.prepare(
@@ -1453,7 +1686,7 @@ mod tests {
         let v: i32 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 11);
+        assert_eq!(v, CURRENT_MIGRATION_VERSION);
 
         // Assert that after migration v9, 2550Q is preserved and active is still false (0)
         let mut stmt = conn.prepare(
