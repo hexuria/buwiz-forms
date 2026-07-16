@@ -1344,6 +1344,15 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 }
 
 /*
+ * Item 25 is Arial Narrow in the official PDF. Arimo deliberately remains
+ * the bundled offline face, so reviewed negative tracking supplies the source
+ * label width without reducing its measured cap height or clipping the row.
+ */
+.form-2551q-page-one .payment-row-25 > span:first-child {
+  letter-spacing: -.75pt;
+}
+
+/*
  * Part I uses the official PDF's own ruled geometry and type sizes.  The
  * normal labels in the source are approximately 9.6pt Arial, while the
  * address instruction is an embedded Arial Narrow Italic face. Arimo is our

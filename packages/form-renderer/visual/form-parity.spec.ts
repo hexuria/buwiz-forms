@@ -452,6 +452,23 @@ test("2551Q page-one typography keeps the reviewed bundled-font calibration", as
       return { fontSize: style.fontSize, fontWeight: style.fontWeight };
     })
   ).toEqual({ fontSize: "24px", fontWeight: "400" });
+
+  const item25Label = pageOne.locator(".payment-row-25 > span:first-child");
+  await expect(item25Label).toHaveText("25 Cash/Bank Debit Memo");
+  const item25Geometry = await item25Label.evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    clientWidth: element.clientWidth,
+    letterSpacing: getComputedStyle(element).letterSpacing,
+    scrollHeight: element.scrollHeight,
+    scrollWidth: element.scrollWidth
+  }));
+  expect(item25Geometry.letterSpacing).toBe("-1px");
+  expect(item25Geometry.scrollWidth).toBeLessThanOrEqual(
+    item25Geometry.clientWidth
+  );
+  expect(item25Geometry.scrollHeight).toBeLessThanOrEqual(
+    item25Geometry.clientHeight
+  );
 });
 
 test("2551Q Schedule 1 keeps black rules and bottom-anchored comb guides", async ({
