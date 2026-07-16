@@ -60,27 +60,98 @@ fn runtime_discrete_assets() -> Vec<serde_json::Value> {
     vec![
         json!({
             "asset": "government_seal",
-            "crop_box_px": [478, 15, 532, 73],
-            "derived_png_sha256": "e5820e87ad13ec0183d9b113fa9aef6d40d4e7a6d0dbb1f8cfd5965f363a7c4a",
+            "bits_per_component": 8,
+            "color_space": "DeviceRGB",
+            "derived_grayscale_pixel_sha256": "2ca1abd3e633cc7f5805e95642dee3ee0d8840336ec9163cb11eb1e138bba01c",
+            "derived_png_sha256": "92b7a3fd81ee9db5705482563925d79842d1e961a5a0a931fc6d838ec7a1402e",
+            "embedded_as": "lossless_grayscale_collapse_of_equal_rgb_channels",
+            "embedded_color_space": "DeviceGray",
             "embedded_in": "packages/form-renderer/src/forms/assets/1701q-seal.png",
+            "source_bbox_top_left_points": [236.07, 7.614, 32.373, 29.106],
+            "source_channels_equal": true,
+            "source_ctm_points": [32.373, 0.0, 0.0, 29.106, 236.07, 899.28],
+            "source_decoded_rgb_sha256": "80ad6c1fa30a29d7795d475da6533459d1242ee2226b6cb23cf8ef6709cba5ce",
             "source_page": 1,
-            "treatment": "exact lossless crop from official 144 DPI source raster"
+            "source_pdf_object_id": [53, 0],
+            "source_pixel_dimensions": [119, 102],
+            "source_png_sha256": "e667f9a75d1b1ab2d929c1ab0feb19edb3bca765336056054491a1cb8c25245a",
+            "treatment": "lossless extraction of the exact official PDF image XObject; equal RGB channels collapsed to one native grayscale channel without crop, resampling, recoloring, thresholding, or substitution"
         }),
         json!({
-            "asset": "static_form_barcode_page_1",
-            "crop_box_px": [881, 87, 1188, 181],
-            "derived_png_sha256": "e71c8154d80f62f5ff1057cedc2015a4dbd955acc42c9dd8ec8651f64c05f909",
-            "embedded_in": "packages/form-renderer/src/forms/assets/1701q-barcode-page-1.png",
+            "asset": "static_form_pdf417_page_1",
+            "caption_bbox_top_left_points": [512.02, 82.80728, 80.6508, 7.437],
+            "caption_font": "Arial",
+            "caption_font_size_points": 8.04,
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1701Q 01/18ENCS P1",
+            "decoded_payload": "1701Q 01/18ENCS P1",
+            "decoder_evidence": [
+                {"decoder": "ZXing-C++ 3.1.0", "payload": "1701Q 01/18ENCS P1", "symbology": "PDF417"}
+            ],
+            "embedded_as": "reviewed_inline_svg_module_matrix_with_live_caption",
+            "embedded_in": "packages/form-renderer/src/forms/official1701QAssets.ts",
+            "encoder_proof": {
+                "columns": 3,
+                "encoding": "ISO-8859-1",
+                "error_correction_level": 2,
+                "implementation": "pdf417gen 0.8.1",
+                "module_differences": 0,
+                "rows": 7
+            },
+            "logical_black_modules": 480,
+            "logical_dimensions": [120, 7],
+            "logical_matrix_sha256": "81ffb136537f07b8b526cb6f5968802f20734fd3026269c1a4a0945a653788df",
+            "logical_path_sha256": "6a2099665e11c70aad1943b919b44537946ca1fe59d19ab5f6926a45cc9af315",
+            "source_active_bbox_top_left_points": [441.24, 46.68, 149.096296, 34.02],
+            "source_active_pixel_bounds": [0, 0, 240, 63],
+            "source_bbox_top_left_points": [441.24, 46.68, 150.96, 34.56],
+            "source_ctm_points": [150.96, 0.0, 0.0, 34.56, 441.24, 854.76],
+            "source_decoded_rgb_sha256": "b68a0106361e1ba84ddf9c224d0411060203178571540623184108eac11acca9",
             "source_page": 1,
-            "treatment": "exact lossless crop from official 144 DPI source raster"
+            "source_pdf_object_id": [52, 0],
+            "source_module_scale_pixels": [2, 9],
+            "source_padding_pixels": {"bottom": 1, "right": 3},
+            "source_pixel_dimensions": [243, 64],
+            "source_png_sha256": "d5205e353f1259349d8217527540a3b12a3c24381cc52a51b773a3fc7c0be8f5",
+            "symbology": "PDF417"
         }),
         json!({
-            "asset": "static_form_barcode_page_2",
-            "crop_box_px": [887, 64, 1193, 172],
-            "derived_png_sha256": "cf48f21702660b07d0b5c281dd5883507c24abdc6d462c01b6fa12b0a44ed890",
-            "embedded_in": "packages/form-renderer/src/forms/assets/1701q-barcode-page-2.png",
+            "asset": "static_form_pdf417_page_2",
+            "caption_bbox_top_left_points": [514.66, 80.16728, 80.6508, 7.437],
+            "caption_font": "Arial",
+            "caption_font_size_points": 8.04,
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1701Q 01/18ENCS P2",
+            "decoded_payload": "1701Q 01/18ENCS P2",
+            "decoder_evidence": [
+                {"decoder": "ZXing-C++ 3.1.0", "payload": "1701Q 01/18ENCS P2", "symbology": "PDF417"}
+            ],
+            "embedded_as": "reviewed_inline_svg_module_matrix_with_live_caption",
+            "embedded_in": "packages/form-renderer/src/forms/official1701QAssets.ts",
+            "encoder_proof": {
+                "columns": 3,
+                "encoding": "ISO-8859-1",
+                "error_correction_level": 2,
+                "implementation": "pdf417gen 0.8.1",
+                "module_differences": 0,
+                "rows": 7
+            },
+            "logical_black_modules": 476,
+            "logical_dimensions": [120, 7],
+            "logical_matrix_sha256": "9457e35a53d6a2a04442d9a0346a19b079ac11bda065e554e3f31d97f31d1120",
+            "logical_path_sha256": "0cf6c87d5dd4f3a559689c8a99c10367c0038c3b1e0ebf11c67b9ab801c09ad5",
+            "source_active_bbox_top_left_points": [444.24, 37.8, 149.333333, 39.2175],
+            "source_active_pixel_bounds": [0, 0, 240, 63],
+            "source_bbox_top_left_points": [444.24, 37.8, 151.2, 39.84],
+            "source_ctm_points": [151.2, 0.0, 0.0, 39.84, 444.24, 858.36],
+            "source_decoded_rgb_sha256": "520c2227868c9333bc1be1a2d7c4a6cf53f023d826b376cd411087954be3dd41",
             "source_page": 2,
-            "treatment": "exact lossless crop from official 144 DPI source raster"
+            "source_pdf_object_id": [56, 0],
+            "source_module_scale_pixels": [2, 9],
+            "source_padding_pixels": {"bottom": 1, "right": 3},
+            "source_pixel_dimensions": [243, 64],
+            "source_png_sha256": "69ab932b888ff0a85aa1193675a9cf5b5870b8f7b0ae1da7c39bfdf663936665",
+            "symbology": "PDF417"
         }),
     ]
 }
@@ -598,6 +669,66 @@ mod tests {
                 fixture.file_name,
                 fixture.envelope.validation
             );
+        }
+    }
+
+    #[test]
+    fn discrete_artwork_provenance_matches_verified_official_xobjects() {
+        let assets = runtime_discrete_assets();
+        assert_eq!(assets.len(), 3);
+
+        let seal = &assets[0];
+        assert_eq!(seal["asset"], json!("government_seal"));
+        assert_eq!(seal["source_pdf_object_id"], json!([53, 0]));
+        assert_eq!(seal["source_pixel_dimensions"], json!([119, 102]));
+        assert_eq!(seal["source_channels_equal"], json!(true));
+        assert_eq!(
+            seal["derived_png_sha256"],
+            json!("92b7a3fd81ee9db5705482563925d79842d1e961a5a0a931fc6d838ec7a1402e")
+        );
+
+        for (asset, expected) in assets[1..].iter().zip([
+            (
+                "static_form_pdf417_page_1",
+                1,
+                52,
+                "1701Q 01/18ENCS P1",
+                480,
+                "81ffb136537f07b8b526cb6f5968802f20734fd3026269c1a4a0945a653788df",
+                "6a2099665e11c70aad1943b919b44537946ca1fe59d19ab5f6926a45cc9af315",
+                json!([441.24, 46.68, 149.096296, 34.02]),
+            ),
+            (
+                "static_form_pdf417_page_2",
+                2,
+                56,
+                "1701Q 01/18ENCS P2",
+                476,
+                "9457e35a53d6a2a04442d9a0346a19b079ac11bda065e554e3f31d97f31d1120",
+                "0cf6c87d5dd4f3a559689c8a99c10367c0038c3b1e0ebf11c67b9ab801c09ad5",
+                json!([444.24, 37.8, 149.333333, 39.2175]),
+            ),
+        ]) {
+            let (name, page, object, payload, black_modules, matrix_hash, path_hash, active_bbox) =
+                expected;
+            assert_eq!(asset["asset"], json!(name));
+            assert_eq!(asset["source_page"], json!(page));
+            assert_eq!(asset["source_pdf_object_id"], json!([object, 0]));
+            assert_eq!(asset["source_pixel_dimensions"], json!([243, 64]));
+            assert_eq!(asset["source_active_pixel_bounds"], json!([0, 0, 240, 63]));
+            assert_eq!(asset["source_active_bbox_top_left_points"], active_bbox);
+            assert_eq!(asset["decoded_payload"], json!(payload));
+            assert_eq!(asset["symbology"], json!("PDF417"));
+            assert_eq!(asset["logical_black_modules"], json!(black_modules));
+            assert_eq!(asset["logical_dimensions"], json!([120, 7]));
+            assert_eq!(asset["logical_matrix_sha256"], json!(matrix_hash));
+            assert_eq!(asset["logical_path_sha256"], json!(path_hash));
+            assert_eq!(asset["source_module_scale_pixels"], json!([2, 9]));
+            assert_eq!(
+                asset["source_padding_pixels"],
+                json!({"bottom": 1, "right": 3})
+            );
+            assert_eq!(asset["encoder_proof"]["module_differences"], json!(0));
         }
     }
 }

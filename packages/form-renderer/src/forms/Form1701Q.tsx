@@ -11,8 +11,8 @@ import {
 } from "../components";
 import { bool, field, text } from "../values";
 import {
-  OFFICIAL_1701Q_BARCODE_PAGE_ONE,
-  OFFICIAL_1701Q_BARCODE_PAGE_TWO,
+  OFFICIAL_1701Q_PDF417_PATHS,
+  OFFICIAL_1701Q_PDF417_PAYLOADS,
   OFFICIAL_1701Q_SEAL
 } from "./official1701QAssets";
 import "./Form1701Q.css";
@@ -131,6 +131,7 @@ function GovernmentHeader1701Q() {
 }
 
 function Masthead1701Q({ page, compact = false }: { page: 1 | 2; compact?: boolean }) {
+  const payload = OFFICIAL_1701Q_PDF417_PAYLOADS[page];
   return (
     <header className={`masthead-1701q${compact ? " compact-1701q" : ""}`}>
       <div className="form-number-1701q">
@@ -144,12 +145,19 @@ function Masthead1701Q({ page, compact = false }: { page: 1 | 2; compact?: boole
         <span>For Individuals, Estates and Trusts</span>
         {!compact && <em>Enter all required information in CAPITAL LETTERS using BLACK ink. Mark all applicable boxes with an “X”. Two copies must be filed with the BIR and one held by the Tax Filer.</em>}
       </div>
-      <div className="barcode-1701q">
-        <img
-          src={page === 1 ? OFFICIAL_1701Q_BARCODE_PAGE_ONE : OFFICIAL_1701Q_BARCODE_PAGE_TWO}
-          alt=""
-          aria-label={`1701Q 01/18 ENCS P${page}`}
-        />
+      <div className="barcode-1701q" aria-label={payload} data-barcode-page={page}>
+        <span className="official-pdf417-object-1701q" aria-hidden="true">
+          <svg
+            className="official-pdf417-symbol-1701q"
+            viewBox="0 0 120 7"
+            preserveAspectRatio="none"
+            shapeRendering="crispEdges"
+            focusable="false"
+          >
+            <path d={OFFICIAL_1701Q_PDF417_PATHS[page]} />
+          </svg>
+        </span>
+        <small>{payload}</small>
       </div>
     </header>
   );

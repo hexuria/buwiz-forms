@@ -8,6 +8,7 @@ import { compareCompleteOfficialPage } from "./official-page-diff";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "../../..");
 const MAX_CHANGED_PERCENT = 1;
+const DEVICE_SCALE_FACTOR = 1.5;
 const STRUCTURAL_INK_THRESHOLD = 100;
 const STRUCTURAL_LINE_MIN_RUN = 20;
 const STRUCTURAL_TOLERANCE_RADIUS = 4;
@@ -28,6 +29,94 @@ test("1701Q 2018 renders every Rust fixture as two stable unclipped Folio pages"
       expect(await pageHasNoOverflow(pages.nth(pageIndex)), `${fixtureName} page ${pageIndex + 1}`).toBe(true);
     }
   }
+});
+
+test("1701Q 2018 keeps verified page-specific PDF417, caption, and seal geometry", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701q-normal.json"));
+  const pages = page.locator(".form-page");
+  await expect(pages).toHaveCount(2);
+
+  await expectCriticalRegionGeometry(pages.nth(0), [
+    {
+      name: "official seal XObject",
+      selector: ".government-wordmark-1701q img",
+      x: 472.14,
+      y: 15.228,
+      width: 64.746,
+      height: 58.212
+    },
+    {
+      name: "page 1 official PDF417 active matrix",
+      selector: '.barcode-1701q[data-barcode-page="1"] .official-pdf417-object-1701q',
+      x: 882.48,
+      y: 93.36,
+      width: 298.192592,
+      height: 68.04
+    },
+    {
+      name: "page 1 official PDF417 live caption",
+      selector: '.barcode-1701q[data-barcode-page="1"] > small',
+      x: 1024.04,
+      y: 165.61456,
+      width: 161.3016,
+      height: 14.874
+    }
+  ]);
+  await expectCriticalRegionGeometry(pages.nth(1), [
+    {
+      name: "page 2 official PDF417 active matrix",
+      selector: '.barcode-1701q[data-barcode-page="2"] .official-pdf417-object-1701q',
+      x: 888.48,
+      y: 75.6,
+      width: 298.666666,
+      height: 78.435
+    },
+    {
+      name: "page 2 official PDF417 live caption",
+      selector: '.barcode-1701q[data-barcode-page="2"] > small',
+      x: 1029.32,
+      y: 160.33456,
+      width: 161.3016,
+      height: 14.874
+    }
+  ]);
+
+  expect(await page.locator(".official-pdf417-symbol-1701q").evaluateAll(
+    (symbols) => symbols.map((symbol) => ({
+      preserveAspectRatio: symbol.getAttribute("preserveAspectRatio"),
+      shapeRendering: getComputedStyle(symbol).shapeRendering,
+      viewBox: symbol.getAttribute("viewBox")
+    }))
+  )).toEqual(Array.from({ length: 2 }, () => ({
+    preserveAspectRatio: "none",
+    shapeRendering: "crispedges",
+    viewBox: "0 0 120 7"
+  })));
+
+  const captions = page.locator(".barcode-1701q > small");
+  await expect(captions.nth(0)).toHaveText("1701Q 01/18ENCS P1");
+  await expect(captions.nth(1)).toHaveText("1701Q 01/18ENCS P2");
+  expect(await captions.evaluateAll((elements) => elements.map((element) => {
+    const style = getComputedStyle(element);
+    return {
+      fontFamily: style.fontFamily,
+      fontSize: style.fontSize,
+      fontWeight: style.fontWeight,
+      whiteSpace: style.whiteSpace
+    };
+  }))).toEqual(Array.from({ length: 2 }, () => ({
+    fontFamily: '"eBIRForms Arimo", Arial, sans-serif',
+    fontSize: "10.72px",
+    fontWeight: "400",
+    whiteSpace: "nowrap"
+  })));
+
+  expect(await page.locator(".government-wordmark-1701q img").evaluate(
+    (image) => ({
+      naturalHeight: (image as HTMLImageElement).naturalHeight,
+      naturalWidth: (image as HTMLImageElement).naturalWidth
+    })
+  )).toEqual({ naturalHeight: 102, naturalWidth: 119 });
 });
 
 test("1701Q 2018 matches the complete official pages", async ({ page }, testInfo) => {
@@ -130,6 +219,58 @@ async function pageHasNoOverflow(locator: Locator) {
     console.warn(`1701Q overflow report: ${JSON.stringify({ report, offenders })}`);
   }
   return valid;
+}
+
+interface CriticalRegion {
+  name: string;
+  selector: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+async function expectCriticalRegionGeometry(page: Locator, regions: CriticalRegion[]) {
+  const pageBox = await page.boundingBox();
+  expect(pageBox).not.toBeNull();
+  if (!pageBox) return;
+  const failures: Array<{
+    region: string;
+    dimension: string;
+    actual: number;
+    expected: number;
+    difference: number;
+  }> = [];
+  for (const region of regions) {
+    const box = await page.locator(region.selector).boundingBox();
+    expect(box, region.name).not.toBeNull();
+    if (!box) continue;
+    const actual = {
+      x: box.x - pageBox.x,
+      y: box.y - pageBox.y,
+      width: box.width,
+      height: box.height
+    };
+    const expected = {
+      x: region.x / DEVICE_SCALE_FACTOR,
+      y: region.y / DEVICE_SCALE_FACTOR,
+      width: region.width / DEVICE_SCALE_FACTOR,
+      height: region.height / DEVICE_SCALE_FACTOR
+    };
+    for (const key of ["x", "y", "width", "height"] as const) {
+      const difference = Math.abs(actual[key] - expected[key]);
+      if (difference > 2 / DEVICE_SCALE_FACTOR) {
+        failures.push({
+          region: region.name,
+          dimension: key,
+          actual: actual[key],
+          expected: expected[key],
+          difference
+        });
+      }
+    }
+  }
+  expect(failures).toEqual([]);
 }
 
 function readFixture(relativePath: string): unknown {

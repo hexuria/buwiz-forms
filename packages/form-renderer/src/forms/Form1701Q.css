@@ -56,8 +56,8 @@
 .government-header-1701q > span:nth-child(2) { padding-left: 2pt; }
 .government-wordmark-1701q {
   position: absolute;
-  left: 221pt;
-  top: -8pt;
+  left: 221.07pt;
+  top: -11.386pt;
   display: flex;
   align-items: center;
   gap: 3pt;
@@ -65,7 +65,12 @@
   line-height: 1.02;
   text-align: left;
 }
-.government-wordmark-1701q img { width: 27pt; height: 29pt; object-fit: contain; }
+.government-wordmark-1701q img {
+  flex: 0 0 32.373pt;
+  width: 32.373pt;
+  height: 29.106pt;
+  object-fit: fill;
+}
 
 .masthead-1701q {
   height: 52pt;
@@ -97,9 +102,56 @@
 .form-title-1701q > em { margin-top: 4pt; padding: 0 5pt; font-size: 6pt; line-height: 1.08; }
 .compact-1701q .form-title-1701q > strong { font-size: 15.5pt; }
 .compact-1701q .form-title-1701q > span { font-size: 9.8pt; }
-.barcode-1701q { border-left: .6pt solid #111; padding: 2pt 1pt; }
-.barcode-1701q img { width: 151pt; max-width: 100%; height: 46pt; object-fit: fill; image-rendering: crisp-edges; }
-.compact-1701q .barcode-1701q img { height: 53pt; }
+.barcode-1701q {
+  position: relative;
+  overflow: visible;
+  border-left: .6pt solid #111;
+  padding: 0;
+}
+.official-pdf417-object-1701q,
+.barcode-1701q > small {
+  position: absolute;
+  display: block;
+}
+.official-pdf417-symbol-1701q {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  fill: #000;
+}
+.barcode-1701q > small {
+  margin: 0;
+  color: #000;
+  font-family: "eBIRForms Arimo", Arial, sans-serif;
+  font-size: 8.04pt;
+  font-weight: 400;
+  line-height: 1;
+  text-align: left;
+  white-space: nowrap;
+}
+.form-1701q-page-one .official-pdf417-object-1701q {
+  left: 5.24pt;
+  top: 5.68pt;
+  width: 149.096296pt;
+  height: 34.02pt;
+}
+.form-1701q-page-one .barcode-1701q > small {
+  left: 76.02pt;
+  top: 41.80728pt;
+  width: 80.6508pt;
+}
+.form-1701q-page-two .official-pdf417-object-1701q {
+  left: 21.74pt;
+  top: 5.8pt;
+  width: 149.333333pt;
+  height: 39.2175pt;
+}
+.form-1701q-page-two .barcode-1701q > small {
+  left: 92.16pt;
+  top: 48.16728pt;
+  width: 80.6508pt;
+}
 
 .header-options-1701q {
   height: 20pt;
