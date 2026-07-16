@@ -181,7 +181,6 @@ impl Database {
             let json_data: String = row.get(0)?;
             let mut profile: TaxpayerProfile = serde_json::from_str(&json_data)?;
             profile.id = row.get(1).ok();
-            profile.ensure_profile_version_ledger();
             self.hydrate_profile_forms(&mut profile)?;
             Ok(Some(profile))
         } else {
@@ -205,7 +204,6 @@ impl Database {
             let (id, json_data) = row_result?;
             let mut profile: TaxpayerProfile = serde_json::from_str(&json_data)?;
             profile.id = Some(id);
-            profile.ensure_profile_version_ledger();
             self.hydrate_profile_forms(&mut profile)?;
             profiles.push(profile);
         }
@@ -264,6 +262,52 @@ mod tests {
     use super::*;
     use crate::db::ProfileCalendarLink;
     use tempfile::NamedTempFile;
+
+    #[test]
+    fn profile_reads_do_not_synthesize_a_missing_version_ledger() {
+        let file = NamedTempFile::new().unwrap();
+        let db = Database::open(file.path()).unwrap();
+        let legacy_json = serde_json::json!({
+            "id": null,
+            "full_name": "Post-migration legacy import",
+            "tin": {
+                "segment1": "444",
+                "segment2": "555",
+                "segment3": "666",
+                "branch": "000"
+            },
+            "rdo_code": "039",
+            "line_of_business": "Consulting",
+            "registered_address": "Quezon City",
+            "zip_code": "1100",
+            "phone": "09156837000",
+            "email": "profile@example.com",
+            "default_form_type": "2551Q",
+            "taxpayer_type": "Individual",
+            "is_vat_registered": false,
+            "business_start_date": "2020-04-15",
+            "compliance_source_mode": "CorVersioned",
+            "profile_versions": []
+        })
+        .to_string();
+        db.conn
+            .execute(
+                "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
+                rusqlite::params!["444555666000", legacy_json],
+            )
+            .unwrap();
+
+        let loaded = db
+            .get_profile("444555666000")
+            .unwrap()
+            .expect("profile should deserialize");
+        assert!(loaded.profile_versions.is_empty());
+        assert!(loaded.confirmed_profile_versions().is_empty());
+
+        let listed = db.list_profiles().unwrap();
+        assert_eq!(listed.len(), 1);
+        assert!(listed[0].profile_versions.is_empty());
+    }
 
     #[test]
     fn tin_reference_migration_moves_calendar_and_forms_records() {
