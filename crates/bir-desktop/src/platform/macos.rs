@@ -1,6 +1,8 @@
 //! macOS-specific UI integrations for bir-desktop.
 
 use gpui::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 // ── Application Lifecycle ────────────────────────────────────────────────────
 
@@ -13,14 +15,49 @@ pub fn enforce_single_instance() {}
 /// GPUI does not create a native `NSApplication.mainMenu` unless `set_menus`
 /// is called. Without it, the application name appears in the macOS menu bar
 /// but highlights without opening a menu.
-pub fn install_app_menu(cx: &mut App) {
+#[derive(Clone, Default)]
+pub struct MacosQuitRouter {
+    target: Rc<RefCell<Option<MacosQuitTarget>>>,
+}
+
+type MacosQuitTarget = (AnyWindowHandle, WeakEntity<crate::app::AppState>);
+
+impl MacosQuitRouter {
+    pub fn bind(&self, main_window: AnyWindowHandle, app_state: &Entity<crate::app::AppState>) {
+        self.target
+            .replace(Some((main_window, app_state.downgrade())));
+    }
+
+    fn request_quit(&self, cx: &mut App) {
+        let target = self.target.borrow().clone();
+        let Some((main_window, app_state)) = target else {
+            cx.quit();
+            return;
+        };
+        let Some(app_state) = app_state.upgrade() else {
+            cx.quit();
+            return;
+        };
+        if let Err(error) = main_window.update(cx, move |_, window, cx| {
+            app_state.update(cx, |state, cx| {
+                state.request_application_quit(window, cx, || {});
+            });
+        }) {
+            tracing::warn!(%error, "Could not route macOS Quit through the application state");
+        }
+    }
+}
+
+pub fn install_app_menu(cx: &mut App) -> MacosQuitRouter {
     use crate::global_actions::*;
 
+    let quit_router = MacosQuitRouter::default();
+    let quit_action_router = quit_router.clone();
     cx.on_action(|_: &AboutApplication, _| show_standard_about_panel())
         .on_action(|_: &HideApplication, cx| cx.hide())
         .on_action(|_: &HideOthers, cx| cx.hide_other_apps())
         .on_action(|_: &ShowAllApplications, cx| cx.unhide_other_apps())
-        .on_action(|_: &QuitApplication, cx| cx.quit())
+        .on_action(move |_: &QuitApplication, cx| quit_action_router.request_quit(cx))
         .on_action(|_: &BringAllToFront, _| bring_all_windows_to_front())
         .on_action(|_: &OpenSupportEmail, cx| {
             cx.open_url("mailto:support@goldcoders.dev?subject=eBIRForms%20Support%20Request");
@@ -31,6 +68,7 @@ pub fn install_app_menu(cx: &mut App) {
 
     cx.set_menus(app_menus());
     log_native_menu_installation();
+    quit_router
 }
 
 /// Keep Settings enabled in the native application menu and forward it to the

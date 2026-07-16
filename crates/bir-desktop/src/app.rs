@@ -1012,6 +1012,36 @@ impl AppState {
         true
     }
 
+    pub(crate) fn request_application_quit(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        before_quit: impl FnOnce(),
+    ) -> bool {
+        let decision = crate::quit_guard::application_quit_decision(
+            self.profile_manager
+                .read(cx)
+                .has_unsaved_compliance_changes(),
+        );
+        match decision {
+            crate::quit_guard::ApplicationQuitDecision::Quit => {
+                before_quit();
+                cx.quit();
+                true
+            }
+            crate::quit_guard::ApplicationQuitDecision::StayOpenForUnsavedCompliance => {
+                self.active_view = ActiveView::ProfileManager;
+                self.profile_manager.update(cx, |view, cx| {
+                    view.notify_unsaved_compliance_blocked(window, cx);
+                });
+                crate::platform::show_in_dock();
+                cx.activate(true);
+                cx.notify();
+                false
+            }
+        }
+    }
+
     fn handle_file_form(
         &mut self,
         event: &DashboardEvent,

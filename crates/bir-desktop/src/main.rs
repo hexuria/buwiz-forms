@@ -20,6 +20,7 @@ mod cor_ocr;
 pub mod events;
 mod ipc;
 mod platform;
+mod quit_guard;
 mod sidebar;
 mod theme;
 mod views;
@@ -191,7 +192,7 @@ fn main() {
         gpui_component::init(cx);
         crate::platform::bind_global_keys(cx);
         #[cfg(target_os = "macos")]
-        crate::platform::install_app_menu(cx);
+        let macos_quit_router = crate::platform::install_app_menu(cx);
 
         let bounds =
             gpui::Bounds::centered(None, gpui::size(gpui::px(1024.0), gpui::px(768.0)), cx);
@@ -330,11 +331,24 @@ fn main() {
                     false // Prevent window destruction
                 });
 
+                let view = cx.new(|cx| app::AppState::new(db, profiles, window, cx));
+                let main_window = window.window_handle();
+                let tray_app_state = view.clone();
+                #[cfg(target_os = "macos")]
+                macos_quit_router.bind(main_window, &view);
+                #[cfg(target_os = "macos")]
+                crate::platform::register_settings_menu_action(
+                    main_window,
+                    view.clone(),
+                    cx,
+                );
+
                 // Listen to tray events
                 let menu_channel = tray_icon::menu::MenuEvent::receiver();
                 let tray_channel = tray_icon::TrayIconEvent::receiver();
 
                 cx.spawn(async move |cx| {
+                    let mut tray = Some(tray);
                     loop {
                         if let Ok(event) = menu_channel.try_recv() {
                             if event.id == show_i.id() {
@@ -347,12 +361,24 @@ fn main() {
                                     crate::platform::hide_from_dock();
                                 });
                             } else if event.id == quit_i.id() {
-                                cx.update(|cx| {
-                                    // Ensure the tray icon is dropped properly before quitting
-                                    drop(tray);
-                                    cx.quit();
+                                let should_stop = cx.update(|cx| {
+                                    match main_window.update(cx, |_, window, cx| {
+                                        tray_app_state.update(cx, |state, cx| {
+                                            state.request_application_quit(window, cx, || {
+                                                drop(tray.take());
+                                            })
+                                        })
+                                    }) {
+                                        Ok(should_quit) => should_quit,
+                                        Err(error) => {
+                                            tracing::warn!(%error, "Could not route tray Quit through the application state");
+                                            false
+                                        }
+                                    }
                                 });
-                                break;
+                                if should_stop {
+                                    break;
+                                }
                             }
                         }
 
@@ -376,13 +402,6 @@ fn main() {
                 })
                 .detach();
 
-                let view = cx.new(|cx| app::AppState::new(db, profiles, window, cx));
-                #[cfg(target_os = "macos")]
-                crate::platform::register_settings_menu_action(
-                    window.window_handle(),
-                    view.clone(),
-                    cx,
-                );
                 cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
             });
         })

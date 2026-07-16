@@ -203,10 +203,10 @@ impl AppState {
     pub(crate) fn handle_quit_application(
         &mut self,
         _action: &QuitApplication,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        cx.quit();
+        self.request_application_quit(window, cx, || {});
     }
 
     pub(crate) fn handle_hide_application(
