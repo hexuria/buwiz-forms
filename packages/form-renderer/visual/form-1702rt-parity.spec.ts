@@ -119,6 +119,28 @@ test("1702RT January 2018C preserves the official Item 10 through 12 label parti
   ]);
 });
 
+test("1702RT January 2018C preserves the official Item 1 and Item 2 hierarchy", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702rt-normal.json"));
+  const pageOne = page.locator(".form-page").first();
+  const basis = pageOne.locator(".basis-1702rt");
+
+  await expect(basis.locator(":scope > div")).toHaveCount(2);
+  await expect(basis.locator(".basis-item-two-1702rt > span:first-child")).toHaveText(
+    "2 Year Ended (MM/20YY)"
+  );
+  expectArtworkBox(await measureElementInPoints(pageOne, ".year-ended-1702rt"), {
+    x: 33.5,
+    y: 152,
+    width: 75,
+    height: 12.5
+  });
+  expect(await cellWidthsInPoints(basis.locator(".year-ended-1702rt > *"))).toEqual([
+    27,
+    22,
+    26
+  ]);
+});
+
 test("1702RT January 2018C matches the complete official pages", async ({ page }, testInfo) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702rt-normal.json"));
   const pages = page.locator(".form-page");

@@ -192,9 +192,14 @@ function HeaderOptions1702RT({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <section className="header-options-1702rt" aria-label="Return period and options">
       <div className="basis-1702rt">
-        <span><b>1</b> For</span>
-        <span><CheckChoice checked={basis === "calendar"} label="Calendar" /><CheckChoice checked={basis === "fiscal"} label="Fiscal" /></span>
-        <span><b>2</b> Year Ended <em>(MM/20YY)</em><YearEnded1702RT month={envelope.period.month} taxableYear={envelope.period.taxable_year} /></span>
+        <div className="basis-item-one-1702rt">
+          <span><b>1</b> For</span>
+          <span><CheckChoice checked={basis === "calendar"} label="Calendar" /><CheckChoice checked={basis === "fiscal"} label="Fiscal" /></span>
+        </div>
+        <div className="basis-item-two-1702rt">
+          <span><b>2</b> Year Ended <em>(MM/20YY)</em></span>
+          <YearEnded1702RT month={envelope.period.month} taxableYear={envelope.period.taxable_year} />
+        </div>
       </div>
       <BinaryHeaderChoice1702RT number={3} label="Amended Return?" checked={bool(envelope, "is_amended")} />
       <BinaryHeaderChoice1702RT number={4} label="Short Period Return?" checked={bool(envelope, "is_short_period")} />
