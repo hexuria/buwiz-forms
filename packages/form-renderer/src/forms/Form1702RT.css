@@ -272,6 +272,9 @@
 .labeled-comb-1702rt + .labeled-comb-1702rt { border-left: .55pt solid #111; }
 .labeled-comb-1702rt > span:first-child { display: flex; align-items: center; padding: 1pt 4pt; background: #d9d9d9; }
 .labeled-comb-1702rt > :last-child { background: #fff; }
+.split-identity-1702rt > .labeled-comb-1702rt:first-child { grid-template-columns: 166.5pt minmax(0, 1fr); }
+.split-identity-1702rt > .labeled-comb-1702rt:last-child,
+.part-one-1702rt > .labeled-comb-1702rt { grid-template-columns: 90.5pt minmax(0, 1fr); }
 .official-date-1702rt {
   min-width: 0;
   height: 100%;

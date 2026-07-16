@@ -101,6 +101,24 @@ test("1702RT January 2018C preserves the official Schedule IIIA header and dead-
   ]);
 });
 
+test("1702RT January 2018C preserves the official Item 10 through 12 label partitions", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702rt-normal.json"));
+  const pageOne = page.locator(".form-page").first();
+  const labels = pageOne.locator([
+    ".split-identity-1702rt > .labeled-comb-1702rt:first-child > span:first-child",
+    ".split-identity-1702rt > .labeled-comb-1702rt:last-child > span:first-child",
+    ".part-one-1702rt > .labeled-comb-1702rt > span:first-child"
+  ].join(", "));
+
+  await expect(labels).toHaveCount(3);
+  expect(await cellWidthsInPoints(labels)).toEqual([166.5, 90.5, 90.5]);
+  expect(await labels.evaluateAll((cells) => cells.map((cell) => getComputedStyle(cell).backgroundColor))).toEqual([
+    "rgb(217, 217, 217)",
+    "rgb(217, 217, 217)",
+    "rgb(217, 217, 217)"
+  ]);
+});
+
 test("1702RT January 2018C matches the complete official pages", async ({ page }, testInfo) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702rt-normal.json"));
   const pages = page.locator(".form-page");
