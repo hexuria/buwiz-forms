@@ -91,6 +91,42 @@ class VerifyOfflineFormRendererTests(unittest.TestCase):
         self.assertEqual(first_path.read_bytes(), second_path.read_bytes())
         self.assertEqual(json.loads(first_path.read_text()), first)
 
+    def test_allows_reachable_arimo_license_and_provenance_documents(self) -> None:
+        self.write_valid_bundle()
+        notices = self.root / "third-party" / "arimo"
+        notices.mkdir(parents=True)
+        (notices / "LICENSE.txt").write_text("Apache-2.0 license\n", encoding="utf-8")
+        (notices / "PROVENANCE.json").write_text("{}\n", encoding="utf-8")
+        index = self.root / "index.html"
+        index.write_text(
+            index.read_text(encoding="utf-8").replace(
+                "</head>",
+                '<link rel="license" href="./third-party/arimo/LICENSE.txt">\n'
+                '<link rel="alternate" href="./third-party/arimo/PROVENANCE.json">\n'
+                "</head>",
+            ),
+            encoding="utf-8",
+        )
+
+        self.assertEqual(verifier.verify_renderer(self.root), [])
+
+    def test_rejects_non_woff2_font_assets(self) -> None:
+        self.write_valid_bundle()
+        css = self.assets / "app.css"
+        css.write_text(
+            "@font-face{font-family:Owned;src:url('./owned.woff')}\n",
+            encoding="utf-8",
+        )
+        (self.assets / "owned.woff2").unlink()
+        (self.assets / "owned.woff").write_bytes(b"legacy-font")
+
+        errors = verifier.verify_renderer(self.root)
+
+        self.assert_has_error(
+            errors,
+            "renderer bundle contains an unauthorized asset type: assets/owned.woff",
+        )
+
     def test_requires_one_root_index_and_exact_local_only_csp(self) -> None:
         self.write_valid_bundle()
         nested = self.root / "nested"

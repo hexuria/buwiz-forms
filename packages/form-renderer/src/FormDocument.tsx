@@ -1,6 +1,7 @@
 import { assertRenderEnvelope, type RenderEnvelope } from "@ebirforms/form-contracts";
 import { getFormComponent } from "./forms/registry";
 import "./print.css";
+import "./fonts.css";
 
 export function FormDocument({ envelope }: { envelope: RenderEnvelope }) {
   assertRenderEnvelope(envelope);

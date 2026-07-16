@@ -50,11 +50,12 @@ ALLOWED_RUNTIME_SUFFIXES = {
     ".mjs",
     ".cjs",
     ".css",
-    ".woff",
     ".woff2",
-    ".ttf",
-    ".otf",
     ".png",
+}
+ALLOWED_BUNDLE_DOCUMENTS = {
+    PurePosixPath("third-party/arimo/LICENSE.txt"),
+    PurePosixPath("third-party/arimo/PROVENANCE.json"),
 }
 
 # The native renderer is loaded from this pinned local origin/custom protocol.
@@ -543,7 +544,11 @@ def verify_renderer(renderer_dir: Path) -> list[str]:
     for asset in files:
         if asset == index:
             continue
-        if asset.suffix.lower() not in ALLOWED_RUNTIME_SUFFIXES:
+        relative = PurePosixPath(asset.relative_to(root).as_posix())
+        if (
+            asset.suffix.lower() not in ALLOWED_RUNTIME_SUFFIXES
+            and relative not in ALLOWED_BUNDLE_DOCUMENTS
+        ):
             errors.append(
                 "renderer bundle contains an unauthorized asset type: "
                 f"{asset.relative_to(root)}"
