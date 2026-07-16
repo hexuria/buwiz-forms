@@ -119,6 +119,18 @@ test("1701Q 2018 keeps verified page-specific PDF417, caption, and seal geometry
   )).toEqual({ naturalHeight: 102, naturalWidth: 119 });
 });
 
+test("1701Q 2018 uses the official 15 percent neutral form fill", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701q-normal.json"));
+  const fills = await page.locator([
+    ".form-1701q-page-one .part-1701q > h2",
+    ".form-1701q-page-two .paired-section-1701q > h2"
+  ].join(", ")).evaluateAll((elements) =>
+    elements.map((element) => getComputedStyle(element).backgroundColor)
+  );
+  expect(fills.length).toBeGreaterThan(1);
+  expect(fills.every((fill) => fill === "rgb(217, 217, 217)")).toBe(true);
+});
+
 test("1701Q 2018 matches the complete official pages", async ({ page }, testInfo) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701q-normal.json"));
   const pages = page.locator(".form-page");

@@ -76,7 +76,7 @@ describe("1701Q:2018 experimental preview contract", () => {
       expect(markup.match(/class="[^"]*form-page/g)).toHaveLength(2);
       expect(markup.match(/data-paper="legal"/g)).toHaveLength(2);
       expect(markup).toContain("PART V – COMPUTATION OF TAX DUE");
-      expect(markup).toContain("Schedule IV – Penalties");
+      expect(markup).toContain("Schedule IV - Penalties");
     }
   });
 
@@ -95,6 +95,17 @@ describe("1701Q:2018 experimental preview contract", () => {
       createElement(FormDocument, { envelope: minimum })
     );
     expect(markup).toContain("blank-amount-1701q");
+  });
+
+  it("keeps the official page-two wording and peso notation", () => {
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: structuredClone(normalFixture) as RenderEnvelope })
+    );
+    expect(markup).toContain("Schedule III - Tax Credits/Payments");
+    expect(markup).toContain("Item 45 x Applicable Tax Rate based on Tax Table below");
+    expect(markup).toContain("in the amount of P 250,000");
+    expect(markup).toContain("P 2,410,000 + 35% of the excess over P 8,000,000");
+    expect(markup).not.toContain("₱");
   });
 
   it("leaves unresolved optional choices unmarked instead of inventing No", () => {

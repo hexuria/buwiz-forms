@@ -38,7 +38,7 @@ const GRADUATED_ROWS: readonly AmountRow[] = [
   [43, <>Non-operating Income <small>(specify)</small></>, "item_43"],
   [44, <>Amount Received/Share in Income by a Partner from General Professional Partnership (GPP)</>, "item_44"],
   [45, <>Total Taxable Income/(Loss) To Date <small>(Sum of Items 41 to 44)</small></>, "item_45"],
-  [46, <>TAX DUE <small>(Item 45 × Applicable Tax Rate based on Tax Table below) (To Part III, Item 26)</small></>, "item_46"]
+  [46, <>TAX DUE <small>(Item 45 x Applicable Tax Rate based on Tax Table below) (To Part III, Item 26)</small></>, "item_46"]
 ];
 
 const EIGHT_PERCENT_ROWS: readonly AmountRow[] = [
@@ -47,9 +47,9 @@ const EIGHT_PERCENT_ROWS: readonly AmountRow[] = [
   [49, <>Total Income for the quarter <small>(Sum of Items 47 and 48)</small></>, "item_49"],
   [50, <>Add: Total Taxable Income/(Loss) Previous Quarter <small>(Item 51 of previous quarter)</small></>, "item_50"],
   [51, <>Cumulative Taxable Income/(Loss) as of This Quarter <small>(Sum of Items 49 and 50)</small></>, "item_51"],
-  [52, <>Less: Allowable reduction from gross sales/receipts and other non-operating income of purely self-employed individuals and/or professionals in the amount of ₱250,000</>, "item_52"],
+  [52, <>Less: Allowable reduction from gross sales/receipts and other non-operating income of purely self-employed individuals and/or professionals in the amount of P 250,000</>, "item_52"],
   [53, <>Taxable Income/(Loss) To Date <small>(Item 51 Less Item 52)</small></>, "item_53"],
-  [54, <>TAX DUE <small>(Item 53 × 8% Tax Rate) (To Part III, Item 26)</small></>, "item_54"]
+  [54, <>TAX DUE <small>(Item 53 x 8% Tax Rate) (To Part III, Item 26)</small></>, "item_54"]
 ];
 
 const CREDIT_ROWS: readonly AmountRow[] = [
@@ -419,9 +419,9 @@ function PartFive1701Q({ envelope }: { envelope: RenderEnvelope }) {
       <div className="part-five-instruction-1701q">If graduated rate, fill in Items 36 to 46; if 8%, fill in Items 47 to 54</div>
       <PairedAmountSection1701Q title="Schedule I – For Graduated IT Rate" rows={GRADUATED_ROWS} envelope={envelope} graduatedLayout />
       <PairedAmountSection1701Q title="Schedule II – For 8% IT Rate" rows={EIGHT_PERCENT_ROWS} envelope={envelope} />
-      <PairedAmountSection1701Q title="Schedule III – Tax Credits/Payments" rows={CREDIT_ROWS} envelope={envelope} />
+      <PairedAmountSection1701Q title="Schedule III - Tax Credits/Payments" rows={CREDIT_ROWS} envelope={envelope} />
       <div className="single-total-1701q"><span><b>63</b> Tax Payable/(Overpayment) <small>(Item 46 or 54, Less Item 62) (To Part III, Item 28)</small></span><Amount1701Q envelope={envelope} fieldKey="item_63_taxpayer" /><Amount1701Q envelope={envelope} fieldKey="item_63_spouse" /></div>
-      <PairedAmountSection1701Q title="Schedule IV – Penalties" rows={PENALTY_ROWS} envelope={envelope} />
+      <PairedAmountSection1701Q title="Schedule IV - Penalties" rows={PENALTY_ROWS} envelope={envelope} />
       <div className="single-total-1701q final-total-1701q"><span><b>68</b> Total Amount Payable/(Overpayment) <small>(Sum of Items 63 and 67) (To Part III, Item 30)</small></span><Amount1701Q envelope={envelope} fieldKey="item_68_taxpayer" /><Amount1701Q envelope={envelope} fieldKey="item_68_spouse" /></div>
     </section>
   );
@@ -431,10 +431,10 @@ function TaxTables1701Q() {
   return (
     <section className="tax-tables-1701q">
       <TaxTable1701Q title="TABLE 1 – Tax Rates (effective January 1, 2018 to December 31, 2022)" rows={[
-        ["Not over ₱250,000", "0%"], ["Over ₱250,000 but not over ₱400,000", "20% of the excess over ₱250,000"], ["Over ₱400,000 but not over ₱800,000", "₱30,000 + 25% of the excess over ₱400,000"], ["Over ₱800,000 but not over ₱2,000,000", "₱130,000 + 30% of the excess over ₱800,000"], ["Over ₱2,000,000 but not over ₱8,000,000", "₱490,000 + 32% of the excess over ₱2,000,000"], ["Over ₱8,000,000", "₱2,410,000 + 35% of the excess over ₱8,000,000"]
+        ["Not over P 250,000", "0%"], ["Over P 250,000 but not over P 400,000", "20% of the excess over P 250,000"], ["Over P 400,000 but not over P 800,000", "P 30,000 + 25% of the excess over P 400,000"], ["Over P 800,000 but not over P 2,000,000", "P 130,000 + 30% of the excess over P 800,000"], ["Over P 2,000,000 but not over P 8,000,000", "P 490,000 + 32% of the excess over P 2,000,000"], ["Over P 8,000,000", "P 2,410,000 + 35% of the excess over P 8,000,000"]
       ]} />
       <TaxTable1701Q title="TABLE 2 – Tax Rates (effective January 1, 2023 and onwards)" rows={[
-        ["Not over ₱250,000", "0%"], ["Over ₱250,000 but not over ₱400,000", "15% of the excess over ₱250,000"], ["Over ₱400,000 but not over ₱800,000", "₱22,500 + 20% of the excess over ₱400,000"], ["Over ₱800,000 but not over ₱2,000,000", "₱102,500 + 25% of the excess over ₱800,000"], ["Over ₱2,000,000 but not over ₱8,000,000", "₱402,500 + 30% of the excess over ₱2,000,000"], ["Over ₱8,000,000", "₱2,202,500 + 35% of the excess over ₱8,000,000"]
+        ["Not over P 250,000", "0%"], ["Over P 250,000 but not over P 400,000", "15% of the excess over P 250,000"], ["Over P 400,000 but not over P 800,000", "P 22,500 + 20% of the excess over P 400,000"], ["Over P 800,000 but not over P 2,000,000", "P 102,500 + 25% of the excess over P 800,000"], ["Over P 2,000,000 but not over P 8,000,000", "P 402,500 + 30% of the excess over P 2,000,000"], ["Over P 8,000,000", "P 2,202,500 + 35% of the excess over P 8,000,000"]
       ]} />
     </section>
   );
