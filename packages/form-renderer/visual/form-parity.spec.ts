@@ -354,6 +354,106 @@ test("2551Q PDF417 artwork keeps the reviewed source geometry", async ({ page })
   }))).toEqual({ naturalHeight: 83, naturalWidth: 95 });
 });
 
+test("2551Q page-one typography keeps the reviewed bundled-font calibration", async ({
+  page
+}) => {
+  await renderEnvelope(
+    page,
+    readFixture("packages/form-contracts/fixtures/2551q-6-rows.json")
+  );
+
+  const pageOne = page.locator(".form-2551q-page-one");
+  const typography = await pageOne.evaluate((formPage) => {
+    const read = (selector: string) => {
+      const element = formPage.querySelector(selector);
+      if (!element) throw new Error(`Missing typography target: ${selector}`);
+      const style = getComputedStyle(element);
+      return {
+        fontFamily: style.fontFamily,
+        fontSize: style.fontSize,
+        fontWeight: style.fontWeight,
+        transform: style.transform
+      };
+    };
+    return {
+      formNumber: read(".official-form-number > strong"),
+      formRevision: read(".official-form-number > small"),
+      formTitle: read(".official-form-title > strong"),
+      instructions: read(".official-form-title > em"),
+      optionLabel: read(".filing-basis > .option-label:first-child"),
+      taxLine: read(".official-tax-line[data-item='14'] .tax-line-label"),
+      taxLineNumber: read(".official-tax-line[data-item='14'] .tax-line-label b"),
+      taxLineNote: read(".official-tax-line[data-item='14'] .tax-line-label em"),
+      paymentLabel: read(".payment-row-25 > span:first-child")
+    };
+  });
+
+  const bundledFont = '"eBIRForms Arimo", sans-serif';
+  expect(typography).toEqual({
+    formNumber: {
+      fontFamily: bundledFont,
+      fontSize: "32px",
+      fontWeight: "500",
+      transform: "matrix(1, 0, 0, 1, 0, -1.33333)"
+    },
+    formRevision: {
+      fontFamily: bundledFont,
+      fontSize: "10.6667px",
+      fontWeight: "400",
+      transform: "none"
+    },
+    formTitle: {
+      fontFamily: bundledFont,
+      fontSize: "24px",
+      fontWeight: "500",
+      transform: "matrix(1, 0, 0, 1, 0, -2.66667)"
+    },
+    instructions: {
+      fontFamily: bundledFont,
+      fontSize: "10.3333px",
+      fontWeight: "400",
+      transform: "matrix(1, 0, 0, 1, 0, -6.66667)"
+    },
+    optionLabel: {
+      fontFamily: bundledFont,
+      fontSize: "12.4444px",
+      fontWeight: "400",
+      transform: "none"
+    },
+    taxLine: {
+      fontFamily: bundledFont,
+      fontSize: "12px",
+      fontWeight: "400",
+      transform: "none"
+    },
+    taxLineNumber: {
+      fontFamily: bundledFont,
+      fontSize: "12px",
+      fontWeight: "600",
+      transform: "none"
+    },
+    taxLineNote: {
+      fontFamily: bundledFont,
+      fontSize: "9.66667px",
+      fontWeight: "400",
+      transform: "none"
+    },
+    paymentLabel: {
+      fontFamily: bundledFont,
+      fontSize: "12.3333px",
+      fontWeight: "400",
+      transform: "none"
+    }
+  });
+
+  expect(
+    await page.locator(".page-two-form-title > strong").evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { fontSize: style.fontSize, fontWeight: style.fontWeight };
+    })
+  ).toEqual({ fontSize: "24px", fontWeight: "400" });
+});
+
 test("2551Q Schedule 1 keeps black rules and bottom-anchored comb guides", async ({
   page
 }) => {

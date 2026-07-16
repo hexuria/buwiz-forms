@@ -1276,6 +1276,74 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 }
 
 /*
+ * The pinned PDF declares Arial Bold/Italic faces, while the renderer uses
+ * the bundled Arimo family so output stays deterministic and offline. These
+ * page-one values are the measured Chromium equivalents of the Poppler
+ * reference: medium Arimo weight matches the source's non-embedded Arial Bold
+ * raster more closely than either synthetic 400 or Arimo 700. Keep the
+ * transforms on the live text only; masthead and table geometry stay fixed.
+ */
+.form-2551q-page-one .official-form-number > strong {
+  font-size: 24pt;
+  font-weight: 500;
+  transform: translateY(-1pt);
+}
+
+.form-2551q-page-one .official-form-number > small,
+.form-2551q-page-one .official-form-number > b {
+  font-size: 8pt;
+}
+
+.form-2551q-page-one .official-form-title > strong {
+  font-size: 18pt;
+  font-weight: 500;
+  transform: translateY(-2pt);
+}
+
+.form-2551q-page-one .official-form-title > em {
+  font-size: 7.75pt;
+  transform: translateY(-5pt);
+}
+
+.form-2551q-page-one .official-header-options :is(.option-label, .check-choice) {
+  font-size: 9.333333pt;
+  font-weight: 400;
+}
+
+.form-2551q-page-one .official-header-options .option-label b {
+  font-size: 9.333333pt;
+  font-weight: 700;
+}
+
+.form-2551q-page-one .filing-basis > .year-label em {
+  font-size: 7.333333pt;
+}
+
+.form-2551q-page-one .sheets-options > .option-label,
+.form-2551q-page-one .sheets-value > span:first-child {
+  font-size: 8.666667pt;
+}
+
+.form-2551q-page-one :is(.tax-line-label, .tax-subheading) {
+  font-size: 9pt;
+}
+
+.form-2551q-page-one .tax-line-label b {
+  font-weight: 600;
+}
+
+.form-2551q-page-one .tax-line-label em {
+  font-size: 7.25pt;
+}
+
+.form-2551q-page-one :is(
+  .payment-row > span:first-child,
+  .payment-other-label
+) {
+  font-size: 9.25pt;
+}
+
+/*
  * Part I uses the official PDF's own ruled geometry and type sizes.  The
  * normal labels in the source are approximately 9.6pt Arial, while the
  * address instruction is an embedded Arial Narrow Italic face. Arimo is our
