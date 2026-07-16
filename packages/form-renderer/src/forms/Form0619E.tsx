@@ -136,10 +136,16 @@ function HeaderOptions0619E({ envelope }: { envelope: RenderEnvelope }) {
   const monthYear = `${String(envelope.period.month).padStart(2, "0")}${String(envelope.period.taxable_year).padStart(4, "0")}`;
   return (
     <section className="header-options-0619e" aria-label="Return period and filing options">
-      <HeaderOption0619E label={<><b>1</b> For the Month of <em>(MM/YYYY)</em></>}>
+      <HeaderOption0619E
+        label={<><b>1</b> For the Month of <em>(MM/YYYY)</em></>}
+        valueClassName="month-value-0619e"
+      >
         <CombValue value={monthYear} cells={6} align="right" />
       </HeaderOption0619E>
-      <HeaderOption0619E label={<><b>2</b> Due Date <em>(MM/DD/YYYY)</em></>}>
+      <HeaderOption0619E
+        label={<><b>2</b> Due Date <em>(MM/DD/YYYY)</em></>}
+        valueClassName="due-date-value-0619e"
+      >
         <AdaptiveCombValue value={text(envelope, "due_date").replace(/\D/g, "")} cells={8} align="right" />
       </HeaderOption0619E>
       <HeaderOption0619E label={<><b>3</b> Amended Form?</>}>
@@ -346,8 +352,12 @@ function Declaration0619E({ envelope }: { envelope: RenderEnvelope }) {
         I/We declare under the penalties of perjury that this remittance form has been made in good faith, verified by me/us, and to the best of my/our knowledge and belief, is true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof. Further, I/we give my/our consent to the processing of my/our information as contemplated under the *Data Privacy Act of 2012 (R.A. No. 10173) for legitimate and lawful purposes. <em>(If Authorized Representative, attach authorization letter)</em>
       </p>
       <div className="signature-body-0619e">
-        <div><span>For Individual:</span><b>Signature over Printed Name of Taxpayer/Authorized Representative/ Tax Agent</b><em>(Indicate Title/Designation and TIN)</em></div>
-        <div><span>For Non-Individual:</span><b>Signature over Printed Name of President/Vice President/<br />Authorized Officer or Representative/Tax Agent</b><em>(Indicate Title/Designation and TIN)</em></div>
+        <div><span>For Individual:</span></div>
+        <div><span>For Non-Individual:</span></div>
+      </div>
+      <div className="signature-labels-0619e">
+        <div><b>Signature over Printed Name of Taxpayer/Authorized Representative/ Tax Agent</b><em>(Indicate Title/Designation and TIN)</em></div>
+        <div><b>Signature over Printed Name of President/Vice President/<br />Authorized Officer or Representative/Tax Agent</b><em>(Indicate Title/Designation and TIN)</em></div>
       </div>
       <div className="signature-footer-0619e">
         <span>Tax Agent Accreditation No./<br />Attorney’s Roll No. <em>(if applicable)</em></span>

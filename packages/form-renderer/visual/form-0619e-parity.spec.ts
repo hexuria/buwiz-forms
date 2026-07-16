@@ -95,6 +95,35 @@ test("0619E 2018 keeps verified PDF417, caption, and seal geometry", async ({ pa
   )).toEqual({ naturalHeight: 78, naturalWidth: 86 });
 });
 
+test("0619E 2018 preserves official period insets and signature bands", async ({ page }) => {
+  const fixture = readFixture("packages/form-contracts/fixtures/0619e-normal.json");
+  await renderEnvelope(page, fixture);
+  const formPage = page.locator(".form-page").first();
+
+  await expectCriticalRegionGeometry(formPage, [
+    { name: "Item 1 value band", selector: ".month-value-0619e", x: 36, y: 260, width: 254, height: 39 },
+    { name: "Item 2 value band", selector: ".due-date-value-0619e", x: 292, y: 260, width: 228, height: 39 },
+    { name: "signature writing area", selector: ".signature-body-0619e", x: 36, y: 1002, width: 1151, height: 87 },
+    { name: "signature labels", selector: ".signature-labels-0619e", x: 36, y: 1089, width: 1151, height: 53 },
+    { name: "tax agent footer", selector: ".signature-footer-0619e", x: 36, y: 1142, width: 1151, height: 45 }
+  ]);
+
+  for (const selector of [".month-value-0619e", ".due-date-value-0619e"]) {
+    await expect.poll(async () => page.locator(selector).evaluate((element) => ({
+      background: getComputedStyle(element, "::before").backgroundColor,
+      overflow: element.scrollHeight - element.clientHeight
+    }))).toEqual({ background: "rgb(217, 217, 217)", overflow: 0 });
+  }
+
+  await expect(page.locator(".signature-labels-0619e")).toHaveCSS(
+    "background-color",
+    "rgb(217, 217, 217)"
+  );
+  expect(await page.locator(".signature-footer-0619e").evaluate(
+    (element) => element.scrollHeight - element.clientHeight
+  )).toBe(0);
+});
+
 test("0619E 2018 matches the complete pinned official page", async ({ page }, testInfo) => {
   const fixture = readFixture("packages/form-contracts/fixtures/0619e-normal.json");
   await renderEnvelope(page, fixture);
