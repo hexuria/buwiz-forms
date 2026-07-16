@@ -574,16 +574,44 @@ function ScheduleNine1702MX({ envelope }: { envelope: RenderEnvelope }) {
 }
 
 function ScheduleTen1702MX({ envelope }: { envelope: RenderEnvelope }) {
+  const row = (item: number, defaultLabel = "") => {
+    const prefix = `schedule_10_item_${item}`;
+    const description = text(envelope, `schedule_10_description_${item}`);
+    const label = description || defaultLabel;
+    const acceptsDescription = [2, 3, 5, 6, 7, 8].includes(item);
+    return (
+      <div key={item} className={`regime-grid-1702mx regime-row-1702mx schedule-ten-row-1702mx item-${item}-1702mx`}>
+        <span>
+          {item}{" "}
+          {acceptsDescription
+            ? <PlainValue1702MX value={description} className="schedule-ten-description-1702mx" />
+            : <PlainValue1702MX value={label} />}
+        </span>
+        <AmountCell1702MX value={amount(envelope, `${prefix}_exempt`)} />
+        <AmountCell1702MX value={amount(envelope, `${prefix}_special`)} />
+        <AmountCell1702MX value={amount(envelope, `${prefix}_regular`)} />
+        <AmountCell1702MX value={amount(envelope, `${prefix}_total`)} />
+      </div>
+    );
+  };
+
   return (
     <section className="schedule-ten-1702mx schedule-block-1702mx regime-table-1702mx">
-      <ScheduleTitle1702MX>Schedule 10 – Reconciliation of Net Income per Books Against Taxable Income</ScheduleTitle1702MX>
+      <ScheduleTitle1702MX>Schedule 10 – Reconciliation of Net Income per Books Against Taxable Income <small>(attach additional sheet/s, if necessary)</small></ScheduleTitle1702MX>
       <div className="regime-grid-1702mx regime-header-1702mx"><span>Particulars</span><span>A. Total Exempt</span><span>B. Total Special</span><span>C. Total Regular</span><span>D. Total All Columns</span></div>
-      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((item) => {
-        const prefix = `schedule_10_item_${item}`;
-        const defaultLabel = item === 1 ? "Net Income/(Loss) per Books" : item === 4 ? "Total (Sum of Items 1 to 3)" : item === 9 ? "Total (Sum of Items 5 to 8)" : item === 10 ? "Net Taxable Income/(Loss) (Item 4 Less Item 9)" : "";
-        const label = text(envelope, `schedule_10_description_${item}`) || defaultLabel;
-        return <div key={item} className="regime-grid-1702mx regime-row-1702mx"><span>{item} <PlainValue1702MX value={label} /></span><AmountCell1702MX value={amount(envelope, `${prefix}_exempt`)} /><AmountCell1702MX value={amount(envelope, `${prefix}_special`)} /><AmountCell1702MX value={amount(envelope, `${prefix}_regular`)} /><AmountCell1702MX value={amount(envelope, `${prefix}_total`)} /></div>;
-      })}
+      {row(1, "Net Income/(Loss) per Books")}
+      <div className="schedule-ten-group-row-1702mx">Add: Non-Deductible Expenses/Taxable Other Income <small>(specify below)</small></div>
+      {row(2)}
+      {row(3)}
+      {row(4, "Total (Sum of Items 1 to 3)")}
+      <div className="schedule-ten-group-row-1702mx">Less: A) Non-Taxable Income and Income Subjected to Final Tax <small>(specify below)</small></div>
+      {row(5)}
+      {row(6)}
+      <div className="schedule-ten-group-row-1702mx schedule-ten-group-b-1702mx">B) Special Deductions <small>(specify below)</small></div>
+      {row(7)}
+      {row(8)}
+      {row(9, "Total (Sum of Items 5 to 8)")}
+      {row(10, "Net Taxable Income/(Loss) (Item 4 Less Item 9)")}
     </section>
   );
 }
@@ -631,9 +659,9 @@ function AmountCell1702MX({ value }: { value: number | null }) {
   return <span className={value === null ? "amount-cell-1702mx blank-amount-1702mx" : "amount-cell-1702mx"}>{value === null ? "" : formatWhole(value)}</span>;
 }
 
-function PlainValue1702MX({ value, fixedFontSizePt }: { value: string; fixedFontSizePt?: number }) {
+function PlainValue1702MX({ value, fixedFontSizePt, className = "" }: { value: string; fixedFontSizePt?: number; className?: string }) {
   const fontSize = fixedFontSizePt ?? Math.max(4, Math.min(7, 210 / Math.max(value.length, 30)));
-  return <span className="plain-value-1702mx" aria-label={value} style={{ fontSize: `${fontSize}pt` }}>{value}</span>;
+  return <span className={`plain-value-1702mx${className ? ` ${className}` : ""}`} aria-label={value} style={{ fontSize: `${fontSize}pt` }}>{value}</span>;
 }
 
 function scheduleThreeLabel(envelope: RenderEnvelope, index: number, label: ReactNode): ReactNode {

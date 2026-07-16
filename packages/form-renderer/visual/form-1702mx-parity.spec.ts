@@ -196,6 +196,22 @@ test("1702MX January 2018C preserves the official Schedule 5 Item 17 band and su
   expect(await pageHasNoOverflow(pageThree)).toBe(true);
 });
 
+test("1702MX January 2018C preserves the official Schedule 10 reconciliation groups", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-normal.json"));
+  const pageFour = page.locator(".form-page").nth(3);
+  const scheduleTen = pageFour.locator(".schedule-ten-1702mx");
+
+  await expect(scheduleTen.locator(":scope > .schedule-ten-row-1702mx")).toHaveCount(10);
+  const groups = scheduleTen.locator(":scope > .schedule-ten-group-row-1702mx");
+  await expect(groups).toHaveCount(3);
+  await expect(groups.nth(0)).toHaveText("Add: Non-Deductible Expenses/Taxable Other Income (specify below)");
+  await expect(groups.nth(1)).toHaveText("Less: A) Non-Taxable Income and Income Subjected to Final Tax (specify below)");
+  await expect(groups.nth(2)).toHaveText("B) Special Deductions (specify below)");
+  await expect(scheduleTen.locator(":scope > .item-2-1702mx .schedule-ten-description-1702mx")).toHaveCount(1);
+  await expect(scheduleTen.locator(":scope > .item-8-1702mx .schedule-ten-description-1702mx")).toHaveCount(1);
+  expect(await pageHasNoOverflow(pageFour)).toBe(true);
+});
+
 test("1702MX January 2018C matches the complete official pages", async ({ page }, testInfo) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-normal.json"));
   const pages = page.locator(".form-page");
@@ -230,7 +246,7 @@ test("1702MX January 2018C matches the complete official pages", async ({ page }
     { name: "Schedule 7.1", selector: ".schedule-seven-one-1702mx", x: 36, y: 241, width: 1152, height: 239 },
     { name: "Schedule 8.1", selector: ".schedule-eight-one-1702mx", x: 36, y: 650, width: 1152, height: 236 },
     { name: "Schedule 9", selector: ".schedule-nine-1702mx", x: 36, y: 891, width: 1152, height: 416 },
-    { name: "Schedule 10", selector: ".schedule-ten-1702mx", x: 36, y: 1314, width: 1152, height: 438 }
+    { name: "Schedule 10", selector: ".schedule-ten-1702mx", x: 36, y: 1310, width: 1152, height: 441 }
   ]);
 
   expect(await pages.nth(0).locator("img").count()).toBe(1);
