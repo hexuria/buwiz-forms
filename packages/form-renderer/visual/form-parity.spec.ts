@@ -170,10 +170,37 @@ for (const parityCase of cases) {
       { name: "Amended no checkbox", selector: ".amended-options .check-choice:nth-child(2) .check-box", x: 934, y: 255, width: 28, height: 26 },
       { name: "Items 6-13", selector: ".background-information", x: 45, y: 295, width: 1137, height: 399 },
       { name: "Items 6-7", selector: ".tin-rdo-row", x: 45, y: 320, width: 1137, height: 36 },
+      { name: "Item 6 label", selector: ".tin-rdo-row > .field-label", x: 47, y: 320, width: 394, height: 35 },
+      { name: "TIN first group", selector: ".tin-rdo-row > .comb-value:nth-child(2)", x: 441, y: 320, width: 85, height: 35 },
+      { name: "TIN first separator", selector: ".tin-rdo-row > .tin-separator:nth-child(3)", x: 526, y: 320, width: 29, height: 35 },
+      { name: "TIN second group", selector: ".tin-rdo-row > .comb-value:nth-child(4)", x: 555, y: 320, width: 85, height: 35 },
+      { name: "TIN second separator", selector: ".tin-rdo-row > .tin-separator:nth-child(5)", x: 640, y: 320, width: 28, height: 35 },
+      { name: "TIN third group", selector: ".tin-rdo-row > .comb-value:nth-child(6)", x: 668, y: 320, width: 86, height: 35 },
+      { name: "TIN third separator", selector: ".tin-rdo-row > .tin-separator:nth-child(7)", x: 754, y: 320, width: 28, height: 35 },
+      { name: "TIN branch group", selector: ".tin-rdo-row > .comb-value:nth-child(8)", x: 782, y: 320, width: 142, height: 35 },
+      { name: "Item 7 label", selector: ".tin-rdo-row > .rdo-label", x: 924, y: 320, width: 170, height: 35 },
+      { name: "Item 7 value", selector: ".tin-rdo-row > .comb-value:last-child", x: 1094, y: 320, width: 86, height: 35 },
       { name: "Item 8", selector: ".name-field", x: 45, y: 356, width: 1137, height: 58 },
+      { name: "Item 8 label", selector: ".name-field > .field-label", x: 47, y: 357, width: 1133, height: 23 },
+      { name: "Item 8 value", selector: ".name-field > .comb-value", x: 47, y: 380, width: 1133, height: 35 },
       { name: "Items 9-9A", selector: ".address-field", x: 45, y: 414, width: 1137, height: 96 },
+      { name: "Item 9 label", selector: ".address-field > .field-label", x: 47, y: 415, width: 1133, height: 23 },
+      { name: "Item 9 first value row", selector: ".address-field > .comb-value", x: 47, y: 438, width: 1133, height: 35 },
+      { name: "Item 9 continuation", selector: ".address-continuation > .comb-value:first-child", x: 47, y: 473, width: 881, height: 38 },
+      { name: "Item 9A label", selector: ".address-continuation > .zip-label", x: 928, y: 473, width: 141, height: 38 },
+      { name: "Item 9A value", selector: ".address-continuation > .comb-value:last-child", x: 1069, y: 473, width: 111, height: 38 },
       { name: "Items 10-11", selector: ".contact-email-field", x: 45, y: 510, width: 1137, height: 59 },
+      { name: "Item 10 label", selector: ".contact-email-field > .field-label:first-child", x: 47, y: 510, width: 337, height: 23 },
+      { name: "Item 11 label", selector: ".contact-email-field > .field-label:nth-child(2)", x: 383, y: 510, width: 796, height: 23 },
+      { name: "Item 10 value", selector: ".contact-email-field > .comb-value:nth-child(3)", x: 47, y: 533, width: 337, height: 35 },
+      { name: "Item 11 value", selector: ".contact-email-field > .comb-value:nth-child(4)", x: 383, y: 533, width: 796, height: 35 },
       { name: "Items 12-12A", selector: ".tax-relief-field", x: 45, y: 569, width: 1137, height: 40 },
+      { name: "Item 12 label", selector: ".tax-relief-field > .field-label", x: 47, y: 568, width: 337, height: 38 },
+      { name: "Item 12 choices", selector: ".tax-relief-field > .relief-choices", x: 383, y: 568, width: 171, height: 38 },
+      { name: "Item 12 Yes box", selector: ".relief-choices .check-choice:first-child .check-box", x: 383, y: 574, width: 28, height: 28 },
+      { name: "Item 12 No box", selector: ".relief-choices .check-choice:last-child .check-box", x: 469, y: 574, width: 28, height: 28 },
+      { name: "Item 12A label", selector: ".tax-relief-field > .tax-relief-spec", x: 554, y: 568, width: 170, height: 38 },
+      { name: "Item 12A value", selector: ".tax-relief-field > .comb-value", x: 724, y: 568, width: 455, height: 38 },
       { name: "Item 13", selector: ".income-rate-field", x: 45, y: 607, width: 1137, height: 87 },
       { name: "Items 14-24 totals", selector: ".tax-payable", x: 45, y: 696, width: 1137, height: 506 },
       { name: "Item 14 total", selector: ".official-tax-line[data-item='14']", x: 45, y: 723, width: 1137, height: 36 },
@@ -194,6 +221,7 @@ for (const parityCase of cases) {
       { name: "Part III item 28 continuation cents cells", selector: ".payment-other-row .comb-value:last-child", x: 1127, y: 1636, width: 53, height: 35 }
     ]);
     await expectHeaderOptionsTopAlignment(pages.nth(0));
+    await expectBackgroundInformationParity(pages.nth(0));
     await expectCriticalRegionGeometry(pages.nth(1), [
       { name: "Schedule 1 masthead", selector: ".page-two-masthead", x: 45, y: 78, width: 1137, height: 117 },
       { name: "Schedule 1 identity", selector: ".page-two-identity", x: 45, y: 193, width: 1137, height: 60 },
@@ -334,6 +362,36 @@ test("2551Q Part III amount cells preserve the official partition", async ({ pag
     { name: "Item 28 decimal cell", selector: ".payment-other-row .decimal-separator", x: 1097, y: 1636, width: 30, height: 35 },
     { name: "Item 28 cents cells", selector: ".payment-other-row .comb-value:last-child", x: 1127, y: 1636, width: 53, height: 35 }
   ]);
+});
+
+test("2551Q Part I labels and writable cells preserve the official rendering", async ({
+  page
+}) => {
+  await renderEnvelope(
+    page,
+    readFixture("packages/form-contracts/fixtures/2551q-6-rows.json")
+  );
+  const pageOne = page.locator(".form-page").first();
+  await expectCriticalRegionGeometry(pageOne, [
+    { name: "Item 6 label", selector: ".tin-rdo-row > .field-label", x: 47, y: 320, width: 394, height: 35 },
+    { name: "TIN first group", selector: ".tin-rdo-row > .comb-value:nth-child(2)", x: 441, y: 320, width: 85, height: 35 },
+    { name: "TIN first separator", selector: ".tin-rdo-row > .tin-separator:nth-child(3)", x: 526, y: 320, width: 29, height: 35 },
+    { name: "TIN branch group", selector: ".tin-rdo-row > .comb-value:nth-child(8)", x: 782, y: 320, width: 142, height: 35 },
+    { name: "Item 7 label", selector: ".tin-rdo-row > .rdo-label", x: 924, y: 320, width: 170, height: 35 },
+    { name: "Item 8 label", selector: ".name-field > .field-label", x: 47, y: 357, width: 1133, height: 23 },
+    { name: "Item 8 value", selector: ".name-field > .comb-value", x: 47, y: 380, width: 1133, height: 35 },
+    { name: "Item 9 label", selector: ".address-field > .field-label", x: 47, y: 415, width: 1133, height: 23 },
+    { name: "Item 9 continuation", selector: ".address-continuation > .comb-value:first-child", x: 47, y: 473, width: 881, height: 38 },
+    { name: "Item 9A label", selector: ".address-continuation > .zip-label", x: 928, y: 473, width: 141, height: 38 },
+    { name: "Item 10 label", selector: ".contact-email-field > .field-label:first-child", x: 47, y: 510, width: 337, height: 23 },
+    { name: "Item 11 value", selector: ".contact-email-field > .comb-value:nth-child(4)", x: 383, y: 533, width: 796, height: 35 },
+    { name: "Item 12 Yes box", selector: ".relief-choices .check-choice:first-child .check-box", x: 383, y: 574, width: 28, height: 28 },
+    { name: "Item 12 No box", selector: ".relief-choices .check-choice:last-child .check-box", x: 469, y: 574, width: 28, height: 28 },
+    { name: "Item 12A label", selector: ".tax-relief-field > .tax-relief-spec", x: 554, y: 568, width: 170, height: 38 },
+    { name: "Item 12A value", selector: ".tax-relief-field > .comb-value", x: 724, y: 568, width: 455, height: 38 }
+  ]);
+  await expectBackgroundInformationParity(pageOne);
+  expect(await pageHasNoOverflow(pageOne)).toBe(true);
 });
 
 test("development preview fallback renders without a contract error", async ({ page }) => {
@@ -789,6 +847,88 @@ async function expectHeaderOptionsTopAlignment(pageOne: Locator) {
       elements.map((element) => getComputedStyle(element).backgroundColor)
     )
   ).toEqual(Array.from({ length: 8 }, () => "rgb(255, 255, 255)"));
+}
+
+async function expectBackgroundInformationParity(pageOne: Locator) {
+  const labels = [
+    [".tin-rdo-row > .field-label", "6 Taxpayer Identification Number (TIN)"],
+    [".name-field > .field-label", "8 Taxpayer’s Name (Last Name, First Name, Middle Name for Individual OR Registered Name for Non-Individual)"],
+    [".address-field > .field-label", "9 Registered Address (Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)"],
+    [".contact-email-field > .field-label:first-child", "10 Contact Number (Landline/Cellphone No.)"],
+    [".contact-email-field > .field-label:nth-child(2)", "11 Email Address"],
+    [".tax-relief-field > .field-label", "12 Are you availing of tax relief under Special Law or International Tax Treaty?"],
+    [".tax-relief-spec", "12A If yes, specify"]
+  ] as const;
+  for (const [selector, wording] of labels) {
+    await expect(pageOne.locator(selector)).toHaveText(wording);
+  }
+
+  const styles = await pageOne.locator(
+    ".tin-rdo-row > .field-label, .name-field > .field-label, .address-field > .field-label, .contact-email-field > .field-label, .tax-relief-spec"
+  ).evaluateAll((elements) => elements.map((element) => {
+    const style = getComputedStyle(element);
+    return {
+      backgroundColor: style.backgroundColor,
+      color: style.color,
+      fontSize: style.fontSize
+    };
+  }));
+  expect(styles).toEqual(Array.from({ length: 6 }, () => ({
+    backgroundColor: "rgb(217, 217, 217)",
+    color: "rgb(0, 0, 0)",
+    fontSize: "12.8px"
+  })));
+
+  const noteStyles = await pageOne.locator(
+    ".name-field > .field-label em, .address-field > .field-label em, .contact-email-field > .field-label em"
+  ).evaluateAll((elements) => elements.map((element) => {
+    const style = getComputedStyle(element);
+    return {
+      fontSize: style.fontSize,
+      fontStyle: style.fontStyle,
+      letterSpacing: style.letterSpacing,
+      transform: style.transform
+    };
+  }));
+  expect(noteStyles).toEqual([
+    { fontSize: "10.6667px", fontStyle: "italic", letterSpacing: "normal", transform: "none" },
+    { fontSize: "7.06667px", fontStyle: "italic", letterSpacing: "-0.106667px", transform: "none" },
+    { fontSize: "9.93333px", fontStyle: "italic", letterSpacing: "normal", transform: "none" }
+  ]);
+
+  const separatorStyles = await pageOne.locator(".tin-separator").evaluateAll(
+    (elements) => elements.map((element) => ({
+      backgroundColor: getComputedStyle(element).backgroundColor,
+      leftRule: getComputedStyle(element, "::before").borderLeftColor,
+      rightRule: getComputedStyle(element, "::after").borderRightColor
+    }))
+  );
+  expect(separatorStyles).toEqual(Array.from({ length: 3 }, () => ({
+    backgroundColor: "rgb(166, 166, 166)",
+    leftRule: "rgb(0, 0, 0)",
+    rightRule: "rgb(0, 0, 0)"
+  })));
+
+  const guide = await pageOne.locator(".name-field .comb-value > span").first().evaluate(
+    (element) => ({
+      color: getComputedStyle(element, "::after").borderRightColor,
+      height: Number.parseFloat(getComputedStyle(element, "::after").height)
+    })
+  );
+  expect(guide.color).toBe("rgb(17, 17, 17)");
+  expect(guide.height).toBeCloseTo(9.33, 1);
+
+  expect(await pageOne.locator(".tin-rdo-row .comb-value > span").count()).toBe(17);
+  expect(await pageOne.locator(".name-field .comb-value > span").count()).toBe(40);
+  expect(await pageOne.locator(".address-field .comb-value > span").count()).toBe(75);
+  expect(await pageOne.locator(".contact-email-field .comb-value > span").count()).toBe(40);
+  expect(await pageOne.locator(".tax-relief-field .comb-value > span").count()).toBe(26);
+
+  expect(
+    await pageOne.locator(".relief-choices .check-box").evaluateAll((elements) =>
+      elements.map((element) => getComputedStyle(element).backgroundColor)
+    )
+  ).toEqual(["rgb(255, 255, 255)", "rgb(255, 255, 255)"]);
 }
 
 async function measuredVerticalGap(formPage: Locator, barcodeSelector: string) {

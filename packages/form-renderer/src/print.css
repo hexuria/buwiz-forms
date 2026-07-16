@@ -1297,6 +1297,134 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   border-right-color: #111;
 }
 
+/*
+ * Part I uses the official PDF's own ruled geometry and type sizes.  The
+ * normal labels in the source are approximately 9.6pt Arial, while the
+ * address instruction is an embedded Arial Narrow Italic face. Arimo is our
+ * deterministic Arial-compatible runtime face, so that narrow note uses the
+ * measured source size and tracking. These rules also
+ * restore the source's black comb ticks, TIN group rules, and Item 12 box
+ * positions; the reference artwork is calibration evidence, never a runtime
+ * background.
+ */
+.form-2551q-page-one .background-information :is(
+  .field-label,
+  .rdo-label,
+  .zip-label,
+  .tax-relief-spec
+) {
+  gap: 2.6pt;
+  padding-left: 5.2pt;
+  color: #000;
+  font-size: 9.6pt;
+}
+
+.form-2551q-page-one .tin-rdo-row {
+  position: relative;
+  grid-template-columns: 197.25pt 42.5pt 14.5pt 42.5pt 14pt 43pt 14pt 71pt 85pt minmax(0, 1fr);
+}
+
+.form-2551q-page-one .tin-rdo-row > .field-label,
+.form-2551q-page-one .tin-rdo-row > .comb-value:last-child {
+  border-right: 0;
+  border-left: 0;
+}
+
+.form-2551q-page-one .tin-rdo-row > .comb-value:nth-child(2),
+.form-2551q-page-one .tin-rdo-row > .rdo-label {
+  border-left: .5pt solid #000;
+}
+
+.form-2551q-page-one .tin-rdo-row > :is(.tin-separator, .rdo-label) {
+  position: relative;
+}
+
+.form-2551q-page-one .tin-rdo-row > .tin-separator::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-left: .5pt solid #000;
+}
+
+.form-2551q-page-one .tin-rdo-row > :is(.tin-separator, .rdo-label)::after {
+  content: "";
+  position: absolute;
+  inset: 0 -.5pt 0 auto;
+  border-right: .5pt solid #000;
+}
+
+.form-2551q-page-one .background-information .tin-rdo-row > .tin-separator {
+  background: #a6a6a6;
+}
+
+.form-2551q-page-one .name-field > .field-label em {
+  font-size: 8pt;
+}
+
+.form-2551q-page-one .address-field > .field-label em {
+  font-size: 5.3pt;
+  letter-spacing: -.08pt;
+}
+
+.form-2551q-page-one .contact-email-field > .field-label:first-child {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.form-2551q-page-one .contact-email-field > .field-label:first-child em {
+  font-size: 7.45pt;
+}
+
+.form-2551q-page-one .contact-email-field > .field-label:nth-child(2) {
+  gap: 3.2pt;
+  padding-left: 5.3pt;
+}
+
+.form-2551q-page-one .tax-relief-field {
+  grid-template-columns: 168.5pt 85.5pt 85pt minmax(0, 1fr);
+}
+
+.form-2551q-page-one .tax-relief-field > .field-label {
+  gap: 4.7pt;
+  padding-left: 0;
+  font-size: 8pt;
+}
+
+.form-2551q-page-one .tax-relief-field > .field-label b {
+  font-size: 9.6pt;
+}
+
+.form-2551q-page-one .relief-choices {
+  position: relative;
+  display: block;
+  border-left: 0;
+  font-size: 9.6pt;
+}
+
+.form-2551q-page-one .relief-choices .check-choice {
+  position: absolute;
+  top: 3pt;
+  gap: 6pt;
+}
+
+.form-2551q-page-one .relief-choices .check-choice:first-child { left: -.25pt; }
+.form-2551q-page-one .relief-choices .check-choice:last-child { left: 42.75pt; }
+
+.form-2551q-page-one .relief-choices .check-box {
+  width: 14pt;
+  height: 14pt;
+  background: #fff;
+}
+
+.form-2551q-page-one .background-information .tax-relief-spec {
+  gap: 1.1pt;
+  padding-left: 1.75pt;
+}
+
+.form-2551q-page-one .background-information .comb-value > span::after {
+  border-right-color: #111;
+}
+
 .preview-validation {
   position: relative;
   width: 568pt;
