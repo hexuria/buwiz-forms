@@ -159,6 +159,7 @@ for (const parityCase of cases) {
       { name: "Item 13", selector: ".income-rate-field", x: 45, y: 607, width: 1137, height: 87 },
       { name: "Items 14-24 totals", selector: ".tax-payable", x: 45, y: 696, width: 1137, height: 506 },
       { name: "Item 14 total", selector: ".official-tax-line[data-item='14']", x: 45, y: 723, width: 1137, height: 36 },
+      { name: "Item 17 specification", selector: ".tax-credit-description", x: 448, y: 862, width: 303, height: 23 },
       { name: "signatures", selector: ".official-declaration", x: 45, y: 1206, width: 1137, height: 232 },
       { name: "signature boxes", selector: ".official-signature-grid", x: 45, y: 1263, width: 1133, height: 134 },
       { name: "Part III item 25 decimal cell", selector: ".payment-row-25 .decimal-separator", x: 1099, y: 1502, width: 28, height: 35 },
@@ -255,20 +256,51 @@ test("every canonical fixture produces stable, unclipped pages", async ({ page }
     "2551q-6-rows.json",
     "2551q-fiscal-period.json",
     "2551q-item13-eight-percent.json",
+    "2551q-long-values.json",
     "2551q-minimum.json",
     "2551q-overpayment-refund.json",
     "2551q-overpayment-tcc.json",
-    "2551q-tax-relief.json"
+    "2551q-tax-relief.json",
+    "2551q-validation-edge.json"
   ];
 
   for (const fixture of fixtures) {
     const envelope = readFixture(`packages/form-contracts/fixtures/${fixture}`) as {
+      fields: Record<string, { type: string; value: unknown }>;
       schedules: Array<{ rows: unknown[] }>;
     };
     await renderEnvelope(page, envelope);
     const pages = page.locator(".form-page");
     const expectedPages = envelope.schedules[0].rows.length > 6 ? 3 : 2;
     await expect(pages, fixture).toHaveCount(expectedPages);
+    if (fixture === "2551q-long-values.json") {
+      const description = envelope.fields.other_tax_credit_description?.value;
+      if (typeof description !== "string") {
+        throw new Error("2551Q long-value fixture Item 17 description must be text");
+      }
+      const renderedDescription = page.locator(".tax-credit-description");
+      await expect(renderedDescription).toHaveText(description);
+      await expect(renderedDescription).toHaveAttribute(
+        "aria-label",
+        `Item 17 specification: ${description}`
+      );
+      await expect(renderedDescription).toHaveAttribute("data-overflow-mode", "plain");
+      const descriptionGeometry = await renderedDescription.evaluate((element) => ({
+        clientHeight: element.clientHeight,
+        clientWidth: element.clientWidth,
+        scrollHeight: element.scrollHeight,
+        scrollWidth: element.scrollWidth
+      }));
+      expect(descriptionGeometry.scrollWidth).toBeLessThanOrEqual(descriptionGeometry.clientWidth + 1);
+      expect(descriptionGeometry.scrollHeight).toBeLessThanOrEqual(descriptionGeometry.clientHeight + 1);
+    }
+    if (fixture === "2551q-validation-edge.json") {
+      await expect(page.locator(".tax-credit-description")).toHaveText("");
+      await expect(page.locator(".tax-credit-description")).toHaveAttribute(
+        "aria-label",
+        "Item 17 specification, blank"
+      );
+    }
     for (let index = 0; index < expectedPages; index += 1) {
       expect(await pageHasNoOverflow(pages.nth(index)), `${fixture} page ${index + 1}`).toBe(true);
     }
@@ -659,6 +691,13 @@ async function expectCriticalRegionContent(pageOne: Locator, pageTwo: Locator) {
     )
   ).toEqual(
     ["14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24"]
+  );
+  await expect(pageOne.locator(".tax-credit-description")).toHaveText(
+    "Validated prior payment"
+  );
+  await expect(pageOne.locator(".tax-credit-description")).toHaveAttribute(
+    "aria-label",
+    "Item 17 specification: Validated prior payment"
   );
   await expect(pageOne.locator(".official-declaration")).toContainText(
     "Signature over Printed Name of Taxpayer/Authorized Representative/Tax Agent"

@@ -22,6 +22,8 @@ use super::{
 const FIXTURE_ATC_CODES: [&str; 10] = [
     "PT010", "PT040", "PT041", "PT060", "PT070", "PT090", "PT140", "PT150", "PT160", "PT170",
 ];
+const LONG_ITEM_17_DESCRIPTION: &str =
+    "Reviewed prior-payment credit supported by official receipt and validation reference 2551Q Item 17";
 
 const SCHEDULES: &[RenderSchedulePolicy] = &[RenderSchedulePolicy {
     id: "schedule_1",
@@ -512,6 +514,11 @@ fn long_values_fixture() -> Result<Form2551QDraft, RenderProviderError> {
     draft.tax_relief = true;
     draft.tax_relief_specification =
         "Reviewed special-law description beyond the official comb".to_string();
+    draft.schedule_1[0].taxable_amount = 100_000.0;
+    draft.schedule_1[0].recompute();
+    draft.other_tax_credit = 25.0;
+    draft.other_tax_credit_description = LONG_ITEM_17_DESCRIPTION.to_string();
+    draft.recompute(None);
     Ok(draft)
 }
 

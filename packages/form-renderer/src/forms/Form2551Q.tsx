@@ -625,7 +625,8 @@ function TaxPayable({
       <OfficialTaxLine
         number={17}
         indent
-        label={<>Other Tax Credit/Payment <em>(specify)</em>{otherTaxCreditDescription && <span className="tax-credit-description">: {otherTaxCreditDescription}</span>}</>}
+        label={<>Other Tax Credit/Payment <em>(specify)</em></>}
+        specification={otherTaxCreditDescription}
         value={decimal(envelope, "other_tax_credit")}
         className="specify-line"
       />
@@ -652,7 +653,8 @@ function OfficialTaxLine({
   value,
   strong = false,
   indent = false,
-  className = ""
+  className = "",
+  specification
 }: {
   number: number;
   label: React.ReactNode;
@@ -660,13 +662,40 @@ function OfficialTaxLine({
   strong?: boolean;
   indent?: boolean;
   className?: string;
+  specification?: string;
 }) {
+  const specificationFit = specification === undefined
+    ? undefined
+    : item17SpecificationFit(specification);
+
   return (
     <div data-item={number} className={`official-tax-line ${strong ? "strong" : ""} ${indent ? "indented" : ""} ${className}`}>
-      <div className="tax-line-label"><b>{number}</b> <span>{label}</span></div>
+      <div className="tax-line-label">
+        <b>{number}</b>
+        <span className="tax-line-copy">{label}</span>
+        {specification !== undefined && (
+          <output
+            className="tax-credit-description"
+            data-fit={specificationFit}
+            data-overflow-mode={specificationFit === "normal" ? undefined : "plain"}
+            aria-label={specification
+              ? `Item 17 specification: ${specification}`
+              : "Item 17 specification, blank"}
+          >
+            {specification}
+          </output>
+        )}
+      </div>
       <OfficialMoneyValue value={value} />
     </div>
   );
+}
+
+function item17SpecificationFit(value: string): "normal" | "compact" | "wrapped" {
+  const length = Array.from(value).length;
+  if (length <= 32) return "normal";
+  if (length <= 64) return "compact";
+  return "wrapped";
 }
 
 function OfficialMoneyValue({ value }: { value: number }) {

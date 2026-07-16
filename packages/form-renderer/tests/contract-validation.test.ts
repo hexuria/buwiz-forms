@@ -115,6 +115,10 @@ describe("2551Q runtime render contract", () => {
     );
     const relief = fixture.fields.tax_relief_specification;
     if (relief.type !== "text") throw new Error("fixture relief must be text");
+    const item17Description = fixture.fields.other_tax_credit_description;
+    if (item17Description.type !== "text") {
+      throw new Error("fixture Item 17 description must be text");
+    }
 
     for (const value of [
       fixture.taxpayer.name,
@@ -124,6 +128,11 @@ describe("2551Q runtime render contract", () => {
     ]) {
       expect(markup).toContain(`aria-label="${value.toUpperCase()}"`);
     }
+    expect(markup).toContain(item17Description.value);
+    expect(markup).toContain(
+      `aria-label="Item 17 specification: ${item17Description.value}"`
+    );
+    expect(markup).toContain('data-fit="wrapped" data-overflow-mode="plain"');
   });
 
   it("fails closed beyond defensive document-rendering limits", () => {

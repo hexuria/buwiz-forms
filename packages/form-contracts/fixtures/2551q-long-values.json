@@ -26,11 +26,11 @@
     },
     "other_tax_credit": {
       "type": "decimal",
-      "value": 0.0
+      "value": 25.0
     },
     "other_tax_credit_description": {
       "type": "text",
-      "value": ""
+      "value": "Reviewed prior-payment credit supported by official receipt and validation reference 2551Q Item 17"
     },
     "overpayment_disposition": {
       "type": "text",
@@ -46,7 +46,7 @@
     },
     "tax_payable": {
       "type": "decimal",
-      "value": 0.0
+      "value": 2975.0
     },
     "tax_period_basis": {
       "type": "text",
@@ -62,7 +62,7 @@
     },
     "total_amount_payable": {
       "type": "decimal",
-      "value": 0.0
+      "value": 2975.0
     },
     "total_penalties": {
       "type": "decimal",
@@ -70,11 +70,11 @@
     },
     "total_tax_credits": {
       "type": "decimal",
-      "value": 0.0
+      "value": 25.0
     },
     "total_tax_due": {
       "type": "decimal",
-      "value": 0.0
+      "value": 3000.0
     }
   },
   "form": {
@@ -131,7 +131,7 @@
             },
             "tax_due": {
               "type": "decimal",
-              "value": 0.0
+              "value": 3000.0
             },
             "tax_rate": {
               "type": "decimal",
@@ -139,7 +139,7 @@
             },
             "taxable_amount": {
               "type": "decimal",
-              "value": 0.0
+              "value": 100000.0
             }
           },
           "key": "schedule-1-1-PT010"
