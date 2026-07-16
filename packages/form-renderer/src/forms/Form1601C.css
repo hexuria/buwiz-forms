@@ -437,19 +437,19 @@
   border: 1pt solid #111;
   border-top: 0;
 }
-.identity-1601c-page-two > span {
+.identity-1601c-page-two > .identity-label-1601c {
   display: flex;
   align-items: center;
   padding: 0 5pt;
   background: #d9d9d9;
   border-bottom: .55pt solid #111;
 }
-.identity-1601c-page-two > span:nth-child(2),
+.identity-1601c-page-two > .identity-label-1601c:nth-child(2),
 .identity-1601c-page-two > .comb-value:last-child,
 .identity-1601c-page-two > .adaptive-plain-value { border-left: .7pt solid #111; }
 .identity-1601c-page-two em { font-size: 7pt; margin-left: 2pt; }
 .identity-1601c-page-two > .comb-value,
-.identity-1601c-page-two > .adaptive-plain-value { height: 100%; }
+.identity-1601c-page-two > .adaptive-plain-value { height: 100%; background: #fff; }
 
 .schedule-1601c { margin-top: 2pt; height: 190.5pt; }
 .schedule-1601c > h3 {
@@ -571,3 +571,8 @@
 .guideline-columns-1601c ol,
 .guideline-columns-1601c ul { margin: 0 0 2pt 12pt; padding-left: 10pt; }
 .guideline-columns-1601c li { margin: 0; }
+.guideline-columns-1601c .note-heading-1601c > span { font-weight: 400; }
+.guideline-columns-1601c .note-list-1601c { margin-left: 8pt; padding-left: 8pt; }
+.guideline-columns-1601c .note-numbering-1601c { margin-left: 6pt; }
+.guideline-columns-1601c .note-numbering-1601c p { margin: 0; text-indent: 0; }
+.guideline-columns-1601c .note-numbering-1601c p:nth-child(n + 2):not(:nth-child(4)) { padding-left: 8pt; }

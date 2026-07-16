@@ -17,7 +17,16 @@ fn default_true() -> bool {
 /// The 1601-C January 2018 XML contract exposes exactly three Schedule I rows.
 pub const MAX_SCHEDULE_1_ROWS: usize = 3;
 
-/// One official Schedule I adjustment row from Part IV of Form 1601-C.
+/// Fixed Item 5 ATC for BIR Form 1601-C January 2018.
+///
+/// Evidence: the pinned official blank PDF
+/// `c8faaa71015337a73b4ceb96bfb265c539589ab5e10eb27899bb81f87f417397`
+/// prints `WW010`, and the reviewed plain XML sample
+/// `794892fc33c0fd7882a91327095f396fb1683d5b3c0d4cb1cb63916f981cad4c`
+/// stores `frm1601c:txtATC=WW010`.
+pub const FORM_1601C_ATC: &str = "WW010";
+
+/// One official Schedule 1 adjustment row from Part IV of Form 1601-C.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Form1601CSchedule1Row {
     /// Item 1: previous month in `MM/YYYY` format.
@@ -75,7 +84,7 @@ pub struct Form1601CDraft {
     #[serde(default)]
     pub registered_address_2: String,
     pub zip_code: String,
-    pub category_of_agent: String, // "P" for Private, "G" for Government
+    pub category_of_agent: String, // Item 11: "P" for Private, "G" for Government
     pub email_address: String,
 
     // === Item 13 — Tax Relief / Treaty ===
@@ -196,7 +205,7 @@ impl Form1601CDraft {
             is_amended: false,
             any_taxes_withheld: true,
             number_of_sheets: 0,
-            atc: "WW010".to_string(),
+            atc: FORM_1601C_ATC.to_string(),
             rdo_code: profile.rdo_code.clone(),
             line_of_business: profile.line_of_business.clone(),
             taxpayer_name: profile.full_name.clone(),
@@ -430,12 +439,15 @@ impl FormValidator for Form1601CDraft {
         if self.category_of_agent != "P" && self.category_of_agent != "G" {
             errors.push((
                 "category_of_agent".to_string(),
-                "Please select an option for Category of Withholding Agent (Item 12)".to_string(),
+                "Please select an option for Category of Withholding Agent (Item 11)".to_string(),
             ));
         }
 
-        if self.atc.trim().is_empty() {
-            errors.push(("atc".to_string(), "ATC is required".to_string()));
+        if self.atc != FORM_1601C_ATC {
+            errors.push((
+                "atc".to_string(),
+                format!("Item 5 ATC must be {FORM_1601C_ATC} for BIR Form 1601-C January 2018"),
+            ));
         }
 
         if self.number_of_sheets > 99 {
@@ -818,6 +830,29 @@ mod tests {
                 .validate()
                 .iter()
                 .all(|(field, _)| field != "tax_relief_specification")
+        );
+    }
+
+    #[test]
+    fn validation_requires_the_official_fixed_item_5_atc_and_item_11_category() {
+        let mut draft = Form1601CDraft::new_from_profile(&test_profile(), 2026, 6);
+        draft.any_taxes_withheld = false;
+        assert_eq!(draft.atc, FORM_1601C_ATC);
+
+        draft.atc = "WC010".to_string();
+        draft.category_of_agent.clear();
+        let errors = draft.validate();
+
+        assert!(errors.iter().any(|(field, message)| {
+            field == "atc" && message.contains("Item 5 ATC must be WW010")
+        }));
+        assert!(errors.iter().any(|(field, message)| {
+            field == "category_of_agent" && message.contains("Item 11")
+        }));
+        assert!(
+            errors
+                .iter()
+                .all(|(_, message)| !message.contains("Item 12"))
         );
     }
 

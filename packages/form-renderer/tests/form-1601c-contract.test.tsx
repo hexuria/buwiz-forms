@@ -44,6 +44,21 @@ describe("1601C:2018 runtime render contract", () => {
     expect(fixture.fields.tax_26_adjustment).toEqual({ type: "decimal", value: 1100 });
   });
 
+  it("prints the reviewed official wording and semantic page-two identity labels", () => {
+    const fixture = structuredClone(normalFixture) as RenderEnvelope;
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: fixture })
+    );
+
+    expect(markup).toContain("From Part IV-Schedule 1, Item 4");
+    expect(markup).not.toContain("From Part IV-Schedule I, Item 4");
+    expect(markup).toContain("is true and correct, pursuant to the provisions");
+    expect(markup.match(/identity-label-1601c/g)).toHaveLength(2);
+    for (const marker of ["a.1", "a.2", "b.1", "b.2", "b.3", "b.4"]) {
+      expect(markup).toContain(`>${marker}</b>`);
+    }
+  });
+
   it("renders long profile and schedule values through reviewed plain boxes", () => {
     const fixture = structuredClone(longFixture) as RenderEnvelope;
     const markup = renderToStaticMarkup(
@@ -71,6 +86,12 @@ describe("1601C:2018 runtime render contract", () => {
     overflow.schedules[0].rows[3].key = "schedule-1-4";
     expect(() => assertRenderEnvelope(overflow)).toThrow(
       "verified Schedule I capacity is three rows"
+    );
+
+    const wrongAtc = structuredClone(normalFixture) as Record<string, any>;
+    wrongAtc.fields.atc = { type: "text", value: "WC010" };
+    expect(() => assertRenderEnvelope(wrongAtc)).toThrow(
+      "fixed Item 5 ATC WW010"
     );
   });
 });

@@ -946,7 +946,13 @@ function assert1601CEnvelope(fields: JsonObject, schedules: unknown[], period: J
     assertRequiredField(fields, key, expectedType);
   }
 
-  maximumCharactersAt(renderText(fields.atc), 16, "envelope.fields.atc.value");
+  const atc = renderText(fields.atc);
+  if (atc !== "WW010") {
+    invalid(
+      "envelope.fields.atc.value",
+      "1601C January 2018 requires the fixed Item 5 ATC WW010"
+    );
+  }
   maximumCharactersAt(
     renderText(fields.line_of_business),
     160,

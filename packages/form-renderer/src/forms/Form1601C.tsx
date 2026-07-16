@@ -30,7 +30,7 @@ const TAX_LINES = [
   ["23", "Less: Taxable compensation not subject to withholding tax (for employees, other than MWEs, receiving ₱250,000 & below for the year)", "tax_23_not_subject"],
   ["24", "Net Taxable Compensation (Item 22 Less Item 23)", "tax_24_net_taxable"],
   ["25", "Total Taxes Withheld", "tax_25_total_taxes_withheld"],
-  ["26", "Add/(Less): Adjustment of Taxes Withheld from Previous Month/s (From Part IV-Schedule I, Item 4)", "tax_26_adjustment"],
+  ["26", "Add/(Less): Adjustment of Taxes Withheld from Previous Month/s (From Part IV-Schedule 1, Item 4)", "tax_26_adjustment"],
   ["27", "Taxes Withheld for Remittance (Sum of Items 25 and 26)", "tax_27_taxes_withheld_for_remittance"],
   ["28", "Less: Tax Remitted in Return Previously Filed, if this is an amended return", "tax_28_tax_remitted_previously"],
   ["29", "Other Remittances Made (specify)", "tax_29_other_remittances_amount"],
@@ -343,7 +343,7 @@ function MoneyComb1601C({ value }: { value: number | null }) {
 function Declaration1601C() {
   return (
     <section className="declaration-1601c">
-      <p>I/We declare under the penalties of perjury that this remittance return, and all its attachments, have been made in good faith, verified by me/us, and to the best of my/our knowledge and belief, is true and correct pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof. Further, I give my consent to the processing of my information as contemplated under the *Data Privacy Act of 2012 (R.A. No. 10173) for legitimate and lawful purposes. <em>(If Authorized Representative, attach authorization letter)</em></p>
+      <p>I/We declare under the penalties of perjury that this remittance return, and all its attachments, have been made in good faith, verified by me/us, and to the best of my/our knowledge and belief, is true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof. Further, I give my consent to the processing of my information as contemplated under the *Data Privacy Act of 2012 (R.A. No. 10173) for legitimate and lawful purposes. <em>(If Authorized Representative, attach authorization letter)</em></p>
       <div className="signature-body-1601c">
         <div><span>For Individual:</span><b>Signature over Printed Name of Taxpayer/Authorized Representative/Tax Agent</b><em>(Indicate Title/Designation and TIN)</em></div>
         <div><span>For Non-Individual:</span><b>Signature over Printed Name of President/Vice President/<br />Authorized Officer or Representative/Tax Agent</b><em>(Indicate Title/Designation and TIN)</em></div>
@@ -384,7 +384,7 @@ function PageTwo({ envelope, rows }: { envelope: RenderEnvelope; rows: RenderRow
     <>
       <Masthead1601C page={2} />
       <div className="identity-1601c-page-two">
-        <span>TIN</span><span>Withholding Agent’s Name <em>(Last Name for Individual OR Registered Name for Non-Individual)</em></span>
+        <span className="identity-label-1601c">TIN</span><span className="identity-label-1601c">Withholding Agent’s Name <em>(Last Name for Individual OR Registered Name for Non-Individual)</em></span>
         <AdaptiveCombValue value={envelope.taxpayer.tin.replace(/\D/g, "")} cells={14} />
         <AdaptiveCombValue value={envelope.taxpayer.name.toUpperCase()} cells={38} />
       </div>
@@ -491,27 +491,20 @@ function Guidelines1601C() {
             <li>For Private Sector, copy of the list submitted to the DOLE Regional/Provincial Offices – Operations Division/Unit.</li>
             <li>For Public Sector, copy of Department of Budget and Management (DBM) circular/s or equivalent.</li>
           </ol>
-          <h4>Note:</h4>
-          <ul>
-            <li>All background information must be properly filled out.</li>
+          <h4 className="note-heading-1601c">Note: <span>All background information must be properly filled out.</span></h4>
+          <ul className="note-list-1601c">
             <li>The last 5 digits of the 14-digit TIN refers to the branch code</li>
             <li>All returns filed by an accredited tax agent on behalf of a taxpayer shall bear the following information:
-              <ol type="A">
-                <li>For Individual (CPAs, members of GPPs, and others)
-                  <ol type="a">
-                    <li>Taxpayer Identification Number (TIN); and</li>
-                    <li>BIR Accreditation Number, Date of Issue, and Date of Expiry.</li>
-                  </ol>
-                </li>
-                <li>For members of the Philippine Bar (Lawyers)
-                  <ol type="a">
-                    <li>Taxpayer Identification Number (TIN);</li>
-                    <li>Attorney’s Roll Number;</li>
-                    <li>Mandatory Continuing Legal Education (MCLE) Compliance Number; and</li>
-                    <li>BIR Accreditation Number, Date of Issue, and Date of Expiry.</li>
-                  </ol>
-                </li>
-              </ol>
+              <div className="note-numbering-1601c">
+                <p><b>A.</b> For Individual (CPAs, members of GPPs, and others)</p>
+                <p><b>a.1</b> Taxpayer Identification Number (TIN); and</p>
+                <p><b>a.2</b> BIR Accreditation Number, Date of Issue, and Date of Expiry.</p>
+                <p><b>B.</b> For members of the Philippine Bar (Lawyers)</p>
+                <p><b>b.1</b> Taxpayer Identification Number (TIN);</p>
+                <p><b>b.2</b> Attorney’s Roll Number;</p>
+                <p><b>b.3</b> Mandatory Continuing Legal Education (MCLE) Compliance Number; and</p>
+                <p><b>b.4</b> BIR Accreditation Number, Date of Issue, and Date of Expiry.</p>
+              </div>
             </li>
           </ul>
         </div>

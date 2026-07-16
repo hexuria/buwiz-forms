@@ -817,6 +817,31 @@ mod tests {
     }
 
     #[test]
+    fn xml_boundaries_reject_a_non_official_item_5_atc() {
+        let profile = test_profile();
+        let mut draft = Form1601CDraft::new_from_profile(&profile, 2026, 4);
+        draft.any_taxes_withheld = false;
+        draft.auto_compute_penalties = false;
+        draft.compute();
+        draft.atc = "WC010".to_string();
+
+        let export_errors = draft
+            .try_to_bir_xml_payload()
+            .expect_err("XML export must reject a non-WW010 Item 5 ATC");
+        assert!(export_errors.iter().any(|(field, message)| {
+            field == "atc" && message.contains("Item 5 ATC must be WW010")
+        }));
+
+        let mut fields = Form1601CDraft::new_from_profile(&profile, 2026, 4).to_bir_field_map();
+        fields.insert("frm1601c:txtATC".to_string(), "WC010".to_string());
+        let import_errors = Form1601CDraft::from_bir_field_map(&fields)
+            .expect_err("XML import must reject a non-WW010 Item 5 ATC");
+        assert!(import_errors.iter().any(|(field, message)| {
+            field == "atc" && message.contains("Item 5 ATC must be WW010")
+        }));
+    }
+
+    #[test]
     fn generated_map_covers_plain_and_encrypted_source_sample_keys() {
         // Source evidence:
         // 794892fc33c0fd7882a91327095f396fb1683d5b3c0d4cb1cb63916f981cad4c
