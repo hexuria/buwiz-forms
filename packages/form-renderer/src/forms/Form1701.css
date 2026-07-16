@@ -520,6 +520,63 @@
 .page-two-1701 > .paired-section-1701:last-child > .paired-head-1701 { height: 16pt; }
 .page-two-1701 > .paired-section-1701:last-child > .paired-row-1701 { min-height: 16.5pt; }
 
+/* Schedule 3.A has three official grouping bands that are not data rows. Its
+ * row heights intentionally vary so the semantic table follows the pinned
+ * page-two partitions instead of stretching a flat generic row list. */
+.page-two-1701 > .schedule-three-a-1701 > .section-band-1701 {
+  height: 12.5pt;
+  margin: 0 -1pt;
+  display: flex;
+  justify-content: center;
+  gap: 3pt;
+}
+.schedule-three-a-1701 > .section-band-1701 > small {
+  font-size: 5.1pt;
+  font-style: italic;
+}
+.page-two-1701 > .paired-section-1701.schedule-three-a-1701:last-child > .paired-row-1701 {
+  height: 16pt;
+  min-height: 0;
+}
+.schedule-three-a-subtitle-1701 {
+  height: 9.5pt;
+  display: flex;
+  align-items: center;
+  padding: 0 5pt;
+  border-bottom: .6pt solid #111;
+  background: #d1d1d1;
+  line-height: 1;
+}
+.schedule-three-a-1701 > .or-subtitle-1701 { justify-content: center; }
+.page-two-1701 > .paired-section-1701.schedule-three-a-1701:last-child > .other-income-row-1701,
+.page-two-1701 > .paired-section-1701.schedule-three-a-1701:last-child > .gpp-income-row-1701,
+.page-two-1701 > .paired-section-1701.schedule-three-a-1701:last-child > .other-income-total-row-1701,
+.page-two-1701 > .paired-section-1701.schedule-three-a-1701:last-child > .business-income-total-row-1701 {
+  height: 15pt;
+}
+.page-two-1701 > .paired-section-1701.schedule-three-a-1701:last-child > .compact-other-income-row-1701 { height: 14.5pt; }
+.schedule-three-a-1701 > .other-income-row-1701 .row-description-1701 { height: 12pt; }
+.schedule-three-a-1701 > .compact-other-income-row-1701 .row-description-1701 { height: 11.5pt; }
+.page-two-1701 > .paired-section-1701.schedule-three-a-1701:last-child > .combined-income-total-row-1701 { height: 16.5pt; }
+.page-two-1701 > .paired-section-1701.schedule-three-a-1701:last-child > .graduated-tax-due-row-1701 { height: 20.5pt; }
+.schedule-three-a-1701 > .gpp-income-row-1701 > span:first-child { font-size: 6.2pt; }
+.schedule-three-a-1701 > .graduated-tax-due-row-1701 > span:first-child {
+  align-items: flex-start;
+  padding-block: 1pt;
+  line-height: .92;
+}
+.graduated-tax-due-label-1701 {
+  min-width: 0;
+  display: block;
+  font-size: 6.4pt;
+  line-height: .9;
+}
+.graduated-tax-due-label-1701 > small {
+  display: inline;
+  font-size: 5pt;
+  line-height: .9;
+}
+
 .schedule-three-b-subtitle-1701,
 .part-nine-subtitle-1701 {
   height: 11pt;

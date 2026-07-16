@@ -174,6 +174,20 @@ describe("1701:2018 semantic HTML preview contract", () => {
     expect(markup).toContain("To Part V Schedule 2 Item 4B and Part VII Item 5B");
   });
 
+  it("preserves the official Schedule 3.A row-group partitions", () => {
+    const fixture = structuredClone(longFixture) as RenderEnvelope;
+    const markup = renderToStaticMarkup(createElement(Form1701, { envelope: fixture }));
+    const schedule = markup.match(/<section class="paired-section-1701 compact-table-1701 schedule-three-a-1701">[\s\S]*?<\/section>/)?.[0];
+    expect(schedule).toBeDefined();
+    expect(schedule).toContain("If graduated rates, fill in items 8 to 24; if 8% flat income tax rate, fill in items 25 to 30");
+    expect(schedule).toContain("Less: Deductions Allowable under Existing Laws");
+    expect(schedule).toContain("or-subtitle-1701\">OR");
+    expect(schedule).toContain("Add: Other Non-Operating Income (specify below)");
+    expect(schedule).toContain("A VALID NON-OPERATING INCOME DESCRIPTION LONGER THAN THE OFFICIAL COMB CAPACITY");
+    expect(schedule).toContain("To Part VI Item 1");
+    expect(schedule).not.toContain("paired-head-1701");
+  });
+
   it("embeds the exact official object-derived grayscale seal", () => {
     const sealPath = path.resolve(HERE, "../src/forms/assets/1701-seal.png");
     const digest = createHash("sha256")

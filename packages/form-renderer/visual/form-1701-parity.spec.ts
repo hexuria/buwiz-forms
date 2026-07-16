@@ -152,6 +152,18 @@ test("1701 2018 keeps the official Item 21 and 21A choice hierarchy", async ({ p
   await expect(firstPage.locator(".taxpayer-election-1701 .eight-percent-choice-1701 > small")).toHaveText("(available if gross sales/receipts and other non-operating income do not exceed Three million pesos (P3M))");
 });
 
+test("1701 2018 keeps the official Schedule 3.A row-group bands", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701-normal.json"));
+  const secondPage = page.locator(".form-page").nth(1);
+
+  await expectCriticalRegionGeometry(secondPage, [
+    { name: "Schedule 3.A deductions band", selector: ".deductions-subtitle-1701", x: 28, y: 1366, width: 1165, height: 19 },
+    { name: "Schedule 3.A OR band", selector: ".or-subtitle-1701", x: 28, y: 1513, width: 1165, height: 19 },
+    { name: "Schedule 3.A other-income band", selector: ".other-income-subtitle-1701", x: 28, y: 1596, width: 1165, height: 19 }
+  ]);
+  await expect(secondPage.locator(".schedule-three-a-1701 > .paired-head-1701")).toHaveCount(0);
+});
+
 test("1701 2018 matches the complete official pages", async ({ page }, testInfo) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701-normal.json"));
   const pages = page.locator(".form-page");

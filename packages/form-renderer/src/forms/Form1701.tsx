@@ -55,7 +55,7 @@ const SCHEDULE_THREE_A_ROWS: readonly PairedRow[] = [
   ["22", <>Total Other Non-Operating Income <small>(Sum of Items 19 to 21)</small></>, "schedule_3_22"],
   ["23", <>Taxable Income-Business <small>(Sum of Items 18 and 22)</small></>, "schedule_3_23"],
   ["24", <>Total Taxable Income - Compensation &amp; Business <small>(Sum of Items 6 and 23)</small></>, "schedule_3_24"],
-  ["25", <>Total Tax Due-Compensation and Business Income <small>(under graduated rates; Item 24 × applicable rate)</small></>, "schedule_3_25"]
+  ["25", <span className="graduated-tax-due-label-1701">Total Tax Due-Compensation and Business Income <small>(under graduated rates)<br />(Item 24 × applicable income tax rate) (To Part VI Item 1)</small></span>, "schedule_3_25"]
 ];
 
 const SCHEDULE_THREE_B_ROWS: readonly PairedRow[] = [
@@ -137,7 +137,7 @@ export function Form1701({ envelope }: { envelope: RenderEnvelope }) {
         <SectionBand1701>PART V - Computation of Tax</SectionBand1701>
         <ScheduleOne1701 envelope={envelope} />
         <PairedSection1701 title="Schedule 2 - Taxable Compensation Income" rows={SCHEDULE_TWO_ROWS} envelope={envelope} compact />
-        <PairedSection1701 title="Schedule 3 - Taxable Business Income" subtitle="3.A - For Graduated Income Tax Rates" rows={SCHEDULE_THREE_A_ROWS} envelope={envelope} compact descriptions />
+        <ScheduleThreeA1701 envelope={envelope} />
       </FolioPage>
 
       <FolioPage pageNumber={3} paper="folio" className="form-1701-page continuation-page-1701 page-three-1701">
@@ -313,8 +313,8 @@ function PairedHead1701() {
   return <div className="paired-head-1701"><span>Particulars</span><span>A. Taxpayer/Filer</span><span>B. Spouse</span></div>;
 }
 
-function PairedRow1701({ item, label, fieldKey, envelope, description = "" }: { item: string; label: ReactNode; fieldKey: string; envelope: RenderEnvelope; description?: string }) {
-  return <div className="paired-row-1701"><span><b>{item}</b>{description ? <span className="row-description-1701"><AdaptiveCombValue value={description} cells={34} /></span> : label}</span><Amount1701 envelope={envelope} fieldKey={`${fieldKey}_taxpayer`} /><Amount1701 envelope={envelope} fieldKey={`${fieldKey}_spouse`} /></div>;
+function PairedRow1701({ item, label, fieldKey, envelope, description = "", className = "" }: { item: string; label: ReactNode; fieldKey: string; envelope: RenderEnvelope; description?: string; className?: string }) {
+  return <div className={`paired-row-1701${className ? ` ${className}` : ""}`}><span><b>{item}</b>{description ? <span className="row-description-1701"><AdaptiveCombValue value={description} cells={34} /></span> : label}</span><Amount1701 envelope={envelope} fieldKey={`${fieldKey}_taxpayer`} /><Amount1701 envelope={envelope} fieldKey={`${fieldKey}_spouse`} /></div>;
 }
 
 function Amount1701({ envelope, fieldKey }: { envelope: RenderEnvelope; fieldKey: string }) {
@@ -363,6 +363,38 @@ function EmployerIdentity1701({ name, tin }: { name: string; tin: string }) {
 function EmployerTotal1701({ item, party, incomeKey, withheldKey, envelope }: { item: "3A" | "3B"; party: "TAXPAYER" | "SPOUSE"; incomeKey: string; withheldKey: string; envelope: RenderEnvelope }) {
   const suffix = item.slice(1);
   return <div className="employer-total-1701"><span><b>{item}</b><span>Gross Compensation Income and Total Tax Withheld for <strong>{party}</strong><small>(To Part V Schedule 2 Item 4{suffix} and Part VII Item 5{suffix})</small></span></span><Amount1701 envelope={envelope} fieldKey={incomeKey} /><Amount1701 envelope={envelope} fieldKey={withheldKey} /></div>;
+}
+
+function ScheduleThreeA1701({ envelope }: { envelope: RenderEnvelope }) {
+  const row = (item: number, options?: { description?: boolean; className?: string }) => {
+    const [number, label, key] = SCHEDULE_THREE_A_ROWS[item - 8];
+    return <PairedRow1701
+      key={key}
+      item={number}
+      label={label}
+      fieldKey={key}
+      envelope={envelope}
+      description={options?.description ? text(envelope, `${key}_description`) : ""}
+      className={options?.className}
+    />;
+  };
+  return <section className="paired-section-1701 compact-table-1701 schedule-three-a-1701">
+    <SectionBand1701>Schedule 3 - Taxable Business Income <small>(If graduated rates, fill in items 8 to 24; if 8% flat income tax rate, fill in items 25 to 30)</small></SectionBand1701>
+    <h3>3.A - For Graduated Income Tax Rates</h3>
+    {[8, 9, 10, 11, 12].map((item) => row(item))}
+    <div className="schedule-three-a-subtitle-1701 deductions-subtitle-1701">Less: Deductions Allowable under Existing Laws</div>
+    {[13, 14, 15, 16].map((item) => row(item))}
+    <div className="schedule-three-a-subtitle-1701 or-subtitle-1701">OR</div>
+    {[17, 18].map((item) => row(item))}
+    <div className="schedule-three-a-subtitle-1701 other-income-subtitle-1701">Add: Other Non-Operating Income (specify below)</div>
+    {row(19, { description: true, className: "other-income-row-1701" })}
+    {row(20, { description: true, className: "other-income-row-1701 compact-other-income-row-1701" })}
+    {row(21, { className: "gpp-income-row-1701" })}
+    {row(22, { className: "other-income-total-row-1701" })}
+    {row(23, { className: "business-income-total-row-1701" })}
+    {row(24, { className: "combined-income-total-row-1701" })}
+    {row(25, { className: "graduated-tax-due-row-1701" })}
+  </section>;
 }
 
 function ScheduleThreeB1701({ envelope }: { envelope: RenderEnvelope }) {
