@@ -412,12 +412,45 @@
 .schedule-three-1702rt { height: 323pt; }
 .schedule-three-1702rt > h3 { height: 12pt; }
 .schedule-three-1702rt > .schedule-amount-row-1702rt { height: 19.5pt; }
-.nolco-grid-1702rt { height: 20pt; display: grid; grid-template-columns: 30pt 121pt 242pt minmax(0, 1fr); }
+.nolco-primary-heading-1702rt {
+  height: 23pt;
+  display: grid;
+  grid-template-columns: 151.5pt 227.5pt minmax(0, 1fr);
+  grid-template-rows: 11pt 12pt;
+  background: #d9d9d9;
+  text-align: center;
+}
+.nolco-primary-heading-1702rt > span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: .55pt solid #111;
+  border-bottom: .55pt solid #111;
+}
+.nolco-primary-title-1702rt { grid-column: 1 / 3; grid-row: 1; }
+.nolco-primary-year-heading-1702rt { grid-column: 1; grid-row: 2; }
+.nolco-primary-amount-heading-1702rt { grid-column: 2; grid-row: 2; }
+.nolco-primary-previous-heading-1702rt { grid-column: 3; grid-row: 1 / 3; }
+.nolco-primary-row-1702rt {
+  height: 20pt;
+  display: grid;
+  grid-template-columns: 30pt 30pt 61pt 61pt 182pt 30pt minmax(0, 1fr);
+}
+.nolco-primary-row-1702rt > * {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: .55pt solid #111;
+  border-bottom: .55pt solid #111;
+}
+.nolco-primary-row-1702rt > span:first-child { background: #d9d9d9; }
+.nolco-primary-row-1702rt > .nolco-dead-cell-1702rt { background: #a6a6a6; }
+.nolco-primary-row-1702rt > :is(.comb-value, .adaptive-plain-value) { background: #fff; }
 .nolco-continuation-grid-1702rt { height: 20pt; display: grid; grid-template-columns: 30pt repeat(3, minmax(0, 1fr)); }
-.nolco-grid-1702rt > *,
 .nolco-continuation-grid-1702rt > * { min-width: 0; display: flex; align-items: center; justify-content: center; border-right: .55pt solid #111; border-bottom: .55pt solid #111; }
 .nolco-heading-1702rt { background: #d9d9d9; text-align: center; }
-.nolco-grid-1702rt.nolco-heading-1702rt { height: 23pt; }
 .nolco-continuation-grid-1702rt.nolco-heading-1702rt { height: 20.5pt; }
 .continuation-title-1702rt { height: 12pt; }
 .schedule-three-1702rt .continuation-title-1702rt { height: 14pt; }

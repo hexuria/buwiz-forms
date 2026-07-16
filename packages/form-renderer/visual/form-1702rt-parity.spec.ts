@@ -80,6 +80,27 @@ test("1702RT January 2018C uses exact native seal and page-specific PDF417 geome
   );
 });
 
+test("1702RT January 2018C preserves the official Schedule IIIA header and dead-cell partitions", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702rt-normal.json"));
+  const pageFour = page.locator(".form-page").nth(3);
+  const headerCells = pageFour.locator(".nolco-primary-heading-1702rt > span");
+  const firstRowCells = pageFour.locator('[data-nolco-item="4"] > *');
+
+  await expect(headerCells).toHaveCount(4);
+  await expect(firstRowCells).toHaveCount(7);
+  expect(await cellWidthsInPoints(headerCells)).toEqual([379, 151.5, 227.5, 196.5]);
+  expect(await cellWidthsInPoints(firstRowCells)).toEqual([30, 30, 61, 61, 182, 30, 181.5]);
+  expect(await firstRowCells.evaluateAll((cells) => cells.map((cell) => getComputedStyle(cell).backgroundColor))).toEqual([
+    "rgb(217, 217, 217)",
+    "rgb(166, 166, 166)",
+    "rgb(255, 255, 255)",
+    "rgb(166, 166, 166)",
+    "rgb(255, 255, 255)",
+    "rgb(166, 166, 166)",
+    "rgb(255, 255, 255)"
+  ]);
+});
+
 test("1702RT January 2018C matches the complete official pages", async ({ page }, testInfo) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702rt-normal.json"));
   const pages = page.locator(".form-page");
@@ -230,6 +251,12 @@ function expectArtworkBox(
   expect(actual.y).toBeCloseTo(expected.y, 1);
   expect(actual.width).toBeCloseTo(expected.width, 1);
   expect(actual.height).toBeCloseTo(expected.height, 1);
+}
+
+async function cellWidthsInPoints(locator: Locator) {
+  return locator.evaluateAll((elements) => elements.map((element) =>
+    Math.round(element.getBoundingClientRect().width * 0.75 * 10) / 10
+  ));
 }
 
 function readFixture(relativePath: string): unknown {

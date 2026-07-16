@@ -332,8 +332,21 @@ function ScheduleThree1702RT({ envelope }: { envelope: RenderEnvelope }) {
     <ScheduleAmountRow1702RT envelope={envelope} item="2" label="Less: Ordinary Allowable Itemized Deductions (From Part VI Schedule I Item 18)" field="schedule_3_item_2" />
     <ScheduleAmountRow1702RT envelope={envelope} item="3" label="Net Operating Loss (Item 1 Less Item 2) (To Schedule IIIA, Item 7A)" field="schedule_3_item_3" />
     <h3>Schedule IIIA – Computation of Available Net Operating Loss Carry Over (NOLCO)</h3>
-    <div className="nolco-grid-1702rt nolco-heading-1702rt"><span /><span>Year Incurred</span><span>A) Amount</span><span>B) NOLCO Applied Previous Year/s</span></div>
-    {[4, 5, 6, 7].map((item) => <div key={item} className="nolco-grid-1702rt"><span>{item}</span><AdaptiveCombValue value={text(envelope, `schedule_3_item_${item}_year`)} cells={4} /><Money1702RT envelope={envelope} fieldKey={`schedule_3_item_${item}_amount`} /><Money1702RT envelope={envelope} fieldKey={`schedule_3_item_${item}_applied_previous`} /></div>)}
+    <div className="nolco-primary-heading-1702rt">
+      <span className="nolco-primary-title-1702rt">Net Operating Loss</span>
+      <span className="nolco-primary-year-heading-1702rt">Year Incurred</span>
+      <span className="nolco-primary-amount-heading-1702rt">A) Amount</span>
+      <span className="nolco-primary-previous-heading-1702rt">B) NOLCO Applied Previous Year/s</span>
+    </div>
+    {[4, 5, 6, 7].map((item) => <div key={item} className="nolco-primary-row-1702rt" data-nolco-item={item}>
+      <span>{item}</span>
+      <span className="nolco-dead-cell-1702rt" aria-hidden="true" />
+      <AdaptiveCombValue value={text(envelope, `schedule_3_item_${item}_year`)} cells={4} />
+      <span className="nolco-dead-cell-1702rt" aria-hidden="true" />
+      <Money1702RT envelope={envelope} fieldKey={`schedule_3_item_${item}_amount`} />
+      <span className="nolco-dead-cell-1702rt" aria-hidden="true" />
+      <Money1702RT envelope={envelope} fieldKey={`schedule_3_item_${item}_applied_previous`} />
+    </div>)}
     <div className="continuation-title-1702rt">Continuation of Schedule IIIA (Item numbers continue from table above)</div>
     <div className="nolco-continuation-grid-1702rt nolco-heading-1702rt"><span /><span>C) NOLCO Expired</span><span>D) NOLCO Applied Current Year</span><span>E) Net Operating Loss (Unapplied) [ E = A Less (B + C + D) ]</span></div>
     {[4, 5, 6, 7].map((item) => <div key={item} className="nolco-continuation-grid-1702rt"><span>{item}</span><Money1702RT envelope={envelope} fieldKey={`schedule_3_item_${item}_expired`} /><Money1702RT envelope={envelope} fieldKey={`schedule_3_item_${item}_applied_current`} /><Money1702RT envelope={envelope} fieldKey={`schedule_3_item_${item}_unapplied`} /></div>)}
