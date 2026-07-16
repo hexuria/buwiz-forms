@@ -161,14 +161,18 @@ for (const parityCase of cases) {
       { name: "Item 14 total", selector: ".official-tax-line[data-item='14']", x: 45, y: 723, width: 1137, height: 36 },
       { name: "Item 17 specification", selector: ".tax-credit-description", x: 448, y: 862, width: 303, height: 23 },
       { name: "signatures", selector: ".official-declaration", x: 45, y: 1206, width: 1137, height: 232 },
+      { name: "declaration copy", selector: ".official-declaration > p", x: 47, y: 1208, width: 1133, height: 56 },
       { name: "signature boxes", selector: ".official-signature-grid", x: 45, y: 1263, width: 1133, height: 134 },
-      { name: "Part III item 25 decimal cell", selector: ".payment-row-25 .decimal-separator", x: 1099, y: 1502, width: 28, height: 35 },
+      { name: "individual signature caption", selector: ".official-signature-grid > div:first-child .signature-caption", x: 47, y: 1345, width: 567, height: 53 },
+      { name: "non-individual signature caption", selector: ".official-signature-grid > div:last-child .signature-caption", x: 615, y: 1345, width: 565, height: 53 },
+      { name: "tax-agent strip", selector: ".tax-agent-strip", x: 47, y: 1398, width: 1133, height: 38 },
+      { name: "Part III item 25 decimal cell", selector: ".payment-row-25 .decimal-separator", x: 1098, y: 1502, width: 29, height: 35 },
       { name: "Part III item 25 cents cells", selector: ".payment-row-25 .comb-value:last-child", x: 1127, y: 1502, width: 53, height: 35 },
-      { name: "Part III item 26 decimal cell", selector: ".payment-row-26 .decimal-separator", x: 1099, y: 1538, width: 28, height: 35 },
+      { name: "Part III item 26 decimal cell", selector: ".payment-row-26 .decimal-separator", x: 1098, y: 1538, width: 29, height: 35 },
       { name: "Part III item 26 cents cells", selector: ".payment-row-26 .comb-value:last-child", x: 1127, y: 1538, width: 53, height: 35 },
-      { name: "Part III item 27 decimal cell", selector: ".payment-row-27 .decimal-separator", x: 1099, y: 1575, width: 28, height: 35 },
+      { name: "Part III item 27 decimal cell", selector: ".payment-row-27 .decimal-separator", x: 1098, y: 1575, width: 29, height: 35 },
       { name: "Part III item 27 cents cells", selector: ".payment-row-27 .comb-value:last-child", x: 1127, y: 1575, width: 53, height: 35 },
-      { name: "Part III item 28 continuation decimal cell", selector: ".payment-other-row .decimal-separator", x: 1099, y: 1636, width: 28, height: 35 },
+      { name: "Part III item 28 continuation decimal cell", selector: ".payment-other-row .decimal-separator", x: 1098, y: 1636, width: 29, height: 35 },
       { name: "Part III item 28 continuation cents cells", selector: ".payment-other-row .comb-value:last-child", x: 1127, y: 1636, width: 53, height: 35 }
     ]);
     await expectCriticalRegionGeometry(pages.nth(1), [
@@ -702,11 +706,34 @@ async function expectCriticalRegionContent(pageOne: Locator, pageTwo: Locator) {
   await expect(pageOne.locator(".official-declaration")).toContainText(
     "Signature over Printed Name of Taxpayer/Authorized Representative/Tax Agent"
   );
+  await expect(pageOne.locator(".official-declaration > p")).toContainText(
+    "I/We declare under the penalties of perjury that this return, and all its attachments, have been made in good faith"
+  );
+  await expect(
+    pageOne.locator(".official-signature-grid > div:first-child .signature-caption b")
+  ).toHaveText(
+    "Signature over Printed Name of Taxpayer/Authorized Representative/Tax Agent"
+  );
+  await expect(
+    pageOne.locator(".official-signature-grid > div:last-child .signature-caption b")
+  ).toHaveText(
+    "Signature over Printed Name of President/Vice President/Authorized Officer or Representative/Tax Agent"
+  );
+  await expect(pageOne.locator(".tax-agent-strip")).toContainText(
+    "Tax Agent Accreditation No./Attorney’s Roll No."
+  );
   await expect(pageOne.locator(".official-barcode > small")).toHaveText(
     "2551Q 01/18ENCS P1"
   );
   await expect(pageOne.locator(".payment-row .decimal-separator")).toHaveCount(3);
   await expect(pageOne.locator(".payment-other-row .decimal-separator")).toHaveCount(1);
+  await expect(pageOne.locator(".blank-money-value")).toHaveCount(4);
+  await expect(
+    pageOne.locator(".blank-money-value > .comb-value:first-child > span")
+  ).toHaveCount(52);
+  await expect(
+    pageOne.locator(".blank-money-value > .comb-value:last-child > span")
+  ).toHaveCount(8);
   await expect(pageTwo.locator(".page-two-barcode > small")).toHaveText(
     "2551Q 01/18ENCS P2"
   );

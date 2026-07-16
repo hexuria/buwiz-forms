@@ -643,13 +643,13 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   height: 28pt;
   margin: 0;
   padding: 1pt 5pt;
-  display: grid;
-  place-items: center;
+  display: block;
   border-bottom: .7pt solid #111;
   background: #d4d4d4;
-  text-align: center;
+  text-align: left;
+  text-indent: 21pt;
   font-size: 6pt;
-  line-height: 1.04;
+  line-height: 1.35;
 }
 .official-signature-grid {
   height: 67pt;
@@ -678,6 +678,8 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 }
 .signature-caption b { font-weight: 400; }
 .signature-caption em { font-size: 7pt; }
+.official-signature-grid > div:first-child .signature-caption b { font-size: 7.6pt; }
+.official-signature-grid > div:last-child .signature-caption em { margin-top: 1pt; }
 .tax-agent-strip {
   height: 19pt;
   display: grid;
@@ -687,7 +689,7 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   line-height: 1;
 }
 .tax-agent-strip > span {
-  padding: 1pt 4pt;
+  padding: 3pt 4pt 1pt;
   border-right: .7pt solid #111;
   text-align: center;
 }
@@ -757,7 +759,13 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 .payment-other-row > * { border-right: .7pt solid #111; }
 .payment-other-row > *:last-child { border-right: 0; }
 .blank-money-value > .comb-value:first-child { flex: 1 1 0; }
-.blank-money-value > .decimal-separator { flex: 0 0 14pt; }
+.blank-money-value > .decimal-separator {
+  box-sizing: border-box;
+  flex: 0 0 14.5pt;
+  width: 14.5pt;
+  border-left: .55pt solid #111;
+  border-right: .55pt solid #111;
+}
 .blank-money-value > .comb-value:last-child { flex: 0 0 26.5pt; }
 .machine-validation {
   height: 66.5pt;
@@ -1147,6 +1155,10 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 
 .form-2551q-page-one .money-value .decimal-separator {
   background: #bfbfbf;
+}
+
+.form-2551q-page-one .blank-money-value > .decimal-separator {
+  background: #d9d9d9;
 }
 
 .form-2551q-page-one .comb-value > span,
