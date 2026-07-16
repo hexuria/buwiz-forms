@@ -116,12 +116,17 @@ impl DashboardView {
             &bus,
             |this: &mut Self, _bus, event: &crate::events::AppEvent, cx| match event {
                 crate::events::AppEvent::DatabaseChanged => {
-                    if let Some(profile) = this.active_profile.clone() {
-                        this.reload_filing_progress(&profile, cx);
-                        cx.notify();
+                    this.reload_active_profile_from_database(cx);
+                }
+                crate::events::AppEvent::ProfileComplianceChanged { tin, .. } => {
+                    if this
+                        .active_profile
+                        .as_ref()
+                        .is_some_and(|profile| profile.tin.full() == *tin)
+                    {
+                        this.reload_active_profile_from_database(cx);
                     }
                 }
-                crate::events::AppEvent::ProfileComplianceChanged { .. } => {}
             },
         )
         .detach();
@@ -179,6 +184,29 @@ impl DashboardView {
         self.active_profile = Some(profile.clone());
         self.reload_filing_progress(&profile, cx);
         cx.notify();
+    }
+
+    /// Reload the active profile before recomputing Forms Set progress.
+    ///
+    /// `ProfileComplianceChanged` is emitted only after the profile and all
+    /// affected yearly Forms Sets commit. Reusing the cached profile here
+    /// would therefore recompute the dashboard from the pre-transaction facts.
+    fn reload_active_profile_from_database(&mut self, cx: &mut Context<Self>) {
+        let Some(tin) = self
+            .active_profile
+            .as_ref()
+            .map(|profile| profile.tin.full())
+        else {
+            return;
+        };
+        let refreshed = self
+            .db
+            .lock()
+            .ok()
+            .and_then(|db| db.get_profile(&tin).ok().flatten());
+        if let Some(profile) = refreshed {
+            self.set_profile(profile, cx);
+        }
     }
 
     /// Query the DB for all form progress for this profile in the selected year.
