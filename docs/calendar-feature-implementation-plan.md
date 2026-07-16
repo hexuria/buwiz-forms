@@ -44,7 +44,7 @@ Tasks:
 Acceptance criteria:
 
 - `git status --short` has a known calendar-only implementation scope.
-- Existing `rtk cargo check -p bir-core` and `rtk cargo check -p bir-desktop` still pass before functional edits.
+- Existing `cargo check -p bir-core` and `cargo check -p bir-desktop` still pass before functional edits.
 - The implementation PR/commit description explicitly says this is a correctness fix, not broader rule coverage certification.
 
 ## Phase 1: Replace The Deadline Data Model
@@ -337,9 +337,9 @@ Desktop-facing tests or focused component checks:
 
 Acceptance criteria:
 
-- `rtk cargo test -p bir-core calendar` or equivalent targeted tests pass.
-- `rtk cargo check -p bir-core` passes.
-- `rtk cargo check -p bir-desktop` passes.
+- `cargo test -p bir-core calendar` or equivalent targeted tests pass.
+- `cargo check -p bir-core` passes.
+- `cargo check -p bir-desktop` passes.
 
 ## Release Gate
 

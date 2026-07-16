@@ -11,6 +11,7 @@
   "dependencies": {
     "@ebirforms/form-contracts": "0.1.0",
     "@ebirforms/form-renderer": "0.1.0",
+    "@ebirforms/form-specs": "0.1.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

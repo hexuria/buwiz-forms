@@ -6,7 +6,7 @@
     "audit:no-legacy": "node scripts/run_python.mjs scripts/audit_no_legacy.py",
     "audit:forms:migration": "node scripts/run_python.mjs scripts/audit_html_form_migration.py",
     "build:forms": "npm run build --workspace @ebirforms/form-preview",
-    "dev:calibration": "npm run dev --workspace @ebirforms/form-calibration",
+    "dev:calibration": "npm run dev --workspace @ebirforms/form-calibration -- --host 127.0.0.1 --port 4175 --strictPort",
     "build:calibration": "npm run build --workspace @ebirforms/form-calibration",
     "capabilities:rust": "cargo run -q --locked -p bir-print --bin generate_form_capabilities",
     "contracts:rust": "cargo run -q --locked -p bir-print --bin generate_render_contract",

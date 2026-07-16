@@ -3,9 +3,54 @@
 [![CI](https://github.com/codeitlikemiley/ebirforms/actions/workflows/ci.yml/badge.svg)](https://github.com/codeitlikemiley/ebirforms/actions/workflows/ci.yml)
 [![Release](https://github.com/codeitlikemiley/ebirforms/actions/workflows/release.yml/badge.svg)](https://github.com/codeitlikemiley/ebirforms/actions/workflows/release.yml)
 
-A modern, native, and secure desktop application for managing and filing eBIRForms in the Philippines. Built in Rust using the [GPUI](https://gpui.rs/) framework, E-BIRForms delivers a highly responsive, offline-first experience that fully respects your data privacy. E-BIRForms completely reverse-engineers the traditional eBIRForms workflow into a seamless, native Mac, Windows, and Linux application.
+A modern, native, and secure desktop application for managing and filing eBIRForms in the Philippines. Built in Rust using the [GPUI](https://gpui.rs/) framework, E-BIRForms is an offline-first reimplementation of the traditional eBIRForms workflow for macOS, Windows, and Linux.
+
+The project is under active development. Form filing support and HTML preview readiness are deliberately tracked separately; a form appearing in the developer calibration viewer does not mean it can be filed or shipped with the HTML renderer.
 
 ---
+
+## Current Development Status
+
+Last verified: **July 16, 2026**. The authoritative sources are
+[`support_level.rs`](crates/bir-core/src/forms/support_level.rs),
+[`form-migration-status.json`](packages/form-specs/form-migration-status.json),
+and [`form-release-evidence.json`](packages/form-specs/form-release-evidence.json).
+If this summary conflicts with those files, the machine-readable status wins.
+
+| Forms | Queue authority | Current implementation | HTML renderer status |
+| --- | --- | --- | --- |
+| `2551Q:2018` | Proven | Typed model, XML, formulas, persistence, queue adapter, editor, contract, HTML, and pagination exist | `html_only`, but still `ScaffoldOnly`; visual and signed cross-platform package evidence are incomplete |
+| `1601C:2018`, `0605:1999`, `0619E:2018`, `0619F:2018`, `2550Q:2024` | Blocked | Typed model, XML, formulas, persistence, editor, contract, HTML, and pagination exist | Experimental calibration only; all remain `ScaffoldOnly` and fail the current visual release gate |
+| `1701Q:2018` | Blocked | Typed model, formulas, persistence, editor, contract, HTML, and pagination exist | Experimental calibration only; XML proof and release evidence remain incomplete |
+| `1701:2018`, `1702RT:2018C`, `1702MX:2018C` | Blocked | Typed model, XML, formulas, persistence, editor, contract, HTML, and pagination exist | Experimental calibration only; queue, visual, native, and packaged-offline evidence remain incomplete |
+
+No form is currently marked `release_ready`. There is no retained fallback
+renderer: unsupported or failed output stays blocked with a diagnostic instead
+of silently switching document implementations.
+
+### HTML Form Calibration Viewer
+
+Install the JavaScript workspace once:
+
+```bash
+npm ci
+```
+
+Start the calibration viewer from the repository root:
+
+```bash
+npm run dev:calibration
+```
+
+Open [http://127.0.0.1:4175](http://127.0.0.1:4175). The viewer now:
+
+- discovers committed fixture JSON automatically through a searchable form selector;
+- scrolls through every rendered page normally, while keeping page-jump controls as shortcuts;
+- loads verified 144 DPI reference pages automatically when they exist in the reference manifest;
+- provides HTML, Overlay, Difference, and reference-opacity controls;
+- labels HTML-enabled forms separately from scaffold-only forms.
+
+Fixture JSON contains form identity, taxpayer/period data, typed field values, schedules, and validation messages. React components and print CSS own the visual structure; form specifications own paper size and pagination. See [HTML Form Renderer](docs/form-print-readiness/html-form-renderer.md) for the complete workflow and release gates.
 
 ## 🌟 Key Features
 
@@ -39,13 +84,13 @@ A modern, native, and secure desktop application for managing and filing eBIRFor
 
 ### 🛠 Form Digitization & Developer Tools
 - **Semantic HTML Form Renderer**: Exact BIR revisions are implemented as reviewed React HTML/CSS documents fed by Rust-owned render contracts. Official PDFs are calibration evidence only; runtime full-page overlays and coordinate layout packs are prohibited.
-- **Dev-Only Inspect Button**: A feature-gated `Inspect` button (enabled via `--features dev-tools`) lets developers preview the PDF output without going through the full submission pipeline. It automatically saves the form before rendering to ensure data integrity.
-- **Structured Tracing**: Debug builds automatically log form save, sync, and PDF rendering events to the terminal via `tracing`. Override log levels at runtime with `RUST_LOG=bir_desktop=trace just run`.
+- **Fixture-Driven Calibration**: The development calibration app renders committed Rust contracts, loads pinned official references automatically, and keeps comparison evidence outside the printable runtime document.
+- **Structured Tracing**: Debug builds automatically log form save, sync, and HTML preview/print/export events to the terminal via `tracing`. Override log levels at runtime with `RUST_LOG=bir_desktop=trace just run`.
 
 ### 🛡️ Data Integrity
 - **Profile Snapshot at Save Time**: When you save a form, it captures your tax profile information at that exact moment. If you later update your profile, the saved form retains the original data — guaranteeing consistency between what was filed and what is stored.
 - **Post-Submission Lock**: Once a form is submitted, all fields become read-only. The only way to update data is to revert to Draft status and re-submit.
-- **PDF Reflects Saved State**: The PDF Viewer always renders from the last-saved database state — never from unsaved, in-progress edits. This ensures the PDF you see is exactly what was (or will be) submitted.
+- **Immutable Output Snapshot**: Opening output creates one immutable Rust render envelope. Preview, system print, and direct PDF export reuse that same snapshot and never mutate the draft lifecycle.
 
 ---
 
@@ -55,6 +100,7 @@ A modern, native, and secure desktop application for managing and filing eBIRFor
   ```bash
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
   ```
+- **Node.js 24 and npm**: Required for the HTML form renderer, calibration viewer, contract generation, and visual tests. Install dependencies with `npm ci` from the repository root.
 
 ### 🍏 macOS Dependencies
 
@@ -129,6 +175,14 @@ We follow a "less is better" philosophy. You only need to remember a few core co
 - `just check` — Run code formatting (`cargo fmt`), linting (`cargo clippy`), and type checking (`cargo check`) across the workspace.
 - `just test` — Run all unit and integration test suites.
 
+**HTML Renderer:**
+- `npm run dev:calibration` — Start the fixture-driven calibration viewer at `http://127.0.0.1:4175`.
+- `npm run contracts:check` — Regenerate the Rust/TypeScript render contract and fail on drift.
+- `npm run typecheck:forms` — Type-check the form web workspaces.
+- `npm run test:forms` — Run renderer unit tests.
+- `npm run test:forms:visual` — Compare enabled HTML forms with verified 144 DPI references.
+- `just forms-build` — Run the full source-bundle build and offline-integrity workflow.
+
 **Dependency Management:**
 - `just audit` — Check for security vulnerabilities in dependencies using the RustSec database.
 - `just outdated` — Display a list of dependencies that have newer versions available.
@@ -143,7 +197,7 @@ The project uses **two independent version identifiers** to satisfy both Apple A
 | Identifier | Source of Truth | Changed By | When |
 |---|---|---|---|
 | **App Version** (semver) | `Cargo.toml` → `version = "0.1.0"` | You, manually | Feature release or hotfix |
-| **Build Number** (counter) | `justfile` → `BUILD_NUMBER := "21"` | `just bump-build` (auto) | Every store submission |
+| **Build Number** (counter) | `justfile` → `BUILD_NUMBER := "26"` | `just bump-build` (auto) | Every store submission |
 
 ### Why Two Numbers?
 
@@ -152,22 +206,22 @@ Apple and Microsoft handle versioning differently:
 | | macOS App Store | Microsoft Store |
 |---|---|---|
 | Marketing version | `CFBundleShortVersionString = "0.1.0"` | Store listing description |
-| Build identifier | `CFBundleVersion = "21"` (separate field) | `Version = "0.1.21.0"` in AppxManifest |
+| Build identifier | `CFBundleVersion = "26"` (separate field) | `Version = "0.1.26.0"` in AppxManifest |
 | Multiple builds per version? | ✅ Yes | ❌ No — each submission needs a higher `Version` |
 
 **macOS** has two separate fields — one for the user-facing version, one for the internal build counter. **Microsoft** has only a single `Version` field, and the 4th part (Revision) must always be `0`.
 
 ### How the Version Maps to Each Store
 
-Given `Cargo.toml version = "0.1.0"` and `BUILD_NUMBER = 22`:
+Given `Cargo.toml version = "0.1.0"` and `BUILD_NUMBER = 26`:
 
 ```
 macOS App Store:
   CFBundleShortVersionString = "0.1.0"    ← what users see
-  CFBundleVersion            = "22"       ← internal build number
+  CFBundleVersion            = "26"       ← internal build number
 
 Microsoft Store:
-  AppxManifest Version       = "0.1.22.0" ← Major.Minor.BuildNumber.0
+  AppxManifest Version       = "0.1.26.0" ← Major.Minor.BuildNumber.0
   Store listing              = "0.1.0"    ← what users see (set in Partner Center)
 ```
 
@@ -178,9 +232,9 @@ Microsoft Store:
 just bump-build    # Queries App Store Connect API, increments BUILD_NUMBER in justfile
 git add justfile && git commit -m "build: bump to $(just --evaluate BUILD_NUMBER)"
 # On macOS:
-just app           # Builds .app with version 0.1.0 (build 23)
+just app           # Builds the .app with the newly incremented build number
 # On Windows:
-just msix          # Builds .msix with version 0.1.23.0
+just msix          # Builds the .msix with the current build number
 ```
 
 **Releasing a new version** (feature release or hotfix):
@@ -197,12 +251,12 @@ git add Cargo.toml justfile && git commit -m "release: v0.2.0"
 
 | Action | Cargo.toml | BUILD_NUMBER | macOS | Windows MSIX |
 |---|---|---|---|---|
-| Initial | `0.1.0` | 21 | `0.1.0` (build 21) | `0.1.21.0` |
-| Bump build | `0.1.0` | 22 | `0.1.0` (build 22) | `0.1.22.0` |
-| Bump build | `0.1.0` | 23 | `0.1.0` (build 23) | `0.1.23.0` |
-| Hotfix | `0.1.1` | 24 | `0.1.1` (build 24) | `0.1.24.0` |
-| Feature release | `0.2.0` | 25 | `0.2.0` (build 25) | `0.2.25.0` |
-| Stable release | `1.0.0` | 30 | `1.0.0` (build 30) | `1.0.30.0` |
+| Current | `0.1.0` | 26 | `0.1.0` (build 26) | `0.1.26.0` |
+| Bump build | `0.1.0` | 27 | `0.1.0` (build 27) | `0.1.27.0` |
+| Bump build | `0.1.0` | 28 | `0.1.0` (build 28) | `0.1.28.0` |
+| Hotfix | `0.1.1` | 29 | `0.1.1` (build 29) | `0.1.29.0` |
+| Feature release | `0.2.0` | 30 | `0.2.0` (build 30) | `0.2.30.0` |
+| Stable release | `1.0.0` | 31 | `1.0.0` (build 31) | `1.0.31.0` |
 
 ## 🔐 CI/CD Secrets & Codesigning
 
@@ -231,21 +285,33 @@ However, if you want to automatically codesign and notarize the **macOS** DMG on
   - `views/` — Per-form view implementations (e.g., `form_2551q_view.rs`, `form_1701q_view.rs`) that compose the shared components.
 - `crates/bir-print/`: Typed HTML render contracts, provider registry, native output coordination, PDF validation, and PDF merging.
 - `crates/gpui-component/`: A centralized design system and UI toolkit customized exclusively for GPUI.
+- `packages/form-contracts/`: Generated JSON schema, TypeScript contract, and canonical render fixtures sourced from Rust.
+- `packages/form-specs/`: Paper/pagination specifications plus migration and release-evidence manifests.
+- `packages/form-renderer/`: Semantic React form documents, print CSS, pagination tests, and verified-reference visual tests.
+- `apps/form-preview/`: HTML preview bundle consumed by the native desktop host for enabled exact revisions.
+- `apps/form-calibration/`: Developer viewer for fixture selection, continuous page scrolling, and visual comparison.
 
 ### 🧩 Form Engine
 
-Adding a new BIR tax form follows a standardized 4-phase lifecycle:
+Adding a new BIR tax form now crosses two separately gated tracks:
 
-1. **Core Model** (`bir-core/forms/`) — Draft struct + `FormValidator` + optional `recompute()`
-2. **Database** (`bir-core/db/`) — Migration + CRUD methods for draft persistence
-3. **UI View** (`bir-desktop/views/`) — Implement `FormViewTrait` + compose UI from `form_parts`
-4. **Submission** — XML field mapping + PDF rendering
+1. **Filing support** — authoritative source evidence, typed domain model,
+   formulas, validation, XML, persistence, queue submission, and desktop UI.
+2. **Print presentation** — a Rust render envelope, semantic React/CSS
+   document, exact-revision form specification, deterministic pagination, and
+   calibrated official references.
+3. **Promotion evidence** — filing support changes only after the in-app gates
+   pass; HTML release changes only after visual, native print/export, and
+   packaged-offline evidence pass.
 
-See [docs/adding-a-new-form.md](docs/adding-a-new-form.md) for the comprehensive developer guide with code examples and a 16-step checklist.
+See [Building BIR Tax Forms](docs/adding-a-new-form.md) for the implementation
+checklist, [Form Tooling Guide](docs/form-tooling-guide.md) for renderer-path
+selection, and [HTML Form Renderer](docs/form-print-readiness/html-form-renderer.md)
+for semantic HTML migration and release gates.
 
 ---
 
-## 🧠 Agent Skills
+## 🧠 Local Agent Tooling
 
 This repository keeps its canonical, versioned agent workflows under `.codex/skills/`:
 
@@ -253,6 +319,10 @@ This repository keeps its canonical, versioned agent workflows under `.codex/ski
 - Use `ebirforms-print-preview` to maintain or calibrate a form that is already HTML-enabled.
 - Treat `.codex/skills/` as the single source of truth. If user-level discovery is needed, use a symlink back to the repository skill rather than a copied second source.
 - Snapshot-overlay and generated-tax-behavior workflows are unsupported and have been removed.
+
+README and runbook examples use standard `npm`, `python3`, and `cargo`
+commands so developers can run the workflow without an agent-specific command
+wrapper.
 
 ---
 

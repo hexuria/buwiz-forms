@@ -105,7 +105,7 @@ Targeted tests live in `crates/bir-core/src/calendar_rules.rs` and cover:
 Useful verification commands:
 
 ```bash
-rtk cargo test -p bir-core calendar_rules -- --nocapture
-rtk cargo check -p bir-core
-rtk cargo check -p bir-desktop
+cargo test -p bir-core calendar_rules -- --nocapture
+cargo check -p bir-core
+cargo check -p bir-desktop
 ```

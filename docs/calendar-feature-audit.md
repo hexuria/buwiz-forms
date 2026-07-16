@@ -262,6 +262,6 @@ The dummy-date strategy is an anti-pattern. Event-based forms should bypass chro
 
 ## Verification
 
-- `rtk cargo check -p bir-core` passed.
-- `rtk cargo check -p bir-desktop` passed.
+- `cargo check -p bir-core` passed.
+- `cargo check -p bir-desktop` passed.
 - The working tree has mixed staged and unstaged calendar edits, so this report reflects the current working tree rather than only staged changes.
