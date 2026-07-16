@@ -31,6 +31,94 @@ test("2550Q April 2024 renders every Rust fixture as two stable unclipped 8.5x14
   }
 });
 
+test("2550Q April 2024 keeps verified page-specific PDF417, caption, and seal geometry", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/2550q-normal.json"));
+  const pages = page.locator(".form-page");
+  await expect(pages).toHaveCount(2);
+
+  await expectCriticalRegionGeometry(pages.nth(0), [
+    {
+      name: "official seal XObject",
+      selector: ".government-wordmark-2550q img",
+      x: 461.6,
+      y: 34.4,
+      width: 62.2,
+      height: 59.4
+    },
+    {
+      name: "page 1 official PDF417 XObject",
+      selector: '.barcode-2550q[data-barcode-page="1"] .official-pdf417-object-2550q',
+      x: 868.6,
+      y: 102.6,
+      width: 312.4,
+      height: 93.4
+    },
+    {
+      name: "page 1 official PDF417 live caption",
+      selector: '.barcode-2550q[data-barcode-page="1"] > small',
+      x: 1018.8,
+      y: 199.312,
+      width: 160.816,
+      height: 14.8
+    }
+  ]);
+  await expectCriticalRegionGeometry(pages.nth(1), [
+    {
+      name: "page 2 official PDF417 XObject",
+      selector: '.barcode-2550q[data-barcode-page="2"] .official-pdf417-object-2550q',
+      x: 867.8,
+      y: 48.8,
+      width: 307.8,
+      height: 90.2
+    },
+    {
+      name: "page 2 official PDF417 live caption",
+      selector: '.barcode-2550q[data-barcode-page="2"] > small',
+      x: 1011,
+      y: 141.512,
+      width: 160.816,
+      height: 14.8
+    }
+  ]);
+
+  expect(await page.locator(".official-pdf417-symbol-2550q").evaluateAll(
+    (symbols) => symbols.map((symbol) => ({
+      preserveAspectRatio: symbol.getAttribute("preserveAspectRatio"),
+      shapeRendering: getComputedStyle(symbol).shapeRendering,
+      viewBox: symbol.getAttribute("viewBox")
+    }))
+  )).toEqual(Array.from({ length: 2 }, () => ({
+    preserveAspectRatio: "none",
+    shapeRendering: "crispedges",
+    viewBox: "0 0 120 7"
+  })));
+
+  const captions = page.locator(".barcode-2550q > small");
+  await expect(captions.nth(0)).toHaveText("2550Q 04/24ENCS P1");
+  await expect(captions.nth(1)).toHaveText("2550Q 04/24ENCS P2");
+  expect(await captions.evaluateAll((elements) => elements.map((element) => {
+    const style = getComputedStyle(element);
+    return {
+      fontFamily: style.fontFamily,
+      fontSize: style.fontSize,
+      fontWeight: style.fontWeight,
+      whiteSpace: style.whiteSpace
+    };
+  }))).toEqual(Array.from({ length: 2 }, () => ({
+    fontFamily: '"eBIRForms Arimo", Arial, sans-serif',
+    fontSize: "10.6667px",
+    fontWeight: "400",
+    whiteSpace: "nowrap"
+  })));
+
+  expect(await page.locator(".government-wordmark-2550q img").evaluate(
+    (image) => ({
+      naturalHeight: (image as HTMLImageElement).naturalHeight,
+      naturalWidth: (image as HTMLImageElement).naturalWidth
+    })
+  )).toEqual({ naturalHeight: 82, naturalWidth: 86 });
+});
+
 test("2550Q April 2024 matches the complete official pages", async ({ page }, testInfo) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/2550q-normal.json"));
   const pages = page.locator(".form-page");
@@ -51,8 +139,10 @@ test("2550Q April 2024 matches the complete official pages", async ({ page }, te
     { name: "Part V", selector: ".part-five-2550q", x: 43, y: 1339, width: 1139, height: 500 }
   ]);
 
-  expect(await pages.nth(0).locator("img").count()).toBe(2);
-  expect(await pages.nth(1).locator("img").count()).toBe(1);
+  expect(await pages.nth(0).locator("img").count()).toBe(1);
+  expect(await pages.nth(1).locator("img").count()).toBe(0);
+  expect(await pages.nth(0).locator(".official-pdf417-symbol-2550q").count()).toBe(1);
+  expect(await pages.nth(1).locator(".official-pdf417-symbol-2550q").count()).toBe(1);
 
   await page.addStyleTag({
     content: `
@@ -123,7 +213,13 @@ async function expectCriticalRegionGeometry(page: Locator, regions: CriticalRegi
   const pageBox = await page.boundingBox();
   expect(pageBox).not.toBeNull();
   if (!pageBox) return;
-  const failures: Array<{ region: string; dimension: string; difference: number }> = [];
+  const failures: Array<{
+    region: string;
+    dimension: string;
+    actual: number;
+    expected: number;
+    difference: number;
+  }> = [];
   for (const region of regions) {
     const box = await page.locator(region.selector).boundingBox();
     expect(box, region.name).not.toBeNull();
@@ -137,7 +233,15 @@ async function expectCriticalRegionGeometry(page: Locator, regions: CriticalRegi
     };
     for (const key of ["x", "y", "width", "height"] as const) {
       const difference = Math.abs(actual[key] - expected[key]);
-      if (difference > 2 / DEVICE_SCALE_FACTOR) failures.push({ region: region.name, dimension: key, difference });
+      if (difference > 2 / DEVICE_SCALE_FACTOR) {
+        failures.push({
+          region: region.name,
+          dimension: key,
+          actual: actual[key],
+          expected: expected[key],
+          difference
+        });
+      }
     }
   }
   expect(failures).toEqual([]);

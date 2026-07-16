@@ -11,8 +11,8 @@ import {
 } from "../components";
 import { bool, field, integer, text } from "../values";
 import {
-  OFFICIAL_2550Q_BARCODE_PAGE_ONE,
-  OFFICIAL_2550Q_BARCODE_PAGE_TWO,
+  OFFICIAL_2550Q_PDF417_PATHS,
+  OFFICIAL_2550Q_PDF417_PAYLOADS,
   OFFICIAL_2550Q_SEAL
 } from "./official2550QAssets";
 import "./Form2550Q.css";
@@ -130,6 +130,7 @@ function GovernmentHeader2550Q() {
 }
 
 function Masthead2550Q({ page, compact = false }: { page: 1 | 2; compact?: boolean }) {
+  const payload = OFFICIAL_2550Q_PDF417_PAYLOADS[page];
   return (
     <header className={`masthead-2550q${compact ? " compact-2550q" : ""}`}>
       <div className="form-number-2550q">
@@ -142,9 +143,19 @@ function Masthead2550Q({ page, compact = false }: { page: 1 | 2; compact?: boole
         <strong>Quarterly Value-Added Tax<br />(VAT) Return</strong>
         {!compact && <em>Enter all required information in CAPITAL LETTERS using BLACK ink. Mark applicable boxes with an “X”. Two copies must be filed with the BIR and one held by the Taxpayer.</em>}
       </div>
-      <div className="barcode-2550q">
-        <img src={page === 1 ? OFFICIAL_2550Q_BARCODE_PAGE_ONE : OFFICIAL_2550Q_BARCODE_PAGE_TWO} alt="" />
-        <small>2550Q 04/24ENCS P{page}</small>
+      <div className="barcode-2550q" aria-label={payload} data-barcode-page={page}>
+        <span className="official-pdf417-object-2550q" aria-hidden="true">
+          <svg
+            className="official-pdf417-symbol-2550q"
+            viewBox="0 0 120 7"
+            preserveAspectRatio="none"
+            shapeRendering="crispEdges"
+            focusable="false"
+          >
+            <path d={OFFICIAL_2550Q_PDF417_PATHS[page]} />
+          </svg>
+        </span>
+        <small>{payload}</small>
       </div>
     </header>
   );

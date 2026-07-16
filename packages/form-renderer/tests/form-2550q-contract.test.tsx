@@ -2,6 +2,10 @@ import {
   assertRenderEnvelope,
   type RenderEnvelope
 } from "@ebirforms/form-contracts";
+import { createHash } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -11,6 +15,47 @@ import minimumFixture from "../../form-contracts/fixtures/2550q-minimum.json";
 import normalFixture from "../../form-contracts/fixtures/2550q-normal.json";
 import validationEdgeFixture from "../../form-contracts/fixtures/2550q-validation-edge.json";
 import { FormDocument } from "../src/FormDocument";
+import {
+  OFFICIAL_2550Q_PDF417_PATHS,
+  OFFICIAL_2550Q_PDF417_PAYLOADS
+} from "../src/forms/official2550QAssets";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+function pdf417ModuleDigest(pathData: string): {
+  digest: string;
+  blackModules: number;
+} {
+  const modules = Array<boolean>(120 * 7).fill(false);
+  const command = /M(\d+) (\d+)h(\d+)v1H(\d+)z/g;
+  const consumed: string[] = [];
+  let blackModules = 0;
+
+  for (const match of pathData.matchAll(command)) {
+    consumed.push(match[0]);
+    const x = Number(match[1]);
+    const y = Number(match[2]);
+    const width = Number(match[3]);
+    expect(Number(match[4])).toBe(x);
+    expect(y).toBeGreaterThanOrEqual(0);
+    expect(y).toBeLessThan(7);
+    expect(x + width).toBeLessThanOrEqual(120);
+
+    for (let column = x; column < x + width; column += 1) {
+      const index = y * 120 + column;
+      expect(modules[index]).toBe(false);
+      modules[index] = true;
+      blackModules += 1;
+    }
+  }
+
+  expect(consumed.join("")).toBe(pathData);
+  const bits = modules.map((module) => module ? "1" : "0").join("");
+  return {
+    digest: createHash("sha256").update(bits).digest("hex"),
+    blackModules
+  };
+}
 
 const fixtures = [
   minimumFixture,
@@ -90,6 +135,45 @@ describe("2550Q:2024 exact semantic preview contract", () => {
       expect(markup).toContain(`aria-label="${value.replaceAll("&", "&amp;").replaceAll('"', "&quot;")}"`);
     }
     expect(markup.match(/data-overflow-mode="plain"/g)?.length).toBeGreaterThan(5);
+  });
+
+  it("preserves both exact official PDF417 matrices and live captions", () => {
+    expect(pdf417ModuleDigest(OFFICIAL_2550Q_PDF417_PATHS[1])).toEqual({
+      digest: "5a8d7f411686eb62d9d45b25a0430703a087068d43cd34cf6e63c35d6fce435f",
+      blackModules: 478
+    });
+    expect(pdf417ModuleDigest(OFFICIAL_2550Q_PDF417_PATHS[2])).toEqual({
+      digest: "95368d60c40a9767d65c09836f3c36152adfd42cd70c740dea33c19e75fe86e6",
+      blackModules: 479
+    });
+
+    const fixture = structuredClone(normalFixture) as RenderEnvelope;
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: fixture })
+    );
+    for (const page of [1, 2] as const) {
+      expect(markup).toContain(
+        `aria-label="${OFFICIAL_2550Q_PDF417_PAYLOADS[page]}"`
+      );
+      expect(markup).toContain(`data-barcode-page="${page}"`);
+      expect(markup).toContain(
+        `<small>${OFFICIAL_2550Q_PDF417_PAYLOADS[page]}</small>`
+      );
+    }
+    expect(markup.match(/viewBox="0 0 120 7"/g)).toHaveLength(2);
+    expect(markup.match(/shape-rendering="crispEdges"/g)).toHaveLength(2);
+    expect(markup).not.toContain("2550q-barcode-page-1.png");
+    expect(markup).not.toContain("2550q-barcode-page-2.png");
+  });
+
+  it("embeds the exact official object-derived grayscale seal", () => {
+    const sealPath = path.resolve(HERE, "../src/forms/assets/2550q-seal.png");
+    const digest = createHash("sha256")
+      .update(fs.readFileSync(sealPath))
+      .digest("hex");
+    expect(digest).toBe(
+      "e4259300bed379aa06e686a31638b1943232ade6476a72b115e8ed357890b6d5"
+    );
   });
 
   it("fails closed on invalid period, continuation schedule, or a third fixed row", () => {

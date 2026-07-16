@@ -28,19 +28,24 @@
 .government-header-2550q > span:nth-child(2) { padding-left: 5pt; }
 .government-wordmark-2550q {
   position: absolute;
-  left: 207.5pt;
+  left: 209.3pt;
   top: 0;
   width: 215pt;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 5pt;
   text-align: center;
   font-size: 7.6pt;
   line-height: 1.02;
   font-weight: 700;
 }
-.government-wordmark-2550q img { width: 31.5pt; height: 30pt; object-fit: contain; }
+.government-wordmark-2550q img {
+  flex: 0 0 31.1pt;
+  width: 31.1pt;
+  height: 29.7pt;
+  object-fit: fill;
+}
 
 .masthead-2550q {
   height: 59pt;
@@ -60,10 +65,56 @@
 .form-title-2550q { padding: 2pt 4pt; }
 .form-title-2550q strong { font-size: 16pt; line-height: 1; }
 .form-title-2550q em { margin-top: 2pt; font-size: 6.8pt; line-height: 1.03; }
-.barcode-2550q { border-left: .65pt solid #111; padding: 2pt 3pt 1pt; }
-.barcode-2550q img { width: 100%; height: 46.7pt; object-fit: fill; image-rendering: auto; }
-.compact-2550q .barcode-2550q img { height: 45pt; }
-.barcode-2550q small { font-size: 6pt; line-height: 7pt; }
+.barcode-2550q {
+  position: relative;
+  overflow: visible;
+  border-left: .65pt solid #111;
+  padding: 0;
+}
+.official-pdf417-object-2550q,
+.barcode-2550q > small {
+  position: absolute;
+  display: block;
+}
+.official-pdf417-symbol-2550q {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  fill: #000;
+}
+.barcode-2550q > small {
+  margin: 0;
+  color: #000;
+  font-family: "eBIRForms Arimo", Arial, sans-serif;
+  font-size: 8pt;
+  font-weight: 400;
+  line-height: 1;
+  text-align: left;
+  white-space: nowrap;
+}
+.form-2550q-page-one .official-pdf417-object-2550q {
+  left: 1.8pt;
+  top: .95pt;
+  width: 156.2pt;
+  height: 46.7pt;
+}
+.form-2550q-page-one .barcode-2550q > small {
+  left: 76.9pt;
+  top: 49.306pt;
+  width: 80.408pt;
+}
+.form-2550q-page-two .official-pdf417-object-2550q {
+  left: -.1pt;
+  top: 1.65pt;
+  width: 153.9pt;
+  height: 45.1pt;
+}
+.form-2550q-page-two .barcode-2550q > small {
+  left: 71.5pt;
+  top: 48.006pt;
+  width: 80.408pt;
+}
 
 .header-options-2550q {
   height: 46.5pt;
