@@ -1016,8 +1016,16 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 .official-atc-table thead th:last-child { padding-left: 0; padding-right: 0; }
 .official-atc-table .atc-entry > td:first-child,
 .official-atc-table .atc-entry > td:last-child { text-align: center; }
+.official-atc-table .atc-entry > td:first-child { letter-spacing: -.1pt; }
+.official-atc-table .atc-entry > td {
+  padding-top: .5pt;
+  vertical-align: top;
+}
 .official-atc-table .atc-entry > td:nth-child(2) {
   font-size: 8pt;
+  padding-left: 3.5pt;
+  padding-right: 3.5pt;
+  letter-spacing: .2pt;
   white-space: nowrap;
 }
 .official-atc-table .atc-entry-multiline > td,

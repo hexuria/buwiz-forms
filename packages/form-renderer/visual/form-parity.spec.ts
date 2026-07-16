@@ -161,7 +161,14 @@ for (const parityCase of cases) {
       { name: "Item 14 total", selector: ".official-tax-line[data-item='14']", x: 45, y: 723, width: 1137, height: 36 },
       { name: "signatures", selector: ".official-declaration", x: 45, y: 1206, width: 1137, height: 232 },
       { name: "signature boxes", selector: ".official-signature-grid", x: 45, y: 1263, width: 1133, height: 134 },
-      { name: "Part III amount decimal cell", selector: ".payment-row-25 .decimal-separator", x: 1099, y: 1502, width: 28, height: 35 }
+      { name: "Part III item 25 decimal cell", selector: ".payment-row-25 .decimal-separator", x: 1099, y: 1502, width: 28, height: 35 },
+      { name: "Part III item 25 cents cells", selector: ".payment-row-25 .comb-value:last-child", x: 1127, y: 1502, width: 53, height: 35 },
+      { name: "Part III item 26 decimal cell", selector: ".payment-row-26 .decimal-separator", x: 1099, y: 1538, width: 28, height: 35 },
+      { name: "Part III item 26 cents cells", selector: ".payment-row-26 .comb-value:last-child", x: 1127, y: 1538, width: 53, height: 35 },
+      { name: "Part III item 27 decimal cell", selector: ".payment-row-27 .decimal-separator", x: 1099, y: 1575, width: 28, height: 35 },
+      { name: "Part III item 27 cents cells", selector: ".payment-row-27 .comb-value:last-child", x: 1127, y: 1575, width: 53, height: 35 },
+      { name: "Part III item 28 continuation decimal cell", selector: ".payment-other-row .decimal-separator", x: 1099, y: 1636, width: 28, height: 35 },
+      { name: "Part III item 28 continuation cents cells", selector: ".payment-other-row .comb-value:last-child", x: 1127, y: 1636, width: 53, height: 35 }
     ]);
     await expectCriticalRegionGeometry(pages.nth(1), [
       { name: "Schedule 1 masthead", selector: ".page-two-masthead", x: 45, y: 78, width: 1137, height: 117 },
