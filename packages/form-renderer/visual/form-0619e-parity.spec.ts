@@ -30,6 +30,71 @@ test("0619E 2018 renders every Rust fixture as one stable unclipped Letter page"
   }
 });
 
+test("0619E 2018 keeps verified PDF417, caption, and seal geometry", async ({ page }) => {
+  const fixture = readFixture("packages/form-contracts/fixtures/0619e-normal.json");
+  await renderEnvelope(page, fixture);
+  const formPage = page.locator(".form-page").first();
+  await expect(formPage).toHaveCount(1);
+
+  await expectCriticalRegionGeometry(formPage, [
+    {
+      name: "official seal XObject",
+      selector: ".government-wordmark-0619e img",
+      x: 464,
+      y: 50,
+      width: 62,
+      height: 56
+    },
+    {
+      name: "official PDF417 symbol",
+      selector: ".official-pdf417-symbol-0619e",
+      x: 910,
+      y: 130,
+      width: 273,
+      height: 72
+    },
+    {
+      name: "official PDF417 live caption",
+      selector: ".barcode-0619e > small",
+      x: 1062,
+      y: 200,
+      width: 124,
+      height: 16
+    }
+  ]);
+
+  const symbol = page.locator(".official-pdf417-symbol-0619e");
+  await expect(symbol).toHaveAttribute("viewBox", "0 0 120 7");
+  await expect(symbol).toHaveAttribute("preserveAspectRatio", "none");
+  await expect(symbol).toHaveCSS("shape-rendering", "crispedges");
+
+  const caption = page.locator(".barcode-0619e > small");
+  await expect(caption).toHaveText("0619-E 01/18 P1");
+  expect(await caption.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      fontFamily: style.fontFamily,
+      fontSize: style.fontSize,
+      lineHeight: style.lineHeight,
+      textAlign: style.textAlign,
+      whiteSpace: style.whiteSpace
+    };
+  })).toEqual({
+    fontFamily: '"eBIRForms Arimo", sans-serif',
+    fontSize: "10.72px",
+    lineHeight: "10.72px",
+    textAlign: "right",
+    whiteSpace: "nowrap"
+  });
+
+  expect(await page.locator(".government-wordmark-0619e img").evaluate(
+    (image) => ({
+      naturalHeight: (image as HTMLImageElement).naturalHeight,
+      naturalWidth: (image as HTMLImageElement).naturalWidth
+    })
+  )).toEqual({ naturalHeight: 78, naturalWidth: 86 });
+});
+
 test("0619E 2018 matches the complete pinned official page", async ({ page }, testInfo) => {
   const fixture = readFixture("packages/form-contracts/fixtures/0619e-normal.json");
   await renderEnvelope(page, fixture);

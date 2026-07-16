@@ -11,7 +11,8 @@ import {
 } from "../components";
 import { bool, decimal, text } from "../values";
 import {
-  OFFICIAL_0619E_BARCODE_PAGE_ONE,
+  OFFICIAL_0619E_PDF417_PAGE_ONE_PATH,
+  OFFICIAL_0619E_PDF417_PAYLOAD,
   OFFICIAL_0619E_SEAL
 } from "./official0619EAssets";
 import "./Form0619E.css";
@@ -114,8 +115,18 @@ function Masthead0619E() {
           applicable boxes with an “X”.<br />Two copies MUST be filed with the BIR and one held by the Taxpayer.
         </em>
       </div>
-      <div className="barcode-0619e" aria-label="0619-E 01/18 P1">
-        <img src={OFFICIAL_0619E_BARCODE_PAGE_ONE} alt="" aria-hidden="true" />
+      <div className="barcode-0619e" aria-label={OFFICIAL_0619E_PDF417_PAYLOAD}>
+        <svg
+          className="official-pdf417-symbol-0619e"
+          viewBox="0 0 120 7"
+          preserveAspectRatio="none"
+          shapeRendering="crispEdges"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path d={OFFICIAL_0619E_PDF417_PAGE_ONE_PATH} />
+        </svg>
+        <small>{OFFICIAL_0619E_PDF417_PAYLOAD}</small>
       </div>
     </header>
   );

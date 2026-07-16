@@ -2,6 +2,10 @@ import {
   assertRenderEnvelope,
   type RenderEnvelope
 } from "@ebirforms/form-contracts";
+import { createHash } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -11,6 +15,47 @@ import normalFixture from "../../form-contracts/fixtures/0619e-normal.json";
 import paymentFixture from "../../form-contracts/fixtures/0619e-payment.json";
 import validationEdgeFixture from "../../form-contracts/fixtures/0619e-validation-edge.json";
 import { FormDocument } from "../src/FormDocument";
+import {
+  OFFICIAL_0619E_PDF417_PAGE_ONE_PATH,
+  OFFICIAL_0619E_PDF417_PAYLOAD
+} from "../src/forms/official0619EAssets";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+function pdf417ModuleDigest(pathData: string): {
+  digest: string;
+  blackModules: number;
+} {
+  const modules = Array<boolean>(120 * 7).fill(false);
+  const command = /M(\d+) (\d+)h(\d+)v1H(\d+)z/g;
+  const consumed: string[] = [];
+  let blackModules = 0;
+
+  for (const match of pathData.matchAll(command)) {
+    consumed.push(match[0]);
+    const x = Number(match[1]);
+    const y = Number(match[2]);
+    const width = Number(match[3]);
+    expect(Number(match[4])).toBe(x);
+    expect(y).toBeGreaterThanOrEqual(0);
+    expect(y).toBeLessThan(7);
+    expect(x + width).toBeLessThanOrEqual(120);
+
+    for (let column = x; column < x + width; column += 1) {
+      const index = y * 120 + column;
+      expect(modules[index]).toBe(false);
+      modules[index] = true;
+      blackModules += 1;
+    }
+  }
+
+  expect(consumed.join("")).toBe(pathData);
+  const bits = modules.map((module) => module ? "1" : "0").join("");
+  return {
+    digest: createHash("sha256").update(bits).digest("hex"),
+    blackModules
+  };
+}
 
 const fixtures = [
   minimumFixture,
@@ -97,6 +142,36 @@ describe("0619E:2018 runtime render contract", () => {
       type: "boolean",
       value: false
     });
+  });
+
+  it("preserves the exact official PDF417 matrix and live caption", () => {
+    expect(pdf417ModuleDigest(OFFICIAL_0619E_PDF417_PAGE_ONE_PATH)).toEqual({
+      digest: "0238537d56f19276b790a8395c429a9f7645ac570eecc097064051b456dc5dfa",
+      blackModules: 480
+    });
+
+    const fixture = structuredClone(normalFixture) as RenderEnvelope;
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: fixture })
+    );
+    expect(markup).toContain(`aria-label="${OFFICIAL_0619E_PDF417_PAYLOAD}"`);
+    expect(markup).toContain('viewBox="0 0 120 7"');
+    expect(markup).toContain('shape-rendering="crispEdges"');
+    expect(markup).toContain(`<small>${OFFICIAL_0619E_PDF417_PAYLOAD}</small>`);
+    expect(markup).not.toContain("0619e-barcode-page-1.png");
+  });
+
+  it("embeds the losslessly extracted official seal object", () => {
+    const sealPath = path.resolve(
+      HERE,
+      "../src/forms/assets/0619e-seal.png"
+    );
+    const digest = createHash("sha256")
+      .update(fs.readFileSync(sealPath))
+      .digest("hex");
+    expect(digest).toBe(
+      "6cd637975f8088cc8b56aa67c26794db23331864a45c08517c66b70f53ff2610"
+    );
   });
 
   it("fails closed on missing fields, mutable fixed codes, or schedules", () => {
