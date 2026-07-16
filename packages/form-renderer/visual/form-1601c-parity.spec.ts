@@ -143,6 +143,20 @@ test("1601C 2018 preserves the official gray and white field partitions", async 
 
   await expectWhiteBackground(pageOne.locator(".address-second-1601c > .comb-value").first());
   await expectGrayBackground(pageOne.locator(".category-choices-1601c"));
+  const taxDebitLabel = pageOne.locator(".payment-tax-debit-1601c > span:first-child");
+  await expect(taxDebitLabel).toHaveText("39 Tax Debit Memo");
+  await expectGrayBackground(taxDebitLabel);
+  const taxDebitPartition = await taxDebitLabel.evaluate((element) => ({
+    gridColumnEnd: getComputedStyle(element).gridColumnEnd,
+    gridColumnStart: getComputedStyle(element).gridColumnStart,
+    width: element.getBoundingClientRect().width
+  }));
+  expect(taxDebitPartition).toMatchObject({
+    gridColumnEnd: "span 2",
+    gridColumnStart: "1"
+  });
+  expect(taxDebitPartition.width).toBeCloseTo(173 * 4 / 3, 1);
+  await expect(pageOne.locator(".payment-tax-debit-1601c > .comb-value")).toHaveCount(2);
   await expectWhiteBackground(pageOne.locator(".payment-other-1601c > span:first-child"));
 });
 

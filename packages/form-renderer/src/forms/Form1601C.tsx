@@ -373,11 +373,14 @@ function PaymentDetails1601C() {
     <section className="payment-1601c">
       <h2>Part III – Details of Payment</h2>
       <div className="payment-head-1601c"><span>Particulars</span><span>Drawee Bank/Agency</span><span>Number</span><span>Date <em>(MM/DD/YYYY)</em></span><span>Amount</span></div>
-      {["37 Cash/Bank Debit Memo", "38 Check", "39 Tax Debit Memo"].map((label) => (
+      {["37 Cash/Bank Debit Memo", "38 Check"].map((label) => (
         <div className="payment-row-1601c" key={label}>
           <span>{label}</span><CombValue value="" cells={4} /><CombValue value="" cells={6} /><CombValue value="" cells={8} /><MoneyComb1601C value={null} />
         </div>
       ))}
+      <div className="payment-row-1601c payment-tax-debit-1601c">
+        <span>39 Tax Debit Memo</span><CombValue value="" cells={6} /><CombValue value="" cells={8} /><MoneyComb1601C value={null} />
+      </div>
       <div className="payment-other-label-1601c">40 Others (specify below)</div>
       <div className="payment-row-1601c payment-other-1601c"><span /><CombValue value="" cells={4} /><CombValue value="" cells={6} /><CombValue value="" cells={8} /><MoneyComb1601C value={null} /></div>
       <div className="machine-validation-1601c"><span>Machine Validation/Revenue Official Receipt Details <small>(if not filed with an Authorized Agent Bank)</small></span><span>Stamp of Receiving Office/AAB and Date of Receipt<br /><em>(RO’s Signature/Bank Teller’s Initial)</em></span></div>
