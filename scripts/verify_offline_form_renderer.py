@@ -13,8 +13,10 @@ import base64
 import binascii
 import hashlib
 import json
+import math
 import re
 import sys
+from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
@@ -113,32 +115,290 @@ RASTER_SUFFIXES = {
     ".bmp",
     ".ico",
 }
-# Only reviewed, cropped runtime artwork recorded by the generated reference
-# manifest may be shipped. Keeping this allowlist derived avoids a second,
-# stale authorization source whenever a form renderer is added or artwork is
-# re-reviewed.
+# Only reviewed runtime artwork recorded by the generated reference manifest
+# may be shipped. Exact seal XObjects are the only raster authorization. PDF417
+# module matrices and their captions remain owned source text/inline SVG and
+# therefore never authorize their source XObject PNGs as runtime raster data.
 REFERENCE_MANIFEST_PATH = (
     Path(__file__).resolve().parents[1]
     / "packages/form-renderer/references/manifest.json"
 )
 RUNTIME_ARTWORK_SOURCE_ROOT = PurePosixPath("packages/form-renderer/src/forms")
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
+PDF417_ASSET_NAME = re.compile(r"static_form_pdf417_page_([1-9][0-9]*)")
+SEAL_EMBEDDING_MODES = {
+    "lossless_native_devicegray_xobject",
+    "lossless_official_pdf_xobject_png",
+    "lossless_grayscale_collapse_of_equal_rgb_channels",
+}
+PDF417_EMBEDDING_MODES = {
+    "reviewed_inline_svg_module_matrix",
+    "reviewed_inline_svg_module_matrix_with_live_caption",
+}
+# 0605's pinned official PDF has been audited and contains no machine-readable
+# symbol. Every other currently generated form must describe one PDF417 per
+# official page; absence is not silently accepted as authorization.
+AUDITED_NO_SYMBOL_FORMS = {
+    ("0605", "1999"): "de04419766c59bf27fdeb854c0f7c3f98601900caa20630442e671e2313e536f",
+}
+
+
+@dataclass(frozen=True)
+class RuntimeFormArtworkAuthorization:
+    code: str
+    revision: str
+    raster_sha256: tuple[str, ...]
+    pdf417_pages: tuple[int, ...]
+    audited_no_symbol: bool
+
+
+@dataclass(frozen=True)
+class RuntimeArtworkAuthorization:
+    raster_sha256: frozenset[str]
+    forms: tuple[RuntimeFormArtworkAuthorization, ...]
+
+
+EMPTY_RUNTIME_ARTWORK_AUTHORIZATION = RuntimeArtworkAuthorization(
+    raster_sha256=frozenset(),
+    forms=(),
+)
+
+
+def _is_sha256(value: object) -> bool:
+    return isinstance(value, str) and SHA256_PATTERN.fullmatch(value) is not None
+
+
+def _is_finite_number(value: object) -> bool:
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(float(value))
+    )
+
+
+def _is_positive_integer_pair(value: object) -> bool:
+    return (
+        isinstance(value, list)
+        and len(value) == 2
+        and all(
+            isinstance(item, int) and not isinstance(item, bool) and item > 0
+            for item in value
+        )
+    )
+
+
+def _is_pdf_object_id(value: object) -> bool:
+    return (
+        isinstance(value, list)
+        and len(value) == 2
+        and all(
+            isinstance(item, int) and not isinstance(item, bool) and item >= 0
+            for item in value
+        )
+        and value[0] > 0
+    )
+
+
+def _is_bbox(value: object) -> bool:
+    return (
+        isinstance(value, list)
+        and len(value) == 4
+        and all(_is_finite_number(item) for item in value)
+        and float(value[2]) > 0
+        and float(value[3]) > 0
+    )
+
+
+def _resolve_runtime_artwork_source(
+    source: object,
+    *,
+    workspace: Path,
+    context: str,
+    errors: list[str],
+) -> Path | None:
+    source_path = PurePosixPath(source) if isinstance(source, str) else None
+    if (
+        source_path is None
+        or source_path.is_absolute()
+        or ".." in source_path.parts
+        or source_path == RUNTIME_ARTWORK_SOURCE_ROOT
+        or RUNTIME_ARTWORK_SOURCE_ROOT not in source_path.parents
+        or any(
+            part in {"reference", "references", "calibration"}
+            for part in source_path.parts
+        )
+    ):
+        errors.append(f"{context} has an invalid runtime source path")
+        return None
+
+    resolved_source = (workspace / Path(*source_path.parts)).resolve()
+    try:
+        resolved_source.relative_to(workspace)
+    except ValueError:
+        errors.append(f"{context} runtime source path escapes the workspace")
+        return None
+    if not resolved_source.is_file():
+        errors.append(f"{context} runtime source path does not exist")
+        return None
+    return resolved_source
+
+
+def _validate_source_page(
+    asset: dict,
+    *,
+    page_count: int,
+    context: str,
+    errors: list[str],
+) -> int | None:
+    source_page = asset.get("source_page")
+    if (
+        not isinstance(source_page, int)
+        or isinstance(source_page, bool)
+        or not 1 <= source_page <= page_count
+    ):
+        errors.append(f"{context} has an invalid source_page")
+        return None
+    return source_page
+
+
+def _validate_native_seal(
+    asset: dict,
+    *,
+    resolved_source: Path | None,
+    reference_hashes: set[str],
+    context: str,
+    errors: list[str],
+) -> str | None:
+    digest = asset.get("derived_png_sha256")
+    if not _is_sha256(digest):
+        errors.append(f"{context} has an invalid derived_png_sha256")
+        return None
+    assert isinstance(digest, str)
+    if digest in reference_hashes:
+        errors.append(f"{context} attempts to authorize a full-page reference hash")
+    if asset.get("embedded_as") not in SEAL_EMBEDDING_MODES:
+        errors.append(f"{context} has an unsupported native-seal embedding mode")
+    if "crop_box_px" in asset:
+        errors.append(f"{context} uses the obsolete runtime crop authorization model")
+    if resolved_source is not None:
+        if resolved_source.suffix.lower() != ".png":
+            errors.append(f"{context} native seal source must be a PNG")
+        elif hashlib.sha256(resolved_source.read_bytes()).hexdigest() != digest:
+            errors.append(f"{context} runtime PNG hash does not match the manifest")
+    if not _is_pdf_object_id(asset.get("source_pdf_object_id")):
+        errors.append(f"{context} has an invalid source_pdf_object_id")
+    if not _is_positive_integer_pair(asset.get("source_pixel_dimensions")):
+        errors.append(f"{context} has invalid native source_pixel_dimensions")
+    if not _is_bbox(asset.get("source_bbox_top_left_points")):
+        errors.append(f"{context} has an invalid source_bbox_top_left_points")
+    if not isinstance(asset.get("treatment"), str) or not asset["treatment"].strip():
+        errors.append(f"{context} is missing the native artwork treatment")
+    return digest
+
+
+def _validate_pdf417(
+    asset: dict,
+    *,
+    asset_page: int,
+    source_page: int | None,
+    resolved_source: Path | None,
+    context: str,
+    errors: list[str],
+) -> None:
+    if asset.get("embedded_as") not in PDF417_EMBEDDING_MODES:
+        errors.append(f"{context} has an unsupported inline PDF417 embedding mode")
+    if asset.get("symbology") not in {"PDF417", "PDF_417"}:
+        errors.append(f"{context} is not explicitly identified as PDF417")
+    if source_page is not None and source_page != asset_page:
+        errors.append(f"{context} asset page does not match source_page")
+    if "derived_png_sha256" in asset:
+        errors.append(f"{context} must not authorize a derived runtime raster")
+    if "crop_box_px" in asset:
+        errors.append(f"{context} uses the obsolete runtime crop authorization model")
+    if resolved_source is not None and resolved_source.suffix.lower() not in {
+        ".ts",
+        ".tsx",
+    }:
+        errors.append(f"{context} inline PDF417 source must be TypeScript")
+    if not _is_pdf_object_id(asset.get("source_pdf_object_id")):
+        errors.append(f"{context} has an invalid source_pdf_object_id")
+    if not _is_positive_integer_pair(asset.get("source_pixel_dimensions")):
+        errors.append(f"{context} has invalid source_pixel_dimensions")
+    logical_dimensions = asset.get("logical_dimensions")
+    if not _is_positive_integer_pair(logical_dimensions):
+        errors.append(f"{context} has invalid logical_dimensions")
+    if not _is_sha256(asset.get("logical_matrix_sha256")):
+        errors.append(f"{context} has an invalid logical_matrix_sha256")
+    source_artwork_hashes = [
+        asset.get("source_png_sha256"),
+        asset.get("source_stream_sha256"),
+        asset.get("source_raw_stream_sha256"),
+    ]
+    if not any(_is_sha256(value) for value in source_artwork_hashes):
+        errors.append(f"{context} has no valid source XObject content hash")
+    payload = asset.get("decoded_payload")
+    if not isinstance(payload, str) or not payload.strip():
+        errors.append(f"{context} has no decoded PDF417 payload")
+    elif resolved_source is not None:
+        try:
+            source_text = resolved_source.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as error:
+            errors.append(f"{context} cannot read inline PDF417 source: {error}")
+        else:
+            if payload not in source_text:
+                errors.append(f"{context} decoded payload is absent from its runtime source")
+
+    if asset.get("embedded_as") != "reviewed_inline_svg_module_matrix_with_live_caption":
+        return
+
+    if asset.get("caption_text") != payload:
+        errors.append(f"{context} live caption does not match the decoded payload")
+    if asset.get("caption_render_font") != "eBIRForms Arimo":
+        errors.append(f"{context} live caption does not use the bundled Arimo font")
+    if not _is_finite_number(asset.get("caption_font_size_points")) or float(
+        asset.get("caption_font_size_points", 0)
+    ) <= 0:
+        errors.append(f"{context} has an invalid live-caption font size")
+    if not _is_bbox(asset.get("caption_bbox_top_left_points")):
+        errors.append(f"{context} has an invalid live-caption bounding box")
+
+    proof = asset.get("encoder_proof")
+    if not isinstance(proof, dict) or proof.get("module_differences") != 0:
+        errors.append(f"{context} lacks zero-difference encoder proof")
+    elif _is_positive_integer_pair(logical_dimensions) and proof.get("rows") != logical_dimensions[1]:
+        errors.append(f"{context} encoder rows do not match logical_dimensions")
+    decoders = asset.get("decoder_evidence")
+    if (
+        not isinstance(decoders, list)
+        or not decoders
+        or not any(
+            isinstance(evidence, dict)
+            and evidence.get("payload") == payload
+            and evidence.get("symbology") in {"PDF417", "PDF_417"}
+            for evidence in decoders
+        )
+    ):
+        errors.append(f"{context} lacks matching PDF417 decoder evidence")
 
 
 def _load_runtime_artwork_authorization(
     manifest_path: Path = REFERENCE_MANIFEST_PATH,
     workspace_root: Path | None = None,
-) -> tuple[frozenset[str], tuple[str, ...]]:
+) -> tuple[RuntimeArtworkAuthorization, tuple[str, ...]]:
     workspace = (workspace_root or manifest_path.resolve().parents[3]).resolve()
     errors: list[str] = []
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        return frozenset(), (f"cannot read runtime artwork manifest: {error}",)
+        return EMPTY_RUNTIME_ARTWORK_AUTHORIZATION, (
+            f"cannot read runtime artwork manifest: {error}",
+        )
 
     forms = manifest.get("forms") if isinstance(manifest, dict) else None
     if not isinstance(forms, list) or not forms:
-        return frozenset(), ("runtime artwork manifest has no forms",)
+        return EMPTY_RUNTIME_ARTWORK_AUTHORIZATION, (
+            "runtime artwork manifest has no forms",
+        )
 
     reference_hashes: set[str] = set()
     for form in forms:
@@ -152,6 +412,7 @@ def _load_runtime_artwork_authorization(
                 reference_hashes.add(page["reference_png_sha256"])
 
     authorized: set[str] = set()
+    form_authorizations: list[RuntimeFormArtworkAuthorization] = []
     seen_assets: set[tuple[str, str, str]] = set()
     for form_index, form in enumerate(forms):
         if not isinstance(form, dict):
@@ -159,27 +420,27 @@ def _load_runtime_artwork_authorization(
             continue
         code = form.get("code")
         revision = form.get("revision")
-        width = form.get("pages", [{}])[0].get("reference_width_px") if isinstance(form.get("pages"), list) and form.get("pages") else None
-        height = form.get("pages", [{}])[0].get("reference_height_px") if isinstance(form.get("pages"), list) and form.get("pages") else None
         page_count = form.get("page_count")
         if not isinstance(code, str) or not code or not isinstance(revision, str) or not revision:
             errors.append(f"forms[{form_index}] has an invalid code or revision")
+            continue
+        if not isinstance(page_count, int) or isinstance(page_count, bool) or page_count < 1:
+            errors.append(f"{code}:{revision} has an invalid page_count")
             continue
         assets = form.get("runtime_discrete_assets")
         if not isinstance(assets, list):
             errors.append(f"{code}:{revision} is missing runtime_discrete_assets")
             continue
 
+        form_rasters: list[str] = []
+        pdf417_pages: list[int] = []
         for asset_index, asset in enumerate(assets):
             context = f"{code}:{revision} runtime_discrete_assets[{asset_index}]"
             if not isinstance(asset, dict):
                 errors.append(f"{context} is not an object")
                 continue
             asset_name = asset.get("asset")
-            digest = asset.get("derived_png_sha256")
             source = asset.get("embedded_in")
-            crop = asset.get("crop_box_px")
-            source_page = asset.get("source_page")
             if not isinstance(asset_name, str) or not asset_name:
                 errors.append(f"{context} is missing asset")
             else:
@@ -187,64 +448,85 @@ def _load_runtime_artwork_authorization(
                 if asset_key in seen_assets:
                     errors.append(f"{context} duplicates asset {asset_name}")
                 seen_assets.add(asset_key)
-            if not isinstance(digest, str) or SHA256_PATTERN.fullmatch(digest) is None:
-                errors.append(f"{context} has an invalid derived_png_sha256")
-                continue
-            if digest in authorized:
-                errors.append(f"{context} duplicates runtime artwork hash {digest}")
-            if digest in reference_hashes:
-                errors.append(f"{context} attempts to authorize a full-page reference hash")
-
-            source_path = PurePosixPath(source) if isinstance(source, str) else None
-            if (
-                source_path is None
-                or source_path.is_absolute()
-                or ".." in source_path.parts
-                or source_path == RUNTIME_ARTWORK_SOURCE_ROOT
-                or RUNTIME_ARTWORK_SOURCE_ROOT not in source_path.parents
-                or any(part in {"reference", "references", "calibration"} for part in source_path.parts)
-            ):
-                errors.append(f"{context} has an invalid runtime source path")
-            else:
-                resolved_source = (workspace / Path(*source_path.parts)).resolve()
-                try:
-                    resolved_source.relative_to(workspace)
-                except ValueError:
-                    errors.append(f"{context} runtime source path escapes the workspace")
-                else:
-                    if not resolved_source.is_file():
-                        errors.append(f"{context} runtime source path does not exist")
-                    elif (
-                        resolved_source.suffix.lower() == ".png"
-                        and hashlib.sha256(resolved_source.read_bytes()).hexdigest() != digest
-                    ):
-                        errors.append(f"{context} runtime PNG hash does not match the manifest")
-
-            valid_crop = (
-                isinstance(crop, list)
-                and len(crop) == 4
-                and all(isinstance(value, int) and not isinstance(value, bool) for value in crop)
-                and isinstance(width, int)
-                and isinstance(height, int)
-                and 0 <= crop[0] < crop[2] <= width
-                and 0 <= crop[1] < crop[3] <= height
-                and (crop[2] - crop[0]) * (crop[3] - crop[1]) < width * height / 4
+            resolved_source = _resolve_runtime_artwork_source(
+                source,
+                workspace=workspace,
+                context=context,
+                errors=errors,
             )
-            if not valid_crop:
-                errors.append(f"{context} has an invalid or full-page crop_box_px")
-            if not isinstance(source_page, int) or isinstance(source_page, bool) or not isinstance(page_count, int) or not 1 <= source_page <= page_count:
-                errors.append(f"{context} has an invalid source_page")
+            source_page = _validate_source_page(
+                asset,
+                page_count=page_count,
+                context=context,
+                errors=errors,
+            )
 
-            authorized.add(digest)
+            if asset_name == "government_seal":
+                digest = _validate_native_seal(
+                    asset,
+                    resolved_source=resolved_source,
+                    reference_hashes=reference_hashes,
+                    context=context,
+                    errors=errors,
+                )
+                if digest is not None:
+                    form_rasters.append(digest)
+                    authorized.add(digest)
+                continue
+
+            pdf417_match = PDF417_ASSET_NAME.fullmatch(asset_name or "")
+            if pdf417_match is not None:
+                asset_page = int(pdf417_match.group(1))
+                _validate_pdf417(
+                    asset,
+                    asset_page=asset_page,
+                    source_page=source_page,
+                    resolved_source=resolved_source,
+                    context=context,
+                    errors=errors,
+                )
+                pdf417_pages.append(asset_page)
+                continue
+
+            errors.append(f"{context} has an unsupported runtime artwork asset type")
+
+        if len(form_rasters) != 1:
+            errors.append(f"{code}:{revision} must authorize exactly one native seal")
+        form_key = (code, revision)
+        expected_no_symbol_source = AUDITED_NO_SYMBOL_FORMS.get(form_key)
+        if expected_no_symbol_source is not None:
+            if form.get("official_source_sha256") != expected_no_symbol_source:
+                errors.append(
+                    f"{code}:{revision} audited no-symbol source hash does not match"
+                )
+            if pdf417_pages:
+                errors.append(f"{code}:{revision} is audited as having no machine-readable symbol")
+        elif tuple(sorted(pdf417_pages)) != tuple(range(1, page_count + 1)):
+            errors.append(
+                f"{code}:{revision} must authorize exactly one page-indexed PDF417 per page"
+            )
+        form_authorizations.append(
+            RuntimeFormArtworkAuthorization(
+                code=code,
+                revision=revision,
+                raster_sha256=tuple(form_rasters),
+                pdf417_pages=tuple(sorted(pdf417_pages)),
+                audited_no_symbol=expected_no_symbol_source is not None,
+            )
+        )
 
     if errors:
-        return frozenset(), tuple(sorted(set(errors)))
-    return frozenset(authorized), ()
+        return EMPTY_RUNTIME_ARTWORK_AUTHORIZATION, tuple(sorted(set(errors)))
+    return RuntimeArtworkAuthorization(
+        raster_sha256=frozenset(authorized),
+        forms=tuple(form_authorizations),
+    ), ()
 
 
-AUTHORIZED_RUNTIME_RASTER_SHA256, RUNTIME_ARTWORK_MANIFEST_ERRORS = (
+RUNTIME_ARTWORK_AUTHORIZATION, RUNTIME_ARTWORK_MANIFEST_ERRORS = (
     _load_runtime_artwork_authorization()
 )
+AUTHORIZED_RUNTIME_RASTER_SHA256 = RUNTIME_ARTWORK_AUTHORIZATION.raster_sha256
 AUTHORIZED_EMBEDDED_IMAGE_SHA256: frozenset[str] = AUTHORIZED_RUNTIME_RASTER_SHA256
 EMBEDDED_IMAGE_DATA = re.compile(
     rb"data\s*:\s*image(?:/|%2f)",

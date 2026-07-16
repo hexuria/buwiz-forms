@@ -58,6 +58,88 @@ class VerifyOfflineFormRendererTests(unittest.TestCase):
             f"expected {expected!r} in errors: {errors!r}",
         )
 
+    def valid_seal_asset(self, source: Path, workspace: Path) -> dict:
+        payload = b"\x89PNG\r\n\x1a\nexact-native-seal"
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_bytes(payload)
+        return {
+            "asset": "government_seal",
+            "derived_png_sha256": hashlib.sha256(payload).hexdigest(),
+            "embedded_as": "lossless_official_pdf_xobject_png",
+            "embedded_in": source.relative_to(workspace).as_posix(),
+            "source_page": 1,
+            "source_pdf_object_id": [41, 0],
+            "source_pixel_dimensions": [95, 83],
+            "source_bbox_top_left_points": [244.8, 21.84, 28.8, 25.2],
+            "treatment": "lossless extraction of the exact official PDF image XObject without crop, resampling, recoloring, or substitution",
+        }
+
+    def valid_pdf417_asset(
+        self,
+        source: Path,
+        workspace: Path,
+        *,
+        page: int = 1,
+        payload: str = "TEST 01/18ENCS P1",
+    ) -> dict:
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text(f'export const payload = "{payload}";\n', encoding="utf-8")
+        return {
+            "asset": f"static_form_pdf417_page_{page}",
+            "decoded_payload": payload,
+            "embedded_as": "reviewed_inline_svg_module_matrix_with_live_caption",
+            "embedded_in": source.relative_to(workspace).as_posix(),
+            "source_page": page,
+            "source_pdf_object_id": [42 + page, 0],
+            "source_pixel_dimensions": [240, 63],
+            "source_png_sha256": "b" * 64,
+            "symbology": "PDF417",
+            "logical_dimensions": [120, 7],
+            "logical_matrix_sha256": "c" * 64,
+            "caption_text": payload,
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_font_size_points": 8.04,
+            "caption_bbox_top_left_points": [500.0, 90.0, 90.0, 9.0],
+            "encoder_proof": {"module_differences": 0, "rows": 7},
+            "decoder_evidence": [
+                {
+                    "decoder": "test decoder",
+                    "payload": payload,
+                    "symbology": "PDF417",
+                }
+            ],
+        }
+
+    def write_artwork_manifest(self, path: Path, forms: list[dict]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"forms": forms}), encoding="utf-8")
+
+    def artwork_form(
+        self,
+        *,
+        code: str,
+        revision: str,
+        assets: list[dict],
+        page_count: int = 1,
+        official_source_sha256: str = "d" * 64,
+    ) -> dict:
+        return {
+            "code": code,
+            "revision": revision,
+            "page_count": page_count,
+            "official_source_sha256": official_source_sha256,
+            "pages": [
+                {
+                    "page": page,
+                    "reference_width_px": 1_224,
+                    "reference_height_px": 1_872,
+                    "reference_png_sha256": f"{page:x}" * 64,
+                }
+                for page in range(1, page_count + 1)
+            ],
+            "runtime_discrete_assets": assets,
+        }
+
     def test_valid_bundle_and_evidence_are_deterministic_and_non_promoting(self) -> None:
         self.write_valid_bundle()
 
@@ -450,101 +532,191 @@ class VerifyOfflineFormRendererTests(unittest.TestCase):
 
     def test_runtime_artwork_authorization_is_derived_from_valid_manifest_entries(self) -> None:
         workspace = Path(self.temporary_directory.name) / "artwork-workspace"
-        source = workspace / "packages/form-renderer/src/forms/assets/reviewed.png"
-        source.parent.mkdir(parents=True)
-        source.write_bytes(b"reviewed-runtime-crop")
-        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        seal = self.valid_seal_asset(
+            workspace / "packages/form-renderer/src/forms/assets/reviewed.png",
+            workspace,
+        )
+        symbol = self.valid_pdf417_asset(
+            workspace / "packages/form-renderer/src/forms/officialTestAssets.ts",
+            workspace,
+        )
         manifest_path = workspace / "packages/form-renderer/references/manifest.json"
-        manifest_path.parent.mkdir(parents=True)
-        manifest_path.write_text(
-            json.dumps(
-                {
-                    "forms": [
-                        {
-                            "code": "TEST",
-                            "revision": "2018",
-                            "page_count": 1,
-                            "pages": [
-                                {
-                                    "reference_width_px": 100,
-                                    "reference_height_px": 100,
-                                    "reference_png_sha256": "a" * 64,
-                                }
-                            ],
-                            "runtime_discrete_assets": [
-                                {
-                                    "asset": "government_seal",
-                                    "derived_png_sha256": digest,
-                                    "embedded_in": "packages/form-renderer/src/forms/assets/reviewed.png",
-                                    "crop_box_px": [10, 10, 30, 30],
-                                    "source_page": 1,
-                                }
-                            ],
-                        }
-                    ]
-                }
-            ),
-            encoding="utf-8",
+        self.write_artwork_manifest(
+            manifest_path,
+            [
+                self.artwork_form(
+                    code="TEST",
+                    revision="2018",
+                    assets=[seal, symbol],
+                )
+            ],
         )
 
-        authorized, errors = verifier._load_runtime_artwork_authorization(
+        authorization, errors = verifier._load_runtime_artwork_authorization(
             manifest_path, workspace
         )
 
         self.assertEqual(errors, ())
-        self.assertEqual(authorized, {digest})
+        self.assertEqual(authorization.raster_sha256, {seal["derived_png_sha256"]})
+        self.assertEqual(len(authorization.forms), 1)
+        self.assertEqual(authorization.forms[0].pdf417_pages, (1,))
+        self.assertFalse(authorization.forms[0].audited_no_symbol)
+        self.assertNotIn(symbol["source_png_sha256"], authorization.raster_sha256)
+
+    def test_0605_is_the_only_explicit_audited_no_symbol_form(self) -> None:
+        workspace = Path(self.temporary_directory.name) / "no-symbol-workspace"
+        seal = self.valid_seal_asset(
+            workspace / "packages/form-renderer/src/forms/assets/0605-seal.png",
+            workspace,
+        )
+        manifest_path = workspace / "packages/form-renderer/references/manifest.json"
+        self.write_artwork_manifest(
+            manifest_path,
+            [
+                self.artwork_form(
+                    code="0605",
+                    revision="1999",
+                    assets=[seal],
+                    page_count=2,
+                    official_source_sha256=verifier.AUDITED_NO_SYMBOL_FORMS[
+                        ("0605", "1999")
+                    ],
+                )
+            ],
+        )
+
+        authorization, errors = verifier._load_runtime_artwork_authorization(
+            manifest_path, workspace
+        )
+
+        self.assertEqual(errors, ())
+        self.assertEqual(authorization.forms[0].pdf417_pages, ())
+        self.assertTrue(authorization.forms[0].audited_no_symbol)
+
+    def test_identical_native_seal_bytes_may_be_shared_by_reviewed_forms(self) -> None:
+        workspace = Path(self.temporary_directory.name) / "shared-seal-workspace"
+        first_seal = self.valid_seal_asset(
+            workspace / "packages/form-renderer/src/forms/assets/first-seal.png",
+            workspace,
+        )
+        second_seal = self.valid_seal_asset(
+            workspace / "packages/form-renderer/src/forms/assets/second-seal.png",
+            workspace,
+        )
+        first_symbol = self.valid_pdf417_asset(
+            workspace / "packages/form-renderer/src/forms/officialFirstAssets.ts",
+            workspace,
+            payload="FIRST 01/18ENCS P1",
+        )
+        second_symbol = self.valid_pdf417_asset(
+            workspace / "packages/form-renderer/src/forms/officialSecondAssets.ts",
+            workspace,
+            payload="SECOND 01/18ENCS P1",
+        )
+        manifest_path = workspace / "packages/form-renderer/references/manifest.json"
+        self.write_artwork_manifest(
+            manifest_path,
+            [
+                self.artwork_form(
+                    code="FIRST",
+                    revision="2018",
+                    assets=[first_seal, first_symbol],
+                ),
+                self.artwork_form(
+                    code="SECOND",
+                    revision="2018",
+                    assets=[second_seal, second_symbol],
+                ),
+            ],
+        )
+
+        authorization, errors = verifier._load_runtime_artwork_authorization(
+            manifest_path, workspace
+        )
+
+        self.assertEqual(errors, ())
+        self.assertEqual(len(authorization.raster_sha256), 1)
+        self.assertEqual(len(authorization.forms), 2)
+
+    def test_checked_in_manifest_models_native_seals_vectors_and_0605_absence(self) -> None:
+        self.assertEqual(verifier.RUNTIME_ARTWORK_MANIFEST_ERRORS, ())
+        self.assertEqual(len(verifier.RUNTIME_ARTWORK_AUTHORIZATION.forms), 10)
+        no_symbol = [
+            form
+            for form in verifier.RUNTIME_ARTWORK_AUTHORIZATION.forms
+            if form.audited_no_symbol
+        ]
+        self.assertEqual(
+            [(form.code, form.revision, form.pdf417_pages) for form in no_symbol],
+            [("0605", "1999", ())],
+        )
+        self.assertEqual(len(verifier.AUTHORIZED_RUNTIME_RASTER_SHA256), 8)
 
     def test_runtime_artwork_manifest_fails_closed_on_invalid_entries(self) -> None:
         workspace = Path(self.temporary_directory.name) / "invalid-artwork-workspace"
         source = workspace / "packages/form-renderer/src/forms/assets/reviewed.png"
-        source.parent.mkdir(parents=True)
-        source.write_bytes(b"reviewed-runtime-crop")
-        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        base_seal = self.valid_seal_asset(source, workspace)
+        symbol_source = workspace / "packages/form-renderer/src/forms/officialTestAssets.ts"
+        base_symbol = self.valid_pdf417_asset(symbol_source, workspace)
         manifest_path = workspace / "packages/form-renderer/references/manifest.json"
-        manifest_path.parent.mkdir(parents=True)
-        base_asset = {
-            "asset": "government_seal",
-            "derived_png_sha256": digest,
-            "embedded_in": "packages/form-renderer/src/forms/assets/reviewed.png",
-            "crop_box_px": [10, 10, 30, 30],
-            "source_page": 1,
-        }
 
         invalid_cases = {
-            "missing hash": [{key: value for key, value in base_asset.items() if key != "derived_png_sha256"}],
-            "duplicate hash": [base_asset, {**base_asset, "asset": "second_barcode"}],
-            "invalid path": [{**base_asset, "embedded_in": "../references/full-page.png"}],
-            "missing path": [{**base_asset, "embedded_in": "packages/form-renderer/src/forms/assets/missing.png"}],
-            "full page crop": [{**base_asset, "crop_box_px": [0, 0, 100, 100]}],
+            "missing seal hash": [
+                {
+                    key: value
+                    for key, value in base_seal.items()
+                    if key != "derived_png_sha256"
+                },
+                base_symbol,
+            ],
+            "duplicate asset name": [base_seal, base_seal, base_symbol],
+            "invalid path": [
+                {**base_seal, "embedded_in": "../references/full-page.png"},
+                base_symbol,
+            ],
+            "missing path": [
+                {
+                    **base_seal,
+                    "embedded_in": "packages/form-renderer/src/forms/assets/missing.png",
+                },
+                base_symbol,
+            ],
+            "obsolete crop": [
+                {**base_seal, "crop_box_px": [10, 10, 30, 30]},
+                base_symbol,
+            ],
+            "generic logo": [
+                base_seal,
+                {**base_symbol, "asset": "generic_downloaded_logo"},
+            ],
+            "wrong live caption": [
+                base_seal,
+                {**base_symbol, "caption_text": "GUESS"},
+            ],
+            "nonzero matrix differences": [
+                base_seal,
+                {**base_symbol, "encoder_proof": {"module_differences": 1, "rows": 7}},
+            ],
         }
         for name, assets in invalid_cases.items():
             with self.subTest(name=name):
-                manifest_path.write_text(
-                    json.dumps(
-                        {
-                            "forms": [
-                                {
-                                    "code": "TEST",
-                                    "revision": "2018",
-                                    "page_count": 1,
-                                    "pages": [
-                                        {
-                                            "reference_width_px": 100,
-                                            "reference_height_px": 100,
-                                            "reference_png_sha256": "a" * 64,
-                                        }
-                                    ],
-                                    "runtime_discrete_assets": assets,
-                                }
-                            ]
-                        }
-                    ),
-                    encoding="utf-8",
+                self.write_artwork_manifest(
+                    manifest_path,
+                    [
+                        self.artwork_form(
+                            code="TEST",
+                            revision="2018",
+                            assets=assets,
+                        )
+                    ],
                 )
-                authorized, errors = verifier._load_runtime_artwork_authorization(
+                authorization, errors = verifier._load_runtime_artwork_authorization(
                     manifest_path, workspace
                 )
-                self.assertEqual(authorized, set())
+                self.assertEqual(
+                    authorization,
+                    verifier.EMPTY_RUNTIME_ARTWORK_AUTHORIZATION,
+                )
                 self.assertNotEqual(errors, ())
 
 

@@ -8,6 +8,15 @@ import react from "@vitejs/plugin-react";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OUTPUT_DIR = path.resolve(HERE, "../../assets/form-renderer");
+const WORKSPACE_ROOT = path.resolve(HERE, "../..");
+const RUNTIME_ARTWORK_SOURCE_ROOT = path.resolve(
+  WORKSPACE_ROOT,
+  "packages/form-renderer/src/forms"
+);
+const REFERENCE_MANIFEST_PATH = path.resolve(
+  WORKSPACE_ROOT,
+  "packages/form-renderer/references/manifest.json"
+);
 const REQUIRE = createRequire(import.meta.url);
 const ARIMO_PACKAGE_NAME = "@fontsource-variable/arimo";
 const ARIMO_PACKAGE_VERSION = "5.2.8";
@@ -40,6 +49,63 @@ const ARIMO_SOURCE_FILES = [
 function sha256(filePath: string) {
   return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
 }
+
+function sha256Bytes(content: Buffer) {
+  return crypto.createHash("sha256").update(content).digest("hex");
+}
+
+function loadAuthorizedRuntimeSealHashes() {
+  const manifest = JSON.parse(fs.readFileSync(REFERENCE_MANIFEST_PATH, "utf8")) as {
+    forms?: Array<{
+      runtime_discrete_assets?: Array<{
+        asset?: string;
+        derived_png_sha256?: string;
+        embedded_in?: string;
+      }>;
+    }>;
+  };
+  if (!Array.isArray(manifest.forms) || manifest.forms.length === 0) {
+    throw new Error("The generated reference manifest has no forms");
+  }
+
+  const hashes = new Set<string>();
+  for (const form of manifest.forms) {
+    if (!Array.isArray(form.runtime_discrete_assets)) {
+      throw new Error("A generated form is missing runtime_discrete_assets");
+    }
+    for (const asset of form.runtime_discrete_assets) {
+      if (asset.asset !== "government_seal") {
+        if (asset.derived_png_sha256 !== undefined) {
+          throw new Error("Only exact government-seal XObjects may authorize raster bytes");
+        }
+        continue;
+      }
+      if (
+        typeof asset.derived_png_sha256 !== "string"
+        || !/^[0-9a-f]{64}$/u.test(asset.derived_png_sha256)
+        || typeof asset.embedded_in !== "string"
+      ) {
+        throw new Error("A government seal has invalid generated authorization metadata");
+      }
+      const source = path.resolve(WORKSPACE_ROOT, asset.embedded_in);
+      if (
+        path.extname(source).toLowerCase() !== ".png"
+        || !source.startsWith(`${RUNTIME_ARTWORK_SOURCE_ROOT}${path.sep}`)
+        || !fs.existsSync(source)
+        || sha256(source) !== asset.derived_png_sha256
+      ) {
+        throw new Error(`A government seal does not match its exact source bytes: ${asset.embedded_in}`);
+      }
+      hashes.add(asset.derived_png_sha256);
+    }
+  }
+  if (hashes.size === 0) {
+    throw new Error("The generated manifest authorizes no exact runtime seals");
+  }
+  return hashes;
+}
+
+const AUTHORIZED_RUNTIME_SEAL_SHA256 = loadAuthorizedRuntimeSealHashes();
 
 function allFiles(root: string): string[] {
   return fs.readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
@@ -149,6 +215,18 @@ export default defineConfig({
   ],
   base: "./",
   build: {
+    // The native host executes a classic script from a custom/file-compatible
+    // local origin. Inline only the exact native seal bytes authorized by the
+    // generated manifest so Vite never emits new URL(..., import.meta.url).
+    // Every other image remains unauthorized and the offline verifier still
+    // rejects it by content hash, independent of its filename.
+    assetsInlineLimit(filePath, content) {
+      const source = path.resolve(filePath);
+      return (
+        source.startsWith(`${RUNTIME_ARTWORK_SOURCE_ROOT}${path.sep}`)
+        && AUTHORIZED_RUNTIME_SEAL_SHA256.has(sha256Bytes(content))
+      );
+    },
     modulePreload: {
       polyfill: false
     },
