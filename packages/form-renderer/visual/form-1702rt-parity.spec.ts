@@ -11,6 +11,28 @@ const MAX_FULL_PAGE_CHANGED_PERCENT = 1;
 const STRUCTURAL_INK_THRESHOLD = 100;
 const STRUCTURAL_LINE_MIN_RUN = 20;
 const STRUCTURAL_TOLERANCE_RADIUS = 4;
+const OFFICIAL_ARTWORK = [
+  {
+    payload: "1702-RT 01/18ENCS P1",
+    symbol: { x: 432.6, y: 70.2, width: 157.384232, height: 38.347397 },
+    caption: { x: 503.380005, y: 109.383774, width: 87.750183, height: 8.964599 }
+  },
+  {
+    payload: "1702-RT 01/18ENCS P2",
+    symbol: { x: 433.2, y: 91.8, width: 157.742739, height: 35.980274 },
+    caption: { x: 504.100006, y: 128.343796, width: 87.750214, height: 8.964599 }
+  },
+  {
+    payload: "1702-RT 01/18ENCS P3",
+    symbol: { x: 432.84, y: 41.16, width: 157.623237, height: 37.045479 },
+    caption: { x: 504.100006, y: 79.50383, width: 87.750214, height: 8.9646 }
+  },
+  {
+    payload: "1702-RT 01/18ENCS P4",
+    symbol: { x: 432.6, y: 43.2, width: 157.742739, height: 36.216986 },
+    caption: { x: 503.380005, y: 79.50383, width: 87.750183, height: 8.9646 }
+  }
+] as const;
 
 test("1702RT January 2018C renders every Rust fixture as four stable unclipped 612x936 pages", async ({ page }) => {
   for (const fixtureName of [
@@ -33,14 +55,35 @@ test("1702RT January 2018C renders every Rust fixture as four stable unclipped 6
   }
 });
 
+test("1702RT January 2018C uses exact native seal and page-specific PDF417 geometry", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702rt-normal.json"));
+  const pages = page.locator(".form-page");
+  await expect(pages).toHaveCount(4);
+  expect(await pages.nth(0).locator("img").count()).toBe(1);
+  for (let pageIndex = 0; pageIndex < 4; pageIndex += 1) {
+    const formPage = pages.nth(pageIndex);
+    if (pageIndex > 0) expect(await formPage.locator("img").count()).toBe(0);
+    await expect(formPage.locator(".official-pdf417-symbol-1702rt")).toHaveCount(1);
+    await expect(formPage.locator(".barcode-1702rt")).toHaveAttribute(
+      "aria-label",
+      OFFICIAL_ARTWORK[pageIndex].payload
+    );
+    const measured = await measureArtworkInPoints(formPage);
+    expectArtworkBox(measured.symbol, OFFICIAL_ARTWORK[pageIndex].symbol);
+    expectArtworkBox(measured.caption, OFFICIAL_ARTWORK[pageIndex].caption);
+    expect(measured.captionFontFamily).toContain("eBIRForms Arimo");
+    expect(measured.captionFontSizePoints).toBeCloseTo(8.04, 2);
+  }
+  expectArtworkBox(
+    await measureElementInPoints(pages.nth(0), ".government-wordmark-1702rt img"),
+    { x: 228.52, y: 28.968, width: 33.682, height: 28.152 }
+  );
+});
+
 test("1702RT January 2018C matches the complete official pages", async ({ page }, testInfo) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702rt-normal.json"));
   const pages = page.locator(".form-page");
   await expect(pages).toHaveCount(4);
-  expect(await pages.nth(0).locator("img").count()).toBe(2);
-  for (let pageIndex = 1; pageIndex < 4; pageIndex += 1) {
-    expect(await pages.nth(pageIndex).locator("img").count()).toBe(1);
-  }
 
   await page.addStyleTag({
     content: `
@@ -140,6 +183,53 @@ async function pageHasNoOverflow(locator: Locator) {
     console.warn(`1702RT overflow report: ${JSON.stringify({ report, offenders })}`);
   }
   return valid;
+}
+
+async function measureArtworkInPoints(locator: Locator) {
+  return locator.evaluate((element) => {
+    const pageBox = element.getBoundingClientRect();
+    const symbol = element.querySelector<HTMLElement>(".official-pdf417-object-1702rt");
+    const caption = element.querySelector<HTMLElement>(".barcode-1702rt > small");
+    if (!symbol || !caption) throw new Error("1702RT official artwork is unavailable");
+    const toPoints = (box: DOMRect) => ({
+      x: (box.x - pageBox.x) * 0.75,
+      y: (box.y - pageBox.y) * 0.75,
+      width: box.width * 0.75,
+      height: box.height * 0.75
+    });
+    const captionStyle = getComputedStyle(caption);
+    return {
+      symbol: toPoints(symbol.getBoundingClientRect()),
+      caption: toPoints(caption.getBoundingClientRect()),
+      captionFontFamily: captionStyle.fontFamily,
+      captionFontSizePoints: Number.parseFloat(captionStyle.fontSize) * 0.75
+    };
+  });
+}
+
+async function measureElementInPoints(locator: Locator, selector: string) {
+  return locator.evaluate((element, childSelector) => {
+    const pageBox = element.getBoundingClientRect();
+    const child = element.querySelector<HTMLElement>(childSelector);
+    if (!child) throw new Error(`1702RT artwork ${childSelector} is unavailable`);
+    const box = child.getBoundingClientRect();
+    return {
+      x: (box.x - pageBox.x) * 0.75,
+      y: (box.y - pageBox.y) * 0.75,
+      width: box.width * 0.75,
+      height: box.height * 0.75
+    };
+  }, selector);
+}
+
+function expectArtworkBox(
+  actual: { x: number; y: number; width: number; height: number },
+  expected: { x: number; y: number; width: number; height: number }
+) {
+  expect(actual.x).toBeCloseTo(expected.x, 1);
+  expect(actual.y).toBeCloseTo(expected.y, 1);
+  expect(actual.width).toBeCloseTo(expected.width, 1);
+  expect(actual.height).toBeCloseTo(expected.height, 1);
 }
 
 function readFixture(relativePath: string): unknown {

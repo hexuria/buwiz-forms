@@ -2,6 +2,9 @@ import {
   assertRenderEnvelope,
   type RenderEnvelope
 } from "@ebirforms/form-contracts";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -11,6 +14,11 @@ import normalFixture from "../../form-contracts/fixtures/1702rt-normal.json";
 import capacityFixture from "../../form-contracts/fixtures/1702rt-schedule-capacity.json";
 import validationEdgeFixture from "../../form-contracts/fixtures/1702rt-validation-edge.json";
 import { FormDocument } from "../src/FormDocument";
+import {
+  OFFICIAL_1702RT_PDF417_MATRICES,
+  OFFICIAL_1702RT_PDF417_PATHS,
+  OFFICIAL_1702RT_PDF417_PAYLOADS
+} from "../src/forms/official1702RTAssets";
 
 const fixtures = [
   minimumFixture,
@@ -42,6 +50,53 @@ describe("1702RT:2018C experimental preview contract", () => {
     expect(fixture.fields.item_56).toEqual({ type: "integer", value: 293500 });
     expect(fixture.fields.schedule_1_item_18).toEqual({ type: "integer", value: 430000 });
     expect(fixture.schedules).toEqual([]);
+  });
+
+  it("renders the exact native seal and all eight rows of every audited PDF417", () => {
+    const fixture = structuredClone(normalFixture) as RenderEnvelope;
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: fixture })
+    );
+    const expectedMatrixHashes = [
+      "362d6c13fc51ae71f86168da68bd2dfeadee77d82a0c68f5234a006adfaf6200",
+      "aaf9a1d313b3804a9ab4507407a98d8d5b32eb4711e8779cae8f1e2e7dbdc849",
+      "3ad58b30bbd02dab3dcfe7b896c861669a6f21693f60a04250e9c4e83000fa5f",
+      "94b3aaadd3c8dcfbfca4ba4fb64347ceef5d1a7693f7d7d96a9f4d1e9bf5a8db"
+    ];
+    const expectedPathHashes = [
+      "82ad803cb29fb6886dd1bd0158c9528df4960c07016f7d807a1a54e6b761eb04",
+      "352ade9e021b50d016521709013b6d278b130bf8cb2eaaec0a599e311cfd1dfc",
+      "f8ca0babf7a0c25535927f096d9f7beeb68aaa9d1f4962c62b85158b0255f1b2",
+      "e52b63b2670d75324b1724a2ae3cc627c024197c5dc20288419f1a2eb9525d4b"
+    ];
+    const pages = [1, 2, 3, 4] as const;
+    const matrixHashes = pages.map((page) => {
+      const rows = OFFICIAL_1702RT_PDF417_MATRICES[page];
+      expect(rows).toHaveLength(8);
+      expect(rows.every((row) => row.length === 120)).toBe(true);
+      return createHash("sha256").update(rows.join("")).digest("hex");
+    });
+    const pathHashes = pages.map((page) =>
+      createHash("sha256").update(OFFICIAL_1702RT_PDF417_PATHS[page]).digest("hex")
+    );
+    const sealBytes = readFileSync(fileURLToPath(
+      new URL("../src/forms/assets/1702rt-seal.png", import.meta.url)
+    ));
+
+    expect(matrixHashes).toEqual(expectedMatrixHashes);
+    expect(pathHashes).toEqual(expectedPathHashes);
+    expect(createHash("sha256").update(sealBytes).digest("hex")).toBe(
+      "50d1fc573146e251138b78074b5790dd569f6dbde335feea908334adef4dd7b0"
+    );
+    expect(markup.match(/viewBox="0 0 120 8"/g)).toHaveLength(4);
+    expect(markup.match(/official-pdf417-object-1702rt/g)).toHaveLength(4);
+    expect(markup.match(/<img /g)).toHaveLength(1);
+    expect(markup).not.toContain("1702rt-barcode-page-");
+    for (const page of pages) {
+      const payload = OFFICIAL_1702RT_PDF417_PAYLOADS[page];
+      expect(markup).toContain(`aria-label="${payload}"`);
+      expect(markup).toContain(`<small>${payload}</small>`);
+    }
   });
 
   it("renders the exact page-one Item 2, date, declaration, and title semantics", () => {

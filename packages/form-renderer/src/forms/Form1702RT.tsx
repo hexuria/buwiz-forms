@@ -10,10 +10,8 @@ import {
 } from "../components";
 import { bool, integer, text } from "../values";
 import {
-  OFFICIAL_1702RT_BARCODE_PAGE_FOUR,
-  OFFICIAL_1702RT_BARCODE_PAGE_ONE,
-  OFFICIAL_1702RT_BARCODE_PAGE_THREE,
-  OFFICIAL_1702RT_BARCODE_PAGE_TWO,
+  OFFICIAL_1702RT_PDF417_PATHS,
+  OFFICIAL_1702RT_PDF417_PAYLOADS,
   OFFICIAL_1702RT_SEAL
 } from "./official1702RTAssets";
 import "./Form1702RT.css";
@@ -151,14 +149,9 @@ function GovernmentHeader1702RT() {
 }
 
 function Masthead1702RT({ page }: { page: 1 | 2 | 3 | 4 }) {
-  const barcodes = [
-    OFFICIAL_1702RT_BARCODE_PAGE_ONE,
-    OFFICIAL_1702RT_BARCODE_PAGE_TWO,
-    OFFICIAL_1702RT_BARCODE_PAGE_THREE,
-    OFFICIAL_1702RT_BARCODE_PAGE_FOUR
-  ] as const;
+  const payload = OFFICIAL_1702RT_PDF417_PAYLOADS[page];
   return (
-    <header className={`masthead-1702rt${page > 1 ? " compact-1702rt" : ""}`}>
+    <header className={`masthead-1702rt masthead-1702rt-page-${page}${page > 1 ? " compact-1702rt" : ""}`}>
       <div className="form-number-1702rt">
         <span>BIR Form No.</span>
         <strong>1702-RT</strong>
@@ -170,7 +163,20 @@ function Masthead1702RT({ page }: { page: 1 | 2 | 3 | 4 }) {
         <span>Corporation, Partnership and Other Non-Individual Taxpayer<br />Subject Only to REGULAR Income Tax Rate</span>
         {page === 1 && <em>Enter all required information in CAPITAL LETTERS. Mark applicable boxes with an “X”.<br />Two copies MUST be filed with the BIR and one held by the taxpayer.</em>}
       </div>
-      <div className="barcode-1702rt"><img src={barcodes[page - 1]} alt="" /></div>
+      <div className="barcode-1702rt" aria-label={payload} data-barcode-page={page}>
+        <span className="official-pdf417-object-1702rt" aria-hidden="true">
+          <svg
+            className="official-pdf417-symbol-1702rt"
+            viewBox="0 0 120 8"
+            preserveAspectRatio="none"
+            shapeRendering="crispEdges"
+            focusable="false"
+          >
+            <path d={OFFICIAL_1702RT_PDF417_PATHS[page]} />
+          </svg>
+        </span>
+        <small>{payload}</small>
+      </div>
     </header>
   );
 }
