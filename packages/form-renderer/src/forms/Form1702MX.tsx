@@ -456,7 +456,7 @@ function ScheduleSix1702MX({ envelope }: { envelope: RenderEnvelope }) {
       <div className="special-grid-1702mx regime-header-1702mx"><span>Description</span><span>Legal Basis</span><span>A. Total Exempt</span><span>B. Total Special</span><span>C. Total Regular</span><span>D. Total All Columns</span></div>
       {[1, 2, 3, 4].map((item) => {
         const prefix = `schedule_6_row_${item}`;
-        return <div key={item} className="special-grid-1702mx"><span>{item} <PlainValue1702MX value={text(envelope, `${prefix}_description`)} /></span><PlainValue1702MX value={text(envelope, `${prefix}_legal_basis`)} /><AmountCell1702MX value={amount(envelope, `${prefix}_exempt`)} /><AmountCell1702MX value={amount(envelope, `${prefix}_special`)} /><AmountCell1702MX value={amount(envelope, `${prefix}_regular`)} /><AmountCell1702MX value={amount(envelope, `${prefix}_total`)} /></div>;
+        return <div key={item} className="special-grid-1702mx"><span>{item} <PlainValue1702MX value={text(envelope, `${prefix}_description`)} /></span><PlainValue1702MX value={text(envelope, `${prefix}_legal_basis`)} fixedFontSizePt={4} /><AmountCell1702MX value={amount(envelope, `${prefix}_exempt`)} /><AmountCell1702MX value={amount(envelope, `${prefix}_special`)} /><AmountCell1702MX value={amount(envelope, `${prefix}_regular`)} /><AmountCell1702MX value={amount(envelope, `${prefix}_total`)} /></div>;
       })}
       <div className="special-grid-1702mx total-row-1702mx"><span>5 Total Special Allowable Itemized Deductions</span><span /><AmountCell1702MX value={amount(envelope, "schedule_6_item_5_exempt")} /><AmountCell1702MX value={amount(envelope, "schedule_6_item_5_special")} /><AmountCell1702MX value={amount(envelope, "schedule_6_item_5_regular")} /><AmountCell1702MX value={amount(envelope, "schedule_6_item_5_total")} /></div>
     </section>
@@ -569,8 +569,8 @@ function AmountCell1702MX({ value }: { value: number | null }) {
   return <span className={value === null ? "amount-cell-1702mx blank-amount-1702mx" : "amount-cell-1702mx"}>{value === null ? "" : formatWhole(value)}</span>;
 }
 
-function PlainValue1702MX({ value }: { value: string }) {
-  const fontSize = Math.max(4, Math.min(7, 210 / Math.max(value.length, 30)));
+function PlainValue1702MX({ value, fixedFontSizePt }: { value: string; fixedFontSizePt?: number }) {
+  const fontSize = fixedFontSizePt ?? Math.max(4, Math.min(7, 210 / Math.max(value.length, 30)));
   return <span className="plain-value-1702mx" aria-label={value} style={{ fontSize: `${fontSize}pt` }}>{value}</span>;
 }
 

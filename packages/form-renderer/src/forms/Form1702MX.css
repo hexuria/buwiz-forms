@@ -261,6 +261,7 @@
 .schedule-one-1702mx { height: 129pt; }
 .schedule-two-1702mx { height: 403.5pt; }
 .schedule-three-1702mx { height: 184.5pt; margin-top: 4pt; }
+.schedule-three-1702mx .regime-row-1702mx > span:first-child { line-height: .8; }
 .schedule-two-1702mx .item-10-1702mx { flex-grow: 2; }
 .schedule-two-1702mx .item-19-1702mx,
 .schedule-three-1702mx .item-32-1702mx,
