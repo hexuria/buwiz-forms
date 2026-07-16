@@ -74,11 +74,21 @@ fn runtime_discrete_assets() -> Vec<serde_json::Value> {
     vec![
         json!({
             "asset": "government_seal",
-            "crop_box_px": [485, 42, 540, 100],
-            "derived_png_sha256": "9ac67b7ae9b242f0edfea91e8c68f67740fdf3b1e106e853f47e126f10e99d1b",
-            "embedded_in": "packages/form-renderer/src/forms/official2551QAssets.ts",
+            "bits_per_component": 8,
+            "color_space": "DeviceRGB",
+            "derived_png_sha256": "7db0df0c022263481d219eebc2077631866f626521b4fe93967910a6a9422a4f",
+            "embedded_as": "lossless_official_pdf_xobject_png",
+            "embedded_in": "packages/form-renderer/src/forms/assets/2551q-seal.png",
+            "source_bbox_top_left_points": [244.8, 21.84, 28.8, 25.2],
+            "source_channels_equal": true,
+            "source_ctm_points": [28.8, 0.0, 0.0, 25.2, 244.8, 888.96],
+            "source_decoded_rgb_sha256": "b826fbf397a21aa19a40db88b2d6edfdef8eb606f1b2f03578b4d02ebad549fe",
             "source_page": 1,
-            "treatment": "16-color grayscale quantization"
+            "source_pdf_object_id": [9, 0],
+            "source_pixel_dimensions": [95, 83],
+            "source_png_sha256": "7db0df0c022263481d219eebc2077631866f626521b4fe93967910a6a9422a4f",
+            "source_stream_sha256": "464ad6cea97d3210a5843eda9ae29e162e416cc5d2a73d2b57696508d79b9b2e",
+            "treatment": "lossless extraction of the exact official equal-channel PDF image XObject; no crop, resampling, recoloring, or substitution"
         }),
         json!({
             "asset": "static_form_pdf417_page_1",
@@ -595,6 +605,20 @@ mod tests {
     #[test]
     fn pdf417_runtime_provenance_matches_verified_official_xobjects() {
         let assets = runtime_discrete_assets();
+
+        let seal = &assets[0];
+        assert_eq!(seal["asset"], json!("government_seal"));
+        assert_eq!(seal["source_pdf_object_id"], json!([9, 0]));
+        assert_eq!(seal["source_pixel_dimensions"], json!([95, 83]));
+        assert_eq!(seal["source_channels_equal"], json!(true));
+        assert_eq!(
+            seal["source_ctm_points"],
+            json!([28.8, 0.0, 0.0, 25.2, 244.8, 888.96])
+        );
+        assert_eq!(
+            seal["source_png_sha256"],
+            json!("7db0df0c022263481d219eebc2077631866f626521b4fe93967910a6a9422a4f")
+        );
 
         assert_eq!(
             &assets[1..],

@@ -297,6 +297,7 @@ test("2551Q PDF417 artwork keeps the reviewed source geometry", async ({ page })
   await expect(pages).toHaveCount(2);
 
   await expectCriticalRegionGeometry(pages.nth(0), [
+    { name: "Page 1 official seal", selector: ".government-seal", x: 490, y: 44, width: 58, height: 50 },
     { name: "Page 1 masthead", selector: ".official-masthead", x: 45, y: 100, width: 1136, height: 124 },
     { name: "Page 1 PDF417 symbol", selector: ".official-barcode > .official-pdf417-symbol", x: 852, y: 119, width: 323, height: 74 },
     { name: "Page 1 PDF417 caption", selector: ".official-barcode > small", x: 1009, y: 196, width: 161, height: 16 }
@@ -346,6 +347,11 @@ test("2551Q PDF417 artwork keeps the reviewed source geometry", async ({ page })
   ]);
   expect(gaps[0]).toBeCloseTo(3.04, 1);
   expect(gaps[1]).toBeCloseTo(5.02, 1);
+
+  expect(await page.locator(".government-seal").evaluate((image) => ({
+    naturalHeight: (image as HTMLImageElement).naturalHeight,
+    naturalWidth: (image as HTMLImageElement).naturalWidth
+  }))).toEqual({ naturalHeight: 83, naturalWidth: 95 });
 });
 
 test("2551Q Part III amount cells preserve the official partition", async ({ page }) => {
@@ -362,6 +368,32 @@ test("2551Q Part III amount cells preserve the official partition", async ({ pag
     { name: "Item 28 decimal cell", selector: ".payment-other-row .decimal-separator", x: 1097, y: 1636, width: 30, height: 35 },
     { name: "Item 28 cents cells", selector: ".payment-other-row .comb-value:last-child", x: 1127, y: 1636, width: 53, height: 35 }
   ]);
+
+  const amountRows = pageOne.locator(
+    ".payment-row-25 .blank-money-value, .payment-row-26 .blank-money-value, .payment-row-27 .blank-money-value, .payment-other-row .blank-money-value"
+  );
+  await expect(amountRows).toHaveCount(4);
+  for (let index = 0; index < 4; index += 1) {
+    const amount = amountRows.nth(index);
+    const integerCells = amount.locator(":scope > .comb-value:first-child > span");
+    await expect(integerCells).toHaveCount(12);
+    await expect(amount.locator(":scope > .comb-value:last-child > span")).toHaveCount(2);
+
+    const widths = await amount.evaluate((element) => {
+      const integer = [...element.querySelectorAll(":scope > .comb-value:first-child > span")]
+        .map((cell) => cell.getBoundingClientRect().width);
+      const decimal = element.querySelector(":scope > .decimal-separator")?.getBoundingClientRect().width ?? 0;
+      const cents = [...element.querySelectorAll(":scope > .comb-value:last-child > span")]
+        .map((cell) => cell.getBoundingClientRect().width);
+      return { integer, decimal, cents };
+    });
+    const integerAverage = widths.integer.reduce((sum, width) => sum + width, 0) /
+      widths.integer.length;
+    expect(Math.max(...widths.integer) - Math.min(...widths.integer)).toBeLessThan(.05);
+    expect(widths.decimal / integerAverage).toBeGreaterThan(.95);
+    expect(widths.decimal / integerAverage).toBeLessThan(1.1);
+    expect(widths.cents.every((width) => width / integerAverage > .9)).toBe(true);
+  }
 });
 
 test("2551Q Part I labels and writable cells preserve the official rendering", async ({
@@ -1006,7 +1038,7 @@ async function expectCriticalRegionContent(pageOne: Locator, pageTwo: Locator) {
   await expect(pageOne.locator(".blank-money-value")).toHaveCount(4);
   await expect(
     pageOne.locator(".blank-money-value > .comb-value:first-child > span")
-  ).toHaveCount(52);
+  ).toHaveCount(48);
   await expect(
     pageOne.locator(".blank-money-value > .comb-value:last-child > span")
   ).toHaveCount(8);

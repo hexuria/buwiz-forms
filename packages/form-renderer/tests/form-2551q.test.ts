@@ -1,4 +1,7 @@
 import { createHash } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   formatAtcRate,
@@ -9,6 +12,8 @@ import {
   OFFICIAL_2551Q_PDF417_PAGE_ONE_PATH,
   OFFICIAL_2551Q_PDF417_PAGE_TWO_PATH
 } from "../src/forms/official2551QAssets";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 function pdf417ModuleDigest(path: string): { digest: string; blackModules: number } {
   const modules = Array<boolean>(120 * 7).fill(false);
@@ -101,5 +106,12 @@ describe("2551Q official PDF417 module geometry", () => {
       digest: "b9257f08de39c25c64cbb7b8cbef835c060a5e347866c67b4cee558669f3233f",
       blackModules: 484
     });
+  });
+
+  it("embeds the losslessly extracted native official seal", () => {
+    const sealPath = path.resolve(HERE, "../src/forms/assets/2551q-seal.png");
+    expect(createHash("sha256").update(fs.readFileSync(sealPath)).digest("hex")).toBe(
+      "7db0df0c022263481d219eebc2077631866f626521b4fe93967910a6a9422a4f"
+    );
   });
 });

@@ -767,7 +767,7 @@ function OfficialPaymentDetails() {
 function BlankMoneyValue() {
   return (
     <span className="money-value blank-money-value">
-      <CombValue value="" cells={13} />
+      <CombValue value="" cells={12} />
       <span className="decimal-separator">.</span>
       <CombValue value="" cells={2} />
     </span>

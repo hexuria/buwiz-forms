@@ -215,8 +215,8 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 .bcs-item { padding-left: 6pt; }
 .government-wordmark {
   position: absolute;
-  left: 182.5pt;
-  top: 1.5pt;
+  left: 183.77pt;
+  top: -.16pt;
   width: 205pt;
   display: flex;
   justify-content: center;
@@ -227,10 +227,10 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   line-height: 1.04;
 }
 .government-seal {
-  flex: 0 0 23pt;
-  width: 23pt;
-  height: 23pt;
-  object-fit: contain;
+  flex: 0 0 28.8pt;
+  width: 28.8pt;
+  height: 25.2pt;
+  object-fit: fill;
 }
 .government-wordmark strong,
 .official-form-number > strong,
