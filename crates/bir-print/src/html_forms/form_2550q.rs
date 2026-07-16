@@ -57,6 +57,7 @@ pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     reference_width_px: 1_224,
     reference_height_px: 2_016,
     visual_reference_pages: VISUAL_REFERENCE_PAGES,
+    machine_readable_artwork: super::MachineReadableArtworkEvidence::Present,
     runtime_discrete_assets,
     fixtures,
     generated_artifacts,
@@ -120,6 +121,7 @@ fn runtime_discrete_assets() -> Vec<serde_json::Value> {
             "source_padding_pixels": {"bottom": 0, "right": 0},
             "source_pixel_dimensions": [240, 63],
             "source_png_sha256": "34d7cac99a6e212ddcf3aed400de37691a40bf7e9917aefbf71f49866ef1ef9c",
+            "source_stream_sha256": "1698de046f9ad0535ed16a57fa1dbae5bb2d4003e7650ea081df69a2aae7ce2c",
             "symbology": "PDF417"
         }),
         json!({
@@ -158,6 +160,7 @@ fn runtime_discrete_assets() -> Vec<serde_json::Value> {
             "source_padding_pixels": {"bottom": 0, "right": 0},
             "source_pixel_dimensions": [240, 63],
             "source_png_sha256": "883cf46213814de3670edf662411b3c88d334188f05877e175e77fa19ba02b1a",
+            "source_stream_sha256": "34d016e1171a32c0446a10e1cbe924ef9db3d0cba0faac70766011c825556c61",
             "symbology": "PDF417"
         }),
     ]

@@ -62,6 +62,7 @@ pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     reference_width_px: 1_224,
     reference_height_px: 1_872,
     visual_reference_pages: VISUAL_REFERENCE_PAGES,
+    machine_readable_artwork: super::MachineReadableArtworkEvidence::Present,
     runtime_discrete_assets,
     fixtures,
     generated_artifacts,
@@ -86,6 +87,7 @@ fn runtime_discrete_assets() -> Vec<serde_json::Value> {
             "source_pdf_object_id": [50, 0],
             "source_pixel_dimensions": [119, 102],
             "source_png_sha256": "e667f9a75d1b1ab2d929c1ab0feb19edb3bca765336056054491a1cb8c25245a",
+            "source_stream_sha256": "46f193f83e79047c3a1a4444b2004687938ae982a5a281e082db2a96c5074d04",
             "treatment": "lossless extraction of the exact official PDF image XObject; equal RGB channels collapsed to one native grayscale channel without crop, resampling, recoloring, thresholding, or substitution"
         }),
         json!({
@@ -115,6 +117,7 @@ fn runtime_discrete_assets() -> Vec<serde_json::Value> {
             "source_padding_pixels": {"bottom": 0, "right": 0},
             "source_pixel_dimensions": [240, 63],
             "source_png_sha256": "3617c72001e6fba856bf375cabbe994964fab6d41912e39345fbd6a2fdeb7ad7",
+            "source_stream_sha256": "56a6358d0143ccf28b15a951d8908f689bd8f52cdba910b2bf0550b341048787",
             "symbology": "PDF417"
         }),
         json!({
@@ -144,6 +147,7 @@ fn runtime_discrete_assets() -> Vec<serde_json::Value> {
             "source_padding_pixels": {"bottom": 0, "right": 0},
             "source_pixel_dimensions": [240, 63],
             "source_png_sha256": "5f44eedfa4f5629a80190dec43073aea01d1b9aced4242ace383f1ce9733b227",
+            "source_stream_sha256": "d2b327ac5898f3166ad2afaa0f3078dac13c2f128087b1bc9c5c19f63483fb72",
             "symbology": "PDF417"
         }),
         json!({
@@ -173,6 +177,7 @@ fn runtime_discrete_assets() -> Vec<serde_json::Value> {
             "source_padding_pixels": {"bottom": 0, "right": 0},
             "source_pixel_dimensions": [240, 63],
             "source_png_sha256": "75fafcf0324308fa49d197c3d9a2b729677d3b69f377e81517f9cc89cd2f134d",
+            "source_stream_sha256": "b05647648dda1446cdebe3e2ada028755be2aec7b49b1f71b3cea6d1fdd6bd05",
             "symbology": "PDF417"
         }),
         json!({
@@ -202,6 +207,7 @@ fn runtime_discrete_assets() -> Vec<serde_json::Value> {
             "source_padding_pixels": {"bottom": 0, "right": 0},
             "source_pixel_dimensions": [240, 63],
             "source_png_sha256": "a07644120648f1810c64e3d5d1c53e65ed3ad6fc884e1d206bfbd58ee93cc8ad",
+            "source_stream_sha256": "8c425c9b9ae69bef05130e691f03612805bc0b0b82af37511c272d1894771ff8",
             "symbology": "PDF417"
         }),
     ]

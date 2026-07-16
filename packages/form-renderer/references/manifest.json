@@ -7,6 +7,17 @@
       "fixture": "packages/form-contracts/fixtures/0605-normal.json",
       "fixture_sha256": "3f76b5f1ae518f81a625b07cd20976b7620bee7b0b1cead224f44af4d20887db",
       "form_id": "0605v1999",
+      "machine_readable_artwork": {
+        "audited_pages": [
+          1,
+          2
+        ],
+        "inventory_method": "pinned PDF image-XObject, decoded page-content stream, and reviewed 144 DPI page inventory",
+        "object_inventory_path": "packages/form-renderer/references/0605-1999-machine-readable-inventory.json",
+        "object_inventory_sha256": "a060310261463e286621bbbb53965e48f8d4785244341c2c40db22ff18a31f5e",
+        "official_source_sha256": "de04419766c59bf27fdeb854c0f7c3f98601900caa20630442e671e2313e536f",
+        "status": "absent_in_official_pdf"
+      },
       "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/0605version1999_09.02.2022_copy.pdf",
       "official_source_sha256": "de04419766c59bf27fdeb854c0f7c3f98601900caa20630442e671e2313e536f",
       "page_count": 2,
@@ -120,6 +131,41 @@
       "fixture": "packages/form-contracts/fixtures/0619e-normal.json",
       "fixture_sha256": "f08bd7cbb1eee63fdfdab025d880094319b949cd566be2c82203385e5f0c41fe",
       "form_id": "0619Ev2018",
+      "machine_readable_artwork": {
+        "asset_ids": [
+          "static_form_pdf417_page_1"
+        ],
+        "asset_inventory_sha256": "5c035e9557648c7aa16db51b9fa6bf6d3fc3d9afba3d283bd63deeb3e6e9a8dd",
+        "assets": [
+          {
+            "asset": "static_form_pdf417_page_1",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "0619-E 01/18 P1",
+            "decoded_payload": "0619-E 01/18 P1",
+            "logical_dimensions": [
+              120,
+              7
+            ],
+            "logical_matrix_sha256": "0238537d56f19276b790a8395c429a9f7645ac570eecc097064051b456dc5dfa",
+            "logical_path_sha256": "68bfaa671497f2c248df79b4071407d50c8d03fe132d9f0c61ccc621cc5f2700",
+            "module_differences": 0,
+            "source_page": 1,
+            "source_pdf_object_id": [
+              42,
+              0
+            ],
+            "source_png_sha256": "d741fca6b5b75409f277ff96754b157ffb8200b89f80aad7558f0014536102e6",
+            "source_stream_sha256": "5217f1767917305c0a989e324074151d3d170db648f8777fbe5de8ace0245cd9",
+            "symbology": "PDF417"
+          }
+        ],
+        "audited_pages": [
+          1
+        ],
+        "inventory_method": "reviewed exact PDF object, decoded payload, zero-difference logical module matrix, and inline vector binding",
+        "official_source_sha256": "0418160d63d4e6f68c34f2bad553273a5d148c3686d8562d338d35fcdd0c5215",
+        "status": "present_in_official_pdf"
+      },
       "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/0619-E%20Jan%202018%20rev%20final.pdf",
       "official_source_sha256": "0418160d63d4e6f68c34f2bad553273a5d148c3686d8562d338d35fcdd0c5215",
       "page_count": 1,
@@ -155,6 +201,7 @@
             31.08,
             28.2
           ],
+          "source_channels_equal": true,
           "source_ctm_points": [
             31.08,
             0.0,
@@ -220,6 +267,7 @@
             7
           ],
           "logical_matrix_sha256": "0238537d56f19276b790a8395c429a9f7645ac570eecc097064051b456dc5dfa",
+          "logical_path_sha256": "68bfaa671497f2c248df79b4071407d50c8d03fe132d9f0c61ccc621cc5f2700",
           "source_active_bbox_top_left_points": [
             454.8,
             65.04,
@@ -279,6 +327,41 @@
       "fixture": "packages/form-contracts/fixtures/0619f-normal.json",
       "fixture_sha256": "e56153e3b269da028de8042dc59f5aa93df142c6b24204299ba9dd137b3e72e6",
       "form_id": "0619Fv2018",
+      "machine_readable_artwork": {
+        "asset_ids": [
+          "static_form_pdf417_page_1"
+        ],
+        "asset_inventory_sha256": "d9cc5aa248beae517e593a5a6449cc8c3dc07bb16103c9dcc153d8b8972ead1a",
+        "assets": [
+          {
+            "asset": "static_form_pdf417_page_1",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "0619-F 01/18 P1",
+            "decoded_payload": "0619-F 01/18 P1",
+            "logical_dimensions": [
+              120,
+              7
+            ],
+            "logical_matrix_sha256": "b72d83aba3dd6189e71a96019fbc57c5e8bcd7ec2465228fda8d74154308150b",
+            "logical_path_sha256": "b9dfa248b3b457c00f6f70dfbc7ac8c6a8985286a86220efa1405b975dd9ad18",
+            "module_differences": 0,
+            "source_page": 1,
+            "source_pdf_object_id": [
+              5,
+              0
+            ],
+            "source_png_sha256": "5b6e8410fc733059bd1aa21ea2abacab316bd569d5801cda04ff7ae08ff1a2a2",
+            "source_stream_sha256": "152350f3bf117e8218d120c576e1140e3600b67a0ff18c238585e350614df48e",
+            "symbology": "PDF417"
+          }
+        ],
+        "audited_pages": [
+          1
+        ],
+        "inventory_method": "reviewed exact PDF object, decoded payload, zero-difference logical module matrix, and inline vector binding",
+        "official_source_sha256": "edd7357390b1f0d95f2a38c9bb76252341c15b54b82bffd338bd540452ff15e1",
+        "status": "present_in_official_pdf"
+      },
       "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/0619-F%20Jan%202018%20rev%20final.pdf",
       "official_source_sha256": "edd7357390b1f0d95f2a38c9bb76252341c15b54b82bffd338bd540452ff15e1",
       "page_count": 1,
@@ -382,6 +465,7 @@
             7
           ],
           "logical_matrix_sha256": "b72d83aba3dd6189e71a96019fbc57c5e8bcd7ec2465228fda8d74154308150b",
+          "logical_path_sha256": "b9dfa248b3b457c00f6f70dfbc7ac8c6a8985286a86220efa1405b975dd9ad18",
           "source_active_bbox_top_left_points": [
             454.44,
             50.28,
@@ -441,6 +525,64 @@
       "fixture": "packages/form-contracts/fixtures/1601c-normal.json",
       "fixture_sha256": "ae115b4e97c9b2ffc9b59b5820e255be3e180efba09996d72030f0c6d607ea34",
       "form_id": "1601Cv2018",
+      "machine_readable_artwork": {
+        "asset_ids": [
+          "static_form_pdf417_page_1",
+          "static_form_pdf417_page_2"
+        ],
+        "asset_inventory_sha256": "492880dea30d55784c7b7e55fb0df3d6dfa97ac8f522aa3846f6733d396ef3d6",
+        "assets": [
+          {
+            "asset": "static_form_pdf417_page_1",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1601-C 01/18ENCS P1",
+            "decoded_payload": "1601-C 01/18ENCS P1",
+            "logical_dimensions": [
+              120,
+              7
+            ],
+            "logical_matrix_sha256": "7e4a3607ef9e721686f43cef71aba5b7426e2727b830149e37866e1d35be9a45",
+            "logical_path_sha256": "799174be5028c217427e7eaa4355a5ed578253aea8e02cd3bb61b81c57c0dcce",
+            "module_differences": 0,
+            "source_page": 1,
+            "source_pdf_object_id": [
+              42,
+              0
+            ],
+            "source_png_sha256": "726f5550edc3b41a3ccf73ebbd1ccbc22f6a168a85327bb85802cd434d8abfb5",
+            "source_stream_sha256": "97c0d9925968373eda7225c87e4a273a99779939b22ac0dcc900b0e9e6478fa8",
+            "symbology": "PDF417"
+          },
+          {
+            "asset": "static_form_pdf417_page_2",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1601-C 01/18ENCS P2",
+            "decoded_payload": "1601-C 01/18ENCS P2",
+            "logical_dimensions": [
+              120,
+              7
+            ],
+            "logical_matrix_sha256": "af50f07764d907447d25e8a18fde78e407679bfbffab5b32eb07fc82aff851c4",
+            "logical_path_sha256": "243d0773c45f3a9c38d0823a07eebbee19218953601d522c546f97e52c2bb313",
+            "module_differences": 0,
+            "source_page": 2,
+            "source_pdf_object_id": [
+              55,
+              0
+            ],
+            "source_png_sha256": "5c6435f8f719cfdc2f35c8608d30cecf7217d133baa074ed2f09a6204d4c8870",
+            "source_stream_sha256": "4a21defb53bb6364abedc524a53891b07de61a105a18c43e9e06504866123c61",
+            "symbology": "PDF417"
+          }
+        ],
+        "audited_pages": [
+          1,
+          2
+        ],
+        "inventory_method": "reviewed exact PDF object, decoded payload, zero-difference logical module matrix, and inline vector binding",
+        "official_source_sha256": "c8faaa71015337a73b4ceb96bfb265c539589ab5e10eb27899bb81f87f417397",
+        "status": "present_in_official_pdf"
+      },
       "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/1601C%20final%20Jan%202018%20with%20DPA.pdf",
       "official_source_sha256": "c8faaa71015337a73b4ceb96bfb265c539589ab5e10eb27899bb81f87f417397",
       "page_count": 2,
@@ -551,6 +693,7 @@
             7
           ],
           "logical_matrix_sha256": "7e4a3607ef9e721686f43cef71aba5b7426e2727b830149e37866e1d35be9a45",
+          "logical_path_sha256": "799174be5028c217427e7eaa4355a5ed578253aea8e02cd3bb61b81c57c0dcce",
           "source_active_bbox_top_left_points": [
             441.12,
             48.72,
@@ -646,6 +789,7 @@
             7
           ],
           "logical_matrix_sha256": "af50f07764d907447d25e8a18fde78e407679bfbffab5b32eb07fc82aff851c4",
+          "logical_path_sha256": "243d0773c45f3a9c38d0823a07eebbee19218953601d522c546f97e52c2bb313",
           "source_active_bbox_top_left_points": [
             439.92,
             34.32,
@@ -705,6 +849,110 @@
       "fixture": "packages/form-contracts/fixtures/1701-normal.json",
       "fixture_sha256": "469be004c4f32ee8e27a4589731cedeb9b6dab61410be831ff0ff001f30dfe58",
       "form_id": "1701v2018",
+      "machine_readable_artwork": {
+        "asset_ids": [
+          "static_form_pdf417_page_1",
+          "static_form_pdf417_page_2",
+          "static_form_pdf417_page_3",
+          "static_form_pdf417_page_4"
+        ],
+        "asset_inventory_sha256": "c2d185ea82e7d12be0689f17b74e67e0b4ff0e4706ba6eb19174161f8e70b9bc",
+        "assets": [
+          {
+            "asset": "static_form_pdf417_page_1",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1701 01/18ENCS P1",
+            "decoded_payload": "1701 01/18ENCS P1",
+            "logical_dimensions": [
+              120,
+              7
+            ],
+            "logical_matrix_sha256": "a70883c8ea82b51527ab13d9d7a84acea444a1b941107cf0be13d3132066a068",
+            "logical_path_sha256": "1e1efef2ff6bdc2eace68bfebbbd9eb493d255f7167e9ec4c70832902d51a64c",
+            "module_differences": 0,
+            "source_page": 1,
+            "source_pdf_object_id": [
+              51,
+              0
+            ],
+            "source_png_sha256": "3617c72001e6fba856bf375cabbe994964fab6d41912e39345fbd6a2fdeb7ad7",
+            "source_stream_sha256": "56a6358d0143ccf28b15a951d8908f689bd8f52cdba910b2bf0550b341048787",
+            "symbology": "PDF417"
+          },
+          {
+            "asset": "static_form_pdf417_page_2",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1701 01/18ENCS P2",
+            "decoded_payload": "1701 01/18ENCS P2",
+            "logical_dimensions": [
+              120,
+              7
+            ],
+            "logical_matrix_sha256": "fc575f786121c3fdfd0b3acc6e7b0757fcf0098bef23b3beac77a359826d3354",
+            "logical_path_sha256": "9c7aea5124cb0901d56b03e3a7b2b1acbaa69f0872e1596e8ffd52cc08c8925a",
+            "module_differences": 0,
+            "source_page": 2,
+            "source_pdf_object_id": [
+              54,
+              0
+            ],
+            "source_png_sha256": "5f44eedfa4f5629a80190dec43073aea01d1b9aced4242ace383f1ce9733b227",
+            "source_stream_sha256": "d2b327ac5898f3166ad2afaa0f3078dac13c2f128087b1bc9c5c19f63483fb72",
+            "symbology": "PDF417"
+          },
+          {
+            "asset": "static_form_pdf417_page_3",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1701 01/18ENCS P3",
+            "decoded_payload": "1701 01/18ENCS P3",
+            "logical_dimensions": [
+              120,
+              7
+            ],
+            "logical_matrix_sha256": "28f993cc6172d3b5891ebd5caa3c0e68696698ecf194c27a10acb774d99a4f6e",
+            "logical_path_sha256": "191691ec2311ce0d786eff4aa9ac4c1ae3e465cc34251fb16a712bd4466ada46",
+            "module_differences": 0,
+            "source_page": 3,
+            "source_pdf_object_id": [
+              66,
+              0
+            ],
+            "source_png_sha256": "75fafcf0324308fa49d197c3d9a2b729677d3b69f377e81517f9cc89cd2f134d",
+            "source_stream_sha256": "b05647648dda1446cdebe3e2ada028755be2aec7b49b1f71b3cea6d1fdd6bd05",
+            "symbology": "PDF417"
+          },
+          {
+            "asset": "static_form_pdf417_page_4",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1701 01/18ENCS P4",
+            "decoded_payload": "1701 01/18ENCS P4",
+            "logical_dimensions": [
+              120,
+              7
+            ],
+            "logical_matrix_sha256": "209e791883eab663776176777be715f5292b13b386a3a461c1f5bd829fbae1d6",
+            "logical_path_sha256": "b3abe63985d02ec09423acfd1c71e14a394ec7398649201f0737b0d59ef84895",
+            "module_differences": 0,
+            "source_page": 4,
+            "source_pdf_object_id": [
+              69,
+              0
+            ],
+            "source_png_sha256": "a07644120648f1810c64e3d5d1c53e65ed3ad6fc884e1d206bfbd58ee93cc8ad",
+            "source_stream_sha256": "8c425c9b9ae69bef05130e691f03612805bc0b0b82af37511c272d1894771ff8",
+            "symbology": "PDF417"
+          }
+        ],
+        "audited_pages": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "inventory_method": "reviewed exact PDF object, decoded payload, zero-difference logical module matrix, and inline vector binding",
+        "official_source_sha256": "19be91d78258eb7c255f2615610db2739f10c378f8ac97adc0887c1bf40d1b2e",
+        "status": "present_in_official_pdf"
+      },
       "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/1701%20Jan%202018%20final%20with%20rates.pdf",
       "official_source_sha256": "19be91d78258eb7c255f2615610db2739f10c378f8ac97adc0887c1bf40d1b2e",
       "page_count": 4,
@@ -783,6 +1031,7 @@
             102
           ],
           "source_png_sha256": "e667f9a75d1b1ab2d929c1ab0feb19edb3bca765336056054491a1cb8c25245a",
+          "source_stream_sha256": "46f193f83e79047c3a1a4444b2004687938ae982a5a281e082db2a96c5074d04",
           "treatment": "lossless extraction of the exact official PDF image XObject; equal RGB channels collapsed to one native grayscale channel without crop, resampling, recoloring, thresholding, or substitution"
         },
         {
@@ -867,6 +1116,7 @@
             63
           ],
           "source_png_sha256": "3617c72001e6fba856bf375cabbe994964fab6d41912e39345fbd6a2fdeb7ad7",
+          "source_stream_sha256": "56a6358d0143ccf28b15a951d8908f689bd8f52cdba910b2bf0550b341048787",
           "symbology": "PDF417"
         },
         {
@@ -951,6 +1201,7 @@
             63
           ],
           "source_png_sha256": "5f44eedfa4f5629a80190dec43073aea01d1b9aced4242ace383f1ce9733b227",
+          "source_stream_sha256": "d2b327ac5898f3166ad2afaa0f3078dac13c2f128087b1bc9c5c19f63483fb72",
           "symbology": "PDF417"
         },
         {
@@ -1035,6 +1286,7 @@
             63
           ],
           "source_png_sha256": "75fafcf0324308fa49d197c3d9a2b729677d3b69f377e81517f9cc89cd2f134d",
+          "source_stream_sha256": "b05647648dda1446cdebe3e2ada028755be2aec7b49b1f71b3cea6d1fdd6bd05",
           "symbology": "PDF417"
         },
         {
@@ -1119,6 +1371,7 @@
             63
           ],
           "source_png_sha256": "a07644120648f1810c64e3d5d1c53e65ed3ad6fc884e1d206bfbd58ee93cc8ad",
+          "source_stream_sha256": "8c425c9b9ae69bef05130e691f03612805bc0b0b82af37511c272d1894771ff8",
           "symbology": "PDF417"
         }
       ]
@@ -1128,6 +1381,64 @@
       "fixture": "packages/form-contracts/fixtures/1701q-normal.json",
       "fixture_sha256": "ca8a90050a22d5f18eaab4fcada5dfce5a074ec053c86ffa87d2694b9f9f12e8",
       "form_id": "1701Qv2018",
+      "machine_readable_artwork": {
+        "asset_ids": [
+          "static_form_pdf417_page_1",
+          "static_form_pdf417_page_2"
+        ],
+        "asset_inventory_sha256": "0661c23d3290fca866b3dd6cde12e9967bbe7a4380b8918768ba76ff29f29286",
+        "assets": [
+          {
+            "asset": "static_form_pdf417_page_1",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1701Q 01/18ENCS P1",
+            "decoded_payload": "1701Q 01/18ENCS P1",
+            "logical_dimensions": [
+              120,
+              7
+            ],
+            "logical_matrix_sha256": "81ffb136537f07b8b526cb6f5968802f20734fd3026269c1a4a0945a653788df",
+            "logical_path_sha256": "6a2099665e11c70aad1943b919b44537946ca1fe59d19ab5f6926a45cc9af315",
+            "module_differences": 0,
+            "source_page": 1,
+            "source_pdf_object_id": [
+              52,
+              0
+            ],
+            "source_png_sha256": "d5205e353f1259349d8217527540a3b12a3c24381cc52a51b773a3fc7c0be8f5",
+            "source_stream_sha256": "d1b9fe8e37a75de40317f7e4cfed38f28988157f538e1742569aea4a6b0afc58",
+            "symbology": "PDF417"
+          },
+          {
+            "asset": "static_form_pdf417_page_2",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1701Q 01/18ENCS P2",
+            "decoded_payload": "1701Q 01/18ENCS P2",
+            "logical_dimensions": [
+              120,
+              7
+            ],
+            "logical_matrix_sha256": "9457e35a53d6a2a04442d9a0346a19b079ac11bda065e554e3f31d97f31d1120",
+            "logical_path_sha256": "0cf6c87d5dd4f3a559689c8a99c10367c0038c3b1e0ebf11c67b9ab801c09ad5",
+            "module_differences": 0,
+            "source_page": 2,
+            "source_pdf_object_id": [
+              56,
+              0
+            ],
+            "source_png_sha256": "69ab932b888ff0a85aa1193675a9cf5b5870b8f7b0ae1da7c39bfdf663936665",
+            "source_stream_sha256": "15f6981f745b30e6c9d0ffe25b6c9840ba0f9ab6eeab33a3203aeea70a5de24b",
+            "symbology": "PDF417"
+          }
+        ],
+        "audited_pages": [
+          1,
+          2
+        ],
+        "inventory_method": "reviewed exact PDF object, decoded payload, zero-difference logical module matrix, and inline vector binding",
+        "official_source_sha256": "c731d3f12556e6f19ab81f6113ca7c4a23f7ed099675c03451ac0074d96b85ed",
+        "status": "present_in_official_pdf"
+      },
       "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/1701Q%20Jan%202018%20final%20rev2_copy.pdf",
       "official_source_sha256": "c731d3f12556e6f19ab81f6113ca7c4a23f7ed099675c03451ac0074d96b85ed",
       "page_count": 2,
@@ -1192,6 +1503,7 @@
             102
           ],
           "source_png_sha256": "e667f9a75d1b1ab2d929c1ab0feb19edb3bca765336056054491a1cb8c25245a",
+          "source_stream_sha256": "46f193f83e79047c3a1a4444b2004687938ae982a5a281e082db2a96c5074d04",
           "treatment": "lossless extraction of the exact official PDF image XObject; equal RGB channels collapsed to one native grayscale channel without crop, resampling, recoloring, thresholding, or substitution"
         },
         {
@@ -1276,6 +1588,7 @@
             64
           ],
           "source_png_sha256": "d5205e353f1259349d8217527540a3b12a3c24381cc52a51b773a3fc7c0be8f5",
+          "source_stream_sha256": "d1b9fe8e37a75de40317f7e4cfed38f28988157f538e1742569aea4a6b0afc58",
           "symbology": "PDF417"
         },
         {
@@ -1360,6 +1673,7 @@
             64
           ],
           "source_png_sha256": "69ab932b888ff0a85aa1193675a9cf5b5870b8f7b0ae1da7c39bfdf663936665",
+          "source_stream_sha256": "15f6981f745b30e6c9d0ffe25b6c9840ba0f9ab6eeab33a3203aeea70a5de24b",
           "symbology": "PDF417"
         }
       ]
@@ -1369,6 +1683,110 @@
       "fixture": "packages/form-contracts/fixtures/1702mx-normal.json",
       "fixture_sha256": "d2f70e503945974783358b321a772e0ca4025736c93e961e29e9191779ab4ec2",
       "form_id": "1702MXv2018C",
+      "machine_readable_artwork": {
+        "asset_ids": [
+          "static_form_pdf417_page_1",
+          "static_form_pdf417_page_2",
+          "static_form_pdf417_page_3",
+          "static_form_pdf417_page_4"
+        ],
+        "asset_inventory_sha256": "d7faa53371d136b5a61c963e53777970ec6adce499854bd413fbb0e698b05766",
+        "assets": [
+          {
+            "asset": "static_form_pdf417_page_1",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1702-MX 01/18ENCS P1",
+            "decoded_payload": "1702-MX 01/18ENCS P1",
+            "logical_dimensions": [
+              120,
+              8
+            ],
+            "logical_matrix_sha256": "58fe10021bc79bf3c031e1dcecb264a3d643f4fa8a5e54fff0e8279106f2fde2",
+            "logical_path_sha256": "6fb048d1d2d6d2b307bc43721e734a89763ed0a9a63113409c952fba02843518",
+            "module_differences": 0,
+            "source_page": 1,
+            "source_pdf_object_id": [
+              43,
+              0
+            ],
+            "source_png_sha256": "0e35ae7820c4628cbd9dedf54c0d44178738e758eb9501426da256d5182176bb",
+            "source_stream_sha256": "37e87ea21c9287193f93b852b2a23d3a519103cbbf013bf41f5040ef6320fac3",
+            "symbology": "PDF417"
+          },
+          {
+            "asset": "static_form_pdf417_page_2",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1702-MX 01/18ENCS P2",
+            "decoded_payload": "1702-MX 01/18ENCS P2",
+            "logical_dimensions": [
+              120,
+              8
+            ],
+            "logical_matrix_sha256": "38f0943e4710bb7c87585e94cbf82e6b4a338379b0d4f95edeb25128364dae25",
+            "logical_path_sha256": "3b075e1128792795dbfeff0eb22e1046fa8e9fc019d823c1d652dea4a9ecf6f4",
+            "module_differences": 0,
+            "source_page": 2,
+            "source_pdf_object_id": [
+              50,
+              0
+            ],
+            "source_png_sha256": "1d000dcc9b81593c57ae11c33b2e861e47c9466042b33d9281a833013c17d135",
+            "source_stream_sha256": "6e2f7206d5bc94bc0ae177acfecf2cfcc3faa10b1373d8cc19f20a540f03700c",
+            "symbology": "PDF417"
+          },
+          {
+            "asset": "static_form_pdf417_page_3",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1702-MX 01/18ENCS P3",
+            "decoded_payload": "1702-MX 01/18ENCS P3",
+            "logical_dimensions": [
+              120,
+              8
+            ],
+            "logical_matrix_sha256": "447a3cd3ae20ed9fcf9527180fb539ef9fbcf5dcd2aeebd6aa272ccd7d4f7602",
+            "logical_path_sha256": "a79be84a5d683b5dc4cdb59ed0b61a02eb45ca28380b1a455577443f0e5bb809",
+            "module_differences": 0,
+            "source_page": 3,
+            "source_pdf_object_id": [
+              53,
+              0
+            ],
+            "source_png_sha256": "2154265911608810be0895f0993aa1ef3673f35e6910c1fc720640b5d072ee51",
+            "source_stream_sha256": "a39cb58432fe7d9f5b08083ceae6a2a34fd99c6bb91e6d646983c5e45210cd4b",
+            "symbology": "PDF417"
+          },
+          {
+            "asset": "static_form_pdf417_page_4",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1702-MX 01/18ENCS P4",
+            "decoded_payload": "1702-MX 01/18ENCS P4",
+            "logical_dimensions": [
+              120,
+              8
+            ],
+            "logical_matrix_sha256": "4dce7fd23395f73f138612cade05ad4bf707ddd597293eedeac889cd3eda7a2d",
+            "logical_path_sha256": "42ad85ee8e08ecf57ac20786c5f6d569bf51060c174e0e514c82c586dbdc3a5d",
+            "module_differences": 0,
+            "source_page": 4,
+            "source_pdf_object_id": [
+              56,
+              0
+            ],
+            "source_png_sha256": "c7ebb61260d8c7917c5b66c583072dda528abc052cc6a6e8891f0be28b44d48f",
+            "source_stream_sha256": "fab6936a6a41f0f829593f4b53c5a83e47071bbad48045a426cfa2fdc4bd255b",
+            "symbology": "PDF417"
+          }
+        ],
+        "audited_pages": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "inventory_method": "reviewed exact PDF object, decoded payload, zero-difference logical module matrix, and inline vector binding",
+        "official_source_sha256": "81c05fffadde6c0b4098aeba8547a9820a0806c6be9b0c6ceac5597cab4263d2",
+        "status": "present_in_official_pdf"
+      },
       "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/1702-MX%20Jan%202018%20ENCS%20Final%20with%20OSDv2.pdf",
       "official_source_sha256": "81c05fffadde6c0b4098aeba8547a9820a0806c6be9b0c6ceac5597cab4263d2",
       "page_count": 4,
@@ -1534,6 +1952,7 @@
             241,
             72
           ],
+          "source_png_sha256": "0e35ae7820c4628cbd9dedf54c0d44178738e758eb9501426da256d5182176bb",
           "source_stream_sha256": "37e87ea21c9287193f93b852b2a23d3a519103cbbf013bf41f5040ef6320fac3",
           "svg_path_sha256": "6fb048d1d2d6d2b307bc43721e734a89763ed0a9a63113409c952fba02843518",
           "symbology": "PDF417"
@@ -1623,6 +2042,7 @@
             241,
             72
           ],
+          "source_png_sha256": "1d000dcc9b81593c57ae11c33b2e861e47c9466042b33d9281a833013c17d135",
           "source_stream_sha256": "6e2f7206d5bc94bc0ae177acfecf2cfcc3faa10b1373d8cc19f20a540f03700c",
           "svg_path_sha256": "3b075e1128792795dbfeff0eb22e1046fa8e9fc019d823c1d652dea4a9ecf6f4",
           "symbology": "PDF417"
@@ -1712,6 +2132,7 @@
             241,
             72
           ],
+          "source_png_sha256": "2154265911608810be0895f0993aa1ef3673f35e6910c1fc720640b5d072ee51",
           "source_stream_sha256": "a39cb58432fe7d9f5b08083ceae6a2a34fd99c6bb91e6d646983c5e45210cd4b",
           "svg_path_sha256": "a79be84a5d683b5dc4cdb59ed0b61a02eb45ca28380b1a455577443f0e5bb809",
           "symbology": "PDF417"
@@ -1801,6 +2222,7 @@
             241,
             72
           ],
+          "source_png_sha256": "c7ebb61260d8c7917c5b66c583072dda528abc052cc6a6e8891f0be28b44d48f",
           "source_stream_sha256": "fab6936a6a41f0f829593f4b53c5a83e47071bbad48045a426cfa2fdc4bd255b",
           "svg_path_sha256": "42ad85ee8e08ecf57ac20786c5f6d569bf51060c174e0e514c82c586dbdc3a5d",
           "symbology": "PDF417"
@@ -1812,6 +2234,110 @@
       "fixture": "packages/form-contracts/fixtures/1702rt-normal.json",
       "fixture_sha256": "c2506735870f32d9da7b3235022ccd6057b4d2ecfe40a2a8e23dd1122d294fd3",
       "form_id": "1702RTv2018C",
+      "machine_readable_artwork": {
+        "asset_ids": [
+          "static_form_pdf417_page_1",
+          "static_form_pdf417_page_2",
+          "static_form_pdf417_page_3",
+          "static_form_pdf417_page_4"
+        ],
+        "asset_inventory_sha256": "80196abc24f101c9d05e442e0d2d557c047f3d3256fde771ae68371645da3f01",
+        "assets": [
+          {
+            "asset": "static_form_pdf417_page_1",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1702-RT 01/18ENCS P1",
+            "decoded_payload": "1702-RT 01/18ENCS P1",
+            "logical_dimensions": [
+              120,
+              8
+            ],
+            "logical_matrix_sha256": "362d6c13fc51ae71f86168da68bd2dfeadee77d82a0c68f5234a006adfaf6200",
+            "logical_path_sha256": "82ad803cb29fb6886dd1bd0158c9528df4960c07016f7d807a1a54e6b761eb04",
+            "module_differences": 0,
+            "source_page": 1,
+            "source_pdf_object_id": [
+              41,
+              0
+            ],
+            "source_png_sha256": "e31dbc17fd55068af2edce3456fc14bafe324bf622405327f7378e65b83a9261",
+            "source_stream_sha256": "7c6c6eed6c797324e189a2cefa42ff68e41e5061f0cc14ea4d8b22e1d9caab62",
+            "symbology": "PDF417"
+          },
+          {
+            "asset": "static_form_pdf417_page_2",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1702-RT 01/18ENCS P2",
+            "decoded_payload": "1702-RT 01/18ENCS P2",
+            "logical_dimensions": [
+              120,
+              8
+            ],
+            "logical_matrix_sha256": "aaf9a1d313b3804a9ab4507407a98d8d5b32eb4711e8779cae8f1e2e7dbdc849",
+            "logical_path_sha256": "352ade9e021b50d016521709013b6d278b130bf8cb2eaaec0a599e311cfd1dfc",
+            "module_differences": 0,
+            "source_page": 2,
+            "source_pdf_object_id": [
+              48,
+              0
+            ],
+            "source_png_sha256": "4c3d7ed213b3ac6a6c21a6c8f058469b5ab96299c9d2741a16e698a0b8628665",
+            "source_stream_sha256": "c1fe6b467fc3cc48fedb022ab6700f0e97f88a2e3583a2bc73827348c3eca431",
+            "symbology": "PDF417"
+          },
+          {
+            "asset": "static_form_pdf417_page_3",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1702-RT 01/18ENCS P3",
+            "decoded_payload": "1702-RT 01/18ENCS P3",
+            "logical_dimensions": [
+              120,
+              8
+            ],
+            "logical_matrix_sha256": "3ad58b30bbd02dab3dcfe7b896c861669a6f21693f60a04250e9c4e83000fa5f",
+            "logical_path_sha256": "f8ca0babf7a0c25535927f096d9f7beeb68aaa9d1f4962c62b85158b0255f1b2",
+            "module_differences": 0,
+            "source_page": 3,
+            "source_pdf_object_id": [
+              51,
+              0
+            ],
+            "source_png_sha256": "2ae9ed22ff2558984877dcab2ec74e6537aaba8f83bb45cb3254da93d5de4954",
+            "source_stream_sha256": "335a41612975234b8f8a1d82af748f8a10c3d2e92f44bd83bb26fc96c5f90f61",
+            "symbology": "PDF417"
+          },
+          {
+            "asset": "static_form_pdf417_page_4",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1702-RT 01/18ENCS P4",
+            "decoded_payload": "1702-RT 01/18ENCS P4",
+            "logical_dimensions": [
+              120,
+              8
+            ],
+            "logical_matrix_sha256": "94b3aaadd3c8dcfbfca4ba4fb64347ceef5d1a7693f7d7d96a9f4d1e9bf5a8db",
+            "logical_path_sha256": "e52b63b2670d75324b1724a2ae3cc627c024197c5dc20288419f1a2eb9525d4b",
+            "module_differences": 0,
+            "source_page": 4,
+            "source_pdf_object_id": [
+              54,
+              0
+            ],
+            "source_png_sha256": "4dda31b5ce31029f31a6595882f3aa034b4e43239761cfcd9c0dc34115c57de4",
+            "source_stream_sha256": "195e85f9243181e7a20f1d818156bd48b00962c07c7ef1bdf55ace9cd3a3150f",
+            "symbology": "PDF417"
+          }
+        ],
+        "audited_pages": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "inventory_method": "reviewed exact PDF object, decoded payload, zero-difference logical module matrix, and inline vector binding",
+        "official_source_sha256": "d9a6a8a13e0114934261151c4eb269a1573042e7ce670eaf12b15f169d308d2d",
+        "status": "present_in_official_pdf"
+      },
       "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/1702-RT%20Jan%202018%20ENCS%20Final%20v3.pdf",
       "official_source_sha256": "d9a6a8a13e0114934261151c4eb269a1573042e7ce670eaf12b15f169d308d2d",
       "page_count": 4,
@@ -1892,6 +2418,7 @@
           ],
           "source_png_sha256": "e667f9a75d1b1ab2d929c1ab0feb19edb3bca765336056054491a1cb8c25245a",
           "source_raw_stream_sha256": "46f193f83e79047c3a1a4444b2004687938ae982a5a281e082db2a96c5074d04",
+          "source_stream_sha256": "46f193f83e79047c3a1a4444b2004687938ae982a5a281e082db2a96c5074d04",
           "treatment": "lossless extraction of the exact official PDF image XObject; equal RGB channels collapsed to one native grayscale channel without crop, resampling, recoloring, thresholding, or substitution"
         },
         {
@@ -1978,6 +2505,7 @@
           ],
           "source_png_sha256": "e31dbc17fd55068af2edce3456fc14bafe324bf622405327f7378e65b83a9261",
           "source_raw_stream_sha256": "7c6c6eed6c797324e189a2cefa42ff68e41e5061f0cc14ea4d8b22e1d9caab62",
+          "source_stream_sha256": "7c6c6eed6c797324e189a2cefa42ff68e41e5061f0cc14ea4d8b22e1d9caab62",
           "symbology": "PDF417"
         },
         {
@@ -2064,6 +2592,7 @@
           ],
           "source_png_sha256": "4c3d7ed213b3ac6a6c21a6c8f058469b5ab96299c9d2741a16e698a0b8628665",
           "source_raw_stream_sha256": "c1fe6b467fc3cc48fedb022ab6700f0e97f88a2e3583a2bc73827348c3eca431",
+          "source_stream_sha256": "c1fe6b467fc3cc48fedb022ab6700f0e97f88a2e3583a2bc73827348c3eca431",
           "symbology": "PDF417"
         },
         {
@@ -2150,6 +2679,7 @@
           ],
           "source_png_sha256": "2ae9ed22ff2558984877dcab2ec74e6537aaba8f83bb45cb3254da93d5de4954",
           "source_raw_stream_sha256": "335a41612975234b8f8a1d82af748f8a10c3d2e92f44bd83bb26fc96c5f90f61",
+          "source_stream_sha256": "335a41612975234b8f8a1d82af748f8a10c3d2e92f44bd83bb26fc96c5f90f61",
           "symbology": "PDF417"
         },
         {
@@ -2236,6 +2766,7 @@
           ],
           "source_png_sha256": "4dda31b5ce31029f31a6595882f3aa034b4e43239761cfcd9c0dc34115c57de4",
           "source_raw_stream_sha256": "195e85f9243181e7a20f1d818156bd48b00962c07c7ef1bdf55ace9cd3a3150f",
+          "source_stream_sha256": "195e85f9243181e7a20f1d818156bd48b00962c07c7ef1bdf55ace9cd3a3150f",
           "symbology": "PDF417"
         }
       ]
@@ -2245,6 +2776,64 @@
       "fixture": "packages/form-contracts/fixtures/2550q-normal.json",
       "fixture_sha256": "f9b13277d40b0b6b093ac4f1c93c289ff72fcc77e191a3a98d3eb27ce11176b3",
       "form_id": "2550Qv2024",
+      "machine_readable_artwork": {
+        "asset_ids": [
+          "static_form_pdf417_page_1",
+          "static_form_pdf417_page_2"
+        ],
+        "asset_inventory_sha256": "297cf4089c7dcb0fac7e858c5f67ba6e46ed7852cc009768d14698d41e0ba863",
+        "assets": [
+          {
+            "asset": "static_form_pdf417_page_1",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "2550Q 04/24ENCS P1",
+            "decoded_payload": "2550Q 04/24ENCS P1",
+            "logical_dimensions": [
+              120,
+              7
+            ],
+            "logical_matrix_sha256": "5a8d7f411686eb62d9d45b25a0430703a087068d43cd34cf6e63c35d6fce435f",
+            "logical_path_sha256": "59064ade808ae9a05497ebe5794e15f4da1b77f9c61009ca2ba85b5b2716625f",
+            "module_differences": 0,
+            "source_page": 1,
+            "source_pdf_object_id": [
+              38,
+              0
+            ],
+            "source_png_sha256": "34d7cac99a6e212ddcf3aed400de37691a40bf7e9917aefbf71f49866ef1ef9c",
+            "source_stream_sha256": "1698de046f9ad0535ed16a57fa1dbae5bb2d4003e7650ea081df69a2aae7ce2c",
+            "symbology": "PDF417"
+          },
+          {
+            "asset": "static_form_pdf417_page_2",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "2550Q 04/24ENCS P2",
+            "decoded_payload": "2550Q 04/24ENCS P2",
+            "logical_dimensions": [
+              120,
+              7
+            ],
+            "logical_matrix_sha256": "95368d60c40a9767d65c09836f3c36152adfd42cd70c740dea33c19e75fe86e6",
+            "logical_path_sha256": "4b76223a10321504a7fde4e652b651f06418779c085b1e31c83fcc05082ee810",
+            "module_differences": 0,
+            "source_page": 2,
+            "source_pdf_object_id": [
+              47,
+              0
+            ],
+            "source_png_sha256": "883cf46213814de3670edf662411b3c88d334188f05877e175e77fa19ba02b1a",
+            "source_stream_sha256": "34d016e1171a32c0446a10e1cbe924ef9db3d0cba0faac70766011c825556c61",
+            "symbology": "PDF417"
+          }
+        ],
+        "audited_pages": [
+          1,
+          2
+        ],
+        "inventory_method": "reviewed exact PDF object, decoded payload, zero-difference logical module matrix, and inline vector binding",
+        "official_source_sha256": "18eb16925010fdda820cef958221ba2c0d073066efa93a898113e39b31135a25",
+        "status": "present_in_official_pdf"
+      },
       "official_source": "https://bir-cdn.bir.gov.ph/BIR/pdf/2550Q%20%20April%202024%20ENCS_Final.pdf",
       "official_source_sha256": "18eb16925010fdda820cef958221ba2c0d073066efa93a898113e39b31135a25",
       "page_count": 2,
@@ -2394,6 +2983,7 @@
             63
           ],
           "source_png_sha256": "34d7cac99a6e212ddcf3aed400de37691a40bf7e9917aefbf71f49866ef1ef9c",
+          "source_stream_sha256": "1698de046f9ad0535ed16a57fa1dbae5bb2d4003e7650ea081df69a2aae7ce2c",
           "symbology": "PDF417"
         },
         {
@@ -2478,6 +3068,7 @@
             63
           ],
           "source_png_sha256": "883cf46213814de3670edf662411b3c88d334188f05877e175e77fa19ba02b1a",
+          "source_stream_sha256": "34d016e1171a32c0446a10e1cbe924ef9db3d0cba0faac70766011c825556c61",
           "symbology": "PDF417"
         }
       ]
@@ -2487,6 +3078,64 @@
       "fixture": "packages/form-contracts/fixtures/2551q-6-rows.json",
       "fixture_sha256": "f3d49ddab5cdd7c1d889a7b2cbd519babf7556c186702f0232b9f18257f7a5b7",
       "form_id": "2551Qv2018",
+      "machine_readable_artwork": {
+        "asset_ids": [
+          "static_form_pdf417_page_1",
+          "static_form_pdf417_page_2"
+        ],
+        "asset_inventory_sha256": "36807f8e33e90866187387ca02c74479dddb5145e9fa92563f5d4c871c640c0a",
+        "assets": [
+          {
+            "asset": "static_form_pdf417_page_1",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "2551Q 01/18ENCS P1",
+            "decoded_payload": "2551Q 01/18ENCS P1",
+            "logical_dimensions": [
+              120,
+              7
+            ],
+            "logical_matrix_sha256": "0b22b8418dc0dadb2043dd6022cb337e6fd60193b50105a3e7c47de3e565b9ca",
+            "logical_path_sha256": "7ecda284c8c42dc6c64631313ff25e705c11450b9a1139223978f43e7d8168c2",
+            "module_differences": 0,
+            "source_page": 1,
+            "source_pdf_object_id": [
+              35,
+              0
+            ],
+            "source_png_sha256": "2fde50ef1089a8b5ec262b2927ea4d6d26323e9fab95832b22ca3b4ab602eae3",
+            "source_stream_sha256": "889982f23eeedeb85d61a4686e2737e2eddf66705df230afc71a5aca22656a9b",
+            "symbology": "PDF417"
+          },
+          {
+            "asset": "static_form_pdf417_page_2",
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "2551Q 01/18ENCS P2",
+            "decoded_payload": "2551Q 01/18ENCS P2",
+            "logical_dimensions": [
+              120,
+              7
+            ],
+            "logical_matrix_sha256": "b9257f08de39c25c64cbb7b8cbef835c060a5e347866c67b4cee558669f3233f",
+            "logical_path_sha256": "d8c1d2fb417d8c4f83c147a5af7c3aee41f811beaa56ca39e20f77117c2c923e",
+            "module_differences": 0,
+            "source_page": 2,
+            "source_pdf_object_id": [
+              38,
+              0
+            ],
+            "source_png_sha256": "8c89b401f443252642d6820164c6801ab00ba0dcd04715e9fa80eb05861f53d9",
+            "source_stream_sha256": "27639c545c7eeee18bcac00bd28e5b1dda3a7d9f7c5c3d11569c1a38d7423c69",
+            "symbology": "PDF417"
+          }
+        ],
+        "audited_pages": [
+          1,
+          2
+        ],
+        "inventory_method": "reviewed exact PDF object, decoded payload, zero-difference logical module matrix, and inline vector binding",
+        "official_source_sha256": "1f270ecf66d778836a14697863e420ff65d5ed0a5576a6cf58b97c9a8e8c9b24",
+        "status": "present_in_official_pdf"
+      },
       "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/2551Q%20Jan%202018%20ENCS%20final%20rev%203_copy.pdf",
       "official_source_sha256": "1f270ecf66d778836a14697863e420ff65d5ed0a5576a6cf58b97c9a8e8c9b24",
       "page_count": 2,
@@ -2554,14 +3203,41 @@
         },
         {
           "asset": "static_form_pdf417_page_1",
+          "caption_bbox_top_left_points": [
+            504.22,
+            96.663803,
+            80.670197,
+            8.9646
+          ],
+          "caption_font": "Arial",
+          "caption_font_size_points": 8.04,
+          "caption_render_font": "eBIRForms Arimo",
+          "caption_text": "2551Q 01/18ENCS P1",
           "decoded_payload": "2551Q 01/18ENCS P1",
-          "embedded_as": "reviewed_inline_svg_module_matrix",
+          "decoder_evidence": [
+            {
+              "decoder": "ZXing 3.5.3",
+              "payload": "2551Q 01/18ENCS P1",
+              "symbology": "PDF417"
+            }
+          ],
+          "embedded_as": "reviewed_inline_svg_module_matrix_with_live_caption",
           "embedded_in": "packages/form-renderer/src/forms/official2551QAssets.ts",
+          "encoder_proof": {
+            "columns": 3,
+            "encoding": "ISO-8859-1",
+            "error_correction_level": 2,
+            "implementation": "pdf417gen 0.8.1",
+            "module_differences": 0,
+            "rows": 7
+          },
+          "logical_black_modules": 491,
           "logical_dimensions": [
             120,
             7
           ],
           "logical_matrix_sha256": "0b22b8418dc0dadb2043dd6022cb337e6fd60193b50105a3e7c47de3e565b9ca",
+          "logical_path_sha256": "7ecda284c8c42dc6c64631313ff25e705c11450b9a1139223978f43e7d8168c2",
           "source_ctm_points": [
             161.28,
             0.0,
@@ -2570,6 +3246,7 @@
             425.76,
             839.52
           ],
+          "source_decoded_rgb_sha256": "1162d0ddcb503c1ff41dfa01255c8f0fc2ede5a76d84b8d774941c1685959da3",
           "source_page": 1,
           "source_pdf_object_id": [
             35,
@@ -2580,18 +3257,46 @@
             63
           ],
           "source_png_sha256": "2fde50ef1089a8b5ec262b2927ea4d6d26323e9fab95832b22ca3b4ab602eae3",
-          "symbology": "PDF_417"
+          "source_stream_sha256": "889982f23eeedeb85d61a4686e2737e2eddf66705df230afc71a5aca22656a9b",
+          "symbology": "PDF417"
         },
         {
           "asset": "static_form_pdf417_page_2",
+          "caption_bbox_top_left_points": [
+            504.22,
+            86.943771,
+            80.670197,
+            8.9646
+          ],
+          "caption_font": "Arial",
+          "caption_font_size_points": 8.04,
+          "caption_render_font": "eBIRForms Arimo",
+          "caption_text": "2551Q 01/18ENCS P2",
           "decoded_payload": "2551Q 01/18ENCS P2",
-          "embedded_as": "reviewed_inline_svg_module_matrix",
+          "decoder_evidence": [
+            {
+              "decoder": "ZXing 3.5.3",
+              "payload": "2551Q 01/18ENCS P2",
+              "symbology": "PDF417"
+            }
+          ],
+          "embedded_as": "reviewed_inline_svg_module_matrix_with_live_caption",
           "embedded_in": "packages/form-renderer/src/forms/official2551QAssets.ts",
+          "encoder_proof": {
+            "columns": 3,
+            "encoding": "ISO-8859-1",
+            "error_correction_level": 2,
+            "implementation": "pdf417gen 0.8.1",
+            "module_differences": 0,
+            "rows": 7
+          },
+          "logical_black_modules": 484,
           "logical_dimensions": [
             120,
             7
           ],
           "logical_matrix_sha256": "b9257f08de39c25c64cbb7b8cbef835c060a5e347866c67b4cee558669f3233f",
+          "logical_path_sha256": "d8c1d2fb417d8c4f83c147a5af7c3aee41f811beaa56ca39e20f77117c2c923e",
           "source_ctm_points": [
             163.2,
             0.0,
@@ -2600,6 +3305,7 @@
             424.32,
             849.84
           ],
+          "source_decoded_rgb_sha256": "df505160a42c47d7d64d7590ec8146124360aa0062950aca9ede808b92396cc6",
           "source_page": 2,
           "source_pdf_object_id": [
             38,
@@ -2610,7 +3316,8 @@
             63
           ],
           "source_png_sha256": "8c89b401f443252642d6820164c6801ab00ba0dcd04715e9fa80eb05861f53d9",
-          "symbology": "PDF_417"
+          "source_stream_sha256": "27639c545c7eeee18bcac00bd28e5b1dda3a7d9f7c5c3d11569c1a38d7423c69",
+          "symbology": "PDF417"
         }
       ]
     }

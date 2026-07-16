@@ -1,7 +1,9 @@
 #![recursion_limit = "256"]
 
 use bir_print::html::{RenderEnvelopeV1, RENDER_CONTRACT_VERSION};
-use bir_print::html_forms::{render_form_provider, render_form_providers, RenderFormProvider};
+use bir_print::html_forms::{
+    render_form_provider, render_form_providers, MachineReadableArtworkEvidence, RenderFormProvider,
+};
 use schemars::schema_for;
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -189,6 +191,215 @@ fn canonical_pretty_json(value: &serde_json::Value) -> Result<String, serde_json
     Ok(format!("{}\n", serde_json::to_string_pretty(&canonical)?))
 }
 
+fn sha256_json_value(value: &serde_json::Value) -> Result<String, serde_json::Error> {
+    Ok(format!(
+        "{:x}",
+        Sha256::digest(canonical_pretty_json(value)?.as_bytes())
+    ))
+}
+
+fn is_machine_readable_asset(asset: &serde_json::Value) -> bool {
+    let name = asset
+        .get("asset")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    ["barcode", "pdf417", "qr_code", "qrcode"]
+        .iter()
+        .any(|token| name.contains(token))
+}
+
+fn machine_readable_asset_summary(asset: &serde_json::Value) -> serde_json::Value {
+    json!({
+        "asset": asset.get("asset"),
+        "source_page": asset.get("source_page"),
+        "source_pdf_object_id": asset.get("source_pdf_object_id"),
+        "source_stream_sha256": asset.get("source_stream_sha256"),
+        "source_png_sha256": asset.get("source_png_sha256"),
+        "decoded_payload": asset.get("decoded_payload"),
+        "symbology": asset.get("symbology"),
+        "logical_dimensions": asset.get("logical_dimensions"),
+        "logical_matrix_sha256": asset.get("logical_matrix_sha256"),
+        "logical_path_sha256": asset
+            .get("logical_path_sha256")
+            .or_else(|| asset.get("svg_path_sha256")),
+        "caption_text": asset.get("caption_text"),
+        "caption_render_font": asset.get("caption_render_font"),
+        "module_differences": asset.pointer("/encoder_proof/module_differences")
+    })
+}
+
+fn expected_physical_pages(provider: &RenderFormProvider) -> Vec<usize> {
+    (1..=provider.expected_base_page_count).collect()
+}
+
+fn build_machine_readable_artwork_evidence(
+    root: &Path,
+    provider: &RenderFormProvider,
+    runtime_discrete_assets: &[serde_json::Value],
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    let code_assets = runtime_discrete_assets
+        .iter()
+        .filter(|asset| is_machine_readable_asset(asset))
+        .cloned()
+        .collect::<Vec<_>>();
+    let expected_pages = expected_physical_pages(provider);
+
+    match provider.machine_readable_artwork {
+        MachineReadableArtworkEvidence::Present => {
+            if code_assets.is_empty() {
+                return Err(format!(
+                    "{} declares machine-readable artwork present but has no reviewed code asset",
+                    provider.key()
+                )
+                .into());
+            }
+
+            let mut audited_pages = code_assets
+                .iter()
+                .map(|asset| {
+                    asset
+                        .get("source_page")
+                        .and_then(serde_json::Value::as_u64)
+                        .and_then(|page| usize::try_from(page).ok())
+                        .ok_or_else(|| {
+                            format!(
+                                "{} machine-readable asset lacks a valid source_page",
+                                provider.key()
+                            )
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            audited_pages.sort_unstable();
+            audited_pages.dedup();
+            if audited_pages != expected_pages {
+                return Err(format!(
+                    "{} machine-readable artwork audits pages {audited_pages:?}; expected every physical page {expected_pages:?}",
+                    provider.key()
+                )
+                .into());
+            }
+
+            let asset_ids = code_assets
+                .iter()
+                .map(|asset| {
+                    asset
+                        .get("asset")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_owned)
+                        .ok_or_else(|| {
+                            format!(
+                                "{} machine-readable asset lacks an asset identifier",
+                                provider.key()
+                            )
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let asset_inventory = serde_json::Value::Array(
+                code_assets
+                    .iter()
+                    .map(machine_readable_asset_summary)
+                    .collect(),
+            );
+            let asset_inventory_sha256 = sha256_json_value(&asset_inventory)?;
+
+            Ok(json!({
+                "status": "present_in_official_pdf",
+                "official_source_sha256": provider.official_source_sha256,
+                "audited_pages": audited_pages,
+                "inventory_method": "reviewed exact PDF object, decoded payload, zero-difference logical module matrix, and inline vector binding",
+                "asset_ids": asset_ids,
+                "assets": asset_inventory,
+                "asset_inventory_sha256": asset_inventory_sha256
+            }))
+        }
+        MachineReadableArtworkEvidence::Absent {
+            audited_pages,
+            inventory_method,
+            object_inventory_path,
+            object_inventory_sha256,
+        } => {
+            if !code_assets.is_empty() {
+                return Err(format!(
+                    "{} declares machine-readable artwork absent but exposes reviewed code assets",
+                    provider.key()
+                )
+                .into());
+            }
+            if audited_pages != expected_pages {
+                return Err(format!(
+                    "{} no-symbol evidence audits pages {audited_pages:?}; expected {expected_pages:?}",
+                    provider.key()
+                )
+                .into());
+            }
+
+            let inventory_path = root.join(object_inventory_path);
+            validate_pinned_hash(
+                &inventory_path,
+                object_inventory_sha256,
+                "machine-readable object inventory",
+            )?;
+            let inventory: serde_json::Value = serde_json::from_slice(&fs::read(&inventory_path)?)?;
+            if inventory
+                .get("official_source_sha256")
+                .and_then(serde_json::Value::as_str)
+                != Some(provider.official_source_sha256)
+            {
+                return Err(format!(
+                    "{} no-symbol inventory is not bound to the pinned official PDF",
+                    provider.key()
+                )
+                .into());
+            }
+            if inventory.get("audited_pages") != Some(&json!(expected_pages)) {
+                return Err(format!(
+                    "{} no-symbol inventory does not cover every physical page",
+                    provider.key()
+                )
+                .into());
+            }
+            if inventory
+                .pointer("/conclusion/status")
+                .and_then(serde_json::Value::as_str)
+                != Some("absent_in_official_pdf")
+            {
+                return Err(format!(
+                    "{} no-symbol inventory lacks an absent_in_official_pdf conclusion",
+                    provider.key()
+                )
+                .into());
+            }
+            let page_inventories = inventory
+                .get("pages")
+                .and_then(serde_json::Value::as_array)
+                .ok_or_else(|| format!("{} no-symbol inventory lacks pages", provider.key()))?;
+            if page_inventories.len() != expected_pages.len()
+                || page_inventories.iter().any(|page| {
+                    page.get("machine_readable_candidates")
+                        .and_then(serde_json::Value::as_array)
+                        .is_none_or(|candidates| !candidates.is_empty())
+                })
+            {
+                return Err(format!(
+                    "{} no-symbol inventory has missing or non-empty page candidate evidence",
+                    provider.key()
+                )
+                .into());
+            }
+
+            Ok(json!({
+                "status": "absent_in_official_pdf",
+                "official_source_sha256": provider.official_source_sha256,
+                "audited_pages": audited_pages,
+                "inventory_method": inventory_method,
+                "object_inventory_path": object_inventory_path,
+                "object_inventory_sha256": object_inventory_sha256
+            }))
+        }
+    }
+}
+
 fn build_visual_reference_manifest(
     root: &Path,
     providers: &[&RenderFormProvider],
@@ -234,6 +445,10 @@ fn build_visual_reference_manifest(
             }));
         }
 
+        let runtime_discrete_assets = (provider.runtime_discrete_assets)();
+        let machine_readable_artwork =
+            build_machine_readable_artwork_evidence(root, provider, &runtime_discrete_assets)?;
+
         forms.push(json!({
             "code": provider.code,
             "revision": provider.revision,
@@ -251,7 +466,8 @@ fn build_visual_reference_manifest(
                 "replacement_required": false,
                 "note": "Rendered directly from the pinned official BIR PDF with Poppler at the manifest DPI; calibration-only and never runtime-loaded."
             },
-            "runtime_discrete_assets": (provider.runtime_discrete_assets)(),
+            "machine_readable_artwork": machine_readable_artwork,
+            "runtime_discrete_assets": runtime_discrete_assets,
             "pages": pages
         }));
     }
@@ -752,6 +968,65 @@ mod tests {
                 !manifest.contains(forbidden),
                 "manifest contains {forbidden}"
             );
+        }
+    }
+
+    #[test]
+    fn every_exact_form_has_explicit_machine_readable_artwork_evidence() {
+        let root = workspace_root().expect("workspace root should resolve");
+        let all_providers = render_form_providers().iter().collect::<Vec<_>>();
+        let manifest = build_visual_reference_manifest(&root, &all_providers)
+            .expect("reference evidence should build");
+        let forms = manifest["forms"]
+            .as_array()
+            .expect("reference manifest forms");
+
+        assert_eq!(forms.len(), all_providers.len());
+        for form in forms {
+            let code = form["code"].as_str().expect("form code");
+            let evidence = &form["machine_readable_artwork"];
+            assert_eq!(
+                evidence["official_source_sha256"], form["official_source_sha256"],
+                "{code} evidence must bind the pinned official PDF"
+            );
+            assert_eq!(
+                evidence["audited_pages"],
+                serde_json::Value::Array(
+                    (1..=form["page_count"].as_u64().expect("page count"))
+                        .map(serde_json::Value::from)
+                        .collect()
+                ),
+                "{code} evidence must cover every physical page"
+            );
+
+            if code == "0605" {
+                assert_eq!(evidence["status"], "absent_in_official_pdf");
+                let inventory_path = evidence["object_inventory_path"]
+                    .as_str()
+                    .expect("0605 inventory path");
+                assert_eq!(
+                    sha256_file(&root.join(inventory_path)).expect("0605 inventory hash"),
+                    evidence["object_inventory_sha256"]
+                        .as_str()
+                        .expect("0605 pinned inventory hash")
+                );
+            } else {
+                assert_eq!(evidence["status"], "present_in_official_pdf");
+                let assets = evidence["assets"]
+                    .as_array()
+                    .expect("reviewed machine-readable assets");
+                assert!(
+                    !assets.is_empty(),
+                    "{code} must retain reviewed code assets"
+                );
+                assert_eq!(
+                    sha256_json_value(&serde_json::Value::Array(assets.clone()))
+                        .expect("machine-readable asset inventory hash"),
+                    evidence["asset_inventory_sha256"]
+                        .as_str()
+                        .expect("pinned asset inventory hash")
+                );
+            }
         }
     }
 }

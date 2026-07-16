@@ -40,6 +40,7 @@ pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     reference_width_px: 1_224,
     reference_height_px: 1_584,
     visual_reference_pages: VISUAL_REFERENCE_PAGES,
+    machine_readable_artwork: super::MachineReadableArtworkEvidence::Present,
     runtime_discrete_assets,
     fixtures,
     generated_artifacts,
@@ -61,6 +62,7 @@ fn runtime_discrete_assets() -> Vec<serde_json::Value> {
             "source_pdf_object_id": [41, 0],
             "source_pixel_dimensions": [86, 78],
             "source_png_sha256": "6cd637975f8088cc8b56aa67c26794db23331864a45c08517c66b70f53ff2610",
+            "source_channels_equal": true,
             "source_stream_sha256": "39613d13cd9b910b039ef6287ce4ef059e03661acf565719fdb740d751771ba1",
             "treatment": "lossless extraction of the exact official PDF image XObject; no crop, resampling, recoloring, or substitution"
         }),
@@ -89,6 +91,7 @@ fn runtime_discrete_assets() -> Vec<serde_json::Value> {
             "logical_black_modules": 480,
             "logical_dimensions": [120, 7],
             "logical_matrix_sha256": "0238537d56f19276b790a8395c429a9f7645ac570eecc097064051b456dc5dfa",
+            "logical_path_sha256": "68bfaa671497f2c248df79b4071407d50c8d03fe132d9f0c61ccc621cc5f2700",
             "source_active_bbox_top_left_points": [454.8, 65.04, 134.9925925926, 35.4375],
             "source_active_pixel_bounds": [0, 0, 240, 63],
             "source_bbox_top_left_points": [454.8, 65.04, 136.68, 36.0],

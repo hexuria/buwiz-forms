@@ -1,0 +1,75 @@
+{
+  "audited_pages": [
+    1,
+    2
+  ],
+  "conclusion": {
+    "machine_readable_candidates": [],
+    "review_note": "Both physical pages were reviewed at the pinned 144 DPI reference resolution. The only image XObject is the exact government seal on page 1; neither decoded page-content stream nor either reviewed page contains a barcode, PDF417 symbol, or QR code.",
+    "status": "absent_in_official_pdf"
+  },
+  "form": {
+    "code": "0605",
+    "form_id": "0605v1999",
+    "revision": "1999"
+  },
+  "inventory_method": "pinned PDF image-XObject, decoded page-content stream, and reviewed 144 DPI page inventory",
+  "official_source_sha256": "de04419766c59bf27fdeb854c0f7c3f98601900caa20630442e671e2313e536f",
+  "pages": [
+    {
+      "content_streams": [
+        {
+          "decoded_stream_sha256": "0796080005d8ae00769a5a5425864e7e03a8d7696c6b16e2e0f6a4523214e669",
+          "object_id": [
+            5,
+            0
+          ],
+          "raw_stream_sha256": "3bb0043a2377ea876c06989ea378b254534634aca019ea2473d4c54436212f14"
+        }
+      ],
+      "image_xobjects": [
+        {
+          "bits_per_component": 8,
+          "color_space": "DeviceGray",
+          "decoded_stream_sha256": "03eb961d4f3bbd8ab0660e3f56461d85655a90bbfa4058b6a4704a4c88125202",
+          "height_px": 93,
+          "object_id": [
+            13,
+            0
+          ],
+          "role": "government_seal",
+          "stream_sha256": "2dfbae2a365476d07a5eac1e725184385f8d3297f499bf6b196baf1432389562",
+          "width_px": 113
+        }
+      ],
+      "machine_readable_candidates": [],
+      "page": 1,
+      "page_object_id": [
+        4,
+        0
+      ],
+      "reference_png_sha256": "419d85b55b05fba3e789ab9ded877cdd0514239ef998f9a15258d9ff78251f84"
+    },
+    {
+      "content_streams": [
+        {
+          "decoded_stream_sha256": "f2890a59fa49b9098892b4302b9c36e512095f9e0c13f204bcc8e8c3facfc584",
+          "object_id": [
+            16,
+            0
+          ],
+          "raw_stream_sha256": "6e28222d4c0780682ed439c25aa7f61bf37e38d3b7d4b2f9cc670f39ffcd0312"
+        }
+      ],
+      "image_xobjects": [],
+      "machine_readable_candidates": [],
+      "page": 2,
+      "page_object_id": [
+        15,
+        0
+      ],
+      "reference_png_sha256": "d1066f9ece7ba7b670f547310851bad94605ba766668d7b9f2097bfefcd02792"
+    }
+  ],
+  "schema_version": 1
+}

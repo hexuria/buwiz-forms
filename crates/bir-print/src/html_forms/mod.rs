@@ -175,6 +175,23 @@ pub struct VisualReferencePage {
     pub sha256: &'static str,
 }
 
+/// Reviewed machine-readable artwork evidence for one exact form revision.
+///
+/// `Present` is intentionally explicit even though the provider also exposes
+/// the reviewed PDF417/QR asset records. `Absent` must point at a committed,
+/// hashed inventory of every physical page; an empty runtime asset list is
+/// never treated as proof that the official PDF contains no symbol.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MachineReadableArtworkEvidence {
+    Present,
+    Absent {
+        audited_pages: &'static [usize],
+        inventory_method: &'static str,
+        object_inventory_path: &'static str,
+        object_inventory_sha256: &'static str,
+    },
+}
+
 #[derive(Debug)]
 pub struct RenderFormProvider {
     pub code: &'static str,
@@ -193,6 +210,7 @@ pub struct RenderFormProvider {
     pub reference_width_px: u32,
     pub reference_height_px: u32,
     pub visual_reference_pages: &'static [VisualReferencePage],
+    pub machine_readable_artwork: MachineReadableArtworkEvidence,
     pub runtime_discrete_assets: fn() -> Vec<serde_json::Value>,
     pub fixtures: fn() -> Result<Vec<RenderContractFixture>, RenderProviderError>,
     pub generated_artifacts: fn() -> Result<Vec<GeneratedContractArtifact>, RenderProviderError>,

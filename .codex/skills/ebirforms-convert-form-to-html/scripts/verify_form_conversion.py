@@ -95,6 +95,13 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def sha256_json_value(value: Any) -> str:
+    payload = json.dumps(
+        value, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False
+    ) + "\n"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def png_size(path: Path) -> tuple[int, int]:
     with path.open("rb") as handle:
         header = handle.read(24)
@@ -225,6 +232,30 @@ def forbidden_artwork_paths(value: Any, prefix: str = "") -> list[str]:
     return findings
 
 
+def machine_readable_asset_summary(asset: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "asset": asset.get("asset"),
+        "caption_render_font": asset.get("caption_render_font"),
+        "caption_text": asset.get("caption_text"),
+        "decoded_payload": asset.get("decoded_payload"),
+        "logical_dimensions": asset.get("logical_dimensions"),
+        "logical_matrix_sha256": asset.get("logical_matrix_sha256"),
+        "logical_path_sha256": asset.get(
+            "logical_path_sha256", asset.get("svg_path_sha256")
+        ),
+        "module_differences": (
+            asset.get("encoder_proof", {}).get("module_differences")
+            if isinstance(asset.get("encoder_proof"), dict)
+            else None
+        ),
+        "source_page": asset.get("source_page"),
+        "source_pdf_object_id": asset.get("source_pdf_object_id"),
+        "source_png_sha256": asset.get("source_png_sha256"),
+        "source_stream_sha256": asset.get("source_stream_sha256"),
+        "symbology": asset.get("symbology"),
+    }
+
+
 def artwork_evidence_findings(
     reference: dict[str, Any], root: Path, artifacts: list[str]
 ) -> list[str]:
@@ -280,6 +311,13 @@ def artwork_evidence_findings(
             ]
             if not decoded_hashes:
                 findings.append(f"{label} lacks a decoded native-content SHA-256")
+            if (
+                str(asset.get("color_space", "")).lower() != "devicegray"
+                and asset.get("source_channels_equal") is not True
+            ):
+                findings.append(
+                    f"{label} lacks proof that official seal/logo channels are equal"
+                )
             embedded_as = str(asset.get("embedded_as", "")).lower()
             if "lossless" not in embedded_as and "vector" not in embedded_as:
                 findings.append(
@@ -364,41 +402,128 @@ def artwork_evidence_findings(
     if government_assets == 0:
         findings.append("reference lacks exact embedded government seal/logo evidence")
 
-    absence = reference.get("machine_readable_artwork")
+    evidence = reference.get("machine_readable_artwork")
+    expected_pages = list(range(1, int(reference.get("page_count", 0)) + 1))
     if code_assets:
-        if (
-            isinstance(absence, dict)
-            and absence.get("status") == "absent_in_official_pdf"
-        ):
+        if not isinstance(evidence, dict):
+            findings.append("code form lacks explicit machine_readable_artwork evidence")
+        elif evidence.get("status") != "present_in_official_pdf":
             findings.append(
-                "machine-readable artwork cannot be both present and absent"
+                "machine-readable artwork assets require present_in_official_pdf evidence"
             )
+        else:
+            if evidence.get("official_source_sha256") != reference.get(
+                "official_source_sha256"
+            ):
+                findings.append(
+                    "machine-readable evidence source hash does not match the pinned official PDF"
+                )
+            if evidence.get("audited_pages") != expected_pages:
+                findings.append(
+                    "machine-readable evidence must audit every physical page in order"
+                )
+            if not isinstance(evidence.get("inventory_method"), str) or not evidence.get(
+                "inventory_method"
+            ):
+                findings.append("machine-readable evidence lacks inventory_method")
+
+            expected_assets = [
+                machine_readable_asset_summary(asset) for asset in code_assets
+            ]
+            expected_ids = [asset.get("asset") for asset in code_assets]
+            if evidence.get("asset_ids") != expected_ids:
+                findings.append(
+                    "machine-readable evidence asset_ids do not match reviewed runtime assets"
+                )
+            if evidence.get("assets") != expected_assets:
+                findings.append(
+                    "machine-readable evidence asset inventory does not match reviewed runtime assets"
+                )
+            expected_inventory_hash = sha256_json_value(expected_assets)
+            if evidence.get("asset_inventory_sha256") != expected_inventory_hash:
+                findings.append(
+                    "machine-readable evidence asset_inventory_sha256 does not match reviewed runtime assets"
+                )
     else:
         if (
-            not isinstance(absence, dict)
-            or absence.get("status") != "absent_in_official_pdf"
+            not isinstance(evidence, dict)
+            or evidence.get("status") != "absent_in_official_pdf"
         ):
             findings.append(
                 "no-code form lacks audited absent_in_official_pdf evidence"
             )
         else:
-            if absence.get("official_source_sha256") != reference.get(
+            if evidence.get("official_source_sha256") != reference.get(
                 "official_source_sha256"
             ):
                 findings.append(
                     "no-code evidence source hash does not match the pinned official PDF"
                 )
-            expected_pages = list(range(1, int(reference.get("page_count", 0)) + 1))
-            if absence.get("audited_pages") != expected_pages:
+            if evidence.get("audited_pages") != expected_pages:
                 findings.append(
                     "no-code evidence must audit every physical page in order"
                 )
-            if not isinstance(absence.get("inventory_method"), str) or not absence.get(
+            if not isinstance(evidence.get("inventory_method"), str) or not evidence.get(
                 "inventory_method"
             ):
                 findings.append("no-code evidence lacks inventory_method")
-            if not SHA256_RE.fullmatch(str(absence.get("object_inventory_sha256", ""))):
+            inventory_hash = str(evidence.get("object_inventory_sha256", ""))
+            if not SHA256_RE.fullmatch(inventory_hash):
                 findings.append("no-code evidence lacks object_inventory_sha256")
+            inventory_path_value = evidence.get("object_inventory_path")
+            if not isinstance(inventory_path_value, str) or not inventory_path_value:
+                findings.append("no-code evidence lacks object_inventory_path")
+            else:
+                inventory_path = root / inventory_path_value
+                if not inventory_path.is_file():
+                    findings.append(
+                        f"no-code evidence object inventory is missing: {inventory_path_value}"
+                    )
+                else:
+                    artifacts.append(relative(inventory_path, root))
+                    if SHA256_RE.fullmatch(inventory_hash) and sha256_file(
+                        inventory_path
+                    ) != inventory_hash:
+                        findings.append(
+                            "no-code evidence object inventory hash does not match"
+                        )
+                    try:
+                        inventory = json.loads(
+                            inventory_path.read_text(encoding="utf-8")
+                        )
+                    except (OSError, json.JSONDecodeError):
+                        findings.append("no-code evidence object inventory is invalid JSON")
+                    else:
+                        if inventory.get("official_source_sha256") != reference.get(
+                            "official_source_sha256"
+                        ):
+                            findings.append(
+                                "no-code object inventory is not bound to the pinned official PDF"
+                            )
+                        if inventory.get("audited_pages") != expected_pages:
+                            findings.append(
+                                "no-code object inventory does not cover every physical page"
+                            )
+                        if inventory.get("conclusion", {}).get("status") != (
+                            "absent_in_official_pdf"
+                        ):
+                            findings.append(
+                                "no-code object inventory lacks an absent conclusion"
+                            )
+                        pages = inventory.get("pages")
+                        if (
+                            not isinstance(pages, list)
+                            or len(pages) != len(expected_pages)
+                            or any(
+                                not isinstance(page, dict)
+                                or page.get("page") != expected_page
+                                or page.get("machine_readable_candidates") != []
+                                for expected_page, page in zip(expected_pages, pages)
+                            )
+                        ):
+                            findings.append(
+                                "no-code object inventory has incomplete page candidate evidence"
+                            )
 
     return findings
 
@@ -718,12 +843,32 @@ def self_test() -> None:
         seal_path = root / "seal.png"
         seal_path.write_bytes(b"native seal")
         seal_hash = sha256_file(seal_path)
+        inventory_path = root / "no-symbol-inventory.json"
+        inventory_path.write_text(
+            json.dumps(
+                {
+                    "official_source_sha256": "a" * 64,
+                    "audited_pages": [1, 2],
+                    "conclusion": {"status": "absent_in_official_pdf"},
+                    "pages": [
+                        {"page": 1, "machine_readable_candidates": []},
+                        {"page": 2, "machine_readable_candidates": []},
+                    ],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        inventory_hash = sha256_file(inventory_path)
         reference = {
             "official_source_sha256": "a" * 64,
             "page_count": 2,
             "runtime_discrete_assets": [
                 {
                     "asset": "government_seal",
+                    "color_space": "DeviceGray",
                     "embedded_as": "lossless_native_devicegray_xobject",
                     "embedded_in": "seal.png",
                     "derived_png_sha256": seal_hash,
@@ -739,12 +884,13 @@ def self_test() -> None:
                 "official_source_sha256": "a" * 64,
                 "audited_pages": [1, 2],
                 "inventory_method": "PDF object and page-content inventory",
-                "object_inventory_sha256": "d" * 64,
+                "object_inventory_path": "no-symbol-inventory.json",
+                "object_inventory_sha256": inventory_hash,
             },
         }
         artifacts: list[str] = []
         assert artwork_evidence_findings(reference, root, artifacts) == []
-        assert artifacts == ["seal.png"]
+        assert artifacts == ["seal.png", "no-symbol-inventory.json"]
 
         reference["runtime_discrete_assets"][0]["crop_box_px"] = [1, 2, 3, 4]
         assert any(
@@ -793,6 +939,19 @@ def self_test() -> None:
                 "encoder_proof": {"module_differences": 0},
             }
         )
+        reference["page_count"] = 1
+        expected_assets = [
+            machine_readable_asset_summary(reference["runtime_discrete_assets"][1])
+        ]
+        reference["machine_readable_artwork"] = {
+            "status": "present_in_official_pdf",
+            "official_source_sha256": "a" * 64,
+            "audited_pages": [1],
+            "inventory_method": "reviewed exact PDF object and logical matrix",
+            "asset_ids": ["static_form_pdf417_page_1"],
+            "assets": expected_assets,
+            "asset_inventory_sha256": sha256_json_value(expected_assets),
+        }
         assert artwork_evidence_findings(reference, root, []) == []
     print("verify_form_conversion.py self-test: ok")
 

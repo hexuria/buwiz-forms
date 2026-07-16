@@ -51,6 +51,12 @@ pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     reference_width_px: 1_224,
     reference_height_px: 1_872,
     visual_reference_pages: VISUAL_REFERENCE_PAGES,
+    machine_readable_artwork: super::MachineReadableArtworkEvidence::Absent {
+        audited_pages: &[1, 2],
+        inventory_method: "pinned PDF image-XObject, decoded page-content stream, and reviewed 144 DPI page inventory",
+        object_inventory_path: "packages/form-renderer/references/0605-1999-machine-readable-inventory.json",
+        object_inventory_sha256: "a060310261463e286621bbbb53965e48f8d4785244341c2c40db22ff18a31f5e",
+    },
     runtime_discrete_assets,
     fixtures,
     generated_artifacts,

@@ -65,6 +65,7 @@ pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     reference_width_px: 1_224,
     reference_height_px: 1_872,
     visual_reference_pages: VISUAL_REFERENCE_PAGES,
+    machine_readable_artwork: super::MachineReadableArtworkEvidence::Present,
     runtime_discrete_assets,
     fixtures,
     generated_artifacts,
@@ -92,31 +93,53 @@ fn runtime_discrete_assets() -> Vec<serde_json::Value> {
         }),
         json!({
             "asset": "static_form_pdf417_page_1",
+            "caption_bbox_top_left_points": [504.22, 96.663803, 80.670197, 8.9646],
+            "caption_font": "Arial",
+            "caption_font_size_points": 8.04,
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "2551Q 01/18ENCS P1",
             "decoded_payload": "2551Q 01/18ENCS P1",
-            "embedded_as": "reviewed_inline_svg_module_matrix",
+            "decoder_evidence": [{"decoder": "ZXing 3.5.3", "payload": "2551Q 01/18ENCS P1", "symbology": "PDF417"}],
+            "embedded_as": "reviewed_inline_svg_module_matrix_with_live_caption",
             "embedded_in": "packages/form-renderer/src/forms/official2551QAssets.ts",
+            "encoder_proof": {"columns": 3, "encoding": "ISO-8859-1", "error_correction_level": 2, "implementation": "pdf417gen 0.8.1", "module_differences": 0, "rows": 7},
+            "logical_black_modules": 491,
             "logical_dimensions": [120, 7],
             "logical_matrix_sha256": "0b22b8418dc0dadb2043dd6022cb337e6fd60193b50105a3e7c47de3e565b9ca",
+            "logical_path_sha256": "7ecda284c8c42dc6c64631313ff25e705c11450b9a1139223978f43e7d8168c2",
             "source_ctm_points": [161.28, 0.0, 0.0, 37.08, 425.76, 839.52],
+            "source_decoded_rgb_sha256": "1162d0ddcb503c1ff41dfa01255c8f0fc2ede5a76d84b8d774941c1685959da3",
             "source_pdf_object_id": [35, 0],
             "source_page": 1,
             "source_pixel_dimensions": [240, 63],
             "source_png_sha256": "2fde50ef1089a8b5ec262b2927ea4d6d26323e9fab95832b22ca3b4ab602eae3",
-            "symbology": "PDF_417"
+            "source_stream_sha256": "889982f23eeedeb85d61a4686e2737e2eddf66705df230afc71a5aca22656a9b",
+            "symbology": "PDF417"
         }),
         json!({
             "asset": "static_form_pdf417_page_2",
+            "caption_bbox_top_left_points": [504.22, 86.943771, 80.670197, 8.9646],
+            "caption_font": "Arial",
+            "caption_font_size_points": 8.04,
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "2551Q 01/18ENCS P2",
             "decoded_payload": "2551Q 01/18ENCS P2",
-            "embedded_as": "reviewed_inline_svg_module_matrix",
+            "decoder_evidence": [{"decoder": "ZXing 3.5.3", "payload": "2551Q 01/18ENCS P2", "symbology": "PDF417"}],
+            "embedded_as": "reviewed_inline_svg_module_matrix_with_live_caption",
             "embedded_in": "packages/form-renderer/src/forms/official2551QAssets.ts",
+            "encoder_proof": {"columns": 3, "encoding": "ISO-8859-1", "error_correction_level": 2, "implementation": "pdf417gen 0.8.1", "module_differences": 0, "rows": 7},
+            "logical_black_modules": 484,
             "logical_dimensions": [120, 7],
             "logical_matrix_sha256": "b9257f08de39c25c64cbb7b8cbef835c060a5e347866c67b4cee558669f3233f",
+            "logical_path_sha256": "d8c1d2fb417d8c4f83c147a5af7c3aee41f811beaa56ca39e20f77117c2c923e",
             "source_ctm_points": [163.2, 0.0, 0.0, 37.56, 424.32, 849.84],
+            "source_decoded_rgb_sha256": "df505160a42c47d7d64d7590ec8146124360aa0062950aca9ede808b92396cc6",
             "source_pdf_object_id": [38, 0],
             "source_page": 2,
             "source_pixel_dimensions": [240, 63],
             "source_png_sha256": "8c89b401f443252642d6820164c6801ab00ba0dcd04715e9fa80eb05861f53d9",
-            "symbology": "PDF_417"
+            "source_stream_sha256": "27639c545c7eeee18bcac00bd28e5b1dda3a7d9f7c5c3d11569c1a38d7423c69",
+            "symbology": "PDF417"
         }),
     ]
 }
@@ -620,38 +643,61 @@ mod tests {
             json!("7db0df0c022263481d219eebc2077631866f626521b4fe93967910a6a9422a4f")
         );
 
-        assert_eq!(
-            &assets[1..],
-            &[
-                json!({
-                    "asset": "static_form_pdf417_page_1",
-                    "decoded_payload": "2551Q 01/18ENCS P1",
-                    "embedded_as": "reviewed_inline_svg_module_matrix",
-                    "embedded_in": "packages/form-renderer/src/forms/official2551QAssets.ts",
-                    "logical_dimensions": [120, 7],
-                    "logical_matrix_sha256": "0b22b8418dc0dadb2043dd6022cb337e6fd60193b50105a3e7c47de3e565b9ca",
-                    "source_ctm_points": [161.28, 0.0, 0.0, 37.08, 425.76, 839.52],
-                    "source_pdf_object_id": [35, 0],
-                    "source_page": 1,
-                    "source_pixel_dimensions": [240, 63],
-                    "source_png_sha256": "2fde50ef1089a8b5ec262b2927ea4d6d26323e9fab95832b22ca3b4ab602eae3",
-                    "symbology": "PDF_417"
-                }),
-                json!({
-                    "asset": "static_form_pdf417_page_2",
-                    "decoded_payload": "2551Q 01/18ENCS P2",
-                    "embedded_as": "reviewed_inline_svg_module_matrix",
-                    "embedded_in": "packages/form-renderer/src/forms/official2551QAssets.ts",
-                    "logical_dimensions": [120, 7],
-                    "logical_matrix_sha256": "b9257f08de39c25c64cbb7b8cbef835c060a5e347866c67b4cee558669f3233f",
-                    "source_ctm_points": [163.2, 0.0, 0.0, 37.56, 424.32, 849.84],
-                    "source_pdf_object_id": [38, 0],
-                    "source_page": 2,
-                    "source_pixel_dimensions": [240, 63],
-                    "source_png_sha256": "8c89b401f443252642d6820164c6801ab00ba0dcd04715e9fa80eb05861f53d9",
-                    "symbology": "PDF_417"
-                })
-            ]
-        );
+        let expected = [
+            (
+                "static_form_pdf417_page_1",
+                1,
+                json!([35, 0]),
+                "2551Q 01/18ENCS P1",
+                491,
+                "0b22b8418dc0dadb2043dd6022cb337e6fd60193b50105a3e7c47de3e565b9ca",
+                "7ecda284c8c42dc6c64631313ff25e705c11450b9a1139223978f43e7d8168c2",
+                "889982f23eeedeb85d61a4686e2737e2eddf66705df230afc71a5aca22656a9b",
+            ),
+            (
+                "static_form_pdf417_page_2",
+                2,
+                json!([38, 0]),
+                "2551Q 01/18ENCS P2",
+                484,
+                "b9257f08de39c25c64cbb7b8cbef835c060a5e347866c67b4cee558669f3233f",
+                "d8c1d2fb417d8c4f83c147a5af7c3aee41f811beaa56ca39e20f77117c2c923e",
+                "27639c545c7eeee18bcac00bd28e5b1dda3a7d9f7c5c3d11569c1a38d7423c69",
+            ),
+        ];
+
+        for (asset, expected) in assets[1..].iter().zip(expected) {
+            let (
+                name,
+                page,
+                object_id,
+                payload,
+                black_modules,
+                matrix_hash,
+                path_hash,
+                stream_hash,
+            ) = expected;
+            assert_eq!(asset["asset"], json!(name));
+            assert_eq!(asset["source_page"], json!(page));
+            assert_eq!(asset["source_pdf_object_id"], object_id);
+            assert_eq!(asset["decoded_payload"], json!(payload));
+            assert_eq!(asset["caption_text"], json!(payload));
+            assert_eq!(asset["symbology"], json!("PDF417"));
+            assert_eq!(asset["logical_dimensions"], json!([120, 7]));
+            assert_eq!(asset["logical_black_modules"], json!(black_modules));
+            assert_eq!(asset["logical_matrix_sha256"], json!(matrix_hash));
+            assert_eq!(asset["logical_path_sha256"], json!(path_hash));
+            assert_eq!(asset["source_stream_sha256"], json!(stream_hash));
+            assert_eq!(
+                asset["embedded_as"],
+                json!("reviewed_inline_svg_module_matrix_with_live_caption")
+            );
+            assert_eq!(asset["caption_render_font"], json!("eBIRForms Arimo"));
+            assert_eq!(asset["encoder_proof"]["module_differences"], json!(0));
+            assert_eq!(
+                asset["decoder_evidence"][0]["decoder"],
+                json!("ZXing 3.5.3")
+            );
+        }
     }
 }
