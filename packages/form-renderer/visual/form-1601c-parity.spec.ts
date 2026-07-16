@@ -121,6 +121,31 @@ test("1601C 2018 keeps verified page-specific PDF417, caption, and seal geometry
   )).toEqual({ naturalHeight: 78, naturalWidth: 86 });
 });
 
+test("1601C 2018 preserves the official gray and white field partitions", async ({ page }) => {
+  const fixture = readFixture("packages/form-contracts/fixtures/1601c-normal.json");
+  await renderEnvelope(page, fixture);
+  const pageOne = page.locator(".form-1601c-page-one");
+
+  const headerOptions = pageOne.locator(".header-option-1601c");
+  expect(await headerOptions.locator(":scope > span").evaluateAll((elements) =>
+    elements.map((element) => getComputedStyle(element).backgroundColor)
+  )).toEqual(Array.from({ length: 5 }, () => "rgb(217, 217, 217)"));
+
+  for (const [optionIndex, expectedWidth] of [[0, 86], [3, 28], [4, 46]] as const) {
+    const comb = headerOptions.nth(optionIndex).locator(":scope > span > .comb-value");
+    const partition = await comb.evaluate((element) => ({
+      backgroundColor: getComputedStyle(element).backgroundColor,
+      width: element.getBoundingClientRect().width
+    }));
+    expect(partition.backgroundColor).toBe("rgb(255, 255, 255)");
+    expect(partition.width).toBeCloseTo(expectedWidth * 4 / 3, 1);
+  }
+
+  await expectWhiteBackground(pageOne.locator(".address-second-1601c > .comb-value").first());
+  await expectGrayBackground(pageOne.locator(".category-choices-1601c"));
+  await expectWhiteBackground(pageOne.locator(".payment-other-1601c > span:first-child"));
+});
+
 test("1601C 2018 matches the complete pinned official pages", async ({ page }, testInfo) => {
   const fixture = readFixture("packages/form-contracts/fixtures/1601c-normal.json");
   await renderEnvelope(page, fixture);
@@ -241,6 +266,16 @@ async function expectGuidelineTypographyAndContent(pageTwo: Locator) {
   ]) {
     await expect(columns).toContainText(officialHeading);
   }
+}
+
+async function expectGrayBackground(locator: Locator) {
+  expect(await locator.evaluate((element) => getComputedStyle(element).backgroundColor))
+    .toBe("rgb(217, 217, 217)");
+}
+
+async function expectWhiteBackground(locator: Locator) {
+  expect(await locator.evaluate((element) => getComputedStyle(element).backgroundColor))
+    .toBe("rgb(255, 255, 255)");
 }
 
 async function expectCriticalRegionGeometry(page: Locator, regions: CriticalRegion[]) {
