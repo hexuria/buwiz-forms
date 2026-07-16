@@ -131,6 +131,21 @@ test("1701Q 2018 uses the official 15 percent neutral form fill", async ({ page 
   expect(fills.every((fill) => fill === "rgb(217, 217, 217)")).toBe(true);
 });
 
+test("1701Q 2018 keeps the official Item 16 and Item 25 choice partitions", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701q-normal.json"));
+  const firstPage = page.locator(".form-page").nth(0);
+  await expectCriticalRegionGeometry(firstPage, [
+    { name: "Item 16 graduated box", selector: ".taxpayer-background-1701q .graduated-choice-1701q .check-box", x: 119, y: 661, width: 28, height: 24 },
+    { name: "Item 16 itemized box", selector: ".taxpayer-background-1701q .deduction-choices-1701q > .check-choice:first-child .check-box", x: 454, y: 660, width: 28, height: 24 },
+    { name: "Item 16 OSD box", selector: ".taxpayer-background-1701q .deduction-choices-1701q > .check-choice:last-child .check-box", x: 715, y: 660, width: 28, height: 24 },
+    { name: "Item 16 eight-percent box", selector: ".taxpayer-background-1701q .eight-percent-choice-1701q .check-box", x: 117, y: 704, width: 28, height: 24 },
+    { name: "Item 25 graduated box", selector: ".spouse-background-1701q .graduated-choice-1701q .check-box", x: 119, y: 1034, width: 28, height: 24 },
+    { name: "Item 25 itemized box", selector: ".spouse-background-1701q .deduction-choices-1701q > .check-choice:first-child .check-box", x: 454, y: 1033, width: 28, height: 24 },
+    { name: "Item 25 OSD box", selector: ".spouse-background-1701q .deduction-choices-1701q > .check-choice:last-child .check-box", x: 715, y: 1033, width: 28, height: 24 },
+    { name: "Item 25 eight-percent box", selector: ".spouse-background-1701q .eight-percent-choice-1701q .check-box", x: 117, y: 1077, width: 28, height: 24 }
+  ]);
+});
+
 test("1701Q 2018 matches the complete official pages", async ({ page }, testInfo) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701q-normal.json"));
   const pages = page.locator(".form-page");

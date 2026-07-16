@@ -295,24 +295,71 @@
   position: relative;
   height: 54.5pt;
   display: grid;
-  grid-template-columns: 62pt 156pt minmax(0, 1fr);
+  grid-template-columns: 43.5pt 153.5pt minmax(0, 1fr);
   grid-template-rows: 31pt 23.5pt;
   align-items: center;
   background: #d9d9d9;
 }
 .tax-election-1701q::after {
   position: absolute;
-  left: 62pt;
+  left: 198pt;
   right: 0;
-  top: 31pt;
+  top: 30.5pt;
   border-top: .45pt solid #111;
   content: "";
 }
-.tax-rate-label-1701q { grid-row: 1 / 3; display: flex; flex-direction: column; padding: 2pt; }
-.tax-rate-label-1701q small { margin-left: 8pt; }
-.graduated-choice-1701q { display: flex; flex-direction: column; gap: 1pt; }
-.deduction-choices-1701q { display: flex; justify-content: space-around; }
-.eight-percent-choice-1701q { grid-column: 2 / 4; }
+.tax-election-1701q .check-box { width: 14pt; height: 12pt; }
+.tax-rate-label-1701q {
+  grid-row: 1 / 3;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  padding: 2pt 1pt;
+  line-height: .95;
+}
+.tax-rate-label-1701q small {
+  min-width: 0;
+  margin: 1pt 0 0 5pt;
+  line-height: .92;
+  overflow-wrap: anywhere;
+}
+.graduated-choice-1701q {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  padding-top: 11pt;
+  line-height: .92;
+}
+.deduction-choices-1701q {
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: 130.5pt minmax(0, 1fr);
+  min-width: 0;
+  padding-top: 4pt;
+}
+.deduction-choices-1701q > .check-choice {
+  min-width: 0;
+  margin-left: 14pt;
+  white-space: nowrap;
+}
+.eight-percent-choice-1701q {
+  z-index: 1;
+  grid-column: 2 / 4;
+  align-self: stretch;
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+  margin-left: -1pt;
+  padding-top: 1.5pt;
+  line-height: .9;
+}
+.eight-percent-choice-1701q .check-choice {
+  width: 100%;
+  min-width: 0;
+  align-items: flex-start;
+  line-height: .92;
+  white-space: normal;
+}
 
 .spouse-background-1701q .tin-rdo-1701q { height: 16pt; }
 .spouse-background-1701q .choice-row-1701q:not(.compact-choices-1701q) {
@@ -333,6 +380,9 @@
   grid-template-rows: 32pt 23.5pt;
 }
 .spouse-background-1701q .tax-election-1701q::after { top: 32pt; }
+.spouse-background-1701q .graduated-choice-1701q { padding-top: 13.1pt; }
+.spouse-background-1701q .deduction-choices-1701q { padding-top: 6.85pt; }
+.spouse-background-1701q .eight-percent-choice-1701q { padding-top: 2.6pt; }
 
 .paired-header-1701q,
 .paired-row-1701q,
