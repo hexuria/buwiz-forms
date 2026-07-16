@@ -102,6 +102,10 @@ pub struct Form2551QView {
 
     // Editable inputs
     quarter: u8,
+    /// Last filing-period selection persisted with effective-profile
+    /// reconciliation. Kept separately because basis controls update the draft
+    /// before `sync_from_inputs` runs.
+    last_profile_period: (u8, TaxPeriodBasis, u8),
     is_amended: bool,
     original_return_filed_and_paid_on_time: bool,
     tax_relief: bool,
@@ -426,18 +430,26 @@ impl Form2551QView {
                             .ok_or_else(|| {
                                 "The taxpayer profile was removed while this form was open"
                                     .to_string()
-                            })?;
+                        })?;
                         let was_editable = matches!(this.draft.status, FilingStatus::Draft);
-                        this.draft.sync_with_profile(&profile);
+                        let resolution_error = this
+                            .draft
+                            .reconcile_with_effective_profile(&profile)
+                            .err();
                         db_guard
                             .save_2551q_draft(&this.draft)
                             .map_err(|error| error.to_string())?;
                         this.is_email_tracking_active = profile.is_email_tracking_active();
-                        Ok::<_, String>(was_editable)
+                        Ok::<_, String>((was_editable, resolution_error))
                     })();
 
                     match refresh_result {
-                        Ok(true) => {
+                        Ok((_, Some(error))) => {
+                            this.is_validated = false;
+                            this.validation_errors = this.validate_for_submit(cx);
+                            this.status_message = Some(error);
+                        }
+                        Ok((true, None)) => {
                             this.is_validated = false;
                             this.validation_errors = this.validate_for_submit(cx);
                             this.status_message = Some(
@@ -445,11 +457,11 @@ impl Form2551QView {
                                     .to_string(),
                             );
                         }
-                        Ok(false) if this.draft.profile_snapshot_stale => {
+                        Ok((false, None)) if this.draft.profile_snapshot_stale => {
                             this.validation_errors = this.validate_for_submit(cx);
                             this.status_message = this.draft.profile_snapshot_stale_reason.clone();
                         }
-                        Ok(false) => {}
+                        Ok((false, None)) => {}
                         Err(error) => {
                             tracing::warn!(%error, "Failed to reconcile open 2551Q after profile save");
                             this.status_message = Some(format!(
@@ -474,12 +486,15 @@ impl Form2551QView {
             false
         };
 
+        let initial_status_message = draft.profile_resolution_error.clone();
+        let last_profile_period = (draft.quarter, draft.tax_period_basis, draft.year_end_month);
         let mut view = Self {
             draft,
             db,
             scroll_handle: ScrollHandle::new(),
             is_validated: false,
             quarter,
+            last_profile_period,
             is_amended,
             original_return_filed_and_paid_on_time,
             tax_relief,
@@ -495,7 +510,7 @@ impl Form2551QView {
             receipt_input,
             validation_errors: Vec::new(),
             suppressed_sections: HashSet::new(),
-            status_message: None,
+            status_message: initial_status_message,
             show_filing_period: true,
             show_background_info: false,
             show_schedule_1: true,
@@ -584,6 +599,48 @@ impl Form2551QView {
         self.draft.recompute(None);
         if self.draft.total_amount_payable >= 0.0 {
             self.draft.overpayment_disposition = OverpaymentDisposition::None;
+        }
+        let selected_profile_period = (
+            self.draft.quarter,
+            self.draft.tax_period_basis,
+            self.draft.year_end_month,
+        );
+        let profile_period_changed = self.last_profile_period != selected_profile_period;
+        if profile_period_changed && matches!(self.draft.status, FilingStatus::Draft) {
+            let db = self.db.clone();
+            let reconciliation = (|| {
+                let db_guard = db
+                    .lock()
+                    .map_err(|_| "The taxpayer profile is temporarily unavailable".to_string())?;
+                let profile = db_guard
+                    .get_profile(&self.draft.tin)
+                    .map_err(|error| error.to_string())?
+                    .ok_or_else(|| "The taxpayer profile no longer exists".to_string())?;
+                let resolution_error = self.draft.reconcile_with_effective_profile(&profile).err();
+                db_guard
+                    .save_2551q_draft(&self.draft)
+                    .map_err(|error| error.to_string())?;
+                Ok::<_, String>(resolution_error)
+            })();
+            match reconciliation {
+                Ok(Some(error)) => {
+                    self.last_profile_period = selected_profile_period;
+                    self.status_message = Some(error);
+                }
+                Ok(None) => {
+                    self.last_profile_period = selected_profile_period;
+                    self.status_message = Some(
+                        "The effective taxpayer-profile segment was refreshed for the selected filing period."
+                            .to_string(),
+                    );
+                }
+                Err(error) => {
+                    tracing::warn!(%error, "Failed to persist 2551Q filing-period reconciliation");
+                    self.status_message = Some(format!(
+                        "The filing period changed, but its taxpayer profile could not be reconciled: {error}"
+                    ));
+                }
+            }
         }
         tracing::debug!("sync_from_inputs: recomputed draft");
         self.validation_errors = self.validate_for_submit(cx);
@@ -782,9 +839,9 @@ impl Form2551QView {
             && let Ok(Some(profile)) = db.get_profile(&self.draft.tin)
         {
             // Reverting is the explicit consent boundary for replacing a
-            // filed snapshot with current profile facts. `sync_with_profile`
-            // is deliberately immutable for every non-Draft status.
-            self.draft.sync_with_profile(&profile);
+            // filed snapshot with the effective profile segment for this
+            // filing period. Non-Draft snapshots are otherwise immutable.
+            let _ = self.draft.reconcile_with_effective_profile(&profile);
         }
         let persistence_result = match self.db.lock() {
             Ok(db) => db
@@ -1245,7 +1302,8 @@ impl Form2551QView {
             .iter()
             .any(|(f, _)| match section_id {
                 "filing_period" => {
-                    f == "taxable_year"
+                    f == "profile_resolution"
+                        || f == "taxable_year"
                         || f == "quarter"
                         || f == "tax_period_basis"
                         || f == "year_end_month"
@@ -1435,7 +1493,39 @@ impl Render for Form2551QView {
             div().into_any_element()
         };
 
-        let profile_snapshot_banner = if self.draft.profile_snapshot_stale {
+        let profile_resolution_banner = if let Some(error) = &self.draft.profile_resolution_error {
+            div()
+                .px_4()
+                .py_3()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .bg(cx.theme().danger.opacity(0.1))
+                .rounded_lg()
+                .border_1()
+                .border_color(cx.theme().danger.opacity(0.35))
+                .text_color(cx.theme().foreground)
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(cx.theme().danger)
+                        .child("Filing blocked — effective taxpayer profile is unresolved"),
+                )
+                .child(div().text_sm().child(error.clone()))
+                .child(
+                    div()
+                        .text_sm()
+                        .child("Review and confirm the COR/profile effective dates, then reopen or refresh this return."),
+                )
+                .into_any_element()
+        } else {
+            div().into_any_element()
+        };
+
+        let profile_snapshot_banner = if self.draft.profile_resolution_error.is_none()
+            && self.draft.profile_snapshot_stale
+        {
             let guidance = if matches!(self.draft.status, FilingStatus::Paid) {
                 "This paid return remains an immutable historical snapshot. Create the appropriate amended return to use the current profile."
             } else {
@@ -2362,6 +2452,7 @@ impl Render for Form2551QView {
             .child(title_block)
             .child(carry_banner)
             .child(submission_claim_banner)
+            .child(profile_resolution_banner)
             .child(profile_snapshot_banner)
             .child(crate::components::form_parts::form_accordion(
                 "acc_filing_period",

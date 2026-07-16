@@ -1,7 +1,7 @@
 //! Taxpayer profile management.
 
 use crate::naming::Tin;
-use chrono::{Duration, NaiveDate, NaiveDateTime};
+use chrono::{Datelike, Duration, NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -330,6 +330,8 @@ pub enum TaxProfileResolutionIssueKind {
     UndatedConfirmedVersion,
     InvalidEffectiveRange,
     OverlappingConfirmedVersions,
+    NoEffectiveVersionForPeriod,
+    AmbiguousEffectiveVersionsForPeriod,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -354,6 +356,25 @@ pub struct ResolvedTaxProfileForYear {
 impl ResolvedTaxProfileForYear {
     pub fn has_blocking_issues(&self) -> bool {
         !self.issues.is_empty()
+    }
+}
+
+/// One confirmed profile segment resolved for an exact filing period.
+///
+/// Forms must consume this result instead of the compatibility fields on
+/// [`TaxpayerProfile`]. A period with no complete segment, multiple segments,
+/// or any unresolved timeline issue deliberately has no effective segment.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolvedTaxProfileForPeriod {
+    pub period_start: NaiveDate,
+    pub period_end: NaiveDate,
+    pub effective_segment: Option<TaxProfileVersion>,
+    pub issues: Vec<TaxProfileResolutionIssue>,
+}
+
+impl ResolvedTaxProfileForPeriod {
+    pub fn has_blocking_issues(&self) -> bool {
+        self.effective_segment.is_none() || !self.issues.is_empty()
     }
 }
 
@@ -815,6 +836,114 @@ impl TaxpayerProfile {
         }
     }
 
+    /// Resolve exactly one confirmed profile version for a filing period.
+    ///
+    /// The yearly resolver remains the timeline authority. This narrower
+    /// resolver combines every calendar year touched by a fiscal period and
+    /// then requires one stored, confirmed version to cover the entire period.
+    /// Synthetic flat-profile fallbacks are intentionally excluded.
+    pub fn resolve_tax_profile_for_period(
+        &self,
+        period_start: NaiveDate,
+        period_end: NaiveDate,
+    ) -> ResolvedTaxProfileForPeriod {
+        let mut issues = Vec::new();
+        let mut segments = Vec::new();
+        let stored_confirmed_ids = self
+            .profile_versions
+            .iter()
+            .filter(|version| version.status == TaxProfileVersionStatus::Confirmed)
+            .map(|version| version.id.as_str())
+            .collect::<BTreeSet<_>>();
+
+        if period_start <= period_end {
+            for calendar_year in period_start.year()..=period_end.year() {
+                let Ok(year) = u16::try_from(calendar_year) else {
+                    continue;
+                };
+                let resolved = self.resolve_tax_profile_for_year(year);
+                for issue in resolved.issues {
+                    let applies_to_period = match issue.kind {
+                        TaxProfileResolutionIssueKind::OverlappingConfirmedVersions => {
+                            issue.version_ids.iter().all(|version_id| {
+                                self.profile_versions
+                                    .iter()
+                                    .find(|version| version.id == *version_id)
+                                    .is_some_and(|version| {
+                                        version.overlaps_period(period_start, period_end)
+                                    })
+                            })
+                        }
+                        _ => true,
+                    };
+                    if applies_to_period && !issues.contains(&issue) {
+                        issues.push(issue);
+                    }
+                }
+            }
+        }
+
+        for segment in self.profile_versions.iter().filter(|version| {
+            stored_confirmed_ids.contains(version.id.as_str())
+                && version.overlaps_period(period_start, period_end)
+        }) {
+            if !segments
+                .iter()
+                .any(|existing: &TaxProfileVersion| existing.id == segment.id)
+            {
+                segments.push(segment.clone());
+            }
+        }
+
+        segments.sort_by(|left, right| {
+            left.effective_from
+                .cmp(&right.effective_from)
+                .then(left.id.cmp(&right.id))
+        });
+
+        let covering_segments = segments
+            .iter()
+            .filter(|version| {
+                version
+                    .effective_from
+                    .is_some_and(|start| start <= period_start)
+                    && version.effective_until.is_none_or(|end| end >= period_end)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
+        if segments.len() > 1 || covering_segments.len() > 1 {
+            issues.push(TaxProfileResolutionIssue {
+                kind: TaxProfileResolutionIssueKind::AmbiguousEffectiveVersionsForPeriod,
+                version_ids: segments.iter().map(|version| version.id.clone()).collect(),
+                message: format!(
+                    "Multiple confirmed taxpayer-profile versions touch the filing period {period_start} through {period_end}"
+                ),
+            });
+        } else if covering_segments.is_empty() {
+            issues.push(TaxProfileResolutionIssue {
+                kind: TaxProfileResolutionIssueKind::NoEffectiveVersionForPeriod,
+                version_ids: segments.iter().map(|version| version.id.clone()).collect(),
+                message: format!(
+                    "No confirmed taxpayer-profile version covers the complete filing period {period_start} through {period_end}"
+                ),
+            });
+        }
+
+        let effective_segment = if issues.is_empty() && covering_segments.len() == 1 {
+            covering_segments.into_iter().next()
+        } else {
+            None
+        };
+
+        ResolvedTaxProfileForPeriod {
+            period_start,
+            period_end,
+            effective_segment,
+            issues,
+        }
+    }
+
     pub fn current_cor_version(&self, as_of_year: u16) -> Option<TaxProfileVersion> {
         self.active_profile_versions_for_year(as_of_year)
             .into_iter()
@@ -1023,6 +1152,46 @@ impl Drop for TaxpayerProfile {
 mod tests {
     use super::*;
 
+    fn test_profile() -> TaxpayerProfile {
+        serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Flat compatibility name",
+            "tin": {
+                "segment1": "123",
+                "segment2": "456",
+                "segment3": "789",
+                "branch": "000"
+            },
+            "rdo_code": "000",
+            "line_of_business": "Services",
+            "registered_address": "Flat compatibility address",
+            "zip_code": "1000",
+            "phone": "09170000000",
+            "email": "flat@example.com",
+            "default_form_type": "2551Qv2018"
+        }))
+        .expect("minimal profile fixture must deserialize")
+    }
+
+    fn confirmed_version(
+        profile: &TaxpayerProfile,
+        id: &str,
+        name: &str,
+        effective_from: Option<NaiveDate>,
+        effective_until: Option<NaiveDate>,
+    ) -> TaxProfileVersion {
+        let mut version = TaxProfileVersion::from_profile_backfill(profile);
+        version.id = id.to_string();
+        version.label = name.to_string();
+        version.source = TaxProfileVersionSource::ManualCor;
+        version.status = TaxProfileVersionStatus::Confirmed;
+        version.effective_from = effective_from;
+        version.effective_until = effective_until;
+        version.needs_effective_date_review = effective_from.is_none();
+        version.cor.registered_name = name.to_string();
+        version
+    }
+
     #[test]
     fn vat_text_classification_prefers_non_vat_negation() {
         assert_eq!(
@@ -1036,6 +1205,160 @@ mod tests {
         assert_eq!(
             classify_vat_registration_text("Monthly remittance return of VAT withheld"),
             VatRegistrationTextClassification::Unknown
+        );
+    }
+
+    #[test]
+    fn exact_period_resolution_selects_sequential_mid_year_versions() {
+        let mut profile = test_profile();
+        profile.profile_versions = vec![
+            confirmed_version(
+                &profile,
+                "first-half",
+                "First Half Taxpayer",
+                NaiveDate::from_ymd_opt(2026, 1, 1),
+                NaiveDate::from_ymd_opt(2026, 6, 30),
+            ),
+            confirmed_version(
+                &profile,
+                "second-half",
+                "Second Half Taxpayer",
+                NaiveDate::from_ymd_opt(2026, 7, 1),
+                None,
+            ),
+        ];
+
+        let q1 = profile.resolve_tax_profile_for_period(
+            NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 3, 31).unwrap(),
+        );
+        let q3 = profile.resolve_tax_profile_for_period(
+            NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 9, 30).unwrap(),
+        );
+
+        assert!(!q1.has_blocking_issues());
+        assert_eq!(
+            q1.effective_segment
+                .as_ref()
+                .map(|version| version.id.as_str()),
+            Some("first-half")
+        );
+        assert!(!q3.has_blocking_issues());
+        assert_eq!(
+            q3.effective_segment
+                .as_ref()
+                .map(|version| version.id.as_str()),
+            Some("second-half")
+        );
+    }
+
+    #[test]
+    fn exact_period_resolution_rejects_a_version_change_inside_the_quarter() {
+        let mut profile = test_profile();
+        profile.profile_versions = vec![
+            confirmed_version(
+                &profile,
+                "before-change",
+                "Before Change",
+                NaiveDate::from_ymd_opt(2026, 1, 1),
+                NaiveDate::from_ymd_opt(2026, 5, 14),
+            ),
+            confirmed_version(
+                &profile,
+                "after-change",
+                "After Change",
+                NaiveDate::from_ymd_opt(2026, 5, 15),
+                None,
+            ),
+        ];
+
+        let resolved = profile.resolve_tax_profile_for_period(
+            NaiveDate::from_ymd_opt(2026, 4, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 6, 30).unwrap(),
+        );
+
+        assert!(resolved.effective_segment.is_none());
+        assert!(resolved.issues.iter().any(|issue| {
+            issue.kind == TaxProfileResolutionIssueKind::AmbiguousEffectiveVersionsForPeriod
+        }));
+    }
+
+    #[test]
+    fn exact_period_resolution_never_uses_a_synthetic_flat_profile() {
+        let mut profile = test_profile();
+        profile.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
+        profile.business_start_date = NaiveDate::from_ymd_opt(2020, 1, 1);
+
+        let resolved = profile.resolve_tax_profile_for_period(
+            NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 3, 31).unwrap(),
+        );
+
+        assert!(resolved.effective_segment.is_none());
+        assert!(resolved.issues.iter().any(|issue| {
+            issue.kind == TaxProfileResolutionIssueKind::NoEffectiveVersionForPeriod
+        }));
+    }
+
+    #[test]
+    fn exact_period_resolution_propagates_undated_and_overlapping_timeline_issues() {
+        let mut undated_profile = test_profile();
+        undated_profile.profile_versions = vec![confirmed_version(
+            &undated_profile,
+            "undated",
+            "Undated COR",
+            None,
+            None,
+        )];
+        let undated = undated_profile.resolve_tax_profile_for_period(
+            NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 3, 31).unwrap(),
+        );
+        assert!(undated.effective_segment.is_none());
+        assert!(
+            undated.issues.iter().any(|issue| {
+                issue.kind == TaxProfileResolutionIssueKind::UndatedConfirmedVersion
+            })
+        );
+
+        let mut overlapping_profile = test_profile();
+        overlapping_profile.profile_versions = vec![
+            confirmed_version(
+                &overlapping_profile,
+                "one",
+                "One",
+                NaiveDate::from_ymd_opt(2025, 1, 1),
+                NaiveDate::from_ymd_opt(2026, 2, 15),
+            ),
+            confirmed_version(
+                &overlapping_profile,
+                "two",
+                "Two",
+                NaiveDate::from_ymd_opt(2026, 2, 1),
+                None,
+            ),
+        ];
+        let overlapping = overlapping_profile.resolve_tax_profile_for_period(
+            NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 3, 31).unwrap(),
+        );
+        assert!(overlapping.effective_segment.is_none());
+        assert!(overlapping.issues.iter().any(|issue| {
+            issue.kind == TaxProfileResolutionIssueKind::OverlappingConfirmedVersions
+        }));
+
+        let after_overlap = overlapping_profile.resolve_tax_profile_for_period(
+            NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 9, 30).unwrap(),
+        );
+        assert!(!after_overlap.has_blocking_issues());
+        assert_eq!(
+            after_overlap
+                .effective_segment
+                .as_ref()
+                .map(|version| version.id.as_str()),
+            Some("two")
         );
     }
 }

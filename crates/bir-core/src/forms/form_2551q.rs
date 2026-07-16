@@ -8,7 +8,7 @@ use crate::penalties::{
     PenaltyConfig, PenaltyContext, PenaltyEngine, PenaltyProfile, TaxpayerClass,
 };
 use crate::profile::{IncomeTaxElection, TaxpayerProfile, TaxpayerType};
-use chrono::Datelike;
+use chrono::{Datelike, Duration, NaiveDate};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
@@ -293,6 +293,14 @@ pub struct Form2551QDraft {
     pub profile_snapshot_stale: bool,
     #[serde(default)]
     pub profile_snapshot_stale_reason: Option<String>,
+    /// Confirmed effective-dated profile version used to prefill this return.
+    /// `None` on older drafts is upgraded when the draft is next opened.
+    #[serde(default)]
+    pub effective_profile_version_id: Option<String>,
+    /// Persisted, user-visible reason an exact filing-period profile segment
+    /// could not be selected. A draft with this error cannot be queued.
+    #[serde(default)]
+    pub profile_resolution_error: Option<String>,
 
     // === Background Retry Logic ===
     #[serde(default)]
@@ -312,8 +320,14 @@ pub struct Form2551QDraft {
 }
 
 impl Form2551QDraft {
-    /// Create a new draft pre-filled from a profile.
-    /// Defaults to PT010 row with zero amounts.
+    /// Compatibility constructor for an already-resolved profile projection.
+    /// Defaults to a PT010 row with zero amounts.
+    ///
+    /// Production profile-owned creation must use
+    /// [`Self::new_from_effective_profile`] so flat compatibility fields never
+    /// bypass the confirmed effective-dated ledger. XML/import adapters and
+    /// focused model tests may use this constructor when they already own the
+    /// authoritative snapshot.
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, quarter: u8) -> Self {
         let now = chrono::Utc::now().to_rfc3339();
         let annual_election = annual_income_tax_election(profile, year);
@@ -368,6 +382,8 @@ impl Form2551QDraft {
             submission_claimed_at: None,
             profile_snapshot_stale: false,
             profile_snapshot_stale_reason: None,
+            effective_profile_version_id: None,
+            profile_resolution_error: None,
             submission_attempts: 0,
             next_retry_at: None,
             last_error: None,
@@ -389,6 +405,20 @@ impl Form2551QDraft {
         draft
     }
 
+    /// Create a production draft from the single confirmed profile segment
+    /// that covers its complete filing period.
+    ///
+    /// The compatibility fields on `TaxpayerProfile` are never used as a
+    /// fallback. When resolution fails, only the stable TIN is retained for
+    /// persistence and the blocking reason is stored on the draft.
+    pub fn new_from_effective_profile(profile: &TaxpayerProfile, year: u16, quarter: u8) -> Self {
+        let mut draft = Self::new_from_profile(profile, year, quarter);
+        draft.clear_profile_owned_snapshot();
+        let _ = draft.reconcile_with_effective_profile(profile);
+        draft.recompute(None);
+        draft
+    }
+
     /// Carry-forward: clone previous quarter's Schedule 1 rows as editable defaults.
     /// Preserves ATCs and amounts as starting point — user adjusts them.
     pub fn with_carried_forward(mut self, previous: &Form2551QDraft) -> Self {
@@ -398,10 +428,97 @@ impl Form2551QDraft {
         self
     }
 
-    /// Sync the draft's header fields with the current profile.
-    /// This ensures that if the user updates their profile (e.g., phone number),
-    /// the changes reflect in the draft return as long as it hasn't been submitted.
+    /// Compatibility sync for callers that already own a resolved projection.
+    ///
+    /// Production drafts carrying effective-profile audit state are always
+    /// reconciled through the effective-dated ledger. Legacy/internal callers
+    /// without that state retain the former raw projection behavior.
     pub fn sync_with_profile(&mut self, profile: &TaxpayerProfile) {
+        if self.effective_profile_version_id.is_some() || self.profile_resolution_error.is_some() {
+            let _ = self.reconcile_with_effective_profile(profile);
+            return;
+        }
+        self.sync_with_profile_snapshot(profile, None);
+    }
+
+    /// Reconcile this return against the confirmed profile segment for the
+    /// return's exact calendar/fiscal quarter.
+    ///
+    /// Editable drafts receive refreshed prefills. Queued and later snapshots
+    /// remain immutable; only their audit/staleness markers may change.
+    pub fn reconcile_with_effective_profile(
+        &mut self,
+        profile: &TaxpayerProfile,
+    ) -> Result<(), String> {
+        let Some((period_start, period_end)) = self.filing_period_bounds() else {
+            let error =
+                "The 2551Q filing period is invalid, so an effective taxpayer-profile version cannot be selected"
+                    .to_string();
+            self.record_profile_resolution_failure(error.clone());
+            return Err(error);
+        };
+        let resolved = profile.resolve_tax_profile_for_period(period_start, period_end);
+        if resolved.has_blocking_issues() {
+            let details = resolved
+                .issues
+                .iter()
+                .map(|issue| issue.message.as_str())
+                .collect::<Vec<_>>()
+                .join("; ");
+            let error = if details.is_empty() {
+                format!(
+                    "No confirmed taxpayer-profile version covers the 2551Q filing period {period_start} through {period_end}"
+                )
+            } else {
+                format!(
+                    "The taxpayer profile cannot be resolved for the 2551Q filing period {period_start} through {period_end}: {details}"
+                )
+            };
+            self.record_profile_resolution_failure(error.clone());
+            return Err(error);
+        }
+
+        let version = resolved
+            .effective_segment
+            .as_ref()
+            .expect("a resolution without blocking issues owns one segment");
+        let projected = profile.projection_for_version(version);
+        self.sync_with_profile_snapshot(&projected, Some(version.id.as_str()));
+        Ok(())
+    }
+
+    fn clear_profile_owned_snapshot(&mut self) {
+        self.taxpayer_type = None;
+        self.business_start_date = None;
+        self.eopt_tier = None;
+        self.annual_income_tax_election = None;
+        self.item_13_election = Item13Election::Unanswered;
+        self.rdo_code.clear();
+        self.taxpayer_name.clear();
+        self.registered_address.clear();
+        self.zip_code.clear();
+        self.contact_number.clear();
+        self.email.clear();
+        self.effective_profile_version_id = None;
+        self.profile_resolution_error = None;
+    }
+
+    fn record_profile_resolution_failure(&mut self, error: String) {
+        self.profile_resolution_error = Some(error.clone());
+        if !matches!(self.status, FilingStatus::Draft) {
+            self.profile_snapshot_stale = true;
+            self.profile_snapshot_stale_reason = Some(format!(
+                "The immutable return snapshot could not be reconciled with the effective-dated taxpayer profile: {error}"
+            ));
+        }
+        self.updated_at = chrono::Utc::now().to_rfc3339();
+    }
+
+    fn sync_with_profile_snapshot(
+        &mut self,
+        profile: &TaxpayerProfile,
+        effective_profile_version_id: Option<&str>,
+    ) {
         let annual_election = annual_income_tax_election(profile, self.taxable_year);
         if !matches!(self.status, FilingStatus::Draft) {
             let snapshot_matches = self.tin == profile.tin.full()
@@ -414,12 +531,16 @@ impl Form2551QDraft {
                 && self.registered_address == profile.registered_address
                 && self.zip_code == profile.zip_code
                 && self.contact_number == profile.phone
-                && self.email == profile.email;
+                && self.email == profile.email
+                && effective_profile_version_id.is_none_or(|version_id| {
+                    self.effective_profile_version_id.as_deref() == Some(version_id)
+                });
             self.profile_snapshot_stale = !snapshot_matches;
             self.profile_snapshot_stale_reason = (!snapshot_matches).then(|| {
                 "The taxpayer profile changed after this return was reviewed. Revert or amend the return to review refreshed profile values before filing."
                     .to_string()
             });
+            self.profile_resolution_error = None;
             self.updated_at = chrono::Utc::now().to_rfc3339();
             return;
         }
@@ -463,6 +584,8 @@ impl Form2551QDraft {
         };
         self.profile_snapshot_stale = false;
         self.profile_snapshot_stale_reason = None;
+        self.effective_profile_version_id = effective_profile_version_id.map(ToOwned::to_owned);
+        self.profile_resolution_error = None;
         self.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
@@ -689,6 +812,43 @@ impl Form2551QDraft {
             "{:02}{}Q{}",
             self.year_end_month, self.taxable_year, self.quarter
         )
+    }
+
+    /// Inclusive calendar dates covered by this return's selected quarter.
+    ///
+    /// `taxable_year` is the year in which the calendar/fiscal year ends. A
+    /// fiscal year ending June 2026 therefore begins July 2025.
+    pub fn filing_period_bounds(&self) -> Option<(NaiveDate, NaiveDate)> {
+        if !(1..=4).contains(&self.quarter)
+            || !(1..=12).contains(&self.year_end_month)
+            || (matches!(self.tax_period_basis, TaxPeriodBasis::Calendar)
+                && self.year_end_month != 12)
+        {
+            return None;
+        }
+
+        let fiscal_end_month_index =
+            i32::from(self.taxable_year) * 12 + i32::from(self.year_end_month) - 1;
+        let quarter_start_month_index =
+            fiscal_end_month_index - 11 + (i32::from(self.quarter) - 1) * 3;
+        let period_start_year = quarter_start_month_index.div_euclid(12);
+        let period_start_month = quarter_start_month_index.rem_euclid(12) + 1;
+        let period_start = NaiveDate::from_ymd_opt(
+            period_start_year,
+            u32::try_from(period_start_month).ok()?,
+            1,
+        )?;
+
+        let month_after_period_index = quarter_start_month_index + 3;
+        let month_after_period_year = month_after_period_index.div_euclid(12);
+        let month_after_period = month_after_period_index.rem_euclid(12) + 1;
+        let period_end = NaiveDate::from_ymd_opt(
+            month_after_period_year,
+            u32::try_from(month_after_period).ok()?,
+            1,
+        )? - Duration::days(1);
+
+        Some((period_start, period_end))
     }
 
     /// Filing deadline for the selected fiscal quarter.
@@ -971,6 +1131,9 @@ use crate::validation::{validate_email, validate_ph_phone, validate_zip};
 impl FormValidator for Form2551QDraft {
     fn validate(&self) -> Vec<(String, String)> {
         let mut errors = Vec::new();
+        if let Some(error) = &self.profile_resolution_error {
+            errors.push(("profile_resolution".to_string(), error.clone()));
+        }
         if self.profile_snapshot_stale {
             errors.push((
                 "profile_snapshot".to_string(),
@@ -1610,7 +1773,10 @@ impl FormValidator for Form2551QDraft {
 mod tests {
     use super::*;
     use crate::naming::Tin;
-    use crate::profile::{TaxpayerProfile, TaxpayerType};
+    use crate::profile::{
+        TaxProfileVersion, TaxProfileVersionSource, TaxProfileVersionStatus, TaxpayerProfile,
+        TaxpayerType,
+    };
 
     fn test_profile() -> TaxpayerProfile {
         TaxpayerProfile {
@@ -1666,6 +1832,27 @@ mod tests {
             is_government_withholding_entity: false,
             registration_activity_status: Default::default(),
         }
+    }
+
+    fn confirmed_profile_version(
+        profile: &TaxpayerProfile,
+        id: &str,
+        name: &str,
+        rdo_code: &str,
+        effective_from: NaiveDate,
+        effective_until: Option<NaiveDate>,
+    ) -> TaxProfileVersion {
+        let mut version = TaxProfileVersion::from_profile_backfill(profile);
+        version.id = id.to_string();
+        version.label = name.to_string();
+        version.source = TaxProfileVersionSource::ManualCor;
+        version.status = TaxProfileVersionStatus::Confirmed;
+        version.effective_from = Some(effective_from);
+        version.effective_until = effective_until;
+        version.needs_effective_date_review = false;
+        version.cor.registered_name = name.to_string();
+        version.cor.rdo_code = rdo_code.to_string();
+        version
     }
 
     /// Helper: create a draft with given taxable_amount, creditable_tax_withheld,
@@ -1727,6 +1914,8 @@ mod tests {
             "queued_submission_fingerprint",
             "submission_claim_token",
             "submission_claimed_at",
+            "effective_profile_version_id",
+            "profile_resolution_error",
         ] {
             object.remove(key);
         }
@@ -1745,6 +1934,8 @@ mod tests {
         assert_eq!(restored.queued_submission_fingerprint, None);
         assert_eq!(restored.submission_claim_token, None);
         assert_eq!(restored.submission_claimed_at, None);
+        assert_eq!(restored.effective_profile_version_id, None);
+        assert_eq!(restored.profile_resolution_error, None);
         assert_eq!(
             restored.overpayment_disposition,
             OverpaymentDisposition::None
@@ -1762,6 +1953,198 @@ mod tests {
         assert!(
             serde_json::from_value::<Form2551QDraft>(unknown).is_err(),
             "an unrecognized persisted taxpayer type must fail closed"
+        );
+    }
+
+    #[test]
+    fn effective_profile_creation_selects_the_segment_for_q1_and_q3() {
+        let mut profile = test_profile();
+        profile.profile_versions = vec![
+            confirmed_profile_version(
+                &profile,
+                "first-half",
+                "First Half Name",
+                "018",
+                NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+                NaiveDate::from_ymd_opt(2026, 6, 30),
+            ),
+            confirmed_profile_version(
+                &profile,
+                "second-half",
+                "Second Half Name",
+                "019",
+                NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
+                None,
+            ),
+        ];
+
+        let q1 = Form2551QDraft::new_from_effective_profile(&profile, 2026, 1);
+        let q3 = Form2551QDraft::new_from_effective_profile(&profile, 2026, 3);
+
+        assert_eq!(
+            q1.effective_profile_version_id.as_deref(),
+            Some("first-half")
+        );
+        assert_eq!(q1.taxpayer_name, "First Half Name");
+        assert_eq!(q1.rdo_code, "018");
+        assert!(q1.profile_resolution_error.is_none());
+        assert_eq!(
+            q3.effective_profile_version_id.as_deref(),
+            Some("second-half")
+        );
+        assert_eq!(q3.taxpayer_name, "Second Half Name");
+        assert_eq!(q3.rdo_code, "019");
+        assert!(q3.profile_resolution_error.is_none());
+    }
+
+    #[test]
+    fn effective_profile_projection_preserves_the_annual_election_ledger() {
+        let mut profile = test_profile();
+        profile
+            .tax_elections
+            .push(crate::profile::TaxElectionHistory {
+                taxable_year: 2026,
+                election: IncomeTaxElection::GraduatedOsd,
+                elected_at: chrono::NaiveDateTime::default(),
+                source_form: "profile_manager".into(),
+            });
+        profile.profile_versions = vec![confirmed_profile_version(
+            &profile,
+            "effective",
+            "Effective Name",
+            "018",
+            NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+            None,
+        )];
+
+        let draft = Form2551QDraft::new_from_effective_profile(&profile, 2026, 1);
+
+        assert_eq!(
+            draft.annual_income_tax_election,
+            Some(AnnualIncomeTaxElection::Graduated)
+        );
+        assert_eq!(draft.item_13_election, Item13Election::Graduated);
+    }
+
+    #[test]
+    fn unresolved_effective_profile_creation_never_uses_flat_prefills() {
+        let profile = test_profile();
+
+        let draft = Form2551QDraft::new_from_effective_profile(&profile, 2026, 1);
+
+        assert_eq!(draft.tin, profile.tin.full());
+        assert!(draft.taxpayer_name.is_empty());
+        assert!(draft.rdo_code.is_empty());
+        assert!(draft.registered_address.is_empty());
+        assert_eq!(draft.taxpayer_type, None);
+        assert_eq!(draft.annual_income_tax_election, None);
+        assert!(draft.profile_resolution_error.is_some());
+        assert!(draft.validate().iter().any(|(field, message)| {
+            field == "profile_resolution" && message.contains("No confirmed")
+        }));
+
+        let restored: Form2551QDraft = serde_json::from_str(
+            &serde_json::to_string(&draft).expect("unresolved draft must serialize"),
+        )
+        .expect("unresolved draft must deserialize");
+        assert_eq!(
+            restored.profile_resolution_error,
+            draft.profile_resolution_error
+        );
+        assert_eq!(restored.effective_profile_version_id, None);
+    }
+
+    #[test]
+    fn effective_profile_reconciliation_keeps_queued_snapshot_immutable() {
+        let mut profile = test_profile();
+        profile.profile_versions = vec![confirmed_profile_version(
+            &profile,
+            "reviewed",
+            "Reviewed Snapshot",
+            "018",
+            NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+            None,
+        )];
+        let mut draft = Form2551QDraft::new_from_effective_profile(&profile, 2026, 1);
+        draft.status = FilingStatus::Queued;
+
+        profile.profile_versions = vec![confirmed_profile_version(
+            &profile,
+            "replacement",
+            "Replacement Profile",
+            "019",
+            NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+            None,
+        )];
+        // Queue-boundary callers still use the compatibility method. Once a
+        // production draft owns version audit state it must delegate back to
+        // effective-dated reconciliation without mutating the snapshot.
+        draft.sync_with_profile(&profile);
+
+        assert_eq!(draft.taxpayer_name, "Reviewed Snapshot");
+        assert_eq!(draft.rdo_code, "018");
+        assert_eq!(
+            draft.effective_profile_version_id.as_deref(),
+            Some("reviewed")
+        );
+        assert!(draft.profile_snapshot_stale);
+        assert!(draft.profile_resolution_error.is_none());
+    }
+
+    #[test]
+    fn fiscal_quarters_resolve_the_correct_calendar_year_segment() {
+        let mut profile = test_profile();
+        profile.profile_versions = vec![
+            confirmed_profile_version(
+                &profile,
+                "calendar-2025",
+                "Calendar 2025",
+                "018",
+                NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+                NaiveDate::from_ymd_opt(2025, 12, 31),
+            ),
+            confirmed_profile_version(
+                &profile,
+                "calendar-2026",
+                "Calendar 2026",
+                "019",
+                NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+                None,
+            ),
+        ];
+        let mut draft = Form2551QDraft::new_from_profile(&profile, 2026, 1);
+        draft.tax_period_basis = TaxPeriodBasis::Fiscal;
+        draft.year_end_month = 6;
+
+        assert_eq!(
+            draft.filing_period_bounds(),
+            Some((
+                NaiveDate::from_ymd_opt(2025, 7, 1).unwrap(),
+                NaiveDate::from_ymd_opt(2025, 9, 30).unwrap(),
+            ))
+        );
+        draft
+            .reconcile_with_effective_profile(&profile)
+            .expect("fiscal Q1 belongs entirely to the 2025 segment");
+        assert_eq!(
+            draft.effective_profile_version_id.as_deref(),
+            Some("calendar-2025")
+        );
+
+        draft.quarter = 3;
+        assert_eq!(
+            draft.filing_period_bounds(),
+            Some((
+                NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+                NaiveDate::from_ymd_opt(2026, 3, 31).unwrap(),
+            ))
+        );
+        draft
+            .reconcile_with_effective_profile(&profile)
+            .expect("fiscal Q3 belongs entirely to the 2026 segment");
+        assert_eq!(
+            draft.effective_profile_version_id.as_deref(),
+            Some("calendar-2026")
         );
     }
 

@@ -1089,7 +1089,9 @@ impl AppState {
                         // Draft mode: sync profile fields so edits to the profile
                         // are reflected in the form before submission.
                         let mut d = d;
-                        d.sync_with_profile(profile);
+                        if let Err(error) = d.reconcile_with_effective_profile(profile) {
+                            tracing::warn!(%error, "2551Q effective profile could not be resolved");
+                        }
                         if let Err(error) = db.save_2551q_draft(&d) {
                             tracing::warn!(%error, "Failed to persist refreshed 2551Q draft");
                         }
@@ -1105,7 +1107,9 @@ impl AppState {
                         // replacing any reviewed values. The draft owns a stale
                         // marker that drives the explicit revert/amend warning.
                         let mut d = d;
-                        d.sync_with_profile(profile);
+                        if let Err(error) = d.reconcile_with_effective_profile(profile) {
+                            tracing::warn!(%error, "Immutable 2551Q effective profile could not be resolved");
+                        }
                         if let Err(error) = db.save_2551q_draft(&d) {
                             tracing::warn!(%error, "Failed to persist 2551Q profile-snapshot marker");
                         }
@@ -1125,15 +1129,20 @@ impl AppState {
                     } else {
                         None
                     };
-                    let new_draft = Form2551QDraft::new_from_profile(profile, year, quarter);
-                    if let Some(prev_draft) = prev {
+                    let new_draft =
+                        Form2551QDraft::new_from_effective_profile(profile, year, quarter);
+                    let new_draft = if let Some(prev_draft) = prev {
                         new_draft.with_carried_forward(&prev_draft)
                     } else {
                         new_draft
+                    };
+                    if let Err(error) = db.save_2551q_draft(&new_draft) {
+                        tracing::warn!(%error, "Failed to persist newly opened 2551Q draft");
                     }
+                    new_draft
                 }
             } else {
-                Form2551QDraft::new_from_profile(profile, year, quarter)
+                Form2551QDraft::new_from_effective_profile(profile, year, quarter)
             };
             // Store the draft; the view will be created on next render with Window access
             self.pending_form_draft = Some(draft);
