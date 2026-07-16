@@ -869,6 +869,13 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 .official-schedule-head > span:last-child { border-right: 0; }
 .official-schedule-head em { font-size: 8pt; }
 
+/* The pinned page-two raster gives the title band three more pixels and the
+ * column-header band three fewer pixels than Chromium's original split. Keep
+ * their combined height stable so every data row and the ATC table stay put. */
+.form-2551q-page-two .official-schedule { margin-top: 1.5pt; }
+.form-2551q-page-two .official-schedule > h2 { height: 13pt; }
+.form-2551q-page-two .official-schedule-head { height: 21.2pt; }
+
 .official-schedule-row {
   height: 18.25pt;
   display: grid;
@@ -1009,13 +1016,25 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   white-space: nowrap;
 }
 .official-atc-table .atc-entry-multiline > td,
-.official-atc-table .atc-note > td { height: 21pt; }
-.official-atc-table .atc-entry-multiline > td,
-.official-atc-table .atc-note[data-atc-note="12"] > td { height: 20pt; }
+.official-atc-table .atc-note > td { height: 20pt; }
+.official-atc-table .atc-entry[data-atc-code="PT010"] > td,
+.official-atc-table .atc-entry[data-atc-code="PT132"] > td { height: 11.5pt; }
+.official-atc-table .atc-entry:is(
+  [data-atc-code="PT060"],
+  [data-atc-code="PT090"],
+  [data-atc-code="PT170"],
+  [data-atc-code="PT101"],
+  [data-atc-code="PT103"],
+  [data-atc-code="PT113"]
+) > td { height: 10pt; }
+.official-atc-table .atc-entry:is(
+  [data-atc-code="PT104"],
+  [data-atc-code="PT120"]
+) > td { height: 12pt; }
 .official-atc-table .atc-entry-multiline span,
 .official-atc-table .atc-note span {
   display: block;
-  height: 10pt;
+  height: 9.5pt;
   white-space: nowrap;
 }
 .official-atc-table .atc-entry-multiline span + span { padding-left: 4pt; }

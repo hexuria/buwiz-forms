@@ -386,7 +386,11 @@ function AtcReferenceTable() {
             );
           }
           return (
-            <tr className={row.lines ? "atc-entry atc-entry-multiline" : "atc-entry"} key={row.atc}>
+            <tr
+              className={row.lines ? "atc-entry atc-entry-multiline" : "atc-entry"}
+              data-atc-code={row.atc.replace(/\s+/g, "")}
+              key={row.atc}
+            >
               <td>{row.atc}</td>
               <td>
                 {row.lines ? (
