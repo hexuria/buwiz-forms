@@ -538,6 +538,8 @@ mod tests {
         let mut draft = sample_draft();
         draft.taxable_year = 2021;
         draft.quarter = 3;
+        draft.annual_income_tax_election =
+            Some(crate::forms::form_2551q::AnnualIncomeTaxElection::Graduated);
         draft.item_13_election = Item13Election::NotApplicable;
         draft.recompute(None);
 
@@ -558,6 +560,8 @@ mod tests {
             .expect_err("a later-quarter graduated election must not serialize");
         assert!(errors.iter().any(|(field, _)| field == "item_13_election"));
 
+        draft.annual_income_tax_election =
+            Some(crate::forms::form_2551q::AnnualIncomeTaxElection::Graduated);
         draft.item_13_election = Item13Election::NotApplicable;
         let fields = draft.to_bir_field_map();
         assert_eq!(fields["frm2551Qv2018:taxRate1"], "false");

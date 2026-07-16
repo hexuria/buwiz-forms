@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 
 use bir_core::forms::{
     form_2551q::{
-        Form2551QDraft, Item13Election, OverpaymentDisposition, Schedule1Row, TaxPeriodBasis,
+        AnnualIncomeTaxElection, Form2551QDraft, Item13Election, OverpaymentDisposition,
+        Schedule1Row, TaxPeriodBasis,
     },
     FormValidator, ATC_TABLE_2551Q,
 };
@@ -526,6 +527,7 @@ fn fiscal_period_fixture() -> Result<Form2551QDraft, RenderProviderError> {
     draft.tax_period_basis = TaxPeriodBasis::Fiscal;
     draft.year_end_month = 6;
     draft.quarter = 3;
+    draft.annual_income_tax_election = Some(AnnualIncomeTaxElection::Graduated);
     draft.item_13_election = Item13Election::NotApplicable;
     Ok(draft)
 }
