@@ -8,6 +8,7 @@ import { compareCompleteOfficialPage } from "./official-page-diff";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "../../..");
 const MAX_CHANGED_PERCENT = 1;
+const DEVICE_SCALE_FACTOR = 1.5;
 const STRUCTURAL_INK_THRESHOLD = 100;
 const STRUCTURAL_LINE_MIN_RUN = 20;
 const STRUCTURAL_TOLERANCE_RADIUS = 4;
@@ -28,6 +29,109 @@ test("1701 2018 renders every Rust fixture as four stable unclipped 612x936 page
       expect(await pageHasNoOverflow(pages.nth(pageIndex)), `${fixtureName} page ${pageIndex + 1}`).toBe(true);
     }
   }
+});
+
+test("1701 2018 keeps verified page-specific PDF417, caption, and seal geometry", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701-normal.json"));
+  const pages = page.locator(".form-page");
+  await expect(pages).toHaveCount(4);
+
+  await expectCriticalRegionGeometry(pages.nth(0), [
+    {
+      name: "official seal XObject",
+      selector: ".government-wordmark-1701 img",
+      x: 480.32,
+      y: 28.176,
+      width: 67.364,
+      height: 56.304
+    },
+    {
+      name: "page 1 official PDF417 active matrix",
+      selector: '.barcode-1701[data-barcode-page="1"] .official-pdf417-object-1701',
+      x: 877.68,
+      y: 98.88,
+      width: 316.8,
+      height: 82.8
+    },
+    {
+      name: "page 1 official PDF417 live caption",
+      selector: '.barcode-1701[data-barcode-page="1"] > small',
+      x: 1044.92,
+      y: 180.8476,
+      width: 148.86044,
+      height: 17.9292
+    }
+  ]);
+
+  const continuationRegions = [
+    {
+      page: 2,
+      matrix: { x: 872.64, y: 42.24, width: 323.28, height: 70.8 },
+      caption: { x: 1044.68, y: 113.6076, width: 148.86044, height: 17.9292 }
+    },
+    {
+      page: 3,
+      matrix: { x: 867.6, y: 42.96, width: 326.4, height: 71.76 },
+      caption: { x: 1045.16, y: 113.8476, width: 148.79688, height: 17.9292 }
+    },
+    {
+      page: 4,
+      matrix: { x: 870.24, y: 42.24, width: 323.52, height: 68.64 },
+      caption: { x: 1044.68, y: 110.4876, width: 148.79688, height: 17.9292 }
+    }
+  ] as const;
+  for (const region of continuationRegions) {
+    await expectCriticalRegionGeometry(pages.nth(region.page - 1), [
+      {
+        name: `page ${region.page} official PDF417 active matrix`,
+        selector: `.barcode-1701[data-barcode-page="${region.page}"] .official-pdf417-object-1701`,
+        ...region.matrix
+      },
+      {
+        name: `page ${region.page} official PDF417 live caption`,
+        selector: `.barcode-1701[data-barcode-page="${region.page}"] > small`,
+        ...region.caption
+      }
+    ]);
+  }
+
+  expect(await page.locator(".official-pdf417-symbol-1701").evaluateAll(
+    (symbols) => symbols.map((symbol) => ({
+      preserveAspectRatio: symbol.getAttribute("preserveAspectRatio"),
+      shapeRendering: getComputedStyle(symbol).shapeRendering,
+      viewBox: symbol.getAttribute("viewBox")
+    }))
+  )).toEqual(Array.from({ length: 4 }, () => ({
+    preserveAspectRatio: "none",
+    shapeRendering: "crispedges",
+    viewBox: "0 0 120 7"
+  })));
+
+  const captions = page.locator(".barcode-1701 > small");
+  for (let pageNumber = 1; pageNumber <= 4; pageNumber += 1) {
+    await expect(captions.nth(pageNumber - 1)).toHaveText(`1701 01/18ENCS P${pageNumber}`);
+  }
+  expect(await captions.evaluateAll((elements) => elements.map((element) => {
+    const style = getComputedStyle(element);
+    return {
+      fontFamily: style.fontFamily,
+      fontSize: style.fontSize,
+      fontWeight: style.fontWeight,
+      whiteSpace: style.whiteSpace
+    };
+  }))).toEqual(Array.from({ length: 4 }, () => ({
+    fontFamily: '"eBIRForms Arimo", Arial, sans-serif',
+    fontSize: "10.72px",
+    fontWeight: "400",
+    whiteSpace: "nowrap"
+  })));
+
+  expect(await page.locator(".government-wordmark-1701 img").evaluate(
+    (image) => ({
+      naturalHeight: (image as HTMLImageElement).naturalHeight,
+      naturalWidth: (image as HTMLImageElement).naturalWidth
+    })
+  )).toEqual({ naturalHeight: 102, naturalWidth: 119 });
 });
 
 test("1701 2018 matches the complete official pages", async ({ page }, testInfo) => {
@@ -114,6 +218,58 @@ async function pageHasNoOverflow(locator: Locator) {
     console.warn(`1701 overflow report: ${JSON.stringify({ report, ...details })}`);
   }
   return valid;
+}
+
+interface CriticalRegion {
+  name: string;
+  selector: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+async function expectCriticalRegionGeometry(page: Locator, regions: CriticalRegion[]) {
+  const pageBox = await page.boundingBox();
+  expect(pageBox).not.toBeNull();
+  if (!pageBox) return;
+  const failures: Array<{
+    region: string;
+    dimension: string;
+    actual: number;
+    expected: number;
+    difference: number;
+  }> = [];
+  for (const region of regions) {
+    const box = await page.locator(region.selector).boundingBox();
+    expect(box, region.name).not.toBeNull();
+    if (!box) continue;
+    const actual = {
+      x: box.x - pageBox.x,
+      y: box.y - pageBox.y,
+      width: box.width,
+      height: box.height
+    };
+    const expected = {
+      x: region.x / DEVICE_SCALE_FACTOR,
+      y: region.y / DEVICE_SCALE_FACTOR,
+      width: region.width / DEVICE_SCALE_FACTOR,
+      height: region.height / DEVICE_SCALE_FACTOR
+    };
+    for (const key of ["x", "y", "width", "height"] as const) {
+      const difference = Math.abs(actual[key] - expected[key]);
+      if (difference > 2 / DEVICE_SCALE_FACTOR) {
+        failures.push({
+          region: region.name,
+          dimension: key,
+          actual: actual[key],
+          expected: expected[key],
+          difference
+        });
+      }
+    }
+  }
+  expect(failures).toEqual([]);
 }
 
 function readFixture(relativePath: string): unknown {

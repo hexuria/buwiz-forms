@@ -1,5 +1,6 @@
 /* 1701 January 2018 semantic reconstruction. Official pages are calibration
- * evidence only; runtime uses reviewed discrete seal and barcode crops. */
+ * evidence only. Runtime artwork is limited to the official embedded seal;
+ * PDF417 symbols are exact vector module matrices with live caption text. */
 .form-page.form-1701-page {
   width: 612pt;
   height: 936pt !important;
@@ -59,14 +60,14 @@
 .government-header-1701 > span:nth-child(2) { align-self: end; padding: 0 0 2pt 2pt; }
 .government-wordmark-1701 {
   position: absolute;
-  left: 221pt;
-  top: -3pt;
+  left: 226.16pt;
+  top: -.912pt;
   display: flex;
   align-items: center;
   gap: 4pt;
   text-align: left;
 }
-.government-wordmark-1701 img { width: 27pt; height: 28.5pt; object-fit: contain; }
+.government-wordmark-1701 img { width: 33.682pt; height: 28.152pt; object-fit: fill; }
 
 .masthead-1701 {
   height: 57pt;
@@ -99,9 +100,74 @@
 .compact-1701 .form-title-1701 > strong { font-size: 16.5pt; }
 .compact-1701 .form-title-1701 > span { font-size: 9.5pt; }
 .compact-1701 .form-number-1701 > strong { height: 16pt; font-size: 16pt; line-height: 16pt; }
-.barcode-1701 { border-left: .6pt solid #111; padding: 1.5pt; }
-.barcode-1701 img { width: 161pt; height: 48pt; object-fit: fill; image-rendering: crisp-edges; }
-.compact-1701 .barcode-1701 img { width: 172pt; height: 43pt; }
+.barcode-1701 {
+  position: relative;
+  overflow: visible;
+  border-left: .6pt solid #111;
+  padding: 0;
+}
+.official-pdf417-object-1701,
+.barcode-1701 > small {
+  position: absolute;
+  display: block;
+}
+.official-pdf417-symbol-1701 {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  fill: #000;
+}
+.barcode-1701 > small {
+  margin: 0;
+  color: #000;
+  font-family: "eBIRForms Arimo", Arial, sans-serif;
+  font-size: 8.04pt;
+  font-weight: 400;
+  line-height: 1;
+  text-align: left;
+  white-space: nowrap;
+}
+.page-one-1701 .official-pdf417-object-1701 {
+  left: 5.84pt;
+  top: 5.94pt;
+  width: 158.4pt;
+  height: 41.4pt;
+}
+.page-one-1701 .barcode-1701 > small {
+  left: 89.46pt;
+  top: 46.924pt;
+}
+.page-two-1701 .official-pdf417-object-1701 {
+  left: 14.32pt;
+  top: 3.12pt;
+  width: 161.64pt;
+  height: 35.4pt;
+}
+.page-two-1701 .barcode-1701 > small {
+  left: 100.34pt;
+  top: 38.804pt;
+}
+.page-three-1701 .official-pdf417-object-1701 {
+  left: 11.8pt;
+  top: 3.48pt;
+  width: 163.2pt;
+  height: 35.88pt;
+}
+.page-three-1701 .barcode-1701 > small {
+  left: 100.58pt;
+  top: 38.924pt;
+}
+.page-four-1701 .official-pdf417-object-1701 {
+  left: 13.12pt;
+  top: 3.12pt;
+  width: 161.76pt;
+  height: 34.32pt;
+}
+.page-four-1701 .barcode-1701 > small {
+  left: 100.34pt;
+  top: 37.244pt;
+}
 
 .header-options-1701 {
   height: 19pt;

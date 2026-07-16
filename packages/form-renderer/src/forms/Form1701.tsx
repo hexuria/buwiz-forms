@@ -10,7 +10,7 @@ import {
 } from "../components";
 import { bool, field, text } from "../values";
 import {
-  OFFICIAL_1701_BARCODES,
+  OFFICIAL_1701_PDF417,
   OFFICIAL_1701_SEAL
 } from "./official1701Assets";
 import "./Form1701.css";
@@ -174,10 +174,24 @@ function GovernmentHeader1701() {
 }
 
 function Masthead1701({ page, compact = false }: { page: 1 | 2 | 3 | 4; compact?: boolean }) {
+  const artwork = OFFICIAL_1701_PDF417[page - 1];
   return <header className={`masthead-1701${compact ? " compact-1701" : ""}`}>
     <div className="form-number-1701"><span>BIR Form No.</span><strong>1701</strong><small>January 2018 (ENCS)</small><b>Page {page}</b></div>
     <div className="form-title-1701"><strong>Annual Income Tax Return</strong><span>Individuals (including MIXED Income Earner), Estates and Trusts</span>{!compact && <em>Enter all required information in CAPITAL LETTERS using BLACK ink. Mark applicable boxes with an “X”. Two copies must be filed with the BIR and one held by the Tax Filer.</em>}</div>
-    <div className="barcode-1701"><img src={OFFICIAL_1701_BARCODES[page - 1]} alt="" aria-label={`1701 01/18ENCS P${page}`} /></div>
+    <div className="barcode-1701" aria-label={artwork.payload} data-barcode-page={page}>
+      <span className="official-pdf417-object-1701" aria-hidden="true">
+        <svg
+          className="official-pdf417-symbol-1701"
+          viewBox={`0 0 ${artwork.columns} ${artwork.rows}`}
+          preserveAspectRatio="none"
+          shapeRendering="crispEdges"
+          focusable="false"
+        >
+          <path d={artwork.path} />
+        </svg>
+      </span>
+      <small>{artwork.payload}</small>
+    </div>
   </header>;
 }
 

@@ -71,43 +71,138 @@ fn runtime_discrete_assets() -> Vec<serde_json::Value> {
     vec![
         json!({
             "asset": "government_seal",
-            "crop_box_px": [485, 30, 539, 87],
-            "derived_png_sha256": "eda4415f9587d26ff520f14e9796405d26f2479a271af33bde596a6a12f3a9ce",
+            "bits_per_component": 8,
+            "color_space": "DeviceRGB",
+            "derived_grayscale_pixel_sha256": "2ca1abd3e633cc7f5805e95642dee3ee0d8840336ec9163cb11eb1e138bba01c",
+            "derived_png_sha256": "50d1fc573146e251138b78074b5790dd569f6dbde335feea908334adef4dd7b0",
+            "embedded_as": "lossless_grayscale_collapse_of_equal_rgb_channels",
+            "embedded_color_space": "DeviceGray",
             "embedded_in": "packages/form-renderer/src/forms/assets/1701-seal.png",
+            "source_bbox_top_left_points": [240.16, 14.088, 33.682, 28.152],
+            "source_channels_equal": true,
+            "source_ctm_points": [33.682, 0.0, 0.0, 28.152, 240.16, 893.76],
+            "source_decoded_rgb_sha256": "80ad6c1fa30a29d7795d475da6533459d1242ee2226b6cb23cf8ef6709cba5ce",
             "source_page": 1,
-            "treatment": "exact lossless crop from official 144 DPI source raster"
+            "source_pdf_object_id": [50, 0],
+            "source_pixel_dimensions": [119, 102],
+            "source_png_sha256": "e667f9a75d1b1ab2d929c1ab0feb19edb3bca765336056054491a1cb8c25245a",
+            "treatment": "lossless extraction of the exact official PDF image XObject; equal RGB channels collapsed to one native grayscale channel without crop, resampling, recoloring, thresholding, or substitution"
         }),
         json!({
-            "asset": "static_form_barcode_page_1",
-            "crop_box_px": [874, 95, 1199, 191],
-            "derived_png_sha256": "de40bf4ef293de4926073c6b96b5d16719f1ebf7c72d13f51862e51741739720",
-            "embedded_in": "packages/form-renderer/src/forms/assets/1701-barcode-page-1.png",
+            "asset": "static_form_pdf417_page_1",
+            "caption_bbox_top_left_points": [522.46, 90.4238, 74.43022, 8.9646],
+            "caption_font": "Arial",
+            "caption_font_size_points": 8.04,
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1701 01/18ENCS P1",
+            "decoded_payload": "1701 01/18ENCS P1",
+            "decoder_evidence": [{"decoder": "ZXing-C++ 3.1.0", "payload": "1701 01/18ENCS P1", "symbology": "PDF417"}],
+            "embedded_as": "reviewed_inline_svg_module_matrix_with_live_caption",
+            "embedded_in": "packages/form-renderer/src/forms/official1701Assets.ts",
+            "encoder_proof": {"columns": 3, "encoding": "ISO-8859-1", "error_correction_level": 2, "implementation": "pdf417gen 0.8.1", "module_differences": 0, "rows": 7},
+            "logical_black_modules": 483,
+            "logical_dimensions": [120, 7],
+            "logical_matrix_sha256": "a70883c8ea82b51527ab13d9d7a84acea444a1b941107cf0be13d3132066a068",
+            "logical_path_sha256": "1e1efef2ff6bdc2eace68bfebbbd9eb493d255f7167e9ec4c70832902d51a64c",
+            "source_active_bbox_top_left_points": [438.84, 49.44, 158.4, 41.4],
+            "source_active_pixel_bounds": [0, 0, 240, 63],
+            "source_bbox_top_left_points": [438.84, 49.44, 158.4, 41.4],
+            "source_ctm_points": [158.4, 0.0, 0.0, 41.4, 438.84, 845.16],
+            "source_decoded_rgb_sha256": "21beac9b84195511f37680d3d7b55afa1804bcf10271a79e028dfccd9c6dbf62",
             "source_page": 1,
-            "treatment": "exact lossless crop from official 144 DPI source raster"
+            "source_pdf_object_id": [51, 0],
+            "source_module_scale_pixels": [2, 9],
+            "source_padding_pixels": {"bottom": 0, "right": 0},
+            "source_pixel_dimensions": [240, 63],
+            "source_png_sha256": "3617c72001e6fba856bf375cabbe994964fab6d41912e39345fbd6a2fdeb7ad7",
+            "symbology": "PDF417"
         }),
         json!({
-            "asset": "static_form_barcode_page_2",
-            "crop_box_px": [870, 38, 1199, 132],
-            "derived_png_sha256": "fad49f7f9ef41a4ffb83384d44f3d5f6568ce4388aa59bd49540940fa62d2b61",
-            "embedded_in": "packages/form-renderer/src/forms/assets/1701-barcode-page-2.png",
+            "asset": "static_form_pdf417_page_2",
+            "caption_bbox_top_left_points": [522.34, 56.8038, 74.43022, 8.9646],
+            "caption_font": "Arial",
+            "caption_font_size_points": 8.04,
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1701 01/18ENCS P2",
+            "decoded_payload": "1701 01/18ENCS P2",
+            "decoder_evidence": [{"decoder": "ZXing-C++ 3.1.0", "payload": "1701 01/18ENCS P2", "symbology": "PDF417"}],
+            "embedded_as": "reviewed_inline_svg_module_matrix_with_live_caption",
+            "embedded_in": "packages/form-renderer/src/forms/official1701Assets.ts",
+            "encoder_proof": {"columns": 3, "encoding": "ISO-8859-1", "error_correction_level": 2, "implementation": "pdf417gen 0.8.1", "module_differences": 0, "rows": 7},
+            "logical_black_modules": 474,
+            "logical_dimensions": [120, 7],
+            "logical_matrix_sha256": "fc575f786121c3fdfd0b3acc6e7b0757fcf0098bef23b3beac77a359826d3354",
+            "logical_path_sha256": "9c7aea5124cb0901d56b03e3a7b2b1acbaa69f0872e1596e8ffd52cc08c8925a",
+            "source_active_bbox_top_left_points": [436.32, 21.12, 161.64, 35.4],
+            "source_active_pixel_bounds": [0, 0, 240, 63],
+            "source_bbox_top_left_points": [436.32, 21.12, 161.64, 35.4],
+            "source_ctm_points": [161.64, 0.0, 0.0, 35.4, 436.32, 879.48],
+            "source_decoded_rgb_sha256": "e861773aba90eed4187e5933484c1086ec7db5b05f8acc3d2e8957f0f6579048",
             "source_page": 2,
-            "treatment": "exact lossless crop from official 144 DPI source raster"
+            "source_pdf_object_id": [54, 0],
+            "source_module_scale_pixels": [2, 9],
+            "source_padding_pixels": {"bottom": 0, "right": 0},
+            "source_pixel_dimensions": [240, 63],
+            "source_png_sha256": "5f44eedfa4f5629a80190dec43073aea01d1b9aced4242ace383f1ce9733b227",
+            "symbology": "PDF417"
         }),
         json!({
-            "asset": "static_form_barcode_page_3",
-            "crop_box_px": [864, 38, 1199, 132],
-            "derived_png_sha256": "382bc418aab01a5236d02004706c3aa9fd41e10b9cd4b3f54fdba7edae034fc4",
-            "embedded_in": "packages/form-renderer/src/forms/assets/1701-barcode-page-3.png",
+            "asset": "static_form_pdf417_page_3",
+            "caption_bbox_top_left_points": [522.58, 56.9238, 74.39844, 8.9646],
+            "caption_font": "Arial",
+            "caption_font_size_points": 8.04,
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1701 01/18ENCS P3",
+            "decoded_payload": "1701 01/18ENCS P3",
+            "decoder_evidence": [{"decoder": "ZXing-C++ 3.1.0", "payload": "1701 01/18ENCS P3", "symbology": "PDF417"}],
+            "embedded_as": "reviewed_inline_svg_module_matrix_with_live_caption",
+            "embedded_in": "packages/form-renderer/src/forms/official1701Assets.ts",
+            "encoder_proof": {"columns": 3, "encoding": "ISO-8859-1", "error_correction_level": 2, "implementation": "pdf417gen 0.8.1", "module_differences": 0, "rows": 7},
+            "logical_black_modules": 484,
+            "logical_dimensions": [120, 7],
+            "logical_matrix_sha256": "28f993cc6172d3b5891ebd5caa3c0e68696698ecf194c27a10acb774d99a4f6e",
+            "logical_path_sha256": "191691ec2311ce0d786eff4aa9ac4c1ae3e465cc34251fb16a712bd4466ada46",
+            "source_active_bbox_top_left_points": [433.8, 21.48, 163.2, 35.88],
+            "source_active_pixel_bounds": [0, 0, 240, 63],
+            "source_bbox_top_left_points": [433.8, 21.48, 163.2, 35.88],
+            "source_ctm_points": [163.2, 0.0, 0.0, 35.88, 433.8, 878.64],
+            "source_decoded_rgb_sha256": "98ca37c879c043e1bed7ba02469140437ebcd125d0e681b0d20bdad7b2238809",
             "source_page": 3,
-            "treatment": "exact lossless crop from official 144 DPI source raster"
+            "source_pdf_object_id": [66, 0],
+            "source_module_scale_pixels": [2, 9],
+            "source_padding_pixels": {"bottom": 0, "right": 0},
+            "source_pixel_dimensions": [240, 63],
+            "source_png_sha256": "75fafcf0324308fa49d197c3d9a2b729677d3b69f377e81517f9cc89cd2f134d",
+            "symbology": "PDF417"
         }),
         json!({
-            "asset": "static_form_barcode_page_4",
-            "crop_box_px": [868, 38, 1199, 132],
-            "derived_png_sha256": "705a9eba84e1b163588b161657e9ad9422213cc0a56ce5a5d80ab4055c4f61c2",
-            "embedded_in": "packages/form-renderer/src/forms/assets/1701-barcode-page-4.png",
+            "asset": "static_form_pdf417_page_4",
+            "caption_bbox_top_left_points": [522.34, 55.2438, 74.39844, 8.9646],
+            "caption_font": "Arial",
+            "caption_font_size_points": 8.04,
+            "caption_render_font": "eBIRForms Arimo",
+            "caption_text": "1701 01/18ENCS P4",
+            "decoded_payload": "1701 01/18ENCS P4",
+            "decoder_evidence": [{"decoder": "ZXing-C++ 3.1.0", "payload": "1701 01/18ENCS P4", "symbology": "PDF417"}],
+            "embedded_as": "reviewed_inline_svg_module_matrix_with_live_caption",
+            "embedded_in": "packages/form-renderer/src/forms/official1701Assets.ts",
+            "encoder_proof": {"columns": 3, "encoding": "ISO-8859-1", "error_correction_level": 2, "implementation": "pdf417gen 0.8.1", "module_differences": 0, "rows": 7},
+            "logical_black_modules": 482,
+            "logical_dimensions": [120, 7],
+            "logical_matrix_sha256": "209e791883eab663776176777be715f5292b13b386a3a461c1f5bd829fbae1d6",
+            "logical_path_sha256": "b3abe63985d02ec09423acfd1c71e14a394ec7398649201f0737b0d59ef84895",
+            "source_active_bbox_top_left_points": [435.12, 21.12, 161.76, 34.32],
+            "source_active_pixel_bounds": [0, 0, 240, 63],
+            "source_bbox_top_left_points": [435.12, 21.12, 161.76, 34.32],
+            "source_ctm_points": [161.76, 0.0, 0.0, 34.32, 435.12, 880.56],
+            "source_decoded_rgb_sha256": "17c6b4269d1484203cab29ea7330ec74124fcc376709b9d365f9092d75b1276f",
             "source_page": 4,
-            "treatment": "exact lossless crop from official 144 DPI source raster"
+            "source_pdf_object_id": [69, 0],
+            "source_module_scale_pixels": [2, 9],
+            "source_padding_pixels": {"bottom": 0, "right": 0},
+            "source_pixel_dimensions": [240, 63],
+            "source_png_sha256": "a07644120648f1810c64e3d5d1c53e65ed3ad6fc884e1d206bfbd58ee93cc8ad",
+            "symbology": "PDF417"
         }),
     ]
 }
@@ -804,6 +899,86 @@ mod tests {
                 fixture.file_name,
                 fixture.envelope.validation
             );
+        }
+    }
+
+    #[test]
+    fn discrete_artwork_provenance_matches_verified_official_xobjects() {
+        let assets = runtime_discrete_assets();
+        assert_eq!(assets.len(), 5);
+
+        let seal = &assets[0];
+        assert_eq!(seal["asset"], json!("government_seal"));
+        assert_eq!(seal["source_pdf_object_id"], json!([50, 0]));
+        assert_eq!(seal["source_pixel_dimensions"], json!([119, 102]));
+        assert_eq!(seal["source_channels_equal"], json!(true));
+        assert_eq!(
+            seal["derived_png_sha256"],
+            json!("50d1fc573146e251138b78074b5790dd569f6dbde335feea908334adef4dd7b0")
+        );
+
+        for (asset, expected) in assets[1..].iter().zip([
+            (
+                "static_form_pdf417_page_1",
+                1,
+                51,
+                "1701 01/18ENCS P1",
+                483,
+                "a70883c8ea82b51527ab13d9d7a84acea444a1b941107cf0be13d3132066a068",
+                "1e1efef2ff6bdc2eace68bfebbbd9eb493d255f7167e9ec4c70832902d51a64c",
+                json!([438.84, 49.44, 158.4, 41.4]),
+            ),
+            (
+                "static_form_pdf417_page_2",
+                2,
+                54,
+                "1701 01/18ENCS P2",
+                474,
+                "fc575f786121c3fdfd0b3acc6e7b0757fcf0098bef23b3beac77a359826d3354",
+                "9c7aea5124cb0901d56b03e3a7b2b1acbaa69f0872e1596e8ffd52cc08c8925a",
+                json!([436.32, 21.12, 161.64, 35.4]),
+            ),
+            (
+                "static_form_pdf417_page_3",
+                3,
+                66,
+                "1701 01/18ENCS P3",
+                484,
+                "28f993cc6172d3b5891ebd5caa3c0e68696698ecf194c27a10acb774d99a4f6e",
+                "191691ec2311ce0d786eff4aa9ac4c1ae3e465cc34251fb16a712bd4466ada46",
+                json!([433.8, 21.48, 163.2, 35.88]),
+            ),
+            (
+                "static_form_pdf417_page_4",
+                4,
+                69,
+                "1701 01/18ENCS P4",
+                482,
+                "209e791883eab663776176777be715f5292b13b386a3a461c1f5bd829fbae1d6",
+                "b3abe63985d02ec09423acfd1c71e14a394ec7398649201f0737b0d59ef84895",
+                json!([435.12, 21.12, 161.76, 34.32]),
+            ),
+        ]) {
+            let (name, page, object, payload, black_modules, matrix_hash, path_hash, active_bbox) =
+                expected;
+            assert_eq!(asset["asset"], json!(name));
+            assert_eq!(asset["source_page"], json!(page));
+            assert_eq!(asset["source_pdf_object_id"], json!([object, 0]));
+            assert_eq!(asset["source_pixel_dimensions"], json!([240, 63]));
+            assert_eq!(asset["source_active_pixel_bounds"], json!([0, 0, 240, 63]));
+            assert_eq!(asset["source_active_bbox_top_left_points"], active_bbox);
+            assert_eq!(asset["decoded_payload"], json!(payload));
+            assert_eq!(asset["symbology"], json!("PDF417"));
+            assert_eq!(asset["logical_black_modules"], json!(black_modules));
+            assert_eq!(asset["logical_dimensions"], json!([120, 7]));
+            assert_eq!(asset["logical_matrix_sha256"], json!(matrix_hash));
+            assert_eq!(asset["logical_path_sha256"], json!(path_hash));
+            assert_eq!(asset["source_module_scale_pixels"], json!([2, 9]));
+            assert_eq!(
+                asset["source_padding_pixels"],
+                json!({"bottom": 0, "right": 0})
+            );
+            assert_eq!(asset["encoder_proof"]["module_differences"], json!(0));
         }
     }
 }
