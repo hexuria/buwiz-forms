@@ -367,7 +367,7 @@ pub fn registered_form_codes_for_version(
     let mut codes = if has_exact_cor_codes {
         extracted_codes
             .into_iter()
-            .filter(|code| code_passes_version_filter(code, version, profile, year))
+            .filter(|code| exact_cor_code_passes_version_filter(code, version, profile, year))
             .collect::<BTreeSet<_>>()
     } else {
         crate::forms::registry::FORM_REGISTRY
@@ -409,13 +409,19 @@ pub fn form_suggestions_for_profile_year(
 
     let mut suggestions = Vec::new();
     for version in resolved.effective_segments {
-        let mut guarded_version = version.clone();
-        if guarded_version.evidence.iter().any(|document| {
-            document.ocr_text.as_deref().is_some_and(|text| {
-                crate::profile::classify_vat_registration_text(text)
-                    == crate::profile::VatRegistrationTextClassification::NonVat
+        let explicit_non_vat_document_ids = version
+            .evidence
+            .iter()
+            .filter(|document| {
+                document.ocr_text.as_deref().is_some_and(|text| {
+                    crate::profile::classify_vat_registration_text(text)
+                        == crate::profile::VatRegistrationTextClassification::NonVat
+                })
             })
-        }) {
+            .map(|document| document.id.clone())
+            .collect::<Vec<_>>();
+        let mut guarded_version = version.clone();
+        if !explicit_non_vat_document_ids.is_empty() {
             guarded_version.is_vat_registered = false;
             guarded_version
                 .registered_tax_types
@@ -476,7 +482,7 @@ pub fn form_suggestions_for_profile_year(
                 (generated_source, Some(reason), source_reference.clone())
             };
             suggestions.push(FormSuggestion {
-                form_code: code,
+                form_code: code.clone(),
                 active: true,
                 source,
                 reason,
@@ -484,6 +490,29 @@ pub fn form_suggestions_for_profile_year(
                 effective_from: guarded_version.effective_from,
                 effective_until: guarded_version.effective_until,
             });
+
+            // An exact form code is reviewed, form-specific evidence and can
+            // establish VAT-form eligibility even when the coarse boolean flag
+            // was not set. Explicit NON-VAT wording is equally reviewed evidence,
+            // though, so preserve both sides as an include/exclude conflict. The
+            // Forms Set reconciler will fail this code closed as NeedsReview.
+            if !explicit_non_vat_document_ids.is_empty()
+                && manual_override.is_none()
+                && is_vat_required_form_code(&code)
+            {
+                suggestions.push(FormSuggestion {
+                    form_code: code.clone(),
+                    active: false,
+                    source: FormSuggestionSource::ReviewedCor,
+                    reason: Some(format!(
+                        "Explicit NON-VAT evidence conflicts with reviewed exact VAT form code '{code}' in '{}'",
+                        guarded_version.label
+                    )),
+                    source_reference: Some(explicit_non_vat_document_ids.join(", ")),
+                    effective_from: guarded_version.effective_from,
+                    effective_until: guarded_version.effective_until,
+                });
+            }
         }
 
         for rule in guarded_version
@@ -746,6 +775,16 @@ pub fn obligation_allowed_for_version_and_profile(
     profile: &TaxpayerProfile,
     year: u16,
 ) -> bool {
+    obligation_allowed_for_version_and_profile_with_evidence(def, version, profile, year, false)
+}
+
+fn obligation_allowed_for_version_and_profile_with_evidence(
+    def: &crate::forms::registry::FormDefinition,
+    version: &TaxProfileVersion,
+    profile: &TaxpayerProfile,
+    year: u16,
+    reviewed_exact_form_code: bool,
+) -> bool {
     // 1. Deprecation check
     if let Some(dep_year) = def.deprecation_year() {
         if year >= dep_year {
@@ -760,7 +799,9 @@ pub fn obligation_allowed_for_version_and_profile(
 
     // 3. VAT registration requirement
     if let Some(req_vat) = def.requires_vat {
-        if req_vat != version.is_vat_registered {
+        let reviewed_exact_vat_code_establishes_eligibility = reviewed_exact_form_code && req_vat;
+        if req_vat != version.is_vat_registered && !reviewed_exact_vat_code_establishes_eligibility
+        {
             return false;
         }
     }
@@ -900,7 +941,7 @@ pub fn obligation_allowed_for_version_and_profile(
 /// Validates a stored form code against the active profile version.
 /// Used as a defense-in-depth post-filter when reading from `per_year_forms`
 /// (Path A), in case the stored data was populated without full obligation checks.
-fn code_passes_version_filter(
+fn exact_cor_code_passes_version_filter(
     code: &str,
     version: &TaxProfileVersion,
     profile: &TaxpayerProfile,
@@ -919,10 +960,15 @@ fn code_passes_version_filter(
     }
 
     if let Some(def) = crate::forms::registry::find_form(code) {
-        obligation_allowed_for_version_and_profile(def, version, profile, year)
+        obligation_allowed_for_version_and_profile_with_evidence(def, version, profile, year, true)
     } else {
         true // custom codes always pass
     }
+}
+
+fn is_vat_required_form_code(code: &str) -> bool {
+    crate::forms::registry::find_form(code)
+        .is_some_and(|definition| definition.requires_vat == Some(true))
 }
 
 fn is_recurring_form_code(code: &str) -> bool {
@@ -1446,6 +1492,47 @@ mod tests {
             .insert(year, reconciliation.forms_set);
     }
 
+    fn configure_confirmed_cor_evidence(
+        profile: &mut TaxpayerProfile,
+        is_vat_registered: bool,
+        registered_tax_types: Vec<crate::profile::RegisteredTaxType>,
+        extracted_form_codes: &[&str],
+        ocr_text: Option<&str>,
+    ) {
+        use crate::profile::{
+            ComplianceSourceMode, CorDocumentRef, TaxProfileVersion, TaxProfileVersionSource,
+            TaxProfileVersionStatus,
+        };
+
+        let mut version = TaxProfileVersion::from_profile_backfill(profile);
+        version.id = "reviewed-cor".into();
+        version.label = "Reviewed COR".into();
+        version.status = TaxProfileVersionStatus::Confirmed;
+        version.source = TaxProfileVersionSource::OcrCor;
+        version.effective_from = NaiveDate::from_ymd_opt(2026, 1, 1);
+        version.needs_effective_date_review = false;
+        version.is_vat_registered = is_vat_registered;
+        version.registered_tax_types = registered_tax_types;
+        version.evidence = vec![CorDocumentRef {
+            id: "cor-document".into(),
+            file_name: "cor.pdf".into(),
+            stored_path: "/tmp/cor.pdf".into(),
+            uploaded_at: None,
+            provider: Some("ocr".into()),
+            model: None,
+            document_type: Some("COR".into()),
+            extracted_form_codes: extracted_form_codes
+                .iter()
+                .map(|code| (*code).to_string())
+                .collect(),
+            ocr_text: ocr_text.map(str::to_string),
+            ocr_confidence: Some(0.99),
+            field_bboxes: Default::default(),
+        }];
+        profile.profile_versions = vec![version];
+        profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+    }
+
     #[test]
     fn form_applicability_requires_a_stored_forms_set() {
         let profile = profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, false);
@@ -1948,6 +2035,107 @@ mod tests {
             suggestions
                 .iter()
                 .all(|suggestion| !suggestion.form_code.starts_with("2550"))
+        );
+    }
+
+    #[test]
+    fn reviewed_exact_vat_form_code_is_eligible_without_boolean_vat_flag() {
+        use crate::profile::RegisteredTaxType;
+
+        let mut profile =
+            profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, false);
+        configure_confirmed_cor_evidence(
+            &mut profile,
+            false,
+            vec![RegisteredTaxType::PercentageTax],
+            &["2550Q"],
+            None,
+        );
+
+        let suggestions = form_suggestions_for_profile_year(&profile, 2026);
+        let vat_suggestions = suggestions
+            .iter()
+            .filter(|suggestion| suggestion.form_code == "2550Q")
+            .collect::<Vec<_>>();
+
+        assert_eq!(vat_suggestions.len(), 1);
+        assert!(vat_suggestions[0].active);
+        assert_eq!(vat_suggestions[0].source, FormSuggestionSource::ReviewedCor);
+    }
+
+    #[test]
+    fn explicit_non_vat_and_exact_vat_code_reconcile_to_needs_review() {
+        use crate::profile::RegisteredTaxType;
+
+        let mut profile =
+            profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, false);
+        configure_confirmed_cor_evidence(
+            &mut profile,
+            false,
+            vec![RegisteredTaxType::PercentageTax],
+            &["2550Q"],
+            Some("TAXPAYER TYPE: NON-VAT REGISTERED"),
+        );
+
+        let suggestions = form_suggestions_for_profile_year(&profile, 2026);
+        let vat_suggestions = suggestions
+            .iter()
+            .filter(|suggestion| suggestion.form_code == "2550Q")
+            .collect::<Vec<_>>();
+        assert_eq!(vat_suggestions.len(), 2);
+        assert!(vat_suggestions.iter().any(|suggestion| suggestion.active));
+        assert!(vat_suggestions.iter().any(|suggestion| !suggestion.active));
+        assert!(
+            vat_suggestions
+                .iter()
+                .all(|suggestion| { suggestion.source == FormSuggestionSource::ReviewedCor })
+        );
+
+        let reconciliation = crate::forms::reconcile_forms_set_for_year(2026, None, &suggestions);
+        let entry = reconciliation
+            .forms_set
+            .entry("2550Q")
+            .expect("conflicting reviewed evidence must remain visible");
+
+        assert!(entry.needs_review());
+        assert!(!entry.is_filing_active());
+        assert_eq!(reconciliation.conflicts.len(), 1);
+        assert!(entry.conflict.as_ref().is_some_and(|conflict| {
+            conflict.competing_suggestions.iter().any(|suggestion| {
+                !suggestion.active
+                    && suggestion
+                        .reason
+                        .as_deref()
+                        .is_some_and(|reason| reason.contains("NON-VAT"))
+            })
+        }));
+    }
+
+    #[test]
+    fn percentage_tax_without_exact_vat_code_does_not_suggest_vat_form() {
+        use crate::profile::RegisteredTaxType;
+
+        let mut profile =
+            profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, false);
+        configure_confirmed_cor_evidence(
+            &mut profile,
+            false,
+            vec![RegisteredTaxType::PercentageTax],
+            &[],
+            None,
+        );
+
+        let suggestions = form_suggestions_for_profile_year(&profile, 2026);
+
+        assert!(
+            suggestions
+                .iter()
+                .any(|suggestion| { suggestion.form_code == "2551Q" && suggestion.active })
+        );
+        assert!(
+            suggestions
+                .iter()
+                .all(|suggestion| { suggestion.form_code != "2550Q" })
         );
     }
 
