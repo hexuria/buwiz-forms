@@ -390,7 +390,7 @@ test("2551Q page-one typography keeps the reviewed bundled-font calibration", as
       fontFamily: bundledFont,
       fontSize: "32px",
       fontWeight: "500",
-      transform: "matrix(1, 0, 0, 1, 0, -1.33333)"
+      transform: "matrix(1, 0, 0, 1, -1.33333, -1.33333)"
     },
     formRevision: {
       fontFamily: bundledFont,
@@ -400,15 +400,15 @@ test("2551Q page-one typography keeps the reviewed bundled-font calibration", as
     },
     formTitle: {
       fontFamily: bundledFont,
-      fontSize: "24px",
+      fontSize: "23.6667px",
       fontWeight: "500",
-      transform: "matrix(1, 0, 0, 1, 0, -2.66667)"
+      transform: "matrix(1, 0, 0, 1, -0.666667, -2)"
     },
     instructions: {
       fontFamily: bundledFont,
       fontSize: "10.3333px",
       fontWeight: "400",
-      transform: "matrix(1, 0, 0, 1, 0, -6.66667)"
+      transform: "matrix(1, 0, 0, 1, -0.666667, -6.66667)"
     },
     optionLabel: {
       fontFamily: bundledFont,
@@ -440,6 +440,43 @@ test("2551Q page-one typography keeps the reviewed bundled-font calibration", as
       fontWeight: "400",
       transform: "none"
     }
+  });
+
+  expect(await pageOne.evaluate((formPage) => {
+    const style = (selector: string) => {
+      const element = formPage.querySelector(selector);
+      if (!element) throw new Error(`Missing parity typography target: ${selector}`);
+      return getComputedStyle(element);
+    };
+    return {
+      declarationLineHeight: style(".official-declaration > p").lineHeight,
+      formNumberLetterSpacing: style(".official-form-number > strong").letterSpacing,
+      formTitleLetterSpacing: style(".official-form-title > strong").letterSpacing,
+      instructionsLetterSpacing: style(".official-form-title > em").letterSpacing,
+      item13EmFontSize: style(".income-rate-question em").fontSize,
+      item13FontSize: style(".income-rate-question").fontSize,
+      item13Transform: style(".income-rate-question").transform,
+      signatureTransforms: Array.from(
+        formPage.querySelectorAll(".signature-caption > *"),
+        (element) => getComputedStyle(element).transform
+      ),
+      taxLineLetterSpacing: style(
+        ".official-tax-line[data-item='14'] .tax-line-label"
+      ).letterSpacing
+    };
+  })).toEqual({
+    declarationLineHeight: "10.6px",
+    formNumberLetterSpacing: "normal",
+    formTitleLetterSpacing: "0.933333px",
+    instructionsLetterSpacing: "-0.0933333px",
+    item13EmFontSize: "10.3333px",
+    item13FontSize: "12px",
+    item13Transform: "matrix(1, 0, 0, 1, 0, -0.333333)",
+    signatureTransforms: Array.from(
+      { length: 4 },
+      () => "matrix(1, 0, 0, 1, 0, -0.666667)"
+    ),
+    taxLineLetterSpacing: "0.32px"
   });
 
   expect(

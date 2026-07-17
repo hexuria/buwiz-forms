@@ -1340,7 +1340,8 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 .form-2551q-page-one .official-form-number > strong {
   font-size: 24pt;
   font-weight: 500;
-  transform: translateY(-1pt);
+  letter-spacing: 0;
+  transform: translate(-1pt, -1pt);
 }
 
 .form-2551q-page-one .official-form-number > small,
@@ -1349,14 +1350,16 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 }
 
 .form-2551q-page-one .official-form-title > strong {
-  font-size: 18pt;
+  font-size: 17.75pt;
   font-weight: 500;
-  transform: translateY(-2pt);
+  letter-spacing: .7pt;
+  transform: translate(-.5pt, -1.5pt);
 }
 
 .form-2551q-page-one .official-form-title > em {
   font-size: 7.75pt;
-  transform: translateY(-5pt);
+  letter-spacing: -.07pt;
+  transform: translate(-.5pt, -5pt);
 }
 
 .form-2551q-page-one .official-header-options :is(.option-label, .check-choice) {
@@ -1380,6 +1383,10 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 
 .form-2551q-page-one :is(.tax-line-label, .tax-subheading) {
   font-size: 9pt;
+}
+
+.form-2551q-page-one .tax-line-label {
+  letter-spacing: .24pt;
 }
 
 .form-2551q-page-one .tax-line-label b {
@@ -1532,6 +1539,23 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 .form-2551q-page-one .background-information .tax-relief-spec {
   gap: 1.1pt;
   padding-left: 1.75pt;
+}
+
+.form-2551q-page-one .income-rate-question {
+  font-size: 9pt;
+  transform: translateY(-.25pt);
+}
+
+.form-2551q-page-one .income-rate-question em {
+  font-size: 7.75pt;
+}
+
+.form-2551q-page-one .signature-caption > * {
+  transform: translateY(-.5pt);
+}
+
+.form-2551q-page-one .official-declaration > p {
+  line-height: 1.325;
 }
 
 .form-2551q-page-one .background-information .comb-value > span::after {
