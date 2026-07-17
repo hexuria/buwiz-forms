@@ -226,7 +226,7 @@
 .tin-value-1601c > i {
   display: grid;
   place-items: center;
-  background: #bfbfbf;
+  background: #a6a6a6;
   border-inline: .55pt solid #111;
   font-style: normal;
   font-size: 10pt;
@@ -398,7 +398,7 @@
   display: grid;
   place-items: center;
   border-inline: .55pt solid #111;
-  background: #bfbfbf;
+  background: #a6a6a6;
   font-weight: 700;
 }
 .money-1601c > i { display: none; }
@@ -641,8 +641,8 @@
 .guideline-columns-1601c {
   height: 488pt;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20pt;
+  grid-template-columns: 285pt minmax(0, 1fr);
+  gap: 31pt;
   font-size: 6pt;
   line-height: 7.84pt;
   text-align: justify;

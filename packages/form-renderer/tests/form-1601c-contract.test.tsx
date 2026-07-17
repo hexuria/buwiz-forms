@@ -97,6 +97,8 @@ describe("1601C:2018 runtime render contract", () => {
 
     expect(markup).toContain("From Part IV-Schedule 1, Item 4");
     expect(markup).not.toContain("From Part IV-Schedule I, Item 4");
+    expect(markup).toContain("receiving P250,000 &amp; below for the year");
+    expect(markup).not.toContain("receiving ₱250,000");
     expect(markup).toContain("is true and correct, pursuant to the provisions");
     expect(markup.match(/identity-label-1601c/g)).toHaveLength(2);
     for (const marker of ["a.1", "a.2", "b.1", "b.2", "b.3", "b.4"]) {

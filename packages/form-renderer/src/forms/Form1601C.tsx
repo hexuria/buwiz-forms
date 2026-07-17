@@ -28,7 +28,7 @@ const TAX_LINES = [
   ["20", "Other Non-Taxable Compensation (specify)", "tax_20_other_amount"],
   ["21", "Total Non-Taxable Compensation (Sum of Items 15 to 20)", "tax_21_total_non_taxable"],
   ["22", "Total Taxable Compensation (Item 14 Less Item 21)", "tax_22_total_taxable"],
-  ["23", "Less: Taxable compensation not subject to withholding tax (for employees, other than MWEs, receiving ₱250,000 & below for the year)", "tax_23_not_subject"],
+  ["23", "Less: Taxable compensation not subject to withholding tax (for employees, other than MWEs, receiving P250,000 & below for the year)", "tax_23_not_subject"],
   ["24", "Net Taxable Compensation (Item 22 Less Item 23)", "tax_24_net_taxable"],
   ["25", "Total Taxes Withheld", "tax_25_total_taxes_withheld"],
   ["26", "Add/(Less): Adjustment of Taxes Withheld from Previous Month/s (From Part IV-Schedule 1, Item 4)", "tax_26_adjustment"],
