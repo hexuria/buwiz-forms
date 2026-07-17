@@ -2,7 +2,7 @@ import type { RenderEnvelope } from "@ebirforms/form-contracts";
 import { getFormSpec } from "@ebirforms/form-specs";
 import type { ReactNode } from "react";
 import {
-  AdaptiveCombValue,
+  AdaptivePlainValue,
   CheckChoice,
   CombValue,
   FolioPage,
@@ -143,14 +143,14 @@ function HeaderFields0605({ envelope }: { envelope: RenderEnvelope }) {
     <section className="header-fields-0605" aria-label="Items 1 to 8">
       <div className="period-block-0605">
         <div className="basis-row-0605"><Label number="1">For the</Label><CheckChoice checked={basis === "calendar"} label="Calendar" /><CheckChoice checked={basis === "fiscal"} label="Fiscal" /></div>
-        <div className="year-row-0605"><Label number="2">Year Ended <em>(MM / YYYY)</em></Label><AdaptiveCombValue value={yearEnded} cells={6} /></div>
+        <div className="year-row-0605"><Label number="2">Year Ended <em>(MM / YYYY)</em></Label><GuidedValue0605 field="2-year-ended" value={yearEnded} segments={[2, 4]} /></div>
       </div>
       <div className="quarter-block-0605"><Label number="3">Quarter</Label><div>{[1, 2, 3, 4].map((value) => <CheckChoice key={value} checked={quarter === value} label={`${value}${value === 1 ? "st" : value === 2 ? "nd" : value === 3 ? "rd" : "th"}`} />)}</div></div>
-      <HeaderValue0605 number="4" label="Due Date ( MM / DD / YYYY)"><AdaptiveCombValue value={text(envelope, "due_date").replace(/\D/g, "")} cells={8} /></HeaderValue0605>
-      <HeaderValue0605 number="5" label={<>No. of Sheets<br />Attached</>}><AdaptiveCombValue value={String(integer(envelope, "number_of_sheets")).padStart(2, "0")} cells={2} align="right" /></HeaderValue0605>
-      <HeaderValue0605 number="6" label="A T C"><AdaptiveCombValue value={text(envelope, "atc")} cells={10} /></HeaderValue0605>
-      <HeaderValue0605 number="7" label="Return Period ( MM / DD / YYYY)"><AdaptiveCombValue value={text(envelope, "return_period").replace(/\D/g, "")} cells={8} /></HeaderValue0605>
-      <HeaderValue0605 number="8" label="Tax Type Code"><AdaptiveCombValue value={text(envelope, "tax_type_code")} cells={4} /></HeaderValue0605>
+      <HeaderValue0605 number="4" label="Due Date ( MM / DD / YYYY)"><GuidedValue0605 field="4-due-date" value={text(envelope, "due_date").replace(/\D/g, "")} segments={[2, 2, 4]} /></HeaderValue0605>
+      <HeaderValue0605 number="5" label={<>No. of Sheets<br />Attached</>}><GuidedValue0605 field="5-sheets" value={String(integer(envelope, "number_of_sheets")).padStart(2, "0")} segments={[2]} align="right" /></HeaderValue0605>
+      <HeaderValue0605 number="6" label="A T C"><PlainValue0605 field="6-atc" value={text(envelope, "atc")} /></HeaderValue0605>
+      <HeaderValue0605 number="7" label="Return Period ( MM / DD / YYYY)"><GuidedValue0605 field="7-return-period" value={text(envelope, "return_period").replace(/\D/g, "")} segments={[2, 2, 4]} /></HeaderValue0605>
+      <HeaderValue0605 number="8" label="Tax Type Code"><GuidedValue0605 field="8-tax-type" value={text(envelope, "tax_type_code")} segments={[2]} /></HeaderValue0605>
       <div className="bcs-item-0605"><span>BCS No./Item No. (To be filled up by the BIR)</span><i /></div>
     </section>
   );
@@ -164,38 +164,133 @@ function HeaderValue0605({ number, label, children }: { number: string; label: R
   return <div className={`header-value-0605 item-${number}-0605`}><Label number={number}>{label}</Label><div>{children}</div></div>;
 }
 
+function PlainValue0605({
+  field,
+  value,
+  align = "left",
+  className = ""
+}: {
+  field: string;
+  value: string;
+  align?: "left" | "right";
+  className?: string;
+}) {
+  return (
+    <span
+      className={`plain-field-shell-0605 ${className}`.trim()}
+      data-official-field={field}
+      data-field-mode="plain"
+      data-guide-count="0"
+    >
+      <AdaptivePlainValue
+        value={value}
+        align={align}
+        className="plain-field-value-0605"
+        maxFontSizePx={10}
+        minFontSizePx={6}
+        fontStepPx={0.5}
+      />
+    </span>
+  );
+}
+
+function GuidedValue0605({
+  field,
+  value,
+  segments,
+  align = "left",
+  className = ""
+}: {
+  field: string;
+  value: string;
+  segments: readonly number[];
+  align?: "left" | "right";
+  className?: string;
+}) {
+  const characters = Array.from(value);
+  const capacity = segments.reduce((total, segment) => total + segment, 0);
+  if (characters.length > capacity) {
+    return (
+      <PlainValue0605
+        field={field}
+        value={value}
+        align={align}
+        className={`guided-overflow-plain-0605 ${className}`.trim()}
+      />
+    );
+  }
+
+  let offset = 0;
+  const guideCount = segments.reduce((total, segment) => total + segment - 1, 0);
+  return (
+    <span
+      className={`guided-field-0605 ${className}`.trim()}
+      data-official-field={field}
+      data-field-mode="guided"
+      data-guide-count={guideCount}
+      data-guide-segments={segments.join("-")}
+      aria-label={value}
+      style={{ gridTemplateColumns: segments.map((segment) => `${segment}fr`).join(" ") }}
+    >
+      {segments.map((segment, index) => {
+        const segmentValue = characters.slice(offset, offset + segment).join("");
+        offset += segment;
+        return (
+          <span className="guided-segment-0605" key={`${field}-${index}`}>
+            <CombValue value={segmentValue} cells={segment} align={align} />
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 function BackgroundInformation0605({ envelope }: { envelope: RenderEnvelope }) {
   const classification = text(envelope, "taxpayer_classification");
   const manner = text(envelope, "manner_of_payment");
   const paymentType = text(envelope, "type_of_payment");
-  const tin = envelope.taxpayer.tin.replace(/\D/g, "").padEnd(14);
+  const tin = envelope.taxpayer.tin.replace(/\D/g, "");
   return (
     <section className="part-one-0605">
       <h2><span>Part I</span><b>Background Information</b></h2>
       <div className="identity-row-0605">
         <HeaderValue0605 number="9" label="Taxpayer Identification No."><Tin0605 value={tin} /></HeaderValue0605>
-        <HeaderValue0605 number="10" label="RDO Code"><CombValue value={envelope.taxpayer.rdo_code} cells={3} /></HeaderValue0605>
+        <HeaderValue0605 number="10" label="RDO Code"><GuidedValue0605 field="10-rdo" value={envelope.taxpayer.rdo_code} segments={[3]} /></HeaderValue0605>
         <div className="classification-0605"><Label number="11">Taxpayer Classification</Label><span><CheckChoice checked={classification === "individual"} label="I" /><CheckChoice checked={classification === "non_individual"} label="N" /></span></div>
-        <HeaderValue0605 number="12" label="Line of Business/Occupation"><AdaptiveCombValue value={text(envelope, "line_of_business")} cells={32} /></HeaderValue0605>
+        <HeaderValue0605 number="12" label="Line of Business/Occupation"><PlainValue0605 field="12-line-of-business" value={text(envelope, "line_of_business")} /></HeaderValue0605>
       </div>
       <div className="name-phone-0605">
-        <div><Label number="13">Taxpayer's Name</Label><AdaptiveCombValue value={envelope.taxpayer.name.toUpperCase()} cells={52} /><small>(Last Name, First Name, Middle Name for Individuals) / (Registered Name for Non-Individuals)</small></div>
-        <HeaderValue0605 number="14" label="Telephone Number"><AdaptiveCombValue value={envelope.taxpayer.contact_number.replace(/\D/g, "")} cells={12} /></HeaderValue0605>
+        <div><Label number="13">Taxpayer's Name</Label><PlainValue0605 field="13-taxpayer-name" value={envelope.taxpayer.name.toUpperCase()} /><small>(Last Name, First Name, Middle Name for Individuals) / (Registered Name for Non-Individuals)</small></div>
+        <HeaderValue0605 number="14" label="Telephone Number"><GuidedValue0605 field="14-telephone" value={envelope.taxpayer.contact_number.replace(/\D/g, "")} segments={[7]} /></HeaderValue0605>
       </div>
       <div className="address-zip-0605">
-        <div><Label number="15">Registered Address</Label><AdaptiveCombValue value={envelope.taxpayer.registered_address.toUpperCase()} cells={52} /></div>
-        <HeaderValue0605 number="16" label="Zip Code"><CombValue value={envelope.taxpayer.zip_code} cells={4} /></HeaderValue0605>
+        <div><Label number="15">Registered Address</Label><PlainValue0605 field="15-registered-address" value={envelope.taxpayer.registered_address.toUpperCase()} /></div>
+        <HeaderValue0605 number="16" label="Zip Code"><GuidedValue0605 field="16-zip" value={envelope.taxpayer.zip_code} segments={[4]} /></HeaderValue0605>
       </div>
       <div className="payment-choice-head-0605"><span>►&nbsp;&nbsp;17&nbsp; Manner of Payment</span><span>►&nbsp;&nbsp;18&nbsp; Type of Payment</span></div>
       <div className="payment-choices-0605">
         <div className="manner-0605">
           <h3>Voluntary Payment</h3><h3>Per Audit/Delinquent Account</h3>
           {MANNER_CHOICES.map(([value, label]) => <CheckChoice key={value} checked={manner === value} label={label} />)}
-          <div className="other-manner-0605"><CheckChoice checked={manner === "others"} label="Others (Specify)" /><AdaptiveCombValue value={text(envelope, "other_manner_description")} cells={34} /></div>
+          <div className="other-manner-0605"><CheckChoice checked={manner === "others"} label="Others (Specify)" /><PlainValue0605 field="17-other-manner" value={text(envelope, "other_manner_description")} /></div>
         </div>
         <div className="type-choices-0605">
           <CheckChoice checked={paymentType === "installment"} label="Installment" />
-          <div><span className="check-box" aria-hidden="true" /><span>No. of Installment</span><AdaptiveCombValue value={bool(envelope, "number_of_installments_present") ? String(integer(envelope, "number_of_installments")) : ""} cells={3} /></div>
+          <div>
+            <span
+              className={bool(envelope, "number_of_installments_present") ? "check-box checked" : "check-box"}
+              aria-hidden="true"
+            >
+              {bool(envelope, "number_of_installments_present") ? "X" : ""}
+            </span>
+            <span>No. of Installment</span>
+            <PlainValue0605
+              field="18-installment-count"
+              value={bool(envelope, "number_of_installments_present") ? String(integer(envelope, "number_of_installments")) : ""}
+              align="right"
+              className="installment-count-0605"
+            />
+          </div>
           <CheckChoice checked={paymentType === "partial"} label="Partial Payment" />
           <CheckChoice checked={paymentType === "full"} label="Full Payment" />
         </div>
@@ -205,25 +300,48 @@ function BackgroundInformation0605({ envelope }: { envelope: RenderEnvelope }) {
 }
 
 function Tin0605({ value }: { value: string }) {
-  return <span className="tin-0605"><CombValue value={value.slice(0, 3)} cells={3} /><i /><CombValue value={value.slice(3, 6)} cells={3} /><i /><CombValue value={value.slice(6, 9)} cells={3} /><i /><CombValue value={value.slice(9, 14)} cells={5} /></span>;
+  if (Array.from(value).length > 12) {
+    return <PlainValue0605 field="9-tin" value={value} className="tin-overflow-plain-0605" />;
+  }
+  return (
+    <span className="tin-0605" data-official-field="9-tin" data-field-mode="guided" data-guide-count="8" data-guide-segments="3-3-3-3" aria-label={value}>
+      {[0, 3, 6, 9].map((offset, index) => (
+        <span className="guided-segment-0605" key={offset}>
+          <CombValue value={value.slice(offset, offset + 3)} cells={3} />
+          {index < 3 && <i aria-hidden="true" />}
+        </span>
+      ))}
+    </span>
+  );
 }
 
 function Computation0605({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <section className="part-two-0605">
       <h2><span>Part II</span><b>►&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Computation of Tax</b></h2>
-      <div className="item-19-row-0605"><span><b>19</b> Basic Tax / Deposit / Advance Payment</span><Money0605 value={decimal(envelope, "item_19_basic_tax_or_payment")} /></div>
-      <div className="penalties-row-0605"><span><b>20</b> Add: Penalties</span><label><span>Surcharge</span><small>20A</small><Money0605 value={decimal(envelope, "item_20a_surcharge")} /></label><label><span>Interest</span><small>20B</small><Money0605 value={decimal(envelope, "item_20b_interest")} /></label><label><span>Compromise</span><small>20C</small><Money0605 value={decimal(envelope, "item_20c_compromise")} /></label><label className="total-penalty-0605"><small>20D</small><Money0605 value={decimal(envelope, "item_20d_total_penalties")} /></label></div>
-      <div className="item-21-row-0605"><span><b>21</b> Total Amount Payable&nbsp; (Sum of Items 19 &amp; 20D)</span><Money0605 value={decimal(envelope, "item_21_total_amount_payable")} /></div>
+      <div className="item-19-row-0605"><span><b>19</b> Basic Tax / Deposit / Advance Payment</span><Money0605 field="19-basic-tax" value={decimal(envelope, "item_19_basic_tax_or_payment")} /></div>
+      <div className="penalties-row-0605"><span><b>20</b> Add: Penalties</span><label><span>Surcharge</span><small>20A</small><Money0605 field="20a-surcharge" value={decimal(envelope, "item_20a_surcharge")} /></label><label><span>Interest</span><small>20B</small><Money0605 field="20b-interest" value={decimal(envelope, "item_20b_interest")} /></label><label><span>Compromise</span><small>20C</small><Money0605 field="20c-compromise" value={decimal(envelope, "item_20c_compromise")} /></label><label className="total-penalty-0605"><small>20D</small><Money0605 field="20d-total-penalties" value={decimal(envelope, "item_20d_total_penalties")} /></label></div>
+      <div className="item-21-row-0605"><span><b>21</b> Total Amount Payable&nbsp; (Sum of Items 19 &amp; 20D)</span><Money0605 field="21-total-payable" value={decimal(envelope, "item_21_total_amount_payable")} /></div>
     </section>
   );
 }
 
-function Money0605({ value, present = true }: { value: number; present?: boolean }) {
-  if (!present) return <span className="money-0605"><CombValue value="" cells={12} /><i>•</i><CombValue value="" cells={2} /></span>;
+function Money0605({ field, value, present = true }: { field: string; value: number; present?: boolean }) {
   const [whole, fraction] = formatMoneyParts(value);
-  if (Array.from(whole).length > 12) return <AdaptiveCombValue value={`${whole}.${fraction}`} cells={15} align="right" className="money-overflow-0605" />;
-  return <span className="money-0605"><CombValue value={whole} cells={12} align="right" /><i>•</i><CombValue value={fraction} cells={2} align="right" /></span>;
+  if (present && Array.from(whole).length > 12) {
+    return (
+      <span className="money-0605 plain-money-field-0605" data-official-field={field} data-field-mode="plain" data-guide-count="0">
+        <AdaptivePlainValue value={`${whole}.${fraction}`} align="right" className="money-overflow-0605" />
+      </span>
+    );
+  }
+  return (
+    <span className="money-0605 plain-money-field-0605" data-official-field={field} data-field-mode="plain" data-guide-count="0">
+      <span className="money-whole-0605">{present ? whole : ""}</span>
+      <i>•</i>
+      <span className="money-fraction-0605">{present ? fraction : ""}</span>
+    </span>
+  );
 }
 
 function Declaration0605({ envelope }: { envelope: RenderEnvelope }) {
@@ -246,7 +364,7 @@ function PaymentDetails0605({ envelope }: { envelope: RenderEnvelope }) {
     <section className="part-three-0605">
       <h2><span>Part III</span><b>Details of Payment</b></h2>
       <div className="payment-table-head-0605"><span>Particulars</span><span>Drawee Bank/Agency</span><span>Number</span><span>MM</span><span>DD</span><span>YYYY</span><span>Amount</span></div>
-      <div className="cash-payment-0605"><span><b>23</b> Cash/Bank<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Debit Memo</span><Money0605 value={decimal(envelope, "payment_23_amount")} present={bool(envelope, "payment_23_amount_present")} /></div>
+      <div className="cash-payment-0605"><span><b>23</b> Cash/Bank<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Debit Memo</span><Money0605 field="23-amount" value={decimal(envelope, "payment_23_amount")} present={bool(envelope, "payment_23_amount_present")} /></div>
       <PaymentRow0605 envelope={envelope} number="24" label="Check" prefix="payment_24" bankItem="24A" numberItem="24B" dateItem="24C" amountItem="24D" />
       <PaymentRow0605 envelope={envelope} number="25" label={<>Tax Debit<br />Memo</>} prefix="payment_25" numberItem="25A" dateItem="25B" amountItem="25C" hideBank />
       <PaymentRow0605 envelope={envelope} number="26" label="Others" prefix="payment_26" bankItem="26A" numberItem="26B" dateItem="26C" amountItem="26D" />
@@ -260,16 +378,23 @@ function PaymentRow0605({ envelope, number, label, prefix, bankItem, numberItem,
   return (
     <div className={`payment-row-0605 ${hideBank ? "no-bank-0605" : ""}`}>
       <span><b>{number}</b> {label}</span>
-      {!hideBank && <FieldWithItem0605 item={bankItem} value={text(envelope, `${prefix}_drawee_bank_or_agency`)} cells={22} className="payment-bank-0605" />}
-      <FieldWithItem0605 item={numberItem} value={text(envelope, `${prefix}_number`)} cells={18} className="payment-number-0605" />
-      <FieldWithItem0605 item={dateItem} value={date} cells={8} className="payment-date-0605" />
-      <div className="payment-amount-0605"><small>{amountItem} ►</small><Money0605 value={decimal(envelope, `${prefix}_amount`)} present={bool(envelope, `${prefix}_amount_present`)} /></div>
+      {!hideBank && <FieldWithItem0605 field={`${number.toLowerCase()}a-bank`} item={bankItem} value={text(envelope, `${prefix}_drawee_bank_or_agency`)} className="payment-bank-0605" />}
+      <FieldWithItem0605 field={`${number.toLowerCase()}${hideBank ? "a" : "b"}-number`} item={numberItem} value={text(envelope, `${prefix}_number`)} className="payment-number-0605" />
+      <FieldWithItem0605 field={`${number.toLowerCase()}${hideBank ? "b" : "c"}-date`} item={dateItem} value={date} segments={[2, 2, 4]} className="payment-date-0605" />
+      <div className="payment-amount-0605"><small>{amountItem} ►</small><Money0605 field={`${number.toLowerCase()}${hideBank ? "c" : "d"}-amount`} value={decimal(envelope, `${prefix}_amount`)} present={bool(envelope, `${prefix}_amount_present`)} /></div>
     </div>
   );
 }
 
-function FieldWithItem0605({ item, value, cells, className = "" }: { item?: string; value: string; cells: number; className?: string }) {
-  return <div className={`payment-field-0605 ${className}`}><small>{item} ►</small><AdaptiveCombValue value={value} cells={cells} /></div>;
+function FieldWithItem0605({ field, item, value, segments, className = "" }: { field: string; item?: string; value: string; segments?: readonly number[]; className?: string }) {
+  return (
+    <div className={`payment-field-0605 ${className}`}>
+      <small>{item} ►</small>
+      {segments
+        ? <GuidedValue0605 field={field} value={value} segments={segments} />
+        : <PlainValue0605 field={field} value={value} />}
+    </div>
+  );
 }
 
 function PageTwoReferenceTables0605() {

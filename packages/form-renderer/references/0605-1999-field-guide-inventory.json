@@ -1,0 +1,42 @@
+{
+  "audit_method": "Reviewed the exact pinned PDF vector rectangles and short bottom-tick paths against the committed 144 DPI page-one raster.",
+  "fields": [
+    { "field": "2-year-ended", "mode": "guided", "segments": [2, 4], "short_tick_count": 4 },
+    { "field": "4-due-date", "mode": "guided", "segments": [2, 2, 4], "short_tick_count": 5 },
+    { "field": "5-sheets", "mode": "guided", "segments": [2], "short_tick_count": 1 },
+    { "field": "6-atc", "mode": "plain", "short_tick_count": 0 },
+    { "field": "7-return-period", "mode": "guided", "segments": [2, 2, 4], "short_tick_count": 5 },
+    { "field": "8-tax-type", "mode": "guided", "segments": [2], "short_tick_count": 1 },
+    { "field": "bcs-item", "mode": "plain", "short_tick_count": 0 },
+    { "field": "9-tin", "mode": "guided", "segments": [3, 3, 3, 3], "short_tick_count": 8, "overflow_mode": "plain" },
+    { "field": "10-rdo", "mode": "guided", "segments": [3], "short_tick_count": 2 },
+    { "field": "12-line-of-business", "mode": "plain", "short_tick_count": 0 },
+    { "field": "13-taxpayer-name", "mode": "plain", "short_tick_count": 0 },
+    { "field": "14-telephone", "mode": "guided", "segments": [7], "short_tick_count": 6, "overflow_mode": "plain" },
+    { "field": "15-registered-address", "mode": "plain", "short_tick_count": 0 },
+    { "field": "16-zip", "mode": "guided", "segments": [4], "short_tick_count": 3 },
+    { "field": "17-other-manner", "mode": "plain", "short_tick_count": 0 },
+    { "field": "18-installment-count", "mode": "plain_unframed", "short_tick_count": 0 },
+    { "field": "19-through-21-money", "mode": "plain_decimal_box", "short_tick_count": 0, "decimal_marker": true },
+    { "field": "23-amount", "mode": "plain_decimal_box", "short_tick_count": 0, "decimal_marker": true },
+    { "field": "24a-bank", "mode": "plain", "short_tick_count": 0 },
+    { "field": "24b-number", "mode": "plain", "short_tick_count": 0 },
+    { "field": "24c-date", "mode": "guided", "segments": [2, 2, 4], "short_tick_count": 5 },
+    { "field": "24d-amount", "mode": "plain_decimal_box", "short_tick_count": 0, "decimal_marker": true },
+    { "field": "25a-number", "mode": "plain", "short_tick_count": 0 },
+    { "field": "25b-date", "mode": "guided", "segments": [2, 2, 4], "short_tick_count": 5 },
+    { "field": "25c-amount", "mode": "plain_decimal_box", "short_tick_count": 0, "decimal_marker": true },
+    { "field": "26a-bank", "mode": "plain", "short_tick_count": 0 },
+    { "field": "26b-number", "mode": "plain", "short_tick_count": 0 },
+    { "field": "26c-date", "mode": "guided", "segments": [2, 2, 4], "short_tick_count": 5 },
+    { "field": "26d-amount", "mode": "plain_decimal_box", "short_tick_count": 0, "decimal_marker": true },
+    { "field": "machine-validation", "mode": "plain_multiline", "short_tick_count": 0 }
+  ],
+  "form": {
+    "code": "0605",
+    "revision": "1999"
+  },
+  "official_source_sha256": "de04419766c59bf27fdeb854c0f7c3f98601900caa20630442e671e2313e536f",
+  "reference_page_one_sha256": "419d85b55b05fba3e789ab9ded877cdd0514239ef998f9a15258d9ff78251f84",
+  "schema_version": 1
+}

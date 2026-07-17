@@ -14,6 +14,7 @@ import minimumFixture from "../../form-contracts/fixtures/0605-minimum.json";
 import normalFixture from "../../form-contracts/fixtures/0605-normal.json";
 import validationEdgeFixture from "../../form-contracts/fixtures/0605-validation-edge.json";
 import variantFixture from "../../form-contracts/fixtures/0605-variant.json";
+import fieldGuideInventory from "../references/0605-1999-field-guide-inventory.json";
 import { FormDocument } from "../src/FormDocument";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -108,6 +109,79 @@ describe("0605:1999 runtime render contract", () => {
     expect(markup.match(/data-overflow-mode="plain"/g)?.length).toBeGreaterThan(4);
   });
 
+  it("encodes the pinned 1999 plain fields and exact short-guide counts", () => {
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: normalFixture as RenderEnvelope })
+    );
+    const inventory = new Map(
+      fieldGuideInventory.fields.map((field) => [field.field, field])
+    );
+
+    for (const field of [
+      "6-atc",
+      "12-line-of-business",
+      "13-taxpayer-name",
+      "15-registered-address",
+      "17-other-manner",
+      "18-installment-count",
+      "19-basic-tax",
+      "24a-bank",
+      "24b-number",
+      "24d-amount"
+    ]) {
+      const tag = officialFieldTag(markup, field);
+      expect(tag, field).toContain('data-field-mode="plain"');
+      expect(tag, field).toContain('data-guide-count="0"');
+    }
+    expect(inventory.get("18-installment-count")?.mode).toBe("plain_unframed");
+
+    const installmentMarkup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: variantFixture as RenderEnvelope })
+    );
+    expect(installmentMarkup).toContain(
+      'class="check-box checked" aria-hidden="true">X</span><span>No. of Installment</span>'
+    );
+    expect(officialFieldTag(installmentMarkup, "18-installment-count")).toContain(
+      'data-field-mode="plain"'
+    );
+
+    for (const [field, segments, guides] of [
+      ["2-year-ended", "2-4", 4],
+      ["4-due-date", "2-2-4", 5],
+      ["5-sheets", "2", 1],
+      ["7-return-period", "2-2-4", 5],
+      ["8-tax-type", "2", 1],
+      ["10-rdo", "3", 2],
+      ["16-zip", "4", 3],
+      ["24c-date", "2-2-4", 5]
+    ] as const) {
+      const tag = officialFieldTag(markup, field);
+      expect(tag, field).toContain('data-field-mode="guided"');
+      expect(tag, field).toContain(`data-guide-segments="${segments}"`);
+      expect(tag, field).toContain(`data-guide-count="${guides}"`);
+      expect(inventory.get(field)?.short_tick_count, field).toBe(guides);
+    }
+  });
+
+  it("switches the whole TIN field to plain mode only when it exceeds the official 12 guides", () => {
+    const fourteenDigitMarkup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: normalFixture as RenderEnvelope })
+    );
+    expect(officialFieldTag(fourteenDigitMarkup, "9-tin")).toContain(
+      'data-field-mode="plain"'
+    );
+
+    const legacyTin = structuredClone(normalFixture) as RenderEnvelope;
+    legacyTin.taxpayer.tin = "123456789000";
+    const legacyMarkup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: legacyTin })
+    );
+    const tag = officialFieldTag(legacyMarkup, "9-tin");
+    expect(tag).toContain('data-field-mode="guided"');
+    expect(tag).toContain('data-guide-segments="3-3-3-3"');
+    expect(tag).toContain('data-guide-count="8"');
+  });
+
   it("distinguishes official blank payment amounts from entered zero", () => {
     const minimum = structuredClone(minimumFixture) as RenderEnvelope;
     expect(minimum.fields.payment_23_amount_present).toEqual({
@@ -139,3 +213,11 @@ describe("0605:1999 runtime render contract", () => {
     expect(() => assertRenderEnvelope(basis)).toThrow("expected calendar or fiscal");
   });
 });
+
+function officialFieldTag(markup: string, field: string): string {
+  const match = markup.match(
+    new RegExp(`<[^>]+data-official-field="${field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*>`)
+  );
+  expect(match, `missing official field ${field}`).not.toBeNull();
+  return match?.[0] ?? "";
+}

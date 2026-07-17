@@ -185,6 +185,109 @@ test("0605 1999 preserves the official Part II amount-box partitions", async ({ 
   ]);
 });
 
+test("0605 1999 uses plain rectangles and only the pinned short-guide counts", async ({ page }) => {
+  const normal = readFixture("packages/form-contracts/fixtures/0605-normal.json");
+  await renderEnvelope(page, normal);
+
+  for (const field of [
+    "6-atc",
+    "12-line-of-business",
+    "13-taxpayer-name",
+    "15-registered-address",
+    "17-other-manner",
+    "18-installment-count",
+    "19-basic-tax",
+    "20a-surcharge",
+    "21-total-payable",
+    "23-amount",
+    "24a-bank",
+    "24b-number",
+    "24d-amount",
+    "25a-number",
+    "25c-amount",
+    "26a-bank",
+    "26b-number",
+    "26d-amount"
+  ]) {
+    const locator = page.locator(`[data-official-field="${field}"]`);
+    await expect(locator, field).toHaveAttribute("data-field-mode", "plain");
+    await expect(locator, field).toHaveAttribute("data-guide-count", "0");
+    await expect(locator.locator(".comb-value"), `${field} invented comb`).toHaveCount(0);
+  }
+
+  const installmentCount = page.locator('[data-official-field="18-installment-count"]');
+  await expect(installmentCount).toHaveCSS("border-bottom-style", "none");
+  await expect(installmentCount).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(installmentCount.locator("xpath=preceding-sibling::*[2]"))
+    .not.toHaveClass(/checked/);
+
+  for (const [field, segments, guideCount] of [
+    ["2-year-ended", "2-4", 4],
+    ["4-due-date", "2-2-4", 5],
+    ["5-sheets", "2", 1],
+    ["7-return-period", "2-2-4", 5],
+    ["8-tax-type", "2", 1],
+    ["10-rdo", "3", 2],
+    ["16-zip", "4", 3],
+    ["24c-date", "2-2-4", 5],
+    ["25b-date", "2-2-4", 5],
+    ["26c-date", "2-2-4", 5]
+  ] as const) {
+    const locator = page.locator(`[data-official-field="${field}"]`);
+    await expect(locator, field).toHaveAttribute("data-field-mode", "guided");
+    await expect(locator, field).toHaveAttribute("data-guide-segments", segments);
+    await expect(locator, field).toHaveAttribute("data-guide-count", String(guideCount));
+    await expect(
+      locator.locator(".guided-segment-0605 .comb-value > span:not(:last-child)"),
+      `${field} rendered short guides`
+    ).toHaveCount(guideCount);
+  }
+
+  await expect(page.locator('[data-official-field="9-tin"]')).toHaveAttribute(
+    "data-field-mode",
+    "plain"
+  );
+  await expect(page.locator('[data-official-field="14-telephone"]')).toHaveAttribute(
+    "data-field-mode",
+    "plain"
+  );
+
+  const legacyCapacity = structuredClone(normal) as Record<string, any>;
+  legacyCapacity.taxpayer.tin = "123456789000";
+  legacyCapacity.taxpayer.contact_number = "1234567";
+  await renderEnvelope(page, legacyCapacity);
+  await expect(page.locator('[data-official-field="9-tin"]')).toHaveAttribute(
+    "data-guide-count",
+    "8"
+  );
+  await expect(
+    page.locator('[data-official-field="9-tin"] .comb-value > span:not(:last-child)')
+  ).toHaveCount(8);
+  await expect(page.locator('[data-official-field="14-telephone"]')).toHaveAttribute(
+    "data-guide-count",
+    "6"
+  );
+  await expect(
+    page.locator('[data-official-field="14-telephone"] .comb-value > span:not(:last-child)')
+  ).toHaveCount(6);
+
+  await renderEnvelope(
+    page,
+    readFixture("packages/form-contracts/fixtures/0605-variant.json")
+  );
+  const enteredInstallmentCount = page.locator(
+    '[data-official-field="18-installment-count"]'
+  );
+  await expect(enteredInstallmentCount).toContainText("3");
+  await expect(enteredInstallmentCount).toHaveCSS("border-bottom-style", "none");
+  await expect(enteredInstallmentCount).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)"
+  );
+  await expect(enteredInstallmentCount.locator("xpath=preceding-sibling::*[2]"))
+    .toHaveClass(/checked/);
+});
+
 test("0605 1999 matches the complete pinned official pages", async ({ page }, testInfo) => {
   const fixture = readFixture("packages/form-contracts/fixtures/0605-normal.json");
   await renderEnvelope(page, fixture);
