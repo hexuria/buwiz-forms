@@ -760,6 +760,26 @@ test("geometry readiness sees overflow hidden descendants and clipping", async (
   const firstPage = page.locator(".form-page").first();
   expect(await pageHasNoOverflow(firstPage)).toBe(true);
 
+  const adaptiveStateReports = await firstPage.evaluate((element) => {
+    const probe = document.createElement("span");
+    probe.dataset.adaptiveFitState = "pending";
+    element.append(probe);
+    const measure = (window as Window & {
+      measureEbirFormGeometry?: () => {
+        pages: Array<{ descendant_overflow_x: number }>;
+      } | null;
+    }).measureEbirFormGeometry;
+    if (!measure) throw new Error("renderer geometry measurement is unavailable");
+    const pending = measure();
+    probe.dataset.adaptiveFitState = "unresolved";
+    const unresolved = measure();
+    probe.remove();
+    return { pending, unresolved };
+  });
+  expect(adaptiveStateReports.pending).toBeNull();
+  expect(adaptiveStateReports.unresolved?.pages[0].descendant_overflow_x)
+    .toBeGreaterThan(0);
+
   await firstPage.evaluate((element) => {
     const clipped = document.createElement("div");
     clipped.dataset.geometryProbe = "clipped";
@@ -782,6 +802,96 @@ test("geometry readiness sees overflow hidden descendants and clipping", async (
   expect(geometry.descendant_overflow_y).toBeGreaterThan(0);
   expect(geometry.descendant_clipped_x).toBeGreaterThan(0);
   expect(geometry.descendant_clipped_y).toBeGreaterThan(0);
+});
+
+test("2551Q plain-box overflow uses the largest readable font that fits the real field", async ({
+  page
+}) => {
+  const fixture = readFixture(
+    "packages/form-contracts/fixtures/2551q-long-values.json"
+  );
+  await renderEnvelope(page, fixture);
+  await page.waitForFunction(
+    () => !document.querySelector('[data-adaptive-fit-state="pending"]')
+  );
+
+  const values = page.locator(".adaptive-plain-value");
+  await expect(values).toHaveCount(5);
+  const measurements = await values.evaluateAll((elements) => elements.map((element) => {
+    const fontSize = Number.parseFloat(getComputedStyle(element).fontSize);
+    const nextSize = Math.min(9.6, Math.round((fontSize + .5) * 10) / 10);
+    const originalSize = element.style.fontSize;
+    element.style.fontSize = `${nextSize}px`;
+    const nextStepOverflows =
+      element.scrollWidth > element.clientWidth + 1 ||
+      element.scrollHeight > element.clientHeight + 1;
+    element.style.fontSize = originalSize;
+    return {
+      clientHeight: element.clientHeight,
+      clientWidth: element.clientWidth,
+      fontSize,
+      nextSize,
+      nextStepOverflows,
+      scrollHeight: element.scrollHeight,
+      scrollWidth: element.scrollWidth,
+      state: element.getAttribute("data-adaptive-fit-state"),
+      text: element.textContent?.trim()
+    };
+  }));
+
+  for (const measurement of measurements) {
+    expect(measurement.state, measurement.text).toBe("fit");
+    expect(measurement.fontSize, measurement.text).toBeGreaterThanOrEqual(8);
+    expect(measurement.fontSize, measurement.text).toBeLessThanOrEqual(9.6);
+    expect(measurement.scrollWidth, measurement.text)
+      .toBeLessThanOrEqual(measurement.clientWidth + 1);
+    expect(measurement.scrollHeight, measurement.text)
+      .toBeLessThanOrEqual(measurement.clientHeight + 1);
+    if (measurement.fontSize < 9.6) {
+      expect(measurement.nextStepOverflows, measurement.text).toBe(true);
+    }
+  }
+
+  const pageTwoName = page.locator(
+    ".page-two-identity > .adaptive-plain-value"
+  );
+  await expect(pageTwoName).toHaveAttribute("data-adaptive-font-size-px", "9.6");
+  await pageTwoName.evaluate((element) => {
+    element.style.width = "320px";
+  });
+  await expect(pageTwoName).toHaveAttribute("data-adaptive-font-size-px", "8.6");
+  await expect(pageTwoName).toHaveAttribute("data-adaptive-fit-state", "fit");
+  await pageTwoName.evaluate((element) => {
+    element.style.width = "";
+  });
+  await expect(pageTwoName).toHaveAttribute("data-adaptive-font-size-px", "9.6");
+
+  const unfitFixture = structuredClone(fixture) as {
+    taxpayer: { name: string };
+  };
+  unfitFixture.taxpayer.name = "W".repeat(160);
+  await renderEnvelope(page, unfitFixture);
+  await page.waitForFunction(
+    () => !document.querySelector('[data-adaptive-fit-state="pending"]')
+  );
+  const unfitNames = page.locator(
+    ".name-field > .adaptive-plain-value, .page-two-identity > .adaptive-plain-value"
+  );
+  await expect(unfitNames).toHaveCount(2);
+  for (const unfitName of await unfitNames.all()) {
+    await expect(unfitName).toHaveAttribute("data-adaptive-font-size-px", "8.0");
+    await expect(unfitName).toHaveAttribute("data-adaptive-fit-state", "unresolved");
+  }
+  const unfitGeometry = await page.evaluate(() => (
+    window as Window & {
+      measureEbirFormGeometry?: () => {
+        pages: Array<{ descendant_overflow_x: number }>;
+      } | null;
+    }
+  ).measureEbirFormGeometry?.());
+  expect(unfitGeometry?.pages.some((renderedPage) =>
+    renderedPage.descendant_overflow_x > 0
+  )).toBe(true);
 });
 
 function writeVisualEvidence() {

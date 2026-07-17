@@ -108,6 +108,16 @@ body { margin: 0; }
   line-height: 1.02;
   text-align: left;
 }
+.adaptive-plain-value.adaptive-align-right {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.form-2551q-page-one .adaptive-plain-value,
+.form-2551q-page-two .adaptive-plain-value {
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
 .money-value { display: flex; width: 100%; min-height: 18pt; }
 .money-value .decimal-separator { display: grid; place-items: center; width: 14pt; background: #bbb; font-weight: 700; }
 .check-choice { display: inline-flex; align-items: center; gap: 3pt; white-space: nowrap; }

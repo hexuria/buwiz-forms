@@ -19,8 +19,11 @@ Convert one exact form revision at a time. Treat conversion as a tax-data and re
   punctuation each consume one character position. Empty, short, and
   exact-capacity values retain every official guide. Only a valid value longer
   than that field's official capacity switches to one untruncated plain text
-  box in the same footprint. Gray or merged non-applicable cells receive no
-  guides.
+  box in the same footprint. Measure the real rendered field after the bundled
+  font loads, start at its reviewed normal size, and reduce only in 0.5px steps
+  to a reviewed readable floor. If it still cannot fit, block
+  preview/print/export; never derive font size from a character-count ratio.
+  Gray or merged non-applicable cells receive no guides.
 - Use official pages only as pinned calibration references. Runtime artwork must
   come from the exact embedded image/XObject or vector object in that pinned PDF,
   at its native dimensions. Never use a rendered-page crop, downloaded/generic

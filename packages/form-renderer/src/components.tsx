@@ -1,4 +1,18 @@
-import type { PropsWithChildren, ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  type PropsWithChildren,
+  type ReactNode
+} from "react";
+
+const ADAPTIVE_MAX_FONT_SIZE_PX = 9.6;
+const ADAPTIVE_MIN_FONT_SIZE_PX = 8;
+const ADAPTIVE_FONT_STEP_PX = .5;
+const ADAPTIVE_FIT_TOLERANCE_PX = 1;
+const useBrowserLayoutEffect = typeof window === "undefined"
+  ? useEffect
+  : useLayoutEffect;
 
 export function FolioPage({
   children,
@@ -75,30 +89,195 @@ export function AdaptiveCombValue({
   value,
   cells,
   align = "left",
-  className = ""
+  className = "",
+  fitToField = false,
+  maxFontSizePx = ADAPTIVE_MAX_FONT_SIZE_PX,
+  minFontSizePx = ADAPTIVE_MIN_FONT_SIZE_PX,
+  fontStepPx = ADAPTIVE_FONT_STEP_PX
 }: {
   value: string;
   cells: number;
   align?: "left" | "right";
   className?: string;
+  fitToField?: boolean;
+  maxFontSizePx?: number;
+  minFontSizePx?: number;
+  fontStepPx?: number;
 }) {
   const characters = Array.from(value);
   if (characters.length <= cells) {
     return <CombValue value={value} cells={cells} align={align} />;
   }
 
-  const fontSize = Math.max(4, Math.min(7.2, 7.2 * cells / characters.length));
+  // Existing scaffold forms retain their prior rendering until each exact
+  // revision reviews a readable floor and opts into measured fitting.
+  if (!fitToField) {
+    const fontSize = Math.max(4, Math.min(7.2, 7.2 * cells / characters.length));
+    return (
+      <span
+        className={`adaptive-plain-value ${className}`.trim()}
+        data-cell-capacity={cells}
+        data-overflow-mode="plain"
+        aria-label={value}
+        style={{ fontSize: `${fontSize}pt` }}
+      >
+        {value}
+      </span>
+    );
+  }
+
+  return (
+    <AdaptivePlainValue
+      value={value}
+      cells={cells}
+      align={align}
+      className={className}
+      maxFontSizePx={maxFontSizePx}
+      minFontSizePx={minFontSizePx}
+      fontStepPx={fontStepPx}
+    />
+  );
+}
+
+function AdaptivePlainValue({
+  value,
+  cells,
+  align,
+  className,
+  maxFontSizePx,
+  minFontSizePx,
+  fontStepPx
+}: {
+  value: string;
+  cells: number;
+  align: "left" | "right";
+  className: string;
+  maxFontSizePx: number;
+  minFontSizePx: number;
+  fontStepPx: number;
+}) {
+  validateAdaptiveFontRange(maxFontSizePx, minFontSizePx, fontStepPx);
+  const valueRef = useRef<HTMLSpanElement>(null);
+  useBrowserLayoutEffect(() => {
+    const element = valueRef.current;
+    if (!element) return;
+
+    let active = true;
+    const refit = () => {
+      if (!active) return;
+      fitAdaptivePlainValue(element, {
+        maxFontSizePx,
+        minFontSizePx,
+        fontStepPx
+      });
+    };
+
+    refit();
+    void document.fonts?.ready.then(refit);
+    document.fonts?.addEventListener("loadingdone", refit);
+
+    const resizeObserver = typeof ResizeObserver === "undefined"
+      ? undefined
+      : new ResizeObserver(refit);
+    resizeObserver?.observe(element);
+    if (!resizeObserver) window.addEventListener("resize", refit);
+
+    return () => {
+      active = false;
+      resizeObserver?.disconnect();
+      if (!resizeObserver) window.removeEventListener("resize", refit);
+      document.fonts?.removeEventListener("loadingdone", refit);
+    };
+  }, [align, cells, className, fontStepPx, maxFontSizePx, minFontSizePx, value]);
+
   return (
     <span
-      className={`adaptive-plain-value ${className}`.trim()}
+      ref={valueRef}
+      className={`adaptive-plain-value adaptive-align-${align} ${className}`.trim()}
       data-cell-capacity={cells}
+      data-adaptive-fit-state="pending"
+      data-adaptive-max-font-px={maxFontSizePx}
+      data-adaptive-min-font-px={minFontSizePx}
+      data-adaptive-step-px={fontStepPx}
       data-overflow-mode="plain"
       aria-label={value}
-      style={{ fontSize: `${fontSize}pt` }}
+      style={{ fontSize: `${maxFontSizePx}px` }}
     >
       {value}
     </span>
   );
+}
+
+/**
+ * Fit overflow text against the field that will actually be printed. The
+ * official comb capacity decides only when to switch to a plain box; it must
+ * never be used as a proxy for that box's available width.
+ */
+export function fitAdaptivePlainValue(
+  element: HTMLElement,
+  {
+    maxFontSizePx = ADAPTIVE_MAX_FONT_SIZE_PX,
+    minFontSizePx = ADAPTIVE_MIN_FONT_SIZE_PX,
+    fontStepPx = ADAPTIVE_FONT_STEP_PX
+  }: {
+    maxFontSizePx?: number;
+    minFontSizePx?: number;
+    fontStepPx?: number;
+  } = {}
+): boolean {
+  validateAdaptiveFontRange(maxFontSizePx, minFontSizePx, fontStepPx);
+  element.dataset.adaptiveFitState = "pending";
+
+  if (element.clientWidth <= 0 || element.clientHeight <= 0) {
+    return false;
+  }
+
+  let fontSize = maxFontSizePx;
+  const inlineJustification = element.style.justifyContent;
+  // Measure from the inline start so right-aligned overflow cannot escape on
+  // the unscrollable start side of a flex container.
+  element.style.justifyContent = "flex-start";
+  element.style.fontSize = `${fontSize}px`;
+
+  while (
+    !adaptivePlainValueFits(element) &&
+    fontSize > minFontSizePx
+  ) {
+    fontSize = Math.max(
+      minFontSizePx,
+      Math.round((fontSize - fontStepPx) * 1_000) / 1_000
+    );
+    element.style.fontSize = `${fontSize}px`;
+  }
+
+  const fits = adaptivePlainValueFits(element);
+  element.style.justifyContent = inlineJustification;
+  element.dataset.adaptiveFontSizePx = fontSize.toFixed(1);
+  element.dataset.adaptiveFitState = fits ? "fit" : "unresolved";
+  return fits;
+}
+
+function validateAdaptiveFontRange(
+  maxFontSizePx: number,
+  minFontSizePx: number,
+  fontStepPx: number
+) {
+  if (
+    !Number.isFinite(maxFontSizePx) ||
+    !Number.isFinite(minFontSizePx) ||
+    !Number.isFinite(fontStepPx) ||
+    maxFontSizePx <= 0 ||
+    minFontSizePx <= 0 ||
+    fontStepPx <= 0 ||
+    minFontSizePx > maxFontSizePx
+  ) {
+    throw new Error("AdaptiveCombValue requires a positive ordered font range");
+  }
+}
+
+function adaptivePlainValueFits(element: HTMLElement): boolean {
+  return element.scrollWidth <= element.clientWidth + ADAPTIVE_FIT_TOLERANCE_PX &&
+    element.scrollHeight <= element.clientHeight + ADAPTIVE_FIT_TOLERANCE_PX;
 }
 
 export function combCharacters(

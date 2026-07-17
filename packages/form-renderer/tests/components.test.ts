@@ -21,12 +21,49 @@ describe("official comb formatting", () => {
   it("uses a single plain text box when readable text exceeds the comb", () => {
     const value = "REGISTERED NAME LONGER THAN THE OFFICIAL CELLS";
     const markup = renderToStaticMarkup(
-      createElement(AdaptiveCombValue, { value, cells: 20 })
+      createElement(AdaptiveCombValue, {
+        value,
+        cells: 20,
+        fitToField: true,
+        minFontSizePx: 8
+      })
     );
 
     expect(markup).toContain('data-overflow-mode="plain"');
+    expect(markup).toContain('data-adaptive-fit-state="pending"');
+    expect(markup).toContain('data-adaptive-max-font-px="9.6"');
+    expect(markup).toContain('data-adaptive-min-font-px="8"');
+    expect(markup).toContain('data-adaptive-step-px="0.5"');
+    expect(markup).toContain('style="font-size:9.6px"');
     expect(markup).toContain(`aria-label="${value}"`);
     expect(markup).not.toContain('class="comb-value"');
+    expect(markup).not.toContain('font-size:4pt');
+  });
+
+  it("preserves right alignment after switching an overflowing comb to plain text", () => {
+    const markup = renderToStaticMarkup(
+      createElement(AdaptiveCombValue, {
+        value: "123456789",
+        cells: 5,
+        align: "right",
+        fitToField: true
+      })
+    );
+
+    expect(markup).toContain("adaptive-align-right");
+    expect(markup).toContain('data-overflow-mode="plain"');
+  });
+
+  it("rejects an invalid measured font range", () => {
+    expect(() => renderToStaticMarkup(
+      createElement(AdaptiveCombValue, {
+        value: "REGISTERED NAME LONGER THAN FIVE CELLS",
+        cells: 5,
+        fitToField: true,
+        maxFontSizePx: 8,
+        minFontSizePx: 9
+      })
+    )).toThrow("positive ordered font range");
   });
 
   it("formats money without locale grouping characters", () => {

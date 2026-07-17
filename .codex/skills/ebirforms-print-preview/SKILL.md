@@ -28,7 +28,11 @@ Fix an already-migrated form through the owning layer. Do not create a second re
   character position. Empty, short, and exact-capacity values retain every
   official guide. Only a valid value longer than that field's official
   capacity switches to one plain text box in the same footprint, without
-  truncation. Merged or gray non-applicable cells never receive comb guides.
+  truncation. Fit that plain text against its actual rendered field after the
+  bundled font loads: start at the reviewed normal size, reduce only in 0.5px
+  steps to the reviewed readable floor, and block preview/print/export if it
+  still does not fit. Never derive its font size from a character-count ratio.
+  Merged or gray non-applicable cells never receive comb guides.
   Keep explicit empty, short, exact-capacity, and capacity-plus-one tests for
   every adaptive field pattern that the renderer introduces.
 

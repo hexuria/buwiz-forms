@@ -60,6 +60,31 @@ export const OFFICIAL_2551Q_COMB_CAPACITIES = {
   }
 } as const;
 
+function Adaptive2551QValue({
+  value,
+  cells,
+  align = "left",
+  className = ""
+}: {
+  value: string;
+  cells: number;
+  align?: "left" | "right";
+  className?: string;
+}) {
+  return (
+    <AdaptiveCombValue
+      value={value}
+      cells={cells}
+      align={align}
+      className={className}
+      fitToField
+      maxFontSizePx={9.6}
+      minFontSizePx={8}
+      fontStepPx={.5}
+    />
+  );
+}
+
 const LENDING_NOTE: AtcReferenceRow = {
   kind: "note",
   lines: [
@@ -227,7 +252,7 @@ function PageTwoIdentity({ envelope }: { envelope: RenderEnvelope }) {
         Taxpayer’s Last Name <em>(if Individual)</em> / Registered Name <em>(if Non-Individual)</em>
       </div>
       <CombValue value={tin} cells={14} />
-      <AdaptiveCombValue
+      <Adaptive2551QValue
         value={taxpayerName}
         cells={OFFICIAL_2551Q_COMB_CAPACITIES.pageTwoTaxpayerName}
       />
@@ -573,14 +598,14 @@ function BackgroundInformation({
       </div>
       <div className="full-width-field name-field">
         <div className="field-label"><b>8</b> Taxpayer’s Name <em>(Last Name, First Name, Middle Name for Individual OR Registered Name for Non-Individual)</em></div>
-        <AdaptiveCombValue value={taxpayerName} cells={40} />
+        <Adaptive2551QValue value={taxpayerName} cells={40} />
       </div>
       <div className="full-width-field address-field">
         <div className="field-label"><b>9</b> Registered Address <em>(Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)</em></div>
         {addressFitsOfficialComb ? (
           <CombValue value={addressLineOne} cells={40} />
         ) : (
-          <AdaptiveCombValue
+          <Adaptive2551QValue
             value={addressLineOne}
             cells={71}
             className="address-overflow-value"
@@ -599,8 +624,8 @@ function BackgroundInformation({
       <div className="contact-email-field">
         <div className="field-label"><b>10</b> Contact Number <em>(Landline/Cellphone No.)</em></div>
         <div className="field-label"><b>11</b> Email Address</div>
-        <AdaptiveCombValue value={envelope.taxpayer.contact_number.replace(/\D/g, "")} cells={12} />
-        <AdaptiveCombValue value={envelope.taxpayer.email.toUpperCase()} cells={28} />
+        <Adaptive2551QValue value={envelope.taxpayer.contact_number.replace(/\D/g, "")} cells={12} />
+        <Adaptive2551QValue value={envelope.taxpayer.email.toUpperCase()} cells={28} />
       </div>
       <div className="tax-relief-field">
         <div className="field-label"><b>12</b> Are you availing of tax relief under <br />Special Law or International Tax Treaty?</div>
@@ -609,7 +634,7 @@ function BackgroundInformation({
           <CheckChoice checked={!bool(envelope, "tax_relief")} label="No" />
         </div>
         <div className="tax-relief-spec"><b>12A</b> If yes, specify</div>
-        <AdaptiveCombValue value={text(envelope, "tax_relief_specification").toUpperCase()} cells={26} />
+        <Adaptive2551QValue value={text(envelope, "tax_relief_specification").toUpperCase()} cells={26} />
       </div>
       <div className="income-rate-field">
         <b>13</b>
@@ -780,7 +805,7 @@ export function OfficialPaymentCombValue({
       data-payment-field={field}
       data-cell-capacity={cells}
     >
-      <AdaptiveCombValue value={value} cells={cells} />
+      <Adaptive2551QValue value={value} cells={cells} />
     </span>
   );
 }
@@ -794,7 +819,7 @@ export function OfficialPaymentOtherDescriptionValue({ value }: { value: string 
       data-cell-capacity={cells}
     >
       <span className="payment-other-description-leading" aria-hidden="true" />
-      <AdaptiveCombValue value={value} cells={cells} />
+      <Adaptive2551QValue value={value} cells={cells} />
     </span>
   );
 }

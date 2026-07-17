@@ -35,6 +35,10 @@ export interface RendererGeometryMeasurement {
 export function measureRenderedPages(
   root: ParentNode = document
 ): RendererGeometryMeasurement | null {
+  // Dynamic plain-box text must settle against its final field width before a
+  // geometry report can certify preview, print, or PDF output.
+  if (root.querySelector('[data-adaptive-fit-state="pending"]')) return null;
+
   const pages = Array.from(root.querySelectorAll<HTMLElement>(".form-page"));
   const firstPage = pages[0];
   if (!firstPage) return null;
@@ -68,7 +72,11 @@ export function rendererGeometryIsSafe(
 
 function measurePage(page: HTMLElement): RendererPageMeasurement {
   const bounds = page.getBoundingClientRect();
-  let descendantOverflowX = 0;
+  // A value that cannot fit at the reviewed readable floor is unsafe even
+  // when integer DOM rounding happens to hide the final fractional pixel.
+  let descendantOverflowX = page.querySelectorAll(
+    '[data-adaptive-fit-state="unresolved"]'
+  ).length;
   let descendantOverflowY = 0;
   let descendantClippedX = 0;
   let descendantClippedY = 0;

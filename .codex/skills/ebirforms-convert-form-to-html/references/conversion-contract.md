@@ -34,8 +34,12 @@ Every adaptive character-field pattern also requires deterministic boundary
 coverage for empty, short, exact-capacity, and capacity-plus-one values. Count
 spaces and punctuation as characters. The first three states must preserve the
 exact official guide geometry; capacity-plus-one must use one untruncated plain
-text box in the same footprint. Do not add guides to blank inset, merged, or
-non-applicable gray cells. If a production contract intentionally has no value
+text box in the same footprint. Fit that box against its actual post-font DOM
+width, beginning at the reviewed normal size and reducing in 0.5px increments
+only to a reviewed readable floor. Character count may select plain-box mode,
+but must never determine its font size. A value that cannot fit at the floor is
+an unresolved geometry error that blocks preview, print, and PDF export. Do not
+add guides to blank inset, merged, or non-applicable gray cells. If a production contract intentionally has no value
 for a printable field, exercise the production rendering helper at component
 level and record that limitation instead of inventing envelope data.
 
