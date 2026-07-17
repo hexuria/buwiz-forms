@@ -688,7 +688,7 @@ impl AppState {
                     cx.notify();
                 }
                 DashboardEvent::LogoutProfile(_tin) => {
-                    this.logout(cx);
+                    this.logout(window, cx);
                 }
                 DashboardEvent::OpenProfileManager => {
                     this.active_view = ActiveView::ProfileManager;
@@ -858,6 +858,10 @@ impl AppState {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.block_unsaved_compliance_navigation(window, cx) {
+            return;
+        }
+
         let (is_app_lock_enabled, has_app_totp) = if let Ok(db) = self.db.lock() {
             let pin = db.get_setting("app_lock_enabled").ok().flatten().as_deref() == Some("true");
             let totp = db.get_setting("app_totp_secret").ok().flatten().is_some();
@@ -892,7 +896,11 @@ impl AppState {
         cx.notify();
     }
 
-    pub(crate) fn logout(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn logout(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.block_unsaved_compliance_navigation(window, cx) {
+            return;
+        }
+
         self.active_session_tin = None;
         self.active_profile_tin = None;
         self.active_view = ActiveView::GlobalDashboard;
@@ -991,7 +999,7 @@ impl AppState {
         }
     }
 
-    fn block_unsaved_compliance_navigation(
+    pub(crate) fn block_unsaved_compliance_navigation(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,

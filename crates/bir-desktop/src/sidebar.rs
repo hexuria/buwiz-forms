@@ -118,7 +118,10 @@ impl AppState {
                                     .id("global_dashboard_btn")
                                     .w_full()
                                     .cursor_pointer()
-                                    .on_click(cx.listener(|this, _ev, _window, cx| {
+                                    .on_click(cx.listener(|this, _ev, window, cx| {
+                                        if this.block_unsaved_compliance_navigation(window, cx) {
+                                            return;
+                                        }
                                         this.active_view = ActiveView::GlobalDashboard;
                                         this.active_profile_tin = None;
                                         cx.notify();
@@ -165,13 +168,16 @@ impl AppState {
                                     .flex_shrink_0()
                                     .cursor_pointer()
                                     .hover(|s| s.bg(cx.theme().muted).rounded_md())
-                                    .on_click(cx.listener(|this, _ev, _window, cx| {
+                                    .on_click(cx.listener(|this, _ev, window, cx| {
+                                        if this.block_unsaved_compliance_navigation(window, cx) {
+                                            return;
+                                        }
                                         // End any active session when creating a new profile
                                         this.active_session_tin = None;
                                         this.active_view = ActiveView::ProfileManager;
                                         this.active_profile_tin = None;
                                         this.profile_manager.update(cx, |view, cx| {
-                                            view.reset_for_new(_window, cx);
+                                            view.reset_for_new(window, cx);
                                         });
                                         cx.notify();
                                     }))
@@ -407,8 +413,11 @@ impl AppState {
                                                                         .on_click(cx.listener({
                                                                             let profile_clone = profile.clone();
                                                                             let tin = profile_clone.tin.full();
-                                                                            move |this, _ev, _window, cx| {
+                                                                            move |this, _ev, window, cx| {
                                                                                 cx.stop_propagation();
+                                                                                if this.block_unsaved_compliance_navigation(window, cx) {
+                                                                                    return;
+                                                                                }
                                                                                 let mut profile_mut = profile_clone.clone();
                                                                                 profile_mut.is_archived = true;
                                                                                 if let Ok(db) = this.db.lock() {
@@ -431,8 +440,11 @@ impl AppState {
                                                                     .on_click(cx.listener({
                                                                         let profile_clone = profile.clone();
                                                                         let tin = profile_clone.tin.full();
-                                                                        move |this, _ev, _window, cx| {
+                                                                        move |this, _ev, window, cx| {
                                                                             cx.stop_propagation();
+                                                                            if this.block_unsaved_compliance_navigation(window, cx) {
+                                                                                return;
+                                                                            }
                                                                             let mut profile_mut = profile_clone.clone();
                                                                             profile_mut.is_archived = false;
                                                                             if let Ok(db) = this.db.lock() {
@@ -452,8 +464,11 @@ impl AppState {
                                                                     .on_click(cx.listener({
                                                                         let profile_clone = profile.clone();
                                                                         let tin = profile_clone.tin.full();
-                                                                        move |_this, _ev, _window, cx| {
+                                                                        move |this, _ev, window, cx| {
                                                                             cx.stop_propagation();
+                                                                            if this.block_unsaved_compliance_navigation(window, cx) {
+                                                                                return;
+                                                                            }
                                                                             cx.spawn({
                                                                                 let tin = tin.clone();
                                                                                 async move |this, cx| {
@@ -605,8 +620,8 @@ impl AppState {
                                             .bg(gpui::rgba(0xef444420))
                                             .cursor_pointer()
                                             .hover(|s| s.bg(gpui::rgba(0xef444440)))
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.logout(cx);
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.logout(window, cx);
                                             }))
                                             .child(svg().path("svg/power.svg").size(px(20.)).text_color(Hsla::from(gpui::rgba(0xef4444ff))))
                                     )
@@ -623,8 +638,8 @@ impl AppState {
                                     .py_4()
                                     .cursor_pointer()
                                     .hover(|s| s.bg(gpui::rgba(0xef444410)))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.logout(cx);
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.logout(window, cx);
                                     }))
                                     .child(
                                         div()
@@ -674,7 +689,10 @@ impl AppState {
                             .when(!is_mini, |this| {
                                 this.justify_start().h_10().px_3().gap_3().rounded_md().bg(cx.theme().secondary)
                             })
-                            .on_click(cx.listener(|this, _ev, _window, cx| {
+                            .on_click(cx.listener(|this, _ev, window, cx| {
+                                if this.block_unsaved_compliance_navigation(window, cx) {
+                                    return;
+                                }
                                 this.active_view = ActiveView::ImportExport;
                                 cx.notify();
                             }))
