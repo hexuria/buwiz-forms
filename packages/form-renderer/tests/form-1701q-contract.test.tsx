@@ -108,6 +108,69 @@ describe("1701Q:2018 experimental preview contract", () => {
     expect(markup).not.toContain("₱");
   });
 
+  it("keeps official plain fields plain and exact guided-field capacities", () => {
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: structuredClone(normalFixture) as RenderEnvelope })
+    );
+
+    for (const fieldName of [
+      "item_43_description",
+      "item_48_description",
+      "item_61_description"
+    ]) {
+      const field = markup.match(new RegExp(
+        `<span class="line-description-1701q" data-field-mode="plain" data-field-name="${fieldName}">([\\s\\S]*?)</span>`
+      ));
+      expect(field, fieldName).not.toBeNull();
+      expect(field?.[1], fieldName).not.toContain("comb-value");
+    }
+
+    const guidedCapacities = {
+      payment_32_bank: 6,
+      payment_32_number: 11,
+      payment_32_date: 8,
+      payment_33_bank: 6,
+      payment_33_number: 11,
+      payment_33_date: 8,
+      payment_34_bank: 6,
+      payment_34_number: 11,
+      payment_34_date: 8,
+      payment_35_particular: 7,
+      payment_35_bank: 6,
+      payment_35_number: 11,
+      payment_35_date: 8,
+      item_26_taxpayer: 8,
+      item_31: 12
+    } as const;
+    for (const [fieldName, capacity] of Object.entries(guidedCapacities)) {
+      expect(markup, fieldName).toContain(
+        `data-field-mode="guided" data-field-name="${fieldName}" data-cell-capacity="${capacity}"`
+      );
+    }
+
+    expect(markup).not.toContain("blank-comb-1701q");
+    expect(markup).not.toContain("<i>.</i>");
+  });
+
+  it("preserves the source-proven official instructions instead of abbreviating them", () => {
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: structuredClone(normalFixture) as RenderEnvelope })
+    );
+    for (const wording of [
+      "TRUST FAO:(First Name, Middle Name, Last Name)",
+      "If branch, indicate the branch address.",
+      "Method of Deduction",
+      "pursuant to the provisions of the National Internal Revenue Code",
+      "If Authorized Representative, attach authorization letter and indicate TIN",
+      "if not filed with an Authorized Agent Bank",
+      "RO’s Signature/Bank Teller’s Initial",
+      "option if initially selected shall automatically be",
+      "Three million pesos (P3M)"
+    ]) {
+      expect(markup).toContain(wording);
+    }
+  });
+
   it("leaves unresolved optional choices unmarked instead of inventing No", () => {
     const fixture = structuredClone(validationEdgeFixture) as RenderEnvelope;
     const markup = renderToStaticMarkup(

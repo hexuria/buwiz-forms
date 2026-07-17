@@ -255,6 +255,7 @@
   border-bottom: .6pt solid #111;
   background: #d9d9d9;
 }
+.label-comb-1701q[data-item-number="9"] > div em { font-size: 4.35pt; white-space: nowrap; }
 .label-comb-1701q > .comb-value,
 .label-comb-1701q > .adaptive-plain-value { height: 16.5pt; border-bottom: .6pt solid #111; }
 .address-1701q > div:first-child {
@@ -266,6 +267,7 @@
   border-bottom: .6pt solid #111;
   background: #d9d9d9;
 }
+.address-1701q > div:first-child em { font-size: 4.25pt; white-space: nowrap; }
 .address-1701q > .comb-value,
 .address-1701q > .adaptive-plain-value { height: 16.5pt; border-bottom: .6pt solid #111; }
 .address-second-1701q {
@@ -330,6 +332,18 @@
   padding-top: 11pt;
   line-height: .92;
 }
+.graduated-choice-1701q > small:first-of-type {
+  position: absolute;
+  left: 127pt;
+  top: 13pt;
+  white-space: nowrap;
+}
+.deduction-heading-1701q {
+  position: absolute;
+  left: 198pt;
+  top: 2pt;
+  font-size: 7.25pt;
+}
 .deduction-choices-1701q {
   align-self: stretch;
   display: grid;
@@ -337,10 +351,26 @@
   min-width: 0;
   padding-top: 4pt;
 }
-.deduction-choices-1701q > .check-choice {
+.deduction-choices-1701q > span {
+  position: relative;
   min-width: 0;
-  margin-left: 14pt;
+  height: 100%;
+}
+.deduction-choices-1701q > span > .check-choice {
+  position: absolute;
+  top: 6pt;
+  left: 14pt;
+  min-width: 0;
+  margin-left: 0;
   white-space: nowrap;
+}
+.deduction-choices-1701q > span > small {
+  position: absolute;
+  top: 19pt;
+  left: 31pt;
+  right: 0;
+  font-size: 4.5pt;
+  line-height: .78;
 }
 .eight-percent-choice-1701q {
   z-index: 1;
@@ -353,12 +383,19 @@
   padding-top: 1.5pt;
   line-height: .9;
 }
+.eight-percent-choice-1701q > span,
 .eight-percent-choice-1701q .check-choice {
   width: 100%;
   min-width: 0;
   align-items: flex-start;
   line-height: .92;
   white-space: normal;
+}
+.eight-percent-choice-1701q > span > small {
+  display: block;
+  margin-left: 17pt;
+  font-size: 4.8pt;
+  line-height: .85;
 }
 
 .spouse-background-1701q .tin-rdo-1701q { height: 16pt; }
@@ -402,10 +439,10 @@
 .paired-row-1701q strong { margin-left: auto; font-size: 5.4pt; font-style: italic; }
 .paired-row-1701q small { margin-left: 2pt; }
 .paired-section-1701q > .schedule-subtitle-1701q { height: 10pt; margin: 0; display: grid; place-items: center; border-bottom: .6pt solid #111; background: #d9d9d9; }
-.amount-1701q { min-width: 0; min-height: 15pt; display: grid; grid-template-columns: minmax(0, 1fr) 10pt 24pt; background: #fff; }
-.amount-1701q > i { display: grid; place-items: center; background: #a9a9a9; font-style: normal; }
-.blank-amount-1701q { display: block; position: relative; }
-.blank-comb-1701q { position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 16pt, #bdbdbd 16pt 16.5pt); }
+.amount-1701q { min-width: 0; min-height: 15pt; display: block; background: #fff; }
+.amount-1701q,
+.guided-payment-field-1701q { font-size: 0; line-height: 0; }
+.amount-1701q > :is(.comb-value, .adaptive-plain-value) { width: 100%; height: 100%; vertical-align: top; }
 .aggregate-1701q {
   height: 16pt;
   display: grid;
@@ -416,13 +453,13 @@
 .aggregate-1701q > span:first-child { display: flex; align-items: center; gap: 3pt; padding: 1pt 3pt; background: #d9d9d9; }
 .aggregate-1701q > .amount-1701q { border-left: .6pt solid #111; }
 
-.declaration-1701q { height: 56.5pt; border: 1pt solid #111; margin-top: 0; }
+.declaration-1701q { height: 67pt; border: 1pt solid #111; margin-top: 0; }
 .declaration-1701q p { height: 25pt; margin: 0; padding: 2pt 4pt; border-bottom: .6pt solid #111; font-size: 5.5pt; text-align: center; }
-.declaration-1701q > div { height: 30.5pt; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2pt; text-align: center; }
+.declaration-1701q > div { height: 41pt; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2pt; text-align: center; }
 
 .payment-details-1701q {
   position: relative;
-  margin-top: 9.5pt;
+  margin-top: 0;
 }
 .payment-details-1701q::before {
   position: absolute;
@@ -447,6 +484,8 @@
 .payment-row-1701q > span { min-width: 0; border-bottom: .6pt solid #111; }
 .payment-row-1701q > span + span { border-left: .6pt solid #111; }
 .payment-row-1701q > span:first-child { display: flex; align-items: center; gap: 2pt; padding-left: 3pt; background: #d9d9d9; }
+.guided-payment-field-1701q { display: block; }
+.guided-payment-field-1701q > :is(.comb-value, .adaptive-plain-value) { width: 100%; height: 100%; vertical-align: top; }
 .payment-row-1701q > .amount-1701q { min-height: 15pt; }
 .payment-row-others-label-1701q { height: 11pt; }
 .payment-row-others-label-1701q > span:first-child { grid-column: 1 / -1; }
@@ -546,10 +585,6 @@
   justify-content: flex-start;
   padding-left: 59pt;
   font-size: 9pt;
-}
-.form-1701q-page-two .blank-comb-1701q {
-  top: auto;
-  height: 45%;
 }
 .single-total-1701q { min-height: 18pt; border: 1pt solid #111; margin-top: 2pt; }
 .single-total-1701q > span:first-child,

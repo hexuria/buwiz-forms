@@ -77,6 +77,8 @@ const PAYMENT_ROWS = [
   [35, "Others (specify)", "payment_35"]
 ] as const;
 
+const PLAIN_DESCRIPTION_ITEMS = new Set([43, 48, 61]);
+
 export function Form1701Q({ envelope }: { envelope: RenderEnvelope }) {
   getFormSpec("1701Q", "2018");
   if (envelope.schedules.length !== 0) {
@@ -96,8 +98,9 @@ export function Form1701Q({ envelope }: { envelope: RenderEnvelope }) {
         <Declaration1701Q />
         <PaymentDetails1701Q envelope={envelope} />
         <p className="notes-1701q">
-          <b>NOTES:</b> * This tax-rate choice is irrevocable for the taxable year, subject to the threshold rule printed on the official form.<br />
-          ** Please read the BIR Data Privacy Policy found on the BIR website (www.bir.gov.ph).
+          <b>NOTES:</b> * I understand that this choice is irrevocable for this taxable year. However, the 8% Income Tax (IT) Rate option if initially selected shall automatically be<br />
+          changed to graduated IT rates when gross sales/receipts and other non-operating income exceed Three million pesos (P3M)<br />
+          ** Please read the BIR Data Privacy Policy found in the BIR website (www.bir.gov.ph)
         </p>
       </FolioPage>
 
@@ -204,7 +207,7 @@ function TaxpayerBackground1701Q({ envelope }: { envelope: RenderEnvelope }) {
         ["II012", "II012 Business Income-Graduated IT Rates"], ["II014", "II014 Income from Profession-Graduated IT Rates"], ["II013", "II013 Mixed Income-Graduated IT Rates"],
         ["II015", "II015 Business Income - 8% IT Rate"], ["II017", "II017 Income from Profession - 8% IT Rate"], ["II016", "II016 Mixed Income - 8% IT Rate"]
       ]} selected={text(envelope, "atc")} />
-      <LabelComb1701Q number="9" label={<>Taxpayer/Filer’s Name <em>(Last Name, First Name, Middle Name for Individual)</em></>} value={envelope.taxpayer.name} cells={40} />
+      <LabelComb1701Q number="9" label={<>Taxpayer/Filer’s Name <em>(Last Name, First Name, Middle Name for Individual) / ESTATE of (First Name, Middle Name, Last Name) / TRUST FAO:(First Name, Middle Name, Last Name)</em></>} value={envelope.taxpayer.name} cells={40} />
       <Address1701Q envelope={envelope} />
       <div className="split-row-1701q three-1701q">
         <LabelComb1701Q number="11" label={<>Date of Birth <em>(MM/DD/YYYY)</em></>} value={text(envelope, "date_of_birth").replace(/\D/g, "")} cells={8} />
@@ -276,9 +279,10 @@ function TaxElection1701Q({ number, taxRate, deduction }: { number: string; taxR
   return (
     <div className="tax-election-1701q">
       <span className="tax-rate-label-1701q"><b>{number}</b> Tax Rate*<small>(choose one, for income from business/profession)</small></span>
-      <span className="graduated-choice-1701q"><CheckChoice checked={taxRate === "graduated"} label="Graduated Rates" /><small>(Choose Method of Deduction)</small></span>
-      <span className="deduction-choices-1701q"><CheckChoice checked={deduction === "itemized"} label="Itemized Deduction" /><CheckChoice checked={deduction === "osd"} label="Optional Standard Deduction (OSD)" /></span>
-      <span className="eight-percent-choice-1701q"><CheckChoice checked={taxRate === "eight_percent"} label="8% on gross sales/receipts & other non-operating income in lieu of Graduated Rates and Percentage Tax" /></span>
+      <span className="graduated-choice-1701q"><CheckChoice checked={taxRate === "graduated"} label="Graduated Rates" /><small>per Tax Table- page 2</small><small>(Choose Method of Deduction in Item {number}A)</small></span>
+      <span className="deduction-heading-1701q"><b>{number}A</b> Method of Deduction</span>
+      <span className="deduction-choices-1701q"><span><CheckChoice checked={deduction === "itemized"} label="Itemized Deduction" /><small>[Sec. 34(A-J), NIRC]</small></span><span><CheckChoice checked={deduction === "osd"} label="Optional Standard Deduction (OSD)" /><small>[40% of Gross Sales/Receipts/Revenues/Fees [Sec. 34(L), NIRC]</small></span></span>
+      <span className="eight-percent-choice-1701q"><span><CheckChoice checked={taxRate === "eight_percent"} label="8% on gross sales/receipts & other non-operating income in lieu of Graduated Rates under Sec. 24(A)(2)(a) & Percentage Tax under Sec. 116 of the NIRC, as amended" /><small>(available if gross sales/receipts and other non-operating income do not exceed Three million pesos (P3M))</small></span></span>
     </div>
   );
 }
@@ -286,7 +290,7 @@ function TaxElection1701Q({ number, taxRate, deduction }: { number: string; taxR
 function Address1701Q({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <div className="address-1701q">
-      <div><b>10</b> Registered Address <em>(Indicate complete address)</em></div>
+      <div><b>10</b> Registered Address <em>(Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)</em></div>
       <AdaptiveCombValue value={envelope.taxpayer.registered_address.toUpperCase()} cells={40} />
       <div className="address-second-1701q"><AdaptiveCombValue value={text(envelope, "registered_address_2").toUpperCase()} cells={31} /><span><b>10A</b> ZIP Code</span><CombValue value={envelope.taxpayer.zip_code} cells={4} align="right" /></div>
     </div>
@@ -295,7 +299,7 @@ function Address1701Q({ envelope }: { envelope: RenderEnvelope }) {
 
 function LabelComb1701Q({ number, label, value, cells }: { number: string; label: ReactNode; value: string; cells: number }) {
   return (
-    <div className="label-comb-1701q"><div><b>{number}</b> {label}</div><AdaptiveCombValue value={value.toUpperCase()} cells={cells} /></div>
+    <div className="label-comb-1701q" data-item-number={number} data-field-mode="guided" data-cell-capacity={cells}><div><b>{number}</b> {label}</div><AdaptiveCombValue value={value.toUpperCase()} cells={cells} /></div>
   );
 }
 
@@ -327,34 +331,35 @@ function PairedAmountSection1701Q({ title, rows, envelope, graduatedLayout = fal
 
 function PairedAmountRow1701Q({ number, label, fieldKey, envelope }: { number: number; label: ReactNode; fieldKey: string; envelope: RenderEnvelope }) {
   const description = text(envelope, `${fieldKey}_description`);
+  const hasPlainDescription = PLAIN_DESCRIPTION_ITEMS.has(number);
   return (
     <div className={`paired-row-1701q item-${number}-1701q`}>
-      <span><b>{number}</b> {label}{description && <span className="line-description-1701q">{description}</span>}</span>
+      <span><b>{number}</b> {label}{hasPlainDescription && <span className="line-description-1701q" data-field-mode="plain" data-field-name={`${fieldKey}_description`}>{description}</span>}</span>
       <Amount1701Q envelope={envelope} fieldKey={`${fieldKey}_taxpayer`} />
       <Amount1701Q envelope={envelope} fieldKey={`${fieldKey}_spouse`} />
     </div>
   );
 }
 
-function Amount1701Q({ envelope, fieldKey, cells = 9 }: { envelope: RenderEnvelope; fieldKey: string; cells?: number }) {
+function Amount1701Q({ envelope, fieldKey, cells = 8 }: { envelope: RenderEnvelope; fieldKey: string; cells?: number }) {
   const value = field(envelope, fieldKey);
   if (!value || value.type !== "decimal") {
-    return <span className="amount-1701q blank-amount-1701q" aria-label="blank amount"><span className="blank-comb-1701q" /></span>;
+    return <span className="amount-1701q blank-amount-1701q" data-field-mode="guided" data-field-name={fieldKey} data-cell-capacity={cells} aria-label="blank amount"><CombValue value="" cells={cells} /></span>;
   }
-  const [whole, decimalPart] = formatMoneyParts(value.value);
-  return <span className="amount-1701q"><AdaptiveCombValue value={whole} cells={cells} align="right" /><i>.</i><CombValue value={decimalPart} cells={2} align="right" /></span>;
+  const [whole] = formatMoneyParts(value.value);
+  return <span className="amount-1701q" data-field-mode="guided" data-field-name={fieldKey} data-cell-capacity={cells}><AdaptiveCombValue value={whole} cells={cells} align="right" /></span>;
 }
 
 function AggregateAmount1701Q({ envelope }: { envelope: RenderEnvelope }) {
   return (
-    <div className="aggregate-1701q"><span><b>31</b> Aggregate Amount Payable/(Overpayment) <small>(Sum of Items 30A and 30B)</small></span><Amount1701Q envelope={envelope} fieldKey="item_31" cells={13} /></div>
+    <div className="aggregate-1701q"><span><b>31</b> Aggregate Amount Payable/(Overpayment) <small>(Sum of Items 30A and 30B)</small></span><Amount1701Q envelope={envelope} fieldKey="item_31" cells={12} /></div>
   );
 }
 
 function Declaration1701Q() {
   return (
     <section className="declaration-1701q">
-      <p>I declare under the penalties of perjury that this return, and all its attachments, have been made in good faith, verified by me, and to the best of my knowledge and belief, are true and correct.</p>
+      <p>I declare under the penalties of perjury that this return, and all its attachments, have been made in good faith, verified by me, and to the best of my knowledge and belief, are true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof. Further, I give my consent to the processing of my information as contemplated under the <b>Data Privacy Act of 2012 (R.A. No. 10173)</b> for legitimate and lawful purposes. <em>(If Authorized Representative, attach authorization letter and indicate TIN)</em></p>
       <div><span>Signature and Printed Name of Taxpayer/Authorized Representative/Tax Agent <small>(Indicate Title/Designation and TIN)</small></span></div>
     </section>
   );
@@ -370,9 +375,9 @@ function PaymentDetails1701Q({ envelope }: { envelope: RenderEnvelope }) {
           {number !== 35 ? (
             <div className="payment-row-1701q">
               <span><b>{number}</b> {label}</span>
-              <AdaptiveCombValue value={text(envelope, `${key}_bank`)} cells={12} />
-              <AdaptiveCombValue value={text(envelope, `${key}_number`)} cells={12} />
-              <AdaptiveCombValue value={text(envelope, `${key}_date`).replace(/\D/g, "")} cells={8} />
+              <GuidedPaymentField1701Q fieldName={`${key}_bank`} value={text(envelope, `${key}_bank`)} cells={6} />
+              <GuidedPaymentField1701Q fieldName={`${key}_number`} value={text(envelope, `${key}_number`)} cells={11} />
+              <GuidedPaymentField1701Q fieldName={`${key}_date`} value={text(envelope, `${key}_date`).replace(/\D/g, "")} cells={8} />
               <Amount1701Q envelope={envelope} fieldKey={`${key}_amount`} />
             </div>
           ) : (
@@ -381,10 +386,10 @@ function PaymentDetails1701Q({ envelope }: { envelope: RenderEnvelope }) {
                 <span><b>{number}</b> {label}</span>
               </div>
               <div className="payment-row-1701q payment-row-others-detail-1701q">
-                <AdaptiveCombValue value={text(envelope, `${key}_particular`)} cells={12} />
-                <AdaptiveCombValue value={text(envelope, `${key}_bank`)} cells={12} />
-                <AdaptiveCombValue value={text(envelope, `${key}_number`)} cells={12} />
-                <AdaptiveCombValue value={text(envelope, `${key}_date`).replace(/\D/g, "")} cells={8} />
+                <GuidedPaymentField1701Q fieldName={`${key}_particular`} value={text(envelope, `${key}_particular`)} cells={7} />
+                <GuidedPaymentField1701Q fieldName={`${key}_bank`} value={text(envelope, `${key}_bank`)} cells={6} />
+                <GuidedPaymentField1701Q fieldName={`${key}_number`} value={text(envelope, `${key}_number`)} cells={11} />
+                <GuidedPaymentField1701Q fieldName={`${key}_date`} value={text(envelope, `${key}_date`).replace(/\D/g, "")} cells={8} />
                 <Amount1701Q envelope={envelope} fieldKey={`${key}_amount`} />
               </div>
             </>
@@ -392,11 +397,15 @@ function PaymentDetails1701Q({ envelope }: { envelope: RenderEnvelope }) {
         </Fragment>
       ))}
       <div className="payment-receipt-1701q">
-        <span>Machine Validation/Revenue Official Receipt Details<span className="receipt-value-1701q">{text(envelope, "machine_validation_or_receipt_details")}</span></span>
-        <span>Stamp of Receiving Office/AAB and Date of Receipt</span>
+        <span>Machine Validation/Revenue Official Receipt Details <em>(if not filed with an Authorized Agent Bank)</em><span className="receipt-value-1701q" data-field-mode="plain" data-field-name="machine_validation_or_receipt_details">{text(envelope, "machine_validation_or_receipt_details")}</span></span>
+        <span>Stamp of Receiving Office/AAB and Date of Receipt<br />(RO’s Signature/Bank Teller’s Initial)</span>
       </div>
     </section>
   );
+}
+
+function GuidedPaymentField1701Q({ fieldName, value, cells }: { fieldName: string; value: string; cells: number }) {
+  return <span className="guided-payment-field-1701q" data-field-mode="guided" data-field-name={fieldName} data-cell-capacity={cells}><AdaptiveCombValue value={value} cells={cells} /></span>;
 }
 
 function PageTwoIdentity1701Q({ envelope }: { envelope: RenderEnvelope }) {
