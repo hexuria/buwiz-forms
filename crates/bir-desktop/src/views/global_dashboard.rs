@@ -90,13 +90,14 @@ impl GlobalDashboardView {
         let bus = cx.global::<crate::events::GlobalEventBus>().0.clone();
         cx.subscribe(
             &bus,
-            |this: &mut Self, _bus, event: &crate::events::AppEvent, cx| {
-                match event {
-                    crate::events::AppEvent::DatabaseChanged => {
-                        // Refresh profiles and other DB-backed info if needed
-                    }
-                    crate::events::AppEvent::ProfileComplianceChanged { .. } => {}
+            |this: &mut Self, _bus, event: &crate::events::AppEvent, cx| match event {
+                crate::events::AppEvent::DatabaseChanged => {
+                    // Refresh profiles and other DB-backed info if needed
                 }
+                crate::events::AppEvent::ProfileComplianceChanged {
+                    tin,
+                    affected_years,
+                } => this.refresh_profile_compliance_after_commit(tin, affected_years, cx),
             },
         )
         .detach();
@@ -155,6 +156,45 @@ impl GlobalDashboardView {
         cx.notify();
     }
 
+    fn refresh_profile_compliance_after_commit(
+        &mut self,
+        tin: &str,
+        affected_years: &[u16],
+        cx: &mut Context<Self>,
+    ) {
+        let refreshed = self
+            .db
+            .lock()
+            .ok()
+            .and_then(|db| db.get_profile(tin).ok().flatten());
+        let Some(refreshed) = refreshed else {
+            return;
+        };
+
+        if let Some(cached) = self
+            .profiles
+            .iter_mut()
+            .find(|profile| profile.tin.full() == tin)
+        {
+            *cached = refreshed;
+        } else {
+            self.profiles.push(refreshed);
+        }
+
+        if !calendar_year_is_affected(self.calendar_year, affected_years) {
+            return;
+        }
+
+        let overrides = self
+            .db
+            .lock()
+            .map(|db| db.get_deadline_overrides())
+            .unwrap_or_default();
+        self.deadlines =
+            Self::deadlines_for_profiles(&self.profiles, self.calendar_year, &overrides);
+        cx.notify();
+    }
+
     fn deadlines_for_profiles(
         _profiles: &[TaxpayerProfile],
         calendar_year: i32,
@@ -173,6 +213,12 @@ impl GlobalDashboardView {
 
         all
     }
+}
+
+fn calendar_year_is_affected(calendar_year: i32, affected_years: &[u16]) -> bool {
+    u16::try_from(calendar_year)
+        .ok()
+        .is_some_and(|year| affected_years.contains(&year))
 }
 
 impl Render for GlobalDashboardView {
@@ -405,5 +451,25 @@ impl GlobalDashboardView {
         } else {
             condensed
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::calendar_year_is_affected;
+
+    #[test]
+    fn calendar_year_is_affected_when_committed_event_includes_visible_year() {
+        assert!(calendar_year_is_affected(2026, &[2025, 2026]));
+    }
+
+    #[test]
+    fn calendar_year_is_not_affected_when_event_only_changes_another_year() {
+        assert!(!calendar_year_is_affected(2026, &[2024, 2025]));
+    }
+
+    #[test]
+    fn calendar_year_is_not_affected_when_visible_year_is_outside_profile_range() {
+        assert!(!calendar_year_is_affected(-1, &[2026]));
     }
 }
