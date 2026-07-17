@@ -874,152 +874,6 @@ fn insert_optional_date(
     );
 }
 
-#[cfg(test)]
-mod tests {
-    use sha2::{Digest, Sha256};
-
-    use super::*;
-
-    fn contract_draft() -> Form1702RTDraft {
-        let mut draft = Form1702RTDraft {
-            tin: "00000000000000".to_string(),
-            taxable_year: 2025,
-            month: 12,
-            filing_basis: Form1702RTFilingBasis::Calendar,
-            atc: Form1702RTAtcSelection {
-                printed_mcit_selected: true,
-                other_selected: true,
-                other_code: "IC010".to_string(),
-            },
-            rdo_code: "018".to_string(),
-            taxpayer_name: "JUAN DELA CRUZ".to_string(),
-            registered_name_lines: ["JUAN DELA CRUZ".to_string(), String::new(), String::new()],
-            registered_address: "OLONGAPO".to_string(),
-            registered_address_lines: ["OLONGAPO".to_string(), String::new(), String::new()],
-            zip_code: "2200".to_string(),
-            incorporation_date: Form1702RTDate::new(2019, 12, 10).ok(),
-            contact_number: "09123456789".to_string(),
-            email: "CODEITLIKEMILEY@GMAIL.COM".to_string(),
-            deduction_method: Form1702RTDeductionMethod::OptionalStandard,
-            president_signatory_title: "PRESIDENT".to_string(),
-            president_signatory_tin: "12345678900000".to_string(),
-            treasurer_signatory_title: "TREASURER".to_string(),
-            treasurer_signatory_tin: "98765432100000".to_string(),
-            number_of_attachments: "000".to_string(),
-            xml_final_flag: "1".to_string(),
-            ..Form1702RTDraft::default()
-        };
-        draft.part_iv.item_27_sales = WholePeso(1_000);
-        draft.part_iv.item_28_sales_returns = WholePeso(1_000);
-        draft.part_iv.item_30_cost_of_sales_or_services = WholePeso(1_000);
-        draft.part_iv.item_32_other_taxable_income = WholePeso(1_000);
-        draft.part_iv.item_40_income_tax_rate_percent = 30;
-        draft.part_iv.tax_credits.item_44_prior_year_excess_credits = WholePeso(1_000);
-        draft.part_ii.item_17_surcharge = WholePeso(1_000);
-        draft.part_ii.item_18_interest = WholePeso(1_000);
-        draft.part_ii.item_19_compromise = WholePeso(1_000);
-        draft.recompute();
-        draft
-    }
-
-    #[test]
-    fn exact_contract_has_258_fields_and_four_pages() {
-        let fields = contract_draft().to_bir_field_map();
-        assert_eq!(fields.len(), EXACT_SOURCE_FIELD_COUNT);
-        assert_eq!(expected_xml_keys().len(), EXACT_SOURCE_FIELD_COUNT);
-        assert_eq!(fields["frm1702RT:txtMaxPage"], "4");
-    }
-
-    #[test]
-    fn checked_import_round_trips_negative_whole_pesos_losslessly() {
-        let mut source = contract_draft().to_bir_field_map();
-        source.insert(
-            "frm1702RT:txtPg1Pt2I16NetTax".to_string(),
-            "-8,000".to_string(),
-        );
-        source.insert(
-            "frm1702RT:txtPg2Pt4I56NetTax".to_string(),
-            "-8,000".to_string(),
-        );
-        let imported = Form1702RTDraft::from_bir_field_map(&source).expect("source shape imports");
-        assert_eq!(
-            imported.part_ii.item_16_net_tax_payable_or_overpayment,
-            WholePeso(-8_000)
-        );
-        assert_eq!(imported.to_bir_field_map(), source);
-    }
-
-    #[test]
-    fn malformed_money_is_rejected_instead_of_becoming_zero() {
-        let mut source = contract_draft().to_bir_field_map();
-        source.insert("frm1702RT:txtPg2Pt4I27Sales".to_string(), "1,2".to_string());
-        let errors = Form1702RTDraft::from_bir_field_map(&source).expect_err("must reject");
-        assert!(
-            errors
-                .iter()
-                .any(|(field, _)| field == "frm1702RT:txtPg2Pt4I27Sales")
-        );
-    }
-
-    #[test]
-    fn generated_pseudo_xml_round_trips_through_checked_parser() {
-        let draft = contract_draft();
-        let xml = draft.to_bir_xml_payload();
-        let imported = Form1702RTDraft::from_bir_xml_payload(&xml).expect("generated XML imports");
-        assert_eq!(imported.president_signatory_title, "PRESIDENT");
-        assert_eq!(imported.treasurer_signatory_title, "TREASURER");
-        assert!(xml.contains("frm1702RT:txtPg1Pt2Signatory1=PRESIDENT"));
-        assert!(xml.contains("frm1702RT:txtPg1Pt2Signatory2=TREASURER"));
-        assert_eq!(imported.to_bir_field_map(), draft.to_bir_field_map());
-    }
-
-    #[test]
-    #[ignore = "requires EBIRFORMS_1702RT_SOURCE_DIR pointing to the reviewed external source pack"]
-    fn locked_external_plain_and_encrypted_sources_match_hashes_and_roundtrip() {
-        let source_dir = std::env::var("EBIRFORMS_1702RT_SOURCE_DIR")
-            .expect("set EBIRFORMS_1702RT_SOURCE_DIR to the reviewed 1702RTv2018c folder");
-        let directory = std::path::Path::new(&source_dir);
-        let plain = std::fs::read(directory.join("00000000000000-1702RTv2018C-122025.xml"))
-            .expect("plain source is readable");
-        assert_eq!(
-            hex::encode(Sha256::digest(&plain)),
-            super::super::form_1702rt::REVIEWED_EDITABLE_XML_SHA256
-        );
-        let plain_xml = std::str::from_utf8(&plain).expect("plain source is UTF-8");
-        let fields = crate::bir_xml::parse_bir_xml_checked(plain_xml).expect("plain source parses");
-        assert_eq!(fields.len(), EXACT_SOURCE_FIELD_COUNT);
-        let draft = Form1702RTDraft::from_bir_field_map(&fields).expect("plain source imports");
-        assert_eq!(draft.to_bir_field_map(), fields);
-
-        let encrypted = std::fs::read(
-            directory.join("00000000000000-1702RTv2018C-122025#CODEITLIKEMILEY@GMAIL.COM#.xml"),
-        )
-        .expect("encrypted source is readable");
-        assert_eq!(
-            hex::encode(Sha256::digest(&encrypted)),
-            super::super::form_1702rt::REVIEWED_ENCRYPTED_XML_SHA256
-        );
-        let decrypted =
-            crate::crypto::decrypt_and_decompress(&encrypted, crate::crypto::BIR_IAF_PASSPHRASE)
-                .expect("encrypted companion decrypts");
-        let decrypted_xml = std::str::from_utf8(&decrypted).expect("decrypted source is UTF-8");
-        let encrypted_draft =
-            Form1702RTDraft::from_bir_xml_payload(decrypted_xml).expect("encrypted source imports");
-        assert_eq!(
-            encrypted_draft.to_bir_field_map().len(),
-            EXACT_SOURCE_FIELD_COUNT
-        );
-        assert_eq!(encrypted_draft.xml_final_flag, "0");
-
-        let pdf = std::fs::read(directory.join("1702-RT Jan 2018 ENCS Final v3.pdf"))
-            .expect("official PDF is readable");
-        assert_eq!(
-            hex::encode(Sha256::digest(&pdf)),
-            super::super::form_1702rt::OFFICIAL_FORM_SHA256
-        );
-    }
-}
-
 fn insert_payment_rows(fields: &mut BTreeMap<String, String>, rows: &[Form1702RTPaymentDetail; 4]) {
     for (prefix, row) in [
         ("frm1702RT:txtPg1Pt3I23DebitMemo", &rows[0]),
@@ -1688,5 +1542,151 @@ impl Form1702RTDraft {
         } else {
             Err(errors)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sha2::{Digest, Sha256};
+
+    use super::*;
+
+    fn contract_draft() -> Form1702RTDraft {
+        let mut draft = Form1702RTDraft {
+            tin: "00000000000000".to_string(),
+            taxable_year: 2025,
+            month: 12,
+            filing_basis: Form1702RTFilingBasis::Calendar,
+            atc: Form1702RTAtcSelection {
+                printed_mcit_selected: true,
+                other_selected: true,
+                other_code: "IC010".to_string(),
+            },
+            rdo_code: "018".to_string(),
+            taxpayer_name: "JUAN DELA CRUZ".to_string(),
+            registered_name_lines: ["JUAN DELA CRUZ".to_string(), String::new(), String::new()],
+            registered_address: "OLONGAPO".to_string(),
+            registered_address_lines: ["OLONGAPO".to_string(), String::new(), String::new()],
+            zip_code: "2200".to_string(),
+            incorporation_date: Form1702RTDate::new(2019, 12, 10).ok(),
+            contact_number: "09123456789".to_string(),
+            email: "CODEITLIKEMILEY@GMAIL.COM".to_string(),
+            deduction_method: Form1702RTDeductionMethod::OptionalStandard,
+            president_signatory_title: "PRESIDENT".to_string(),
+            president_signatory_tin: "12345678900000".to_string(),
+            treasurer_signatory_title: "TREASURER".to_string(),
+            treasurer_signatory_tin: "98765432100000".to_string(),
+            number_of_attachments: "000".to_string(),
+            xml_final_flag: "1".to_string(),
+            ..Form1702RTDraft::default()
+        };
+        draft.part_iv.item_27_sales = WholePeso(1_000);
+        draft.part_iv.item_28_sales_returns = WholePeso(1_000);
+        draft.part_iv.item_30_cost_of_sales_or_services = WholePeso(1_000);
+        draft.part_iv.item_32_other_taxable_income = WholePeso(1_000);
+        draft.part_iv.item_40_income_tax_rate_percent = 30;
+        draft.part_iv.tax_credits.item_44_prior_year_excess_credits = WholePeso(1_000);
+        draft.part_ii.item_17_surcharge = WholePeso(1_000);
+        draft.part_ii.item_18_interest = WholePeso(1_000);
+        draft.part_ii.item_19_compromise = WholePeso(1_000);
+        draft.recompute();
+        draft
+    }
+
+    #[test]
+    fn exact_contract_has_258_fields_and_four_pages() {
+        let fields = contract_draft().to_bir_field_map();
+        assert_eq!(fields.len(), EXACT_SOURCE_FIELD_COUNT);
+        assert_eq!(expected_xml_keys().len(), EXACT_SOURCE_FIELD_COUNT);
+        assert_eq!(fields["frm1702RT:txtMaxPage"], "4");
+    }
+
+    #[test]
+    fn checked_import_round_trips_negative_whole_pesos_losslessly() {
+        let mut source = contract_draft().to_bir_field_map();
+        source.insert(
+            "frm1702RT:txtPg1Pt2I16NetTax".to_string(),
+            "-8,000".to_string(),
+        );
+        source.insert(
+            "frm1702RT:txtPg2Pt4I56NetTax".to_string(),
+            "-8,000".to_string(),
+        );
+        let imported = Form1702RTDraft::from_bir_field_map(&source).expect("source shape imports");
+        assert_eq!(
+            imported.part_ii.item_16_net_tax_payable_or_overpayment,
+            WholePeso(-8_000)
+        );
+        assert_eq!(imported.to_bir_field_map(), source);
+    }
+
+    #[test]
+    fn malformed_money_is_rejected_instead_of_becoming_zero() {
+        let mut source = contract_draft().to_bir_field_map();
+        source.insert("frm1702RT:txtPg2Pt4I27Sales".to_string(), "1,2".to_string());
+        let errors = Form1702RTDraft::from_bir_field_map(&source).expect_err("must reject");
+        assert!(
+            errors
+                .iter()
+                .any(|(field, _)| field == "frm1702RT:txtPg2Pt4I27Sales")
+        );
+    }
+
+    #[test]
+    fn generated_pseudo_xml_round_trips_through_checked_parser() {
+        let draft = contract_draft();
+        let xml = draft.to_bir_xml_payload();
+        let imported = Form1702RTDraft::from_bir_xml_payload(&xml).expect("generated XML imports");
+        assert_eq!(imported.president_signatory_title, "PRESIDENT");
+        assert_eq!(imported.treasurer_signatory_title, "TREASURER");
+        assert!(xml.contains("frm1702RT:txtPg1Pt2Signatory1=PRESIDENT"));
+        assert!(xml.contains("frm1702RT:txtPg1Pt2Signatory2=TREASURER"));
+        assert_eq!(imported.to_bir_field_map(), draft.to_bir_field_map());
+    }
+
+    #[test]
+    #[ignore = "requires EBIRFORMS_1702RT_SOURCE_DIR pointing to the reviewed external source pack"]
+    fn locked_external_plain_and_encrypted_sources_match_hashes_and_roundtrip() {
+        let source_dir = std::env::var("EBIRFORMS_1702RT_SOURCE_DIR")
+            .expect("set EBIRFORMS_1702RT_SOURCE_DIR to the reviewed 1702RTv2018c folder");
+        let directory = std::path::Path::new(&source_dir);
+        let plain = std::fs::read(directory.join("00000000000000-1702RTv2018C-122025.xml"))
+            .expect("plain source is readable");
+        assert_eq!(
+            hex::encode(Sha256::digest(&plain)),
+            super::super::form_1702rt::REVIEWED_EDITABLE_XML_SHA256
+        );
+        let plain_xml = std::str::from_utf8(&plain).expect("plain source is UTF-8");
+        let fields = crate::bir_xml::parse_bir_xml_checked(plain_xml).expect("plain source parses");
+        assert_eq!(fields.len(), EXACT_SOURCE_FIELD_COUNT);
+        let draft = Form1702RTDraft::from_bir_field_map(&fields).expect("plain source imports");
+        assert_eq!(draft.to_bir_field_map(), fields);
+
+        let encrypted = std::fs::read(
+            directory.join("00000000000000-1702RTv2018C-122025#CODEITLIKEMILEY@GMAIL.COM#.xml"),
+        )
+        .expect("encrypted source is readable");
+        assert_eq!(
+            hex::encode(Sha256::digest(&encrypted)),
+            super::super::form_1702rt::REVIEWED_ENCRYPTED_XML_SHA256
+        );
+        let decrypted =
+            crate::crypto::decrypt_and_decompress(&encrypted, crate::crypto::BIR_IAF_PASSPHRASE)
+                .expect("encrypted companion decrypts");
+        let decrypted_xml = std::str::from_utf8(&decrypted).expect("decrypted source is UTF-8");
+        let encrypted_draft =
+            Form1702RTDraft::from_bir_xml_payload(decrypted_xml).expect("encrypted source imports");
+        assert_eq!(
+            encrypted_draft.to_bir_field_map().len(),
+            EXACT_SOURCE_FIELD_COUNT
+        );
+        assert_eq!(encrypted_draft.xml_final_flag, "0");
+
+        let pdf = std::fs::read(directory.join("1702-RT Jan 2018 ENCS Final v3.pdf"))
+            .expect("official PDF is readable");
+        assert_eq!(
+            hex::encode(Sha256::digest(&pdf)),
+            super::super::form_1702rt::OFFICIAL_FORM_SHA256
+        );
     }
 }
