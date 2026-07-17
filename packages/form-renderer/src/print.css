@@ -1409,6 +1409,12 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   font-weight: 500;
 }
 
+/* Item 24 and the overpayment strip share one fixed official footprint. At
+ * 144 DPI, the original split rounded Item 24 one raster line too early.
+ * Transfer .25pt to Item 24 without moving the declaration or pagination. */
+.form-2551q-page-one .official-tax-line[data-item="24"] { height: 18.75pt; }
+.form-2551q-page-one .overpayment-options { height: 15.75pt; }
+
 .form-2551q-page-one .tax-agent-strip {
   font-size: 6.5pt;
 }
