@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "asset_id": "bir-seal-commons-2017-exact-white-candidate",
+  "status": "calibration_candidate_only",
+  "runtime_eligible": false,
+  "approved_form_revisions": [],
+  "source": {
+    "description": "Seal of the Bureau of Internal Revenue (Philippines)",
+    "commons_page_url": "https://commons.wikimedia.org/wiki/File:Bureau_of_Internal_Revenue_%28BIR%29.svg",
+    "commons_permanent_page_url": "https://commons.wikimedia.org/w/index.php?title=File:Bureau_of_Internal_Revenue_(BIR).svg&oldid=999776473",
+    "original_svg_url": "https://upload.wikimedia.org/wikipedia/commons/5/54/Bureau_of_Internal_Revenue_%28BIR%29.svg",
+    "source_organization_url": "http://www.bir.gov.ph/",
+    "author": "Bureau of Internal Revenue (Philippines)",
+    "render_date": "2017-05-28",
+    "adoption_year": 1964,
+    "retrieved_on": "2026-07-17",
+    "license_identifier": "PD-PhilippinesGov",
+    "copyright_status": "Public domain in the Philippines as a Philippine government work; the Commons file page notes that other laws may still regulate use.",
+    "recommended_attribution": "Bureau of Internal Revenue (Philippines), via Wikimedia Commons",
+    "source_file": "packages/form-renderer/references/artwork/bir-seal-commons-original.svg",
+    "source_bytes": 176659,
+    "source_sha1": "cd8ebd5fb511dffb8c088a9c37a573392fb89192",
+    "source_sha256": "9e1c158416b396bfb2d3b7820cf56ace8ed080aff53651dc880606a3e75e7aa7",
+    "nominal_pixel_dimensions": [490, 490],
+    "view_box": [0.0, 0.0, 490.00002, 490.00002]
+  },
+  "derivative": {
+    "file": "packages/form-renderer/references/artwork/bir-seal-commons-binary-exact-white.svg",
+    "sha256": "1fa8a9151690c58b416338af277c382e0e36b71bca76c5d3edb57b4cacaa063d",
+    "generator": "scripts/prepare_monochrome_bir_seal.py",
+    "mode": "binary",
+    "threshold": 255,
+    "algorithm": "Compute integer sRGB relative luminance and map luminance >= 255 to #ffffff; map every non-white source color to #000000.",
+    "css_filter_used": false,
+    "raster_elements": 0,
+    "path_count": 238,
+    "path_data_sha256": "aa172b7a855daa5dff22d37bd4a3fb585823013929a7d9f24f6d4f4fbe9247d3",
+    "path_geometry_preserved": true,
+    "text_is_outlined_as_vector_paths": true,
+    "view_box_preserved": true
+  },
+  "generator_support": {
+    "grayscale": true,
+    "reviewed_binary_thresholds": [128, 192, 255],
+    "policy": "The three thresholds were declared from source semantics before comparison; the generator retains them for reproducibility, but only the best exact-white derivative is stored."
+  },
+  "official_form_comparison": {
+    "authority_manifest": "packages/form-renderer/references/manifest.json",
+    "official_reference_source": "Pinned official PDF hashes and page rasters recorded by the authority manifest",
+    "reviewed_form_revisions": 10,
+    "reviewed_runtime_seal_hashes": 8,
+    "same_emblem_family": true,
+    "exact_revision_artwork_match_proven": false,
+    "commons_canvas": {
+      "dimensions": [490, 490],
+      "active_bounds": [0, 0, 490, 490],
+      "shape": "square full-bleed vector"
+    },
+    "representative_official_assets": [
+      {
+        "form": "2551Q:2018",
+        "official_pdf_sha256": "1f270ecf66d778836a14697863e420ff65d5ed0a5576a6cf58b97c9a8e8c9b24",
+        "source_object": [9, 0],
+        "canvas_pixels": [95, 83],
+        "active_bounds_pixels": [9, 7, 75, 73],
+        "placed_bbox_points": [244.8, 21.84, 28.8, 25.2],
+        "runtime_sha256": "7db0df0c022263481d219eebc2077631866f626521b4fe93967910a6a9422a4f"
+      },
+      {
+        "form": "1702RT:2018C",
+        "official_pdf_sha256": "d9a6a8a13e0114934261151c4eb269a1573042e7ce670eaf12b15f169d308d2d",
+        "source_object": [40, 0],
+        "canvas_pixels": [119, 102],
+        "active_bounds_pixels": [11, 9, 95, 91],
+        "placed_bbox_points": [228.52, 28.968, 33.682, 28.152],
+        "runtime_sha256": "50d1fc573146e251138b78074b5790dd569f6dbde335feea908334adef4dd7b0"
+      }
+    ],
+    "form_specific_presentations": [
+      {
+        "form": "2551Q:2018",
+        "file": "packages/form-renderer/references/artwork/bir-seal-2551q-2018-candidate.svg",
+        "sha256": "f091f0ddaeb3245177934ee9774e931cfef56becbf88d5733d600333bb16b60e",
+        "shared_vector": "packages/form-renderer/references/artwork/bir-seal-commons-binary-exact-white.svg",
+        "path_data_duplicated": false,
+        "canvas_pixels": [95, 83],
+        "active_bounds_pixels": [9, 7, 75, 73],
+        "placed_bbox_points": [244.8, 21.84, 28.8, 25.2],
+        "calibration": {
+          "evidence_scope": "development_non_promotional_calibration",
+          "runner": "Playwright 1.58.2 Chromium",
+          "device_scale_factor": 1.5,
+          "reference_dpi": 144,
+          "pixelmatch_threshold": 0.1,
+          "fixture_sha256": "f7ccf4db8b7f57ed9897351887bd34987dbfa8f088767eb120391694d53c0777",
+          "reference_page_sha256": "8f93ea4f937ca9bdb48ecc5b57de30e5130ab35608fdfc4609cb8dbf03f3f3d3",
+          "seal_region_raster_pixels": [490, 44, 58, 50],
+          "current_page": {
+            "changed_pixels": 164852,
+            "changed_percent": 7.1946050499972065
+          },
+          "candidate_page": {
+            "changed_pixels": 165297,
+            "changed_percent": 7.214026101893749
+          },
+          "candidate_page_delta_pixels": 445,
+          "current_seal_region": {
+            "changed_pixels": 635,
+            "changed_percent": 21.896551724137932,
+            "expected_ink_missing_percent": 4.927007299270073
+          },
+          "candidate_seal_region": {
+            "changed_pixels": 1080,
+            "changed_percent": 37.241379310344826,
+            "expected_ink_missing_percent": 4.927007299270073
+          },
+          "candidate_seal_delta_pixels": 445,
+          "current_to_candidate_changed_pixels": 1077,
+          "historical_threshold_policy": {
+            "selection": "three_predeclared_source_based_thresholds_not_reference_optimized",
+            "thresholds": [128, 192, 255]
+          },
+          "historical_variants": [
+            {
+              "id": "grayscale",
+              "retained": false,
+              "page_changed_pixels": 165332,
+              "page_changed_percent": 7.215553600357522,
+              "page_delta_from_current_pixels": 480,
+              "seal_changed_pixels": 1115,
+              "seal_changed_percent": 38.44827586206897,
+              "seal_delta_from_current_pixels": 480,
+              "current_to_candidate_changed_pixels": 1102
+            },
+            {
+              "id": "binary_threshold_128",
+              "retained": false,
+              "page_changed_pixels": 165356,
+              "page_changed_percent": 7.216601027875537,
+              "page_delta_from_current_pixels": 504,
+              "seal_changed_pixels": 1139,
+              "seal_changed_percent": 39.275862068965516,
+              "seal_delta_from_current_pixels": 504,
+              "current_to_candidate_changed_pixels": 1116
+            },
+            {
+              "id": "binary_threshold_192",
+              "retained": false,
+              "page_changed_pixels": 165354,
+              "page_changed_percent": 7.216513742249036,
+              "page_delta_from_current_pixels": 502,
+              "seal_changed_pixels": 1137,
+              "seal_changed_percent": 39.206896551724135,
+              "seal_delta_from_current_pixels": 502,
+              "current_to_candidate_changed_pixels": 1114
+            },
+            {
+              "id": "binary_exact_white",
+              "retained": true,
+              "page_changed_pixels": 165297,
+              "page_changed_percent": 7.214026101893749,
+              "page_delta_from_current_pixels": 445,
+              "seal_changed_pixels": 1080,
+              "seal_changed_percent": 37.241379310344826,
+              "seal_delta_from_current_pixels": 445,
+              "current_to_candidate_changed_pixels": 1077
+            }
+          ],
+          "best_binary_variant": "binary_exact_white",
+          "best_binary_beats_grayscale": true,
+          "best_binary_beats_current_official_pdf_xobject": false,
+          "result": "rejected_for_runtime_candidate_worsens_official_fidelity"
+        }
+      }
+    ],
+    "conclusion": "The Commons vector is crisp and the 2551Q wrapper exactly reproduces the reviewed canvas, active bounds, padding, and placement without copying path data. It nevertheless depicts materially different center artwork. The grayscale derivative worsens the official seal-region comparison from 635 to 1,115 changed pixels. Of three predeclared true black-and-white mappings, exact-white is best at 1,080 pixels, but it still trails the exact official PDF XObject by 445 pixels. The exact official 2551Q raster therefore remains authoritative. Other forms require their own measured calibration rather than inheriting this rejected presentation."
+  },
+  "promotion_requirements": [
+    "Bind the candidate to an exact form code and revision.",
+    "Review crop, aspect ratio, placement, and optical weight against every official page using the seal.",
+    "Pass the strict full-page and critical-region visual gates without changing reference images, masks, or thresholds.",
+    "Record the approved form revision and runtime embedding in the reference manifest before importing the SVG into production code."
+  ]
+}

@@ -644,6 +644,39 @@ class VerifyOfflineFormRendererTests(unittest.TestCase):
 
         self.assert_has_error(errors, "matches a pinned official/reference page hash")
 
+    def test_commons_seal_candidate_is_rejected_even_after_rename(self) -> None:
+        self.write_valid_bundle()
+        artwork_root = (
+            SCRIPT_PATH.resolve().parents[1]
+            / "packages/form-renderer/references/artwork"
+        )
+        for name in (
+            "bir-seal-commons-original.svg",
+            "bir-seal-commons-binary-exact-white.svg",
+            "bir-seal-2551q-2018-candidate.svg",
+        ):
+            with self.subTest(name=name):
+                renamed = self.assets / "innocent.bin"
+                renamed.write_bytes((artwork_root / name).read_bytes())
+
+                errors = verifier.verify_renderer(self.root)
+
+                self.assert_has_error(
+                    errors,
+                    "matches an unapproved calibration-only artwork candidate",
+                )
+
+    def test_commons_seal_source_marker_is_rejected_from_scripts(self) -> None:
+        self.write_valid_bundle()
+        (self.assets / "app.js").write_text(
+            "const artwork = 'bir-seal-commons-binary-exact-white.svg';\n",
+            encoding="utf-8",
+        )
+
+        errors = verifier.verify_renderer(self.root)
+
+        self.assert_has_error(errors, "forbidden official-source marker")
+
     def test_runtime_artwork_authorization_is_derived_from_valid_manifest_entries(self) -> None:
         workspace = Path(self.temporary_directory.name) / "artwork-workspace"
         seal = self.valid_seal_asset(

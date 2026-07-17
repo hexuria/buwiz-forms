@@ -95,6 +95,20 @@ OFFICIAL_ARTWORK_SHA256 = {
     "c78f0724e2f320f1b306408008e9085ed36397c4e1add66bf5e77c322a3485ea",
     "d6ab5afbf6b3f4cbac7c69a01df231eaf6dcf7fde587e78c02ee20e3f2508d1a",
 }
+# Generic artwork candidates remain calibration-only until an exact form
+# revision records approval in the runtime artwork manifest. Pin both the
+# Pin the Commons source, retained candidate, current wrapper, and measured
+# historical candidates by content so a rename cannot turn any into production
+# evidence.
+CALIBRATION_ONLY_ARTWORK_SHA256 = {
+    "1fa8a9151690c58b416338af277c382e0e36b71bca76c5d3edb57b4cacaa063d",
+    "6b66b2aae768e92c09086e69efe5ef4ddbdceffa87f1e20a76937acd1abeaf62",
+    "6b8e2de6eb3340118bf34f9b040740bb13b94fc820cfb07017435ba56317d272",
+    "9e1c158416b396bfb2d3b7820cf56ace8ed080aff53651dc880606a3e75e7aa7",
+    "94c8be15cff12a414693b01de4909ad5b461ba3eddac630771bc261947c091e8",
+    "c21dec6db908b55e689cf26bc5d20704197f0a4cf98859bf0809564ce04a2e73",
+    "f091f0ddaeb3245177934ee9774e931cfef56becbf88d5733d600333bb16b60e",
+}
 OFFICIAL_SOURCE_MARKERS = {
     b"bir-cdn.bir.gov.ph",
     b"2551q%20jan%202018%20encs%20final%20rev%203_copy.pdf",
@@ -104,6 +118,8 @@ OFFICIAL_SOURCE_MARKERS = {
     b'"official_source"',
     b'"reference_png"',
     b'"source_svg"',
+    b"bir-seal-commons",
+    b"bureau_of_internal_revenue_%28bir%29.svg",
 }
 DEV_ONLY_SAMPLE_MARKERS = {
     b"renderer preview corporation",
@@ -751,6 +767,8 @@ def _forbidden_artwork_reason(path: Path, digest: str, payload: bytes) -> str | 
         return "unauthorized or malformed runtime raster asset"
     if digest in OFFICIAL_ARTWORK_SHA256:
         return "file matches a pinned official/reference page hash"
+    if digest in CALIBRATION_ONLY_ARTWORK_SHA256:
+        return "file matches an unapproved calibration-only artwork candidate"
     if suffix == ".png" and "2551q" in name:
         return "2551Q reference PNGs are calibration-only"
     if suffix == ".svg" and (
