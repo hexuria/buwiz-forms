@@ -298,6 +298,16 @@ impl Database {
         &self,
         draft: &Form2551QDraft,
     ) -> Result<i64, DbError> {
+        self.save_queued_2551q_draft_and_election_with_post_commit_status(draft)
+            .map(super::PostCommitWrite::into_committed)
+    }
+
+    /// Atomically persist the queued draft and annual election while exposing
+    /// the independent status of the post-commit calendar/deadline refresh.
+    pub fn save_queued_2551q_draft_and_election_with_post_commit_status(
+        &self,
+        draft: &Form2551QDraft,
+    ) -> Result<super::PostCommitWrite<i64>, DbError> {
         if !matches!(draft.status, FilingStatus::Queued) {
             return Err(DbError::Other(
                 "Only a queued 2551Q draft can be saved through the submission path".to_string(),
@@ -501,8 +511,7 @@ impl Database {
         )?;
         tx.commit()?;
 
-        let _ = self.request_google_calendar_sync();
-        Ok(id)
+        Ok(self.finish_post_commit_write(id, "Queued 2551Q election save"))
     }
 
     /// Atomically claim the exact queue generation that was revalidated by the
@@ -1453,6 +1462,66 @@ mod tests {
         assert!(saved_set.contains_active("1701"));
         assert!(!saved_set.contains_active("2551Q"));
         assert_eq!(saved_profile.per_year_forms.get(&2026), Some(&saved_set));
+    }
+
+    #[test]
+    fn queued_election_reports_recorded_post_commit_refresh_request() {
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        let draft = queued_eight_percent_draft(&profile);
+
+        let outcome = db
+            .save_queued_2551q_draft_and_election_with_post_commit_status(&draft)
+            .expect("the queued draft and election transaction should commit");
+
+        assert!(outcome.refresh_status().request_recorded());
+        assert_eq!(
+            db.get_setting("google_calendar_sync_requested").unwrap(),
+            Some("true".to_string())
+        );
+        assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_some());
+    }
+
+    #[test]
+    fn queued_election_refresh_failure_warns_without_rolling_back_committed_data() {
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        db.conn
+            .execute_batch(
+                "DELETE FROM settings WHERE key = 'google_calendar_sync_requested';
+                 CREATE TRIGGER reject_calendar_refresh_insert
+                 BEFORE INSERT ON settings
+                 WHEN NEW.key = 'google_calendar_sync_requested'
+                 BEGIN
+                   SELECT RAISE(ABORT, 'forced refresh request failure');
+                 END;
+                 CREATE TRIGGER reject_calendar_refresh_update
+                 BEFORE UPDATE ON settings
+                 WHEN NEW.key = 'google_calendar_sync_requested'
+                 BEGIN
+                   SELECT RAISE(ABORT, 'forced refresh request failure');
+                 END;",
+            )
+            .unwrap();
+        let draft = queued_eight_percent_draft(&profile);
+
+        let outcome = db
+            .save_queued_2551q_draft_and_election_with_post_commit_status(&draft)
+            .expect("refresh failure must not misreport the committed transaction as rolled back");
+
+        assert!(matches!(
+            outcome.refresh_status(),
+            super::super::PostCommitRefreshStatus::Failed { warning }
+                if warning.contains("committed")
+                    && warning.contains("forced refresh request failure")
+        ));
+        let saved_profile = db.get_profile(&draft.tin).unwrap().unwrap();
+        assert!(saved_profile.tax_elections.iter().any(|entry| {
+            entry.taxable_year == 2026 && entry.election == IncomeTaxElection::EightPercent
+        }));
+        assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_some());
     }
 
     #[test]

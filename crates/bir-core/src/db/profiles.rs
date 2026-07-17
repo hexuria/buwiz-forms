@@ -325,6 +325,16 @@ impl Database {
     }
 
     pub fn save_profile(&self, profile: TaxpayerProfile) -> Result<TaxpayerProfile, DbError> {
+        self.save_profile_with_post_commit_status(profile)
+            .map(super::PostCommitWrite::into_committed)
+    }
+
+    /// Save a profile while keeping the post-commit calendar/deadline refresh
+    /// status distinct from transaction success.
+    pub fn save_profile_with_post_commit_status(
+        &self,
+        profile: TaxpayerProfile,
+    ) -> Result<super::PostCommitWrite<TaxpayerProfile>, DbError> {
         self.save_profile_inner(profile, None)
     }
 
@@ -333,6 +343,17 @@ impl Database {
         profile: TaxpayerProfile,
         reviewed_plan: &TaxProfileVersionConfirmationPlan,
     ) -> Result<TaxpayerProfile, DbError> {
+        self.save_profile_with_confirmation_plan_and_post_commit_status(profile, reviewed_plan)
+            .map(super::PostCommitWrite::into_committed)
+    }
+
+    /// Save a reviewed profile-version confirmation while keeping a failed
+    /// post-commit refresh request from masquerading as a rolled-back save.
+    pub fn save_profile_with_confirmation_plan_and_post_commit_status(
+        &self,
+        profile: TaxpayerProfile,
+        reviewed_plan: &TaxProfileVersionConfirmationPlan,
+    ) -> Result<super::PostCommitWrite<TaxpayerProfile>, DbError> {
         self.save_profile_inner(profile, Some(reviewed_plan))
     }
 
@@ -340,7 +361,7 @@ impl Database {
         &self,
         mut profile: TaxpayerProfile,
         reviewed_plan: Option<&TaxProfileVersionConfirmationPlan>,
-    ) -> Result<TaxpayerProfile, DbError> {
+    ) -> Result<super::PostCommitWrite<TaxpayerProfile>, DbError> {
         profile.ensure_profile_version_ledger();
         let tin = profile.tin.full();
         let previous_tin = profile
@@ -450,8 +471,7 @@ impl Database {
         }
 
         tx.commit()?;
-        let _ = self.request_google_calendar_sync();
-        Ok(profile)
+        Ok(self.finish_post_commit_write(profile, "Taxpayer profile save"))
     }
 
     /// Get a profile by TIN.

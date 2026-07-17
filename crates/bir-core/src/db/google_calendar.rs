@@ -5,6 +5,63 @@ use serde::{Deserialize, Serialize};
 
 use super::{Database, DbError};
 
+/// Result of requesting calendar and deadline refresh after a database write
+/// has already committed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PostCommitRefreshStatus {
+    /// The durable request was recorded and an active worker was notified (or
+    /// already had a notification pending).
+    Requested,
+    /// The durable request was recorded, but immediate worker notification was
+    /// unavailable. A later worker tick can still consume the request.
+    Deferred { warning: String },
+    /// The durable request itself could not be recorded. The primary write is
+    /// still committed and must not be reported as rolled back.
+    Failed { warning: String },
+}
+
+impl PostCommitRefreshStatus {
+    /// Whether the durable refresh marker was stored successfully.
+    pub fn request_recorded(&self) -> bool {
+        matches!(self, Self::Requested | Self::Deferred { .. })
+    }
+
+    /// A non-blocking warning suitable for logs or user notification.
+    pub fn warning(&self) -> Option<&str> {
+        match self {
+            Self::Requested => None,
+            Self::Deferred { warning } | Self::Failed { warning } => Some(warning),
+        }
+    }
+}
+
+/// A successful, committed database write plus the independent status of its
+/// post-commit calendar/deadline refresh request.
+#[derive(Debug)]
+#[must_use = "inspect refresh_status before presenting the committed write to the user"]
+pub struct PostCommitWrite<T> {
+    committed: T,
+    refresh_status: PostCommitRefreshStatus,
+}
+
+impl<T> PostCommitWrite<T> {
+    pub fn committed(&self) -> &T {
+        &self.committed
+    }
+
+    pub fn refresh_status(&self) -> &PostCommitRefreshStatus {
+        &self.refresh_status
+    }
+
+    pub fn into_parts(self) -> (T, PostCommitRefreshStatus) {
+        (self.committed, self.refresh_status)
+    }
+
+    pub fn into_committed(self) -> T {
+        self.committed
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProfileCalendarLink {
     pub profile_tin: String,
@@ -28,9 +85,61 @@ pub struct CalendarEventLink {
 
 impl Database {
     pub fn request_google_calendar_sync(&self) -> Result<(), DbError> {
-        self.set_setting("google_calendar_sync_requested", "true")?;
-        crate::background_cron::wake();
+        let wake_status = match self.record_google_calendar_sync_request() {
+            Ok(status) => status,
+            Err(error) => {
+                tracing::warn!(
+                    %error,
+                    "Calendar/deadline refresh request could not be recorded"
+                );
+                return Err(error);
+            }
+        };
+        if let Some(reason) = deferred_wake_reason(wake_status) {
+            tracing::warn!(
+                reason,
+                "Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred"
+            );
+        }
         Ok(())
+    }
+
+    fn record_google_calendar_sync_request(
+        &self,
+    ) -> Result<crate::background_cron::WakeDispatchStatus, DbError> {
+        self.set_setting("google_calendar_sync_requested", "true")?;
+        Ok(crate::background_cron::wake_with_status())
+    }
+
+    pub(crate) fn finish_post_commit_write<T>(
+        &self,
+        committed: T,
+        operation: &'static str,
+    ) -> PostCommitWrite<T> {
+        let refresh_status = match self.record_google_calendar_sync_request() {
+            Ok(wake_status) => match deferred_wake_reason(wake_status) {
+                None => PostCommitRefreshStatus::Requested,
+                Some(reason) => PostCommitRefreshStatus::Deferred {
+                    warning: format!(
+                        "{operation} committed, and the calendar/deadline refresh request was recorded for retry, but the immediate wake was deferred: {reason}"
+                    ),
+                },
+            },
+            Err(error) => PostCommitRefreshStatus::Failed {
+                warning: format!(
+                    "{operation} committed, but the calendar/deadline refresh request could not be recorded: {error}. The committed data was not rolled back; retry the refresh."
+                ),
+            },
+        };
+
+        if let Some(warning) = refresh_status.warning() {
+            tracing::warn!(warning, "Post-commit refresh needs attention");
+        }
+
+        PostCommitWrite {
+            committed,
+            refresh_status,
+        }
     }
 
     pub fn get_profile_calendar_link(
@@ -187,6 +296,18 @@ impl Database {
             params![tin, obligation_key],
         )?;
         Ok(())
+    }
+}
+
+fn deferred_wake_reason(
+    status: crate::background_cron::WakeDispatchStatus,
+) -> Option<&'static str> {
+    use crate::background_cron::WakeDispatchStatus;
+
+    match status {
+        WakeDispatchStatus::Delivered | WakeDispatchStatus::AlreadyPending => None,
+        WakeDispatchStatus::WorkerNotRunning => Some("the background worker is not running yet"),
+        WakeDispatchStatus::WorkerClosed => Some("the background worker channel is closed"),
     }
 }
 

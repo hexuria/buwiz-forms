@@ -12,6 +12,14 @@ use tracing::{error, info, warn};
 static WAKE_TX: OnceLock<mpsc::Sender<()>> = OnceLock::new();
 static ACTIVE_JOBS: OnceLock<Arc<Mutex<HashSet<String>>>> = OnceLock::new();
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WakeDispatchStatus {
+    Delivered,
+    AlreadyPending,
+    WorkerNotRunning,
+    WorkerClosed,
+}
+
 pub fn get_active_jobs() -> Arc<Mutex<HashSet<String>>> {
     ACTIVE_JOBS
         .get_or_init(|| Arc::new(Mutex::new(HashSet::new())))
@@ -19,8 +27,26 @@ pub fn get_active_jobs() -> Arc<Mutex<HashSet<String>>> {
 }
 
 pub fn wake() {
-    if let Some(tx) = WAKE_TX.get() {
-        let _ = tx.try_send(());
+    match wake_with_status() {
+        WakeDispatchStatus::Delivered | WakeDispatchStatus::AlreadyPending => {}
+        WakeDispatchStatus::WorkerNotRunning => {
+            warn!("Background cron wake was deferred because the worker is not running yet");
+        }
+        WakeDispatchStatus::WorkerClosed => {
+            warn!("Background cron wake was deferred because the worker channel is closed");
+        }
+    }
+}
+
+pub(crate) fn wake_with_status() -> WakeDispatchStatus {
+    let Some(tx) = WAKE_TX.get() else {
+        return WakeDispatchStatus::WorkerNotRunning;
+    };
+
+    match tx.try_send(()) {
+        Ok(()) => WakeDispatchStatus::Delivered,
+        Err(mpsc::error::TrySendError::Full(())) => WakeDispatchStatus::AlreadyPending,
+        Err(mpsc::error::TrySendError::Closed(())) => WakeDispatchStatus::WorkerClosed,
     }
 }
 

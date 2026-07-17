@@ -32,7 +32,9 @@ use tracing::info;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-pub use google_calendar::{CalendarEventLink, ProfileCalendarLink};
+pub use google_calendar::{
+    CalendarEventLink, PostCommitRefreshStatus, PostCommitWrite, ProfileCalendarLink,
+};
 
 // =========================================================================
 // Data types
