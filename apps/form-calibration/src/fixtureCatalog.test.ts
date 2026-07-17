@@ -40,6 +40,8 @@ describe("calibration fixture catalog", () => {
     expect(fixtureVariantLabel(fixtures[5])).toBe("All Lines · 1701q-all-lines.json");
     expect(fixtureVariantLabel({ code: "2551Q", id: "2551q-6-rows", revision: "2018" }))
       .toBe("Canonical 6 Rows · 2551q-6-rows.json");
+    expect(fixtureVariantLabel({ code: "2551Q", id: "2551q-10-rows", revision: "2018" }))
+      .toBe("10 ATC Rows + Continuation · 2551q-10-rows.json");
   });
 
   it("selects the normal fixture by default for a form", () => {

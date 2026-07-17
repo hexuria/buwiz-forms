@@ -54,7 +54,7 @@ export function fixtureVariantLabel(fixture: FixtureDescriptor): string {
   const title = variant === "6-rows"
     ? "Canonical 6 Rows"
     : variant === "10-rows"
-      ? "10 Row Overflow"
+      ? "10 ATC Rows + Continuation"
       : variant
         .split("-")
         .filter(Boolean)
