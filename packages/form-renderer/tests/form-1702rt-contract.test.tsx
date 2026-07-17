@@ -108,7 +108,9 @@ describe("1702RT:2018C experimental preview contract", () => {
     expect(markup).toContain('data-official-date-format="MM/20YY" aria-label="12/2026"');
     expect(markup).toContain('class="year-literal-1702rt">/20</span>');
     expect(markup.match(/data-official-date-format="MM\/DD\/YYYY"/g)).toHaveLength(5);
-    expect(markup.match(/class="date-separator-1702rt">\/<\/span>/g)).toHaveLength(10);
+    expect(markup.match(/class="date-separator-1702rt">\/<\/span>/g)).toHaveLength(2);
+    expect(markup.match(/class="payment-date-1702rt"/g)).toHaveLength(4);
+    expect(markup.match(/data-segment-capacities="2,2,4"/g)).toHaveLength(4);
     for (const date of ["12/10/2019", "04/15/2027", "04/16/2027", "04/17/2027"]) {
       expect(markup).toContain(`aria-label="${date}"`);
     }
@@ -140,6 +142,68 @@ describe("1702RT:2018C experimental preview contract", () => {
     expect(markup.indexOf('data-payment-item-label="26"')).toBeLessThan(
       markup.indexOf('data-payment-item="26"')
     );
+  });
+
+  it("preserves the official four-page order and audited field modes and capacities", () => {
+    const fixture = structuredClone(normalFixture) as RenderEnvelope;
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: fixture })
+    );
+    const orderedAnchors = [
+      'data-page-number="1"',
+      "Part I – Background Information",
+      "Part III – Details of Payment",
+      'data-page-number="2"',
+      "Part IV – Computation of Tax",
+      "Part V – Tax Relief Availment",
+      'data-page-number="3"',
+      "Schedule I – Ordinary Allowable Itemized Deductions",
+      "Schedule II – Special Allowable Itemized Deductions",
+      'data-page-number="4"',
+      "Schedule III – Computation of Net Operating Loss Carry Over (NOLCO)",
+      "Schedule V – Reconciliation of Net Income per Books Against Taxable Income"
+    ];
+    for (let index = 1; index < orderedAnchors.length; index += 1) {
+      expect(markup.indexOf(orderedAnchors[index - 1])).toBeLessThan(
+        markup.indexOf(orderedAnchors[index])
+      );
+    }
+
+    expect(markup).toContain('class="stacked-field-1702rt" data-official-field-mode="guided" data-line-capacity="38"');
+    expect(markup).toContain('class="address-block-1702rt" data-official-field-mode="guided" data-line-capacities="38,38,30"');
+    expect(markup).toContain('data-cell-capacity="12"><span><b>11</b>Contact Number');
+    expect(markup).toContain('data-cell-capacity="32"><span><b>12</b>Email Address');
+    expect(markup).toContain('data-official-field-mode="plain" aria-label="IC010"');
+    expect(markup.match(/class="payment-value-1702rt" data-official-field-mode="guided" data-cell-capacity="5"/g)).toHaveLength(2);
+    expect(markup.match(/class="payment-value-1702rt" data-official-field-mode="guided" data-cell-capacity="7"/g)).toHaveLength(4);
+    expect(markup).toContain('data-official-field-mode="plain" aria-label="OTHER REVIEWED PAYMENT"');
+    expect(markup).toContain('data-official-field-mode="plain" aria-label="AUTHORIZED AGENT BANK 026"');
+    expect(markup).toContain('data-other-description-capacity="23"');
+    expect(markup).toContain('data-description-capacity="15" data-legal-basis-capacity="10"');
+    expect(markup).toContain('data-description-capacity="24"');
+  });
+
+  it("keeps the official monetary guides for representable values and switches overflow to one plain field", () => {
+    const fixture = structuredClone(normalFixture) as RenderEnvelope;
+    fixture.fields.item_14 = { type: "integer", value: 1_234_567_890_123 };
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: fixture })
+    );
+    const itemFourteen = markup.match(/aria-label="1234567890123"[\s\S]{0,260}/)?.[0];
+    expect(itemFourteen).toBeDefined();
+    expect(itemFourteen).toContain('data-cell-capacity="12"');
+    expect(itemFourteen).toContain('data-overflow-mode="plain"');
+    expect(itemFourteen).toContain("1234567890123");
+  });
+
+  it("includes the official Part IV eligibility and cross-part references", () => {
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: structuredClone(minimumFixture) as RenderEnvelope })
+    );
+    expect(markup).toContain("[Only for those taxable under Sec. 27 (A to C); Sec. 28(A)(1)(A)(6)(b) of the Tax Code, as amended]");
+    expect(markup).toContain("(To Part II Item 14)");
+    expect(markup).toContain("(To Part II Item 15)");
+    expect(markup).toContain("(To Part II Item 16)");
   });
 
   it("prints only a Rust-reviewed alternate ATC description and fails closed otherwise", () => {

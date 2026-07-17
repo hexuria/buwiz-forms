@@ -252,6 +252,7 @@
 .atc-row-1702rt > span:first-child,
 .atc-row-1702rt > span:nth-child(2) { display: flex; align-items: center; min-width: 0; padding: 0 3pt; background: #fff; border: .45pt solid #111; }
 .atc-description-1702rt { font-size: 5.2pt; line-height: 1; white-space: nowrap; }
+.atc-code-value-1702rt { white-space: nowrap; }
 .atc-row-1702rt > .check-box { width: 14pt; height: 12pt; }
 
 .part-1702rt { margin-top: 2pt; border: 1.15pt solid #111; }
@@ -334,25 +335,60 @@
 .amount-row-1702rt > span:first-child { min-width: 0; display: flex; align-items: center; padding: 1pt 5pt; background: #d9d9d9; }
 .amount-row-1702rt > span:first-child > .adaptive-plain-value { height: 16pt; background: #fff; }
 .amount-row-1702rt.emphasis-1702rt > span:first-child { font-weight: 700; }
+.amount-description-row-1702rt {
+  grid-template-columns: 30pt minmax(0, 1fr) 15pt 183pt;
+}
+.amount-description-row-1702rt > span:first-child {
+  justify-content: center;
+  padding: 1pt;
+}
+.amount-description-row-1702rt > :is(.comb-value, .adaptive-plain-value) {
+  min-width: 0;
+  height: 100%;
+  background: #fff;
+  border-left: .55pt solid #111;
+}
+.amount-description-dead-cell-1702rt {
+  background: #d9d9d9;
+  border-left: .55pt solid #111;
+}
+.nolco-source-note-1702rt {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  margin-left: 9pt;
+  line-height: .95;
+}
+.nolco-source-note-1702rt em:first-child { font-size: 5.3pt; }
 .subband-1702rt { height: 11pt; display: flex; align-items: center; padding-left: 18pt; background: #d9d9d9; border-bottom: .55pt solid #111; }
 .centered-subband-1702rt { justify-content: center; padding: 0; }
 .money-1702rt {
   position: relative;
   min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 1pt 4pt;
-  background-color: #fff;
-  background-image: repeating-linear-gradient(90deg, transparent 0 14.7pt, #111 14.7pt 15.1pt);
-  background-position: 0 100%;
-  background-size: auto 48%;
-  background-repeat: repeat-x;
+  display: block;
+  padding: 0;
+  background: #fff;
   border-left: .55pt solid #111;
   font-variant-numeric: tabular-nums;
   overflow: hidden;
 }
-.money-1702rt > span { position: relative; z-index: 1; padding: 0 2pt; background: #fff; }
+.money-1702rt > :is(.comb-value, .adaptive-plain-value) {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  background: #fff;
+}
+.money-1702rt > .comb-value > span:nth-child(3n):not(:last-child)::after {
+  width: 1.2pt;
+  height: 68%;
+}
+.money-1702rt > .comb-value > span:last-child::after { display: none; }
+.money-1702rt > .adaptive-plain-value {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 1pt 3pt;
+}
 .overpayment-title-1702rt { height: 11pt; display: flex; align-items: center; padding-left: 18pt; background: #d9d9d9; border-bottom: .55pt solid #111; }
 .overpayment-options-1702rt { height: 14.5pt; display: flex; align-items: center; justify-content: space-around; background: #d9d9d9; }
 .overpayment-options-1702rt .check-box { width: 14pt; height: 12pt; background: #fff; }
@@ -381,15 +417,27 @@
 .payment-row-1702rt { height: 19.5pt; }
 .payment-row-1702rt > span { display: flex; align-items: center; padding: 1pt 4pt; overflow: hidden; }
 .payment-row-1702rt > span:first-child { background: #d9d9d9; }
-.payment-row-1702rt > :is(.payment-value-1702rt, .official-date-1702rt) { padding: 0; background: #fff; }
+.payment-row-1702rt > :is(.payment-value-1702rt, .official-date-1702rt, .payment-date-1702rt) { padding: 0; background: #fff; }
 .payment-row-tax-debit-1702rt > span:first-child { grid-column: 1 / 3; }
 .payment-value-1702rt { min-width: 0; height: 100%; display: flex; overflow: hidden; background: #fff; }
 .payment-value-1702rt > :is(.comb-value, .adaptive-plain-value) { height: 100%; box-sizing: border-box; flex: 1 1 auto; }
 .plain-value-1702rt { min-width: 0; padding: 2pt 3pt; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.payment-date-1702rt {
+  min-width: 0;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 2fr 2fr 4fr;
+  background: #fff;
+}
+.payment-date-1702rt > .comb-value {
+  width: 100%;
+  height: 100%;
+}
+.payment-date-1702rt > .comb-value + .comb-value { border-left: .55pt solid #111; }
 .payment-other-label-1702rt { height: 11pt; display: flex; align-items: center; gap: 2pt; padding: 1pt 4pt; background: #d9d9d9; border-bottom: .55pt solid #111; }
 .payment-other-label-1702rt > b { margin: 0; }
 .payment-other-1702rt { height: 19pt; }
-.payment-other-1702rt > :is(.payment-value-1702rt, .official-date-1702rt) { padding: 0; background: #fff; }
+.payment-other-1702rt > :is(.payment-value-1702rt, .official-date-1702rt, .payment-date-1702rt) { padding: 0; background: #fff; }
 .payment-validation-1702rt { height: 79pt; display: grid; grid-template-columns: 2.35fr 1fr; }
 .payment-validation-1702rt > span { padding: 3pt 5pt; }
 .payment-validation-1702rt > span:last-child { display: flex; flex-direction: column; border-left: .55pt solid #111; }

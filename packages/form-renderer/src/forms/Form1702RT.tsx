@@ -45,13 +45,13 @@ const PART_FOUR_ROWS: readonly AmountRow1702RT[] = [
   { item: 33, label: <>Total Taxable Income <em>(Sum of Items 31 and 32)</em></>, field: "item_33" },
   { item: 34, label: <>Ordinary Allowable Itemized Deductions <em>(From Part VI Schedule I Item 18)</em></>, field: "item_34" },
   { item: 35, label: <>Special Allowable Itemized Deductions <em>(From Part VI Schedule II Item 5)</em></>, field: "item_35" },
-  { item: 36, label: <>N O L C O <em>(From Part VI Schedule III Item 8)</em></>, field: "item_36" },
+  { item: 36, label: <>N O L C O <span className="nolco-source-note-1702rt"><em>[Only for those taxable under Sec. 27 (A to C); Sec. 28(A)(1)(A)(6)(b) of the Tax Code, as amended]</em><em>(From Part VI Schedule III Item 8)</em></span></>, field: "item_36" },
   { item: 37, label: <>Total Deductions <em>(Sum of Items 34 to 36)</em></>, field: "item_37" },
   { item: 38, label: <>Optional Standard Deduction (OSD) <em>(40% of Item 33)</em></>, field: "item_38" },
   { item: 39, label: <>Net Taxable Income/(Loss) <em>(If Itemized: Item 33 Less Item 37; If OSD: Item 33 Less Item 38)</em></>, field: "item_39" },
-  { item: 41, label: <>Income Tax Due other than Minimum Corporate Income Tax (MCIT) <em>(Item 39 × Item 40)</em></>, field: "item_41" },
+  { item: 41, label: <>Income Tax Due other than Minimum Corporate Income Tax (MCIT) <em>(Item 39 x Item 40)</em></>, field: "item_41" },
   { item: 42, label: <>MCIT Due <em>(2% of Item 33)</em></>, field: "item_42" },
-  { item: 43, label: <>Tax Due <em>(Normal Income Tax Due in Item 41 OR MCIT Due in Item 42, whichever is higher)</em></>, field: "item_43", emphasis: true },
+  { item: 43, label: <>Tax Due <em>(Normal Income Tax Due in Item 41 OR the MCIT Due in Item 42, whichever is higher) (To Part II Item 14)</em></>, field: "item_43", emphasis: true },
   { item: 44, label: "Prior Year’s Excess Credits other than MCIT", field: "item_44" },
   { item: 45, label: "Income Tax Payment under MCIT from Previous Quarter/s", field: "item_45" },
   { item: 46, label: "Income Tax Payment under Regular/Normal Rate from Previous Quarter/s", field: "item_46" },
@@ -63,12 +63,12 @@ const PART_FOUR_ROWS: readonly AmountRow1702RT[] = [
   { item: 52, label: "Special Tax Credits (To Part V Item 58)", field: "item_52" },
   { item: 53, label: "Other Tax Credits/Payments (specify)", field: "item_53", descriptionField: "item_53_description" },
   { item: 54, label: "", field: "item_54", descriptionField: "item_54_description" },
-  { item: 55, label: <>Total Tax Credits/Payments <em>(Sum of Items 44 to 54)</em></>, field: "item_55" },
-  { item: 56, label: <>Net Tax Payable / (Overpayment) <em>(Item 43 Less Item 55)</em></>, field: "item_56", emphasis: true }
+  { item: 55, label: <>Total Tax Credits/Payments <em>(Sum of Items 44 to 54) (To Part II Item 15)</em></>, field: "item_55" },
+  { item: 56, label: <>Net Tax Payable / (Overpayment) <em>(Item 43 Less Item 55) (To Part II Item 16)</em></>, field: "item_56", emphasis: true }
 ];
 
 const PART_FIVE_ROWS: readonly AmountRow1702RT[] = [
-  { item: 57, label: "Special Allowable Itemized Deductions (Item 35 of Part IV × Applicable Income Tax Rate)", field: "item_57" },
+  { item: 57, label: "Special Allowable Itemized Deductions (Item 35 of Part IV x Applicable Income Tax Rate)", field: "item_57" },
   { item: 58, label: "Add: Special Tax Credits (From Part IV Item 52)", field: "item_58" },
   { item: 59, label: <>Total Tax Relief Availment <em>(Sum of Items 57 and 58)</em></>, field: "item_59", emphasis: true }
 ];
@@ -206,7 +206,7 @@ function HeaderOptions1702RT({ envelope }: { envelope: RenderEnvelope }) {
       <div className="atc-options-1702rt">
         <b>5</b><span>Alphanumeric Tax Code (ATC)</span>
         <span className="atc-row-1702rt"><span>IC 055</span><span>Minimum Corporate Income Tax (MCIT)</span><span className={bool(envelope, "atc_mcit_selected") ? "check-box checked" : "check-box"}>{bool(envelope, "atc_mcit_selected") ? "X" : ""}</span></span>
-        <span className="atc-row-1702rt"><AdaptiveCombValue value={otherAtcCode} cells={8} /><span className="atc-description-1702rt" aria-label={otherAtcDescription}>{otherAtcDescription}</span><span className={otherAtcSelected ? "check-box checked" : "check-box"}>{otherAtcSelected ? "X" : ""}</span></span>
+        <span className="atc-row-1702rt"><span className="plain-value-1702rt atc-code-value-1702rt" data-official-field-mode="plain" aria-label={otherAtcCode}>{otherAtcCode}</span><span className="atc-description-1702rt" data-official-field-mode="plain" aria-label={otherAtcDescription}>{otherAtcDescription}</span><span className={otherAtcSelected ? "check-box checked" : "check-box"}>{otherAtcSelected ? "X" : ""}</span></span>
       </div>
     </section>
   );
@@ -222,17 +222,17 @@ function PartOne1702RT({ envelope }: { envelope: RenderEnvelope }) {
     <section className="part-1702rt part-one-1702rt">
       <h2>Part I – Background Information</h2>
       <div className="tin-rdo-1702rt"><span><b>6</b> Taxpayer Identification Number (TIN)</span><Tin1702RT value={envelope.taxpayer.tin} /><span><b>7</b> RDO Code</span><CombValue value={envelope.taxpayer.rdo_code} cells={3} align="right" /></div>
-      <StackedIdentityField1702RT number="8" label="Registered Name (Enter only 1 letter per box using CAPITAL LETTERS)" values={[1, 2, 3].map((line) => text(envelope, `registered_name_line_${line}`))} cells={40} />
-      <div className="address-block-1702rt">
+      <StackedIdentityField1702RT number="8" label="Registered Name (Enter only 1 letter per box using CAPITAL LETTERS)" values={[1, 2, 3].map((line) => text(envelope, `registered_name_line_${line}`))} cells={38} />
+      <div className="address-block-1702rt" data-official-field-mode="guided" data-line-capacities="38,38,30">
         <span><b>9</b> Registered Address <em>(Indicate complete address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)</em></span>
-        {[1, 2].map((line) => <AdaptiveCombValue key={line} value={text(envelope, `registered_address_line_${line}`)} cells={40} />)}
-        <div className="address-last-1702rt"><AdaptiveCombValue value={text(envelope, "registered_address_line_3")} cells={31} /><span><b>9A</b> ZIP Code</span><CombValue value={envelope.taxpayer.zip_code} cells={4} align="right" /></div>
+        {[1, 2].map((line) => <AdaptiveCombValue key={line} value={text(envelope, `registered_address_line_${line}`)} cells={38} />)}
+        <div className="address-last-1702rt"><AdaptiveCombValue value={text(envelope, "registered_address_line_3")} cells={30} /><span><b>9A</b> ZIP Code</span><CombValue value={envelope.taxpayer.zip_code} cells={4} align="right" /></div>
       </div>
       <div className="split-identity-1702rt">
         <div className="labeled-comb-1702rt"><span><b>10</b>Date of Incorporation/Organization</span><OfficialDate1702RT value={text(envelope, "incorporation_date")} /></div>
-        <LabeledComb1702RT number="11" label="Contact Number" value={envelope.taxpayer.contact_number} cells={18} />
+        <LabeledComb1702RT number="11" label="Contact Number" value={envelope.taxpayer.contact_number} cells={12} />
       </div>
-      <LabeledComb1702RT number="12" label="Email Address" value={envelope.taxpayer.email} cells={34} />
+      <LabeledComb1702RT number="12" label="Email Address" value={envelope.taxpayer.email} cells={32} />
       <div className="deduction-choice-1702rt"><b>13</b><span>Method of Deductions</span><CheckChoice checked={deduction === "itemized"} label="Itemized Deductions [Section 34 (A-J), NIRC]" /><CheckChoice checked={deduction === "osd"} label="Optional Standard Deduction (OSD) – 40% of Gross Income [Section 34(L) NIRC, as amended]" /></div>
     </section>
   );
@@ -275,17 +275,17 @@ function PartThree1702RT({ envelope }: { envelope: RenderEnvelope }) {
     <section className="part-three-1702rt">
       <h2>Part III – Details of Payment</h2>
       <div className="payment-grid-1702rt payment-header-1702rt"><span>Particulars</span><span>Drawee Bank/Agency</span><span>Number</span><span>Date (MM/DD/YYYY)</span><span>Amount</span></div>
-      {rows.map(([item, label]) => <div key={item} className="payment-grid-1702rt payment-row-1702rt" data-payment-item={item} data-payment-fields="bank,number,date,amount"><span><b>{item}</b>{label}</span><PaymentTextCell1702RT value={text(envelope, `payment_${item}_bank`)} cells={14} /><PaymentTextCell1702RT value={text(envelope, `payment_${item}_number`)} cells={16} /><OfficialDate1702RT value={text(envelope, `payment_${item}_date`)} /><Money1702RT envelope={envelope} fieldKey={`payment_${item}_amount`} /></div>)}
-      <div className="payment-grid-1702rt payment-row-1702rt payment-row-tax-debit-1702rt" data-payment-item="25" data-payment-fields="number,date,amount"><span><b>25</b>Tax Debit Memo</span><PaymentTextCell1702RT value={text(envelope, "payment_25_number")} cells={16} /><OfficialDate1702RT value={text(envelope, "payment_25_date")} /><Money1702RT envelope={envelope} fieldKey="payment_25_amount" /></div>
+      {rows.map(([item, label]) => <div key={item} className="payment-grid-1702rt payment-row-1702rt" data-payment-item={item} data-payment-fields="bank,number,date,amount"><span><b>{item}</b>{label}</span><PaymentTextCell1702RT value={text(envelope, `payment_${item}_bank`)} cells={5} /><PaymentTextCell1702RT value={text(envelope, `payment_${item}_number`)} cells={7} /><PaymentDate1702RT value={text(envelope, `payment_${item}_date`)} /><Money1702RT envelope={envelope} fieldKey={`payment_${item}_amount`} /></div>)}
+      <div className="payment-grid-1702rt payment-row-1702rt payment-row-tax-debit-1702rt" data-payment-item="25" data-payment-fields="number,date,amount"><span><b>25</b>Tax Debit Memo</span><PaymentTextCell1702RT value={text(envelope, "payment_25_number")} cells={7} /><PaymentDate1702RT value={text(envelope, "payment_25_date")} /><Money1702RT envelope={envelope} fieldKey="payment_25_amount" /></div>
       <div className="payment-other-label-1702rt" data-payment-item-label="26"><b>26</b>Others <em>(Specify below)</em></div>
-      <div className="payment-grid-1702rt payment-other-1702rt" data-payment-item="26" data-payment-fields="specification,bank,number,date,amount"><PaymentTextCell1702RT value={text(envelope, "payment_26_specification")} cells={20} /><PaymentTextCell1702RT value={text(envelope, "payment_26_bank")} cells={14} /><PaymentTextCell1702RT value={text(envelope, "payment_26_number")} cells={16} /><OfficialDate1702RT value={text(envelope, "payment_26_date")} /><Money1702RT envelope={envelope} fieldKey="payment_26_amount" /></div>
+      <div className="payment-grid-1702rt payment-other-1702rt" data-payment-item="26" data-payment-fields="specification,bank,number,date,amount"><PaymentPlainTextCell1702RT value={text(envelope, "payment_26_specification")} /><PaymentPlainTextCell1702RT value={text(envelope, "payment_26_bank")} /><PaymentTextCell1702RT value={text(envelope, "payment_26_number")} cells={7} /><PaymentDate1702RT value={text(envelope, "payment_26_date")} /><Money1702RT envelope={envelope} fieldKey="payment_26_amount" /></div>
       <div className="payment-validation-1702rt"><span>Machine Validation/Revenue Official Receipt Details [if not filed with an Authorized Agent Bank (AAB)]</span><span>Stamp of Receiving Office/AAB and Date of Receipt <em>(RO’s Signature/Bank Teller’s Initial)</em></span></div>
     </section>
   );
 }
 
 function PageIdentity1702RT({ envelope }: { envelope: RenderEnvelope }) {
-  return <section className="page-identity-1702rt"><div><span>Taxpayer Identification Number (TIN)</span><Tin1702RT value={envelope.taxpayer.tin} /></div><div><span>Registered Name</span><AdaptiveCombValue value={envelope.taxpayer.name} cells={24} /></div></section>;
+  return <section className="page-identity-1702rt"><div><span>Taxpayer Identification Number (TIN)</span><Tin1702RT value={envelope.taxpayer.tin} /></div><div data-official-field-mode="guided" data-cell-capacity="24"><span>Registered Name</span><AdaptiveCombValue value={envelope.taxpayer.name} cells={24} /></div></section>;
 }
 
 function PartFour1702RT({ envelope }: { envelope: RenderEnvelope }) {
@@ -314,19 +314,19 @@ function PartSixHeading1702RT() {
 
 function ScheduleOne1702RT({ envelope }: { envelope: RenderEnvelope }) {
   const rows = SCHEDULE_ONE_FIXED.map((label, index) => ({ item: index + 1, label, field: `schedule_1_item_${index + 1}` }));
-  return <section className="schedule-1702rt schedule-one-1702rt"><h3>Schedule I – Ordinary Allowable Itemized Deductions <small>(attach additional sheet/s, if necessary)</small></h3>
+  return <section className="schedule-1702rt schedule-one-1702rt" data-other-description-capacity="23"><h3>Schedule I – Ordinary Allowable Itemized Deductions <small>(attach additional sheet/s, if necessary)</small></h3>
     {rows.map((row) => <ScheduleAmountRow1702RT key={row.item} envelope={envelope} item={String(row.item)} label={row.label} field={row.field} />)}
     <div className="schedule-subband-1702rt">17 Others (Deductions Subject to Withholding Tax and Other Expenses) [Specify below; Add additional sheet(s), if necessary]</div>
     {["a", "b", "c"].map((suffix, index) => <ScheduleAmountRow1702RT key={suffix} envelope={envelope} item={suffix} label={["Janitorial and Messengerial Services", "Professional Fees", "Security Services"][index]} field={`schedule_1_item_17${suffix}`} />)}
-    {["d", "e", "f", "g", "h", "i"].map((suffix) => <ScheduleAmountRow1702RT key={suffix} envelope={envelope} item={suffix} label={<AdaptiveCombValue value={text(envelope, `schedule_1_item_17${suffix}_description`)} cells={24} />} field={`schedule_1_item_17${suffix}_amount`} />)}
+    {["d", "e", "f", "g", "h", "i"].map((suffix) => <ScheduleAmountRow1702RT key={suffix} envelope={envelope} item={suffix} label={<AdaptiveCombValue value={text(envelope, `schedule_1_item_17${suffix}_description`)} cells={23} />} field={`schedule_1_item_17${suffix}_amount`} />)}
     <ScheduleAmountRow1702RT envelope={envelope} item="18" label={<>Total Ordinary Allowable Itemized Deductions <em>(Sum of Items 1 to 17i) (To Part IV Item 34)</em></>} field="schedule_1_item_18" emphasis />
   </section>;
 }
 
 function ScheduleTwo1702RT({ envelope }: { envelope: RenderEnvelope }) {
-  return <section className="schedule-1702rt schedule-two-1702rt"><h3>Schedule II – Special Allowable Itemized Deductions <small>(attach additional sheet/s, if necessary)</small></h3>
+  return <section className="schedule-1702rt schedule-two-1702rt" data-description-capacity="15" data-legal-basis-capacity="10"><h3>Schedule II – Special Allowable Itemized Deductions <small>(attach additional sheet/s, if necessary)</small></h3>
     <div className="schedule-two-grid-1702rt schedule-table-header-1702rt"><span /><span>Description</span><span>Legal Basis</span><span>Amount</span></div>
-    {[1, 2, 3, 4].map((item) => <div key={item} className="schedule-two-grid-1702rt"><span>{item}</span><AdaptiveCombValue value={text(envelope, `schedule_2_item_${item}_description`)} cells={20} /><AdaptiveCombValue value={text(envelope, `schedule_2_item_${item}_legal_basis`)} cells={14} /><Money1702RT envelope={envelope} fieldKey={`schedule_2_item_${item}_amount`} /></div>)}
+    {[1, 2, 3, 4].map((item) => <div key={item} className="schedule-two-grid-1702rt"><span>{item}</span><AdaptiveCombValue value={text(envelope, `schedule_2_item_${item}_description`)} cells={15} /><AdaptiveCombValue value={text(envelope, `schedule_2_item_${item}_legal_basis`)} cells={10} /><Money1702RT envelope={envelope} fieldKey={`schedule_2_item_${item}_amount`} /></div>)}
     <div className="schedule-two-total-1702rt"><span>5 Total Special Allowable Itemized Deductions (Sum of Items 1 to 4) (To Part IV Item 35)</span><Money1702RT envelope={envelope} fieldKey="schedule_2_item_5" /></div>
   </section>;
 }
@@ -362,16 +362,16 @@ function ScheduleThree1702RT({ envelope }: { envelope: RenderEnvelope }) {
 function ScheduleFour1702RT({ envelope }: { envelope: RenderEnvelope }) {
   return <section className="schedule-1702rt schedule-four-1702rt"><h3>Schedule IV – Computation of Minimum Corporate Income Tax (MCIT)</h3>
     <div className="mcit-grid-1702rt mcit-heading-1702rt"><span /><span>Year</span><span>A) Normal Income Tax as Adjusted</span><span>B) MCIT</span><span>C) Excess MCIT over Normal Income Tax</span></div>
-    {[1, 2, 3].map((item) => <div key={item} className="mcit-grid-1702rt"><span>{item}</span><AdaptiveCombValue value={text(envelope, `schedule_4_item_${item}_year`)} cells={4} /><Money1702RT envelope={envelope} fieldKey={`schedule_4_item_${item}_normal_tax`} /><Money1702RT envelope={envelope} fieldKey={`schedule_4_item_${item}_mcit`} /><Money1702RT envelope={envelope} fieldKey={`schedule_4_item_${item}_excess`} /></div>)}
+    {[1, 2, 3].map((item) => <div key={item} className="mcit-grid-1702rt"><span>{item}</span><AdaptiveCombValue value={text(envelope, `schedule_4_item_${item}_year`)} cells={4} /><Money1702RT envelope={envelope} fieldKey={`schedule_4_item_${item}_normal_tax`} cells={11} /><Money1702RT envelope={envelope} fieldKey={`schedule_4_item_${item}_mcit`} cells={11} /><Money1702RT envelope={envelope} fieldKey={`schedule_4_item_${item}_excess`} cells={11} /></div>)}
     <div className="continuation-title-1702rt">Continuation of Schedule IV (Item numbers continue from table above)</div>
     <div className="mcit-continuation-grid-1702rt mcit-heading-1702rt"><span /><span>D) Excess MCIT Applied/Used in Previous Years</span><span>E) Expired Portion of Excess MCIT</span><span>F) Excess MCIT Applied this Current Taxable Year</span><span>G) Balance of Excess MCIT Allowable as Tax Credit for Succeeding Year/s</span></div>
-    {[1, 2, 3].map((item) => <div key={item} className="mcit-continuation-grid-1702rt"><span>{item}</span><Money1702RT envelope={envelope} fieldKey={`schedule_4_item_${item}_applied_previous`} /><Money1702RT envelope={envelope} fieldKey={`schedule_4_item_${item}_expired`} /><Money1702RT envelope={envelope} fieldKey={`schedule_4_item_${item}_applied_current`} /><Money1702RT envelope={envelope} fieldKey={`schedule_4_item_${item}_balance`} /></div>)}
-    <div className="schedule-four-total-1702rt"><span>4 Total Excess MCIT Applied (Sum of Items 1F to 3F) (To Part IV Item 47)</span><Money1702RT envelope={envelope} fieldKey="schedule_4_item_4" /><span /></div>
+    {[1, 2, 3].map((item) => <div key={item} className="mcit-continuation-grid-1702rt"><span>{item}</span><Money1702RT envelope={envelope} fieldKey={`schedule_4_item_${item}_applied_previous`} cells={9} /><Money1702RT envelope={envelope} fieldKey={`schedule_4_item_${item}_expired`} cells={9} /><Money1702RT envelope={envelope} fieldKey={`schedule_4_item_${item}_applied_current`} cells={10} /><Money1702RT envelope={envelope} fieldKey={`schedule_4_item_${item}_balance`} cells={9} /></div>)}
+    <div className="schedule-four-total-1702rt"><span>4 Total Excess MCIT Applied (Sum of Items 1F to 3F) (To Part IV Item 47)</span><Money1702RT envelope={envelope} fieldKey="schedule_4_item_4" cells={10} /><span /></div>
   </section>;
 }
 
 function ScheduleFive1702RT({ envelope }: { envelope: RenderEnvelope }) {
-  return <section className="schedule-1702rt schedule-five-1702rt"><h3>Schedule V – Reconciliation of Net Income per Books Against Taxable Income <small>(attach additional sheet/s, if necessary)</small></h3>
+  return <section className="schedule-1702rt schedule-five-1702rt" data-description-capacity="24"><h3>Schedule V – Reconciliation of Net Income per Books Against Taxable Income <small>(attach additional sheet/s, if necessary)</small></h3>
     <ScheduleAmountRow1702RT envelope={envelope} item="1" label="Net Income/(Loss) per Books" field="schedule_5_item_1" />
     <div className="schedule-subband-1702rt">Add: Non-Deductible Expenses/Taxable Other Income</div>
     {[2, 3].map((item) => <ScheduleAmountRow1702RT key={item} envelope={envelope} item={String(item)} label={<AdaptiveCombValue value={text(envelope, `schedule_5_item_${item}_description`)} cells={24} />} field={`schedule_5_item_${item}_amount`} />)}
@@ -386,6 +386,9 @@ function ScheduleFive1702RT({ envelope }: { envelope: RenderEnvelope }) {
 }
 
 function AmountRow1702RT({ envelope, row }: { envelope: RenderEnvelope; row: AmountRow1702RT }) {
+  if (row.descriptionField) {
+    return <div className="amount-row-1702rt amount-description-row-1702rt" data-description-capacity="23"><span><b>{row.item}</b></span><AdaptiveCombValue value={text(envelope, row.descriptionField)} cells={23} /><span className="amount-description-dead-cell-1702rt" aria-hidden="true" /><Money1702RT envelope={envelope} fieldKey={row.field} /></div>;
+  }
   return <div className={`amount-row-1702rt${row.emphasis ? " emphasis-1702rt" : ""}`}><span><b>{row.item}</b>{row.descriptionField ? <AdaptiveCombValue value={text(envelope, row.descriptionField)} cells={28} /> : row.label}</span><Money1702RT envelope={envelope} fieldKey={row.field} /></div>;
 }
 
@@ -393,9 +396,9 @@ function ScheduleAmountRow1702RT({ envelope, item, label, field, emphasis = fals
   return <div className={`schedule-amount-row-1702rt${emphasis ? " emphasis-1702rt" : ""}`}><span>{item}</span><span>{label}</span><Money1702RT envelope={envelope} fieldKey={field} /></div>;
 }
 
-function Money1702RT({ envelope, fieldKey }: { envelope: RenderEnvelope; fieldKey: string }) {
+function Money1702RT({ envelope, fieldKey, cells = 12 }: { envelope: RenderEnvelope; fieldKey: string; cells?: number }) {
   const value = integer(envelope, fieldKey);
-  return <span className="money-1702rt" aria-label={String(value)}><span>{value === 0 ? "" : value.toLocaleString("en-US")}</span></span>;
+  return <span className="money-1702rt" data-official-field-mode="guided" data-cell-capacity={cells} aria-label={String(value)}><AdaptiveCombValue value={value === 0 ? "" : String(value)} cells={cells} align="right" /></span>;
 }
 
 function YearEnded1702RT({ month, taxableYear }: { month: number | null | undefined; taxableYear: number }) {
@@ -411,16 +414,30 @@ function YearEnded1702RT({ month, taxableYear }: { month: number | null | undefi
 }
 
 function OfficialDate1702RT({ value }: { value: string }) {
+  const { normalized, match } = officialDateParts1702RT(value);
+  return <span className="official-date-1702rt" data-official-date-format="MM/DD/YYYY" aria-label={normalized}><CombValue value={match?.[1] ?? ""} cells={2} /><span className="date-separator-1702rt">/</span><CombValue value={match?.[2] ?? ""} cells={2} /><span className="date-separator-1702rt">/</span><CombValue value={match?.[3] ?? ""} cells={4} /></span>;
+}
+
+function PaymentDate1702RT({ value }: { value: string }) {
+  const { normalized, match } = officialDateParts1702RT(value);
+  return <span className="payment-date-1702rt" data-official-date-format="MM/DD/YYYY" data-official-field-mode="guided" data-segment-capacities="2,2,4" aria-label={normalized}><CombValue value={match?.[1] ?? ""} cells={2} /><CombValue value={match?.[2] ?? ""} cells={2} /><CombValue value={match?.[3] ?? ""} cells={4} /></span>;
+}
+
+function officialDateParts1702RT(value: string) {
   const normalized = value.trim();
   const match = normalized.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
   if (normalized && !match) {
     throw new Error(`1702RTv2018C date value ${normalized} must use MM/DD/YYYY`);
   }
-  return <span className="official-date-1702rt" data-official-date-format="MM/DD/YYYY" aria-label={normalized}><CombValue value={match?.[1] ?? ""} cells={2} /><span className="date-separator-1702rt">/</span><CombValue value={match?.[2] ?? ""} cells={2} /><span className="date-separator-1702rt">/</span><CombValue value={match?.[3] ?? ""} cells={4} /></span>;
+  return { normalized, match };
 }
 
 function PaymentTextCell1702RT({ value, cells }: { value: string; cells: number }) {
-  return <span className="payment-value-1702rt" aria-label={value}><AdaptiveCombValue value={value} cells={cells} /></span>;
+  return <span className="payment-value-1702rt" data-official-field-mode="guided" data-cell-capacity={cells} aria-label={value}><AdaptiveCombValue value={value} cells={cells} /></span>;
+}
+
+function PaymentPlainTextCell1702RT({ value }: { value: string }) {
+  return <span className="payment-value-1702rt" data-official-field-mode="plain" aria-label={value}><span className="plain-value-1702rt">{value}</span></span>;
 }
 
 function Tin1702RT({ value }: { value: string }) {
@@ -429,9 +446,9 @@ function Tin1702RT({ value }: { value: string }) {
 }
 
 function StackedIdentityField1702RT({ number, label, values, cells }: { number: string; label: ReactNode; values: string[]; cells: number }) {
-  return <div className="stacked-field-1702rt"><span><b>{number}</b>{label}</span>{values.map((value, index) => <AdaptiveCombValue key={index} value={value} cells={cells} />)}</div>;
+  return <div className="stacked-field-1702rt" data-official-field-mode="guided" data-line-capacity={cells}><span><b>{number}</b>{label}</span>{values.map((value, index) => <AdaptiveCombValue key={index} value={value} cells={cells} />)}</div>;
 }
 
 function LabeledComb1702RT({ number, label, value, cells }: { number: string; label: ReactNode; value: string; cells: number }) {
-  return <div className="labeled-comb-1702rt"><span><b>{number}</b>{label}</span><AdaptiveCombValue value={value} cells={cells} /></div>;
+  return <div className="labeled-comb-1702rt" data-official-field-mode="guided" data-cell-capacity={cells}><span><b>{number}</b>{label}</span><AdaptiveCombValue value={value} cells={cells} /></div>;
 }
