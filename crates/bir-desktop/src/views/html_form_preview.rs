@@ -16,6 +16,20 @@ use bir_print::html_support::{
 };
 use std::path::PathBuf;
 
+#[cfg(all(feature = "dev-tools", any(target_os = "macos", target_os = "windows")))]
+use bir_print::html_output::PdfValidationReport;
+#[cfg(all(feature = "dev-tools", any(target_os = "macos", target_os = "windows")))]
+use bir_print::html_output_evidence::{
+    ClippingCountersV1, DEVELOPMENT_NATIVE_OUTPUT_OBSERVATION_SCHEMA_VERSION,
+    DevelopmentDestinationOutcomeV1, DevelopmentDestinationSnapshotV1,
+    DevelopmentEvidenceAvailability, DevelopmentEvidenceScope, DevelopmentNativeOutputBackendV1,
+    DevelopmentNativeOutputObservationV1, DevelopmentNativeOutputPlatformV1,
+    EvidenceArtifactSource, GeometryReportEvidenceV1, NativeBackendCompletionObservationV1,
+    NativeNonceObservationV1, NativePdfPagePayloadObservationV1, PdfValidationEvidenceV1,
+    encode_development_native_output_observation, geometry_page_rect_sha256,
+    hash_evidence_artifact,
+};
+
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 use {
     bir_print::html::serialize_envelope,
@@ -267,6 +281,8 @@ pub(crate) struct PreparedHtmlPreview {
     pub(crate) entry: PathBuf,
     pub(crate) url: String,
     pub(crate) initialization_script: String,
+    #[cfg(all(feature = "dev-tools", any(target_os = "macos", target_os = "windows")))]
+    pub(crate) envelope_json: String,
     pub(crate) layout_plan: RenderLayoutPlan,
     pub(crate) pdf_expectation: PdfExpectation,
     pub(crate) default_pdf_name: String,
@@ -361,6 +377,8 @@ pub(crate) fn prepare_html_form_preview(
         entry,
         url: "ebirforms://localhost/index.html".to_string(),
         initialization_script,
+        #[cfg(all(feature = "dev-tools", any(target_os = "macos", target_os = "windows")))]
+        envelope_json,
         layout_plan,
         pdf_expectation,
         default_pdf_name,
@@ -1003,6 +1021,7 @@ struct RendererState {
     ready: bool,
     page_count: Option<usize>,
     page_rects: Vec<RendererPageRect>,
+    geometry_reports: Option<[RendererGeometryReport; 2]>,
     geometry_print_mode: bool,
     error: Option<String>,
     render_epoch: u64,
@@ -1024,6 +1043,7 @@ impl RendererState {
         self.ready = false;
         self.page_count = None;
         self.page_rects.clear();
+        self.geometry_reports = None;
         self.geometry_print_mode = false;
         self.print_ready_nonce = None;
         self.error = Some(reason.into());
@@ -1042,6 +1062,7 @@ impl RendererState {
         self.ready = false;
         self.page_count = None;
         self.page_rects.clear();
+        self.geometry_reports = None;
         self.geometry_print_mode = false;
         self.error = None;
         self.print_ready_nonce = None;
@@ -1066,7 +1087,9 @@ impl RendererState {
         match renderer_readiness_decision(self.ready, self.page_count, self.error.as_deref(), false)
         {
             RendererReadinessDecision::Ready { .. }
-                if self.page_count != Some(self.page_rects.len()) || self.page_rects.is_empty() =>
+                if self.page_count != Some(self.page_rects.len())
+                    || self.page_rects.is_empty()
+                    || self.geometry_reports.is_none() =>
             {
                 self.print_ready_nonce = None;
                 self.error = Some(
@@ -1094,6 +1117,10 @@ struct PendingNativeOutput {
     started_at: Instant,
     backend_started: bool,
     binding: Option<NativeOutputRendererBinding>,
+    #[cfg(feature = "dev-tools")]
+    destination_before: DevelopmentDestinationSnapshotV1,
+    #[cfg(feature = "dev-tools")]
+    preflight_consumptions: Vec<u64>,
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -1103,11 +1130,19 @@ struct NativeOutputRendererBinding {
     render_epoch: u64,
     readiness_revision: u64,
     page_rects: Vec<RendererPageRect>,
+    geometry_reports: [RendererGeometryReport; 2],
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 impl PendingNativeOutput {
     fn validating(kind: HtmlOutputKind, nonce: u64, destination: Option<PathBuf>) -> Self {
+        #[cfg(feature = "dev-tools")]
+        let destination_before = destination
+            .as_deref()
+            .map(development_destination_snapshot)
+            .unwrap_or_else(|| DevelopmentDestinationSnapshotV1::Unavailable {
+                reason: "system print has no PDF destination".to_string(),
+            });
         Self {
             kind,
             nonce,
@@ -1116,8 +1151,240 @@ impl PendingNativeOutput {
             started_at: Instant::now(),
             backend_started: false,
             binding: None,
+            #[cfg(feature = "dev-tools")]
+            destination_before,
+            #[cfg(feature = "dev-tools")]
+            preflight_consumptions: Vec::new(),
         }
     }
+}
+
+#[cfg(all(feature = "dev-tools", any(target_os = "macos", target_os = "windows")))]
+#[derive(Debug)]
+struct DevelopmentBackendObservation {
+    completion: NativeBackendCompletionObservationV1,
+    page_payloads: DevelopmentEvidenceAvailability<Vec<NativePdfPagePayloadObservationV1>>,
+}
+
+#[cfg(all(feature = "dev-tools", any(target_os = "macos", target_os = "windows")))]
+fn development_destination_snapshot(path: &Path) -> DevelopmentDestinationSnapshotV1 {
+    let metadata = match std::fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return DevelopmentDestinationSnapshotV1::Absent;
+        }
+        Err(error) => {
+            return DevelopmentDestinationSnapshotV1::Unavailable {
+                reason: format!("destination metadata could not be read: {error}"),
+            };
+        }
+    };
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return DevelopmentDestinationSnapshotV1::Unavailable {
+            reason: "destination is not a regular non-symlink file".to_string(),
+        };
+    }
+    match hash_evidence_artifact(EvidenceArtifactSource::File(path)) {
+        Ok(sha256) => DevelopmentDestinationSnapshotV1::File { sha256 },
+        Err(error) => DevelopmentDestinationSnapshotV1::Unavailable {
+            reason: format!("destination could not be hashed: {error}"),
+        },
+    }
+}
+
+#[cfg(all(feature = "dev-tools", any(target_os = "macos", target_os = "windows")))]
+fn development_renderer_bundle_hash(entry: &Path) -> DevelopmentEvidenceAvailability<String> {
+    let Some(renderer_root) = entry.parent() else {
+        return DevelopmentEvidenceAvailability::unavailable(
+            "renderer entry point has no parent directory",
+        );
+    };
+    match hash_evidence_artifact(EvidenceArtifactSource::Directory(renderer_root)) {
+        Ok(hash) => DevelopmentEvidenceAvailability::observed(hash),
+        Err(error) => DevelopmentEvidenceAvailability::unavailable(format!(
+            "runtime renderer bundle could not be stably hashed: {error}"
+        )),
+    }
+}
+
+#[cfg(all(feature = "dev-tools", target_os = "macos"))]
+fn development_package_hash() -> DevelopmentEvidenceAvailability<String> {
+    let executable = match std::env::current_exe() {
+        Ok(path) => path,
+        Err(error) => {
+            return DevelopmentEvidenceAvailability::unavailable(format!(
+                "current executable path could not be resolved: {error}"
+            ));
+        }
+    };
+    let mut candidate = executable.as_path();
+    while let Some(parent) = candidate.parent() {
+        if candidate
+            .extension()
+            .is_some_and(|extension| extension == "app")
+        {
+            return match hash_evidence_artifact(EvidenceArtifactSource::Directory(candidate)) {
+                Ok(hash) => DevelopmentEvidenceAvailability::observed(hash),
+                Err(error) => DevelopmentEvidenceAvailability::unavailable(format!(
+                    "running macOS package could not be stably hashed: {error}"
+                )),
+            };
+        }
+        candidate = parent;
+    }
+    DevelopmentEvidenceAvailability::unavailable(
+        "cargo-run executable is not inside a macOS application package",
+    )
+}
+
+#[cfg(all(feature = "dev-tools", target_os = "windows"))]
+fn development_package_hash() -> DevelopmentEvidenceAvailability<String> {
+    DevelopmentEvidenceAvailability::unavailable(
+        "the Windows package root is not bound to the running executable yet",
+    )
+}
+
+#[cfg(all(feature = "dev-tools", target_os = "macos"))]
+fn development_platform() -> DevelopmentNativeOutputPlatformV1 {
+    DevelopmentNativeOutputPlatformV1::Macos
+}
+
+#[cfg(all(feature = "dev-tools", target_os = "windows"))]
+fn development_platform() -> DevelopmentNativeOutputPlatformV1 {
+    DevelopmentNativeOutputPlatformV1::Windows
+}
+
+#[cfg(all(feature = "dev-tools", target_os = "macos"))]
+fn development_backend() -> DevelopmentNativeOutputBackendV1 {
+    DevelopmentNativeOutputBackendV1::WkWebViewCreatePdf
+}
+
+#[cfg(all(feature = "dev-tools", target_os = "windows"))]
+fn development_backend() -> DevelopmentNativeOutputBackendV1 {
+    DevelopmentNativeOutputBackendV1::WebView2PrintToPdf
+}
+
+#[cfg(all(feature = "dev-tools", any(target_os = "macos", target_os = "windows")))]
+fn development_backend_observation(
+    completion: &NativeBackendCompletion,
+) -> Option<DevelopmentBackendObservation> {
+    match completion {
+        NativeBackendCompletion::SystemPrint { .. } => None,
+        #[cfg(target_os = "macos")]
+        NativeBackendCompletion::CapturedPages {
+            nonce,
+            document_identity,
+            render_epoch,
+            pages,
+        } => {
+            let page_payloads = pages
+                .iter()
+                .enumerate()
+                .map(|(index, page)| match page {
+                    Ok(bytes) => NativePdfPagePayloadObservationV1 {
+                        page_number: index + 1,
+                        succeeded: true,
+                        byte_count: bytes.len(),
+                        sha256: Some(format!("{:x}", Sha256::digest(bytes))),
+                        error: None,
+                    },
+                    Err(error) => NativePdfPagePayloadObservationV1 {
+                        page_number: index + 1,
+                        succeeded: false,
+                        byte_count: 0,
+                        sha256: None,
+                        error: Some(error.clone()),
+                    },
+                })
+                .collect::<Vec<_>>();
+            let errors = pages
+                .iter()
+                .filter_map(|page| page.as_ref().err())
+                .cloned()
+                .collect::<Vec<_>>();
+            Some(DevelopmentBackendObservation {
+                completion: NativeBackendCompletionObservationV1 {
+                    nonce: *nonce,
+                    document_run_id: document_identity.document_run_id.clone(),
+                    envelope_sha256: document_identity.envelope_hash.clone(),
+                    render_epoch: *render_epoch,
+                    succeeded: errors.is_empty(),
+                    error: (!errors.is_empty()).then(|| errors.join("; ")),
+                },
+                page_payloads: DevelopmentEvidenceAvailability::observed(page_payloads),
+            })
+        }
+        #[cfg(target_os = "windows")]
+        NativeBackendCompletion::PdfFile {
+            nonce,
+            document_identity,
+            render_epoch,
+            result,
+        } => Some(DevelopmentBackendObservation {
+            completion: NativeBackendCompletionObservationV1 {
+                nonce: *nonce,
+                document_run_id: document_identity.document_run_id.clone(),
+                envelope_sha256: document_identity.envelope_hash.clone(),
+                render_epoch: *render_epoch,
+                succeeded: result.is_ok(),
+                error: result.as_ref().err().cloned(),
+            },
+            page_payloads: DevelopmentEvidenceAvailability::unavailable(
+                "WebView2 PrintToPdf exposes only the completed PDF file, not one callback payload per page",
+            ),
+        }),
+    }
+}
+
+#[cfg(all(feature = "dev-tools", any(target_os = "macos", target_os = "windows")))]
+fn development_evidence_dir() -> Option<PathBuf> {
+    std::env::var_os("EBIR_NATIVE_OUTPUT_EVIDENCE_DIR")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
+#[cfg(all(feature = "dev-tools", any(target_os = "macos", target_os = "windows")))]
+fn write_development_evidence_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "development evidence path has no parent".to_string())?;
+    std::fs::create_dir_all(parent).map_err(|error| {
+        format!(
+            "development evidence directory {} could not be created: {error}",
+            parent.display()
+        )
+    })?;
+    let temporary = parent.join(format!(
+        ".{}.{}.partial",
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("native-output-observation"),
+        uuid::Uuid::new_v4()
+    ));
+    let result = (|| {
+        use std::io::Write;
+
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = options.open(&temporary).map_err(|error| {
+            format!("development evidence temp file could not be created: {error}")
+        })?;
+        file.write_all(bytes)
+            .map_err(|error| format!("development evidence could not be written: {error}"))?;
+        file.sync_all()
+            .map_err(|error| format!("development evidence could not be flushed: {error}"))?;
+        std::fs::rename(&temporary, path)
+            .map_err(|error| format!("development evidence could not be finalized: {error}"))
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temporary);
+    }
+    result
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -1140,11 +1407,15 @@ fn bind_renderer_for_native_output(
     if state.page_rects.is_empty() || state.page_count != Some(state.page_rects.len()) {
         return Err("native output renderer epoch has incomplete page rectangles".to_string());
     }
+    let geometry_reports = state.geometry_reports.clone().ok_or_else(|| {
+        "native output renderer epoch did not retain both stable geometry observations".to_string()
+    })?;
     Ok(NativeOutputRendererBinding {
         document_identity,
         render_epoch: state.render_epoch,
         readiness_revision: state.readiness_revision,
         page_rects: state.page_rects.clone(),
+        geometry_reports,
     })
 }
 
@@ -1170,6 +1441,11 @@ fn renderer_binding_mismatch_reason(
     if state.page_count != Some(binding.page_rects.len()) || state.page_rects != binding.page_rects
     {
         return Some("renderer page geometry changed after native output started".to_string());
+    }
+    if state.geometry_reports.as_ref() != Some(&binding.geometry_reports) {
+        return Some(
+            "renderer stable geometry observations changed after native output started".to_string(),
+        );
     }
     None
 }
@@ -1481,12 +1757,34 @@ enum RendererMessage {
     },
     PageCount {
         render_epoch: u64,
-        page_count: usize,
-        page_width_pt: f64,
-        page_height_pt: f64,
         print_mode: bool,
-        pages: Vec<RendererPageRectMessage>,
+        geometry_reports: [RendererGeometryReportMessage; 2],
     },
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[derive(Debug, Deserialize)]
+struct RendererGeometryReportMessage {
+    page_count: usize,
+    page_width_pt: f64,
+    page_height_pt: f64,
+    pages: Vec<RendererPageRectMessage>,
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+impl RendererGeometryReportMessage {
+    fn into_report(self) -> RendererGeometryReport {
+        RendererGeometryReport {
+            page_count: self.page_count,
+            page_width_pt: self.page_width_pt,
+            page_height_pt: self.page_height_pt,
+            pages: self
+                .pages
+                .into_iter()
+                .map(RendererPageRectMessage::into_rect)
+                .collect(),
+        }
+    }
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -1541,6 +1839,26 @@ struct RendererPageRectMessage {
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
+impl RendererPageRectMessage {
+    fn into_rect(self) -> RendererPageRect {
+        RendererPageRect {
+            x: self.x,
+            y: self.y,
+            width: self.width,
+            height: self.height,
+            client_width: self.client_width,
+            client_height: self.client_height,
+            scroll_width: self.scroll_width,
+            scroll_height: self.scroll_height,
+            descendant_overflow_x: self.descendant_overflow_x,
+            descendant_overflow_y: self.descendant_overflow_y,
+            descendant_clipped_x: self.descendant_clipped_x,
+            descendant_clipped_y: self.descendant_clipped_y,
+        }
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn apply_renderer_message(
     state: &mut RendererState,
     message: RendererMessage,
@@ -1575,46 +1893,33 @@ fn apply_renderer_message(
         } => state.accept_print_ready(nonce, render_epoch, print_mode),
         RendererMessage::PageCount {
             render_epoch,
-            page_count,
-            page_width_pt,
-            page_height_pt,
             print_mode,
-            pages,
+            geometry_reports,
         } => {
             if !state.accepts_epoch(render_epoch) {
                 return;
             }
-            let report = RendererGeometryReport {
-                page_count,
-                page_width_pt,
-                page_height_pt,
-                pages: pages
-                    .into_iter()
-                    .map(|page| RendererPageRect {
-                        x: page.x,
-                        y: page.y,
-                        width: page.width,
-                        height: page.height,
-                        client_width: page.client_width,
-                        client_height: page.client_height,
-                        scroll_width: page.scroll_width,
-                        scroll_height: page.scroll_height,
-                        descendant_overflow_x: page.descendant_overflow_x,
-                        descendant_overflow_y: page.descendant_overflow_y,
-                        descendant_clipped_x: page.descendant_clipped_x,
-                        descendant_clipped_y: page.descendant_clipped_y,
-                    })
-                    .collect(),
+            let [first, second] = geometry_reports.map(RendererGeometryReportMessage::into_report);
+            let validation = if first != second {
+                Err(
+                    "the renderer's two stable geometry observations were not identical"
+                        .to_string(),
+                )
+            } else {
+                validate_renderer_geometry(&first, layout_plan)
+                    .and_then(|()| validate_renderer_geometry(&second, layout_plan))
             };
-            match validate_renderer_geometry(&report, layout_plan) {
+            match validation {
                 Ok(()) => {
-                    state.page_count = Some(page_count);
-                    state.page_rects = report.pages;
+                    state.page_count = Some(second.page_count);
+                    state.page_rects = second.pages.clone();
+                    state.geometry_reports = Some([first, second]);
                     state.geometry_print_mode = print_mode;
                 }
                 Err(error) => {
                     state.page_count = None;
                     state.page_rects.clear();
+                    state.geometry_reports = None;
                     state.geometry_print_mode = false;
                     state.error = Some(error);
                 }
@@ -2008,6 +2313,16 @@ impl HtmlFormPreviewView {
         let document_identity = binding.document_identity.clone();
         let render_epoch = binding.render_epoch;
         if let Some(pending) = self.pending_output.as_mut() {
+            #[cfg(feature = "dev-tools")]
+            {
+                if !pending.preflight_consumptions.is_empty() {
+                    return Err(
+                        "native output preflight nonce was already consumed for this operation"
+                            .to_string(),
+                    );
+                }
+                pending.preflight_consumptions.push(nonce);
+            }
             pending.binding = Some(binding.clone());
         }
 
@@ -2210,6 +2525,9 @@ impl HtmlFormPreviewView {
             return;
         };
 
+        #[cfg(feature = "dev-tools")]
+        let development_backend = development_backend_observation(&completion);
+
         #[cfg(target_os = "macos")]
         let backend_result = match completion {
             NativeBackendCompletion::CapturedPages { pages, .. } => {
@@ -2236,12 +2554,39 @@ impl HtmlFormPreviewView {
 
         let export_result = backend_result.and_then(|()| {
             finalize_pdf_export(&temp_path, &destination, &self.pdf_expectation)
-                .map(|_| ())
                 .map_err(|error| error.to_string())
         });
         self.leave_native_output_mode(cx);
         match export_result {
-            Ok(()) => {
+            Ok(validation) => {
+                #[cfg(feature = "dev-tools")]
+                if let Some(backend) = development_backend.as_ref() {
+                    let evidence_result = self
+                        .pending_output
+                        .as_ref()
+                        .ok_or_else(|| {
+                            "development evidence lost the pending native output".to_string()
+                        })
+                        .and_then(|pending| {
+                            self.write_development_pdf_observation(
+                                pending,
+                                backend,
+                                &validation,
+                                &destination,
+                            )
+                        });
+                    match evidence_result {
+                        Ok(Some(path)) => tracing::info!(
+                            path = %path.display(),
+                            "wrote non-promotional native-output observation"
+                        ),
+                        Ok(None) => {}
+                        Err(error) => tracing::warn!(
+                            error = %error,
+                            "could not write non-promotional native-output observation"
+                        ),
+                    }
+                }
                 self.finish_native_output_state(completion_nonce);
                 self.pending_output = None;
                 self.output_state = HtmlOutputState::Idle;
@@ -2251,6 +2596,178 @@ impl HtmlFormPreviewView {
                 self.fail_pending_output(format!("HTML renderer PDF export failed: {error}"), cx)
             }
         }
+    }
+
+    #[cfg(feature = "dev-tools")]
+    fn write_development_pdf_observation(
+        &self,
+        pending: &PendingNativeOutput,
+        backend: &DevelopmentBackendObservation,
+        validation: &PdfValidationReport,
+        destination: &Path,
+    ) -> Result<Option<PathBuf>, String> {
+        let Some(evidence_dir) = development_evidence_dir() else {
+            return Ok(None);
+        };
+        let binding = pending.binding.as_ref().ok_or_else(|| {
+            "development evidence has no renderer document/epoch binding".to_string()
+        })?;
+        let [first_report, second_report] = &binding.geometry_reports;
+        let first = GeometryReportEvidenceV1::from(first_report);
+        let second = GeometryReportEvidenceV1::from(second_report);
+        let geometry_page_rect_sha256 =
+            geometry_page_rect_sha256(&first).map_err(|error| error.to_string())?;
+        let renderer_bundle_sha256 = development_renderer_bundle_hash(&self.prepared.entry);
+        let package_sha256 = development_package_hash();
+        let output_snapshot = development_destination_snapshot(destination);
+        let output_pdf_sha256 = match &output_snapshot {
+            DevelopmentDestinationSnapshotV1::File { sha256 } => {
+                DevelopmentEvidenceAvailability::observed(sha256.clone())
+            }
+            DevelopmentDestinationSnapshotV1::Absent => {
+                DevelopmentEvidenceAvailability::unavailable(
+                    "finalized export destination is unexpectedly absent",
+                )
+            }
+            DevelopmentDestinationSnapshotV1::Unavailable { reason } => {
+                DevelopmentEvidenceAvailability::unavailable(format!(
+                    "finalized export destination hash is unavailable: {reason}"
+                ))
+            }
+        };
+
+        let mut strict_verifier_gaps = vec![
+            "runtime observation collector is development-only and is not attested"
+                .to_string(),
+            "canonical source revision is not embedded in the running desktop binary"
+                .to_string(),
+            "independent offline renderer bundle hash is not bound to the running package"
+                .to_string(),
+            "a real failed export against a pre-existing destination was not exercised by this successful run"
+                .to_string(),
+            "system-print, signed-package, packaged network-denial, and rollback evidence are outside this observation"
+                .to_string(),
+        ];
+        if matches!(
+            &package_sha256,
+            DevelopmentEvidenceAvailability::Unavailable { .. }
+        ) {
+            strict_verifier_gaps.push(
+                "running package hash is unavailable for this cargo-run or unbound package layout"
+                    .to_string(),
+            );
+        }
+        if matches!(
+            &renderer_bundle_sha256,
+            DevelopmentEvidenceAvailability::Unavailable { .. }
+        ) {
+            strict_verifier_gaps
+                .push("runtime renderer bundle could not be stably hashed".to_string());
+        }
+        if matches!(
+            &backend.page_payloads,
+            DevelopmentEvidenceAvailability::Unavailable { .. }
+        ) {
+            strict_verifier_gaps.push(
+                "native backend does not expose per-page callback payload hashes".to_string(),
+            );
+        }
+        if matches!(
+            &output_pdf_sha256,
+            DevelopmentEvidenceAvailability::Unavailable { .. }
+        ) {
+            strict_verifier_gaps.push("final output PDF hash is unavailable".to_string());
+        }
+
+        let observation = DevelopmentNativeOutputObservationV1 {
+            schema_version: DEVELOPMENT_NATIVE_OUTPUT_OBSERVATION_SCHEMA_VERSION,
+            scope: DevelopmentEvidenceScope::DevelopmentDiagnostic,
+            promotion_eligible: false,
+            platform: development_platform(),
+            backend: development_backend(),
+            form_code: self.pdf_expectation.form_code.clone(),
+            form_revision: self.pdf_expectation.revision.clone(),
+            document_run_id: binding.document_identity.document_run_id.clone(),
+            envelope_sha256: binding.document_identity.envelope_hash.clone(),
+            source_revision: DevelopmentEvidenceAvailability::unavailable(
+                "canonical source revision is not embedded in the running desktop binary",
+            ),
+            package_sha256,
+            renderer_bundle_sha256,
+            independently_expected_renderer_bundle_sha256:
+                DevelopmentEvidenceAvailability::unavailable(
+                    "offline bundle evidence is not yet injected into the native runtime",
+                ),
+            geometry_reports: [first.clone(), second],
+            geometry_page_rect_sha256,
+            clipping_totals: ClippingCountersV1::from_geometry(&first),
+            nonce: NativeNonceObservationV1 {
+                issued_nonce: pending.nonce,
+                preflight_consumptions: pending.preflight_consumptions.clone(),
+                backend_completion_nonce: DevelopmentEvidenceAvailability::observed(
+                    backend.completion.nonce,
+                ),
+            },
+            render_epoch: binding.render_epoch,
+            readiness_revision: binding.readiness_revision,
+            backend_completion: DevelopmentEvidenceAvailability::observed(
+                backend.completion.clone(),
+            ),
+            native_page_payloads: backend.page_payloads.clone(),
+            output_pdf_sha256,
+            pdf_validation: DevelopmentEvidenceAvailability::observed(
+                PdfValidationEvidenceV1::from(validation),
+            ),
+            destination_outcome: DevelopmentDestinationOutcomeV1::ExportSucceeded {
+                before: pending.destination_before.clone(),
+                after: output_snapshot,
+                temporary_file_remaining: pending.temp_path.as_deref().is_some_and(Path::exists),
+                preservation_failure_case_exercised: false,
+            },
+            strict_verifier_gaps,
+        };
+        let encoded = encode_development_native_output_observation(&observation)
+            .map_err(|error| error.to_string())?;
+
+        std::fs::create_dir_all(&evidence_dir).map_err(|error| {
+            format!(
+                "development evidence directory {} could not be created: {error}",
+                evidence_dir.display()
+            )
+        })?;
+        let evidence_dir = evidence_dir.canonicalize().map_err(|error| {
+            format!("development evidence directory could not be resolved: {error}")
+        })?;
+        if let Some(renderer_root) = self.prepared.entry.parent() {
+            let renderer_root = renderer_root
+                .canonicalize()
+                .map_err(|error| format!("runtime renderer root could not be resolved: {error}"))?;
+            if evidence_dir.starts_with(&renderer_root) {
+                return Err(
+                    "development evidence directory must remain outside the renderer bundle"
+                        .to_string(),
+                );
+            }
+        }
+        let stem = format!(
+            "native-output-{}-{}",
+            binding.document_identity.document_run_id, pending.nonce
+        );
+        let envelope_path = evidence_dir.join(format!("{stem}.envelope.json"));
+        let observed_envelope_hash = format!(
+            "{:x}",
+            Sha256::digest(self.prepared.envelope_json.as_bytes())
+        );
+        if observed_envelope_hash != binding.document_identity.envelope_hash {
+            return Err(
+                "immutable envelope bytes no longer match the renderer document identity"
+                    .to_string(),
+            );
+        }
+        write_development_evidence_file(&envelope_path, self.prepared.envelope_json.as_bytes())?;
+        let observation_path = evidence_dir.join(format!("{stem}.observation.json"));
+        write_development_evidence_file(&observation_path, &encoded)?;
+        Ok(Some(observation_path))
     }
 
     fn leave_native_output_mode(&self, cx: &mut Context<Self>) {
@@ -2573,10 +3090,22 @@ mod tests {
         state.document_boot_accepted = true;
         assert!(state.invalidate_for_epoch(render_epoch));
         state.ready = true;
-        state.page_count = Some(2);
-        state.page_rects = vec![validated_page_rect(0.0), validated_page_rect(1248.0)];
+        let report = validated_geometry_report();
+        state.page_count = Some(report.page_count);
+        state.page_rects = report.pages.clone();
+        state.geometry_reports = Some([report.clone(), report]);
         state.geometry_print_mode = true;
         state
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    fn validated_geometry_report() -> RendererGeometryReport {
+        RendererGeometryReport {
+            page_count: 2,
+            page_width_pt: 612.0,
+            page_height_pt: 936.0,
+            pages: vec![validated_page_rect(0.0), validated_page_rect(1248.0)],
+        }
     }
 
     #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -2605,6 +3134,19 @@ mod tests {
             descendant_overflow_y: 0,
             descendant_clipped_x: 0,
             descendant_clipped_y: 0,
+        }
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    fn renderer_geometry_report_message() -> RendererGeometryReportMessage {
+        RendererGeometryReportMessage {
+            page_count: 2,
+            page_width_pt: 612.0,
+            page_height_pt: 936.0,
+            pages: vec![
+                renderer_page_rect_message(0.0),
+                renderer_page_rect_message(1248.0),
+            ],
         }
     }
 
@@ -2719,6 +3261,7 @@ mod tests {
         assert!(renderer_source.contains("postRendererHostMessage({ type: \"renderer_boot\" })"));
         assert!(renderer_source.contains("document_run_id: rendererDocumentRunId"));
         assert!(renderer_source.contains("envelope_hash: rendererEnvelopeHash"));
+        assert!(renderer_source.contains("geometry_reports: [previousMeasurement, measurement]"));
     }
 
     #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -2920,13 +3463,10 @@ mod tests {
             &mut state,
             RendererMessage::PageCount {
                 render_epoch: 6,
-                page_count: 2,
-                page_width_pt: 612.0,
-                page_height_pt: 936.0,
                 print_mode: true,
-                pages: vec![
-                    renderer_page_rect_message(0.0),
-                    renderer_page_rect_message(1248.0),
+                geometry_reports: [
+                    renderer_geometry_report_message(),
+                    renderer_geometry_report_message(),
                 ],
             },
             &plan,
@@ -2946,13 +3486,10 @@ mod tests {
             &mut state,
             RendererMessage::PageCount {
                 render_epoch: 5,
-                page_count: 2,
-                page_width_pt: 612.0,
-                page_height_pt: 936.0,
                 print_mode: true,
-                pages: vec![
-                    renderer_page_rect_message(0.0),
-                    renderer_page_rect_message(1248.0),
+                geometry_reports: [
+                    renderer_geometry_report_message(),
+                    renderer_geometry_report_message(),
                 ],
             },
             &plan,
@@ -2965,6 +3502,41 @@ mod tests {
 
         assert!(state.ready);
         assert_eq!(state.page_count, Some(2));
+        assert_eq!(
+            state.geometry_reports,
+            Some([validated_geometry_report(), validated_geometry_report(),])
+        );
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[test]
+    fn renderer_ipc_rejects_nonidentical_geometry_observations() {
+        let plan = renderer_layout_plan();
+        let mut state = RendererState::default();
+        assert!(state.invalidate_for_epoch(5));
+        let first = renderer_geometry_report_message();
+        let mut second = renderer_geometry_report_message();
+        second.pages[0].x += 0.5;
+
+        apply_renderer_message(
+            &mut state,
+            RendererMessage::PageCount {
+                render_epoch: 5,
+                print_mode: true,
+                geometry_reports: [first, second],
+            },
+            &plan,
+        );
+
+        assert_eq!(state.page_count, None);
+        assert!(state.page_rects.is_empty());
+        assert!(state.geometry_reports.is_none());
+        assert!(
+            state
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("not identical"))
+        );
     }
 
     #[cfg(any(target_os = "macos", target_os = "windows"))]

@@ -10,7 +10,7 @@ name = "bir"
 path = "src/main.rs"
 
 [features]
-dev-tools = []
+dev-tools = ["bir-print/native-output-evidence"]
 inspector = []
 mas_build = ["bir-core/mas_build", "gpui_platform/macos_app_store"]
 

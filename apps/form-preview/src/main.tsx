@@ -122,7 +122,7 @@ async function waitForRenderedPages(
   sequence: number,
   epoch: number,
   deadline: number,
-  previousSignature?: string,
+  previousMeasurement?: RendererGeometryMeasurement,
   printNonce?: number
 ) {
   try {
@@ -148,7 +148,7 @@ async function waitForRenderedPages(
           sequence,
           epoch,
           deadline,
-          previousSignature,
+          previousMeasurement,
           printNonce
         );
         return;
@@ -158,12 +158,20 @@ async function waitForRenderedPages(
     }
     const signature = JSON.stringify(measurement);
     const stability = geometryStabilityDecision(
-      previousSignature,
+      previousMeasurement === undefined
+        ? undefined
+        : JSON.stringify(previousMeasurement),
       signature,
       performance.now() >= deadline
     );
     if (stability === "retry") {
-      void waitForRenderedPages(sequence, epoch, deadline, signature, printNonce);
+      void waitForRenderedPages(
+        sequence,
+        epoch,
+        deadline,
+        measurement,
+        printNonce
+      );
       return;
     }
     if (stability === "timed_out") {
@@ -180,10 +188,18 @@ async function waitForRenderedPages(
       );
       return;
     }
+    if (previousMeasurement === undefined) {
+      reportRendererError(
+        "Renderer reported stable geometry without two independent observations",
+        epoch
+      );
+      return;
+    }
 
     const printMode = nativePrintModeIsActive();
     postRendererHostMessage({
-      ...measurement,
+      type: "page_count",
+      geometry_reports: [previousMeasurement, measurement],
       render_epoch: epoch,
       print_mode: printMode
     });

@@ -74,18 +74,62 @@ Do not add these transcripts to
 trusted platform evidence producer, or change a form capability or
 `release_ready` value from this verifier alone.
 
-## Runtime collector still required
+## Development runtime observation slice
+
+The native host now retains the two separately measured, byte-for-byte
+identical geometry observations instead of retaining the second observation
+only. Both reports are validated independently, bound to the immutable
+document run ID, envelope hash, render epoch, readiness revision, and one-use
+output nonce, and retained in the backend binding.
+
+When the desktop is built with `dev-tools`, setting
+`EBIR_NATIVE_OUTPUT_EVIDENCE_DIR` opts in to a local diagnostic write after a
+successful direct PDF export. The host writes the exact immutable envelope and
+a `DevelopmentNativeOutputObservationV1` JSON file outside the renderer bundle.
+On macOS it records the actual WKPDF callback byte count and SHA-256 for every
+page; on Windows it explicitly records that WebView2 exposes only the completed
+PDF file. The observation also records the completed backend identity/epoch,
+`lopdf` validation, final destination hash, runtime renderer-bundle hash, and
+whether the sibling temporary file remains.
+
+The collector code and its `bir-print/native-output-evidence` dependency are
+compiled only through the desktop `dev-tools` feature. In a default or release
+build, setting `EBIR_NATIVE_OUTPUT_EVIDENCE_DIR` alone has no effect and cannot
+write an observation.
+
+This observation shape is intentionally different from
+`DevelopmentNativeOutputTranscriptV1`, requires at least one concrete strict
+verifier gap, rejects `promotion_eligible: true`, and cannot be deserialized as
+the strict transcript. A cargo-run build records the package hash as unavailable
+rather than treating the executable as a package. Source revision and the
+independently produced offline bundle hash also remain unavailable until the
+build/package pipeline binds them to the running process.
+
+Example opt-in location:
+
+```sh
+EBIR_NATIVE_OUTPUT_EVIDENCE_DIR="$PWD/target/native-output-observations" \
+  cargo run --locked --bin bir --features dev-tools
+```
+
+These files contain document-envelope data and must remain local development
+artifacts. They must not be committed, copied into the signed package, or added
+to `form-release-evidence.json`.
+
+## Attested runtime collector still required
 
 A later, narrow macOS collector must gather real runtime facts without changing
 the output document:
 
-1. Assign an opaque run identity when the prepared preview's Wry/WKWebView is
-   created, then retain it through preflight and WKPDF completion.
-2. Capture both actual stable geometry measurements. The current native host
-   receives only the final report, so it must not duplicate that report and
-   claim two observations.
-3. Retain each WKPDF callback payload and the validated final output for hashing
-   and page-reachable object-graph comparison.
+1. Independently attest the opaque run identity already assigned when the
+   prepared preview's Wry/WKWebView is created and retained through preflight
+   and WKPDF completion.
+2. Preserve the now-retained pair of actual stable geometry measurements in an
+   independently attested collector rather than trusting the app-written
+   diagnostic observation.
+3. Retain each WKPDF callback payload and the validated final output as separate
+   verifier inputs for page-reachable object-graph comparison; diagnostic
+   hashes alone are not those artifacts.
 4. Exercise a real failed export against a pre-existing destination and record
    destination preservation and temporary-file cleanup.
 5. Resolve the canonical source, stable package tree, independently produced

@@ -25,6 +25,7 @@ use crate::html_output::{
 use crate::html_support::{validate_renderer_geometry, RendererGeometryReport, RendererPageRect};
 
 pub const DEVELOPMENT_NATIVE_OUTPUT_TRANSCRIPT_SCHEMA_VERSION: u8 = 1;
+pub const DEVELOPMENT_NATIVE_OUTPUT_OBSERVATION_SCHEMA_VERSION: u8 = 1;
 pub const MACOS_RENDERER_BUNDLE_RELATIVE_PATH: &str = "Contents/Resources/assets/form-renderer";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -272,6 +273,447 @@ pub struct DestinationPreservationEvidenceV1 {
     pub before_sha256: String,
     pub after_sha256: String,
     pub temporary_files_remaining: usize,
+}
+
+/// A runtime observation that is useful for diagnostics but is deliberately
+/// incapable of satisfying [`verify_development_native_output_transcript`].
+///
+/// The native host writes this shape while collector provenance is incomplete.
+/// Missing artifacts remain explicit `unavailable` values; they must never be
+/// replaced with guessed hashes or duplicated observations.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DevelopmentNativeOutputObservationV1 {
+    pub schema_version: u8,
+    pub scope: DevelopmentEvidenceScope,
+    pub promotion_eligible: bool,
+    pub platform: DevelopmentNativeOutputPlatformV1,
+    pub backend: DevelopmentNativeOutputBackendV1,
+    pub form_code: String,
+    pub form_revision: String,
+    pub document_run_id: String,
+    pub envelope_sha256: String,
+    pub source_revision: DevelopmentEvidenceAvailability<String>,
+    pub package_sha256: DevelopmentEvidenceAvailability<String>,
+    pub renderer_bundle_sha256: DevelopmentEvidenceAvailability<String>,
+    pub independently_expected_renderer_bundle_sha256: DevelopmentEvidenceAvailability<String>,
+    pub geometry_reports: [GeometryReportEvidenceV1; 2],
+    pub geometry_page_rect_sha256: Vec<String>,
+    pub clipping_totals: ClippingCountersV1,
+    pub nonce: NativeNonceObservationV1,
+    pub render_epoch: u64,
+    pub readiness_revision: u64,
+    pub backend_completion: DevelopmentEvidenceAvailability<NativeBackendCompletionObservationV1>,
+    pub native_page_payloads:
+        DevelopmentEvidenceAvailability<Vec<NativePdfPagePayloadObservationV1>>,
+    pub output_pdf_sha256: DevelopmentEvidenceAvailability<String>,
+    pub pdf_validation: DevelopmentEvidenceAvailability<PdfValidationEvidenceV1>,
+    pub destination_outcome: DevelopmentDestinationOutcomeV1,
+    /// Concrete reasons this observation cannot be promoted or passed to the
+    /// strict transcript verifier. At least one gap is always required.
+    pub strict_verifier_gaps: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DevelopmentNativeOutputPlatformV1 {
+    Macos,
+    Windows,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DevelopmentNativeOutputBackendV1 {
+    WkWebViewCreatePdf,
+    WebView2PrintToPdf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DevelopmentEvidenceAvailability<T> {
+    Observed { value: T },
+    Unavailable { reason: String },
+}
+
+impl<T> DevelopmentEvidenceAvailability<T> {
+    pub fn observed(value: T) -> Self {
+        Self::Observed { value }
+    }
+
+    pub fn unavailable(reason: impl Into<String>) -> Self {
+        Self::Unavailable {
+            reason: reason.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NativeNonceObservationV1 {
+    pub issued_nonce: u64,
+    pub preflight_consumptions: Vec<u64>,
+    pub backend_completion_nonce: DevelopmentEvidenceAvailability<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NativeBackendCompletionObservationV1 {
+    pub nonce: u64,
+    pub document_run_id: String,
+    pub envelope_sha256: String,
+    pub render_epoch: u64,
+    pub succeeded: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NativePdfPagePayloadObservationV1 {
+    pub page_number: usize,
+    pub succeeded: bool,
+    pub byte_count: usize,
+    pub sha256: Option<String>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DevelopmentDestinationSnapshotV1 {
+    Absent,
+    File { sha256: String },
+    Unavailable { reason: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "outcome", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DevelopmentDestinationOutcomeV1 {
+    ExportSucceeded {
+        before: DevelopmentDestinationSnapshotV1,
+        after: DevelopmentDestinationSnapshotV1,
+        temporary_file_remaining: bool,
+        preservation_failure_case_exercised: bool,
+    },
+    ExportFailed {
+        message: String,
+        before: DevelopmentDestinationSnapshotV1,
+        after: DevelopmentDestinationSnapshotV1,
+        temporary_file_remaining: bool,
+        destination_preserved: DevelopmentEvidenceAvailability<bool>,
+    },
+    NotApplicable {
+        reason: String,
+    },
+}
+
+impl DevelopmentNativeOutputObservationV1 {
+    /// Validate only the internal consistency of a diagnostic observation.
+    /// This intentionally does not turn it into strict or promotional evidence.
+    pub fn validate_non_promotional(&self) -> Result<(), DevelopmentNativeOutputEvidenceError> {
+        if self.schema_version != DEVELOPMENT_NATIVE_OUTPUT_OBSERVATION_SCHEMA_VERSION {
+            return invalid(format!(
+                "observation schema_version must be {}",
+                DEVELOPMENT_NATIVE_OUTPUT_OBSERVATION_SCHEMA_VERSION
+            ));
+        }
+        if self.scope != DevelopmentEvidenceScope::DevelopmentDiagnostic {
+            return invalid("observation scope must remain development_diagnostic");
+        }
+        if self.promotion_eligible {
+            return invalid("runtime observations must never be promotion eligible");
+        }
+        if self.document_run_id.trim().is_empty() {
+            return invalid("runtime observation document_run_id is required");
+        }
+        if self.form_code.trim().is_empty() || self.form_revision.trim().is_empty() {
+            return invalid("runtime observation form code and revision are required");
+        }
+        if !matches!(
+            (self.platform, self.backend),
+            (
+                DevelopmentNativeOutputPlatformV1::Macos,
+                DevelopmentNativeOutputBackendV1::WkWebViewCreatePdf
+            ) | (
+                DevelopmentNativeOutputPlatformV1::Windows,
+                DevelopmentNativeOutputBackendV1::WebView2PrintToPdf
+            )
+        ) {
+            return invalid("runtime observation platform and backend do not match");
+        }
+        if self.render_epoch == 0 || self.readiness_revision == 0 {
+            return invalid("runtime observation requires a nonzero epoch and readiness revision");
+        }
+        verify_digest("runtime observation envelope sha256", &self.envelope_sha256)?;
+        verify_available_digest("source revision", &self.source_revision, true)?;
+        verify_available_digest("package sha256", &self.package_sha256, false)?;
+        verify_available_digest(
+            "renderer bundle sha256",
+            &self.renderer_bundle_sha256,
+            false,
+        )?;
+        verify_available_digest(
+            "independently expected renderer bundle sha256",
+            &self.independently_expected_renderer_bundle_sha256,
+            false,
+        )?;
+
+        let [first, second] = &self.geometry_reports;
+        if first != second {
+            return invalid("runtime observation geometry reports are not identical");
+        }
+        if first.page_count == 0 || first.pages.len() != first.page_count {
+            return invalid("runtime observation geometry report has an invalid page count");
+        }
+        let expected_rect_hashes = geometry_page_rect_sha256(first)?;
+        if self.geometry_page_rect_sha256 != expected_rect_hashes {
+            return invalid("runtime observation page-rectangle hashes do not match the reports");
+        }
+        let clipping_totals = ClippingCountersV1::from_geometry(first);
+        if self.clipping_totals != clipping_totals || !clipping_totals.is_zero() {
+            return invalid("runtime observation contains clipping or inconsistent counters");
+        }
+        if self.nonce.issued_nonce == 0
+            || self.nonce.preflight_consumptions.as_slice() != [self.nonce.issued_nonce]
+        {
+            return invalid("runtime observation nonce was not consumed exactly once");
+        }
+        validate_observation_completion(self)?;
+        validate_observation_page_payloads(&self.native_page_payloads, first.page_count)?;
+        verify_available_digest("output PDF sha256", &self.output_pdf_sha256, false)?;
+        validate_observation_pdf_validation(&self.pdf_validation, first)?;
+        validate_destination_outcome(&self.destination_outcome, &self.output_pdf_sha256)?;
+        if self.strict_verifier_gaps.is_empty()
+            || self
+                .strict_verifier_gaps
+                .iter()
+                .any(|gap| gap.trim().is_empty())
+        {
+            return invalid("runtime observation must record concrete strict-verifier gaps");
+        }
+        Ok(())
+    }
+}
+
+/// Serialize an internally consistent diagnostic observation. The resulting
+/// JSON is not accepted by the strict transcript verifier.
+pub fn encode_development_native_output_observation(
+    observation: &DevelopmentNativeOutputObservationV1,
+) -> Result<Vec<u8>, DevelopmentNativeOutputEvidenceError> {
+    observation.validate_non_promotional()?;
+    let mut encoded = serde_json::to_vec_pretty(observation)?;
+    encoded.push(b'\n');
+    Ok(encoded)
+}
+
+pub fn geometry_page_rect_sha256(
+    report: &GeometryReportEvidenceV1,
+) -> Result<Vec<String>, DevelopmentNativeOutputEvidenceError> {
+    report
+        .pages
+        .iter()
+        .map(|page| {
+            serde_json::to_vec(page)
+                .map(|bytes| sha256_bytes(&bytes))
+                .map_err(Into::into)
+        })
+        .collect()
+}
+
+fn verify_available_digest<T: AsRef<str>>(
+    field: &str,
+    value: &DevelopmentEvidenceAvailability<T>,
+    allow_git_object_id: bool,
+) -> Result<(), DevelopmentNativeOutputEvidenceError> {
+    match value {
+        DevelopmentEvidenceAvailability::Observed { value } => {
+            let value = value.as_ref();
+            if allow_git_object_id && value.len() == 40 {
+                if value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+                {
+                    return Ok(());
+                }
+                return invalid(format!("{field} must be canonical lowercase hex"));
+            }
+            verify_digest(field, value)
+        }
+        DevelopmentEvidenceAvailability::Unavailable { reason } => {
+            if reason.trim().is_empty() {
+                return invalid(format!("{field} unavailability requires a reason"));
+            }
+            Ok(())
+        }
+    }
+}
+
+fn validate_observation_completion(
+    observation: &DevelopmentNativeOutputObservationV1,
+) -> Result<(), DevelopmentNativeOutputEvidenceError> {
+    match &observation.backend_completion {
+        DevelopmentEvidenceAvailability::Observed { value } => {
+            if value.nonce != observation.nonce.issued_nonce
+                || value.document_run_id != observation.document_run_id
+                || value.envelope_sha256 != observation.envelope_sha256
+                || value.render_epoch != observation.render_epoch
+            {
+                return invalid(
+                    "runtime backend completion is not bound to document, envelope, nonce, and epoch",
+                );
+            }
+            if value.succeeded == value.error.is_some() {
+                return invalid("runtime backend completion success/error fields are inconsistent");
+            }
+            match observation.nonce.backend_completion_nonce {
+                DevelopmentEvidenceAvailability::Observed { value: nonce }
+                    if nonce == value.nonce => {}
+                _ => return invalid("runtime completion nonce is missing or inconsistent"),
+            }
+        }
+        DevelopmentEvidenceAvailability::Unavailable { reason } if reason.trim().is_empty() => {
+            return invalid("backend completion unavailability requires a reason");
+        }
+        DevelopmentEvidenceAvailability::Unavailable { .. } => {}
+    }
+    Ok(())
+}
+
+fn validate_observation_page_payloads(
+    payloads: &DevelopmentEvidenceAvailability<Vec<NativePdfPagePayloadObservationV1>>,
+    expected_page_count: usize,
+) -> Result<(), DevelopmentNativeOutputEvidenceError> {
+    match payloads {
+        DevelopmentEvidenceAvailability::Observed { value } => {
+            if value.len() != expected_page_count {
+                return invalid("observed native page payload count differs from geometry");
+            }
+            for (index, page) in value.iter().enumerate() {
+                if page.page_number != index + 1 {
+                    return invalid("native page payload observations are out of order");
+                }
+                match (
+                    page.succeeded,
+                    page.sha256.as_deref(),
+                    page.error.as_deref(),
+                ) {
+                    (true, Some(hash), None) if page.byte_count > 0 => {
+                        verify_digest("native page payload sha256", hash)?;
+                    }
+                    (false, None, Some(error)) if !error.trim().is_empty() => {}
+                    _ => return invalid("native page payload observation is inconsistent"),
+                }
+            }
+        }
+        DevelopmentEvidenceAvailability::Unavailable { reason } if reason.trim().is_empty() => {
+            return invalid("native page payload unavailability requires a reason");
+        }
+        DevelopmentEvidenceAvailability::Unavailable { .. } => {}
+    }
+    Ok(())
+}
+
+fn validate_observation_pdf_validation(
+    validation: &DevelopmentEvidenceAvailability<PdfValidationEvidenceV1>,
+    geometry: &GeometryReportEvidenceV1,
+) -> Result<(), DevelopmentNativeOutputEvidenceError> {
+    match validation {
+        DevelopmentEvidenceAvailability::Observed { value } => {
+            if !value.lopdf_validated
+                || value.page_count != geometry.page_count
+                || value.width_points != geometry.page_width_pt
+                || value.height_points != geometry.page_height_pt
+            {
+                return invalid("runtime PDF validation differs from renderer geometry");
+            }
+        }
+        DevelopmentEvidenceAvailability::Unavailable { reason } if reason.trim().is_empty() => {
+            return invalid("PDF validation unavailability requires a reason");
+        }
+        DevelopmentEvidenceAvailability::Unavailable { .. } => {}
+    }
+    Ok(())
+}
+
+fn validate_destination_snapshot(
+    snapshot: &DevelopmentDestinationSnapshotV1,
+) -> Result<(), DevelopmentNativeOutputEvidenceError> {
+    match snapshot {
+        DevelopmentDestinationSnapshotV1::File { sha256 } => {
+            verify_digest("destination snapshot sha256", sha256)
+        }
+        DevelopmentDestinationSnapshotV1::Unavailable { reason } if reason.trim().is_empty() => {
+            invalid("destination snapshot unavailability requires a reason")
+        }
+        DevelopmentDestinationSnapshotV1::Absent
+        | DevelopmentDestinationSnapshotV1::Unavailable { .. } => Ok(()),
+    }
+}
+
+fn validate_destination_outcome(
+    outcome: &DevelopmentDestinationOutcomeV1,
+    output_pdf_sha256: &DevelopmentEvidenceAvailability<String>,
+) -> Result<(), DevelopmentNativeOutputEvidenceError> {
+    match outcome {
+        DevelopmentDestinationOutcomeV1::ExportSucceeded {
+            before,
+            after,
+            temporary_file_remaining,
+            preservation_failure_case_exercised,
+        } => {
+            validate_destination_snapshot(before)?;
+            validate_destination_snapshot(after)?;
+            if *temporary_file_remaining || *preservation_failure_case_exercised {
+                return invalid(
+                    "successful export cannot claim a destination-preservation failure exercise",
+                );
+            }
+            if !matches!(after, DevelopmentDestinationSnapshotV1::File { .. }) {
+                return invalid("successful export must retain the final destination hash");
+            }
+            match (after, output_pdf_sha256) {
+                (
+                    DevelopmentDestinationSnapshotV1::File {
+                        sha256: destination,
+                    },
+                    DevelopmentEvidenceAvailability::Observed { value: output },
+                ) if destination == output => {}
+                _ => {
+                    return invalid(
+                        "successful export destination and output PDF hashes are inconsistent",
+                    );
+                }
+            }
+        }
+        DevelopmentDestinationOutcomeV1::ExportFailed {
+            message,
+            before,
+            after,
+            temporary_file_remaining: _,
+            destination_preserved,
+        } => {
+            if message.trim().is_empty() {
+                return invalid("failed export observation requires an error message");
+            }
+            validate_destination_snapshot(before)?;
+            validate_destination_snapshot(after)?;
+            if let DevelopmentEvidenceAvailability::Unavailable { reason } = destination_preserved {
+                if reason.trim().is_empty() {
+                    return invalid("destination-preservation unavailability requires a reason");
+                }
+            }
+            if let DevelopmentEvidenceAvailability::Observed { value } = destination_preserved {
+                if *value != (before == after) {
+                    return invalid(
+                        "destination-preservation result differs from the before/after snapshots",
+                    );
+                }
+            }
+        }
+        DevelopmentDestinationOutcomeV1::NotApplicable { reason } if reason.trim().is_empty() => {
+            return invalid("destination outcome not-applicable reason is required");
+        }
+        DevelopmentDestinationOutcomeV1::NotApplicable { .. } => {}
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1499,6 +1941,127 @@ mod tests {
         });
         document.trailer.set("Root", catalog_id);
         document.save(path).expect("test PDF should save");
+    }
+
+    fn development_observation(fixture: &Fixture) -> DevelopmentNativeOutputObservationV1 {
+        let geometry_reports = fixture.transcript.geometry_reports.clone();
+        let geometry_page_rect_sha256 =
+            geometry_page_rect_sha256(&geometry_reports[0]).expect("rectangle hashes");
+        DevelopmentNativeOutputObservationV1 {
+            schema_version: DEVELOPMENT_NATIVE_OUTPUT_OBSERVATION_SCHEMA_VERSION,
+            scope: DevelopmentEvidenceScope::DevelopmentDiagnostic,
+            promotion_eligible: false,
+            platform: DevelopmentNativeOutputPlatformV1::Macos,
+            backend: DevelopmentNativeOutputBackendV1::WkWebViewCreatePdf,
+            form_code: fixture.transcript.form_code.clone(),
+            form_revision: fixture.transcript.form_revision.clone(),
+            document_run_id: "runtime-document-1".to_string(),
+            envelope_sha256: fixture.transcript.envelope_sha256.clone(),
+            source_revision: DevelopmentEvidenceAvailability::unavailable(
+                "source revision is not embedded",
+            ),
+            package_sha256: DevelopmentEvidenceAvailability::unavailable(
+                "cargo-run process has no package root",
+            ),
+            renderer_bundle_sha256: DevelopmentEvidenceAvailability::observed(
+                fixture.transcript.renderer_bundle_sha256.clone(),
+            ),
+            independently_expected_renderer_bundle_sha256:
+                DevelopmentEvidenceAvailability::unavailable("offline evidence is not injected"),
+            geometry_reports,
+            geometry_page_rect_sha256,
+            clipping_totals: ClippingCountersV1::default(),
+            nonce: NativeNonceObservationV1 {
+                issued_nonce: 7,
+                preflight_consumptions: vec![7],
+                backend_completion_nonce: DevelopmentEvidenceAvailability::observed(7),
+            },
+            render_epoch: 4,
+            readiness_revision: 9,
+            backend_completion: DevelopmentEvidenceAvailability::observed(
+                NativeBackendCompletionObservationV1 {
+                    nonce: 7,
+                    document_run_id: "runtime-document-1".to_string(),
+                    envelope_sha256: fixture.transcript.envelope_sha256.clone(),
+                    render_epoch: 4,
+                    succeeded: true,
+                    error: None,
+                },
+            ),
+            native_page_payloads: DevelopmentEvidenceAvailability::observed(
+                fixture
+                    .page_payloads
+                    .iter()
+                    .enumerate()
+                    .map(|(index, payload)| NativePdfPagePayloadObservationV1 {
+                        page_number: index + 1,
+                        succeeded: true,
+                        byte_count: payload.len(),
+                        sha256: Some(sha256_bytes(payload)),
+                        error: None,
+                    })
+                    .collect(),
+            ),
+            output_pdf_sha256: DevelopmentEvidenceAvailability::observed(
+                fixture.transcript.output_pdf_sha256.clone(),
+            ),
+            pdf_validation: DevelopmentEvidenceAvailability::observed(
+                fixture.transcript.pdf_validation.clone(),
+            ),
+            destination_outcome: DevelopmentDestinationOutcomeV1::ExportSucceeded {
+                before: DevelopmentDestinationSnapshotV1::Absent,
+                after: DevelopmentDestinationSnapshotV1::File {
+                    sha256: fixture.transcript.output_pdf_sha256.clone(),
+                },
+                temporary_file_remaining: false,
+                preservation_failure_case_exercised: false,
+            },
+            strict_verifier_gaps: vec![
+                "collector is not attested".to_string(),
+                "failed destination-preservation case was not exercised".to_string(),
+            ],
+        }
+    }
+
+    #[test]
+    fn runtime_observation_serializes_real_values_and_explicit_gaps_without_promotion() {
+        let fixture = make_fixture();
+        let observation = development_observation(&fixture);
+        let encoded = encode_development_native_output_observation(&observation)
+            .expect("non-promotional observation");
+        assert_eq!(encoded.last(), Some(&b'\n'));
+        let decoded: DevelopmentNativeOutputObservationV1 =
+            serde_json::from_slice(&encoded).expect("observation JSON");
+        assert_eq!(decoded, observation);
+        assert!(!decoded.promotion_eligible);
+        assert!(matches!(
+            decoded.source_revision,
+            DevelopmentEvidenceAvailability::Unavailable { .. }
+        ));
+        assert!(
+            serde_json::from_slice::<DevelopmentNativeOutputTranscriptV1>(&encoded).is_err(),
+            "an incomplete runtime observation must not parse as the strict transcript"
+        );
+    }
+
+    #[test]
+    fn runtime_observation_rejects_duplicated_claims_and_missing_gap_reasons() {
+        let fixture = make_fixture();
+        let mut observation = development_observation(&fixture);
+        observation.geometry_reports[1].pages[0].x += 1.0;
+        assert!(observation.validate_non_promotional().is_err());
+
+        let mut observation = development_observation(&fixture);
+        observation.source_revision = DevelopmentEvidenceAvailability::unavailable(" ");
+        assert!(observation.validate_non_promotional().is_err());
+
+        let mut observation = development_observation(&fixture);
+        observation.promotion_eligible = true;
+        assert!(observation.validate_non_promotional().is_err());
+
+        let mut observation = development_observation(&fixture);
+        observation.form_code = " ".to_string();
+        assert!(observation.validate_non_promotional().is_err());
     }
 
     #[test]
