@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::db::DbError;
 
-const CURRENT_MIGRATION_VERSION: i32 = 12;
+const CURRENT_MIGRATION_VERSION: i32 = 13;
 
 pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
     let mut version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
@@ -255,6 +255,9 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         // legacy profiles. Undated backfills remain review-blocked and do not
         // replace an existing user-owned Forms Set.
         "SELECT 1; -- v12 marker: durable profile-version ledger backfill (Rust-side)",
+        // v13: Correct early v12 undated migration backfills that were
+        // serialized as Confirmed even though they required date review.
+        "SELECT 1; -- v13 marker: explicit NeedsReview profile-version status (Rust-side)",
     ];
 
     while version < CURRENT_MIGRATION_VERSION {
@@ -292,6 +295,10 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
             if version == 12 {
                 migrate_v12_profile_version_ledger(conn)?;
             }
+
+            if version == 13 {
+                migrate_v13_profile_version_review_status(conn)?;
+            }
         } else {
             break;
         }
@@ -300,12 +307,61 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
     Ok(())
 }
 
+/// Convert undated migration backfills from the early v12 `Confirmed` state
+/// to the explicit fail-closed `NeedsReview` state.
+///
+/// This migration changes profile JSON only. Existing user-owned Forms Sets
+/// are intentionally left untouched.
+fn migrate_v13_profile_version_review_status(conn: &Connection) -> Result<(), DbError> {
+    use crate::profile::TaxpayerProfile;
+
+    let rows = {
+        let mut stmt = conn.prepare("SELECT id, data_json FROM profiles")?;
+        stmt.query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?
+    };
+
+    let mut normalized = 0usize;
+    for (id, data_json) in rows {
+        let mut profile: TaxpayerProfile = match serde_json::from_str(&data_json) {
+            Ok(profile) => profile,
+            Err(error) => {
+                tracing::warn!(
+                    profile_id = id,
+                    %error,
+                    "v13 migration: profile JSON could not be normalized"
+                );
+                continue;
+            }
+        };
+        if !profile.normalize_profile_version_review_statuses() {
+            continue;
+        }
+
+        conn.execute(
+            "UPDATE profiles SET data_json = ?1 WHERE id = ?2",
+            rusqlite::params![serde_json::to_string(&profile)?, id],
+        )?;
+        normalized += 1;
+    }
+
+    if normalized > 0 {
+        info!(
+            "v13 migration: moved {} undated profile versions to NeedsReview",
+            normalized
+        );
+    }
+    Ok(())
+}
+
 /// Persist one compatibility profile-version record for legacy profile JSON.
 ///
 /// This is deliberately a one-time migration rather than a resolver fallback.
 /// A reliable business start date becomes the effective start. Otherwise the
-/// version is retained as `needs_effective_date_review` and resolution remains
-/// fail-closed. Existing `per_year_forms` rows are left untouched.
+/// version is retained as `NeedsReview` and resolution remains fail-closed.
+/// Existing `per_year_forms` rows are left untouched.
 fn migrate_v12_profile_version_ledger(conn: &Connection) -> Result<(), DbError> {
     use crate::profile::TaxpayerProfile;
 
@@ -1159,7 +1215,7 @@ mod tests {
             undated_version.source,
             TaxProfileVersionSource::MigrationBackfill
         );
-        assert_eq!(undated_version.status, TaxProfileVersionStatus::Confirmed);
+        assert_eq!(undated_version.status, TaxProfileVersionStatus::NeedsReview);
         assert_eq!(undated_version.effective_from, None);
         assert!(undated_version.needs_effective_date_review);
 
@@ -1213,6 +1269,95 @@ mod tests {
         assert_eq!(before_second_run, after_second_run);
         assert_eq!(dated.profile_versions[0].id, "legacy-current-profile");
         assert_eq!(undated.profile_versions[0].id, "legacy-current-profile");
+    }
+
+    #[test]
+    fn test_v13_normalizes_undated_confirmed_backfill_without_touching_forms_sets() {
+        use crate::profile::{TaxProfileVersionStatus, TaxpayerProfile};
+
+        let mut profile: TaxpayerProfile = serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Undated Versioned Legacy",
+            "tin": {
+                "segment1": "444",
+                "segment2": "456",
+                "segment3": "789",
+                "branch": "000"
+            },
+            "rdo_code": "039",
+            "line_of_business": "Consulting",
+            "registered_address": "Quezon City",
+            "zip_code": "1100",
+            "phone": "09156837000",
+            "email": "profile@example.com",
+            "default_form_type": "2551Q",
+            "taxpayer_type": "Individual",
+            "is_vat_registered": false,
+            "business_start_date": null,
+            "compliance_source_mode": "CorVersioned"
+        }))
+        .unwrap();
+        profile.ensure_profile_version_ledger();
+        profile.profile_versions[0].status = TaxProfileVersionStatus::Confirmed;
+        let legacy_v12_json = serde_json::to_string(&profile).unwrap();
+
+        let conn = test_conn();
+        conn.execute_batch(
+            "CREATE TABLE profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tin TEXT UNIQUE NOT NULL,
+                data_json TEXT NOT NULL
+            );
+            CREATE TABLE per_year_forms (
+                tin TEXT NOT NULL,
+                taxable_year INTEGER NOT NULL,
+                form_code TEXT NOT NULL,
+                reason TEXT
+            );
+            INSERT INTO per_year_forms (tin, taxable_year, form_code, reason)
+            VALUES ('444456789000', 2026, '2551Q', 'Manual include survives review migration');
+            PRAGMA user_version = 12;",
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
+            rusqlite::params!["444456789000", legacy_v12_json],
+        )
+        .unwrap();
+
+        migrate_database(&conn).unwrap();
+
+        let migrated_json: String = conn
+            .query_row(
+                "SELECT data_json FROM profiles WHERE tin = '444456789000'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let migrated: TaxpayerProfile = serde_json::from_str(&migrated_json).unwrap();
+        assert_eq!(
+            migrated.profile_versions[0].status,
+            TaxProfileVersionStatus::NeedsReview
+        );
+        assert!(migrated.profile_versions[0].needs_effective_date_review);
+        assert!(migrated.confirmed_profile_versions().is_empty());
+
+        let forms_row: (String, i64, String, String) = conn
+            .query_row(
+                "SELECT tin, taxable_year, form_code, reason FROM per_year_forms",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            forms_row,
+            (
+                "444456789000".to_string(),
+                2026,
+                "2551Q".to_string(),
+                "Manual include survives review migration".to_string(),
+            )
+        );
     }
 
     #[test]

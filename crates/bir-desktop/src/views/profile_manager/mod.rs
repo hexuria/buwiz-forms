@@ -105,6 +105,7 @@ pub struct ProfileManagerView {
     stored_atc_codes: Vec<String>,
     stored_tax_elections: Vec<bir_core::profile::TaxElectionHistory>,
     stored_profile_versions: Vec<bir_core::profile::TaxProfileVersion>,
+    pending_cor_evidence_cleanup: Vec<(u64, bir_core::profile::CorDocumentRef)>,
     compliance_source_mode: ComplianceSourceMode,
     cor_sub_tab: usize,
     ocr_selected_version_id: Option<String>,
@@ -714,6 +715,7 @@ impl ProfileManagerView {
             stored_atc_codes: vec![],
             stored_tax_elections: vec![],
             stored_profile_versions: vec![],
+            pending_cor_evidence_cleanup: vec![],
             compliance_source_mode: ComplianceSourceMode::TemporalSuggestion,
             cor_sub_tab: 0,
             ocr_selected_version_id: None,
@@ -920,6 +922,7 @@ impl ProfileManagerView {
         self.stored_atc_codes.clear();
         self.stored_tax_elections = vec![];
         self.stored_profile_versions = vec![];
+        self.pending_cor_evidence_cleanup.clear();
         self.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
         self.ocr_selected_version_id = None;
         self.cor_editing_version_id = None;
@@ -1058,6 +1061,7 @@ impl ProfileManagerView {
         self.stored_atc_codes = profile.atc_codes.clone();
         self.stored_tax_elections = profile.tax_elections.clone();
         self.stored_profile_versions = profile.profile_versions.clone();
+        self.pending_cor_evidence_cleanup.clear();
         self.compliance_source_mode =
             Self::derive_compliance_source_mode(&self.stored_profile_versions);
         tracing::info!(
@@ -2029,6 +2033,13 @@ impl ProfileManagerView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if let Some(message) = self.cor_upload_target_error(target_version_id.as_deref()) {
+            let message = message.to_string();
+            self.save_message = Some(message.clone());
+            window.push_notification(Notification::error(message).title("COR is read-only"), cx);
+            return;
+        }
+
         let mut profile = self.current_profile(cx);
         profile.profile_versions.clear();
         profile.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
@@ -2112,6 +2123,30 @@ impl ProfileManagerView {
                 ocr.fields.extracted_form_codes
             );
 
+            // The target may have been confirmed or archived while OCR was running.
+            // Re-check before copying evidence into managed storage, then check once
+            // more before mutating the in-memory profile below.
+            let target_still_editable = this.update(cx, |this, cx| {
+                if let Some(message) =
+                    this.cor_upload_target_error(target_ver_id.as_deref())
+                {
+                    let message = message.to_string();
+                    this.save_message = Some(message.clone());
+                    this.pending_notification = Some((NotificationType::Error, message));
+                    this.is_uploading_cor = false;
+                    cx.notify();
+                    false
+                } else {
+                    true
+                }
+            });
+            if !matches!(target_still_editable, Ok(true)) {
+                tracing::info!(
+                    "[COR Upload] Target became read-only or disappeared before evidence storage."
+                );
+                return;
+            }
+
             // Store evidence file
             tracing::info!("[COR Upload] Storing evidence file for TIN={tin}…");
             match crate::cor_evidence::store_cor_document(&source_path, &tin) {
@@ -2120,6 +2155,22 @@ impl ProfileManagerView {
                     evidence.provider = Some(provider_label);
                     evidence.model = model_label;
                     let _ = this.update(cx, move |this, cx| {
+                        if let Some(message) =
+                            this.cor_upload_target_error(target_ver_id.as_deref())
+                        {
+                            crate::cor_evidence::remove_stored_cor_document(&evidence);
+                            let message = message.to_string();
+                            this.save_message = Some(message.clone());
+                            this.pending_notification = Some((NotificationType::Error, message));
+                            this.gemini_ocr_cloud_consent = false;
+                            this.is_uploading_cor = false;
+                            cx.notify();
+                            tracing::info!(
+                                "[COR Upload] Refused replacement because target became read-only or disappeared."
+                            );
+                            return;
+                        }
+
                         let version = crate::cor_ocr::create_draft_cor_version_from_ocr(
                             &profile,
                             evidence,
@@ -2220,11 +2271,18 @@ impl ProfileManagerView {
             return;
         };
 
-        let removed_path = version
+        if !Self::profile_version_facts_are_editable(&version.status) {
+            let message = Self::immutable_cor_version_message().to_string();
+            self.save_message = Some(message.clone());
+            window.push_notification(Notification::error(message).title("COR is read-only"), cx);
+            return;
+        }
+
+        let removed_document = version
             .evidence
             .iter()
             .find(|document| document.id == document_id)
-            .map(|document| document.stored_path.clone());
+            .cloned();
         let before = version.evidence.len();
         version
             .evidence
@@ -2239,15 +2297,54 @@ impl ProfileManagerView {
             return;
         }
 
-        if let Some(path) = removed_path {
-            let _ = std::fs::remove_file(path);
+        self.mark_profile_changed();
+        if let Some(document) = removed_document {
+            self.pending_cor_evidence_cleanup
+                .push((self.profile_change_revision, document));
         }
         self.save_profile(cx);
-        self.save_message = Some("COR evidence removed.".to_string());
-        window.push_notification(
-            Notification::success("COR evidence document removed.").title("OCR"),
-            cx,
+    }
+
+    fn delete_cor_version(
+        &mut self,
+        version_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(version_index) = self
+            .stored_profile_versions
+            .iter()
+            .position(|version| version.id == version_id)
+        else {
+            self.save_message = Some("COR version was not found.".to_string());
+            return;
+        };
+        if !Self::profile_version_facts_are_editable(
+            &self.stored_profile_versions[version_index].status,
+        ) {
+            let message = Self::immutable_cor_version_message().to_string();
+            self.save_message = Some(message.clone());
+            window.push_notification(Notification::error(message).title("COR is read-only"), cx);
+            return;
+        }
+
+        let version = self.stored_profile_versions.remove(version_index);
+        if self.ocr_selected_version_id.as_deref() == Some(version_id) {
+            self.ocr_selected_version_id = None;
+            self.interactive_document_viewer = None;
+        }
+        if self.cor_editing_version_id.as_deref() == Some(version_id) {
+            self.cor_editing_version_id = None;
+        }
+        self.mark_profile_changed();
+        let cleanup_revision = self.profile_change_revision;
+        self.pending_cor_evidence_cleanup.extend(
+            version
+                .evidence
+                .into_iter()
+                .map(|evidence| (cleanup_revision, evidence)),
         );
+        self.save_profile(cx);
     }
 
     fn cor_version_confirmation_plan(
@@ -2304,15 +2401,8 @@ impl ProfileManagerView {
         cx: &mut Context<Self>,
     ) {
         self.pending_profile_version_confirmation = None;
-        let auto_closed_prior_version = !plan.auto_close_consequences.is_empty();
         match self.confirm_cor_version(&plan, window, cx) {
             Ok(()) => {
-                self.save_message = Some(if auto_closed_prior_version {
-                    "COR version confirmed; the acknowledged prior profile timeline was closed, and the Forms Set reconciliation was saved."
-                        .to_string()
-                } else {
-                    "COR version confirmed; profile and Forms Set reconciliation saved.".to_string()
-                });
                 self.compliance_source_mode =
                     Self::derive_compliance_source_mode(&self.stored_profile_versions);
             }
@@ -2363,7 +2453,7 @@ impl ProfileManagerView {
             profile.per_year_forms = self.stored_per_year_forms.clone();
 
             self.mark_profile_changed();
-            self.save_profile(cx);
+            self.save_profile_with_reviewed_confirmation(plan.clone(), cx);
 
             Ok(())
         } else {
@@ -2387,20 +2477,51 @@ impl ProfileManagerView {
         }
     }
 
-    fn cor_override_target_version_id(&self) -> Option<String> {
-        if let Some(editing_id) = self.cor_editing_version_id.as_ref()
-            && self.stored_profile_versions.iter().any(|version| {
-                version.id == *editing_id
-                    && version.status != bir_core::profile::TaxProfileVersionStatus::Archived
-            })
+    fn profile_version_facts_are_editable(
+        status: &bir_core::profile::TaxProfileVersionStatus,
+    ) -> bool {
+        matches!(
+            status,
+            bir_core::profile::TaxProfileVersionStatus::Draft
+                | bir_core::profile::TaxProfileVersionStatus::NeedsReview
+        )
+    }
+
+    fn immutable_cor_version_message() -> &'static str {
+        "Confirmed and archived COR facts are read-only. Create a replacement version to correct dates, tax facts, evidence, or overrides, then confirm it through the reviewed workflow."
+    }
+
+    fn cor_upload_target_error(&self, target_version_id: Option<&str>) -> Option<&'static str> {
+        let target_version_id = target_version_id?;
+        match self
+            .stored_profile_versions
+            .iter()
+            .find(|version| version.id == target_version_id)
         {
-            return Some(editing_id.clone());
+            Some(version) if Self::profile_version_facts_are_editable(&version.status) => None,
+            Some(_) => Some(Self::immutable_cor_version_message()),
+            None => Some(
+                "COR version was not found. Create a replacement draft and upload the document there.",
+            ),
+        }
+    }
+
+    fn cor_override_target_version_id(&self) -> Option<String> {
+        if let Some(editing_id) = self.cor_editing_version_id.as_ref() {
+            return self
+                .stored_profile_versions
+                .iter()
+                .find(|version| {
+                    version.id == *editing_id
+                        && Self::profile_version_facts_are_editable(&version.status)
+                })
+                .map(|version| version.id.clone());
         }
 
         self.stored_profile_versions
             .iter()
             .rev()
-            .find(|version| version.status != bir_core::profile::TaxProfileVersionStatus::Archived)
+            .find(|version| Self::profile_version_facts_are_editable(&version.status))
             .map(|version| version.id.clone())
     }
 
@@ -2582,6 +2703,35 @@ impl ProfileManagerView {
         let Some(version_id) = self.cor_editing_version_id.clone() else {
             return Err("Select a COR version to edit first.".to_string());
         };
+        let label = self
+            .cor_version_label_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+        if label.is_empty() {
+            return Err("COR version label is required.".to_string());
+        }
+        let Some(version_index) = self
+            .stored_profile_versions
+            .iter()
+            .position(|version| version.id == version_id)
+        else {
+            return Err("COR version was not found.".to_string());
+        };
+        if !Self::profile_version_facts_are_editable(
+            &self.stored_profile_versions[version_index].status,
+        ) {
+            self.stored_profile_versions[version_index].label = label;
+            self.save_profile(cx);
+            self.save_message = Some(
+                "COR version label updated. Confirmed and archived facts remain read-only; create a replacement version for corrections."
+                    .to_string(),
+            );
+            self.load_cor_version_editor(&version_id, window, cx)?;
+            return Ok(());
+        }
+
         let effective_from = Self::parse_optional_cor_date(
             self.cor_effective_from_input.read(cx).value().trim(),
             "effective from",
@@ -2600,23 +2750,7 @@ impl ProfileManagerView {
             "registration date",
         )?;
 
-        let Some(version) = self
-            .stored_profile_versions
-            .iter_mut()
-            .find(|version| version.id == version_id)
-        else {
-            return Err("COR version was not found.".to_string());
-        };
-
-        let label = self
-            .cor_version_label_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
-        if label.is_empty() {
-            return Err("COR version label is required.".to_string());
-        }
+        let version = &mut self.stored_profile_versions[version_index];
 
         version.label = label;
         version.effective_from = effective_from;
@@ -2733,6 +2867,13 @@ impl ProfileManagerView {
             self.save_message = Some("COR version was not found.".to_string());
             return;
         };
+
+        if !Self::profile_version_facts_are_editable(&version.status) {
+            let message = Self::immutable_cor_version_message().to_string();
+            self.save_message = Some(message.clone());
+            window.push_notification(Notification::error(message).title("COR is read-only"), cx);
+            return;
+        }
 
         if let Some(index) = version
             .registered_tax_types
@@ -2973,6 +3114,10 @@ impl ProfileManagerView {
             self.save_message = Some("COR version was not found.".to_string());
             return;
         };
+        if !Self::profile_version_facts_are_editable(&version.status) {
+            self.save_message = Some(Self::immutable_cor_version_message().to_string());
+            return;
+        }
         if index >= version.deadline_overrides.len() {
             self.save_message = Some("Profile deadline override was not found.".to_string());
             return;
@@ -2983,6 +3128,22 @@ impl ProfileManagerView {
     }
 
     fn save_profile(&mut self, cx: &mut Context<Self>) {
+        self.save_profile_inner(None, cx);
+    }
+
+    fn save_profile_with_reviewed_confirmation(
+        &mut self,
+        reviewed_plan: TaxProfileVersionConfirmationPlan,
+        cx: &mut Context<Self>,
+    ) {
+        self.save_profile_inner(Some(reviewed_plan), cx);
+    }
+
+    fn save_profile_inner(
+        &mut self,
+        reviewed_plan: Option<TaxProfileVersionConfirmationPlan>,
+        cx: &mut Context<Self>,
+    ) {
         let profile = self.current_profile(cx);
         self.errors = validate_profile(&profile);
 
@@ -3082,7 +3243,12 @@ impl ProfileManagerView {
                 .background_executor()
                 .spawn(async move {
                     if let Ok(db) = db_arc.lock() {
-                        db.save_profile(profile).map_err(|e| e.to_string())
+                        if let Some(reviewed_plan) = reviewed_plan.as_ref() {
+                            db.save_profile_with_confirmation_plan(profile, reviewed_plan)
+                                .map_err(|e| e.to_string())
+                        } else {
+                            db.save_profile(profile).map_err(|e| e.to_string())
+                        }
                     } else {
                         Err("Database lock is poisoned".to_string())
                     }
@@ -3103,6 +3269,7 @@ impl ProfileManagerView {
                         };
                         let tin_val = saved.tin.full();
                         let affected_years = compliance_affected_years(&saved);
+                        this.cleanup_saved_cor_evidence(&saved, save_revision);
                         this.editing_id = Some(saved_id);
                         this.persisted_profile_tin = Some(tin_val.clone());
                         this.stored_atc_codes.clone_from(&saved.atc_codes);
@@ -3164,6 +3331,28 @@ impl ProfileManagerView {
             });
         })
         .detach();
+    }
+
+    fn cleanup_saved_cor_evidence(&mut self, saved: &TaxpayerProfile, save_revision: u64) {
+        let referenced_paths = saved
+            .profile_versions
+            .iter()
+            .flat_map(|version| version.evidence.iter())
+            .map(|evidence| evidence.stored_path.clone())
+            .collect::<std::collections::HashSet<_>>();
+        let mut ready = Vec::new();
+        self.pending_cor_evidence_cleanup
+            .retain(|(revision, evidence)| {
+                let should_remove =
+                    *revision <= save_revision && !referenced_paths.contains(&evidence.stored_path);
+                if should_remove {
+                    ready.push(evidence.clone());
+                }
+                !should_remove
+            });
+        for evidence in ready {
+            crate::cor_evidence::remove_stored_cor_document(&evidence);
+        }
     }
 
     fn field_label(text: &str, cx: &Context<Self>) -> Div {

@@ -3,7 +3,7 @@ use bir_core::forms::forms_set::{FormSetEntry, FormSetSource, PerYearFormsSet};
 use bir_core::integration::resolve_profile_obligations_for_year;
 use bir_core::naming::Tin;
 use bir_core::profile::{
-    ComplianceSourceMode, CorRegistrationFacts, ManualObligationOverride,
+    ComplianceSourceMode, CorDocumentRef, CorRegistrationFacts, ManualObligationOverride,
     ManualObligationOverrideAction, RegisteredTaxType, TaxClassification, TaxProfileVersion,
     TaxProfileVersionSource, TaxProfileVersionStatus, TaxpayerProfile, TaxpayerType,
 };
@@ -136,7 +136,7 @@ fn profile_save_reconciles_generated_forms_and_preserves_manual_entry() {
             RegisteredTaxType::IncomeTax,
             RegisteredTaxType::PercentageTax,
         ];
-        let saved = db.save_profile(profile).expect("initial profile save");
+        let saved = save_initial_confirmed_profile(&db, profile);
         let year = chrono::Utc::now().year() as u16;
 
         let mut set = saved
@@ -155,12 +155,29 @@ fn profile_save_reconciles_generated_forms_and_preserves_manual_entry() {
             .get_profile(&saved.tin.full())
             .expect("profile lookup")
             .expect("stored profile");
-        changed.profile_versions[0].is_vat_registered = true;
-        changed.profile_versions[0].registered_tax_types = vec![
+        let mut replacement = changed.profile_versions[0].clone();
+        replacement.id = "confirmed-vat-cor".to_string();
+        replacement.label = "Confirmed VAT COR".to_string();
+        replacement.status = TaxProfileVersionStatus::Draft;
+        replacement.effective_from = NaiveDate::from_ymd_opt(year as i32, 1, 1);
+        replacement.effective_until = None;
+        replacement.is_vat_registered = true;
+        replacement.registered_tax_types = vec![
             RegisteredTaxType::IncomeTax,
             RegisteredTaxType::ValueAddedTax,
         ];
-        let changed = db.save_profile(changed).expect("VAT profile save");
+        changed.profile_versions.push(replacement);
+        let mut changed = db
+            .save_profile(changed)
+            .expect("VAT replacement draft save");
+        let effective_from = NaiveDate::from_ymd_opt(year as i32, 1, 1).unwrap();
+        let plan = changed
+            .profile_version_confirmation_plan("confirmed-vat-cor", effective_from)
+            .expect("VAT replacement confirmation plan");
+        assert!(changed.apply_profile_version_confirmation_plan(&plan));
+        let changed = db
+            .save_profile_with_confirmation_plan(changed, &plan)
+            .expect("reviewed VAT profile save");
         let reconciled = changed
             .per_year_forms
             .get(&year)
@@ -211,24 +228,34 @@ fn profile_save_rejects_overlapping_confirmed_versions() {
         let temp_file = NamedTempFile::new().unwrap();
         let db = Database::open(temp_file.path()).expect("Failed to open DB");
         let mut profile = create_test_profile("010558054000");
-        profile.profile_versions[0].id = "first".into();
+        profile.profile_versions[0].id = "first".to_string();
         profile.profile_versions[0].source = TaxProfileVersionSource::ManualCor;
-        profile.profile_versions[0].effective_until = NaiveDate::from_ymd_opt(2026, 12, 31);
-        let saved = db.save_profile(profile).expect("initial profile save");
+        let saved = save_initial_confirmed_profile(&db, profile);
 
         let mut overlapping = TaxProfileVersion::from_profile_backfill(&saved);
         overlapping.id = "overlapping".into();
+        overlapping.status = TaxProfileVersionStatus::Draft;
         overlapping.source = TaxProfileVersionSource::ManualCor;
-        overlapping.effective_from = NaiveDate::from_ymd_opt(2026, 6, 1);
+        overlapping.effective_from = NaiveDate::from_ymd_opt(2024, 6, 1);
         overlapping.effective_until = None;
         let mut changed = saved;
         changed.profile_versions.push(overlapping);
+        let plan = changed
+            .profile_version_confirmation_plan(
+                "overlapping",
+                NaiveDate::from_ymd_opt(2024, 6, 1).unwrap(),
+            )
+            .expect("confirmation plan should be available");
+        assert!(changed.apply_profile_version_confirmation_plan(&plan));
 
         let error = db
-            .save_profile(changed)
+            .save_profile_with_confirmation_plan(changed, &plan)
             .expect_err("overlap must be rejected");
 
-        assert!(error.to_string().contains("overlap"));
+        assert!(
+            error.to_string().contains("overlap"),
+            "unexpected rejection: {error}"
+        );
     });
 }
 
@@ -406,12 +433,15 @@ fn test_cor_confirmation_flow_populates_forms_set() {
         db.delete_per_year_forms(&tin_str, 2026).unwrap();
         assert!(!db.has_per_year_forms(&tin_str, 2026).unwrap());
 
-        // Simulate confirmation: change status to Confirmed, update profile and save
-        saved_profile.profile_versions[0].status = TaxProfileVersionStatus::Confirmed;
-        saved_profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+        // Confirm through the same reviewed plan boundary used by the app.
+        let effective_from = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        let plan = saved_profile
+            .profile_version_confirmation_plan("draft-cor-1", effective_from)
+            .expect("confirmation plan should be available");
+        assert!(saved_profile.apply_profile_version_confirmation_plan(&plan));
 
         let _final_saved = db
-            .save_profile(saved_profile)
+            .save_profile_with_confirmation_plan(saved_profile, &plan)
             .expect("Failed to save confirmed profile");
 
         // Verify that a forms set has been automatically created and populated in per_year_forms table for 2026!
@@ -426,6 +456,504 @@ fn test_cor_confirmation_flow_populates_forms_set() {
         let entry = generated_set.entry("1701").unwrap();
         assert!(entry.active);
         assert_eq!(entry.source, FormSetSource::Manual);
+    });
+}
+
+fn profile_with_open_prior_and_draft(tin: &str) -> TaxpayerProfile {
+    let mut profile = create_test_profile(tin);
+    profile.profile_versions[0].id = "prior-cor".to_string();
+    profile.profile_versions[0].label = "Prior COR".to_string();
+    profile.profile_versions[0].source = TaxProfileVersionSource::ManualCor;
+    profile.profile_versions[0].effective_from = NaiveDate::from_ymd_opt(2025, 1, 1);
+    profile.profile_versions[0].effective_until = None;
+
+    let mut replacement = profile.profile_versions[0].clone();
+    replacement.id = "replacement-cor".to_string();
+    replacement.label = "Replacement COR".to_string();
+    replacement.status = TaxProfileVersionStatus::Draft;
+    replacement.source = TaxProfileVersionSource::ManualCor;
+    replacement.effective_from = NaiveDate::from_ymd_opt(2026, 7, 1);
+    replacement.effective_until = None;
+    replacement.needs_effective_date_review = false;
+    profile.profile_versions.push(replacement);
+
+    profile
+}
+
+fn save_profile_with_open_prior_and_draft(db: &Database, tin: &str) -> TaxpayerProfile {
+    let profile = profile_with_open_prior_and_draft(tin);
+    let plan = profile
+        .profile_version_confirmation_plan(
+            "prior-cor",
+            NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        )
+        .expect("initial reviewed plan should be available");
+    db.save_profile_with_confirmation_plan(profile, &plan)
+        .expect("initial profile timeline should save")
+}
+
+fn save_initial_confirmed_profile(db: &Database, profile: TaxpayerProfile) -> TaxpayerProfile {
+    let version = profile
+        .profile_versions
+        .iter()
+        .find(|version| version.status == TaxProfileVersionStatus::Confirmed)
+        .expect("fixture should contain one confirmed profile version");
+    let effective_from = version
+        .effective_from
+        .expect("confirmed fixture should have an effective start date");
+    let plan = profile
+        .profile_version_confirmation_plan(&version.id, effective_from)
+        .expect("initial reviewed plan should be available");
+    db.save_profile_with_confirmation_plan(profile, &plan)
+        .expect("initial reviewed profile should save")
+}
+
+fn protected_version_fact_mutations(
+    profile: &TaxpayerProfile,
+    version_index: usize,
+) -> Vec<(&'static str, TaxpayerProfile)> {
+    let mut vat_flag = profile.clone();
+    vat_flag.profile_versions[version_index].is_vat_registered = true;
+
+    let mut registered_tax_type = profile.clone();
+    registered_tax_type.profile_versions[version_index]
+        .registered_tax_types
+        .push(RegisteredTaxType::ValueAddedTax);
+
+    let mut evidence = profile.clone();
+    evidence.profile_versions[version_index]
+        .evidence
+        .push(CorDocumentRef {
+            id: "added-evidence".to_string(),
+            file_name: "cor-2303.pdf".to_string(),
+            stored_path: "/tmp/cor-2303.pdf".to_string(),
+            uploaded_at: None,
+            provider: Some("Test".to_string()),
+            model: None,
+            document_type: Some("COR Form 2303".to_string()),
+            extracted_form_codes: vec!["2550Q".to_string()],
+            ocr_text: Some("VALUE ADDED TAX".to_string()),
+            ocr_confidence: Some(0.99),
+            field_bboxes: std::collections::HashMap::new(),
+        });
+
+    let mut obligation_override = profile.clone();
+    obligation_override.profile_versions[version_index]
+        .obligation_overrides
+        .push(ManualObligationOverride {
+            form_code: "2550Q".to_string(),
+            action: ManualObligationOverrideAction::Include,
+            reason: "Attempted hidden change".to_string(),
+            source_reference: None,
+        });
+
+    let mut cor_fact = profile.clone();
+    cor_fact.profile_versions[version_index].cor.registered_name =
+        "Silently Changed Taxpayer".to_string();
+
+    let mut source = profile.clone();
+    source.profile_versions[version_index].source = TaxProfileVersionSource::UserOverride;
+
+    vec![
+        ("VAT flag", vat_flag),
+        ("registered tax type", registered_tax_type),
+        ("evidence and extracted form code", evidence),
+        ("obligation override", obligation_override),
+        ("COR fact", cor_fact),
+        ("source", source),
+    ]
+}
+
+#[test]
+fn initial_exact_migration_backfill_can_save_without_reviewed_plan() {
+    temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db = Database::open(temp_file.path()).expect("Failed to open DB");
+        let profile = create_test_profile("010558054000");
+
+        let saved = db
+            .save_profile(profile)
+            .expect("the exact one-time migration backfill should remain compatible");
+
+        assert_eq!(saved.profile_versions.len(), 1);
+        assert_eq!(
+            saved.profile_versions[0].source,
+            TaxProfileVersionSource::MigrationBackfill
+        );
+        assert_eq!(
+            saved.profile_versions[0].status,
+            TaxProfileVersionStatus::Confirmed
+        );
+    });
+}
+
+#[test]
+fn initial_confirmed_cor_sources_require_an_exact_reviewed_plan() {
+    temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
+        for source in [
+            TaxProfileVersionSource::ManualCor,
+            TaxProfileVersionSource::OcrCor,
+            TaxProfileVersionSource::UserOverride,
+        ] {
+            let temp_file = NamedTempFile::new().unwrap();
+            let db = Database::open(temp_file.path()).expect("Failed to open DB");
+            let mut profile = create_test_profile("010558054000");
+            profile.profile_versions[0].id = "reviewed-cor".to_string();
+            profile.profile_versions[0].label = "Reviewed COR".to_string();
+            profile.profile_versions[0].source = source.clone();
+
+            let error = db.save_profile(profile.clone()).unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("requires an explicit reviewed confirmation plan"),
+                "{source:?} unexpectedly saved without review: {error}"
+            );
+
+            let effective_from = profile.profile_versions[0].effective_from.unwrap();
+            let plan = profile
+                .profile_version_confirmation_plan("reviewed-cor", effective_from)
+                .expect("reviewed plan should be available");
+            db.save_profile_with_confirmation_plan(profile, &plan)
+                .expect("the exact first-save reviewed plan should be accepted");
+        }
+    });
+}
+
+#[test]
+fn confirmed_profile_version_facts_are_immutable_except_label() {
+    temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db = Database::open(temp_file.path()).expect("Failed to open DB");
+        let saved = save_profile_with_open_prior_and_draft(&db, "010558054000");
+
+        let mut label_only = saved;
+        label_only.profile_versions[0].label = "Renamed confirmed COR".to_string();
+        let label_only = db
+            .save_profile(label_only)
+            .expect("label-only edits remain ordinary metadata changes");
+
+        for (fact, submitted) in protected_version_fact_mutations(&label_only, 0) {
+            let error = db.save_profile(submitted).unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("Confirmed and archived profile-version facts cannot change"),
+                "confirmed {fact} unexpectedly changed: {error}"
+            );
+        }
+
+        let unchanged = db.get_profile("010558054000").unwrap().unwrap();
+        assert_eq!(unchanged.profile_versions[0].label, "Renamed confirmed COR");
+        assert!(!unchanged.profile_versions[0].is_vat_registered);
+        assert!(unchanged.profile_versions[0].evidence.is_empty());
+        assert!(
+            unchanged.profile_versions[0]
+                .obligation_overrides
+                .is_empty()
+        );
+    });
+}
+
+#[test]
+fn archived_profile_version_facts_are_immutable_except_label() {
+    temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db = Database::open(temp_file.path()).expect("Failed to open DB");
+        let mut profile = create_test_profile("010558054000");
+        profile.profile_versions[0].status = TaxProfileVersionStatus::Archived;
+        profile.profile_versions[0].source = TaxProfileVersionSource::ManualCor;
+        let saved = db
+            .save_profile(profile)
+            .expect("initial archived evidence should save without becoming filing authority");
+
+        let mut label_only = saved;
+        label_only.profile_versions[0].label = "Renamed archived COR".to_string();
+        let label_only = db
+            .save_profile(label_only)
+            .expect("archived label-only edits remain ordinary metadata changes");
+
+        for (fact, submitted) in protected_version_fact_mutations(&label_only, 0) {
+            let error = db.save_profile(submitted).unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("Confirmed and archived profile-version facts cannot change"),
+                "archived {fact} unexpectedly changed: {error}"
+            );
+        }
+
+        let unchanged = db.get_profile("010558054000").unwrap().unwrap();
+        assert_eq!(unchanged.profile_versions[0].label, "Renamed archived COR");
+        assert!(!unchanged.profile_versions[0].is_vat_registered);
+        assert!(unchanged.profile_versions[0].evidence.is_empty());
+        assert!(
+            unchanged.profile_versions[0]
+                .obligation_overrides
+                .is_empty()
+        );
+    });
+}
+
+#[test]
+fn profile_save_cannot_bypass_reviewed_prior_version_closure() {
+    temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db = Database::open(temp_file.path()).expect("Failed to open DB");
+        let saved = save_profile_with_open_prior_and_draft(&db, "010558054000");
+        let effective_from = NaiveDate::from_ymd_opt(2026, 7, 1).unwrap();
+        let plan = saved
+            .profile_version_confirmation_plan("replacement-cor", effective_from)
+            .unwrap();
+        let mut submitted = saved.clone();
+        assert!(submitted.apply_profile_version_confirmation_plan(&plan));
+
+        let error = db.save_profile(submitted.clone()).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("explicit reviewed confirmation plan is required")
+        );
+
+        let unchanged = db.get_profile("010558054000").unwrap().unwrap();
+        assert_eq!(unchanged.profile_versions[0].effective_until, None);
+        assert_eq!(
+            unchanged.profile_versions[1].status,
+            TaxProfileVersionStatus::Draft
+        );
+
+        let authorized = db
+            .save_profile_with_confirmation_plan(submitted, &plan)
+            .expect("the exact reviewed plan should authorize the closure");
+        assert_eq!(
+            authorized.profile_versions[0].effective_until,
+            NaiveDate::from_ymd_opt(2026, 6, 30)
+        );
+        assert_eq!(
+            authorized.profile_versions[1].status,
+            TaxProfileVersionStatus::Confirmed
+        );
+    });
+}
+
+#[test]
+fn profile_save_rejects_two_step_manual_close_then_planless_confirmation_bypass() {
+    temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
+        let close_temp_file = NamedTempFile::new().unwrap();
+        let close_db = Database::open(close_temp_file.path()).expect("Failed to open DB");
+        let saved = save_profile_with_open_prior_and_draft(&close_db, "010558054000");
+
+        let mut manually_closed = saved;
+        manually_closed.profile_versions[0].effective_until = NaiveDate::from_ymd_opt(2026, 6, 30);
+        let error = close_db.save_profile(manually_closed).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("Confirmed and archived profile-version facts cannot change")
+        );
+        let unchanged = close_db.get_profile("010558054000").unwrap().unwrap();
+        assert_eq!(unchanged.profile_versions[0].effective_until, None);
+
+        // A confirmation with no predecessor closure is still a reviewed
+        // transition. This prevents the second half of a split save from
+        // becoming planless merely because no open predecessor remains.
+        let confirm_temp_file = NamedTempFile::new().unwrap();
+        let confirm_db = Database::open(confirm_temp_file.path()).expect("Failed to open DB");
+        let mut draft_only = create_test_profile("010558054000");
+        let mut replacement = draft_only.profile_versions.remove(0);
+        replacement.id = "replacement-cor".to_string();
+        replacement.label = "Replacement COR".to_string();
+        replacement.status = TaxProfileVersionStatus::Draft;
+        replacement.source = TaxProfileVersionSource::ManualCor;
+        replacement.effective_from = NaiveDate::from_ymd_opt(2026, 7, 1);
+        replacement.effective_until = None;
+        draft_only.profile_versions.push(replacement);
+        let saved = confirm_db
+            .save_profile(draft_only)
+            .expect("an unconfirmed draft should save initially");
+        let effective_from = NaiveDate::from_ymd_opt(2026, 7, 1).unwrap();
+        let plan = saved
+            .profile_version_confirmation_plan("replacement-cor", effective_from)
+            .unwrap();
+        assert!(plan.auto_close_consequences.is_empty());
+        let mut submitted = saved;
+        assert!(submitted.apply_profile_version_confirmation_plan(&plan));
+
+        let error = confirm_db.save_profile(submitted.clone()).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("explicit reviewed confirmation plan is required")
+        );
+        let unchanged = confirm_db.get_profile("010558054000").unwrap().unwrap();
+        assert_eq!(
+            unchanged.profile_versions[0].status,
+            TaxProfileVersionStatus::Draft
+        );
+
+        confirm_db
+            .save_profile_with_confirmation_plan(submitted, &plan)
+            .expect("the current reviewed plan should authorize confirmation");
+    });
+}
+
+#[test]
+fn ordinary_profile_save_rejects_direct_confirmed_timeline_edits() {
+    temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db = Database::open(temp_file.path()).expect("Failed to open DB");
+        let saved = save_profile_with_open_prior_and_draft(&db, "010558054000");
+
+        let mut changed_start = saved.clone();
+        changed_start.profile_versions[0].effective_from = NaiveDate::from_ymd_opt(2025, 2, 1);
+        let mut changed_end = saved.clone();
+        changed_end.profile_versions[0].effective_until = NaiveDate::from_ymd_opt(2026, 6, 30);
+        let mut changed_status = saved.clone();
+        changed_status.profile_versions[0].status = TaxProfileVersionStatus::Archived;
+        let mut changed_review_state = saved.clone();
+        changed_review_state.profile_versions[0].needs_effective_date_review = true;
+
+        for (field, submitted) in [
+            ("effective_from", changed_start),
+            ("effective_until", changed_end),
+            ("status", changed_status),
+            ("needs_effective_date_review", changed_review_state),
+        ] {
+            let error = db.save_profile(submitted).unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("Confirmed and archived profile-version facts cannot change"),
+                "{field} unexpectedly bypassed the persistence boundary: {error}"
+            );
+        }
+
+        let unchanged = db.get_profile("010558054000").unwrap().unwrap();
+        assert_eq!(
+            unchanged.profile_versions[0].effective_from,
+            NaiveDate::from_ymd_opt(2025, 1, 1)
+        );
+        assert_eq!(unchanged.profile_versions[0].effective_until, None);
+        assert_eq!(
+            unchanged.profile_versions[0].status,
+            TaxProfileVersionStatus::Confirmed
+        );
+        assert!(!unchanged.profile_versions[0].needs_effective_date_review);
+    });
+}
+
+#[test]
+fn reviewed_confirmation_plan_cannot_authorize_extra_timeline_edits() {
+    temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db = Database::open(temp_file.path()).expect("Failed to open DB");
+        let saved = save_profile_with_open_prior_and_draft(&db, "010558054000");
+        let effective_from = NaiveDate::from_ymd_opt(2026, 7, 1).unwrap();
+        let plan = saved
+            .profile_version_confirmation_plan("replacement-cor", effective_from)
+            .unwrap();
+        let mut submitted = saved;
+        assert!(submitted.apply_profile_version_confirmation_plan(&plan));
+        submitted.profile_versions[0].effective_from = NaiveDate::from_ymd_opt(2025, 2, 1);
+
+        let error = db
+            .save_profile_with_confirmation_plan(submitted, &plan)
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("Confirmed and archived profile-version facts cannot change")
+        );
+
+        let unchanged = db.get_profile("010558054000").unwrap().unwrap();
+        assert_eq!(
+            unchanged.profile_versions[0].effective_from,
+            NaiveDate::from_ymd_opt(2025, 1, 1)
+        );
+        assert_eq!(unchanged.profile_versions[0].effective_until, None);
+        assert_eq!(
+            unchanged.profile_versions[1].status,
+            TaxProfileVersionStatus::Draft
+        );
+    });
+}
+
+#[test]
+fn reviewed_confirmation_plan_cannot_resurrect_an_archived_version() {
+    temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db = Database::open(temp_file.path()).expect("Failed to open DB");
+        let mut profile = profile_with_open_prior_and_draft("010558054000");
+        profile.profile_versions[0].status = TaxProfileVersionStatus::Archived;
+        profile.profile_versions[0].effective_until = NaiveDate::from_ymd_opt(2025, 12, 31);
+        let saved = db
+            .save_profile(profile)
+            .expect("initial archived evidence should save");
+        let effective_from = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let plan = saved
+            .profile_version_confirmation_plan("prior-cor", effective_from)
+            .expect("domain planner can describe the attempted transition");
+        let mut submitted = saved;
+        assert!(submitted.apply_profile_version_confirmation_plan(&plan));
+
+        let error = db
+            .save_profile_with_confirmation_plan(submitted, &plan)
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("Archived profile versions cannot be confirmed directly")
+        );
+
+        let unchanged = db.get_profile("010558054000").unwrap().unwrap();
+        assert_eq!(
+            unchanged.profile_versions[0].status,
+            TaxProfileVersionStatus::Archived
+        );
+        assert_eq!(
+            unchanged.profile_versions[0].effective_until,
+            NaiveDate::from_ymd_opt(2025, 12, 31)
+        );
+    });
+}
+
+#[test]
+fn profile_save_rejects_stale_reviewed_confirmation_plan() {
+    temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db = Database::open(temp_file.path()).expect("Failed to open DB");
+        let original = save_profile_with_open_prior_and_draft(&db, "010558054000");
+        let effective_from = NaiveDate::from_ymd_opt(2026, 7, 1).unwrap();
+        let stale_plan = original
+            .profile_version_confirmation_plan("replacement-cor", effective_from)
+            .unwrap();
+
+        let mut stored_edit = original.clone();
+        stored_edit.profile_versions[0].label = "Prior COR edited after review".to_string();
+        db.save_profile(stored_edit)
+            .expect("ordinary non-timeline profile edit should save");
+
+        let mut stale_submission = original;
+        assert!(stale_submission.apply_profile_version_confirmation_plan(&stale_plan));
+        let error = db
+            .save_profile_with_confirmation_plan(stale_submission, &stale_plan)
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("timeline changed after confirmation was reviewed")
+        );
+
+        let unchanged = db.get_profile("010558054000").unwrap().unwrap();
+        assert_eq!(
+            unchanged.profile_versions[0].label,
+            "Prior COR edited after review"
+        );
+        assert_eq!(unchanged.profile_versions[0].effective_until, None);
+        assert_eq!(
+            unchanged.profile_versions[1].status,
+            TaxProfileVersionStatus::Draft
+        );
     });
 }
 
@@ -479,7 +1007,7 @@ fn test_obligation_filtering_individual_vs_corporate_and_vat() {
             deadline_overrides: vec![],
         };
 
-        let saved_indiv = db.save_profile(individual).unwrap();
+        let saved_indiv = save_initial_confirmed_profile(&db, individual);
         let resolved_indiv = resolve_profile_obligations_for_year(&saved_indiv, 2026);
 
         // Individual should have 1701/1701Q but NOT 1702/1702Q
@@ -529,7 +1057,7 @@ fn test_obligation_filtering_individual_vs_corporate_and_vat() {
             deadline_overrides: vec![],
         };
 
-        let saved_corp = db.save_profile(corporate).unwrap();
+        let saved_corp = save_initial_confirmed_profile(&db, corporate);
         let resolved_corp = resolve_profile_obligations_for_year(&saved_corp, 2026);
 
         // Corp should have 1702RT/1702Q but NOT 1701/1701Q
@@ -583,7 +1111,7 @@ fn test_obligation_filtering_individual_vs_corporate_and_vat() {
             deadline_overrides: vec![],
         };
 
-        let saved_vat_corp = db.save_profile(vat_corp).unwrap();
+        let saved_vat_corp = save_initial_confirmed_profile(&db, vat_corp);
         let resolved_vat_corp = resolve_profile_obligations_for_year(&saved_vat_corp, 2026);
 
         // VAT Corp should have quarterly VAT but not percentage tax.

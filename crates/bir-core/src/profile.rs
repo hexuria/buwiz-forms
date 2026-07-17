@@ -128,6 +128,9 @@ pub struct TaxElectionHistory {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TaxProfileVersionStatus {
     Draft,
+    /// Migrated or imported profile facts that cannot participate in filing
+    /// suggestions until their effective date has been reviewed explicitly.
+    NeedsReview,
     Confirmed,
     Archived,
 }
@@ -660,24 +663,38 @@ impl TaxpayerProfile {
             self.profile_versions
                 .push(TaxProfileVersion::from_profile_backfill(self));
         }
+        self.normalize_profile_version_review_statuses();
     }
 
-    pub(crate) fn validate_confirmed_profile_timeline(&mut self) -> Result<(), String> {
-        let has_dated_confirmed_version = self.profile_versions.iter().any(|version| {
-            version.status == TaxProfileVersionStatus::Confirmed
-                && version.source != TaxProfileVersionSource::MigrationBackfill
-                && version.effective_from.is_some()
-        });
-        if has_dated_confirmed_version {
-            for version in &mut self.profile_versions {
-                if version.status == TaxProfileVersionStatus::Confirmed
-                    && version.source == TaxProfileVersionSource::MigrationBackfill
-                    && version.effective_from.is_none()
-                {
-                    version.status = TaxProfileVersionStatus::Archived;
+    /// Normalize legacy undated migration backfills into an explicit
+    /// fail-closed review state.
+    ///
+    /// Early profile-ledger builds serialized these records as `Confirmed`
+    /// while also setting `needs_effective_date_review`. The status is the
+    /// authority used by obligation resolution, so the boolean alone was not
+    /// sufficient to keep the record out of confirmed-profile UI and APIs.
+    pub(crate) fn normalize_profile_version_review_statuses(&mut self) -> bool {
+        let mut changed = false;
+        for version in &mut self.profile_versions {
+            if version.source == TaxProfileVersionSource::MigrationBackfill
+                && version.effective_from.is_none()
+                && version.status != TaxProfileVersionStatus::Archived
+            {
+                if version.status != TaxProfileVersionStatus::NeedsReview {
+                    version.status = TaxProfileVersionStatus::NeedsReview;
+                    changed = true;
+                }
+                if !version.needs_effective_date_review {
+                    version.needs_effective_date_review = true;
+                    changed = true;
                 }
             }
         }
+        changed
+    }
+
+    pub(crate) fn validate_confirmed_profile_timeline(&mut self) -> Result<(), String> {
+        self.normalize_profile_version_review_statuses();
 
         let mut confirmed = self
             .profile_versions
@@ -686,9 +703,6 @@ impl TaxpayerProfile {
             .collect::<Vec<_>>();
         for version in &confirmed {
             let Some(effective_from) = version.effective_from else {
-                if version.source == TaxProfileVersionSource::MigrationBackfill {
-                    continue;
-                }
                 return Err(format!(
                     "Confirmed profile version '{}' must have an effective start date",
                     version.label
@@ -975,21 +989,6 @@ impl TaxpayerProfile {
         crate::integration::resolve_profile_obligations_for_year(self, year)
     }
 
-    pub fn auto_close_previous_confirmed_version(&mut self, new_effective_from: NaiveDate) {
-        let close_at = new_effective_from - Duration::days(1);
-        for version in &mut self.profile_versions {
-            if version.status == TaxProfileVersionStatus::Confirmed
-                && version.effective_until.is_none()
-                && (version.source == TaxProfileVersionSource::MigrationBackfill
-                    || version
-                        .effective_from
-                        .is_none_or(|start| start < new_effective_from))
-            {
-                version.effective_until = Some(close_at);
-            }
-        }
-    }
-
     pub fn profile_version_confirmation_plan(
         &self,
         version_id: &str,
@@ -1153,7 +1152,11 @@ impl TaxProfileVersion {
         Self {
             id: "legacy-current-profile".to_string(),
             label: "Current profile".to_string(),
-            status: TaxProfileVersionStatus::Confirmed,
+            status: if effective_from.is_some() {
+                TaxProfileVersionStatus::Confirmed
+            } else {
+                TaxProfileVersionStatus::NeedsReview
+            },
             source: TaxProfileVersionSource::MigrationBackfill,
             effective_from,
             effective_until: None,
@@ -1287,6 +1290,51 @@ mod tests {
         version.needs_effective_date_review = true;
         version.cor.registered_name = name.to_string();
         version
+    }
+
+    #[test]
+    fn undated_backfill_is_explicitly_needs_review_and_not_confirmed() {
+        let mut profile = test_profile();
+        profile.business_start_date = None;
+        profile.profile_versions.clear();
+
+        profile.ensure_profile_version_ledger();
+
+        assert_eq!(profile.profile_versions.len(), 1);
+        assert_eq!(
+            profile.profile_versions[0].status,
+            TaxProfileVersionStatus::NeedsReview
+        );
+        assert!(profile.profile_versions[0].needs_effective_date_review);
+        assert!(profile.confirmed_profile_versions().is_empty());
+        assert_eq!(
+            serde_json::to_string(&profile.profile_versions[0].status).unwrap(),
+            "\"NeedsReview\""
+        );
+    }
+
+    #[test]
+    fn legacy_undated_confirmed_backfill_normalizes_to_needs_review() {
+        let mut profile = test_profile();
+        profile.business_start_date = None;
+        let mut legacy_version = TaxProfileVersion::from_profile_backfill(&profile);
+        legacy_version.status = TaxProfileVersionStatus::Confirmed;
+        legacy_version.needs_effective_date_review = false;
+        profile.profile_versions = vec![legacy_version];
+
+        profile.ensure_profile_version_ledger();
+
+        assert_eq!(
+            profile.profile_versions[0].status,
+            TaxProfileVersionStatus::NeedsReview
+        );
+        assert!(profile.profile_versions[0].needs_effective_date_review);
+        assert!(
+            profile
+                .resolve_tax_profile_for_year(2026)
+                .effective_segments
+                .is_empty()
+        );
     }
 
     #[test]

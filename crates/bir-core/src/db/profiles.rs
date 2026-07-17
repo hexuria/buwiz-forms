@@ -3,7 +3,298 @@
 use rusqlite::{OptionalExtension, params};
 
 use super::{Database, DbError};
-use crate::profile::TaxpayerProfile;
+use crate::profile::{
+    TaxProfileVersion, TaxProfileVersionConfirmationPlan, TaxProfileVersionSource,
+    TaxProfileVersionStatus, TaxpayerProfile,
+};
+
+fn same_persisted_version_except_label(
+    stored: &TaxProfileVersion,
+    submitted: &TaxProfileVersion,
+) -> bool {
+    let mut stored = stored.clone();
+    let mut submitted = submitted.clone();
+    stored.label.clear();
+    submitted.label.clear();
+
+    let Ok(stored) = serde_json::to_value(stored) else {
+        return false;
+    };
+    let Ok(submitted) = serde_json::to_value(submitted) else {
+        return false;
+    };
+    stored == submitted
+}
+
+fn is_exact_initial_migration_backfill(
+    profile: &TaxpayerProfile,
+    version: &TaxProfileVersion,
+) -> bool {
+    version.source == TaxProfileVersionSource::MigrationBackfill
+        && same_persisted_version_except_label(
+            &TaxProfileVersion::from_profile_backfill(profile),
+            version,
+        )
+}
+
+fn validate_reviewed_confirmation_plan(
+    existing_profile: Option<&TaxpayerProfile>,
+    submitted_profile: &TaxpayerProfile,
+    reviewed_plan: Option<&TaxProfileVersionConfirmationPlan>,
+) -> Result<(), DbError> {
+    let Some(existing_profile) = existing_profile else {
+        let confirmed = submitted_profile
+            .profile_versions
+            .iter()
+            .filter(|version| version.status == TaxProfileVersionStatus::Confirmed)
+            .collect::<Vec<_>>();
+        let Some(reviewed_plan) = reviewed_plan else {
+            if confirmed.is_empty()
+                || (confirmed.len() == 1
+                    && is_exact_initial_migration_backfill(submitted_profile, confirmed[0]))
+            {
+                return Ok(());
+            }
+            return Err(DbError::Other(
+                "A new confirmed COR or manual profile version requires an explicit reviewed confirmation plan; only the exact one-time migration backfill may be generated automatically"
+                    .to_string(),
+            ));
+        };
+
+        if confirmed.iter().any(|version| {
+            version.id != reviewed_plan.version_id
+                && version.source != TaxProfileVersionSource::MigrationBackfill
+        }) {
+            return Err(DbError::Other(
+                "The reviewed confirmation plan authorizes only one new confirmed profile version"
+                    .to_string(),
+            ));
+        }
+
+        let mut planning_profile = submitted_profile.clone();
+        let Some(target) = planning_profile
+            .profile_versions
+            .iter_mut()
+            .find(|version| version.id == reviewed_plan.version_id)
+        else {
+            return Err(DbError::Other(
+                "The submitted profile does not match the reviewed confirmation plan".to_string(),
+            ));
+        };
+        if target.status != TaxProfileVersionStatus::Confirmed
+            || target.effective_from != Some(reviewed_plan.effective_from)
+            || target.effective_until.is_some()
+        {
+            return Err(DbError::Other(
+                "The submitted profile does not match the reviewed confirmation plan".to_string(),
+            ));
+        }
+        target.status = TaxProfileVersionStatus::Draft;
+
+        for closure in &reviewed_plan.auto_close_consequences {
+            let Some(prior) = planning_profile
+                .profile_versions
+                .iter_mut()
+                .find(|version| version.id == closure.version_id)
+            else {
+                return Err(DbError::Other(
+                    "The submitted profile does not match the reviewed confirmation plan"
+                        .to_string(),
+                ));
+            };
+            if prior.status != TaxProfileVersionStatus::Confirmed
+                || prior.effective_from != closure.effective_from
+                || prior.effective_until != Some(closure.effective_until)
+            {
+                return Err(DbError::Other(
+                    "The submitted profile does not match the reviewed confirmation plan"
+                        .to_string(),
+                ));
+            }
+            prior.effective_until = None;
+        }
+
+        let expected_plan = planning_profile
+            .profile_version_confirmation_plan(
+                &reviewed_plan.version_id,
+                reviewed_plan.effective_from,
+            )
+            .ok_or_else(|| {
+                DbError::Other(
+                    "The submitted profile does not match the reviewed confirmation plan"
+                        .to_string(),
+                )
+            })?;
+        if &expected_plan != reviewed_plan {
+            return Err(DbError::Other(
+                "The submitted profile does not match the exact reviewed confirmation plan"
+                    .to_string(),
+            ));
+        }
+
+        for version in confirmed {
+            if version.id == reviewed_plan.version_id {
+                continue;
+            }
+            let Some(expected_backfill) = planning_profile
+                .profile_versions
+                .iter()
+                .find(|candidate| candidate.id == version.id)
+            else {
+                return Err(DbError::Other(
+                    "The submitted profile contains an unreviewed confirmed profile version"
+                        .to_string(),
+                ));
+            };
+            if !is_exact_initial_migration_backfill(submitted_profile, expected_backfill) {
+                return Err(DbError::Other(
+                    "The submitted profile contains an unreviewed confirmed profile version"
+                        .to_string(),
+                ));
+            }
+        }
+        return Ok(());
+    };
+
+    let newly_confirmed = submitted_profile
+        .profile_versions
+        .iter()
+        .filter(|version| {
+            version.status == TaxProfileVersionStatus::Confirmed
+                && existing_profile
+                    .profile_versions
+                    .iter()
+                    .find(|stored| stored.id == version.id)
+                    .is_none_or(|stored| stored.status != TaxProfileVersionStatus::Confirmed)
+        })
+        .collect::<Vec<_>>();
+    if newly_confirmed.len() > 1 {
+        return Err(DbError::Other(
+            "Confirm profile versions one at a time so each timeline change can be reviewed"
+                .to_string(),
+        ));
+    }
+
+    let mut authorized_timeline = existing_profile.clone();
+    let authorized_target_id = if let Some(version) = newly_confirmed.first() {
+        let reviewed_plan = reviewed_plan.ok_or_else(|| {
+            DbError::Other(
+                "Confirming a persisted profile version: an explicit reviewed confirmation plan is required"
+                    .to_string(),
+            )
+        })?;
+        let effective_from = version.effective_from.ok_or_else(|| {
+            DbError::Other(
+                "A confirmed profile version must have an effective start date".to_string(),
+            )
+        })?;
+
+        if let Some(stored_version) = authorized_timeline
+            .profile_versions
+            .iter()
+            .find(|stored| stored.id == version.id)
+        {
+            if stored_version.status == TaxProfileVersionStatus::Archived {
+                return Err(DbError::Other(
+                    "Archived profile versions cannot be confirmed directly; create a replacement version through the reviewed confirmation workflow"
+                        .to_string(),
+                ));
+            }
+            if stored_version
+                .effective_from
+                .or(stored_version.cor.registration_date)
+                != Some(effective_from)
+            {
+                return Err(DbError::Other(
+                    "The profile timeline changed after confirmation was reviewed; review the consequence again"
+                        .to_string(),
+                ));
+            }
+        } else {
+            authorized_timeline
+                .profile_versions
+                .push((*version).clone());
+        }
+
+        let expected_plan = authorized_timeline
+            .profile_version_confirmation_plan(&version.id, effective_from)
+            .ok_or_else(|| {
+                DbError::Other(
+                    "The reviewed profile-version confirmation plan is stale or does not match a newly confirmed version"
+                        .to_string(),
+                )
+            })?;
+        if &expected_plan != reviewed_plan {
+            return Err(DbError::Other(
+                "The profile timeline changed after confirmation was reviewed; review the consequence again"
+                    .to_string(),
+            ));
+        }
+        if !authorized_timeline.apply_profile_version_confirmation_plan(reviewed_plan) {
+            return Err(DbError::Other(
+                "The profile timeline changed after confirmation was reviewed; review the consequence again"
+                    .to_string(),
+            ));
+        }
+
+        Some(version.id.clone())
+    } else {
+        if reviewed_plan.is_some() {
+            return Err(DbError::Other(
+                "The reviewed profile-version confirmation plan is stale or does not match a newly confirmed version"
+                    .to_string(),
+            ));
+        }
+        None
+    };
+
+    for stored in existing_profile.profile_versions.iter().filter(|version| {
+        matches!(
+            version.status,
+            TaxProfileVersionStatus::Confirmed | TaxProfileVersionStatus::Archived
+        )
+    }) {
+        let authorized = authorized_timeline
+            .profile_versions
+            .iter()
+            .find(|version| version.id == stored.id)
+            .expect("the authorized timeline starts from the stored profile");
+        let submitted = submitted_profile
+            .profile_versions
+            .iter()
+            .find(|version| version.id == stored.id);
+        if !submitted
+            .is_some_and(|version| same_persisted_version_except_label(authorized, version))
+        {
+            return Err(DbError::Other(
+                "Confirmed and archived profile-version facts cannot change; create a replacement version and confirm it through the reviewed workflow"
+                    .to_string(),
+            ));
+        }
+    }
+
+    if let Some(target_id) = authorized_target_id {
+        let authorized = authorized_timeline
+            .profile_versions
+            .iter()
+            .find(|version| version.id == target_id)
+            .expect("the reviewed target exists in the authorized timeline");
+        let submitted = submitted_profile
+            .profile_versions
+            .iter()
+            .find(|version| version.id == target_id);
+        if !submitted
+            .is_some_and(|version| same_persisted_version_except_label(authorized, version))
+        {
+            return Err(DbError::Other(
+                "The submitted profile version contains changes outside the exact reviewed confirmation plan"
+                    .to_string(),
+            ));
+        }
+    }
+
+    Ok(())
+}
 
 impl Database {
     fn migrate_profile_tin_references(
@@ -33,7 +324,23 @@ impl Database {
         Ok(())
     }
 
-    pub fn save_profile(&self, mut profile: TaxpayerProfile) -> Result<TaxpayerProfile, DbError> {
+    pub fn save_profile(&self, profile: TaxpayerProfile) -> Result<TaxpayerProfile, DbError> {
+        self.save_profile_inner(profile, None)
+    }
+
+    pub fn save_profile_with_confirmation_plan(
+        &self,
+        profile: TaxpayerProfile,
+        reviewed_plan: &TaxProfileVersionConfirmationPlan,
+    ) -> Result<TaxpayerProfile, DbError> {
+        self.save_profile_inner(profile, Some(reviewed_plan))
+    }
+
+    fn save_profile_inner(
+        &self,
+        mut profile: TaxpayerProfile,
+        reviewed_plan: Option<&TaxProfileVersionConfirmationPlan>,
+    ) -> Result<TaxpayerProfile, DbError> {
         profile.ensure_profile_version_ledger();
         let tin = profile.tin.full();
         let previous_tin = profile
@@ -61,30 +368,7 @@ impl Database {
             profile.atc_codes.clone_from(existing_atc_codes);
         }
 
-        let old_confirmed_ids = existing_profile
-            .as_ref()
-            .map(|stored| {
-                stored
-                    .confirmed_profile_versions()
-                    .into_iter()
-                    .map(|version| version.id)
-                    .collect::<std::collections::HashSet<_>>()
-            })
-            .unwrap_or_default();
-        let mut newly_confirmed_starts = profile
-            .profile_versions
-            .iter()
-            .filter(|version| {
-                version.status == crate::profile::TaxProfileVersionStatus::Confirmed
-                    && version.source != crate::profile::TaxProfileVersionSource::MigrationBackfill
-                    && !old_confirmed_ids.contains(&version.id)
-            })
-            .filter_map(|version| version.effective_from)
-            .collect::<Vec<_>>();
-        newly_confirmed_starts.sort_unstable();
-        for effective_from in newly_confirmed_starts {
-            profile.auto_close_previous_confirmed_version(effective_from);
-        }
+        validate_reviewed_confirmation_plan(existing_profile.as_ref(), &profile, reviewed_plan)?;
         profile
             .validate_confirmed_profile_timeline()
             .map_err(DbError::Other)?;
@@ -180,6 +464,7 @@ impl Database {
         if let Some(row) = rows.next()? {
             let json_data: String = row.get(0)?;
             let mut profile: TaxpayerProfile = serde_json::from_str(&json_data)?;
+            profile.normalize_profile_version_review_statuses();
             profile.id = row.get(1).ok();
             self.hydrate_profile_forms(&mut profile)?;
             Ok(Some(profile))
@@ -203,6 +488,7 @@ impl Database {
         for row_result in rows {
             let (id, json_data) = row_result?;
             let mut profile: TaxpayerProfile = serde_json::from_str(&json_data)?;
+            profile.normalize_profile_version_review_statuses();
             profile.id = Some(id);
             self.hydrate_profile_forms(&mut profile)?;
             profiles.push(profile);

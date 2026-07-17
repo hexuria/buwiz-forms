@@ -13,6 +13,22 @@ pub(crate) fn store_cor_document(source_path: &Path, tin: &str) -> Result<CorDoc
     store_cor_document_in_dir(source_path, tin, &data_dir, &document_id)
 }
 
+pub(crate) fn remove_stored_cor_document(evidence: &CorDocumentRef) {
+    let viewer_path = PathBuf::from(&evidence.stored_path);
+    let _ = std::fs::remove_file(&viewer_path);
+
+    // PDF uploads may be converted to a sibling PNG for the desktop viewer.
+    // In that case `stored_path` names the PNG while the original PDF remains
+    // beside it. Remove both artifacts when an upload is rejected or deleted.
+    if let Some(source_extension) = Path::new(&evidence.file_name).extension() {
+        let source_extension = source_extension.to_string_lossy().to_ascii_lowercase();
+        let source_path = viewer_path.with_extension(source_extension);
+        if source_path != viewer_path {
+            let _ = std::fs::remove_file(source_path);
+        }
+    }
+}
+
 fn store_cor_document_in_dir(
     source_path: &Path,
     tin: &str,
@@ -217,6 +233,64 @@ mod tests {
         let error = store_cor_document_in_dir(&source, "000", &dir, "doc-id").unwrap_err();
 
         assert!(error.contains("png, jpg, jpeg, or pdf"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn removes_viewer_and_original_pdf_artifacts() {
+        let dir = temp_cor_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let viewer_path = dir.join("cor-000-doc-id.png");
+        let source_path = dir.join("cor-000-doc-id.pdf");
+        std::fs::write(&viewer_path, b"viewer").unwrap();
+        std::fs::write(&source_path, b"source").unwrap();
+        let evidence = CorDocumentRef {
+            id: "doc-id".to_string(),
+            file_name: "uploaded.PDF".to_string(),
+            stored_path: viewer_path.to_string_lossy().to_string(),
+            uploaded_at: None,
+            provider: None,
+            model: None,
+            document_type: None,
+            extracted_form_codes: vec![],
+            ocr_text: None,
+            ocr_confidence: None,
+            field_bboxes: std::collections::HashMap::new(),
+        };
+
+        remove_stored_cor_document(&evidence);
+
+        assert!(!viewer_path.exists());
+        assert!(!source_path.exists());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn removing_raster_evidence_does_not_delete_an_unrelated_sibling() {
+        let dir = temp_cor_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let viewer_path = dir.join("cor-000-doc-id.png");
+        let unrelated_pdf_path = dir.join("cor-000-doc-id.pdf");
+        std::fs::write(&viewer_path, b"viewer").unwrap();
+        std::fs::write(&unrelated_pdf_path, b"unrelated").unwrap();
+        let evidence = CorDocumentRef {
+            id: "doc-id".to_string(),
+            file_name: "uploaded.PNG".to_string(),
+            stored_path: viewer_path.to_string_lossy().to_string(),
+            uploaded_at: None,
+            provider: None,
+            model: None,
+            document_type: None,
+            extracted_form_codes: vec![],
+            ocr_text: None,
+            ocr_confidence: None,
+            field_bboxes: std::collections::HashMap::new(),
+        };
+
+        remove_stored_cor_document(&evidence);
+
+        assert!(!viewer_path.exists());
+        assert!(unrelated_pdf_path.exists());
         let _ = std::fs::remove_dir_all(dir);
     }
 }

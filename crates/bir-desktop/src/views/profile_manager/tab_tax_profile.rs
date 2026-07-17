@@ -495,6 +495,8 @@ impl ProfileManagerView {
             for version in &self.stored_profile_versions {
                 let version_id_for_review = version.id.clone();
                 let version_id_for_delete = version.id.clone();
+                let version_facts_editable =
+                    Self::profile_version_facts_are_editable(&version.status);
                 let first_document = version.evidence.first();
                 let document_name = first_document
                     .map(|document| document.file_name.clone())
@@ -524,6 +526,11 @@ impl ProfileManagerView {
                         gpui::rgba(0xfce8e8ff),
                         gpui::rgba(0xcb2424ff),
                     ),
+                    bir_core::profile::TaxProfileVersionStatus::NeedsReview => (
+                        "Effective Date Review Needed",
+                        gpui::rgba(0xfff3cdff),
+                        gpui::rgba(0x7a4f01ff),
+                    ),
                     bir_core::profile::TaxProfileVersionStatus::Confirmed => {
                         ("Completed", gpui::rgba(0xe8fce8ff), gpui::rgba(0x24cb24ff))
                     }
@@ -532,12 +539,15 @@ impl ProfileManagerView {
                     }
                 };
 
-                let action_label =
-                    if version.status == bir_core::profile::TaxProfileVersionStatus::Draft {
-                        "Review"
-                    } else {
-                        "View Data"
-                    };
+                let action_label = if matches!(
+                    version.status,
+                    bir_core::profile::TaxProfileVersionStatus::Draft
+                        | bir_core::profile::TaxProfileVersionStatus::NeedsReview
+                ) {
+                    "Review"
+                } else {
+                    "View Data"
+                };
 
                 // Form tag chips
                 let form_chips = div()
@@ -665,52 +675,29 @@ impl ProfileManagerView {
                                         }))
                                         .child(action_label),
                                 )
-                                .child(
-                                    div()
-                                        .id(format!("delete_{}", version_id_for_delete))
-                                        .cursor_pointer()
-                                        .text_sm()
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .text_color(gpui::Hsla::from(gpui::rgba(0xef4444ff)))
-                                        .hover(|this| {
-                                            this.text_color(gpui::Hsla::from(gpui::rgba(
-                                                0xdc2626ff,
-                                            )))
-                                        })
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            // Delete evidence files from disk
-                                            if let Some(version) = this
-                                                .stored_profile_versions
-                                                .iter()
-                                                .find(|v| v.id == version_id_for_delete)
-                                            {
-                                                for evidence in &version.evidence {
-                                                    let _ =
-                                                        std::fs::remove_file(&evidence.stored_path);
-                                                }
-                                            }
-                                            this.stored_profile_versions
-                                                .retain(|v| v.id != version_id_for_delete);
-                                            // Clear selection if we deleted the active one
-                                            if this.ocr_selected_version_id.as_deref()
-                                                == Some(&version_id_for_delete)
-                                            {
-                                                this.ocr_selected_version_id = None;
-                                                this.interactive_document_viewer = None;
-                                            }
-                                            if this.cor_editing_version_id.as_deref()
-                                                == Some(&version_id_for_delete)
-                                            {
-                                                this.cor_editing_version_id = None;
-                                            }
-                                            this.save_message = Some(
-                                                "COR version deleted. Save the profile to persist."
-                                                    .into(),
-                                            );
-                                            cx.notify();
-                                        }))
-                                        .child("Delete"),
-                                ),
+                                .when(version_facts_editable, |this| {
+                                    this.child(
+                                        div()
+                                            .id(format!("delete_{}", version_id_for_delete))
+                                            .cursor_pointer()
+                                            .text_sm()
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(gpui::Hsla::from(gpui::rgba(0xef4444ff)))
+                                            .hover(|this| {
+                                                this.text_color(gpui::Hsla::from(gpui::rgba(
+                                                    0xdc2626ff,
+                                                )))
+                                            })
+                                            .on_click(cx.listener(move |this, _, window, cx| {
+                                                this.delete_cor_version(
+                                                    &version_id_for_delete,
+                                                    window,
+                                                    cx,
+                                                );
+                                            }))
+                                            .child("Delete"),
+                                    )
+                                }),
                         ),
                 );
             }
@@ -792,6 +779,11 @@ impl ProfileManagerView {
                 gpui::rgba(0xe8fce8ff),
                 gpui::rgba(0x24cb24ff),
             ),
+            bir_core::profile::TaxProfileVersionStatus::NeedsReview => (
+                "Effective Date Review Required",
+                gpui::rgba(0xfff3cdff),
+                gpui::rgba(0x7a4f01ff),
+            ),
             bir_core::profile::TaxProfileVersionStatus::Confirmed => {
                 ("Committed", gpui::rgba(0xe8fce8ff), gpui::rgba(0x24cb24ff))
             }
@@ -802,6 +794,7 @@ impl ProfileManagerView {
 
         let version_id_for_confirm = version.id.clone();
         let version_id_for_review = version.id.clone();
+        let version_facts_editable = Self::profile_version_facts_are_editable(&version.status);
         let document_id_for_open = first_document.map(|doc| doc.id.clone());
 
         let header = div()
@@ -867,8 +860,11 @@ impl ProfileManagerView {
                                 ),
                             )
                             .when(
-                                version.status
-                                    != bir_core::profile::TaxProfileVersionStatus::Confirmed,
+                                matches!(
+                                    version.status,
+                                    bir_core::profile::TaxProfileVersionStatus::Draft
+                                        | bir_core::profile::TaxProfileVersionStatus::NeedsReview
+                                ),
                                 |this| {
                                     this.child(
                                         gpui_component::button::Button::new("ocr_commit_detail")
@@ -921,23 +917,41 @@ impl ProfileManagerView {
                             .items_center()
                             .justify_center()
                             .gap_4()
-                            .when(document_id_for_open.is_none(), |this| {
-                                let ver_id = version_id_for_review.clone();
-                                this.child(
-                                    div().flex().flex_col().items_center().gap_3().child(
-                                        gpui_component::button::Button::new("ocr_center_upload")
+                            .when(
+                                document_id_for_open.is_none() && version_facts_editable,
+                                |this| {
+                                    let ver_id = version_id_for_review.clone();
+                                    this.child(
+                                        div().flex().flex_col().items_center().gap_3().child(
+                                            gpui_component::button::Button::new(
+                                                "ocr_center_upload",
+                                            )
                                             .label("Upload COR")
-                                            .on_click(cx.listener(move |this, _, window, cx| {
-                                                this.upload_cor_document(
-                                                    Some(ver_id.clone()),
-                                                    window,
-                                                    cx,
-                                                );
-                                                cx.notify();
-                                            })),
-                                    ),
-                                )
-                            })
+                                            .on_click(
+                                                cx.listener(move |this, _, window, cx| {
+                                                    this.upload_cor_document(
+                                                        Some(ver_id.clone()),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                    cx.notify();
+                                                }),
+                                            ),
+                                        ),
+                                    )
+                                },
+                            )
+                            .when(
+                                document_id_for_open.is_none() && !version_facts_editable,
+                                |this| {
+                                    this.child(
+                                        div()
+                                            .text_sm()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child(Self::immutable_cor_version_message()),
+                                    )
+                                },
+                            )
                             .when(document_id_for_open.is_some(), |this| {
                                 let doc_id = document_id_for_open.unwrap();
                                 let ver_id = version_id_for_review.clone();
@@ -1042,8 +1056,64 @@ impl ProfileManagerView {
             }
         }
 
-        // ── Right column: directly editable fields (no manual override toggle) ──
-        let right_col = div()
+        // ── Right column: only drafts/review records are editable ──
+        let right_col = if !Self::profile_version_facts_are_editable(&version.status) {
+            div()
+                .flex()
+                .flex_col()
+                .gap_4()
+                .p_4()
+                .rounded_lg()
+                .border_1()
+                .border_color(cx.theme().border)
+                .bg(cx.theme().background)
+                .child(
+                    div()
+                        .text_lg()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(cx.theme().foreground)
+                        .child("Extracted Entity Data (read only)"),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(Self::immutable_cor_version_message()),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().foreground)
+                        .child(format!(
+                            "TIN: {}\nName: {}\nRDO: {}\nAddress: {}\nLine of business: {}",
+                            version.cor.tin.as_deref().unwrap_or("not captured"),
+                            version.cor.registered_name,
+                            version.cor.rdo_code,
+                            version.cor.registered_address,
+                            version.cor.line_of_business_description
+                        )),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(Self::field_label("Version Label", cx))
+                        .child(Input::new(&self.cor_version_label_input)),
+                )
+                .child(
+                    gpui_component::button::Button::new("ocr_save_locked_label")
+                        .label("Save Label")
+                        .small()
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            if let Err(message) = this.apply_cor_version_editor(window, cx) {
+                                this.save_message = Some(message);
+                            }
+                            cx.notify();
+                        })),
+                )
+        } else {
+            div()
             .flex()
             .flex_col()
             .gap_4()
@@ -1482,7 +1552,8 @@ impl ProfileManagerView {
                             cx.notify();
                         })),
                 ),
-            );
+            )
+        };
 
         div()
             .flex()
@@ -1630,7 +1701,11 @@ impl ProfileManagerView {
                 .iter_mut()
                 .find(|version| {
                     version.id == version_id
-                        && version.status == bir_core::profile::TaxProfileVersionStatus::Draft
+                        && matches!(
+                            version.status,
+                            bir_core::profile::TaxProfileVersionStatus::Draft
+                                | bir_core::profile::TaxProfileVersionStatus::NeedsReview
+                        )
                 })
                 .map(|version| {
                     let assumed_effective_from =
@@ -1890,12 +1965,20 @@ impl ProfileManagerView {
             .and_then(|editing_id| {
                 self.stored_profile_versions.iter().find(|version| {
                     version.id == *editing_id
-                        && version.status == bir_core::profile::TaxProfileVersionStatus::Draft
+                        && matches!(
+                            version.status,
+                            bir_core::profile::TaxProfileVersionStatus::Draft
+                                | bir_core::profile::TaxProfileVersionStatus::NeedsReview
+                        )
                 })
             })
             .or_else(|| {
                 self.stored_profile_versions.iter().find(|version| {
-                    version.status == bir_core::profile::TaxProfileVersionStatus::Draft
+                    matches!(
+                        version.status,
+                        bir_core::profile::TaxProfileVersionStatus::Draft
+                            | bir_core::profile::TaxProfileVersionStatus::NeedsReview
+                    )
                 })
             })
             .map(|version| {
@@ -2004,6 +2087,13 @@ impl ProfileManagerView {
                 let id_for_confirm = version.id.clone();
                 let id_for_archive = version.id.clone();
                 let id_for_edit = version.id.clone();
+                let version_facts_editable =
+                    Self::profile_version_facts_are_editable(&version.status);
+                let details_action_label = if version_facts_editable {
+                    "Edit Details"
+                } else {
+                    "View / Rename"
+                };
                 let mut evidence_list = div().flex().flex_col().gap_1();
                 for document in &version.evidence {
                     let version_id_for_open = version.id.clone();
@@ -2020,44 +2110,46 @@ impl ProfileManagerView {
                         }
                         None => format!("Evidence: {}", document.file_name),
                     };
-                    evidence_list =
-                        evidence_list.child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .gap_2()
-                                .px_2()
-                                .py_1()
-                                .rounded_md()
-                                .border_1()
-                                .border_color(cx.theme().border)
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(evidence_label),
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .gap_2()
-                                        .child(
-                                            gpui_component::button::Button::new(format!(
-                                                "open_cor_doc_{}_{}",
-                                                version.id, document.id
-                                            ))
-                                            .label("Open")
-                                            .small()
-                                            .on_click(cx.listener(move |this, _, _, cx| {
+                    evidence_list = evidence_list.child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .px_2()
+                            .py_1()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(cx.theme().border)
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(evidence_label),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .gap_2()
+                                    .child(
+                                        gpui_component::button::Button::new(format!(
+                                            "open_cor_doc_{}_{}",
+                                            version.id, document.id
+                                        ))
+                                        .label("Open")
+                                        .small()
+                                        .on_click(
+                                            cx.listener(move |this, _, _, cx| {
                                                 this.open_cor_document(
                                                     &version_id_for_open,
                                                     &document_id_for_open,
                                                 );
                                                 cx.notify();
-                                            })),
-                                        )
-                                        .child(
+                                            }),
+                                        ),
+                                    )
+                                    .when(version_facts_editable, |this| {
+                                        this.child(
                                             gpui_component::button::Button::new(format!(
                                                 "remove_cor_doc_{}_{}",
                                                 version.id, document.id
@@ -2073,9 +2165,10 @@ impl ProfileManagerView {
                                                 );
                                                 cx.notify();
                                             })),
-                                        ),
-                                ),
-                        );
+                                        )
+                                    }),
+                            ),
+                    );
                 }
                 let registered_tax_types = if version.registered_tax_types.is_empty() {
                     "No registered tax types".to_string()
@@ -2187,7 +2280,7 @@ impl ProfileManagerView {
                                         "edit_cor_{}",
                                         id_for_edit
                                     ))
-                                    .label("Edit Details")
+                                    .label(details_action_label)
                                     .small()
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         if let Err(message) = this.load_cor_version_editor(
@@ -2201,7 +2294,11 @@ impl ProfileManagerView {
                                     })),
                                 )
                                 .when(
-                                    version.status != bir_core::profile::TaxProfileVersionStatus::Confirmed,
+                                    matches!(
+                                        &version.status,
+                                        bir_core::profile::TaxProfileVersionStatus::Draft
+                                            | bir_core::profile::TaxProfileVersionStatus::NeedsReview
+                                    ),
                                     |this| {
                                         this.child(
                                             gpui_component::button::Button::new(format!(
@@ -2221,7 +2318,11 @@ impl ProfileManagerView {
                                     },
                                 )
                                 .when(
-                                    version.status != bir_core::profile::TaxProfileVersionStatus::Archived,
+                                    matches!(
+                                        &version.status,
+                                        bir_core::profile::TaxProfileVersionStatus::Draft
+                                            | bir_core::profile::TaxProfileVersionStatus::NeedsReview
+                                    ),
                                     |this| {
                                         this.child(
                                             gpui_component::button::Button::new(format!(
@@ -2624,6 +2725,96 @@ impl ProfileManagerView {
         else {
             return div();
         };
+
+        if !Self::profile_version_facts_are_editable(&version.status) {
+            let effective = match (version.effective_from, version.effective_until) {
+                (Some(from), Some(until)) => format!("{from} to {until}"),
+                (Some(from), None) => format!("{from} onward"),
+                (None, Some(until)) => format!("until {until}"),
+                (None, None) => "date unavailable".to_string(),
+            };
+            let registered_tax_types = version
+                .registered_tax_types
+                .iter()
+                .map(Self::registered_tax_type_label)
+                .collect::<Vec<_>>()
+                .join(", ");
+            return div()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .p_3()
+                .rounded_md()
+                .border_1()
+                .border_color(cx.theme().border)
+                .bg(cx.theme().background)
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(cx.theme().foreground)
+                        .child("Confirmed or archived COR evidence (read only)"),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(Self::immutable_cor_version_message()),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(Self::field_label("Version Label", cx))
+                        .child(Input::new(&self.cor_version_label_input)),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(format!(
+                            "Effective {effective} | TIN {} | Name {} | RDO {} | Tax types: {} | {} evidence file(s)",
+                            version.cor.tin.as_deref().unwrap_or("not captured"),
+                            version.cor.registered_name,
+                            version.cor.rdo_code,
+                            if registered_tax_types.is_empty() {
+                                "none"
+                            } else {
+                                registered_tax_types.as_str()
+                            },
+                            version.evidence.len()
+                        )),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .gap_2()
+                        .child(
+                            gpui_component::button::Button::new("save_locked_cor_label")
+                                .label("Save Label")
+                                .small()
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    if let Err(message) =
+                                        this.apply_cor_version_editor(window, cx)
+                                    {
+                                        this.save_message = Some(message);
+                                    }
+                                    cx.notify();
+                                })),
+                        )
+                        .child(
+                            gpui_component::button::Button::new("close_locked_cor_version")
+                                .label("Close")
+                                .small()
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.cor_editing_version_id = None;
+                                    this.clear_cor_version_editor(window, cx);
+                                    cx.notify();
+                                })),
+                        ),
+                );
+        }
 
         div()
             .flex()
@@ -3127,46 +3318,49 @@ impl ProfileManagerView {
                             })),
                     ),
             )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .pt_2()
-                    .border_t_1()
-                    .border_color(cx.theme().border)
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(cx.theme().muted_foreground)
-                            .child("Profile deadline override"),
-                    )
-                    .child(
-                        div()
-                            .grid()
-                            .grid_cols(2)
-                            .gap_2()
-                            .child(Input::new(&self.cor_deadline_title_input))
-                            .child(Input::new(&self.cor_deadline_source_input))
-                            .child(Input::new(&self.cor_deadline_forms_input))
-                            .child(Input::new(&self.cor_deadline_reason_input))
-                            .child(Input::new(&self.cor_deadline_original_input))
-                            .child(Input::new(&self.cor_deadline_adjusted_input)),
-                    )
-                    .child(deadline_overrides)
-                    .child(
-                        gpui_component::button::Button::new("add_cor_deadline_override")
-                            .label("Add Profile Deadline Override")
-                            .small()
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                if let Err(message) = this.add_cor_deadline_override(window, cx) {
-                                    this.save_message = Some(message);
-                                }
-                                cx.notify();
-                            })),
-                    ),
-            )
+            .when(target_version_id.is_some(), |this| {
+                this.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .pt_2()
+                        .border_t_1()
+                        .border_color(cx.theme().border)
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(cx.theme().muted_foreground)
+                                .child("Profile deadline override"),
+                        )
+                        .child(
+                            div()
+                                .grid()
+                                .grid_cols(2)
+                                .gap_2()
+                                .child(Input::new(&self.cor_deadline_title_input))
+                                .child(Input::new(&self.cor_deadline_source_input))
+                                .child(Input::new(&self.cor_deadline_forms_input))
+                                .child(Input::new(&self.cor_deadline_reason_input))
+                                .child(Input::new(&self.cor_deadline_original_input))
+                                .child(Input::new(&self.cor_deadline_adjusted_input)),
+                        )
+                        .child(deadline_overrides)
+                        .child(
+                            gpui_component::button::Button::new("add_cor_deadline_override")
+                                .label("Add Profile Deadline Override")
+                                .small()
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    if let Err(message) = this.add_cor_deadline_override(window, cx)
+                                    {
+                                        this.save_message = Some(message);
+                                    }
+                                    cx.notify();
+                                })),
+                        ),
+                )
+            })
     }
 
     fn registered_tax_type_label(tax_type: &bir_core::profile::RegisteredTaxType) -> &'static str {
@@ -3192,6 +3386,7 @@ impl ProfileManagerView {
     ) -> &'static str {
         match status {
             bir_core::profile::TaxProfileVersionStatus::Draft => "Draft",
+            bir_core::profile::TaxProfileVersionStatus::NeedsReview => "Needs Review",
             bir_core::profile::TaxProfileVersionStatus::Confirmed => "Confirmed",
             bir_core::profile::TaxProfileVersionStatus::Archived => "Archived",
         }
