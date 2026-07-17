@@ -111,8 +111,27 @@ impl ComboboxState {
         self.input.update(cx, |input, cx| {
             input.set_value(value.to_string(), window, cx);
         });
+        // Programmatic set_value emits no Change event, so the typed-query
+        // filter would otherwise linger and the next open would show a stale
+        // subset. A committed value is a selection, not a filter: offer the
+        // full list again, cursor on the selection.
+        self.reset_filter_to_all(value);
         self.open = false;
         cx.notify();
+    }
+
+    fn reset_filter_to_all(&mut self, selected: &str) {
+        self.filtered_options = self.options.clone();
+        // Highlight only an actual match. A Some(0) fallback would let a bare
+        // Enter on focus silently commit the first option over a value that
+        // is empty or not in the list.
+        self.selected_index = if selected.is_empty() {
+            None
+        } else {
+            self.filtered_options
+                .iter()
+                .position(|option| option == selected)
+        };
     }
 
     pub fn selected_value(&self, cx: &gpui::App) -> String {
@@ -120,14 +139,22 @@ impl ComboboxState {
     }
 
     fn select_item(&mut self, item: &str, window: &mut Window, cx: &mut Context<Self>) {
+        // Re-committing the value already in the input (e.g. focus + bare
+        // Enter on the highlighted current selection) is not a change;
+        // emitting would mark the profile dirty and strand in-flight save
+        // completions as stale.
+        let unchanged = self.input.read(cx).value() == item;
         self.input.update(cx, |input, cx| {
             input.set_value(item.to_string(), window, cx);
         });
+        self.reset_filter_to_all(item);
         self.open = false;
         window.blur();
-        cx.emit(ComboboxEvent {
-            selected: Some(item.to_string()),
-        });
+        if !unchanged {
+            cx.emit(ComboboxEvent {
+                selected: Some(item.to_string()),
+            });
+        }
         cx.notify();
     }
 

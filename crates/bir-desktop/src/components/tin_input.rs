@@ -153,6 +153,18 @@ impl TinInput {
             tin.segment3.clone(),
             tin.branch.clone(),
         ];
+        // A programmatic re-population with an unchanged TIN must not emit
+        // Change: subscribers mark the profile dirty, which strands async
+        // save completions as stale when editor flows re-load their inputs
+        // right after dispatching a save.
+        let unchanged = self
+            .inputs
+            .iter()
+            .zip(parts.iter())
+            .all(|(input, part)| input.read(cx).value() == part.as_str());
+        if unchanged {
+            return;
+        }
         for (i, part) in parts.into_iter().enumerate() {
             self.inputs[i].update(cx, |input, cx| {
                 input.set_value(part.clone(), window, cx);
@@ -165,11 +177,21 @@ impl TinInput {
 
     pub fn set_text_value(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
         let clean = text.replace("-", "");
+        // Clamp segment ranges to the available length: `str::get` returns
+        // None for any out-of-bounds range, which would silently drop the
+        // digits of a partially-typed TIN (e.g. "1234" losing its "4") on
+        // every programmatic reload.
+        let segment = |start: usize, end: usize| {
+            clean
+                .get(start.min(clean.len())..end.min(clean.len()))
+                .unwrap_or("")
+                .to_string()
+        };
         let tin = bir_core::naming::Tin {
-            segment1: clean.get(0..3).unwrap_or("").to_string(),
-            segment2: clean.get(3..6).unwrap_or("").to_string(),
-            segment3: clean.get(6..9).unwrap_or("").to_string(),
-            branch: clean.get(9..).unwrap_or("").to_string(),
+            segment1: segment(0, 3),
+            segment2: segment(3, 6),
+            segment3: segment(6, 9),
+            branch: segment(9, clean.len().max(9)),
         };
         self.set_from_tin(&tin, window, cx);
     }

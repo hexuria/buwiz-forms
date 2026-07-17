@@ -39,12 +39,44 @@ impl DateInputState {
                 &input,
                 window,
                 |this, _input, event: &InputEvent, window, cx| match event {
+                    InputEvent::Change => {
+                        let value = _input.read(cx).value().trim().to_string();
+                        // Keep the parsed value synchronized with the text on
+                        // every edit. Otherwise an invalid replacement can
+                        // leave the previously valid date in memory and be
+                        // saved silently by callers that read `date`.
+                        this.date = Self::parse_date(&value);
+                        // Keep the calendar in step here as well: the Blur
+                        // set_date call may hit the no-op early-return when
+                        // the typed text already matches the display format.
+                        // Skip implausible years — chrono's %Y accepts 1-4
+                        // digits, so mid-typing prefixes parse to years like
+                        // 0002 and would strand the picker far outside its
+                        // navigable range.
+                        if let Some(d) = this.date
+                            && chrono::Datelike::year(&d) >= 1900
+                        {
+                            this.calendar.update(cx, |cal, cx| {
+                                cal.set_date(
+                                    gpui_component::calendar::Date::Single(Some(d)),
+                                    window,
+                                    cx,
+                                );
+                            });
+                        }
+                        cx.emit(DateInputEvent { date: this.date });
+                        cx.notify();
+                    }
                     InputEvent::Blur | InputEvent::PressEnter { .. } => {
                         let value = _input.read(cx).value().trim().to_string();
                         if let Some(parsed) = Self::parse_date(&value) {
                             this.set_date(Some(parsed), window, cx);
                         } else if value.is_empty() {
                             this.set_date(None, window, cx);
+                        } else {
+                            this.date = None;
+                            cx.emit(DateInputEvent { date: None });
+                            cx.notify();
                         }
                     }
                     InputEvent::Focus => {
@@ -97,6 +129,10 @@ impl DateInputState {
         if let Ok(d) = NaiveDate::parse_from_str(value, "%m-%d-%Y") {
             return Some(d);
         }
+        // The component itself displays selected values in this format.
+        if let Ok(d) = NaiveDate::parse_from_str(value, "%b %d %Y") {
+            return Some(d);
+        }
         None
     }
 
@@ -106,10 +142,39 @@ impl DateInputState {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.date = date;
         let display_value = date
             .map(|d| d.format("%b %d %Y").to_string())
             .unwrap_or_default();
+        // A no-op must not emit DateInputEvent: programmatic re-loads (e.g.
+        // re-opening the just-applied COR version) would otherwise mark the
+        // profile dirty after its save was dispatched, permanently flagging
+        // saved state as unsaved.
+        if self.date == date {
+            let current_text = self.input.read(cx).value().to_string();
+            if current_text == display_value {
+                return;
+            }
+            // Same date but different text — e.g. the focused "%m/%d/%Y"
+            // editing format. Normalize the display without emitting;
+            // subscribers treat an emission as a data change.
+            if date.is_some() && Self::parse_date(current_text.trim()) == date {
+                self.input.update(cx, |input, cx| {
+                    input.set_value(display_value, window, cx);
+                });
+                if let Some(d) = date {
+                    self.calendar.update(cx, |cal, cx| {
+                        cal.set_date(
+                            gpui_component::calendar::Date::Single(Some(d)),
+                            window,
+                            cx,
+                        );
+                    });
+                }
+                cx.notify();
+                return;
+            }
+        }
+        self.date = date;
         self.input.update(cx, |input, cx| {
             input.set_value(display_value, window, cx);
         });
@@ -126,6 +191,10 @@ impl DateInputState {
 
     pub fn value(&self, cx: &gpui::App) -> String {
         self.input.read(cx).value().to_string()
+    }
+
+    pub fn has_invalid_value(&self, cx: &gpui::App) -> bool {
+        !self.value(cx).trim().is_empty() && self.date.is_none()
     }
 
     pub fn set_value(&mut self, value: String, window: &mut Window, cx: &mut Context<Self>) {
