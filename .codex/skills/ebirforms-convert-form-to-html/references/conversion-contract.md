@@ -30,6 +30,11 @@ Represent unknown semantics explicitly and fail closed. Do not silently truncate
 - `validation-edge`: missing/conflicting applicability and invalid boundaries.
 - `maximum-capacity`: every repeatable schedule filled to its verified limit.
 
+Inventory guided and plain fields independently from the pinned revision. A
+plain field must remain plain in both its empty and populated states; shared
+components must not add comb cells, guide ticks, or repeating guide
+backgrounds merely because a similar field is guided on another form.
+
 Every adaptive character-field pattern also requires deterministic boundary
 coverage for empty, short, exact-capacity, and capacity-plus-one values. Count
 spaces and punctuation as characters. The first three states must preserve the

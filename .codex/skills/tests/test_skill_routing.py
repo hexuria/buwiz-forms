@@ -94,6 +94,17 @@ class SkillRoutingTests(unittest.TestCase):
         ):
             self.assertIn(forbidden_operation, artwork)
 
+    def test_plain_fields_never_inherit_character_guides(self) -> None:
+        conversion = " ".join(CONVERSION.read_text(encoding="utf-8").lower().split())
+        maintenance = " ".join(MAINTENANCE.read_text(encoding="utf-8").lower().split())
+
+        for policy in (conversion, maintenance):
+            self.assertIn("plain field", policy)
+            self.assertIn("absence of guides", policy)
+            self.assertIn("comb cells", policy)
+            self.assertIn("guide ticks", policy)
+            self.assertIn("repeating guide background", policy)
+
 
 if __name__ == "__main__":
     unittest.main()
