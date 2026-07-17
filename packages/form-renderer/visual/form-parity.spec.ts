@@ -916,6 +916,138 @@ test("geometry readiness sees overflow hidden descendants and clipping", async (
   expect(geometry.descendant_clipped_y).toBeGreaterThan(0);
 });
 
+test("2551Q just-over-comb values use the largest reviewed field-height candidate", async ({
+  page
+}) => {
+  const fixture = readFixture(
+    "packages/form-contracts/fixtures/2551q-6-rows.json"
+  ) as {
+    fields: Record<string, { type: string; value: unknown }>;
+    taxpayer: {
+      email: string;
+      name: string;
+      registered_address: string;
+    };
+  };
+  fixture.taxpayer.name = "N".repeat(41);
+  fixture.taxpayer.registered_address = "A".repeat(72);
+  fixture.taxpayer.email = `${"E".repeat(16)}@EXAMPLE.TEST`;
+  fixture.fields.tax_relief_specification.value = "R".repeat(27);
+
+  await renderEnvelope(page, fixture);
+  await page.waitForFunction(
+    () => !document.querySelector('[data-adaptive-fit-state="pending"]')
+  );
+
+  const expectMaximizedValue = async (
+    selector: string,
+    expectedText: string,
+    expectedFontSize: number,
+    expectedMaxFontSize: number
+  ) => {
+    const rendered = page.locator(selector);
+    await expect(rendered).toHaveCount(1);
+    await expect(rendered).toHaveText(expectedText);
+    const measurement = await rendered.evaluate((element) => {
+      const tolerance = 1;
+      const fitsField = () => {
+        if (
+          element.scrollWidth > element.clientWidth + tolerance ||
+          element.scrollHeight > element.clientHeight + tolerance
+        ) {
+          return false;
+        }
+        const valueBounds = element.getBoundingClientRect();
+        const textRange = document.createRange();
+        textRange.selectNodeContents(element);
+        for (const textBounds of textRange.getClientRects()) {
+          if (
+            textBounds.left < valueBounds.left - tolerance ||
+            textBounds.top < valueBounds.top - tolerance ||
+            textBounds.right > valueBounds.right + tolerance ||
+            textBounds.bottom > valueBounds.bottom + tolerance
+          ) {
+            return false;
+          }
+        }
+        const ownerBounds = element.parentElement?.getBoundingClientRect();
+        return !ownerBounds || (
+          valueBounds.left >= ownerBounds.left - tolerance &&
+          valueBounds.top >= ownerBounds.top - tolerance &&
+          valueBounds.right <= ownerBounds.right + tolerance &&
+          valueBounds.bottom <= ownerBounds.bottom + tolerance
+        );
+      };
+      const fontSize = Number.parseFloat(getComputedStyle(element).fontSize);
+      const fontStep = Number.parseFloat(
+        element.getAttribute("data-adaptive-step-px") ?? "NaN"
+      );
+      const originalSize = element.style.fontSize;
+      element.style.fontSize = `${fontSize + fontStep}px`;
+      const nextStepOverflows = !fitsField();
+      element.style.fontSize = originalSize;
+      return {
+        fontSize,
+        fontStep,
+        maxFontSize: Number.parseFloat(
+          element.getAttribute("data-adaptive-max-font-px") ?? "NaN"
+        ),
+        nextStepOverflows,
+        state: element.getAttribute("data-adaptive-fit-state")
+      };
+    });
+    expect(measurement.state, selector).toBe("fit");
+    expect(measurement.fontStep, selector).toBe(.5);
+    expect(measurement.fontSize, selector).toBe(expectedFontSize);
+    expect(measurement.maxFontSize, selector).toBe(expectedMaxFontSize);
+    expect(measurement.nextStepOverflows, selector).toBe(true);
+  };
+
+  await expectMaximizedValue(
+    ".name-field > .adaptive-plain-value",
+    fixture.taxpayer.name,
+    21,
+    21
+  );
+  await expectMaximizedValue(
+    ".address-field > .adaptive-plain-value",
+    fixture.taxpayer.registered_address,
+    15.5,
+    21
+  );
+  await expectMaximizedValue(
+    ".contact-email-field > .adaptive-plain-value",
+    fixture.taxpayer.email,
+    21,
+    21
+  );
+  await expectMaximizedValue(
+    ".tax-relief-field > .adaptive-plain-value",
+    fixture.fields.tax_relief_specification.value as string,
+    15,
+    21.5
+  );
+  await expectMaximizedValue(
+    ".page-two-identity > .adaptive-plain-value",
+    fixture.taxpayer.name,
+    16,
+    21.5
+  );
+
+  const pageTwoOnlyFixture = structuredClone(fixture);
+  pageTwoOnlyFixture.taxpayer.name = "N".repeat(27);
+  await renderEnvelope(page, pageTwoOnlyFixture);
+  await page.waitForFunction(
+    () => !document.querySelector('[data-adaptive-fit-state="pending"]')
+  );
+  await expectMaximizedValue(
+    ".page-two-identity > .adaptive-plain-value",
+    pageTwoOnlyFixture.taxpayer.name,
+    21.5,
+    21.5
+  );
+});
+
 test("2551Q plain-box overflow uses the largest readable font that fits the real field", async ({
   page
 }) => {
@@ -951,6 +1083,18 @@ test("2551Q plain-box overflow uses the largest readable font that fits the real
       }
       if (!owner) return true;
       const valueBounds = element.getBoundingClientRect();
+      const textRange = document.createRange();
+      textRange.selectNodeContents(element);
+      for (const textBounds of textRange.getClientRects()) {
+        if (
+          textBounds.left < valueBounds.left - tolerance ||
+          textBounds.top < valueBounds.top - tolerance ||
+          textBounds.right > valueBounds.right + tolerance ||
+          textBounds.bottom > valueBounds.bottom + tolerance
+        ) {
+          return false;
+        }
+      }
       const ownerBounds = owner.getBoundingClientRect();
       return valueBounds.left >= ownerBounds.left - tolerance &&
         valueBounds.top >= ownerBounds.top - tolerance &&
@@ -1004,7 +1148,6 @@ test("2551Q plain-box overflow uses the largest readable font that fits the real
       textRects
     };
   }));
-
   for (const measurement of measurements) {
     expect(measurement.state, measurement.text).toBe("fit");
     expect(measurement.fontStep, measurement.text).toBe(.5);
@@ -1037,10 +1180,10 @@ test("2551Q plain-box overflow uses the largest readable font that fits the real
   }
 
   const expectedFontSizes = [
-    [".name-field > .adaptive-plain-value", "18.0"],
+    [".name-field > .adaptive-plain-value", "20.5"],
     [".address-field > .adaptive-plain-value", "12.5"],
     [".contact-email-field > .adaptive-plain-value", "17.5"],
-    [".tax-relief-field > .adaptive-plain-value", "11.5"],
+    [".tax-relief-field > .adaptive-plain-value", "12.0"],
     [".page-two-identity > .adaptive-plain-value", "13.0"]
   ] as const;
   for (const [selector, fontSize] of expectedFontSizes) {
@@ -1062,6 +1205,69 @@ test("2551Q plain-box overflow uses the largest readable font that fits the real
     ".page-two-identity > .adaptive-plain-value"
   );
   await expect(pageTwoName).toHaveAttribute("data-adaptive-font-size-px", "13.0");
+  const pageTwoLongNameCandidates = await pageTwoName.evaluate((element) => {
+    const originalSize = element.style.fontSize;
+    const ownerBounds = element.parentElement?.getBoundingClientRect();
+    const candidates = [13, 13.5].map((fontSize) => {
+      element.style.fontSize = `${fontSize}px`;
+      const valueBounds = element.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const textBounds = range.getBoundingClientRect();
+      return {
+        clientHeight: element.clientHeight,
+        clientWidth: element.clientWidth,
+        fontSize,
+        scrollHeight: element.scrollHeight,
+        scrollWidth: element.scrollWidth,
+        textBounds: {
+          bottom: textBounds.bottom,
+          height: textBounds.height,
+          left: textBounds.left,
+          right: textBounds.right,
+          top: textBounds.top,
+          width: textBounds.width
+        },
+        valueBounds: {
+          bottom: valueBounds.bottom,
+          height: valueBounds.height,
+          left: valueBounds.left,
+          right: valueBounds.right,
+          top: valueBounds.top,
+          width: valueBounds.width
+        }
+      };
+    });
+    element.style.fontSize = originalSize;
+    return {
+      candidates,
+      ownerBounds: ownerBounds && {
+        bottom: ownerBounds.bottom,
+        height: ownerBounds.height,
+        left: ownerBounds.left,
+        right: ownerBounds.right,
+        top: ownerBounds.top,
+        width: ownerBounds.width
+      }
+    };
+  });
+  const [pageTwoAt13, pageTwoAt13Point5] = pageTwoLongNameCandidates.candidates;
+  expect(pageTwoAt13.clientWidth).toBe(490);
+  expect(pageTwoAt13.valueBounds.width).toBeCloseTo(490.6875, 3);
+  expect(pageTwoAt13.textBounds.width).toBeCloseTo(471.46875, 3);
+  expect(pageTwoAt13.scrollWidth).toBeLessThanOrEqual(pageTwoAt13.clientWidth + 1);
+  expect(pageTwoAt13.textBounds.right)
+    .toBeLessThanOrEqual(pageTwoAt13.valueBounds.right + 1);
+  expect(pageTwoAt13Point5.textBounds.width).toBeCloseTo(489.59375, 3);
+  expect(pageTwoAt13Point5.scrollWidth)
+    .toBeGreaterThan(pageTwoAt13Point5.clientWidth + 1);
+  expect(pageTwoAt13Point5.textBounds.right)
+    .toBeGreaterThan(pageTwoAt13Point5.valueBounds.right + 1);
+  expect(pageTwoLongNameCandidates.ownerBounds).toBeDefined();
+  if (pageTwoLongNameCandidates.ownerBounds) {
+    expect(pageTwoAt13Point5.textBounds.right)
+      .toBeGreaterThan(pageTwoLongNameCandidates.ownerBounds.right + 1);
+  }
   await pageTwoName.evaluate((element) => {
     element.style.width = "400px";
   });
@@ -1243,17 +1449,9 @@ test("2551Q adaptive fields retain domain-boundary text and report unsafe geomet
       scrollWidth: element.scrollWidth,
       state: element.getAttribute("data-adaptive-fit-state")
     }));
-    expect(["fit", "unresolved"], selector).toContain(measurement.state);
-    expect(measurement.fontSize, selector).toBeGreaterThanOrEqual(measurement.minFontSize);
+    expect(measurement.state, selector).toBe("unresolved");
+    expect(measurement.fontSize, selector).toBe(measurement.minFontSize);
     expect(measurement.fontSize, selector).toBeLessThanOrEqual(measurement.maxFontSize);
-    if (measurement.state === "fit") {
-      expect(measurement.scrollWidth, selector)
-        .toBeLessThanOrEqual(measurement.clientWidth + 1);
-      expect(measurement.scrollHeight, selector)
-        .toBeLessThanOrEqual(measurement.clientHeight + 1);
-    } else {
-      expect(measurement.fontSize, selector).toBe(measurement.minFontSize);
-    }
   }
 
   const geometry = await measuredPage(page.locator(".form-page").first());

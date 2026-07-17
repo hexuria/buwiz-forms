@@ -71,12 +71,19 @@ export const OFFICIAL_2551Q_COMB_CAPACITIES = {
  */
 const REVIEWED_2551Q_OVERFLOW_FONT_PX = {
   generic: { max: 13, min: 10.5 },
-  pageOneName: { max: 18, min: 10.5 },
-  pageOneAddress: { max: 15, min: 10.5 },
-  pageOneEmail: { max: 17.5, min: 10.5 },
-  item12A: { max: 11.5, min: 10.5 },
+  // The 17.25–17.5pt value rows retain a 21px Arimo glyph range after the
+  // reviewed padding and line height; the next 0.5px candidate escapes the
+  // measured field. This is the reviewed ceiling even for one-character
+  // overflow, preventing arbitrary enlargement in an unusually wide field.
+  pageOneName: { max: 21, min: 10.5 },
+  pageOneAddress: { max: 21, min: 10.5 },
+  pageOneEmail: { max: 21, min: 10.5 },
+  // The 19.5pt rows retain a 21.5px one-line glyph range. Width and wrapping
+  // are measured in the final DOM, so longer values descend before using a
+  // second line or becoming unresolved at the readable floor.
+  item12A: { max: 21.5, min: 10.5 },
   item17: { max: 12, min: 10.5 },
-  pageTwoName: { max: 13, min: 10.5 }
+  pageTwoName: { max: 21.5, min: 10.5 }
 } as const;
 
 function Adaptive2551QValue({

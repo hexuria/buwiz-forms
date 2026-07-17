@@ -289,9 +289,22 @@ function adaptivePlainValueFits(element: HTMLElement): boolean {
   // own client and scroll dimensions remain equal. Certify the printable
   // footprint as well as the child so that such growth cannot be reported as
   // a successful fit and later be clipped by the document geometry.
+  const valueBounds = element.getBoundingClientRect();
+  const textRange = document.createRange();
+  textRange.selectNodeContents(element);
+  for (const textBounds of textRange.getClientRects()) {
+    if (
+      textBounds.left < valueBounds.left - ADAPTIVE_FIT_TOLERANCE_PX ||
+      textBounds.top < valueBounds.top - ADAPTIVE_FIT_TOLERANCE_PX ||
+      textBounds.right > valueBounds.right + ADAPTIVE_FIT_TOLERANCE_PX ||
+      textBounds.bottom > valueBounds.bottom + ADAPTIVE_FIT_TOLERANCE_PX
+    ) {
+      return false;
+    }
+  }
+
   const owner = element.parentElement;
   if (!owner) return true;
-  const valueBounds = element.getBoundingClientRect();
   const ownerBounds = owner.getBoundingClientRect();
   return valueBounds.left >= ownerBounds.left - ADAPTIVE_FIT_TOLERANCE_PX &&
     valueBounds.top >= ownerBounds.top - ADAPTIVE_FIT_TOLERANCE_PX &&
