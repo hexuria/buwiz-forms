@@ -23,6 +23,10 @@ impl ProfileManagerView {
             .unwrap_or_default();
         let linked = link.is_some();
 
+        if !connection.profile_calendar_available() {
+            return div().into_any_element();
+        }
+
         div()
             .p_4()
             .rounded_lg()
@@ -70,24 +74,6 @@ impl ProfileManagerView {
                             .child(if linked { "Linked" } else { "Not linked" }),
                     ),
             )
-            .when(!connection.configured, |this| {
-                this.child(
-                    div()
-                        .text_sm()
-                        .text_color(cx.theme().danger)
-                        .child(
-                            "Google OAuth is not configured in this build. Configure it in Settings and rebuild.",
-                        ),
-                )
-            })
-            .when(connection.configured && connection.connected_email.is_none(), |this| {
-                this.child(
-                    div()
-                        .text_sm()
-                        .text_color(cx.theme().danger)
-                        .child("Connect a Google account in Settings first."),
-                )
-            })
             .when(forms_years.is_empty(), |this| {
                 this.child(
                     div()

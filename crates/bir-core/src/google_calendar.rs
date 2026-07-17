@@ -39,6 +39,20 @@ pub struct GoogleCalendarConnection {
     pub connected_email: Option<String>,
 }
 
+impl GoogleCalendarConnection {
+    /// The per-profile Calendar UI is useful only after the release contains
+    /// Google OAuth credentials and the user has connected a Calendar account
+    /// from Settings. Email-receipt OAuth is a separate integration and must
+    /// not make the Calendar tab appear.
+    pub fn profile_calendar_available(&self) -> bool {
+        self.configured
+            && self
+                .connected_email
+                .as_deref()
+                .is_some_and(|email| !email.trim().is_empty())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CalendarSyncReport {
     pub inserted: usize,
@@ -1036,6 +1050,33 @@ mod tests {
             period_key(&DeadlinePeriod::Annual { taxable_year: 2026 }),
             "annual"
         );
+    }
+
+    #[test]
+    fn profile_calendar_requires_build_configuration_and_connected_account() {
+        let configured_and_connected = GoogleCalendarConnection {
+            configured: true,
+            connected_email: Some("calendar@example.com".into()),
+        };
+        assert!(configured_and_connected.profile_calendar_available());
+
+        let not_built_with_oauth = GoogleCalendarConnection {
+            configured: false,
+            connected_email: Some("calendar@example.com".into()),
+        };
+        assert!(!not_built_with_oauth.profile_calendar_available());
+
+        let not_connected = GoogleCalendarConnection {
+            configured: true,
+            connected_email: None,
+        };
+        assert!(!not_connected.profile_calendar_available());
+
+        let blank_connection_marker = GoogleCalendarConnection {
+            configured: true,
+            connected_email: Some("   ".into()),
+        };
+        assert!(!blank_connection_marker.profile_calendar_available());
     }
 
     #[test]

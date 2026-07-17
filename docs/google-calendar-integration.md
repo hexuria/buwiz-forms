@@ -63,7 +63,11 @@ is the login Keychain.
 
 1. Open **eBIRForms > Settings > Google Calendar**.
 2. Select **Connect Google** and authorize the account in the browser.
-3. Edit an existing tax profile and open its **Calendar** tab.
+3. Edit an existing tax profile and open its **Calendar** tab. The tab appears
+   only when the current build contains Google Calendar OAuth configuration and
+   a Calendar account has been connected in Settings. The Google account shown
+   under a profile's Email Settings is for receipt tracking and does not enable
+   Calendar access.
 4. Confirm the calendar name and select **Create Google Calendar**.
 5. Repeat for every tax profile that should have a separate calendar.
 6. Open Google Calendar. Each profile calendar appears separately in the left
@@ -101,7 +105,10 @@ Google continues delivering event reminders even when eBIRForms is closed.
 ### Google OAuth is not configured
 
 The build does not contain `GOOGLE_CLIENT_ID` or `GOOGLE_CLIENT_SECRET`. Set both
-values and rebuild the application.
+values and rebuild the application. The profile Calendar tab stays hidden until
+the rebuilt app is configured and a Calendar account is connected in Settings.
+The Settings screen includes these setup steps directly, so it does not depend
+on access to a private repository.
 
 ### Access blocked or user is not authorized
 

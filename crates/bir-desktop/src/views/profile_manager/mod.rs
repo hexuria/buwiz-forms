@@ -28,6 +28,7 @@ use bir_core::validation::{ValidationError, validate_profile};
 // ─── Tab sub-modules ──────────────────────────────────────────────────────────
 // Each file holds one `impl ProfileManagerView` block rendering that tab's UI.
 // Imports from this module are re-exported via `use super::*` in each sub-module.
+mod dirty_state;
 mod tab_calendar;
 mod tab_email_settings;
 mod tab_export;
@@ -78,6 +79,9 @@ pub struct ProfileManagerView {
     save_message: Option<String>,
     pending_notification: Option<(gpui_component::notification::NotificationType, String)>,
     has_unsaved_profile_changes: bool,
+    has_unsaved_forms_set_changes: bool,
+    clean_profile_snapshot: Option<serde_json::Value>,
+    clean_forms_set_snapshot: std::collections::BTreeMap<u16, bir_core::forms::PerYearFormsSet>,
     profile_change_revision: u64,
     persisted_profile_tin: Option<String>,
     rdo_options: Vec<String>,
@@ -661,7 +665,7 @@ impl ProfileManagerView {
         )
         .detach();
 
-        Self {
+        let mut view = Self {
             db,
             tin_input,
             rdo_select,
@@ -767,6 +771,9 @@ impl ProfileManagerView {
             is_uploading_cor: false,
             pending_notification: None,
             has_unsaved_profile_changes: false,
+            has_unsaved_forms_set_changes: false,
+            clean_profile_snapshot: None,
+            clean_forms_set_snapshot: std::collections::BTreeMap::new(),
             profile_change_revision: 0,
             persisted_profile_tin: None,
             stored_per_year_forms: std::collections::BTreeMap::new(),
@@ -780,13 +787,15 @@ impl ProfileManagerView {
             calendar_name_input,
             calendar_action_message: None,
             _subscriptions: subscriptions,
-        }
+        };
+        view.capture_clean_baseline(cx);
+        view
     }
 
     /// Whether the in-memory profile, compliance ledger, or yearly Forms Set
     /// contains changes that have not completed a database save.
     pub fn has_unsaved_compliance_changes(&self) -> bool {
-        self.has_unsaved_profile_changes
+        self.has_unsaved_profile_changes || self.has_unsaved_forms_set_changes
     }
 
     /// Shows the reason cross-view navigation was refused. App-level callers
@@ -797,12 +806,11 @@ impl ProfileManagerView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let dirty_state = self.dirty_state();
         window.push_notification(
             Notification::error("Navigation blocked")
-                .message(
-                    "Save or discard the pending profile and Forms Set changes before opening another profile or filing form.",
-                )
-                .title("Unsaved profile changes"),
+                .message(dirty_state.navigation_message())
+                .title(dirty_state.title()),
             cx,
         );
         cx.notify();
@@ -815,9 +823,64 @@ impl ProfileManagerView {
 
     fn clear_profile_changed(&mut self) {
         self.has_unsaved_profile_changes = false;
+        self.has_unsaved_forms_set_changes = false;
+    }
+
+    fn dirty_state(&self) -> dirty_state::ComplianceDirtyState {
+        dirty_state::ComplianceDirtyState {
+            profile: self.has_unsaved_profile_changes,
+            forms_set: self.has_unsaved_forms_set_changes,
+        }
+    }
+
+    fn profile_snapshot(&self, cx: &Context<Self>) -> serde_json::Value {
+        let mut snapshot = serde_json::to_value(self.current_profile(cx))
+            .expect("TaxpayerProfile must remain serializable for persistence");
+        if let Some(fields) = snapshot.as_object_mut() {
+            // Forms Sets have their own dirty state and user-facing copy.
+            fields.remove("per_year_forms");
+        }
+        snapshot
+    }
+
+    fn forms_set_snapshot(
+        forms: &std::collections::BTreeMap<u16, bir_core::forms::PerYearFormsSet>,
+    ) -> std::collections::BTreeMap<u16, bir_core::forms::PerYearFormsSet> {
+        let mut snapshot = forms.clone();
+        for set in snapshot.values_mut() {
+            // Entry order is presentation-only. Reconciliation and the editor can
+            // produce the same authoritative set in different display order.
+            set.entries
+                .sort_by(|left, right| left.form_code.cmp(&right.form_code));
+        }
+        snapshot
+    }
+
+    fn capture_clean_baseline(&mut self, cx: &Context<Self>) {
+        self.clean_profile_snapshot = Some(self.profile_snapshot(cx));
+        self.clean_forms_set_snapshot = Self::forms_set_snapshot(&self.stored_per_year_forms);
+        self.clear_profile_changed();
+    }
+
+    fn refresh_dirty_state(&mut self, cx: &Context<Self>) {
+        let Some(clean_profile) = self.clean_profile_snapshot.as_ref() else {
+            return;
+        };
+        let current_profile = self.profile_snapshot(cx);
+        let current_forms_set = Self::forms_set_snapshot(&self.stored_per_year_forms);
+        let state = dirty_state::ComplianceDirtyState::from_comparison(
+            clean_profile,
+            &current_profile,
+            &self.clean_forms_set_snapshot,
+            &current_forms_set,
+        );
+        self.has_unsaved_profile_changes = state.profile;
+        self.has_unsaved_forms_set_changes = state.forms_set;
     }
 
     fn discard_profile_changes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.refresh_dirty_state(cx);
+        let discarded_state = self.dirty_state();
         let persisted_profile = self.persisted_profile_tin.as_deref().and_then(|tin| {
             self.db
                 .lock()
@@ -829,7 +892,7 @@ impl ProfileManagerView {
             self.edit_profile(profile, window, cx);
             self.pending_notification = Some((
                 NotificationType::Success,
-                "Unsaved profile and Forms Set changes were discarded.".to_string(),
+                discarded_state.discarded_message().to_string(),
             ));
         } else if self.editing_id.is_none() {
             self.reset_for_new(window, cx);
@@ -1001,6 +1064,8 @@ impl ProfileManagerView {
         });
         self.business_start_input
             .update(cx, |input, cx| input.set_date(None, window, cx));
+        self.birth_date_input
+            .update(cx, |input, cx| input.set_date(None, window, cx));
         self.rdo_select.update(cx, |select, cx| {
             select.set_selected_value("", window, cx);
         });
@@ -1014,7 +1079,7 @@ impl ProfileManagerView {
             select.set_selected_value("", window, cx);
         });
         self.profile_change_revision = 0;
-        self.clear_profile_changed();
+        self.capture_clean_baseline(cx);
         cx.notify();
     }
 
@@ -1278,7 +1343,7 @@ impl ProfileManagerView {
         self.forms_editor_selected_code = None;
 
         self.profile_change_revision = 0;
-        self.clear_profile_changed();
+        self.capture_clean_baseline(cx);
         cx.notify();
     }
 
@@ -3291,7 +3356,7 @@ impl ProfileManagerView {
                             .clone_from(&saved.profile_versions);
                         this.stored_per_year_forms.clone_from(&saved.per_year_forms);
                         if this.profile_change_revision == save_revision {
-                            this.clear_profile_changed();
+                            this.capture_clean_baseline(cx);
                         }
                         this.save_message = None;
                         this.pending_notification = Some(match refresh_status.warning() {
@@ -3383,7 +3448,8 @@ impl ProfileManagerView {
     }
 
     fn render_unsaved_profile_banner(&self, cx: &Context<Self>) -> gpui::AnyElement {
-        if !self.has_unsaved_profile_changes {
+        let dirty_state = self.dirty_state();
+        if !dirty_state.any() {
             return div().into_any_element();
         }
 
@@ -3396,8 +3462,8 @@ impl ProfileManagerView {
             .py_3()
             .rounded_lg()
             .border_1()
-            .border_color(gpui::rgba(0xd97706a0))
-            .bg(gpui::rgba(0xfef3c730))
+            .border_color(cx.theme().warning.opacity(0.45))
+            .bg(cx.theme().warning.opacity(0.12))
             .child(
                 div()
                     .flex()
@@ -3407,16 +3473,14 @@ impl ProfileManagerView {
                         div()
                             .text_sm()
                             .font_weight(FontWeight::BOLD)
-                            .text_color(gpui::rgb(0x92400e))
-                            .child("Unsaved profile and Forms Set changes"),
+                            .text_color(cx.theme().warning_foreground)
+                            .child(dirty_state.title()),
                     )
                     .child(
                         div()
                             .text_xs()
-                            .text_color(gpui::rgb(0x92400e))
-                            .child(
-                                "Save or discard these changes before switching profiles or opening a filing form.",
-                            ),
+                            .text_color(cx.theme().warning_foreground)
+                            .child(dirty_state.navigation_message()),
                     ),
             )
             .child(
@@ -3491,6 +3555,10 @@ impl ProfileManagerView {
 
 impl Render for ProfileManagerView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+        // Programmatic InputState/Combobox population emits the same change
+        // events as user edits. Reconcile against the loaded baseline before
+        // deciding whether to show or enforce the unsaved-changes guard.
+        self.refresh_dirty_state(cx);
         if let Some((notif_type, msg)) = self.pending_notification.take() {
             let notification = gpui_component::notification::Notification::new()
                 .message(msg)
@@ -3555,6 +3623,18 @@ impl Render for ProfileManagerView {
         } else {
             false
         };
+        let profile_calendar_available = self
+            .db
+            .lock()
+            .ok()
+            .map(|db| {
+                bir_core::google_calendar::google_calendar_connection_from_db(&db)
+                    .profile_calendar_available()
+            })
+            .unwrap_or(false);
+        if self.active_tab == 6 && !profile_calendar_available {
+            self.active_tab = 0;
+        }
 
         div()
             .size_full()
@@ -3795,30 +3875,32 @@ impl Render for ProfileManagerView {
                                                         }))
                                                         .child(div().text_sm().child("Forms Set")),
                                                 )
-                                                .child(
-                                                    div()
-                                                        .id("tab_6")
-                                                        .px_4()
-                                                        .py_1p5()
-                                                        .rounded_md()
-                                                        .cursor_pointer()
-                                                        .when(self.active_tab == 6, |s| {
-                                                            s.bg(cx.theme().background)
-                                                                .shadow_sm()
-                                                                .text_color(cx.theme().foreground)
-                                                                .font_weight(FontWeight::SEMIBOLD)
-                                                        })
-                                                        .when(self.active_tab != 6, |s| {
-                                                            s.hover(|s| s.bg(cx.theme().muted))
-                                                                .text_color(cx.theme().muted_foreground)
-                                                                .font_weight(FontWeight::MEDIUM)
-                                                        })
-                                                        .on_click(cx.listener(|this, _, _, cx| {
-                                                            this.active_tab = 6;
-                                                            cx.notify();
-                                                        }))
-                                                        .child(div().text_sm().child("Calendar")),
-                                                )
+                                                .when(profile_calendar_available, |this| {
+                                                    this.child(
+                                                        div()
+                                                            .id("tab_6")
+                                                            .px_4()
+                                                            .py_1p5()
+                                                            .rounded_md()
+                                                            .cursor_pointer()
+                                                            .when(self.active_tab == 6, |s| {
+                                                                s.bg(cx.theme().background)
+                                                                    .shadow_sm()
+                                                                    .text_color(cx.theme().foreground)
+                                                                    .font_weight(FontWeight::SEMIBOLD)
+                                                            })
+                                                            .when(self.active_tab != 6, |s| {
+                                                                s.hover(|s| s.bg(cx.theme().muted))
+                                                                    .text_color(cx.theme().muted_foreground)
+                                                                    .font_weight(FontWeight::MEDIUM)
+                                                            })
+                                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                                this.active_tab = 6;
+                                                                cx.notify();
+                                                            }))
+                                                            .child(div().text_sm().child("Calendar")),
+                                                    )
+                                                })
                                             }),
                                     ),
                             )
@@ -3842,7 +3924,9 @@ impl Render for ProfileManagerView {
                                     .child(self.render_security_tab(global_pins_enabled, cx))
                                     .child(self.render_export_tab(cx))
                                     .child(self.render_active_forms_tab(cx))
-                                    .child(self.render_calendar_tab(cx))
+                                    .when(profile_calendar_available, |this| {
+                                        this.child(self.render_calendar_tab(cx))
+                                    })
                             )
                             .when(self.active_tab != 1 && self.active_tab != 6, |this| {
                                 this.child(

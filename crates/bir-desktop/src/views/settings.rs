@@ -32,6 +32,7 @@ pub struct SettingsView {
     google_calendar_configured: bool,
     google_calendar_email: Option<String>,
     google_calendar_message: Option<(bool, String)>,
+    show_google_calendar_setup_guide: bool,
 }
 
 impl SettingsView {
@@ -113,6 +114,7 @@ impl SettingsView {
             google_calendar_configured: calendar_connection.configured,
             google_calendar_email: calendar_connection.connected_email,
             google_calendar_message: None,
+            show_google_calendar_setup_guide: false,
         };
 
         cx.subscribe_in(
@@ -366,15 +368,81 @@ impl SettingsView {
                     })
                     .child(
                         gpui_component::button::Button::new("google_calendar_setup_docs")
-                            .label("Setup Guide")
+                            .label(if self.show_google_calendar_setup_guide {
+                                "Hide Setup Guide"
+                            } else {
+                                "Setup Guide"
+                            })
+                            .ghost()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.show_google_calendar_setup_guide =
+                                    !this.show_google_calendar_setup_guide;
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .when(self.show_google_calendar_setup_guide, |this| {
+                this.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .p_4()
+                        .rounded_lg()
+                        .bg(cx.theme().secondary)
+                        .border_1()
+                        .border_color(cx.theme().border)
+                        .child(
+                            div()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child("Google Calendar setup"),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(cx.theme().foreground)
+                                .child(
+                                    "1. The app build must include a Google Desktop OAuth client and have the Google Calendar API enabled.",
+                                ),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(cx.theme().foreground)
+                                .child(
+                                    "2. Connect the Calendar account here in Settings. Email receipt tracking uses a separate Google connection.",
+                                ),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(cx.theme().foreground)
+                                .child(
+                                    "3. After connection, edit a saved tax profile. Its Calendar tab will appear so you can create a filing calendar.",
+                                ),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(
+                                    "For local or release builds, set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET before rebuilding. Tokens are stored in the operating-system credential store, not in the project environment.",
+                                ),
+                        )
+                        .child(
+                            gpui_component::button::Button::new(
+                                "google_calendar_official_oauth_docs",
+                            )
+                            .label("Open official Google OAuth guide")
                             .ghost()
                             .on_click(|_, _, _| {
                                 let _ = open::that(
-                                    "https://github.com/codeitlikemiley/ebirforms/blob/main/docs/google-calendar-integration.md",
+                                    "https://developers.google.com/identity/protocols/oauth2/native-app",
                                 );
                             }),
-                    ),
-            )
+                        ),
+                )
+            })
     }
 }
 
