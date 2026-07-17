@@ -13,6 +13,7 @@ use serde_json::json;
 
 const GEMINI_KEYCHAIN_SERVICE: &str = "dev.goldcoders.bir.gemini_ocr";
 const GEMINI_KEYCHAIN_USER: &str = "gemini_api_key";
+const COR_DOCUMENT_IDENTITY_FORM_CODE: &str = "2303";
 pub(crate) const DEFAULT_GEMINI_MODEL: &str = "gemini-3.5-flash";
 pub(crate) const COR_OCR_GEMINI_ENABLED_SETTING: &str = "cor_ocr_gemini_enabled";
 pub(crate) const COR_OCR_GEMINI_MODEL_SETTING: &str = "cor_ocr_gemini_model";
@@ -674,7 +675,9 @@ fn extract_form_codes_from_text(text: &str) -> Vec<String> {
         }
 
         if let Some((code, consumed)) = longest_match {
-            codes.push(code);
+            if is_cor_obligation_form_code(&code) {
+                codes.push(code);
+            }
             token_index += consumed;
         } else {
             token_index += 1;
@@ -1080,11 +1083,16 @@ fn normalize_form_codes(codes: Vec<String>) -> Vec<String> {
                 })
                 .collect::<Vec<_>>()
         })
-        .filter(|code| !code.is_empty())
+        .filter(|code| is_cor_obligation_form_code(code))
         .collect::<Vec<_>>();
     codes.sort();
     codes.dedup();
     codes
+}
+
+fn is_cor_obligation_form_code(code: &str) -> bool {
+    let canonical = bir_core::forms::registry::canonical_form_code(code);
+    !canonical.is_empty() && canonical != COR_DOCUMENT_IDENTITY_FORM_CODE
 }
 
 fn non_empty(value: String) -> Option<String> {
@@ -1446,6 +1454,24 @@ PERCENTAGE TAX
         assert_eq!(
             extract_form_codes_from_text("Annual Information Return 1604CF"),
             vec!["1604CF".to_string()]
+        );
+    }
+
+    #[test]
+    fn fallback_form_code_extraction_excludes_cor_document_identity() {
+        assert_eq!(
+            extract_form_codes_from_text(
+                "BIR Form 2303 Certificate of Registration; registered return 2551Q"
+            ),
+            vec!["2551Q".to_string()]
+        );
+    }
+
+    #[test]
+    fn gemini_form_code_normalization_excludes_cor_document_identity() {
+        assert_eq!(
+            normalize_form_codes(vec!["2303".into(), "2551-Q".into()]),
+            vec!["2551Q".to_string()]
         );
     }
 
