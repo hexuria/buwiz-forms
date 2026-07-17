@@ -845,6 +845,28 @@ fn obligation_allowed_for_version_and_profile_with_evidence(
         return false;
     }
 
+    // Form 0605 is event-driven, not a recurring annual obligation. A coarse
+    // Registration Fee tax type may infer it only for the year recorded on
+    // the confirmed COR/profile segment. Reviewed exact COR evidence and
+    // explicit manual overrides are handled at higher-priority paths and must
+    // remain available outside that year.
+    if def.code == "0605"
+        && !reviewed_exact_form_code
+        && version.cor.registration_date.map(|date| date.year() as u16) != Some(year)
+    {
+        return false;
+    }
+
+    // These are independently selectable official forms, not aliases for the
+    // older generic codes. The current coarse registered-tax-type facts do not
+    // establish their specialized applicability, so never infer them without
+    // a reviewed exact COR code. Manual includes remain authoritative.
+    if matches!(def.code, "1600PT" | "1600VT" | "1602Q" | "1603Q" | "2000OT")
+        && !reviewed_exact_form_code
+    {
+        return false;
+    }
+
     // 5. Abolished 1704 check
     if def.code == "1704" && year >= 2021 {
         return false;
@@ -1357,12 +1379,12 @@ fn is_compensation_withholding_form(code: &str) -> bool {
 fn is_final_withholding_form(code: &str) -> bool {
     matches!(
         code,
-        "0619F" | "1600WP" | "1601F" | "1601FQ" | "1602" | "1603"
+        "0619F" | "1600WP" | "1601F" | "1601FQ" | "1602" | "1602Q" | "1603" | "1603Q"
     )
 }
 
 fn is_vat_percentage_withholding_form(code: &str) -> bool {
-    code == "1600"
+    matches!(code, "1600" | "1600PT" | "1600VT")
 }
 
 fn is_excise_form(code: &str) -> bool {
@@ -1567,6 +1589,156 @@ mod tests {
         }];
         profile.profile_versions = vec![version];
         profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
+    }
+
+    #[test]
+    fn registration_fee_infers_0605_only_for_the_cor_registration_year() {
+        use crate::profile::RegisteredTaxType;
+
+        let mut profile =
+            profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, false);
+        configure_confirmed_cor_evidence(
+            &mut profile,
+            false,
+            vec![RegisteredTaxType::RegistrationFee],
+            &[],
+            None,
+        );
+        profile.profile_versions[0].effective_from = NaiveDate::from_ymd_opt(2020, 1, 1);
+        profile.profile_versions[0].cor.registration_date = NaiveDate::from_ymd_opt(2026, 7, 18);
+
+        let registration_year = form_suggestions_for_profile_year(&profile, 2026);
+        assert!(registration_year.iter().any(|suggestion| {
+            suggestion.form_code == "0605"
+                && suggestion.active
+                && suggestion.source == FormSuggestionSource::InferredTaxType
+        }));
+
+        let following_year = form_suggestions_for_profile_year(&profile, 2027);
+        assert!(
+            following_year
+                .iter()
+                .all(|suggestion| suggestion.form_code != "0605")
+        );
+    }
+
+    #[test]
+    fn new_profile_backfill_suggests_0605_in_its_registration_year() {
+        let mut profile =
+            profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, false);
+        profile.profile_versions.clear();
+        profile.business_start_date = NaiveDate::from_ymd_opt(2026, 7, 18);
+        profile.ensure_profile_version_ledger();
+
+        let registration_year = form_suggestions_for_profile_year(&profile, 2026);
+        assert!(registration_year.iter().any(|suggestion| {
+            suggestion.form_code == "0605"
+                && suggestion.active
+                && suggestion.source == FormSuggestionSource::MigrationBackfill
+        }));
+
+        let following_year = form_suggestions_for_profile_year(&profile, 2027);
+        assert!(
+            following_year
+                .iter()
+                .all(|suggestion| suggestion.form_code != "0605")
+        );
+    }
+
+    #[test]
+    fn reviewed_exact_0605_survives_outside_the_registration_year() {
+        let mut profile =
+            profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, false);
+        configure_confirmed_cor_evidence(&mut profile, false, vec![], &["0605"], None);
+        profile.profile_versions[0].effective_from = NaiveDate::from_ymd_opt(2020, 1, 1);
+        profile.profile_versions[0].cor.registration_date = NaiveDate::from_ymd_opt(2020, 1, 1);
+
+        let suggestions = form_suggestions_for_profile_year(&profile, 2026);
+        assert!(suggestions.iter().any(|suggestion| {
+            suggestion.form_code == "0605"
+                && suggestion.active
+                && suggestion.source == FormSuggestionSource::ReviewedCor
+        }));
+    }
+
+    #[test]
+    fn manual_0605_include_survives_outside_the_registration_year() {
+        use crate::profile::{
+            ManualObligationOverride, ManualObligationOverrideAction, RegisteredTaxType,
+        };
+
+        let mut profile =
+            profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, false);
+        configure_confirmed_cor_evidence(
+            &mut profile,
+            false,
+            vec![RegisteredTaxType::RegistrationFee],
+            &[],
+            None,
+        );
+        profile.profile_versions[0].effective_from = NaiveDate::from_ymd_opt(2020, 1, 1);
+        profile.profile_versions[0].cor.registration_date = NaiveDate::from_ymd_opt(2020, 1, 1);
+        profile.profile_versions[0]
+            .obligation_overrides
+            .push(ManualObligationOverride {
+                form_code: "0605".into(),
+                action: ManualObligationOverrideAction::Include,
+                reason: "Reviewed current-year payment need".into(),
+                source_reference: Some("User review".into()),
+            });
+
+        let suggestions = form_suggestions_for_profile_year(&profile, 2026);
+        let reconciliation = crate::forms::reconcile_forms_set_for_year(2026, None, &suggestions);
+        let entry = reconciliation
+            .forms_set
+            .entry("0605")
+            .expect("manual 0605 include must remain visible");
+
+        assert!(entry.is_filing_active());
+        assert_eq!(entry.source, crate::forms::FormSetSource::Manual);
+    }
+
+    #[test]
+    fn distinct_official_variants_require_exact_or_manual_evidence() {
+        use crate::profile::RegisteredTaxType;
+
+        let mut profile =
+            profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, false);
+        configure_confirmed_cor_evidence(
+            &mut profile,
+            false,
+            vec![
+                RegisteredTaxType::WithholdingFinal,
+                RegisteredTaxType::WithholdingVatAndPercentage,
+            ],
+            &[],
+            None,
+        );
+
+        let inferred = form_suggestions_for_profile_year(&profile, 2026);
+        for code in ["1600PT", "1600VT", "1602Q", "1603Q", "2000OT"] {
+            assert!(
+                inferred
+                    .iter()
+                    .all(|suggestion| suggestion.form_code != code),
+                "{code} must not be invented from coarse tax-type evidence"
+            );
+        }
+
+        profile.profile_versions[0].evidence[0].extracted_form_codes =
+            ["1600-PT", "1600-VT", "1602Q", "1603Q", "2000-OT"]
+                .into_iter()
+                .map(str::to_string)
+                .collect();
+
+        let exact = form_suggestions_for_profile_year(&profile, 2026);
+        for code in ["1600PT", "1600VT", "1602Q", "1603Q", "2000OT"] {
+            assert!(exact.iter().any(|suggestion| {
+                suggestion.form_code == code
+                    && suggestion.active
+                    && suggestion.source == FormSuggestionSource::ReviewedCor
+            }));
+        }
     }
 
     #[test]

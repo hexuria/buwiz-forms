@@ -1022,23 +1022,26 @@ pub fn canonical_form_code(display_form_no: &str) -> &'static str {
         "1702-MX" => "1702MX",
         "1702-RT" => "1702RT",
         "1707-A" => "1707A",
-        "2000-OT" => "2000",
+        "2000-OT" => "2000OT",
         "2200-A" => "2200A",
         "2200-AN" => "2200AN",
         "2200-M" => "2200M",
         "2200-S" => "2200S",
         "2200-T" => "2200T",
         "2550-DS" => "2550DS",
-        "1600-VT" | "1600-PT" => "1600",
+        "1600-VT" => "1600VT",
+        "1600-PT" => "1600PT",
         "2200-C" => "2200C",
         other => match other {
             "0605" => "0605",
             "0611-A" => "0611A",
             "0613" => "0613",
             "0620" => "0620",
+            "1600PT" => "1600PT",
+            "1600VT" => "1600VT",
             "1606" => "1606",
-            "1602Q" => "1602",
-            "1603Q" => "1603",
+            "1602Q" => "1602Q",
+            "1603Q" => "1603Q",
             "1621" => "1621",
             "1700" => "1700",
             "1701" => "1701",
@@ -1052,6 +1055,7 @@ pub fn canonical_form_code(display_form_no: &str) -> &'static str {
             "1801" => "1801",
             "1905" => "1905",
             "2000" => "2000",
+            "2000OT" => "2000OT",
             "2200P" => "2200P",
             "2316" => "2316",
             "2550Q" => "2550Q",
@@ -1284,6 +1288,11 @@ mod tests {
         assert_eq!(canonical_form_code("0619-E"), "0619E");
         assert_eq!(canonical_form_code("1701-MS"), "1701MS");
         assert_eq!(canonical_form_code("1702-RT"), "1702RT");
+        assert_eq!(canonical_form_code("1600-PT"), "1600PT");
+        assert_eq!(canonical_form_code("1600-VT"), "1600VT");
+        assert_eq!(canonical_form_code("1602Q"), "1602Q");
+        assert_eq!(canonical_form_code("1603Q"), "1603Q");
+        assert_eq!(canonical_form_code("2000-OT"), "2000OT");
     }
 
     #[test]

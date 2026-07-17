@@ -662,8 +662,8 @@ fn extract_form_codes_from_text(text: &str) -> Vec<String> {
     const KNOWN_CODES: &[&str] = &[
         "2303", "0605", "0619E", "0619F", "1600", "1600PT", "1600VT", "1601C", "1601EQ", "1601FQ",
         "1602Q", "1603Q", "1604C", "1604CF", "1604E", "1621", "1701", "1701A", "1701MS", "1701Q",
-        "1702EX", "1702MX", "1702Q", "1702RT", "1704", "2200M", "2200P", "2316", "2550DS", "2550M",
-        "2550Q", "2551Q",
+        "1702EX", "1702MX", "1702Q", "1702RT", "1704", "2000OT", "2200M", "2200P", "2316",
+        "2550DS", "2550M", "2550Q", "2551Q",
     ];
     let normalized = normalize(text);
     let tokens = normalized.split_whitespace().collect::<Vec<_>>();
@@ -1468,6 +1468,10 @@ PERCENTAGE TAX
         assert_eq!(
             extract_form_codes_from_text("Annual Information Return 1604CF"),
             vec!["1604CF".to_string()]
+        );
+        assert_eq!(
+            extract_form_codes_from_text("BIR Form 2000-OT"),
+            vec!["2000OT".to_string()]
         );
     }
 

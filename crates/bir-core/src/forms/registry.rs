@@ -115,6 +115,34 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         is_deprecated: false,
     },
     FormDefinition {
+        code: "1600PT",
+        title: "Monthly Remittance Return of Other Percentage Taxes Withheld",
+        category: "Withholding Tax",
+        frequency: FilingFrequency::Monthly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: false,
+        is_deprecated: false,
+    },
+    FormDefinition {
+        code: "1600VT",
+        title: "Monthly Remittance Return of Value-Added Tax Withheld",
+        category: "Withholding Tax",
+        frequency: FilingFrequency::Monthly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: false,
+        is_deprecated: false,
+    },
+    FormDefinition {
         code: "1600WP",
         title: "Remittance Return of Percentage Tax on Winnings and Prizes",
         category: "Withholding Tax",
@@ -213,8 +241,36 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         is_deprecated: false,
     },
     FormDefinition {
+        code: "1602Q",
+        title: "Quarterly Remittance Return of Final Taxes Withheld on Interest Paid on Deposits and Yield on Deposit Substitutes / Trusts / Etc.",
+        category: "Withholding Tax",
+        frequency: FilingFrequency::Quarterly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: false,
+        is_deprecated: false,
+    },
+    FormDefinition {
         code: "1603",
         title: "Quarterly Remittance Return of Final Income Taxes Withheld",
+        category: "Withholding Tax",
+        frequency: FilingFrequency::Quarterly,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: true,
+        is_deprecated: false,
+    },
+    FormDefinition {
+        code: "1603Q",
+        title: "Quarterly Remittance Return of Final Income Taxes Withheld on Fringe Benefits Paid to Employees Other Than Rank and File",
         category: "Withholding Tax",
         frequency: FilingFrequency::Quarterly,
         taxpayer_types: &[
@@ -523,6 +579,20 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         requires_employees: false,
         is_deprecated: false,
     },
+    FormDefinition {
+        code: "2000OT",
+        title: "Documentary Stamp Tax Declaration/Return (One-Time Transactions)",
+        category: "Documentary Stamp Tax",
+        frequency: FilingFrequency::OpenEnded,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: false,
+        is_deprecated: false,
+    },
     // ═══════════════════════════════════════════
     // Excise Tax
     // ═══════════════════════════════════════════
@@ -758,12 +828,8 @@ pub fn canonical_form_code(code: &str) -> String {
         .collect::<String>();
 
     match compact.as_str() {
-        "1600VT" | "1600PT" => "1600".to_string(),
-        "1602Q" => "1602".to_string(),
-        "1603Q" => "1603".to_string(),
         "1604C" | "1604F" | "1604CF" => "1604CF".to_string(),
         "1707" | "1707A" => "1707A".to_string(),
-        "2000OT" => "2000".to_string(),
         other if FORM_REGISTRY.iter().any(|form| form.code == other) => other.to_string(),
         _ => normalized,
     }
@@ -805,7 +871,38 @@ mod tests {
         assert_eq!(canonical_form_code("1604C"), "1604CF");
         assert_eq!(canonical_form_code("1604-C"), "1604CF");
         assert_eq!(canonical_form_code("0619-E"), "0619E");
+        assert_eq!(canonical_form_code("1600-PT"), "1600PT");
+        assert_eq!(canonical_form_code("1600-VT"), "1600VT");
+        assert_eq!(canonical_form_code("1602Q"), "1602Q");
+        assert_eq!(canonical_form_code("1603-Q"), "1603Q");
+        assert_eq!(canonical_form_code("2000-OT"), "2000OT");
         assert_eq!(canonical_form_code("CUSTOM_FORM"), "CUSTOM_FORM");
+    }
+
+    #[test]
+    fn registry_keeps_the_five_official_variants_as_distinct_forms() {
+        assert_eq!(FORM_REGISTRY.len(), 51);
+
+        for code in ["1600PT", "1600VT", "1602Q", "1603Q", "2000OT"] {
+            assert_eq!(
+                find_form(code).map(|form| form.code),
+                Some(code),
+                "{code} must remain independently selectable"
+            );
+        }
+
+        assert_eq!(
+            find_form("1600-PT").map(|form| &form.frequency),
+            Some(&FilingFrequency::Monthly)
+        );
+        assert_eq!(
+            find_form("1602Q").map(|form| &form.frequency),
+            Some(&FilingFrequency::Quarterly)
+        );
+        assert_eq!(
+            find_form("2000-OT").map(|form| &form.frequency),
+            Some(&FilingFrequency::OpenEnded)
+        );
     }
 
     #[test]
