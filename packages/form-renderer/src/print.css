@@ -927,8 +927,6 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 }
 .blank-money-value > .comb-value:last-child { flex: 0 0 26.5pt; }
 .machine-validation {
-  /* The reviewed two-line Item 17 extension reallocates exactly 18pt from
-   * this non-data stamp area so the legal 612 x 936pt page remains unchanged. */
   height: 48.5pt;
   display: grid;
   grid-template-columns: 353.5pt minmax(0, 1fr);
@@ -1640,6 +1638,33 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 
 .form-2551q-page-one .signature-caption > * {
   transform: translateY(-.5pt);
+}
+
+/* Item 17 deliberately owns one additional 18.5pt input line. Reclaim that
+ * fixed-page space from the two otherwise blank wet-signature areas, not from
+ * Part III's official machine-validation box. This keeps the signature
+ * captions, tax-agent strip, payment table, validation box, privacy note, and
+ * page boundary on their reviewed official coordinates while preserving the
+ * approved double-height Item 17 row. The complete-page comparison still sees
+ * the intentional shorter signature spaces; no reference pixels are masked. */
+.form-2551q-page-one .official-declaration {
+  height: 97pt;
+}
+
+.form-2551q-page-one .official-signature-grid {
+  height: 48.5pt;
+}
+
+.form-2551q-page-one .official-signature-grid > div {
+  grid-template-rows: 22pt 26.5pt;
+}
+
+.form-2551q-page-one .machine-validation {
+  height: 66.5pt;
+}
+
+.form-2551q-page-one .official-payment-details {
+  height: 182.5pt;
 }
 
 .form-2551q-page-one .official-declaration > p {

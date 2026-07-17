@@ -198,12 +198,15 @@ for (const parityCase of cases) {
       { name: "Item 12A label", selector: ".tax-relief-field > .tax-relief-spec", x: 554, y: 568, width: 170, height: 38 },
       { name: "Item 12A value", selector: ".tax-relief-field > .comb-value", x: 724, y: 568, width: 455, height: 38 },
       { name: "Item 13", selector: ".income-rate-field", x: 45, y: 607, width: 1137, height: 87 },
-      { name: "Items 14-24 totals", selector: ".tax-payable", x: 45, y: 696, width: 1137, height: 506 },
+      // Item 17 owns one additional 18pt input line by product decision. Keep
+      // the geometry assertion explicit instead of hiding that deliberate
+      // divergence from the untouched official raster in a comparison mask.
+      { name: "Items 14-24 totals with approved Item 17 extension", selector: ".tax-payable", x: 45, y: 696, width: 1137, height: 543 },
       { name: "Item 14 total", selector: ".official-tax-line[data-item='14']", x: 45, y: 723, width: 1137, height: 36 },
-      { name: "Item 17 specification", selector: ".tax-credit-description", x: 448, y: 862, width: 303, height: 23 },
-      { name: "signatures", selector: ".official-declaration", x: 45, y: 1206, width: 1137, height: 232 },
-      { name: "declaration copy", selector: ".official-declaration > p", x: 47, y: 1208, width: 1133, height: 56 },
-      { name: "signature boxes", selector: ".official-signature-grid", x: 45, y: 1263, width: 1133, height: 134 },
+      { name: "Item 17 dedicated specification line", selector: ".tax-credit-description", x: 131, y: 892, width: 623, height: 35 },
+      { name: "signatures after approved Item 17 extension", selector: ".official-declaration", x: 45, y: 1243, width: 1137, height: 194 },
+      { name: "declaration copy", selector: ".official-declaration > p", x: 47, y: 1244, width: 1133, height: 56 },
+      { name: "signature boxes with reallocated blank space", selector: ".official-signature-grid", x: 47, y: 1300, width: 1133, height: 97 },
       { name: "individual signature caption", selector: ".official-signature-grid > div:first-child .signature-caption", x: 47, y: 1345, width: 567, height: 53 },
       { name: "non-individual signature caption", selector: ".official-signature-grid > div:last-child .signature-caption", x: 615, y: 1345, width: 565, height: 53 },
       { name: "tax-agent strip", selector: ".tax-agent-strip", x: 47, y: 1398, width: 1133, height: 38 },
@@ -214,7 +217,9 @@ for (const parityCase of cases) {
       { name: "Part III item 27 decimal cell", selector: ".payment-row-27 .decimal-separator", x: 1097, y: 1575, width: 30, height: 35 },
       { name: "Part III item 27 cents cells", selector: ".payment-row-27 .blank-money-value > .comb-value:last-child", x: 1127, y: 1575, width: 53, height: 35 },
       { name: "Part III item 28 continuation decimal cell", selector: ".payment-other-row .decimal-separator", x: 1097, y: 1636, width: 30, height: 35 },
-      { name: "Part III item 28 continuation cents cells", selector: ".payment-other-row .blank-money-value > .comb-value:last-child", x: 1127, y: 1636, width: 53, height: 35 }
+      { name: "Part III item 28 continuation cents cells", selector: ".payment-other-row .blank-money-value > .comb-value:last-child", x: 1127, y: 1636, width: 53, height: 35 },
+      { name: "Part III machine validation", selector: ".machine-validation", x: 45, y: 1672, width: 1137, height: 133 },
+      { name: "privacy note", selector: ".privacy-note", x: 45, y: 1811, width: 1137, height: 16 }
     ]);
     await expectHeaderOptionsTopAlignment(pages.nth(0));
     await expectBackgroundInformationParity(pages.nth(0));

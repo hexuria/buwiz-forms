@@ -2159,6 +2159,15 @@ impl Render for Form2551QView {
                     .text_color(cx.theme().muted_foreground)
                     .child(schedule_row_counter),
             )
+            .child(
+                div()
+                    .w_full()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(
+                        "Use one line per distinct ATC. Combine businesses that share the same ATC; add another line when the ATC differs.",
+                    ),
+            )
             .when(
                 schedule_row_count > FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY,
                 |controls| {
