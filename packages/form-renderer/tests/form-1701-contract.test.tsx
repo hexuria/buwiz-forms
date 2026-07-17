@@ -78,7 +78,7 @@ describe("1701:2018 semantic HTML preview contract", () => {
     }
   });
 
-  it("maps only Rust-owned calculations and keeps unentered cells blank", () => {
+  it("maps only Rust-owned calculations and keeps unentered cells as empty official guides", () => {
     const fixture = structuredClone(minimumFixture) as RenderEnvelope;
     expect(fixture.fields.schedule_3_8_taxpayer).toEqual({
       type: "decimal",
@@ -90,7 +90,38 @@ describe("1701:2018 semantic HTML preview contract", () => {
     });
     expect(fixture.fields.schedule_4_1_taxpayer).toBeUndefined();
     const markup = renderToStaticMarkup(createElement(Form1701, { envelope: fixture }));
-    expect(markup).toContain("blank-amount-1701");
+    expect(markup).toContain('data-field-key="schedule_4_1_taxpayer" data-field-mode="guided" data-cell-capacity="9"><span class="comb-value"');
+    expect(markup).not.toContain("blank-amount-1701");
+  });
+
+  it("uses only source-visible plain and guided modes at the measured official capacities", () => {
+    const fixture = structuredClone(normalFixture) as RenderEnvelope;
+    const markup = renderToStaticMarkup(createElement(Form1701, { envelope: fixture }));
+
+    for (const fragment of [
+      'data-field-mode="guided" data-cell-capacity="40"><span><b>8</b> Taxpayer’s Name',
+      'class="labeled-comb-1701 address-1701" data-field-mode="guided" data-cell-capacity="71"',
+      'data-field-mode="guided" data-cell-capacity="8"><span><b>10</b> Date of Birth',
+      'data-field-mode="guided" data-cell-capacity="32"><span><b>11</b> Email Address',
+      'data-field-key="payment_34_bank" data-field-mode="guided" data-cell-capacity="6"',
+      'data-field-key="payment_34_number" data-field-mode="guided" data-cell-capacity="10"',
+      'data-field-key="payment_34_date" data-field-mode="guided" data-cell-capacity="8"',
+      'data-field-key="payment_34_amount" data-field-mode="guided" data-cell-capacity="9"',
+      'data-field-key="payment_37_description" data-field-mode="guided" data-cell-capacity="7"',
+      'data-field-key="schedule_5_taxpayer_1_description" data-field-mode="guided" data-cell-capacity="21"',
+      'data-field-key="schedule_5_taxpayer_1_legal_basis" data-field-mode="guided" data-cell-capacity="9"',
+      'data-field-key="schedule_6_taxpayer_1_amount" data-field-mode="plain"'
+    ]) {
+      expect(markup).toContain(fragment);
+    }
+
+    expect(markup).not.toContain('data-field-key="payment_36_bank"');
+    expect(markup).toContain('class="row-description-1701" data-field-mode="plain"><span class="adaptive-plain-value');
+    expect(markup).toContain('class="inline-description-1701" data-field-mode="plain"><span class="adaptive-plain-value');
+
+    const css = fs.readFileSync(path.resolve(HERE, "../src/forms/Form1701.css"), "utf8");
+    expect(css).not.toContain("repeating-linear-gradient");
+    expect(css).not.toContain("blank-amount-1701");
   });
 
   it("renders unresolved choices unmarked instead of inventing No", () => {
