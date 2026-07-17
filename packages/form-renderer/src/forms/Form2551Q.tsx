@@ -60,20 +60,35 @@ export const OFFICIAL_2551Q_COMB_CAPACITIES = {
   }
 } as const;
 
+/**
+ * Reviewed overflow typography for the fixed January 2018 field geometry.
+ *
+ * The comb capacity decides only when plain-box mode begins. These maxima are
+ * the normal readable sizes attempted before the browser measures the actual
+ * loaded Arimo glyphs and descends in 0.5px steps. The floor is never crossed;
+ * an unresolved value is reported to the native geometry gate instead.
+ */
+const REVIEWED_2551Q_OVERFLOW_FONT_PX = {
+  generic: { max: 13, min: 10.5 },
+  pageOneName: { max: 18, min: 10.5 },
+  pageOneAddress: { max: 15, min: 10.5 },
+  pageOneEmail: { max: 17.5, min: 10.5 },
+  item12A: { max: 11.5, min: 10.5 },
+  pageTwoName: { max: 13, min: 10.5 }
+} as const;
+
 function Adaptive2551QValue({
   value,
   cells,
   align = "left",
   className = "",
-  maxFontSizePx = 13,
-  minFontSizePx = 10.5
+  typography = REVIEWED_2551Q_OVERFLOW_FONT_PX.generic
 }: {
   value: string;
   cells: number;
   align?: "left" | "right";
   className?: string;
-  maxFontSizePx?: number;
-  minFontSizePx?: number;
+  typography?: Readonly<{ max: number; min: number }>;
 }) {
   return (
     <AdaptiveCombValue
@@ -82,8 +97,8 @@ function Adaptive2551QValue({
       align={align}
       className={className}
       fitToField
-      maxFontSizePx={maxFontSizePx}
-      minFontSizePx={minFontSizePx}
+      maxFontSizePx={typography.max}
+      minFontSizePx={typography.min}
       fontStepPx={.5}
     />
   );
@@ -259,6 +274,7 @@ function PageTwoIdentity({ envelope }: { envelope: RenderEnvelope }) {
       <Adaptive2551QValue
         value={taxpayerName}
         cells={OFFICIAL_2551Q_COMB_CAPACITIES.pageTwoTaxpayerName}
+        typography={REVIEWED_2551Q_OVERFLOW_FONT_PX.pageTwoName}
       />
     </section>
   );
@@ -602,7 +618,11 @@ function BackgroundInformation({
       </div>
       <div className="full-width-field name-field">
         <div className="field-label"><b>8</b> Taxpayer’s Name <em>(Last Name, First Name, Middle Name for Individual OR Registered Name for Non-Individual)</em></div>
-        <Adaptive2551QValue value={taxpayerName} cells={40} />
+        <Adaptive2551QValue
+          value={taxpayerName}
+          cells={40}
+          typography={REVIEWED_2551Q_OVERFLOW_FONT_PX.pageOneName}
+        />
       </div>
       <div className="full-width-field address-field">
         <div className="field-label"><b>9</b> Registered Address <em>(Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)</em></div>
@@ -613,6 +633,7 @@ function BackgroundInformation({
             value={addressLineOne}
             cells={71}
             className="address-overflow-value"
+            typography={REVIEWED_2551Q_OVERFLOW_FONT_PX.pageOneAddress}
           />
         )}
         <div className="address-continuation">
@@ -629,7 +650,11 @@ function BackgroundInformation({
         <div className="field-label"><b>10</b> Contact Number <em>(Landline/Cellphone No.)</em></div>
         <div className="field-label"><b>11</b> Email Address</div>
         <Adaptive2551QValue value={envelope.taxpayer.contact_number.replace(/\D/g, "")} cells={12} />
-        <Adaptive2551QValue value={envelope.taxpayer.email.toUpperCase()} cells={28} />
+        <Adaptive2551QValue
+          value={envelope.taxpayer.email.toUpperCase()}
+          cells={28}
+          typography={REVIEWED_2551Q_OVERFLOW_FONT_PX.pageOneEmail}
+        />
       </div>
       <div className="tax-relief-field">
         <div className="field-label"><b>12</b> Are you availing of tax relief under <br />Special Law or International Tax Treaty?</div>
@@ -642,7 +667,7 @@ function BackgroundInformation({
           value={text(envelope, "tax_relief_specification").toUpperCase()}
           cells={26}
           className="tax-relief-overflow-value"
-          maxFontSizePx={11}
+          typography={REVIEWED_2551Q_OVERFLOW_FONT_PX.item12A}
         />
       </div>
       <div className="income-rate-field">

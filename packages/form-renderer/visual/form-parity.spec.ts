@@ -922,29 +922,68 @@ test("2551Q plain-box overflow uses the largest readable font that fits the real
     const fontStep = Number.parseFloat(
       element.getAttribute("data-adaptive-step-px") ?? "NaN"
     );
-    const nextSize = Math.min(
-      maxFontSize,
-      Math.round((fontSize + fontStep) * 10) / 10
-    );
+    const tolerance = 1;
+    const owner = element.parentElement;
+    const fitsOwner = () => {
+      if (
+        element.scrollWidth > element.clientWidth + tolerance ||
+        element.scrollHeight > element.clientHeight + tolerance
+      ) {
+        return false;
+      }
+      if (!owner) return true;
+      const valueBounds = element.getBoundingClientRect();
+      const ownerBounds = owner.getBoundingClientRect();
+      return valueBounds.left >= ownerBounds.left - tolerance &&
+        valueBounds.top >= ownerBounds.top - tolerance &&
+        valueBounds.right <= ownerBounds.right + tolerance &&
+        valueBounds.bottom <= ownerBounds.bottom + tolerance;
+    };
     const originalSize = element.style.fontSize;
+    const candidates: Array<{ fits: boolean; size: number }> = [];
+    for (
+      let candidate = maxFontSize;
+      candidate >= minFontSize - .001;
+      candidate = Math.round((candidate - fontStep) * 10) / 10
+    ) {
+      element.style.fontSize = `${candidate}px`;
+      candidates.push({ fits: fitsOwner(), size: candidate });
+    }
+    const largestFittingSize = candidates.find((candidate) => candidate.fits)?.size;
+    const nextSize = Math.round((fontSize + fontStep) * 10) / 10;
     element.style.fontSize = `${nextSize}px`;
-    const nextStepOverflows =
-      element.scrollWidth > element.clientWidth + 1 ||
-      element.scrollHeight > element.clientHeight + 1;
+    const nextStepOverflows = !fitsOwner();
     element.style.fontSize = originalSize;
+    const ownerBounds = owner?.getBoundingClientRect();
+    const textRange = document.createRange();
+    textRange.selectNodeContents(element);
+    const textRects = Array.from(textRange.getClientRects()).map((rect) => ({
+      bottom: rect.bottom,
+      left: rect.left,
+      right: rect.right,
+      top: rect.top
+    }));
     return {
       clientHeight: element.clientHeight,
       clientWidth: element.clientWidth,
       fontSize,
       fontStep,
+      largestFittingSize,
       maxFontSize,
       minFontSize,
       nextSize,
       nextStepOverflows,
+      ownerBounds: ownerBounds && {
+        bottom: ownerBounds.bottom,
+        left: ownerBounds.left,
+        right: ownerBounds.right,
+        top: ownerBounds.top
+      },
       scrollHeight: element.scrollHeight,
       scrollWidth: element.scrollWidth,
       state: element.getAttribute("data-adaptive-fit-state"),
-      text: element.textContent?.trim()
+      text: element.textContent?.trim(),
+      textRects
     };
   }));
 
@@ -955,6 +994,8 @@ test("2551Q plain-box overflow uses the largest readable font that fits the real
       .toBeGreaterThanOrEqual(measurement.minFontSize);
     expect(measurement.fontSize, measurement.text)
       .toBeLessThanOrEqual(measurement.maxFontSize);
+    expect(measurement.fontSize, measurement.text)
+      .toBe(measurement.largestFittingSize);
     expect(measurement.scrollWidth, measurement.text)
       .toBeLessThanOrEqual(measurement.clientWidth + 1);
     expect(measurement.scrollHeight, measurement.text)
@@ -962,13 +1003,26 @@ test("2551Q plain-box overflow uses the largest readable font that fits the real
     if (measurement.fontSize < measurement.maxFontSize) {
       expect(measurement.nextStepOverflows, measurement.text).toBe(true);
     }
+    expect(measurement.ownerBounds, measurement.text).toBeDefined();
+    if (measurement.ownerBounds) {
+      for (const textRect of measurement.textRects) {
+        expect(textRect.left, measurement.text)
+          .toBeGreaterThanOrEqual(measurement.ownerBounds.left - 1);
+        expect(textRect.top, measurement.text)
+          .toBeGreaterThanOrEqual(measurement.ownerBounds.top - 1);
+        expect(textRect.right, measurement.text)
+          .toBeLessThanOrEqual(measurement.ownerBounds.right + 1);
+        expect(textRect.bottom, measurement.text)
+          .toBeLessThanOrEqual(measurement.ownerBounds.bottom + 1);
+      }
+    }
   }
 
   const expectedFontSizes = [
-    [".name-field > .adaptive-plain-value", "13.0"],
+    [".name-field > .adaptive-plain-value", "18.0"],
     [".address-field > .adaptive-plain-value", "12.5"],
-    [".contact-email-field > .adaptive-plain-value", "13.0"],
-    [".tax-relief-field > .adaptive-plain-value", "11.0"],
+    [".contact-email-field > .adaptive-plain-value", "17.5"],
+    [".tax-relief-field > .adaptive-plain-value", "11.5"],
     [".page-two-identity > .adaptive-plain-value", "13.0"]
   ] as const;
   for (const [selector, fontSize] of expectedFontSizes) {
@@ -984,7 +1038,7 @@ test("2551Q plain-box overflow uses the largest readable font that fits the real
     const range = document.createRange();
     range.selectNodeContents(element);
     return range.getClientRects().length;
-  })).toBeGreaterThanOrEqual(2);
+  })).toBe(2);
 
   const pageTwoName = page.locator(
     ".page-two-identity > .adaptive-plain-value"

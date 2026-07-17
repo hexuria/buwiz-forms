@@ -115,6 +115,7 @@ body { margin: 0; }
 
 .form-2551q-page-one .adaptive-plain-value,
 .form-2551q-page-two .adaptive-plain-value {
+  min-height: 0;
   overflow-wrap: normal;
   white-space: nowrap;
 }

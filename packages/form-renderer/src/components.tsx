@@ -276,8 +276,25 @@ function validateAdaptiveFontRange(
 }
 
 function adaptivePlainValueFits(element: HTMLElement): boolean {
-  return element.scrollWidth <= element.clientWidth + ADAPTIVE_FIT_TOLERANCE_PX &&
-    element.scrollHeight <= element.clientHeight + ADAPTIVE_FIT_TOLERANCE_PX;
+  if (
+    element.scrollWidth > element.clientWidth + ADAPTIVE_FIT_TOLERANCE_PX ||
+    element.scrollHeight > element.clientHeight + ADAPTIVE_FIT_TOLERANCE_PX
+  ) {
+    return false;
+  }
+
+  // A wrapped grid/flex item can grow beyond a fixed-height field while its
+  // own client and scroll dimensions remain equal. Certify the printable
+  // footprint as well as the child so that such growth cannot be reported as
+  // a successful fit and later be clipped by the document geometry.
+  const owner = element.parentElement;
+  if (!owner) return true;
+  const valueBounds = element.getBoundingClientRect();
+  const ownerBounds = owner.getBoundingClientRect();
+  return valueBounds.left >= ownerBounds.left - ADAPTIVE_FIT_TOLERANCE_PX &&
+    valueBounds.top >= ownerBounds.top - ADAPTIVE_FIT_TOLERANCE_PX &&
+    valueBounds.right <= ownerBounds.right + ADAPTIVE_FIT_TOLERANCE_PX &&
+    valueBounds.bottom <= ownerBounds.bottom + ADAPTIVE_FIT_TOLERANCE_PX;
 }
 
 export function combCharacters(
