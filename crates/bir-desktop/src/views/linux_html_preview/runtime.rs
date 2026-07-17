@@ -4,8 +4,9 @@ use super::{
     linux_native_print_contract, linux_renderer_retry_action, select_linux_html_host,
 };
 use crate::views::html_form_preview::{
-    PreparedHtmlPreview, native_output_cleanup_script, native_print_preflight_script,
-    prepare_html_form_preview, renderer_protocol_response, renderer_relative_path,
+    PreparedHtmlPreview, RendererDocumentIdentity, native_output_cleanup_script,
+    native_print_preflight_script, prepare_html_form_preview, renderer_document_identity_script,
+    renderer_protocol_response, renderer_relative_path,
 };
 use bir_print::html::RenderEnvelopeV1;
 use bir_print::html_forms::RenderLayoutPlan;
@@ -87,6 +88,9 @@ pub(crate) fn launch_linux_html_preview(
 
 #[derive(Debug, Clone, Default, PartialEq)]
 struct LinuxRendererState {
+    document_identity: Option<RendererDocumentIdentity>,
+    document_boot_accepted: bool,
+    document_identity_rejected: bool,
     ready: bool,
     page_count: Option<usize>,
     print_mode: bool,
@@ -98,6 +102,28 @@ struct LinuxRendererState {
 }
 
 impl LinuxRendererState {
+    fn for_document(document_identity: RendererDocumentIdentity) -> Self {
+        Self {
+            document_identity: Some(document_identity),
+            ..Self::default()
+        }
+    }
+
+    fn reject_document_identity(&mut self, reason: impl Into<String>) {
+        self.document_identity_rejected = true;
+        self.ready = false;
+        self.page_count = None;
+        self.print_mode = false;
+        self.error = Some(reason.into());
+        self.print_ready_nonce = None;
+        self.last_geometry = None;
+        self.readiness_revision = self.readiness_revision.saturating_add(1);
+    }
+
+    fn accepts_document_identity(&self, identity: &RendererDocumentIdentity) -> bool {
+        !self.document_identity_rejected && self.document_identity.as_ref() == Some(identity)
+    }
+
     fn invalidate_for_epoch(&mut self, render_epoch: u64) -> bool {
         if render_epoch == 0 || render_epoch <= self.render_epoch {
             return false;
@@ -135,6 +161,7 @@ struct PendingLinuxOutput {
 
 #[derive(Debug, Clone, PartialEq)]
 struct LinuxOutputRendererBinding {
+    document_identity: RendererDocumentIdentity,
     render_epoch: u64,
     readiness_revision: u64,
     geometry: RendererGeometryReport,
@@ -172,6 +199,15 @@ impl Default for LinuxHostBridge {
 fn bind_renderer_for_linux_output(
     state: &LinuxRendererState,
 ) -> Result<LinuxOutputRendererBinding, String> {
+    let document_identity = state
+        .document_identity
+        .clone()
+        .ok_or_else(|| "Linux native output has no immutable document identity".to_string())?;
+    if !state.document_boot_accepted || state.document_identity_rejected {
+        return Err(
+            "Linux native output document identity handshake is incomplete or rejected".to_string(),
+        );
+    }
     if state.render_epoch == 0 {
         return Err("Linux native output has no validated renderer epoch".to_string());
     }
@@ -189,6 +225,7 @@ fn bind_renderer_for_linux_output(
         return Err("Linux native output has incomplete page rectangles".to_string());
     }
     Ok(LinuxOutputRendererBinding {
+        document_identity,
         render_epoch: state.render_epoch,
         readiness_revision: state.readiness_revision,
         geometry,
@@ -199,6 +236,14 @@ fn linux_renderer_binding_mismatch_reason(
     state: &LinuxRendererState,
     binding: &LinuxOutputRendererBinding,
 ) -> Option<String> {
+    if state.document_identity.as_ref() != Some(&binding.document_identity)
+        || !state.document_boot_accepted
+        || state.document_identity_rejected
+    {
+        return Some(
+            "Linux renderer document identity changed after native output started".to_string(),
+        );
+    }
     if state.render_epoch != binding.render_epoch
         || state.readiness_revision != binding.readiness_revision
     {
@@ -296,8 +341,26 @@ fn linux_output_timeout_reason(pending: &PendingLinuxOutput) -> Option<String> {
 }
 
 #[derive(Debug, Deserialize)]
+struct RendererIpcMessage {
+    document_run_id: String,
+    envelope_hash: String,
+    #[serde(flatten)]
+    message: RendererMessage,
+}
+
+impl RendererIpcMessage {
+    fn document_identity(&self) -> RendererDocumentIdentity {
+        RendererDocumentIdentity {
+            document_run_id: self.document_run_id.clone(),
+            envelope_hash: self.envelope_hash.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum RendererMessage {
+    RendererBoot,
     RendererReady {
         render_epoch: u64,
     },
@@ -315,12 +378,32 @@ enum RendererMessage {
     },
     PageCount {
         render_epoch: u64,
-        page_count: usize,
-        page_width_pt: f64,
-        page_height_pt: f64,
         print_mode: bool,
-        pages: Vec<RendererPageRectMessage>,
+        geometry_reports: [RendererGeometryReportMessage; 2],
     },
+}
+
+#[derive(Debug, Deserialize)]
+struct RendererGeometryReportMessage {
+    page_count: usize,
+    page_width_pt: f64,
+    page_height_pt: f64,
+    pages: Vec<RendererPageRectMessage>,
+}
+
+impl RendererGeometryReportMessage {
+    fn into_report(self) -> RendererGeometryReport {
+        RendererGeometryReport {
+            page_count: self.page_count,
+            page_width_pt: self.page_width_pt,
+            page_height_pt: self.page_height_pt,
+            pages: self
+                .pages
+                .into_iter()
+                .map(RendererPageRectMessage::into_rect)
+                .collect(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -339,23 +422,85 @@ struct RendererPageRectMessage {
     descendant_clipped_y: usize,
 }
 
+impl RendererPageRectMessage {
+    fn into_rect(self) -> RendererPageRect {
+        RendererPageRect {
+            x: self.x,
+            y: self.y,
+            width: self.width,
+            height: self.height,
+            client_width: self.client_width,
+            client_height: self.client_height,
+            scroll_width: self.scroll_width,
+            scroll_height: self.scroll_height,
+            descendant_overflow_x: self.descendant_overflow_x,
+            descendant_overflow_y: self.descendant_overflow_y,
+            descendant_clipped_x: self.descendant_clipped_x,
+            descendant_clipped_y: self.descendant_clipped_y,
+        }
+    }
+}
+
 fn accept_renderer_message(
     bridge: &Arc<Mutex<LinuxHostBridge>>,
     layout_plan: &RenderLayoutPlan,
     body: &str,
 ) {
-    let Ok(message) = serde_json::from_str::<RendererMessage>(body) else {
-        tracing::warn!(
-            body_bytes = body.len(),
-            "ignored malformed Linux renderer IPC"
-        );
-        return;
+    let message = match serde_json::from_str::<RendererIpcMessage>(body) {
+        Ok(message) => message,
+        Err(_) => {
+            if let Ok(mut bridge) = bridge.lock() {
+                bridge.renderer.reject_document_identity(
+                    "Linux renderer IPC omitted or malformed the immutable document identity",
+                );
+                cancel_output_if_renderer_binding_changed(&mut bridge);
+            }
+            tracing::warn!(
+                body_bytes = body.len(),
+                "ignored malformed Linux renderer IPC"
+            );
+            return;
+        }
     };
     let Ok(mut bridge) = bridge.lock() else {
         return;
     };
 
+    let identity = message.document_identity();
+    if bridge.renderer.document_identity_rejected {
+        return;
+    }
+    if !bridge.renderer.accepts_document_identity(&identity) {
+        bridge.renderer.reject_document_identity(
+            "Linux renderer IPC document run ID or envelope hash did not match the host document",
+        );
+        cancel_output_if_renderer_binding_changed(&mut bridge);
+        return;
+    }
+    let message = match message.message {
+        RendererMessage::RendererBoot => {
+            if bridge.renderer.document_boot_accepted {
+                bridge.renderer.reject_document_identity(
+                    "Linux renderer document run ID was replayed by a reload or replacement document",
+                );
+            } else {
+                bridge.renderer.document_boot_accepted = true;
+            }
+            cancel_output_if_renderer_binding_changed(&mut bridge);
+            return;
+        }
+        _ if !bridge.renderer.document_boot_accepted => {
+            bridge.renderer.reject_document_identity(
+                "Linux renderer IPC arrived before the host document identity boot handshake",
+            );
+            cancel_output_if_renderer_binding_changed(&mut bridge);
+            return;
+        }
+        message => message,
+    };
+
     match message {
+        RendererMessage::RendererBoot => unreachable!("renderer boot handled by identity gate"),
         RendererMessage::RendererReady { render_epoch } => {
             if bridge.renderer.accepts_epoch(render_epoch) {
                 bridge.renderer.ready = true;
@@ -411,42 +556,27 @@ fn accept_renderer_message(
         }
         RendererMessage::PageCount {
             render_epoch,
-            page_count,
-            page_width_pt,
-            page_height_pt,
             print_mode,
-            pages,
+            geometry_reports,
         } => {
             if !bridge.renderer.accepts_epoch(render_epoch) {
                 return;
             }
-            let report = RendererGeometryReport {
-                page_count,
-                page_width_pt,
-                page_height_pt,
-                pages: pages
-                    .into_iter()
-                    .map(|page| RendererPageRect {
-                        x: page.x,
-                        y: page.y,
-                        width: page.width,
-                        height: page.height,
-                        client_width: page.client_width,
-                        client_height: page.client_height,
-                        scroll_width: page.scroll_width,
-                        scroll_height: page.scroll_height,
-                        descendant_overflow_x: page.descendant_overflow_x,
-                        descendant_overflow_y: page.descendant_overflow_y,
-                        descendant_clipped_x: page.descendant_clipped_x,
-                        descendant_clipped_y: page.descendant_clipped_y,
-                    })
-                    .collect(),
+            let [first, second] = geometry_reports.map(RendererGeometryReportMessage::into_report);
+            let validation = if first != second {
+                Err(
+                    "the renderer's two stable geometry observations were not identical"
+                        .to_string(),
+                )
+            } else {
+                validate_renderer_geometry(&first, layout_plan)
+                    .and_then(|()| validate_renderer_geometry(&second, layout_plan))
             };
-            match validate_renderer_geometry(&report, layout_plan) {
+            match validation {
                 Ok(()) => {
-                    bridge.renderer.page_count = Some(page_count);
+                    bridge.renderer.page_count = Some(second.page_count);
                     bridge.renderer.print_mode = print_mode;
-                    bridge.renderer.last_geometry = Some(report);
+                    bridge.renderer.last_geometry = Some(second);
                 }
                 Err(error) => {
                     bridge.renderer.page_count = None;
@@ -463,16 +593,22 @@ fn accept_renderer_message(
 fn configured_webview_builder(
     prepared: &PreparedHtmlPreview,
     bridge: Arc<Mutex<LinuxHostBridge>>,
+    document_identity: &RendererDocumentIdentity,
 ) -> wry::WebViewBuilder<'static> {
     let protocol_root = prepared.entry.parent().map(PathBuf::from);
     let layout_plan = prepared.layout_plan;
+    let initialization_script = format!(
+        "{}\n{}",
+        renderer_document_identity_script(document_identity),
+        prepared.initialization_script
+    );
     wry::WebViewBuilder::new()
         .with_incognito(true)
         .with_custom_protocol("ebirforms".into(), move |_webview_id, request| {
             renderer_protocol_response(protocol_root.as_deref(), request)
         })
         .with_url(prepared.url.clone())
-        .with_initialization_script(prepared.initialization_script.clone())
+        .with_initialization_script(initialization_script)
         .with_navigation_handler(|candidate| {
             let Ok(url) = url::Url::parse(&candidate) else {
                 return false;
@@ -922,7 +1058,18 @@ fn reset_linux_renderer_for_retry(bridge: &Arc<Mutex<LinuxHostBridge>>) -> Resul
         tombstone_output_nonce(&mut bridge, pending.nonce);
     }
     bridge.completion = None;
-    bridge.renderer = LinuxRendererState::default();
+    if bridge.renderer.document_boot_accepted || bridge.renderer.document_identity_rejected {
+        return Err(
+            "Secure Linux renderer retry requires closing and reopening the preview so the host can mint a new document run ID"
+                .to_string(),
+        );
+    }
+    let document_identity = bridge
+        .renderer
+        .document_identity
+        .clone()
+        .ok_or_else(|| "Linux renderer retry has no immutable document identity".to_string())?;
+    bridge.renderer = LinuxRendererState::for_document(document_identity);
     bridge.readiness_started_at = Instant::now();
     Ok(())
 }
@@ -1159,8 +1306,14 @@ fn run_gtk_top_level(
     root.pack_start(&webview_container, true, true, 0);
     window.add(&root);
 
-    let bridge = Arc::new(Mutex::new(LinuxHostBridge::default()));
-    let webview = configured_webview_builder(&prepared, bridge.clone())
+    let document_identity =
+        RendererDocumentIdentity::host_generated(&prepared.pdf_expectation.envelope_hash)
+            .expect("prepared HTML previews always contain a canonical envelope hash");
+    let bridge = Arc::new(Mutex::new(LinuxHostBridge {
+        renderer: LinuxRendererState::for_document(document_identity.clone()),
+        ..LinuxHostBridge::default()
+    }));
+    let webview = configured_webview_builder(&prepared, bridge.clone(), &document_identity)
         .build_gtk(&webview_container)
         .map_err(|error| format!("WebKitGTK host construction failed: {error}"))?;
     let webview = Rc::new(webview);
@@ -1380,12 +1533,18 @@ impl LinuxEmbeddedHtmlPreviewView {
     pub fn new(prepared: PreparedHtmlPreview, window: &mut Window, cx: &mut Context<Self>) -> Self {
         use raw_window_handle::HasWindowHandle;
 
-        let bridge = Arc::new(Mutex::new(LinuxHostBridge::default()));
+        let document_identity =
+            RendererDocumentIdentity::host_generated(&prepared.pdf_expectation.envelope_hash)
+                .expect("prepared HTML previews always contain a canonical envelope hash");
+        let bridge = Arc::new(Mutex::new(LinuxHostBridge {
+            renderer: LinuxRendererState::for_document(document_identity.clone()),
+            ..LinuxHostBridge::default()
+        }));
         let result = window
             .window_handle()
             .map_err(|error| error.to_string())
             .and_then(|window_handle| {
-                configured_webview_builder(&prepared, bridge.clone())
+                configured_webview_builder(&prepared, bridge.clone(), &document_identity)
                     .build_as_child(&window_handle)
                     .map_err(|error| error.to_string())
             });
@@ -1678,6 +1837,73 @@ mod tests {
         renderer_host_plan(&envelope).expect("2551Q layout plan")
     }
 
+    fn test_document_identity() -> RendererDocumentIdentity {
+        RendererDocumentIdentity::test_identity()
+    }
+
+    fn test_bridge() -> Arc<Mutex<LinuxHostBridge>> {
+        Arc::new(Mutex::new(LinuxHostBridge {
+            renderer: LinuxRendererState::for_document(test_document_identity()),
+            ..LinuxHostBridge::default()
+        }))
+    }
+
+    fn identified_message(identity: &RendererDocumentIdentity, body: &str) -> serde_json::Value {
+        let mut message =
+            serde_json::from_str::<serde_json::Value>(body).expect("renderer test message JSON");
+        let object = message
+            .as_object_mut()
+            .expect("renderer test messages are JSON objects");
+        object.insert(
+            "document_run_id".to_string(),
+            serde_json::json!(identity.document_run_id),
+        );
+        object.insert(
+            "envelope_hash".to_string(),
+            serde_json::json!(identity.envelope_hash),
+        );
+        message
+    }
+
+    // Existing protocol tests use this helper so every message crosses the
+    // same immutable identity gate as production. Security-negative tests call
+    // `super::accept_renderer_message` directly.
+    fn accept_renderer_message(
+        bridge: &Arc<Mutex<LinuxHostBridge>>,
+        layout_plan: &RenderLayoutPlan,
+        body: &str,
+    ) {
+        let identity = {
+            let mut bridge = bridge.lock().expect("bridge");
+            let identity = bridge
+                .renderer
+                .document_identity
+                .clone()
+                .unwrap_or_else(test_document_identity);
+            if bridge.renderer.document_identity.is_none() {
+                bridge.renderer = LinuxRendererState::for_document(identity.clone());
+            }
+            identity
+        };
+        let needs_boot = !bridge
+            .lock()
+            .expect("bridge")
+            .renderer
+            .document_boot_accepted;
+        if needs_boot {
+            super::accept_renderer_message(
+                bridge,
+                layout_plan,
+                &identified_message(&identity, r#"{"type":"renderer_boot"}"#).to_string(),
+            );
+        }
+        super::accept_renderer_message(
+            bridge,
+            layout_plan,
+            &identified_message(&identity, body).to_string(),
+        );
+    }
+
     fn geometry_message(render_epoch: u64, print_mode: bool, overflow_x: usize) -> String {
         geometry_message_with_x(render_epoch, print_mode, overflow_x, 0.0)
     }
@@ -1688,13 +1914,10 @@ mod tests {
         overflow_x: usize,
         x: f64,
     ) -> String {
-        serde_json::json!({
-            "type": "page_count",
-            "render_epoch": render_epoch,
+        let measurement = serde_json::json!({
             "page_count": 2,
             "page_width_pt": 612.0,
             "page_height_pt": 936.0,
-            "print_mode": print_mode,
             "pages": [
                 {
                     "x": x,
@@ -1725,6 +1948,12 @@ mod tests {
                     "descendant_clipped_y": 0
                 }
             ]
+        });
+        serde_json::json!({
+            "type": "page_count",
+            "render_epoch": render_epoch,
+            "print_mode": print_mode,
+            "geometry_reports": [measurement.clone(), measurement]
         })
         .to_string()
     }
@@ -1824,7 +2053,7 @@ mod tests {
 
     #[test]
     fn retry_reset_cleans_in_flight_output_and_restarts_renderer_readiness() {
-        let bridge = Arc::new(Mutex::new(LinuxHostBridge::default()));
+        let bridge = test_bridge();
         let temp_path = std::env::temp_dir().join(format!(
             "ebirforms-linux-retry-output-{}.pdf",
             uuid::Uuid::new_v4()
@@ -1862,7 +2091,10 @@ mod tests {
         assert_eq!(state.next_output_nonce, 17);
         assert!(state.pending_output.is_none());
         assert!(state.completion.is_none());
-        assert_eq!(state.renderer, LinuxRendererState::default());
+        assert_eq!(
+            state.renderer,
+            LinuxRendererState::for_document(test_document_identity())
+        );
         assert!(state.readiness_started_at >= reset_started_at);
         assert!(matches!(
             state.renderer.decision(),
@@ -1874,6 +2106,156 @@ mod tests {
         assert!(bridge.lock().expect("bridge").renderer.error.is_none());
         complete_output(&bridge, 17, 7, Ok("late output".to_string()));
         assert!(bridge.lock().expect("bridge").completion.is_none());
+    }
+
+    #[test]
+    fn renderer_ipc_requires_the_host_identity_boot_handshake() {
+        let plan = test_layout_plan();
+        let identity = test_document_identity();
+        let bridge = test_bridge();
+
+        super::accept_renderer_message(
+            &bridge,
+            &plan,
+            &identified_message(
+                &identity,
+                r#"{"type":"renderer_invalidated","render_epoch":1}"#,
+            )
+            .to_string(),
+        );
+
+        let state = bridge.lock().expect("bridge");
+        assert!(state.renderer.document_identity_rejected);
+        assert!(!state.renderer.ready);
+        assert_eq!(state.renderer.render_epoch, 0);
+        assert!(
+            state
+                .renderer
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("before"))
+        );
+    }
+
+    #[test]
+    fn renderer_ipc_rejects_mismatch_reload_replay_and_missing_identity() {
+        let plan = test_layout_plan();
+        let identity = test_document_identity();
+
+        let replay_bridge = test_bridge();
+        let boot = identified_message(&identity, r#"{"type":"renderer_boot"}"#).to_string();
+        super::accept_renderer_message(&replay_bridge, &plan, &boot);
+        super::accept_renderer_message(&replay_bridge, &plan, &boot);
+        {
+            let state = replay_bridge.lock().expect("bridge");
+            assert!(state.renderer.document_identity_rejected);
+            assert!(
+                state
+                    .renderer
+                    .error
+                    .as_deref()
+                    .is_some_and(|error| error.contains("replayed"))
+            );
+        }
+
+        let mismatch_bridge = test_bridge();
+        let mut wrong_run = identity.clone();
+        wrong_run.document_run_id = "00000000-0000-4000-8000-000000000002".to_string();
+        super::accept_renderer_message(
+            &mismatch_bridge,
+            &plan,
+            &identified_message(&wrong_run, r#"{"type":"renderer_boot"}"#).to_string(),
+        );
+        {
+            let state = mismatch_bridge.lock().expect("bridge");
+            assert!(state.renderer.document_identity_rejected);
+            assert!(
+                state
+                    .renderer
+                    .error
+                    .as_deref()
+                    .is_some_and(|error| error.contains("did not match"))
+            );
+        }
+
+        let missing_bridge = test_bridge();
+        super::accept_renderer_message(&missing_bridge, &plan, r#"{"type":"renderer_boot"}"#);
+        let state = missing_bridge.lock().expect("bridge");
+        assert!(state.renderer.document_identity_rejected);
+        assert!(
+            state
+                .renderer
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("omitted or malformed"))
+        );
+    }
+
+    #[test]
+    fn output_binding_is_cancelled_when_document_identity_changes() {
+        let bridge = test_bridge();
+        let plan = test_layout_plan();
+        ready_renderer(&bridge, &plan, 7);
+        bridge.lock().expect("bridge").pending_output = Some(pending_output(42));
+        accept_renderer_message(
+            &bridge,
+            &plan,
+            r#"{"type":"print_ready","nonce":42,"render_epoch":7,"print_mode":true}"#,
+        );
+
+        let started = take_ready_output(&bridge).expect("identity-bound backend starts");
+        assert_eq!(
+            started
+                .binding
+                .as_ref()
+                .expect("renderer binding")
+                .document_identity,
+            test_document_identity()
+        );
+
+        let mut replacement = test_document_identity();
+        replacement.document_run_id = "00000000-0000-4000-8000-000000000002".to_string();
+        super::accept_renderer_message(
+            &bridge,
+            &plan,
+            &identified_message(
+                &replacement,
+                r#"{"type":"renderer_ready","render_epoch":7}"#,
+            )
+            .to_string(),
+        );
+
+        let completion = take_completion(&bridge).expect("identity change cancels output");
+        assert!(
+            completion
+                .result
+                .is_err_and(|error| error.contains("document identity changed"))
+        );
+        assert!(
+            bridge
+                .lock()
+                .expect("bridge")
+                .tombstoned_output_nonces
+                .contains(&42)
+        );
+    }
+
+    #[test]
+    fn booted_linux_document_cannot_reuse_its_run_id_for_in_place_retry() {
+        let bridge = test_bridge();
+        let plan = test_layout_plan();
+        ready_renderer(&bridge, &plan, 7);
+        bridge.lock().expect("bridge").renderer.error = Some("failed".to_string());
+
+        let error = reset_linux_renderer_for_retry(&bridge)
+            .expect_err("booted documents need a newly constructed WebView and run ID");
+        assert!(error.contains("closing and reopening"));
+        let state = bridge.lock().expect("bridge");
+        assert!(state.renderer.document_boot_accepted);
+        assert_eq!(
+            state.renderer.document_identity,
+            Some(test_document_identity())
+        );
     }
 
     #[test]
@@ -2171,6 +2553,35 @@ mod tests {
 
         let bridge = bridge.lock().expect("bridge");
         assert_eq!(bridge.renderer.page_count, None);
+        assert!(matches!(
+            bridge.renderer.decision(),
+            RendererReadinessDecision::Fallback(_)
+        ));
+    }
+
+    #[test]
+    fn non_identical_stable_geometry_reports_fail_closed() {
+        let bridge = Arc::new(Mutex::new(LinuxHostBridge::default()));
+        let plan = test_layout_plan();
+        accept_renderer_message(
+            &bridge,
+            &plan,
+            r#"{"type":"renderer_invalidated","render_epoch":7}"#,
+        );
+        let mut message = serde_json::from_str::<serde_json::Value>(&geometry_message(7, true, 0))
+            .expect("geometry message JSON");
+        message["geometry_reports"][1]["pages"][0]["x"] = serde_json::json!(1.0);
+        accept_renderer_message(&bridge, &plan, &message.to_string());
+
+        let bridge = bridge.lock().expect("bridge");
+        assert_eq!(bridge.renderer.page_count, None);
+        assert!(
+            bridge
+                .renderer
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("were not identical"))
+        );
         assert!(matches!(
             bridge.renderer.decision(),
             RendererReadinessDecision::Fallback(_)

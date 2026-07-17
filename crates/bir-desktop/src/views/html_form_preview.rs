@@ -289,16 +289,16 @@ pub(crate) struct PreparedHtmlPreview {
     pub(crate) default_pdf_name: String,
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct RendererDocumentIdentity {
-    document_run_id: String,
-    envelope_hash: String,
+pub(crate) struct RendererDocumentIdentity {
+    pub(crate) document_run_id: String,
+    pub(crate) envelope_hash: String,
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 impl RendererDocumentIdentity {
-    fn host_generated(envelope_hash: &str) -> Result<Self, String> {
+    pub(crate) fn host_generated(envelope_hash: &str) -> Result<Self, String> {
         if envelope_hash.len() != 64
             || !envelope_hash
                 .bytes()
@@ -313,7 +313,7 @@ impl RendererDocumentIdentity {
     }
 
     #[cfg(test)]
-    fn test_identity() -> Self {
+    pub(crate) fn test_identity() -> Self {
         Self {
             document_run_id: "00000000-0000-4000-8000-000000000001".to_string(),
             envelope_hash: "a".repeat(64),
@@ -612,8 +612,8 @@ fn renderer_initialization_script(encoded_json: &str) -> String {
     )
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-fn renderer_document_identity_script(identity: &RendererDocumentIdentity) -> String {
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+pub(crate) fn renderer_document_identity_script(identity: &RendererDocumentIdentity) -> String {
     let document_run_id = serde_json::to_string(&identity.document_run_id)
         .expect("UUID renderer document run IDs always serialize");
     let envelope_hash = serde_json::to_string(&identity.envelope_hash)
