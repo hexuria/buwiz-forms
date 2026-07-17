@@ -23,10 +23,11 @@ declare global {
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("Renderer root element is missing");
 const root = createRoot(rootElement, {
-  onCaughtError: reportRendererError,
-  onUncaughtError: reportRendererError
+  onCaughtError: (error) => reportRendererError(error),
+  onUncaughtError: (error) => reportRendererError(error)
 });
 let measurementSequence = 0;
+let renderEpoch = 0;
 let hasRenderedEnvelope = false;
 let pendingPrintNonce: number | undefined;
 const readinessDeadlineMs = 4_000;
@@ -48,10 +49,21 @@ function leaveNativePrintMode() {
   document.documentElement.classList.remove(nativePrintModeClass);
 }
 
+function beginRendererEpoch() {
+  const sequence = ++measurementSequence;
+  const epoch = ++renderEpoch;
+  postRendererHostMessage({
+    type: "renderer_invalidated",
+    render_epoch: epoch
+  });
+  return { sequence, epoch };
+}
+
 function render(value: unknown) {
+  pendingPrintNonce = undefined;
+  leaveNativePrintMode();
+  hasRenderedEnvelope = false;
   try {
-    pendingPrintNonce = undefined;
-    leaveNativePrintMode();
     assertRenderEnvelope(value);
     root.render(
       <StrictMode>
@@ -61,16 +73,17 @@ function render(value: unknown) {
     hasRenderedEnvelope = true;
     requestGeometryValidation();
   } catch (error) {
-    reportRendererError(error);
+    const { epoch } = beginRendererEpoch();
+    reportRendererError(error, epoch);
   }
 }
 
 function requestGeometryValidation(printNonce = pendingPrintNonce) {
   if (!hasRenderedEnvelope) return;
-  const sequence = ++measurementSequence;
-  postRendererHostMessage({ type: "renderer_invalidated" });
+  const { sequence, epoch } = beginRendererEpoch();
   void waitForRenderedPages(
     sequence,
+    epoch,
     performance.now() + readinessDeadlineMs,
     undefined,
     printNonce
@@ -92,18 +105,23 @@ async function awaitPrintableFonts() {
 
 async function waitForRenderedPages(
   sequence: number,
+  epoch: number,
   deadline: number,
   previousSignature?: string,
   printNonce?: number
 ) {
   try {
     await awaitPrintableFonts();
+    if (sequence !== measurementSequence) return;
     await nextAnimationFrame();
+    if (sequence !== measurementSequence) return;
     await nextAnimationFrame();
   } catch (error) {
-    reportRendererError(error);
+    if (sequence !== measurementSequence) return;
+    reportRendererError(error, epoch);
     return;
   }
+  if (sequence !== measurementSequence) return;
 
   window.setTimeout(() => {
     if (sequence !== measurementSequence) return;
@@ -113,13 +131,14 @@ async function waitForRenderedPages(
       if (performance.now() < deadline) {
         void waitForRenderedPages(
           sequence,
+          epoch,
           deadline,
           previousSignature,
           printNonce
         );
         return;
       }
-      reportRendererError("Renderer produced no measurable form pages");
+      reportRendererError("Renderer produced no measurable form pages", epoch);
       return;
     }
     const signature = JSON.stringify(measurement);
@@ -129,23 +148,34 @@ async function waitForRenderedPages(
       performance.now() >= deadline
     );
     if (stability === "retry") {
-      void waitForRenderedPages(sequence, deadline, signature, printNonce);
+      void waitForRenderedPages(sequence, epoch, deadline, signature, printNonce);
       return;
     }
     if (stability === "timed_out") {
-      reportRendererError("Renderer page geometry did not stabilize before the readiness deadline");
+      reportRendererError(
+        "Renderer page geometry did not stabilize before the readiness deadline",
+        epoch
+      );
       return;
     }
     if (!rendererGeometryIsSafe(measurement)) {
       reportRendererError(
-        "Renderer contains descendant overflow or clipped printable content"
+        "Renderer contains descendant overflow or clipped printable content",
+        epoch
       );
       return;
     }
 
     const printMode = nativePrintModeIsActive();
-    postRendererHostMessage({ ...measurement, print_mode: printMode });
-    postRendererHostMessage({ type: "renderer_ready" });
+    postRendererHostMessage({
+      ...measurement,
+      render_epoch: epoch,
+      print_mode: printMode
+    });
+    postRendererHostMessage({
+      type: "renderer_ready",
+      render_epoch: epoch
+    });
     if (
       printNonce !== undefined &&
       pendingPrintNonce === printNonce &&
@@ -155,17 +185,23 @@ async function waitForRenderedPages(
       postRendererHostMessage({
         type: "print_ready",
         nonce: printNonce,
+        render_epoch: epoch,
         print_mode: true
       });
     }
   }, 25);
 }
 
-function reportRendererError(error: unknown) {
+function reportRendererError(error: unknown, epoch = renderEpoch) {
   const message = error instanceof Error ? error.message : String(error);
+  const errorEpoch = epoch > 0 ? epoch : beginRendererEpoch().epoch;
   pendingPrintNonce = undefined;
   leaveNativePrintMode();
-  postRendererHostMessage({ type: "renderer_error", message });
+  postRendererHostMessage({
+    type: "renderer_error",
+    render_epoch: errorEpoch,
+    message
+  });
 }
 
 window.renderEbirForm = render;
@@ -181,11 +217,6 @@ window.prepareEbirFormForNativePrint = (nonce) => {
   // and requires a fresh stable geometry report before native printing.
   requestGeometryValidation(nonce);
 };
-
-window.addEventListener("afterprint", () => {
-  leaveNativePrintMode();
-  if (hasRenderedEnvelope) requestGeometryValidation();
-});
 
 const invalidateForLayoutChange = () => requestGeometryValidation();
 const resizeObserver =

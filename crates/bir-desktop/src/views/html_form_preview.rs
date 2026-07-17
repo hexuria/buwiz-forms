@@ -596,6 +596,7 @@ fn macos_system_print_completion_decision(success: bool) -> Result<(), String> {
 #[cfg(target_os = "macos")]
 struct MacPrintCompletionDelegateIvars {
     nonce: u64,
+    render_epoch: u64,
     bridge: Arc<Mutex<NativeBackendBridge>>,
 }
 
@@ -620,6 +621,7 @@ define_class!(
             if let Ok(mut bridge) = self.ivars().bridge.lock() {
                 bridge.record_completion(NativeBackendCompletion::SystemPrint {
                     nonce: self.ivars().nonce,
+                    render_epoch: self.ivars().render_epoch,
                     result: macos_system_print_completion_decision(success),
                 });
             }
@@ -641,11 +643,16 @@ impl MacPrintCompletionDelegate {
     fn new(
         main_thread: MainThreadMarker,
         nonce: u64,
+        render_epoch: u64,
         bridge: Arc<Mutex<NativeBackendBridge>>,
     ) -> Retained<Self> {
         let delegate = main_thread
             .alloc::<Self>()
-            .set_ivars(MacPrintCompletionDelegateIvars { nonce, bridge });
+            .set_ivars(MacPrintCompletionDelegateIvars {
+                nonce,
+                render_epoch,
+                bridge,
+            });
         // SAFETY: the allocated object has its complete Rust ivars installed
         // and NSObject's initializer returns the retained instance.
         unsafe { msg_send![super(delegate), init] }
@@ -657,6 +664,7 @@ fn start_macos_system_print(
     raw_webview: &wry::WebView,
     expectation: &PdfExpectation,
     nonce: u64,
+    render_epoch: u64,
     bridge: Arc<Mutex<NativeBackendBridge>>,
 ) -> Result<(), String> {
     expectation
@@ -702,7 +710,7 @@ fn start_macos_system_print(
     let print_operation = unsafe { webview.printOperationWithPrintInfo(&print_info) };
     print_operation.setCanSpawnSeparateThread(true);
 
-    let delegate = MacPrintCompletionDelegate::new(main_thread, nonce, bridge);
+    let delegate = MacPrintCompletionDelegate::new(main_thread, nonce, render_epoch, bridge);
     let retained_context = Retained::into_raw(delegate.clone()).cast::<c_void>();
     // SAFETY: the window, operation, and delegate are main-thread AppKit
     // objects. The selector has AppKit's documented
@@ -726,6 +734,7 @@ fn start_macos_pdf_capture(
     raw_webview: &wry::WebView,
     page_rects: &[RendererPageRect],
     nonce: u64,
+    render_epoch: u64,
     bridge: Arc<Mutex<NativeBackendBridge>>,
 ) -> Result<(), String> {
     let Some(main_thread) = MainThreadMarker::new() else {
@@ -735,7 +744,7 @@ fn start_macos_pdf_capture(
         return Err("WKWebView PDF capture received no validated page rectangles".to_string());
     }
     if let Ok(mut bridge) = bridge.lock() {
-        bridge.begin_macos_capture(nonce, page_rects.len());
+        bridge.begin_macos_capture(nonce, render_epoch, page_rects.len());
     } else {
         return Err("WKWebView PDF capture state is unavailable".to_string());
     }
@@ -835,6 +844,7 @@ fn start_windows_system_print(
     raw_webview: &wry::WebView,
     expectation: &PdfExpectation,
     nonce: u64,
+    render_epoch: u64,
     bridge: Arc<Mutex<NativeBackendBridge>>,
 ) -> Result<(), String> {
     let settings = create_windows_print_settings(raw_webview, expectation)?;
@@ -850,7 +860,11 @@ fn start_windows_system_print(
             )),
         };
         if let Ok(mut bridge) = bridge.lock() {
-            bridge.record_completion(NativeBackendCompletion::SystemPrint { nonce, result });
+            bridge.record_completion(NativeBackendCompletion::SystemPrint {
+                nonce,
+                render_epoch,
+                result,
+            });
         }
         Ok(())
     }));
@@ -867,6 +881,7 @@ fn start_windows_pdf_export(
     temp_path: &Path,
     expectation: &PdfExpectation,
     nonce: u64,
+    render_epoch: u64,
     bridge: Arc<Mutex<NativeBackendBridge>>,
 ) -> Result<(), String> {
     let settings = create_windows_print_settings(raw_webview, expectation)?;
@@ -890,7 +905,11 @@ fn start_windows_pdf_export(
             )),
         };
         if let Ok(mut bridge) = callback_bridge.lock() {
-            bridge.record_completion(NativeBackendCompletion::PdfFile { nonce, result });
+            bridge.record_completion(NativeBackendCompletion::PdfFile {
+                nonce,
+                render_epoch,
+                result,
+            });
         }
         Ok(())
     }));
@@ -909,22 +928,36 @@ struct RendererState {
     page_rects: Vec<RendererPageRect>,
     geometry_print_mode: bool,
     error: Option<String>,
+    render_epoch: u64,
     readiness_revision: u64,
     print_ready_nonce: Option<u64>,
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 impl RendererState {
-    fn invalidate(&mut self) {
+    fn invalidate_for_epoch(&mut self, render_epoch: u64) -> bool {
+        if render_epoch == 0 || render_epoch <= self.render_epoch {
+            return false;
+        }
+        self.render_epoch = render_epoch;
         self.ready = false;
         self.page_count = None;
         self.page_rects.clear();
         self.geometry_print_mode = false;
+        self.error = None;
         self.print_ready_nonce = None;
         self.readiness_revision = self.readiness_revision.saturating_add(1);
+        true
     }
 
-    fn accept_print_ready(&mut self, nonce: u64, print_mode: bool) {
+    fn accepts_epoch(&self, render_epoch: u64) -> bool {
+        render_epoch != 0 && render_epoch == self.render_epoch
+    }
+
+    fn accept_print_ready(&mut self, nonce: u64, render_epoch: u64, print_mode: bool) {
+        if !self.accepts_epoch(render_epoch) {
+            return;
+        }
         if !print_mode || !self.geometry_print_mode {
             self.print_ready_nonce = None;
             self.error =
@@ -961,6 +994,15 @@ struct PendingNativeOutput {
     temp_path: Option<PathBuf>,
     started_at: Instant,
     backend_started: bool,
+    binding: Option<NativeOutputRendererBinding>,
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[derive(Debug, Clone, PartialEq)]
+struct NativeOutputRendererBinding {
+    render_epoch: u64,
+    readiness_revision: u64,
+    page_rects: Vec<RendererPageRect>,
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -973,8 +1015,49 @@ impl PendingNativeOutput {
             temp_path: None,
             started_at: Instant::now(),
             backend_started: false,
+            binding: None,
         }
     }
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn bind_renderer_for_native_output(
+    state: &RendererState,
+) -> Result<NativeOutputRendererBinding, String> {
+    if state.render_epoch == 0 {
+        return Err("native output has no validated renderer epoch".to_string());
+    }
+    if !state.ready || !state.geometry_print_mode {
+        return Err("native output renderer epoch is not ready in print mode".to_string());
+    }
+    if state.page_rects.is_empty() || state.page_count != Some(state.page_rects.len()) {
+        return Err("native output renderer epoch has incomplete page rectangles".to_string());
+    }
+    Ok(NativeOutputRendererBinding {
+        render_epoch: state.render_epoch,
+        readiness_revision: state.readiness_revision,
+        page_rects: state.page_rects.clone(),
+    })
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn renderer_binding_mismatch_reason(
+    state: &RendererState,
+    binding: &NativeOutputRendererBinding,
+) -> Option<String> {
+    if state.render_epoch != binding.render_epoch
+        || state.readiness_revision != binding.readiness_revision
+    {
+        return Some("renderer epoch changed after native output started".to_string());
+    }
+    if !state.ready || !state.geometry_print_mode {
+        return Some("renderer readiness was invalidated after native output started".to_string());
+    }
+    if state.page_count != Some(binding.page_rects.len()) || state.page_rects != binding.page_rects
+    {
+        return Some("renderer page geometry changed after native output started".to_string());
+    }
+    None
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -1005,16 +1088,19 @@ fn native_output_timeout_reason(
 enum NativeBackendCompletion {
     SystemPrint {
         nonce: u64,
+        render_epoch: u64,
         result: Result<(), String>,
     },
     #[cfg(target_os = "macos")]
     CapturedPages {
         nonce: u64,
+        render_epoch: u64,
         pages: Vec<Result<Vec<u8>, String>>,
     },
     #[cfg(target_os = "windows")]
     PdfFile {
         nonce: u64,
+        render_epoch: u64,
         result: Result<(), String>,
     },
 }
@@ -1023,6 +1109,7 @@ enum NativeBackendCompletion {
 #[derive(Debug)]
 struct MacCaptureBatch {
     nonce: u64,
+    render_epoch: u64,
     pages: Vec<Option<Result<Vec<u8>, String>>>,
 }
 
@@ -1131,12 +1218,42 @@ fn native_backend_completion_nonce(completion: &NativeBackendCompletion) -> u64 
     }
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn native_backend_completion_render_epoch(completion: &NativeBackendCompletion) -> u64 {
+    match completion {
+        NativeBackendCompletion::SystemPrint { render_epoch, .. } => *render_epoch,
+        #[cfg(target_os = "macos")]
+        NativeBackendCompletion::CapturedPages { render_epoch, .. } => *render_epoch,
+        #[cfg(target_os = "windows")]
+        NativeBackendCompletion::PdfFile { render_epoch, .. } => *render_epoch,
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn native_backend_completion_binding_error(
+    pending: &PendingNativeOutput,
+    state: &RendererState,
+    completion: &NativeBackendCompletion,
+) -> Option<String> {
+    if !pending.backend_started {
+        return Some("native backend completed before its renderer epoch was bound".to_string());
+    }
+    let Some(binding) = pending.binding.as_ref() else {
+        return Some("native backend completed without a bound renderer epoch".to_string());
+    };
+    if native_backend_completion_render_epoch(completion) != binding.render_epoch {
+        return Some("native backend completion reported a stale renderer epoch".to_string());
+    }
+    renderer_binding_mismatch_reason(state, binding)
+}
+
 #[cfg(target_os = "macos")]
 impl NativeBackendBridge {
-    fn begin_macos_capture(&mut self, nonce: u64, page_count: usize) {
+    fn begin_macos_capture(&mut self, nonce: u64, render_epoch: u64, page_count: usize) {
         self.completion = None;
         self.mac_capture = Some(MacCaptureBatch {
             nonce,
+            render_epoch,
             pages: (0..page_count).map(|_| None).collect(),
         });
     }
@@ -1166,7 +1283,11 @@ impl NativeBackendBridge {
             let Some(pages) = batch.pages.into_iter().collect::<Option<Vec<_>>>() else {
                 return;
             };
-            self.record_completion(NativeBackendCompletion::CapturedPages { nonce, pages });
+            self.record_completion(NativeBackendCompletion::CapturedPages {
+                nonce,
+                render_epoch: batch.render_epoch,
+                pages,
+            });
         }
     }
 }
@@ -1175,16 +1296,23 @@ impl NativeBackendBridge {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum RendererMessage {
-    RendererReady,
-    RendererInvalidated,
+    RendererReady {
+        render_epoch: u64,
+    },
+    RendererInvalidated {
+        render_epoch: u64,
+    },
     RendererError {
+        render_epoch: u64,
         message: String,
     },
     PrintReady {
         nonce: u64,
+        render_epoch: u64,
         print_mode: bool,
     },
     PageCount {
+        render_epoch: u64,
         page_count: usize,
         page_width_pt: f64,
         page_height_pt: f64,
@@ -1208,6 +1336,84 @@ struct RendererPageRectMessage {
     descendant_overflow_y: usize,
     descendant_clipped_x: usize,
     descendant_clipped_y: usize,
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn apply_renderer_message(
+    state: &mut RendererState,
+    message: RendererMessage,
+    layout_plan: &RenderLayoutPlan,
+) {
+    match message {
+        RendererMessage::RendererReady { render_epoch } => {
+            if state.accepts_epoch(render_epoch) {
+                state.ready = true;
+            }
+        }
+        RendererMessage::RendererInvalidated { render_epoch } => {
+            state.invalidate_for_epoch(render_epoch);
+        }
+        RendererMessage::RendererError {
+            render_epoch,
+            message,
+        } => {
+            if state.accepts_epoch(render_epoch) {
+                state.error = Some(message);
+            }
+        }
+        RendererMessage::PrintReady {
+            nonce,
+            render_epoch,
+            print_mode,
+        } => state.accept_print_ready(nonce, render_epoch, print_mode),
+        RendererMessage::PageCount {
+            render_epoch,
+            page_count,
+            page_width_pt,
+            page_height_pt,
+            print_mode,
+            pages,
+        } => {
+            if !state.accepts_epoch(render_epoch) {
+                return;
+            }
+            let report = RendererGeometryReport {
+                page_count,
+                page_width_pt,
+                page_height_pt,
+                pages: pages
+                    .into_iter()
+                    .map(|page| RendererPageRect {
+                        x: page.x,
+                        y: page.y,
+                        width: page.width,
+                        height: page.height,
+                        client_width: page.client_width,
+                        client_height: page.client_height,
+                        scroll_width: page.scroll_width,
+                        scroll_height: page.scroll_height,
+                        descendant_overflow_x: page.descendant_overflow_x,
+                        descendant_overflow_y: page.descendant_overflow_y,
+                        descendant_clipped_x: page.descendant_clipped_x,
+                        descendant_clipped_y: page.descendant_clipped_y,
+                    })
+                    .collect(),
+            };
+            match validate_renderer_geometry(&report, layout_plan) {
+                Ok(()) => {
+                    state.page_count = Some(page_count);
+                    state.page_rects = report.pages;
+                    state.geometry_print_mode = print_mode;
+                }
+                Err(error) => {
+                    state.page_count = None;
+                    state.page_rects.clear();
+                    state.geometry_print_mode = false;
+                    state.error = Some(error);
+                }
+            }
+        }
+    }
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -1278,59 +1484,7 @@ impl HtmlFormPreviewView {
                         let Ok(mut state) = ipc_state.lock() else {
                             return;
                         };
-                        match message {
-                            RendererMessage::RendererReady => state.ready = true,
-                            RendererMessage::RendererInvalidated => state.invalidate(),
-                            RendererMessage::RendererError { message } => {
-                                state.error = Some(message)
-                            }
-                            RendererMessage::PrintReady { nonce, print_mode } => {
-                                state.accept_print_ready(nonce, print_mode)
-                            }
-                            RendererMessage::PageCount {
-                                page_count,
-                                page_width_pt,
-                                page_height_pt,
-                                print_mode,
-                                pages,
-                            } => {
-                                let report = RendererGeometryReport {
-                                    page_count,
-                                    page_width_pt,
-                                    page_height_pt,
-                                    pages: pages
-                                        .into_iter()
-                                        .map(|page| RendererPageRect {
-                                            x: page.x,
-                                            y: page.y,
-                                            width: page.width,
-                                            height: page.height,
-                                            client_width: page.client_width,
-                                            client_height: page.client_height,
-                                            scroll_width: page.scroll_width,
-                                            scroll_height: page.scroll_height,
-                                            descendant_overflow_x: page.descendant_overflow_x,
-                                            descendant_overflow_y: page.descendant_overflow_y,
-                                            descendant_clipped_x: page.descendant_clipped_x,
-                                            descendant_clipped_y: page.descendant_clipped_y,
-                                        })
-                                        .collect(),
-                                };
-                                match validate_renderer_geometry(&report, &layout_plan) {
-                                    Ok(()) => {
-                                        state.page_count = Some(page_count);
-                                        state.page_rects = report.pages;
-                                        state.geometry_print_mode = print_mode;
-                                    }
-                                    Err(error) => {
-                                        state.page_count = None;
-                                        state.page_rects.clear();
-                                        state.geometry_print_mode = false;
-                                        state.error = Some(error);
-                                    }
-                                }
-                            }
-                        }
+                        apply_renderer_message(&mut state, message, &layout_plan);
                     })
                     .build_as_child(&window_handle)
                     .map_err(|error| error.to_string())
@@ -1402,6 +1556,23 @@ impl HtmlFormPreviewView {
                     }
                     if readiness_was_invalidated {
                         this.status = "Layout changed; validating print geometry again".to_string();
+                        should_notify = true;
+                    }
+                    let output_binding_failure = this.pending_output.as_ref().and_then(|pending| {
+                        if !pending.backend_started {
+                            return None;
+                        }
+                        match pending.binding.as_ref() {
+                            Some(binding) => {
+                                renderer_binding_mismatch_reason(&this.renderer_state, binding)
+                            }
+                            None => Some(
+                                "native output started without a bound renderer epoch".to_string(),
+                            ),
+                        }
+                    });
+                    if let Some(reason) = output_binding_failure {
+                        this.fail_pending_output(reason, cx);
                         should_notify = true;
                     }
                     match renderer_readiness_decision(
@@ -1609,6 +1780,11 @@ impl HtmlFormPreviewView {
         let Some(webview) = self.webview.clone() else {
             return Err("HTML renderer WebView disappeared before native output".to_string());
         };
+        let binding = bind_renderer_for_native_output(&self.renderer_state)?;
+        let render_epoch = binding.render_epoch;
+        if let Some(pending) = self.pending_output.as_mut() {
+            pending.binding = Some(binding.clone());
+        }
 
         match kind {
             HtmlOutputKind::SystemPrint => {
@@ -1625,7 +1801,13 @@ impl HtmlFormPreviewView {
                     let bridge = self.native_backend_bridge.clone();
                     webview
                         .update(cx, move |webview, _| {
-                            start_windows_system_print(webview.raw(), &expectation, nonce, bridge)
+                            start_windows_system_print(
+                                webview.raw(),
+                                &expectation,
+                                nonce,
+                                render_epoch,
+                                bridge,
+                            )
                         })
                         .map_err(|error| {
                             format!("HTML renderer native print failed to start: {error}")
@@ -1640,7 +1822,13 @@ impl HtmlFormPreviewView {
                     let bridge = self.native_backend_bridge.clone();
                     webview
                         .update(cx, move |webview, _| {
-                            start_macos_system_print(webview.raw(), &expectation, nonce, bridge)
+                            start_macos_system_print(
+                                webview.raw(),
+                                &expectation,
+                                nonce,
+                                render_epoch,
+                                bridge,
+                            )
                         })
                         .map_err(|error| {
                             format!("HTML renderer native print failed to start: {error}")
@@ -1679,9 +1867,15 @@ impl HtmlFormPreviewView {
                 let bridge = self.native_backend_bridge.clone();
                 #[cfg(target_os = "macos")]
                 let start_result = {
-                    let page_rects = self.renderer_state.page_rects.clone();
+                    let page_rects = binding.page_rects;
                     webview.update(cx, move |webview, _| {
-                        start_macos_pdf_capture(webview.raw(), &page_rects, nonce, bridge)
+                        start_macos_pdf_capture(
+                            webview.raw(),
+                            &page_rects,
+                            nonce,
+                            render_epoch,
+                            bridge,
+                        )
                     })
                 };
                 #[cfg(target_os = "windows")]
@@ -1693,6 +1887,7 @@ impl HtmlFormPreviewView {
                             &temp_path,
                             &expectation,
                             nonce,
+                            render_epoch,
                             bridge,
                         )
                     })
@@ -1709,13 +1904,7 @@ impl HtmlFormPreviewView {
         completion: NativeBackendCompletion,
         cx: &mut Context<Self>,
     ) {
-        let completion_nonce = match &completion {
-            NativeBackendCompletion::SystemPrint { nonce, .. } => *nonce,
-            #[cfg(target_os = "macos")]
-            NativeBackendCompletion::CapturedPages { nonce, .. } => *nonce,
-            #[cfg(target_os = "windows")]
-            NativeBackendCompletion::PdfFile { nonce, .. } => *nonce,
-        };
+        let completion_nonce = native_backend_completion_nonce(&completion);
         let completion_kind = match &completion {
             NativeBackendCompletion::SystemPrint { .. } => HtmlOutputKind::SystemPrint,
             #[cfg(target_os = "macos")]
@@ -1731,6 +1920,13 @@ impl HtmlFormPreviewView {
             return;
         };
         if pending_nonce != completion_nonce || pending_kind != completion_kind {
+            return;
+        }
+        let binding_error = self.pending_output.as_ref().and_then(|pending| {
+            native_backend_completion_binding_error(pending, &self.renderer_state, &completion)
+        });
+        if let Some(reason) = binding_error {
+            self.fail_pending_output(reason, cx);
             return;
         }
 
@@ -1852,12 +2048,6 @@ impl HtmlFormPreviewView {
         }
         if let Ok(mut bridge) = self.native_backend_bridge.lock() {
             bridge.cancel_output(pending.nonce);
-            #[cfg(target_os = "macos")]
-            if pending.kind == HtmlOutputKind::SystemPrint {
-                // The current macOS host has no callback that could arrive
-                // after cancellation, so this nonce needs no tombstone.
-                bridge.finish_output(pending.nonce);
-            }
         }
         self.renderer_state.print_ready_nonce = None;
         if let Ok(mut renderer) = self.bridge_state.lock() {
@@ -2148,6 +2338,46 @@ mod tests {
     }
 
     #[cfg(any(target_os = "macos", target_os = "windows"))]
+    fn ready_renderer_state(render_epoch: u64) -> RendererState {
+        let mut state = RendererState::default();
+        assert!(state.invalidate_for_epoch(render_epoch));
+        state.ready = true;
+        state.page_count = Some(2);
+        state.page_rects = vec![validated_page_rect(0.0), validated_page_rect(1248.0)];
+        state.geometry_print_mode = true;
+        state
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    fn renderer_layout_plan() -> RenderLayoutPlan {
+        let provider = bir_print::html_forms::render_form_provider("2551Q", "2018")
+            .expect("2551Q renderer provider");
+        RenderLayoutPlan {
+            provider,
+            page_geometry: provider.page_geometry().expect("2551Q page geometry"),
+            expected_page_count: 2,
+        }
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    fn renderer_page_rect_message(y: f64) -> RendererPageRectMessage {
+        RendererPageRectMessage {
+            x: 0.0,
+            y,
+            width: 816.0,
+            height: 1248.0,
+            client_width: 816.0,
+            client_height: 1248.0,
+            scroll_width: 816.0,
+            scroll_height: 1248.0,
+            descendant_overflow_x: 0,
+            descendant_overflow_y: 0,
+            descendant_clipped_x: 0,
+            descendant_clipped_y: 0,
+        }
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     fn assert_renderer_security_headers(response: &wry::http::Response<Cow<'static, [u8]>>) {
         let csp = response
             .headers()
@@ -2231,35 +2461,226 @@ mod tests {
         assert!(script.contains("(42)"));
 
         let invalidated: RendererMessage =
-            serde_json::from_str(r#"{"type":"renderer_invalidated"}"#)
+            serde_json::from_str(r#"{"type":"renderer_invalidated","render_epoch":7}"#)
                 .expect("parse renderer invalidation");
-        assert!(matches!(invalidated, RendererMessage::RendererInvalidated));
-        let print_ready: RendererMessage =
-            serde_json::from_str(r#"{"type":"print_ready","nonce":42,"print_mode":true}"#)
-                .expect("parse print readiness");
+        assert!(matches!(
+            invalidated,
+            RendererMessage::RendererInvalidated { render_epoch: 7 }
+        ));
+        let print_ready: RendererMessage = serde_json::from_str(
+            r#"{"type":"print_ready","nonce":42,"render_epoch":7,"print_mode":true}"#,
+        )
+        .expect("parse print readiness");
         assert!(matches!(
             print_ready,
             RendererMessage::PrintReady {
                 nonce: 42,
+                render_epoch: 7,
                 print_mode: true
             }
         ));
+        let renderer_error: RendererMessage = serde_json::from_str(
+            r#"{"type":"renderer_error","render_epoch":7,"message":"font failure"}"#,
+        )
+        .expect("parse renderer error");
+        assert!(matches!(
+            renderer_error,
+            RendererMessage::RendererError {
+                render_epoch: 7,
+                ref message
+            } if message == "font failure"
+        ));
+        assert!(
+            serde_json::from_str::<RendererMessage>(
+                r#"{"type":"renderer_error","message":"unversioned failure"}"#
+            )
+            .is_err(),
+            "renderer errors must be causally bound to an epoch"
+        );
 
-        let mut state = RendererState {
-            ready: true,
-            page_count: Some(2),
-            page_rects: vec![validated_page_rect(0.0), validated_page_rect(1248.0)],
-            geometry_print_mode: true,
-            ..RendererState::default()
-        };
-        state.accept_print_ready(42, true);
+        let mut state = ready_renderer_state(7);
+        state.accept_print_ready(42, 7, true);
         assert_eq!(state.print_ready_nonce, Some(42));
-        state.invalidate();
+        assert!(state.invalidate_for_epoch(8));
         assert!(!state.ready);
         assert_eq!(state.page_count, None);
         assert!(!state.geometry_print_mode);
         assert_eq!(state.print_ready_nonce, None);
+        assert_eq!(state.render_epoch, 8);
+        assert_eq!(state.readiness_revision, 2);
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[test]
+    fn renderer_ipc_ignores_stale_and_out_of_order_epochs() {
+        let plan = renderer_layout_plan();
+        let mut state = RendererState::default();
+        apply_renderer_message(
+            &mut state,
+            RendererMessage::RendererInvalidated { render_epoch: 5 },
+            &plan,
+        );
+        apply_renderer_message(
+            &mut state,
+            RendererMessage::RendererReady { render_epoch: 4 },
+            &plan,
+        );
+        apply_renderer_message(
+            &mut state,
+            RendererMessage::PageCount {
+                render_epoch: 6,
+                page_count: 2,
+                page_width_pt: 612.0,
+                page_height_pt: 936.0,
+                print_mode: true,
+                pages: vec![
+                    renderer_page_rect_message(0.0),
+                    renderer_page_rect_message(1248.0),
+                ],
+            },
+            &plan,
+        );
+        apply_renderer_message(
+            &mut state,
+            RendererMessage::RendererInvalidated { render_epoch: 4 },
+            &plan,
+        );
+
+        assert_eq!(state.render_epoch, 5);
         assert_eq!(state.readiness_revision, 1);
+        assert!(!state.ready);
+        assert_eq!(state.page_count, None);
+
+        apply_renderer_message(
+            &mut state,
+            RendererMessage::PageCount {
+                render_epoch: 5,
+                page_count: 2,
+                page_width_pt: 612.0,
+                page_height_pt: 936.0,
+                print_mode: true,
+                pages: vec![
+                    renderer_page_rect_message(0.0),
+                    renderer_page_rect_message(1248.0),
+                ],
+            },
+            &plan,
+        );
+        apply_renderer_message(
+            &mut state,
+            RendererMessage::RendererReady { render_epoch: 5 },
+            &plan,
+        );
+
+        assert!(state.ready);
+        assert_eq!(state.page_count, Some(2));
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[test]
+    fn renderer_ipc_ignores_stale_error_epochs() {
+        let plan = renderer_layout_plan();
+        let mut state = ready_renderer_state(7);
+
+        apply_renderer_message(
+            &mut state,
+            RendererMessage::RendererError {
+                render_epoch: 6,
+                message: "stale font failure".to_string(),
+            },
+            &plan,
+        );
+        assert_eq!(state.error, None);
+
+        apply_renderer_message(
+            &mut state,
+            RendererMessage::RendererError {
+                render_epoch: 7,
+                message: "current font failure".to_string(),
+            },
+            &plan,
+        );
+        assert_eq!(state.error.as_deref(), Some("current font failure"));
+
+        apply_renderer_message(
+            &mut state,
+            RendererMessage::RendererInvalidated { render_epoch: 8 },
+            &plan,
+        );
+        apply_renderer_message(
+            &mut state,
+            RendererMessage::RendererError {
+                render_epoch: 7,
+                message: "late measurement failure".to_string(),
+            },
+            &plan,
+        );
+        assert_eq!(state.render_epoch, 8);
+        assert_eq!(state.error, None);
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[test]
+    fn native_output_binding_rejects_invalidation_after_backend_start() {
+        let mut state = ready_renderer_state(7);
+        let binding = bind_renderer_for_native_output(&state).expect("bind ready renderer");
+        let mut pending = PendingNativeOutput::validating(HtmlOutputKind::SystemPrint, 9, None);
+        pending.backend_started = true;
+        pending.binding = Some(binding);
+
+        assert!(state.invalidate_for_epoch(8));
+
+        let reason = renderer_binding_mismatch_reason(
+            &state,
+            pending.binding.as_ref().expect("pending renderer binding"),
+        )
+        .expect("invalidation must stale the native output");
+        assert!(reason.contains("epoch changed"));
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[test]
+    fn native_backend_completion_must_match_bound_renderer_epoch() {
+        let state = ready_renderer_state(7);
+        let binding = bind_renderer_for_native_output(&state).expect("bind ready renderer");
+        let mut pending = PendingNativeOutput::validating(HtmlOutputKind::SystemPrint, 9, None);
+        pending.backend_started = true;
+        pending.binding = Some(binding);
+        let stale_completion = NativeBackendCompletion::SystemPrint {
+            nonce: 9,
+            render_epoch: 6,
+            result: Ok(()),
+        };
+
+        let reason = native_backend_completion_binding_error(&pending, &state, &stale_completion)
+            .expect("stale completion must fail");
+        assert!(reason.contains("stale renderer epoch"));
+
+        let current_completion = NativeBackendCompletion::SystemPrint {
+            nonce: 9,
+            render_epoch: 7,
+            result: Ok(()),
+        };
+        assert_eq!(
+            native_backend_completion_binding_error(&pending, &state, &current_completion),
+            None
+        );
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[test]
+    fn cancelled_system_print_ignores_late_native_completion() {
+        let mut bridge = NativeBackendBridge::default();
+        bridge.cancel_output(9);
+
+        bridge.record_completion(NativeBackendCompletion::SystemPrint {
+            nonce: 9,
+            render_epoch: 7,
+            result: Ok(()),
+        });
+
+        assert!(bridge.completion.is_none());
+        assert!(!bridge.cancelled_nonces.contains(&9));
     }
 
     #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -2317,16 +2738,20 @@ mod tests {
     #[test]
     fn macos_page_capture_waits_for_every_page_and_preserves_order() {
         let mut bridge = NativeBackendBridge::default();
-        bridge.begin_macos_capture(9, 2);
+        bridge.begin_macos_capture(9, 7, 2);
         bridge.record_macos_page(9, 1, Ok(vec![2]));
         assert!(bridge.completion.is_none());
         bridge.record_macos_page(9, 0, Ok(vec![1]));
-        let Some(NativeBackendCompletion::CapturedPages { nonce, pages }) =
-            bridge.completion.take()
+        let Some(NativeBackendCompletion::CapturedPages {
+            nonce,
+            render_epoch,
+            pages,
+        }) = bridge.completion.take()
         else {
             panic!("macOS capture should complete after all page callbacks");
         };
         assert_eq!(nonce, 9);
+        assert_eq!(render_epoch, 7);
         assert_eq!(pages, vec![Ok(vec![1]), Ok(vec![2])]);
     }
 
@@ -2342,7 +2767,7 @@ mod tests {
         bridge
             .register_temp_path(9, temp_path.clone())
             .expect("register test temp");
-        bridge.begin_macos_capture(9, 1);
+        bridge.begin_macos_capture(9, 7, 1);
 
         bridge.cancel_output(9);
         bridge.prepare_for_output();
@@ -2441,9 +2866,10 @@ mod tests {
             ready: true,
             page_count: Some(2),
             geometry_print_mode: true,
+            render_epoch: 7,
             ..RendererState::default()
         };
-        state.accept_print_ready(42, true);
+        state.accept_print_ready(42, 7, true);
         assert_eq!(state.print_ready_nonce, None);
         assert!(
             state
@@ -2458,9 +2884,10 @@ mod tests {
     fn print_ready_signal_is_rejected_without_fresh_geometry() {
         let mut state = RendererState {
             geometry_print_mode: true,
+            render_epoch: 7,
             ..RendererState::default()
         };
-        state.accept_print_ready(7, true);
+        state.accept_print_ready(7, 7, true);
         assert_eq!(state.print_ready_nonce, None);
         assert!(
             state
@@ -2476,9 +2903,10 @@ mod tests {
         let mut state = RendererState {
             ready: true,
             page_count: Some(2),
+            render_epoch: 7,
             ..RendererState::default()
         };
-        state.accept_print_ready(7, false);
+        state.accept_print_ready(7, 7, false);
         assert_eq!(state.print_ready_nonce, None);
         assert!(
             state
