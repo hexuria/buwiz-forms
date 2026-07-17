@@ -537,6 +537,16 @@ impl Form2551QDraft {
     }
 
     fn record_profile_resolution_failure(&mut self, error: String) {
+        if matches!(self.status, FilingStatus::Draft) {
+            // Editable returns must not keep displaying a previously resolved
+            // profile snapshot after the effective-dated ledger stops
+            // resolving. Clear profile-owned prefills and Item 13 so preview
+            // and validation fail closed instead of presenting stale facts as
+            // current. Queue-bound and later snapshots remain immutable below.
+            self.clear_profile_owned_snapshot();
+            self.profile_snapshot_stale = false;
+            self.profile_snapshot_stale_reason = None;
+        }
         self.profile_resolution_error = Some(error.clone());
         if !matches!(self.status, FilingStatus::Draft) {
             self.profile_snapshot_stale = true;
@@ -2110,6 +2120,103 @@ mod tests {
             draft.profile_resolution_error
         );
         assert_eq!(restored.effective_profile_version_id, None);
+    }
+
+    #[test]
+    fn unresolved_profile_refresh_clears_an_editable_profile_snapshot() {
+        let mut profile = test_profile();
+        profile
+            .tax_elections
+            .push(crate::profile::TaxElectionHistory {
+                taxable_year: 2026,
+                election: IncomeTaxElection::GraduatedOsd,
+                elected_at: chrono::NaiveDateTime::default(),
+                source_form: "profile_manager".into(),
+            });
+        profile.profile_versions = vec![confirmed_profile_version(
+            &profile,
+            "reviewed",
+            "Reviewed Snapshot",
+            "018",
+            NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+            None,
+        )];
+        let mut draft = Form2551QDraft::new_from_effective_profile(&profile, 2026, 1);
+        assert_eq!(draft.item_13_election, Item13Election::Graduated);
+        assert_eq!(draft.taxpayer_name, "Reviewed Snapshot");
+
+        profile.profile_versions.clear();
+        let error = draft
+            .reconcile_with_effective_profile(&profile)
+            .expect_err("an unresolved confirmed timeline must fail closed");
+
+        assert!(error.contains("No confirmed"));
+        assert_eq!(draft.tin, profile.tin.full());
+        assert!(draft.taxpayer_name.is_empty());
+        assert!(draft.rdo_code.is_empty());
+        assert!(draft.registered_address.is_empty());
+        assert_eq!(draft.taxpayer_type, None);
+        assert_eq!(draft.annual_income_tax_election, None);
+        assert_eq!(draft.item_13_election, Item13Election::Unanswered);
+        assert_eq!(draft.effective_profile_version_id, None);
+        assert_eq!(
+            draft.profile_resolution_error.as_deref(),
+            Some(error.as_str())
+        );
+        assert!(!draft.profile_snapshot_stale);
+        assert!(draft.profile_snapshot_stale_reason.is_none());
+    }
+
+    #[test]
+    fn unresolved_profile_refresh_keeps_a_queued_snapshot_immutable() {
+        let mut profile = test_profile();
+        profile
+            .tax_elections
+            .push(crate::profile::TaxElectionHistory {
+                taxable_year: 2026,
+                election: IncomeTaxElection::EightPercent,
+                elected_at: chrono::NaiveDateTime::default(),
+                source_form: "profile_manager".into(),
+            });
+        profile.profile_versions = vec![confirmed_profile_version(
+            &profile,
+            "reviewed",
+            "Reviewed Snapshot",
+            "018",
+            NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+            None,
+        )];
+        let mut draft = Form2551QDraft::new_from_effective_profile(&profile, 2026, 1);
+        draft.status = FilingStatus::Queued;
+
+        profile.profile_versions.clear();
+        let error = draft
+            .reconcile_with_effective_profile(&profile)
+            .expect_err("an unresolved confirmed timeline must fail closed");
+
+        assert_eq!(draft.taxpayer_name, "Reviewed Snapshot");
+        assert_eq!(draft.rdo_code, "018");
+        assert_eq!(draft.taxpayer_type, Some(profile.taxpayer_type.clone()));
+        assert_eq!(
+            draft.annual_income_tax_election,
+            Some(AnnualIncomeTaxElection::EightPercent)
+        );
+        assert_eq!(draft.item_13_election, Item13Election::EightPercent);
+        assert_eq!(
+            draft.effective_profile_version_id.as_deref(),
+            Some("reviewed")
+        );
+        assert_eq!(
+            draft.profile_resolution_error.as_deref(),
+            Some(error.as_str())
+        );
+        assert!(draft.profile_snapshot_stale);
+        assert!(
+            draft
+                .profile_snapshot_stale_reason
+                .as_deref()
+                .is_some_and(|reason| reason.contains("immutable return snapshot"))
+        );
     }
 
     #[test]
