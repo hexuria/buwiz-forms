@@ -149,9 +149,9 @@ test("0619F 2018 preserves the official Items 1-5 value-band partitions", async 
   const formPage = page.locator(".form-page").first();
 
   await expectCriticalRegionGeometry(formPage, [
-    { name: "Item 1 month comb", selector: ".month-value-0619f > .comb-value", x: 92, y: 219, width: 171, height: 39 },
-    { name: "Item 2 due-date comb", selector: ".due-date-value-0619f > .comb-value", x: 349, y: 219, width: 231, height: 39 },
-    { name: "Item 5 tax-type comb", selector: ".code-value-0619f > .comb-value", x: 1071, y: 219, width: 59, height: 39 }
+    { name: "Item 1 month field", selector: '[data-official-field="1-month"]', x: 92, y: 219, width: 171, height: 39 },
+    { name: "Item 2 due-date field", selector: '[data-official-field="2-due-date"]', x: 349, y: 219, width: 231, height: 39 },
+    { name: "Item 5 tax-type field", selector: '[data-official-field="5-tax-type-code"]', x: 1071, y: 219, width: 59, height: 39 }
   ]);
 
   for (const selector of [
@@ -163,9 +163,93 @@ test("0619F 2018 preserves the official Items 1-5 value-band partitions", async 
       getComputedStyle(element).backgroundColor
     )).toBe("rgb(217, 217, 217)");
   }
-  expect(await page.locator(".month-value-0619f > .comb-value").evaluate((element) =>
+  expect(await page.locator('[data-official-field="1-month"]').evaluate((element) =>
     getComputedStyle(element).backgroundColor
   )).toBe("rgb(255, 255, 255)");
+});
+
+test("0619F 2018 uses only exact pinned guides and measured plain overflow fields", async ({ page }) => {
+  const normal = readFixture("packages/form-contracts/fixtures/0619f-normal.json");
+  await renderEnvelope(page, normal);
+
+  for (const field of [
+    "13-atc",
+    "14-atc",
+    "tax-agent-accreditation",
+    "tax-agent-date-of-issue",
+    "tax-agent-date-of-expiry",
+    "20-bank",
+    "20-number",
+    "22-bank",
+    "machine-validation"
+  ]) {
+    const locator = page.locator(`[data-official-field="${field}"]`);
+    await expect(locator, field).toHaveAttribute("data-field-mode", "plain");
+    await expect(locator, field).toHaveAttribute("data-guide-count", "0");
+    await expect(locator.locator(".comb-value"), `${field} invented comb`).toHaveCount(0);
+  }
+
+  for (const [field, segments, guideCount] of [
+    ["1-month", "2-4", 4],
+    ["2-due-date", "2-2-4", 5],
+    ["5-tax-type-code", "2", 1],
+    ["6-tin", "3-3-3-5", 10],
+    ["7-rdo", "3", 2],
+    ["8-agent-name", "40", 39],
+    ["9-address-line-1", "40", 39],
+    ["9-address-line-2", "31", 30],
+    ["9a-zip", "4", 3],
+    ["10-contact", "12", 11],
+    ["12-email", "40", 39],
+    ["13-amount", "11-2", 11],
+    ["19-amount", "11-2", 11],
+    ["20-date", "2-2-4", 5],
+    ["20-amount", "11-2", 11]
+  ] as const) {
+    const locator = page.locator(`[data-official-field="${field}"]`);
+    await expect(locator, field).toHaveAttribute("data-field-mode", "guided");
+    await expect(locator, field).toHaveAttribute("data-guide-segments", segments);
+    await expect(locator, field).toHaveAttribute("data-guide-count", String(guideCount));
+    await expect(
+      locator.locator(".guided-segment-0619f .comb-value > span:not(:last-child)"),
+      `${field} short rules`
+    ).toHaveCount(guideCount);
+  }
+
+  const minimum = readFixture("packages/form-contracts/fixtures/0619f-minimum.json");
+  await renderEnvelope(page, minimum);
+  for (const [field, segments, guideCount] of [
+    ["20-bank", "5", 4],
+    ["20-number", "6", 5],
+    ["20-date", "2-2-4", 5],
+    ["21-bank", "5", 4],
+    ["21-number", "6", 5],
+    ["21-date", "2-2-4", 5],
+    ["22-number", "6", 5],
+    ["22-date", "2-2-4", 5],
+    ["23-particular", "7", 6],
+    ["23-bank", "5", 4],
+    ["23-number", "6", 5],
+    ["23-date", "2-2-4", 5]
+  ] as const) {
+    const locator = page.locator(`[data-official-field="${field}"]`);
+    await expect(locator, field).toHaveAttribute("data-field-mode", "guided");
+    await expect(locator, field).toHaveAttribute("data-guide-segments", segments);
+    await expect(
+      locator.locator(".guided-segment-0619f .comb-value > span:not(:last-child)"),
+      `${field} short rules`
+    ).toHaveCount(guideCount);
+  }
+
+  const longValues = readFixture("packages/form-contracts/fixtures/0619f-long-values.json");
+  await renderEnvelope(page, longValues);
+  await expect(page.locator('[data-adaptive-fit-state="unresolved"]')).toHaveCount(0);
+  for (const field of ["8-agent-name", "20-bank", "20-number"]) {
+    const locator = page.locator(`[data-official-field="${field}"]`);
+    await expect(locator, field).toHaveAttribute("data-field-mode", "plain");
+    await expect(locator, field).toHaveAttribute("data-guide-count", "0");
+    await expect(locator.locator(".comb-value"), `${field} overflow comb`).toHaveCount(0);
+  }
 });
 
 test("0619F 2018 preserves the official payment-row partitions", async ({ page }) => {
@@ -198,7 +282,7 @@ test("0619F 2018 preserves the official payment-row partitions", async ({ page }
 });
 
 test("0619F 2018 matches the complete pinned official page", async ({ page }, testInfo) => {
-  const fixture = readFixture("packages/form-contracts/fixtures/0619f-normal.json");
+  const fixture = readFixture("packages/form-contracts/fixtures/0619f-minimum.json");
   await renderEnvelope(page, fixture);
   const formPage = page.locator(".form-page").first();
   await expect(formPage).toHaveCount(1);

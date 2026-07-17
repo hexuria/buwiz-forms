@@ -14,6 +14,7 @@ import minimumFixture from "../../form-contracts/fixtures/0619f-minimum.json";
 import normalFixture from "../../form-contracts/fixtures/0619f-normal.json";
 import allPaymentsFixture from "../../form-contracts/fixtures/0619f-all-payments.json";
 import validationEdgeFixture from "../../form-contracts/fixtures/0619f-validation-edge.json";
+import fieldGuideInventory from "../references/0619f-2018-field-guide-inventory.json";
 import { FormDocument } from "../src/FormDocument";
 import {
   OFFICIAL_0619F_PDF417_PAGE_ONE_PATH,
@@ -124,7 +125,8 @@ describe("0619F:2018 runtime render contract", () => {
       expect(paymentMarkup).toContain(reference);
     }
     expect(paymentMarkup).toContain("payment-tax-debit-row-0619f");
-    expect(paymentMarkup).toContain("payment-tax-debit-bank-0619f\">BIR");
+    expect(paymentMarkup).toContain('data-official-field="22-bank"');
+    expect(paymentMarkup).toContain('aria-label="BIR"');
     expect(paymentMarkup).toContain("payment-particular-field-0619f");
     expect(paymentMarkup).toContain("REVENUE COLLECTION OFFICER");
 
@@ -166,6 +168,111 @@ describe("0619F:2018 runtime render contract", () => {
     );
   });
 
+  it("encodes the pinned 2018 plain fields and exact short-guide counts", () => {
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: normalFixture as RenderEnvelope })
+    );
+    const inventory = new Map(
+      fieldGuideInventory.fields.map((field) => [field.field, field])
+    );
+
+    for (const field of [
+      "13-atc",
+      "14-atc",
+      "tax-agent-accreditation",
+      "tax-agent-date-of-issue",
+      "tax-agent-date-of-expiry",
+      "22-bank",
+      "machine-validation"
+    ]) {
+      const tag = officialFieldTag(markup, field);
+      expect(tag, field).toContain('data-field-mode="plain"');
+      expect(tag, field).toContain('data-guide-count="0"');
+      expect(inventory.get(field)?.short_tick_count, field).toBe(0);
+    }
+
+    for (const field of [
+      "1-month",
+      "2-due-date",
+      "5-tax-type-code",
+      "6-tin",
+      "7-rdo",
+      "8-agent-name",
+      "9-address-line-1",
+      "9-address-line-2",
+      "9a-zip",
+      "10-contact",
+      "12-email",
+      "13-amount",
+      "14-amount",
+      "15-amount",
+      "16-amount",
+      "17-amount",
+      "18a-amount",
+      "18b-amount",
+      "18c-amount",
+      "18d-amount",
+      "19-amount",
+      "20-date",
+      "20-amount",
+      "21-bank",
+      "21-number",
+      "21-date",
+      "21-amount",
+      "22-number",
+      "22-date",
+      "22-amount",
+      "23-particular",
+      "23-bank",
+      "23-number",
+      "23-date",
+      "23-amount"
+    ]) {
+      const evidence = inventory.get(field);
+      const tag = officialFieldTag(markup, field);
+      expect(tag, field).toContain('data-field-mode="guided"');
+      expect(tag, field).toContain(
+        `data-guide-segments="${evidence?.segments?.join("-")}"`
+      );
+      expect(tag, field).toContain(
+        `data-guide-count="${evidence?.short_tick_count}"`
+      );
+    }
+
+    for (const field of ["20-bank", "20-number"]) {
+      const tag = officialFieldTag(markup, field);
+      expect(tag, field).toContain('data-field-mode="plain"');
+      expect(tag, field).toContain('data-guide-count="0"');
+    }
+  });
+
+  it("keeps exact-capacity guides and switches the whole over-capacity field to measured plain mode", () => {
+    const exact = structuredClone(normalFixture) as RenderEnvelope;
+    exact.taxpayer.name = "A".repeat(40);
+    const exactMarkup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: exact })
+    );
+    expect(officialFieldTag(exactMarkup, "8-agent-name")).toContain(
+      'data-field-mode="guided"'
+    );
+    expect(officialFieldTag(exactMarkup, "8-agent-name")).toContain(
+      'data-guide-count="39"'
+    );
+
+    const overflow = structuredClone(normalFixture) as RenderEnvelope;
+    overflow.taxpayer.name = "B".repeat(41);
+    const overflowMarkup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: overflow })
+    );
+    expect(officialFieldTag(overflowMarkup, "8-agent-name")).toContain(
+      'data-field-mode="plain"'
+    );
+    expect(overflowMarkup).toContain(`aria-label="${"B".repeat(41)}"`);
+    expect(overflowMarkup).toContain('data-adaptive-max-font-px="10"');
+    expect(overflowMarkup).toContain('data-adaptive-min-font-px="6"');
+    expect(overflowMarkup).toContain('data-adaptive-step-px="0.5"');
+  });
+
   it("fails closed on missing fields, mutable fixed codes, or schedules", () => {
     const missing = structuredClone(normalFixture) as Record<string, any>;
     delete missing.fields.item_19_total_amount_of_remittance;
@@ -184,3 +291,11 @@ describe("0619F:2018 runtime render contract", () => {
     );
   });
 });
+
+function officialFieldTag(markup: string, field: string): string {
+  const match = markup.match(
+    new RegExp(`<[^>]+data-official-field="${field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*>`)
+  );
+  expect(match, `missing official field ${field}`).not.toBeNull();
+  return match?.[0] ?? "";
+}

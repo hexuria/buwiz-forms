@@ -15,17 +15,50 @@
 
 .form-0619f-page-one :is(b, strong) { font-weight: 400; }
 .form-0619f-page-one em { font-size: 6.8pt; font-weight: 400; }
-.form-0619f-page-one .comb-value > span {
+.form-0619f-page-one .guided-segment-0619f > .comb-value > span {
   position: relative;
   border-right: 0;
 }
-.form-0619f-page-one .comb-value > span::after {
+.form-0619f-page-one .guided-segment-0619f > .comb-value > span:not(:last-child)::after {
   position: absolute;
   right: 0;
   bottom: 0;
-  height: 46%;
+  height: 40%;
   border-right: .5pt solid #000;
   content: "";
+}
+.plain-field-shell-0619f,
+.guided-field-0619f {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+.plain-field-shell-0619f {
+  display: flex;
+}
+.plain-field-shell-0619f > .plain-field-value-0619f {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0 2pt;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+.guided-field-0619f {
+  display: grid;
+}
+.guided-segment-0619f {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+}
+.guided-segment-0619f > .comb-value {
+  width: 100%;
+  height: 100%;
+}
+.guided-field-0619f > .guided-segment-0619f + .guided-segment-0619f {
+  border-left: .5pt solid #000;
 }
 
 .government-header-0619f {
@@ -189,14 +222,14 @@
   padding: 0 29pt 0 27.5pt;
   font-size: 10pt;
 }
-.header-option-0619f > :is(.month-value-0619f, .due-date-value-0619f, .code-value-0619f) > :is(.comb-value, .adaptive-plain-value) {
+.header-option-0619f > :is(.month-value-0619f, .due-date-value-0619f, .code-value-0619f) > :is(.guided-field-0619f, .plain-field-shell-0619f) {
   width: auto;
   flex: 1 1 auto;
   border-right: .5pt solid #000;
   border-left: .5pt solid #000;
   background: #fff;
 }
-.header-option-0619f .code-value-0619f > .comb-value { height: 100%; }
+.header-option-0619f .code-value-0619f > :is(.guided-field-0619f, .plain-field-shell-0619f) { height: 100%; }
 
 .part-0619f {
   width: 577pt;
@@ -234,12 +267,16 @@
   grid-template-columns: 43pt 15pt 43pt 15pt 43pt 15pt 72pt;
   min-width: 0;
 }
-.tin-value-0619f > i {
+.tin-value-0619f > .guided-segment-0619f {
+  display: contents;
+}
+.tin-value-0619f > .guided-segment-0619f > i {
   display: grid;
   place-items: center;
   background: #d9d9d9;
   font-style: normal;
 }
+.tin-overflow-plain-0619f { height: 100%; }
 .label-value-0619f { width: 100%; }
 .label-0619f {
   display: flex;
@@ -251,15 +288,13 @@
 }
 .label-0619f em { margin-left: 1pt; }
 .name-0619f .label-0619f { height: 11pt; border-bottom: .5pt solid #000; }
-.name-0619f > .comb-value,
-.name-0619f > .adaptive-plain-value {
+.name-0619f > :is(.guided-field-0619f, .plain-field-shell-0619f) {
   height: 18pt;
   border-bottom: .5pt solid #000;
 }
 .address-0619f .label-0619f { height: 10.5pt; border-bottom: .5pt solid #000; }
 .address-0619f .label-0619f em { font-size: 5.3pt; letter-spacing: -.06pt; }
-.address-0619f > .comb-value,
-.address-0619f > .adaptive-plain-value {
+.address-0619f > :is(.guided-field-0619f, .plain-field-shell-0619f) {
   height: 18pt;
   border-bottom: .5pt solid #000;
 }
@@ -269,7 +304,7 @@
   grid-template-columns: 446.5pt 72pt minmax(0, 1fr);
   border-bottom: .5pt solid #000;
 }
-.address-second-0619f > span:not(.comb-value):not(.adaptive-plain-value) {
+.address-second-0619f > span:not(.guided-field-0619f):not(.plain-field-shell-0619f) {
   display: flex;
   align-items: center;
   gap: 2pt;
@@ -302,8 +337,7 @@
   height: 13pt;
 }
 .email-0619f .label-0619f { height: 10.5pt; border-bottom: .5pt solid #000; }
-.email-0619f > .comb-value,
-.email-0619f > .adaptive-plain-value { height: 18.5pt; }
+.email-0619f > :is(.guided-field-0619f, .plain-field-shell-0619f) { height: 18.5pt; }
 
 .remittance-0619f { height: 218pt; margin-top: 1.5pt; }
 .remittance-0619f > h2 { height: 12pt; }
@@ -387,6 +421,13 @@
   display: grid;
   grid-template-columns: 159pt 14pt minmax(0, 1fr);
 }
+.money-0619f > .guided-segment-0619f > .comb-value { height: 100%; }
+.form-0619f-page-one .money-whole-0619f > .comb-value > span:nth-child(2)::after,
+.form-0619f-page-one .money-whole-0619f > .comb-value > span:nth-child(5)::after,
+.form-0619f-page-one .money-whole-0619f > .comb-value > span:nth-child(8)::after {
+  height: 56%;
+  border-right-width: 1.1pt;
+}
 .decimal-separator-0619f {
   display: grid;
   place-items: center;
@@ -395,6 +436,7 @@
 }
 .money-overflow-0619f {
   width: 100%;
+  height: 100%;
   justify-content: flex-end;
   text-align: right;
   white-space: nowrap;
@@ -459,15 +501,14 @@
   border-right: .5pt solid #000;
 }
 .signature-footer-0619f > *:last-child { border-right: 0; }
-.signature-footer-0619f > span:not(.comb-value):not(.adaptive-plain-value) {
+.signature-footer-0619f > span:not(.plain-field-shell-0619f) {
   display: block;
   padding: 1pt 4pt;
   background: #d9d9d9;
   font-size: 7.1pt;
   line-height: 1;
 }
-.signature-footer-0619f > .comb-value,
-.signature-footer-0619f > .adaptive-plain-value {
+.signature-footer-0619f > .plain-field-shell-0619f {
   align-self: end;
   height: 18pt;
 }
@@ -524,18 +565,29 @@
   background: #d9d9d9;
 }
 .payment-tax-debit-bank-0619f {
+  width: auto;
+  height: 100%;
+  min-width: 0;
   margin-left: auto;
+}
+.payment-tax-debit-bank-0619f > .plain-field-value-0619f {
   padding-right: 5pt;
-  font-size: 7pt;
-  line-height: 1;
+  padding-left: 3pt;
 }
 .payment-row-0619f > span.payment-particular-field-0619f:first-child {
   padding: 0;
   background: #fff;
 }
-.payment-particular-field-0619f > :is(.comb-value, .adaptive-plain-value) {
+.payment-particular-field-0619f > :is(.guided-field-0619f, .plain-field-shell-0619f) {
   width: 100%;
   height: 100%;
+}
+.payment-row-0619f .guided-overflow-plain-0619f > .plain-field-value-0619f {
+  display: block;
+  align-content: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.05;
 }
 .payment-row-0619f > .money-0619f { width: 100%; }
 .payment-other-label-0619f {
