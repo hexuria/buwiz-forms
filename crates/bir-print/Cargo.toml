@@ -3,6 +3,13 @@ name = "bir-print"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = []
+# Development-only model/verifier for transcripts captured from the native
+# HTML output path. This feature does not enable a renderer route or promote
+# any form capability.
+native-output-evidence = []
+
 [dependencies]
 bir-core = { path = "../bir-core" }
 tempfile = "3.27.0"

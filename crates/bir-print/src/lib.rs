@@ -9,6 +9,8 @@
 pub mod html;
 pub mod html_forms;
 pub mod html_output;
+#[cfg(any(test, feature = "native-output-evidence"))]
+pub mod html_output_evidence;
 pub mod html_support;
 pub mod pdf_util;
 

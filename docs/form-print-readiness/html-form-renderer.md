@@ -179,6 +179,12 @@ unchanged.
 Record reviewed preview, system-print, and direct-export evidence on macOS,
 Windows, and Linux before setting the corresponding capabilities.
 
+The current macOS development-only transcript verifier and its explicit trust
+boundary are documented in
+[macOS native-output evidence foundation](macos-native-evidence-foundation.md).
+It verifies supplied artifacts but does not collect runtime evidence or promote
+form readiness.
+
 ## Offline build and packaging
 
 Build the embedded renderer and verify its locked-down asset graph:
