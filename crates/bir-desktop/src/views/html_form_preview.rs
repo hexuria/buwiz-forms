@@ -2,6 +2,8 @@
 
 use bir_print::html::RenderEnvelopeV1;
 use bir_print::html_forms::RenderLayoutPlan;
+#[cfg(any(target_os = "macos", all(feature = "dev-tools", target_os = "windows")))]
+use bir_print::html_output::PdfValidationReport;
 #[cfg(target_os = "macos")]
 use bir_print::html_output::merge_single_page_pdfs;
 use bir_print::html_output::{
@@ -16,8 +18,6 @@ use bir_print::html_support::{
 };
 use std::path::PathBuf;
 
-#[cfg(all(feature = "dev-tools", any(target_os = "macos", target_os = "windows")))]
-use bir_print::html_output::PdfValidationReport;
 #[cfg(all(feature = "dev-tools", any(target_os = "macos", target_os = "windows")))]
 use bir_print::html_output_evidence::{
     ClippingCountersV1, DEVELOPMENT_NATIVE_OUTPUT_OBSERVATION_SCHEMA_VERSION,
@@ -879,6 +879,32 @@ fn start_macos_pdf_capture(
         }
     }
     Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn finalize_macos_pdf_capture(
+    pages: Vec<Result<Vec<u8>, String>>,
+    temp_path: &Path,
+    destination: &Path,
+    expectation: &PdfExpectation,
+) -> Result<PdfValidationReport, String> {
+    let result = pages
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .and_then(|pages| merge_single_page_pdfs(&pages).map_err(|error| error.to_string()))
+        .and_then(|merged| std::fs::write(temp_path, merged).map_err(|error| error.to_string()))
+        .and_then(|()| {
+            finalize_pdf_export(temp_path, destination, expectation)
+                .map_err(|error| error.to_string())
+        });
+    if result.is_err() {
+        // Merge and write failures happen before `finalize_pdf_export`, so the
+        // macOS capture boundary must clean its registered sibling temp itself.
+        // The outer view repeats this cleanup defensively when it leaves the
+        // failed output state.
+        let _ = discard_pdf_export_temp(temp_path);
+    }
+    result
 }
 
 #[cfg(target_os = "windows")]
@@ -2662,14 +2688,7 @@ impl HtmlFormPreviewView {
         #[cfg(target_os = "macos")]
         let backend_result = match completion {
             NativeBackendCompletion::CapturedPages { pages, .. } => {
-                let page_bytes = pages.into_iter().collect::<Result<Vec<_>, _>>();
-                page_bytes
-                    .and_then(|pages| {
-                        merge_single_page_pdfs(&pages).map_err(|error| error.to_string())
-                    })
-                    .and_then(|merged| {
-                        std::fs::write(&temp_path, merged).map_err(|error| error.to_string())
-                    })
+                finalize_macos_pdf_capture(pages, &temp_path, &destination, &self.pdf_expectation)
             }
             NativeBackendCompletion::SystemPrint { .. } => {
                 Err("system print completion reached the PDF export finalizer".to_string())
@@ -2683,6 +2702,9 @@ impl HtmlFormPreviewView {
             }
         };
 
+        #[cfg(target_os = "macos")]
+        let export_result = backend_result;
+        #[cfg(target_os = "windows")]
         let export_result = backend_result.and_then(|()| {
             finalize_pdf_export(&temp_path, &destination, &self.pdf_expectation)
                 .map_err(|error| error.to_string())
@@ -3968,6 +3990,160 @@ mod tests {
 
         assert!(!temp_path.exists());
         assert!(bridge.completion.is_none());
+    }
+
+    #[cfg(target_os = "macos")]
+    fn captured_pdf_page(content: &str) -> Vec<u8> {
+        let stream = format!("{content}\n");
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 936] /CropBox [0 0 612 936] /Resources << >> /Contents 4 0 R >>".to_string(),
+            format!(
+                "<< /Length {} >>\nstream\n{}endstream",
+                stream.len(),
+                stream
+            ),
+        ];
+        let mut bytes = b"%PDF-1.4\n".to_vec();
+        let mut offsets = Vec::with_capacity(objects.len());
+        for (index, object) in objects.iter().enumerate() {
+            offsets.push(bytes.len());
+            bytes.extend_from_slice(format!("{} 0 obj\n{object}\nendobj\n", index + 1).as_bytes());
+        }
+        let xref_offset = bytes.len();
+        bytes.extend_from_slice(format!("xref\n0 {}\n", objects.len() + 1).as_bytes());
+        bytes.extend_from_slice(b"0000000000 65535 f \n");
+        for offset in offsets {
+            bytes.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+        }
+        bytes.extend_from_slice(
+            format!(
+                "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n",
+                objects.len() + 1
+            )
+            .as_bytes(),
+        );
+        bytes
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_capture_pipeline_merges_validated_pages_and_binds_the_envelope() {
+        let directory = std::env::temp_dir().join(format!(
+            "ebirforms-macos-capture-success-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&directory).expect("create macOS capture fixture directory");
+        let destination = directory.join("selected.pdf");
+        std::fs::write(&destination, b"old destination").expect("write old destination");
+        let temp_path = create_pdf_export_temp(&destination).expect("create sibling temp");
+        let mut expectation = pdf_expectation_with_geometry(612.0, 936.0);
+        expectation.expected_page_count = 2;
+
+        let report = finalize_macos_pdf_capture(
+            vec![
+                Ok(captured_pdf_page("q 1 0 0 1 1 1 cm Q")),
+                Ok(captured_pdf_page("q 1 0 0 1 2 2 cm Q")),
+            ],
+            &temp_path,
+            &destination,
+            &expectation,
+        )
+        .expect("valid WKPDF captures should finalize");
+
+        assert_eq!(report.page_count, 2);
+        assert!(!temp_path.exists());
+        bir_print::html_output::validate_pdf_file(&destination, &expectation)
+            .expect("the destination must retain the immutable envelope evidence");
+        let mut other_envelope = expectation.clone();
+        other_envelope.envelope_hash = "b".repeat(64);
+        assert!(
+            bir_print::html_output::validate_pdf_file(&destination, &other_envelope).is_err(),
+            "the same PDF must not validate for another immutable envelope"
+        );
+
+        std::fs::remove_dir_all(directory).expect("remove macOS capture fixture directory");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_capture_pipeline_preserves_existing_destination_on_forced_failure() {
+        let directory = std::env::temp_dir().join(format!(
+            "ebirforms-macos-capture-failure-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&directory).expect("create macOS capture fixture directory");
+        let destination = directory.join("selected.pdf");
+        let original = b"pre-existing destination";
+        std::fs::write(&destination, original).expect("write existing destination");
+        let temp_path = create_pdf_export_temp(&destination).expect("create sibling temp");
+
+        let error = finalize_macos_pdf_capture(
+            vec![
+                Ok(captured_pdf_page("q 1 0 0 1 1 1 cm Q")),
+                Ok(b"forced invalid WKPDF callback payload".to_vec()),
+            ],
+            &temp_path,
+            &destination,
+            &pdf_expectation_with_geometry(612.0, 936.0),
+        )
+        .expect_err("invalid WKPDF payload must fail closed");
+
+        assert!(error.contains("captured page 2"));
+        assert_eq!(
+            std::fs::read(&destination).expect("read preserved destination"),
+            original
+        );
+        assert!(!temp_path.exists());
+
+        std::fs::remove_dir_all(directory).expect("remove macOS capture fixture directory");
+    }
+
+    #[cfg(all(feature = "dev-tools", target_os = "macos"))]
+    #[test]
+    fn macos_observation_binds_callback_payloads_to_the_renderer_document() {
+        let document_identity = RendererDocumentIdentity::test_identity();
+        let first = captured_pdf_page("q 1 0 0 1 1 1 cm Q");
+        let second = captured_pdf_page("q 1 0 0 1 2 2 cm Q");
+        let completion = NativeBackendCompletion::CapturedPages {
+            nonce: 17,
+            document_identity: document_identity.clone(),
+            render_epoch: 23,
+            pages: vec![Ok(first.clone()), Ok(second.clone())],
+        };
+
+        let observation = development_backend_observation(&completion)
+            .expect("captured pages should produce a diagnostic observation");
+        assert_eq!(observation.completion.nonce, 17);
+        assert_eq!(
+            observation.completion.document_run_id,
+            document_identity.document_run_id
+        );
+        assert_eq!(
+            observation.completion.envelope_sha256,
+            document_identity.envelope_hash
+        );
+        assert_eq!(observation.completion.render_epoch, 23);
+        assert!(observation.completion.succeeded);
+        let DevelopmentEvidenceAvailability::Observed { value: payloads } =
+            observation.page_payloads
+        else {
+            panic!("WKPDF callback payload hashes must remain directly observed");
+        };
+        assert_eq!(payloads.len(), 2);
+        assert_eq!(payloads[0].page_number, 1);
+        assert_eq!(payloads[0].byte_count, first.len());
+        assert_eq!(
+            payloads[0].sha256.as_deref(),
+            Some(format!("{:x}", Sha256::digest(&first)).as_str())
+        );
+        assert_eq!(payloads[1].page_number, 2);
+        assert_eq!(payloads[1].byte_count, second.len());
+        assert_eq!(
+            payloads[1].sha256.as_deref(),
+            Some(format!("{:x}", Sha256::digest(&second)).as_str())
+        );
     }
 
     #[test]
