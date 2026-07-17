@@ -1114,13 +1114,18 @@ impl AppState {
                         // Non-draft: compare against the current profile without
                         // replacing any reviewed values. The draft owns a stale
                         // marker that drives the explicit revert/amend warning.
-                        let mut d = d;
-                        if let Err(error) = d.reconcile_with_effective_profile(profile) {
-                            tracing::warn!(%error, "Immutable 2551Q effective profile could not be resolved");
-                        }
-                        if let Err(error) = db.save_2551q_draft(&d) {
-                            tracing::warn!(%error, "Failed to persist 2551Q profile-snapshot marker");
-                        }
+                        let d = match db.reconcile_immutable_2551q_profile_snapshot(
+                            &d.tin,
+                            d.taxable_year,
+                            d.quarter,
+                            profile,
+                        ) {
+                            Ok(refreshed) => refreshed,
+                            Err(error) => {
+                                tracing::warn!(%error, "Failed to reconcile immutable 2551Q profile-snapshot marker");
+                                d
+                            }
+                        };
                         tracing::info!(
                             tin = %d.tin,
                             status = ?d.status,

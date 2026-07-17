@@ -10,6 +10,7 @@ use crate::forms::{
     FilingFrequency, FilingPeriod, FilingStatus, FormDraftSummary, FormFilingProgress,
     QuarterState, find_form,
 };
+use crate::profile::TaxpayerProfile;
 
 pub(crate) enum Claim2551QSubmissionResult {
     Claimed {
@@ -284,6 +285,79 @@ impl Database {
         tx.commit()?;
         let _ = self.request_google_calendar_sync();
         Ok(id)
+    }
+
+    /// Reconcile only the profile-staleness audit fields on an immutable 2551Q
+    /// snapshot.
+    ///
+    /// The caller may hold an older Queued/Submitted view while a background
+    /// worker or receipt flow has already advanced the stored return. Reloading
+    /// the row inside this transaction and CAS-updating its exact JSON prevents
+    /// that older view from replacing newer submission, confirmation, payment,
+    /// receipt, or claim data through the generic whole-row draft UPSERT.
+    pub fn reconcile_immutable_2551q_profile_snapshot(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        quarter: u8,
+        profile: &TaxpayerProfile,
+    ) -> Result<Form2551QDraft, DbError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((raw_json, db_status)) = tx
+            .query_row(
+                "SELECT data_json, status FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '2551Q'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![tin, i64::from(taxable_year), i64::from(quarter)],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()?
+        else {
+            return Err(DbError::Other(format!(
+                "Cannot reconcile 2551Q profile snapshot because {tin}/{taxable_year}/Q{quarter} no longer exists"
+            )));
+        };
+
+        let mut current: Form2551QDraft = serde_json::from_str(&raw_json)?;
+        if matches!(current.status, FilingStatus::Draft) {
+            return Err(DbError::Other(
+                "Editable 2551Q drafts must use the draft save path for profile reconciliation"
+                    .to_string(),
+            ));
+        }
+        if filing_status_from_db(&db_status) != current.status {
+            return Err(DbError::Other(format!(
+                "Stored 2551Q status column '{db_status}' does not match its immutable snapshot"
+            )));
+        }
+
+        // Immutable reconciliation changes only audit/staleness fields in the
+        // freshly loaded row. A resolution error is persisted in those fields
+        // and returned through `profile_resolution_error` for the UI to show.
+        let _ = current.reconcile_with_effective_profile(profile);
+        let reconciled_json = serde_json::to_string(&current)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts
+             SET data_json = ?1, updated_at = datetime('now')
+             WHERE tin = ?2 AND form_code = '2551Q'
+               AND taxable_year = ?3 AND quarter = ?4
+               AND status = ?5 AND data_json = ?6",
+            params![
+                reconciled_json,
+                tin,
+                i64::from(taxable_year),
+                i64::from(quarter),
+                db_status,
+                raw_json
+            ],
+        )?;
+        if updated != 1 {
+            return Err(DbError::Other(
+                "2551Q changed while its immutable profile marker was being reconciled".to_string(),
+            ));
+        }
+        tx.commit()?;
+        Ok(current)
     }
 
     /// Atomically persist a queued 2551Q draft and the initial-quarter Item 13
@@ -1809,6 +1883,141 @@ mod tests {
         assert_eq!(submitted.status, FilingStatus::Submitted);
         assert!(submitted.submission_claim_token.is_none());
         assert!(submitted.submission_claimed_at.is_none());
+    }
+
+    #[test]
+    fn immutable_profile_reconciliation_preserves_newer_filing_state_and_payload() {
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        let stale_open_view = queued_graduated_draft(&profile);
+        db.save_queued_2551q_draft_and_election(&stale_open_view)
+            .expect("queued draft should persist before claiming");
+
+        let (mut claimed, token) = match db
+            .claim_queued_2551q_submission(
+                &stale_open_view.tin,
+                stale_open_view.taxable_year,
+                stale_open_view.quarter,
+                &stale_open_view.queued_submission_fingerprint,
+                &stale_open_view.next_retry_at,
+                stale_open_view.submission_attempts,
+            )
+            .unwrap()
+        {
+            Claim2551QSubmissionResult::Claimed { draft, token } => (draft, token),
+            _ => panic!("the exact queued generation should be claimed"),
+        };
+        claimed.transition_to_submitted("authoritative-submission.xml".to_string());
+        db.finish_claimed_2551q_submission(&claimed, &token)
+            .expect("the claim owner should advance the stored return");
+
+        let mut changed_profile = profile.clone();
+        changed_profile.ensure_profile_version_ledger();
+        changed_profile.full_name = "Changed Taxpayer Name".to_string();
+        changed_profile.profile_versions[0].cor.registered_name =
+            "Changed Taxpayer Name".to_string();
+
+        // The caller still owns the pre-claim Queued snapshot, but the narrow
+        // reconciliation path reloads the authoritative Submitted row.
+        assert_eq!(stale_open_view.status, FilingStatus::Queued);
+        let submitted = db
+            .reconcile_immutable_2551q_profile_snapshot(
+                &stale_open_view.tin,
+                stale_open_view.taxable_year,
+                stale_open_view.quarter,
+                &changed_profile,
+            )
+            .expect("immutable marker reconciliation should succeed");
+        assert_eq!(submitted.status, FilingStatus::Submitted);
+        assert_eq!(
+            submitted.submission_filename.as_deref(),
+            Some("authoritative-submission.xml")
+        );
+        assert_eq!(submitted.taxpayer_name, "Test Taxpayer");
+        assert!(submitted.profile_snapshot_stale);
+
+        let mut confirmed = submitted.clone();
+        confirmed.transition_to_confirmed("2026-04-25T12:00:00Z".to_string(), Some(42), None);
+        db.save_2551q_draft(&confirmed)
+            .expect("confirmation transition should persist");
+        let confirmed = db
+            .reconcile_immutable_2551q_profile_snapshot(
+                &stale_open_view.tin,
+                stale_open_view.taxable_year,
+                stale_open_view.quarter,
+                &changed_profile,
+            )
+            .expect("confirmed marker reconciliation should preserve confirmation");
+        assert_eq!(confirmed.status, FilingStatus::Confirmed);
+        assert_eq!(confirmed.receipt_id, Some(42));
+        assert_eq!(
+            confirmed.submission_filename.as_deref(),
+            Some("authoritative-submission.xml")
+        );
+
+        let mut paid = confirmed;
+        paid.transition_to_paid();
+        db.save_2551q_draft(&paid)
+            .expect("payment transition should persist");
+        let paid = db
+            .reconcile_immutable_2551q_profile_snapshot(
+                &stale_open_view.tin,
+                stale_open_view.taxable_year,
+                stale_open_view.quarter,
+                &changed_profile,
+            )
+            .expect("paid marker reconciliation should preserve payment");
+        assert_eq!(paid.status, FilingStatus::Paid);
+        assert_eq!(paid.receipt_id, Some(42));
+        assert_eq!(paid.taxpayer_name, "Test Taxpayer");
+
+        let stored = db
+            .get_2551q_draft(
+                &stale_open_view.tin,
+                stale_open_view.taxable_year,
+                stale_open_view.quarter,
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.status, FilingStatus::Paid);
+        assert_eq!(stored.receipt_id, Some(42));
+        assert_eq!(stored.taxpayer_name, "Test Taxpayer");
+        assert!(stored.profile_snapshot_stale);
+    }
+
+    #[test]
+    fn immutable_profile_reconciliation_refuses_editable_draft_rows() {
+        let db = test_db();
+        let mut profile = test_profile();
+        profile.ensure_profile_version_ledger();
+        let draft = Form2551QDraft::new_from_effective_profile(&profile, 2026, 1);
+        db.save_2551q_draft(&draft)
+            .expect("editable draft should use the generic draft save path");
+        let before = serde_json::to_value(
+            db.get_2551q_draft(&draft.tin, draft.taxable_year, draft.quarter)
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+
+        let error = db
+            .reconcile_immutable_2551q_profile_snapshot(
+                &draft.tin,
+                draft.taxable_year,
+                draft.quarter,
+                &profile,
+            )
+            .expect_err("immutable reconciliation must reject an editable draft");
+        assert!(error.to_string().contains("Editable 2551Q drafts"));
+
+        let after = serde_json::to_value(
+            db.get_2551q_draft(&draft.tin, draft.taxable_year, draft.quarter)
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(after, before);
     }
 
     #[test]

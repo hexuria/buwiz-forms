@@ -2020,6 +2020,7 @@ impl ProfileManagerView {
         self.stored_profile_versions.push(version.clone());
         self.compliance_source_mode =
             Self::derive_compliance_source_mode(&self.stored_profile_versions);
+        self.mark_profile_changed();
         self.active_tab = 1;
         self.sync_document_viewer(cx);
         if let Err(e) = self.load_cor_version_editor(&version.id, window, cx) {
@@ -2203,6 +2204,7 @@ impl ProfileManagerView {
                         this.sync_document_viewer(cx);
                         this.compliance_source_mode =
                             Self::derive_compliance_source_mode(&this.stored_profile_versions);
+                        this.mark_profile_changed();
                         this.save_profile(cx);
                         this.save_message = Some(ocr.status_message.clone());
                         this.pending_notification = Some((
@@ -2723,6 +2725,7 @@ impl ProfileManagerView {
             &self.stored_profile_versions[version_index].status,
         ) {
             self.stored_profile_versions[version_index].label = label;
+            self.mark_profile_changed();
             self.save_profile(cx);
             self.save_message = Some(
                 "COR version label updated. Confirmed and archived facts remain read-only; create a replacement version for corrections."
@@ -2845,6 +2848,7 @@ impl ProfileManagerView {
             self.sync_projection_to_ui(&projected, window, cx);
         }
 
+        self.mark_profile_changed();
         self.save_profile(cx);
 
         self.save_message = Some("COR version details updated and saved.".to_string());
@@ -2895,6 +2899,7 @@ impl ProfileManagerView {
             self.sync_projection_to_ui(&projected, window, cx);
         }
 
+        self.mark_profile_changed();
         self.save_profile(cx);
         self.save_message = Some("Registered tax type updated and saved.".to_string());
     }
@@ -3093,6 +3098,7 @@ impl ProfileManagerView {
                 },
             });
         self.clear_cor_override_inputs(window, cx);
+        self.mark_profile_changed();
         self.save_profile(cx);
         self.save_message = Some(format!(
             "Profile deadline override '{title}' added and saved."
@@ -3123,6 +3129,7 @@ impl ProfileManagerView {
             return;
         }
         version.deadline_overrides.remove(index);
+        self.mark_profile_changed();
         self.save_profile(cx);
         self.save_message = Some("Profile deadline override removed.".to_string());
     }

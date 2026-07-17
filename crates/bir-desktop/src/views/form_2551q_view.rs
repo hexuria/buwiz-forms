@@ -432,13 +432,28 @@ impl Form2551QView {
                                     .to_string()
                         })?;
                         let was_editable = matches!(this.draft.status, FilingStatus::Draft);
-                        let resolution_error = this
-                            .draft
-                            .reconcile_with_effective_profile(&profile)
-                            .err();
-                        db_guard
-                            .save_2551q_draft(&this.draft)
-                            .map_err(|error| error.to_string())?;
+                        let resolution_error = if was_editable {
+                            let resolution_error = this
+                                .draft
+                                .reconcile_with_effective_profile(&profile)
+                                .err();
+                            db_guard
+                                .save_2551q_draft(&this.draft)
+                                .map_err(|error| error.to_string())?;
+                            resolution_error
+                        } else {
+                            let refreshed = db_guard
+                                .reconcile_immutable_2551q_profile_snapshot(
+                                    &this.draft.tin,
+                                    this.draft.taxable_year,
+                                    this.draft.quarter,
+                                    &profile,
+                                )
+                                .map_err(|error| error.to_string())?;
+                            let resolution_error = refreshed.profile_resolution_error.clone();
+                            this.draft = refreshed;
+                            resolution_error
+                        };
                         this.is_email_tracking_active = profile.is_email_tracking_active();
                         Ok::<_, String>((was_editable, resolution_error))
                     })();

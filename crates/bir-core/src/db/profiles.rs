@@ -436,7 +436,11 @@ impl Database {
         // preserve existing Forms Sets instead of guessing.
         let mut years_to_update = std::collections::BTreeSet::new();
         use chrono::Datelike as _;
-        let current_year = chrono::Utc::now().year() as u16;
+        // Filing obligations follow the desktop user's local calendar year.
+        // Using UTC here can reconcile the previous year during the first
+        // local hours of January 1 in time zones east of UTC, while the UI and
+        // emitted compliance event already identify the new local year.
+        let current_year = chrono::Local::now().year() as u16;
         years_to_update.insert(current_year);
         years_to_update.extend(profile.per_year_forms.keys().copied());
         if let Some(stored) = &existing_profile {

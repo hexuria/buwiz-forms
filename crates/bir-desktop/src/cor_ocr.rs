@@ -145,7 +145,25 @@ pub(crate) fn create_draft_cor_version_from_ocr(
     version.label = format!("Uploaded COR {}", now.date().format("%Y-%m-%d"));
     version.status = TaxProfileVersionStatus::Draft;
     version.source = TaxProfileVersionSource::OcrCor;
-    version.needs_effective_date_review = version.effective_from.is_none();
+    // A newly uploaded document is a new evidence set, not another name for
+    // the flat profile's historical compliance facts. Keep identity fields as
+    // an editing convenience, but fail closed for every fact that can change
+    // filing obligations until OCR supplies it or the user reviews the draft.
+    version.effective_from = None;
+    version.effective_until = None;
+    version.cor.registration_date = None;
+    version.registered_tax_types.clear();
+    version.tax_classification = None;
+    version.eopt_tier = None;
+    version.is_vat_registered = false;
+    version.is_gpp_partner = false;
+    version.withholds_compensation = false;
+    version.withholds_expanded = false;
+    version.withholds_final = false;
+    version.is_top_withholding_agent = false;
+    version.is_government_withholding_entity = false;
+    version.excise_tax_categories.clear();
+    version.needs_effective_date_review = true;
 
     if let Some(tin) = ocr.fields.tin {
         let trimmed = tin.trim();
@@ -155,10 +173,8 @@ pub(crate) fn create_draft_cor_version_from_ocr(
     }
     if let Some(registration_date) = ocr.fields.registration_date {
         version.cor.registration_date = Some(registration_date);
-        if version.effective_from.is_none() {
-            version.effective_from = Some(registration_date);
-            version.needs_effective_date_review = false;
-        }
+        version.effective_from = Some(registration_date);
+        version.needs_effective_date_review = false;
     }
     if let Some(registered_name) = ocr.fields.registered_name {
         let trimmed = registered_name.trim();
@@ -199,10 +215,8 @@ pub(crate) fn create_draft_cor_version_from_ocr(
     if let Some(taxpayer_type) = ocr.fields.taxpayer_type {
         version.taxpayer_type = taxpayer_type;
     }
-    if !ocr.fields.registered_tax_types.is_empty() {
-        version.registered_tax_types = ocr.fields.registered_tax_types;
-        sync_version_flags_from_registered_tax_types(&mut version);
-    }
+    version.registered_tax_types = ocr.fields.registered_tax_types;
+    sync_version_flags_from_registered_tax_types(&mut version);
     if !ocr.fields.filing_reminders.is_empty() {
         let reminders = ocr.fields.filing_reminders.join("\n");
         evidence.ocr_text = Some(match evidence.ocr_text.take() {
@@ -1606,6 +1620,82 @@ PERCENTAGE TAX
                 .unwrap_or_default()
                 .contains("Filing reminders detected")
         );
+    }
+
+    #[test]
+    fn ocr_draft_does_not_inherit_stale_dates_or_vat_facts() {
+        let mut profile = sample_profile();
+        profile.business_start_date = NaiveDate::from_ymd_opt(2020, 1, 15);
+        profile.is_vat_registered = true;
+        profile.withholds_compensation = true;
+        profile.withholds_expanded = true;
+        profile.withholds_final = true;
+        profile.is_top_withholding_agent = true;
+        profile.is_government_withholding_entity = true;
+        profile.tax_classification = Some(TaxClassification::SelfEmployed);
+
+        let version = create_draft_cor_version_from_ocr(
+            &profile,
+            sample_evidence(),
+            CorOcrResult {
+                text: Some("NOT VAT REGISTERED".to_string()),
+                confidence: Some(0.95),
+                fields: CorOcrFields::default(),
+                status_message: "Review the extracted COR facts.".to_string(),
+            },
+            NaiveDate::from_ymd_opt(2026, 3, 1)
+                .unwrap()
+                .and_hms_opt(8, 30, 0)
+                .unwrap(),
+        );
+
+        assert_eq!(version.status, TaxProfileVersionStatus::Draft);
+        assert_eq!(version.effective_from, None);
+        assert_eq!(version.cor.registration_date, None);
+        assert!(version.needs_effective_date_review);
+        assert!(version.registered_tax_types.is_empty());
+        assert_eq!(version.tax_classification, None);
+        assert!(!version.is_vat_registered);
+        assert!(!version.withholds_compensation);
+        assert!(!version.withholds_expanded);
+        assert!(!version.withholds_final);
+        assert!(!version.is_top_withholding_agent);
+        assert!(!version.is_government_withholding_entity);
+    }
+
+    #[test]
+    fn ocr_registration_date_replaces_inherited_profile_start_date() {
+        let mut profile = sample_profile();
+        profile.business_start_date = NaiveDate::from_ymd_opt(2018, 4, 12);
+        let reviewed_date = NaiveDate::from_ymd_opt(2026, 2, 17).unwrap();
+
+        let version = create_draft_cor_version_from_ocr(
+            &profile,
+            sample_evidence(),
+            CorOcrResult {
+                text: Some("Registration Date: February 17, 2026".to_string()),
+                confidence: Some(0.9),
+                fields: CorOcrFields {
+                    registration_date: Some(reviewed_date),
+                    registered_tax_types: vec![RegisteredTaxType::PercentageTax],
+                    ..Default::default()
+                },
+                status_message: "Review the extracted COR facts.".to_string(),
+            },
+            NaiveDate::from_ymd_opt(2026, 3, 1)
+                .unwrap()
+                .and_hms_opt(8, 30, 0)
+                .unwrap(),
+        );
+
+        assert_eq!(version.effective_from, Some(reviewed_date));
+        assert_eq!(version.cor.registration_date, Some(reviewed_date));
+        assert!(!version.needs_effective_date_review);
+        assert_eq!(
+            version.registered_tax_types,
+            vec![RegisteredTaxType::PercentageTax]
+        );
+        assert!(!version.is_vat_registered);
     }
 
     #[test]
