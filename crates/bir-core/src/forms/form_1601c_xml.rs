@@ -1,24 +1,21 @@
+//! Checked editable-save mapping for exact form `1601Cv2018`.
+//!
+//! The reviewed plaintext save is a 100-field editable snapshot. Its binary
+//! encrypted companion is hash-locked as provenance but is not treated as
+//! plaintext XML or as evidence of submission semantics. Queueing therefore
+//! remains disabled independently in the form capability registry.
+
 use super::FormValidator;
 use super::form_1601c::{Form1601CDraft, Form1601CSchedule1Row, MAX_SCHEDULE_1_ROWS};
-use chrono::Local;
 use std::collections::BTreeMap;
+
+#[cfg(test)]
+const EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT: usize = 100;
 
 impl Form1601CDraft {
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
         let (tin1, tin2, tin3, branch) = split_tin(&self.tin);
-
-        // Required hidden fields from eFPS
-        insert(&mut fields, "newOfflineForm", "Y");
-
-        let now = Local::now();
-        let timestamp = now.format("%m%d%Y%H%M%S").to_string();
-        // Standard BIR filename convention: FormCode_TIN_Period_Timestamp
-        let filename = format!(
-            "1601C_{}{}{}{}_{:02}_{}_{}",
-            tin1, tin2, tin3, branch, self.month, self.taxable_year, timestamp
-        );
-        insert(&mut fields, "txtFileName", filename);
 
         // Header
         insert(
@@ -60,11 +57,13 @@ impl Form1601CDraft {
             "frm1601c:txtAddress",
             self.registered_address.clone(),
         );
-        insert(
-            &mut fields,
-            "frm1601c:txtAddress2",
-            self.registered_address_2.clone(),
-        );
+        if !self.registered_address_2.is_empty() {
+            insert(
+                &mut fields,
+                "frm1601c:txtAddress2",
+                self.registered_address_2.clone(),
+            );
+        }
         insert(&mut fields, "frm1601c:txtZipCode", self.zip_code.clone());
         insert(
             &mut fields,
@@ -680,6 +679,7 @@ mod tests {
     use super::*;
     use crate::naming::Tin;
     use crate::profile::{TaxpayerProfile, TaxpayerType};
+    use sha2::{Digest, Sha256};
 
     fn test_profile() -> TaxpayerProfile {
         TaxpayerProfile {
@@ -842,12 +842,7 @@ mod tests {
     }
 
     #[test]
-    fn generated_map_covers_plain_and_encrypted_source_sample_keys() {
-        // Source evidence:
-        // 794892fc33c0fd7882a91327095f396fb1683d5b3c0d4cb1cb63916f981cad4c
-        // (plain) and
-        // 4501f3514a1883d0137d126101d02b3f0fa94daf7f6e39398b3729c9104c51d3
-        // (encrypted). The encrypted payload adds txtAddress2.
+    fn generated_map_covers_the_reviewed_plain_schema_and_optional_address_line() {
         const PLAIN_SAMPLE_KEYS: &str = r#"
 frm1601c:txtMonth
 frm1601c:txtYear
@@ -952,18 +947,100 @@ frm1601c:txtLineBus
 "#;
 
         let profile = test_profile();
-        let fields = Form1601CDraft::new_from_profile(&profile, 2026, 4).to_bir_field_map();
-
-        let missing = PLAIN_SAMPLE_KEYS
+        let mut draft = Form1601CDraft::new_from_profile(&profile, 2026, 4);
+        let fields = draft.to_bir_field_map();
+        let reviewed_keys = PLAIN_SAMPLE_KEYS
             .lines()
             .map(str::trim)
             .filter(|key| !key.is_empty())
+            .collect::<Vec<_>>();
+
+        let missing = reviewed_keys
+            .iter()
+            .copied()
             .filter(|key| !fields.contains_key(*key))
             .collect::<Vec<_>>();
         assert!(
             missing.is_empty(),
             "missing source sample keys: {missing:?}"
         );
-        assert!(fields.contains_key("frm1601c:txtAddress2"));
+        assert_eq!(reviewed_keys.len(), EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT);
+        assert_eq!(fields.len(), EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT);
+        assert!(!fields.contains_key("frm1601c:txtAddress2"));
+
+        draft.registered_address_2 = "Reviewed second address line".to_string();
+        let fields_with_optional_address = draft.to_bir_field_map();
+        assert_eq!(
+            fields_with_optional_address.len(),
+            EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT + 1
+        );
+        assert_eq!(
+            fields_with_optional_address["frm1601c:txtAddress2"],
+            "Reviewed second address line"
+        );
+    }
+
+    #[test]
+    fn editable_map_is_deterministic_and_contains_no_unreviewed_transport_metadata() {
+        let draft = Form1601CDraft::new_from_profile(&test_profile(), 2026, 5);
+
+        let first = draft.to_bir_field_map();
+        let second = draft.to_bir_field_map();
+
+        assert_eq!(first, second);
+        assert!(!first.contains_key("newOfflineForm"));
+        assert!(!first.contains_key("txtFileName"));
+    }
+
+    #[test]
+    #[ignore = "requires EBIRFORMS_1601C_SOURCE_DIR pointing to the reviewed external source pack"]
+    fn locked_external_source_pack_matches_hashes_and_replays_all_100_plain_fields() {
+        let source_dir = std::env::var("EBIRFORMS_1601C_SOURCE_DIR")
+            .expect("set EBIRFORMS_1601C_SOURCE_DIR to the exact reviewed 1601Cv2018 folder");
+        let directory = std::path::Path::new(&source_dir);
+
+        let plain = std::fs::read(directory.join("00000000000000-1601Cv2018-052026.xml"))
+            .expect("reviewed plaintext source must be readable");
+        assert_eq!(
+            hex::encode(Sha256::digest(&plain)),
+            "794892fc33c0fd7882a91327095f396fb1683d5b3c0d4cb1cb63916f981cad4c"
+        );
+        let plain_xml =
+            std::str::from_utf8(&plain).expect("reviewed plaintext source must be UTF-8");
+        let source_fields = crate::bir_xml::parse_bir_xml_checked(plain_xml)
+            .expect("reviewed plaintext source must pass the checked parser");
+        assert_eq!(source_fields.len(), EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT);
+
+        let draft = Form1601CDraft::from_bir_field_map(&source_fields)
+            .expect("reviewed plaintext source must satisfy the typed semantic contract");
+        assert!(!draft.auto_compute_penalties);
+        assert_eq!(draft.tax_32_surcharge, 1.0);
+        assert_eq!(draft.tax_33_interest, 1.0);
+        assert_eq!(draft.tax_34_compromise, 1.0);
+
+        let replayed_fields = draft.to_bir_field_map();
+        assert_eq!(replayed_fields.len(), EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT);
+        assert_eq!(replayed_fields, source_fields);
+        assert_eq!(
+            crate::bir_xml::parse_bir_xml_checked(&draft.to_bir_xml_payload())
+                .expect("generated replay must pass the checked parser"),
+            source_fields
+        );
+
+        let encrypted = std::fs::read(
+            directory.join("00000000000000-1601Cv2018-052026#codeitlikemiley@gmail.com#.xml"),
+        )
+        .expect("reviewed encrypted companion must be readable");
+        assert_eq!(
+            hex::encode(Sha256::digest(&encrypted)),
+            "4501f3514a1883d0137d126101d02b3f0fa94daf7f6e39398b3729c9104c51d3"
+        );
+        assert!(
+            std::str::from_utf8(&encrypted)
+                .ok()
+                .and_then(|text| crate::bir_xml::parse_bir_xml_checked(text).ok())
+                .is_none(),
+            "encrypted companion must never be accepted as plaintext editable XML"
+        );
     }
 }

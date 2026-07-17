@@ -157,6 +157,10 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         code: "1601C",
         revision: "2018",
         form_id: "1601Cv2018",
+        // XML evidence is an exact 100-field replay of the hash-locked
+        // plaintext editable save. The encrypted companion is provenance-only,
+        // and queue submission remains disabled. Formula evidence covers the
+        // printed arithmetic; penalty components remain reviewed manual inputs.
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,

@@ -1,18 +1,14 @@
 //! BIR Form 1601C (Monthly Remittance Return of Income Taxes Withheld on Compensation)
 //!
-//! Data model and auto-computation logic based on 1601Cv2018 ENCS offline forms.
+//! Data model and reviewed arithmetic for the 1601Cv2018 ENCS offline form.
+//!
+//! Items 32 through 34 are evidence-bound manual inputs. The form does not
+//! infer filing dates, deadlines, taxpayer classifications, or penalty rules.
 
 use super::{FilingStatus, FormValidator};
-use crate::penalties::{
-    PenaltyConfig, PenaltyContext, PenaltyEngine, PenaltyProfile, TaxpayerClass,
-};
 use crate::profile::TaxpayerProfile;
 use crate::validation::{validate_ph_phone, validate_zip};
 use serde::{Deserialize, Serialize};
-
-fn default_true() -> bool {
-    true
-}
 
 /// The 1601-C January 2018 XML contract exposes exactly three Schedule I rows.
 pub const MAX_SCHEDULE_1_ROWS: usize = 3;
@@ -80,7 +76,9 @@ pub struct Form1601CDraft {
     pub taxpayer_name: String,
     pub contact_number: String,
     pub registered_address: String,
-    /// Optional second address line present in the encrypted 1601-C payload.
+    /// Legacy optional second address line retained for backward-compatible
+    /// drafts. It is absent from the hash-locked 100-field plaintext sample
+    /// and is not part of the exact-source replay claim.
     #[serde(default)]
     pub registered_address_2: String,
     pub zip_code: String,
@@ -163,7 +161,10 @@ pub struct Form1601CDraft {
     pub tax_31_tax_still_due: f64,
 
     // === Penalties ===
-    #[serde(default = "default_true")]
+    /// Legacy persisted switch retained for backward-compatible draft reads.
+    /// `compute` always normalizes this to `false`; Items 32 through 34 are
+    /// entered manually from reviewed filing evidence.
+    #[serde(default)]
     pub auto_compute_penalties: bool,
     #[serde(default)]
     pub tax_32_surcharge: f64,
@@ -240,7 +241,7 @@ impl Form1601CDraft {
             tax_30_total_tax_remittances: 0.0,
             tax_31_tax_still_due: 0.0,
 
-            auto_compute_penalties: true,
+            auto_compute_penalties: false,
             tax_32_surcharge: 0.0,
             tax_33_interest: 0.0,
             tax_34_compromise: 0.0,
@@ -331,46 +332,10 @@ impl Form1601CDraft {
             self.tax_27_taxes_withheld_for_remittance - self.tax_30_total_tax_remittances,
         );
 
-        // Auto-compute penalties if enabled and still in Draft
-        if self.auto_compute_penalties && matches!(self.status, FilingStatus::Draft) {
-            // 1601C monthly deadline: 10th of the following month (15th for December)
-            let (deadline_year, deadline_month) = if self.month == 12 {
-                (self.taxable_year as i32 + 1, 1u32)
-            } else {
-                (self.taxable_year as i32, self.month as u32 + 1)
-            };
-            let deadline_day = if self.month == 12 { 15 } else { 10 };
-
-            if let Some(deadline) =
-                chrono::NaiveDate::from_ymd_opt(deadline_year, deadline_month, deadline_day)
-            {
-                let today = chrono::Local::now().date_naive();
-                let config = PenaltyConfig::default_rules();
-
-                let penalty_tax_base = self.tax_31_tax_still_due.max(0.0);
-
-                let ctx = PenaltyContext {
-                    form_code: "1601Cv2018".to_string(),
-                    tax_type: PenaltyProfile::Withholding,
-                    taxpayer_class: TaxpayerClass::Regular,
-                    taxable_period: format!("M{:02} {}", self.month, self.taxable_year),
-                    is_amended_return: self.is_amended,
-                    original_was_on_time: false,
-                    is_fraud_or_willful_neglect: false,
-                    basic_tax_due: penalty_tax_base,
-                    amount_paid_before_deadline: 0.0,
-                    gross_sales_or_receipts: self.tax_14_total_compensation,
-                    due_date: deadline,
-                    filing_date: today,
-                    payment_date: None,
-                };
-
-                let penalties = PenaltyEngine::calculate(&ctx, &config);
-                self.tax_32_surcharge = penalties.surcharge;
-                self.tax_33_interest = penalties.interest;
-                self.tax_34_compromise = penalties.compromise;
-            }
-        }
+        // Drafts written before manual-only penalty handling may still carry
+        // this persisted flag. Disable it without changing the reviewed manual
+        // values in Items 32 through 34.
+        self.auto_compute_penalties = false;
 
         // Line 35 = 32 + 33 + 34
         self.tax_35_total_penalties =
@@ -878,6 +843,44 @@ mod tests {
             errors
                 .iter()
                 .any(|(field, _)| field == "tax_29_other_remittances_amount")
+        );
+    }
+
+    #[test]
+    fn penalty_components_remain_manual_when_a_legacy_draft_requests_auto_compute() {
+        let mut draft = Form1601CDraft::new_from_profile(&test_profile(), 2020, 1);
+        draft.auto_compute_penalties = true;
+        draft.tax_25_total_taxes_withheld = 1_000.0;
+        draft.tax_32_surcharge = 125.25;
+        draft.tax_33_interest = 31.5;
+        draft.tax_34_compromise = 1_000.0;
+
+        draft.compute();
+
+        assert!(!draft.auto_compute_penalties);
+        assert_eq!(draft.tax_32_surcharge, 125.25);
+        assert_eq!(draft.tax_33_interest, 31.5);
+        assert_eq!(draft.tax_34_compromise, 1_000.0);
+        assert_eq!(draft.tax_35_total_penalties, 1_156.75);
+        assert_eq!(draft.tax_36_total_amount_payable, 2_156.75);
+
+        let computed = (
+            draft.tax_32_surcharge,
+            draft.tax_33_interest,
+            draft.tax_34_compromise,
+            draft.tax_35_total_penalties,
+            draft.tax_36_total_amount_payable,
+        );
+        draft.compute();
+        assert_eq!(
+            computed,
+            (
+                draft.tax_32_surcharge,
+                draft.tax_33_interest,
+                draft.tax_34_compromise,
+                draft.tax_35_total_penalties,
+                draft.tax_36_total_amount_payable,
+            )
         );
     }
 }
