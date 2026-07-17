@@ -456,6 +456,10 @@ test("2551Q page-one typography keeps the reviewed bundled-font calibration", as
       item13EmFontSize: style(".income-rate-question em").fontSize,
       item13FontSize: style(".income-rate-question").fontSize,
       item13Transform: style(".income-rate-question").transform,
+      machineValidationFontSize: style(".machine-validation").fontSize,
+      nameLabelBorderBottomWidth: style(".name-field > .field-label").borderBottomWidth,
+      nameLabelBoxShadow: style(".name-field > .field-label").boxShadow,
+      paymentHeadingsFontSize: style(".payment-headings").fontSize,
       signatureTransforms: Array.from(
         formPage.querySelectorAll(".signature-caption > *"),
         (element) => getComputedStyle(element).transform
@@ -472,6 +476,10 @@ test("2551Q page-one typography keeps the reviewed bundled-font calibration", as
     item13EmFontSize: "10.3333px",
     item13FontSize: "12px",
     item13Transform: "matrix(1, 0, 0, 1, 0, -0.333333)",
+    machineValidationFontSize: "9.6px",
+    nameLabelBorderBottomWidth: "1px",
+    nameLabelBoxShadow: "none",
+    paymentHeadingsFontSize: "9.6px",
     signatureTransforms: Array.from(
       { length: 4 },
       () => "matrix(1, 0, 0, 1, 0, -0.666667)"
