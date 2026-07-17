@@ -173,7 +173,10 @@ describe("2551Q runtime render contract", () => {
     );
     expect(markup).toContain('class="adaptive-plain-value adaptive-align-left tax-credit-description"');
     expect(markup).toContain('data-adaptive-fit-state="pending"');
-    expect(markup).toContain('data-adaptive-max-font-px="12"');
+    expect(markup).toContain('data-item="17" class="official-tax-line');
+    expect(markup).toContain('specify-line');
+    expect(markup).toContain('class="tax-line-primary"');
+    expect(markup).toContain('data-adaptive-max-font-px="21"');
     expect(markup).toContain('data-adaptive-min-font-px="10.5"');
     expect(markup).toContain('data-adaptive-step-px="0.5"');
     expect(markup).toContain('data-overflow-mode="plain"');

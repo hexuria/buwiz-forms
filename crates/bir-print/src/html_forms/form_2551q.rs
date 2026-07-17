@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use bir_core::forms::{
     form_2551q::{
         AnnualIncomeTaxElection, Form2551QDraft, Item13Election, OverpaymentDisposition,
-        Schedule1Row, TaxPeriodBasis,
+        Schedule1Row, TaxPeriodBasis, FORM_2551Q_SCHEDULE_CONTINUATION_ROW_CAPACITY,
+        FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY,
     },
     FormValidator, ATC_TABLE_2551Q,
 };
@@ -22,14 +23,13 @@ use super::{
 const FIXTURE_ATC_CODES: [&str; 10] = [
     "PT010", "PT040", "PT041", "PT060", "PT070", "PT090", "PT140", "PT150", "PT160", "PT170",
 ];
-const LONG_ITEM_17_DESCRIPTION: &str =
-    "Reviewed prior-payment credit supported by official receipt and validation reference 2551Q Item 17";
+const LONG_ITEM_17_DESCRIPTION: &str = "Reviewed prior-payment credit supported by official receipt and validation reference 2551Q Item 17";
 
 const SCHEDULES: &[RenderSchedulePolicy] = &[RenderSchedulePolicy {
     id: "schedule_1",
-    minimum_rows: 6,
-    first_page_rows: 6,
-    continuation_page_rows: 12,
+    minimum_rows: FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY,
+    first_page_rows: FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY,
+    continuation_page_rows: FORM_2551Q_SCHEDULE_CONTINUATION_ROW_CAPACITY,
     repeat_header: true,
     final_totals_on_last_page: true,
 }];
@@ -524,6 +524,7 @@ fn fixture_with_rows(row_count: usize) -> Result<Form2551QDraft, RenderProviderE
             Ok(row)
         })
         .collect::<Result<Vec<_>, _>>()?;
+    draft.ensure_required_schedule_attachment_sheets();
     draft.recompute(None);
     Ok(draft)
 }
@@ -635,6 +636,29 @@ mod tests {
         assert_eq!(short.taxpayer_name.chars().count(), 14);
         assert_eq!(exact.taxpayer_name.chars().count(), 26);
         assert!(overflow.taxpayer_name.chars().count() > 26);
+    }
+
+    #[test]
+    fn ten_row_fixture_retains_every_atc_and_counts_its_continuation_sheet() {
+        let draft = fixture_with_rows(10).expect("ten-row fixture");
+        let envelope = RenderEnvelopeV1::from(&draft);
+        let schedule = envelope
+            .schedules
+            .iter()
+            .find(|schedule| schedule.id == "schedule_1")
+            .expect("Schedule 1 contract");
+
+        assert_eq!(draft.number_of_attached_sheets, 1);
+        assert_eq!(schedule.rows.len(), 10);
+        assert_eq!(draft.total_tax_due, 16_500.0);
+        assert_eq!(
+            envelope.fields["schedule_1_page_2_subtotal"],
+            RenderValue::Decimal(6_300.0)
+        );
+        assert!(envelope.validation.iter().any(|issue| {
+            issue.field_path == "schedule_1"
+                && issue.message.contains("cannot be queued or submitted")
+        }));
     }
 
     #[test]

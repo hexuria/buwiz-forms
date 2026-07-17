@@ -3,6 +3,12 @@ use super::{AtcRateResolution, resolve_2551q_atc_rate};
 use std::collections::BTreeMap;
 
 impl Form2551QDraft {
+    /// Build the fixed reviewed eBIRForms field set.
+    ///
+    /// This low-level helper exposes exactly six Schedule 1 slots. User-facing
+    /// export must call [`Self::to_bir_xml_payload`], which validates the draft
+    /// first and rejects additional saved/printable rows instead of truncating
+    /// them into a seemingly fileable payload.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
         let (tin1, tin2, tin3, branch) = split_tin(&self.tin);
@@ -464,6 +470,32 @@ mod tests {
         assert!(xml.contains("frm2551Qv2018:txt18="));
         assert!(xml.contains("frm2551Qv2018:txtPg2TaxpayerName="));
         assert!(xml.contains("txtTotalSched1="));
+    }
+
+    #[test]
+    fn xml_export_fails_closed_before_ten_printable_rows_can_be_truncated() {
+        let mut draft = sample_draft();
+        draft.schedule_1 = [
+            "PT010", "PT040", "PT041", "PT060", "PT070", "PT090", "PT140", "PT150", "PT160",
+            "PT170",
+        ]
+        .into_iter()
+        .map(|code| Schedule1Row::new(code).expect("test ATC must be canonical"))
+        .collect();
+        draft.ensure_required_schedule_attachment_sheets();
+        draft.recompute(None);
+
+        let errors = draft
+            .to_bir_xml_payload()
+            .expect_err("the reviewed XML has no fields beyond Schedule 1 row 6");
+
+        assert!(errors.iter().any(|(field, message)| {
+            field == "schedule_1"
+                && message.contains("at most 6")
+                && message.contains("official XML attachment protocol")
+        }));
+        assert_eq!(draft.schedule_1.len(), 10);
+        assert_eq!(draft.number_of_attached_sheets, 1);
     }
 
     #[test]

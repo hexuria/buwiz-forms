@@ -22,7 +22,7 @@
     },
     "number_of_attached_sheets": {
       "type": "integer",
-      "value": 0
+      "value": 1
     },
     "other_tax_credit": {
       "type": "decimal",
@@ -390,7 +390,7 @@
     {
       "code": "invalid",
       "field_path": "schedule_1",
-      "message": "BIR Form 2551Q XML accepts at most six Schedule 1 rows; additional rows remain printable but cannot be submitted until the official attachment protocol is verified",
+      "message": "BIR Form 2551Q XML accepts at most 6 Schedule 1 rows; additional rows remain saved and printable as continuation attachments but cannot be queued or submitted until the official XML attachment protocol is verified",
       "rule_version": "2551q-main-v1",
       "severity": "error"
     }

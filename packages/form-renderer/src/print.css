@@ -304,6 +304,27 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 }
 .official-barcode > small { top: 47.26pt; }
 .page-two-barcode > small { top: 49.02pt; }
+.page-two-barcode.schedule-continuation-mark {
+  justify-content: center;
+  gap: 3.5pt;
+  background: #fff;
+}
+.page-two-barcode.schedule-continuation-mark > strong {
+  font-size: 15pt;
+  line-height: 1;
+}
+.page-two-barcode.schedule-continuation-mark > span {
+  font-size: 8pt;
+  font-weight: 700;
+  letter-spacing: .35pt;
+}
+.page-two-barcode.schedule-continuation-mark > small {
+  position: static;
+  width: auto;
+  font-size: 8pt;
+  line-height: 1;
+  text-align: center;
+}
 
 .official-header-options {
   height: 33.5pt;
@@ -617,7 +638,7 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 .income-rate-choice .check-choice { white-space: normal; line-height: 1.03; }
 
 .tax-payable {
-  height: 253.5pt;
+  height: 271.5pt;
   margin-top: 1.5pt;
 }
 .official-tax-line {
@@ -628,10 +649,10 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   border-top: 0;
 }
 .official-tax-line[data-item="15"],
-.official-tax-line[data-item="17"],
 .official-tax-line[data-item="19"],
 .official-tax-line[data-item="20"],
 .official-tax-line[data-item="22"] { height: 18pt; }
+.official-tax-line[data-item="17"] { height: 36pt; }
 .tax-line-label {
   display: flex;
   align-items: center;
@@ -661,7 +682,32 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 }
 .official-money-integer > .comb-value { flex: 11 11 0; }
 .specify-line .tax-line-label {
-  position: relative;
+  display: grid;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.specify-line .tax-line-primary {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 3pt;
+  padding: 1pt 3pt 1pt 42pt;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.specify-line .tax-line-primary,
+.specify-line .tax-credit-description {
+  height: auto;
+  max-height: none;
+  min-height: 0;
+}
+.specify-line .tax-line-primary > b { min-width: 10pt; }
+.specify-line .tax-credit-description {
+  align-self: stretch;
+  overflow: hidden;
 }
 .specify-line .tax-line-copy {
   flex: 1;
@@ -669,21 +715,29 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 }
 .tax-credit-description {
   box-sizing: border-box;
-  position: absolute;
-  left: 201pt;
-  width: 151.5pt;
-  top: 2.5pt;
-  height: 11.5pt;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  align-self: stretch;
   display: flex;
   align-items: center;
   min-width: 0;
-  padding: 0 2pt;
+  padding: 1pt 3pt;
   border: 0;
-  border-bottom: .55pt solid #111;
+  border-top: .55pt solid #111;
   background: #fff;
   font-style: normal;
   line-height: 1.02;
   white-space: nowrap;
+}
+.form-2551q-page-one .tax-credit-description {
+  /* Item 17 owns a dedicated second input line. Long reviewed descriptions
+   * may use its two readable baselines, but may not grow the fixed row. */
+  display: block;
+  padding-block: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  line-height: .95;
 }
 .tax-subheading {
   height: 11.5pt;
@@ -772,7 +826,7 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 .tax-agent-strip em { font-size: 6.5pt; }
 
 .official-payment-details {
-  height: 182pt;
+  height: 164pt;
   margin-top: 2pt;
 }
 .official-payment-details > h2 { height: 12.75pt; }
@@ -873,7 +927,9 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 }
 .blank-money-value > .comb-value:last-child { flex: 0 0 26.5pt; }
 .machine-validation {
-  height: 66.5pt;
+  /* The reviewed two-line Item 17 extension reallocates exactly 18pt from
+   * this non-data stamp area so the legal 612 x 936pt page remains unchanged. */
+  height: 48.5pt;
   display: grid;
   grid-template-columns: 353.5pt minmax(0, 1fr);
   border: 1pt solid #111;

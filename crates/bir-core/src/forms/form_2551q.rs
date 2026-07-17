@@ -36,6 +36,16 @@ fn fits_decimal_comb(value: f64, integer_cells: usize) -> bool {
 const TWO_DECIMAL_TOLERANCE: f64 = 0.005;
 const ATC_RATE_TOLERANCE: f64 = 1e-12;
 
+/// The reviewed eBIRForms XML contract exposes only `drpATC1..6` and their
+/// matching amount/rate/due fields. Printable continuation sheets must never
+/// be mistaken for additional XML capacity.
+pub const FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY: usize = 6;
+
+/// Application-owned Schedule 1 continuation sheets retain twelve lines after
+/// the repeated identity and column header. These sheets are printable
+/// attachments only; they are not part of the reviewed eBIRForms XML payload.
+pub const FORM_2551Q_SCHEDULE_CONTINUATION_ROW_CAPACITY: usize = 12;
+
 fn round_to_cents(value: f64) -> f64 {
     (value * 100.0).round() / 100.0
 }
@@ -320,6 +330,37 @@ pub struct Form2551QDraft {
 }
 
 impl Form2551QDraft {
+    /// Minimum Item 5 count required by application-generated Schedule 1
+    /// continuation sheets. The user's Item 5 value may be larger because it
+    /// can include other supporting attachments.
+    pub fn required_schedule_attachment_sheets(&self) -> u16 {
+        let overflow_rows = self
+            .schedule_1
+            .len()
+            .saturating_sub(FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY);
+        if overflow_rows == 0 {
+            return 0;
+        }
+
+        let continuation_pages = overflow_rows
+            .saturating_add(FORM_2551Q_SCHEDULE_CONTINUATION_ROW_CAPACITY - 1)
+            / FORM_2551Q_SCHEDULE_CONTINUATION_ROW_CAPACITY;
+        u16::try_from(continuation_pages)
+            .expect("the canonical 2551Q ATC registry cannot exceed Item 5 capacity")
+    }
+
+    /// Raise Item 5 to the generated-continuation minimum without erasing any
+    /// user-owned count for other attachments. Removing Schedule rows does not
+    /// call this helper, so the count is never silently lowered.
+    pub fn ensure_required_schedule_attachment_sheets(&mut self) -> bool {
+        let required = self.required_schedule_attachment_sheets();
+        if self.number_of_attached_sheets >= required {
+            return false;
+        }
+        self.number_of_attached_sheets = required;
+        true
+    }
+
     /// Compatibility constructor for an already-resolved profile projection.
     /// Defaults to a PT010 row with zero amounts.
     ///
@@ -1217,6 +1258,16 @@ impl FormValidator for Form2551QDraft {
                 "Number of attached sheets must fit the two-digit Item 5 field".to_string(),
             ));
         }
+        let required_schedule_attachments = self.required_schedule_attachment_sheets();
+        if self.number_of_attached_sheets < required_schedule_attachments {
+            errors.push((
+                "number_of_attached_sheets".to_string(),
+                format!(
+                    "Item 5 must include at least {required_schedule_attachments} Schedule 1 continuation sheet(s) for {} ATC rows",
+                    self.schedule_1.len()
+                ),
+            ));
+        }
 
         if self.tax_relief && self.tax_relief_specification.trim().is_empty() {
             errors.push((
@@ -1417,11 +1468,12 @@ impl FormValidator for Form2551QDraft {
                 "Schedule 1 requires at least one ATC row".to_string(),
             ));
         }
-        if self.schedule_1.len() > 6 {
+        if self.schedule_1.len() > FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY {
             errors.push((
                 "schedule_1".to_string(),
-                "BIR Form 2551Q XML accepts at most six Schedule 1 rows; additional rows remain printable but cannot be submitted until the official attachment protocol is verified"
-                    .to_string(),
+                format!(
+                    "BIR Form 2551Q XML accepts at most {FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY} Schedule 1 rows; additional rows remain saved and printable as continuation attachments but cannot be queued or submitted until the official XML attachment protocol is verified"
+                ),
             ));
         }
         let mut seen_atc_codes = HashSet::new();
@@ -3550,6 +3602,35 @@ mod tests {
     }
 
     #[test]
+    fn schedule_continuation_sheet_minimum_preserves_user_owned_attachments() {
+        let mut draft = make_draft(100_000.0, 0.0, 2099, 1);
+        draft.schedule_1 = ["PT010", "PT040", "PT041", "PT060", "PT070", "PT090"]
+            .into_iter()
+            .map(|code| Schedule1Row::new(code).expect("test ATC must be canonical"))
+            .collect();
+        assert_eq!(draft.required_schedule_attachment_sheets(), 0);
+        assert!(!draft.ensure_required_schedule_attachment_sheets());
+
+        draft
+            .schedule_1
+            .push(Schedule1Row::new("PT140").expect("test ATC must be canonical"));
+        assert_eq!(draft.required_schedule_attachment_sheets(), 1);
+        assert!(draft.ensure_required_schedule_attachment_sheets());
+        assert_eq!(draft.number_of_attached_sheets, 1);
+
+        draft.number_of_attached_sheets = 4;
+        draft
+            .schedule_1
+            .truncate(FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY);
+        assert_eq!(draft.required_schedule_attachment_sheets(), 0);
+        assert!(!draft.ensure_required_schedule_attachment_sheets());
+        assert_eq!(
+            draft.number_of_attached_sheets, 4,
+            "removing Schedule rows must not erase unrelated attachments"
+        );
+    }
+
+    #[test]
     fn validation_rejects_duplicate_schedule_atcs() {
         let mut draft = make_draft(100_000.0, 0.0, 2099, 1);
         draft.schedule_1 = vec![Schedule1Row::default_pt010(), Schedule1Row::default_pt010()];
@@ -3566,14 +3647,64 @@ mod tests {
     #[test]
     fn validation_rejects_schedule_rows_beyond_verified_xml_capacity() {
         let mut draft = make_draft(100_000.0, 0.0, 2099, 1);
-        draft.schedule_1 = vec![Schedule1Row::default_pt010(); 7];
+        draft.schedule_1 = [
+            "PT010", "PT040", "PT041", "PT060", "PT070", "PT090", "PT140", "PT150", "PT160",
+            "PT170",
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(index, code)| {
+            let mut row = Schedule1Row::new(code).expect("test ATC must be canonical");
+            row.taxable_amount = (index as f64 + 1.0) * 1_000.0;
+            row
+        })
+        .collect();
+        assert_eq!(draft.required_schedule_attachment_sheets(), 1);
+        draft.ensure_required_schedule_attachment_sheets();
+        draft.recompute(None);
 
         let errors = draft.validate();
 
+        assert!(errors.iter().any(|(field, message)| {
+            field == "schedule_1"
+                && message.contains("at most 6")
+                && message.contains("cannot be queued or submitted")
+        }));
+        assert_eq!(draft.total_tax_due, 6_110.0);
+
+        let queue_errors = draft
+            .transition_to_queued()
+            .expect_err("ten printable rows must remain outside the verified XML queue boundary");
+        assert!(queue_errors.iter().any(|(field, message)| {
+            field == "schedule_1" && message.contains("official XML attachment protocol")
+        }));
+        assert_eq!(draft.status, FilingStatus::Draft);
+    }
+
+    #[test]
+    fn validation_requires_item_5_to_count_generated_schedule_attachments() {
+        let mut draft = make_draft(100_000.0, 0.0, 2099, 1);
+        draft.schedule_1 = [
+            "PT010", "PT040", "PT041", "PT060", "PT070", "PT090", "PT140", "PT150", "PT160",
+            "PT170",
+        ]
+        .into_iter()
+        .map(|code| Schedule1Row::new(code).expect("test ATC must be canonical"))
+        .collect();
+        draft.number_of_attached_sheets = 0;
+
+        assert!(draft.validate().iter().any(|(field, message)| {
+            field == "number_of_attached_sheets"
+                && message.contains("at least 1")
+                && message.contains("10 ATC rows")
+        }));
+
+        draft.number_of_attached_sheets = 1;
         assert!(
-            errors
+            draft
+                .validate()
                 .iter()
-                .any(|(field, message)| field == "schedule_1" && message.contains("at most six"))
+                .all(|(field, _)| field != "number_of_attached_sheets")
         );
     }
 

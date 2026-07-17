@@ -800,11 +800,11 @@ test("canonical fixtures render safely or fail closed at the readable floor", as
       await expect(renderedDescription).toHaveAttribute("data-overflow-mode", "plain");
       await expect(renderedDescription).toHaveAttribute(
         "data-adaptive-font-size-px",
-        "10.5"
+        "12.0"
       );
       await expect(renderedDescription).toHaveAttribute(
         "data-adaptive-fit-state",
-        "unresolved"
+        "fit"
       );
       const descriptionGeometry = await renderedDescription.evaluate((element) => ({
         clientHeight: element.clientHeight,
@@ -812,10 +812,12 @@ test("canonical fixtures render safely or fail closed at the readable floor", as
         scrollHeight: element.scrollHeight,
         scrollWidth: element.scrollWidth
       }));
-      expect(
-        descriptionGeometry.scrollWidth > descriptionGeometry.clientWidth + 1 ||
-        descriptionGeometry.scrollHeight > descriptionGeometry.clientHeight + 1
-      ).toBe(true);
+      expect(descriptionGeometry.scrollWidth).toBeLessThanOrEqual(
+        descriptionGeometry.clientWidth + 1
+      );
+      expect(descriptionGeometry.scrollHeight).toBeLessThanOrEqual(
+        descriptionGeometry.clientHeight + 1
+      );
     }
     if (fixture === "2551q-validation-edge.json") {
       await expect(page.locator(".tax-credit-description")).toHaveText("");
@@ -825,15 +827,7 @@ test("canonical fixtures render safely or fail closed at the readable floor", as
       );
     }
     for (let index = 0; index < expectedPages; index += 1) {
-      if (fixture === "2551q-long-values.json" && index === 0) {
-        const geometry = await measuredPage(pages.nth(index));
-        expect(
-          geometry.descendant_overflow_x + geometry.descendant_overflow_y,
-          `${fixture} page ${index + 1}`
-        ).toBeGreaterThan(0);
-      } else {
-        expect(await pageHasNoOverflow(pages.nth(index)), `${fixture} page ${index + 1}`).toBe(true);
-      }
+      expect(await pageHasNoOverflow(pages.nth(index)), `${fixture} page ${index + 1}`).toBe(true);
     }
   }
 
@@ -1329,12 +1323,32 @@ test("2551Q Item 17 measures its fixed field and blocks unreadable values", asyn
   const normalDescription = page.locator(".tax-credit-description");
   await expect(normalDescription).toHaveText("Validated prior payment");
   await expect(normalDescription).toHaveAttribute("data-adaptive-fit-state", "fit");
-  await expect(normalDescription).toHaveAttribute("data-adaptive-font-size-px", "12.0");
-  await expect(normalDescription).toHaveAttribute("data-adaptive-max-font-px", "12");
+  await expect(normalDescription).toHaveAttribute("data-adaptive-font-size-px", "21.0");
+  await expect(normalDescription).toHaveAttribute("data-adaptive-max-font-px", "21");
   await expect(normalDescription).toHaveAttribute("data-adaptive-min-font-px", "10.5");
   await expect(normalDescription).toHaveAttribute("data-adaptive-step-px", "0.5");
   const officialField = await normalDescription.boundingBox();
   expect(officialField).not.toBeNull();
+
+  const item15 = await page.locator('.official-tax-line[data-item="15"]').boundingBox();
+  const item17 = await page.locator('.official-tax-line[data-item="17"]').boundingBox();
+  const item17Label = await page.locator('.official-tax-line[data-item="17"] .tax-line-label').boundingBox();
+  const item17Primary = await page.locator('.official-tax-line[data-item="17"] .tax-line-primary').boundingBox();
+  const item17Money = await page.locator('.official-tax-line[data-item="17"] > .money-value').boundingBox();
+  expect(item15).not.toBeNull();
+  expect(item17).not.toBeNull();
+  expect(item17Label).not.toBeNull();
+  expect(item17Primary).not.toBeNull();
+  expect(item17Money).not.toBeNull();
+  if (item15 && item17 && item17Label && item17Primary && item17Money && officialField) {
+    expect(item17.height).toBeCloseTo(item15.height * 2, 0);
+    expect(Math.abs(item17Label.height - item17.height)).toBeLessThanOrEqual(1);
+    expect(Math.abs(item17Money.height - item17.height)).toBeLessThanOrEqual(1);
+    expect(Math.abs(item17Primary.height - item17.height / 2)).toBeLessThanOrEqual(.5);
+    expect(Math.abs(officialField.height - item17.height / 2)).toBeLessThanOrEqual(.5);
+    expect(Math.abs(officialField.y - item17Primary.y - item17Primary.height)).toBeLessThanOrEqual(.5);
+    expect(item17Money.x).toBeCloseTo(item17Label.x + item17Label.width, 1);
+  }
 
   const longFixture = readFixture(
     "packages/form-contracts/fixtures/2551q-long-values.json"
@@ -1346,7 +1360,50 @@ test("2551Q Item 17 measures its fixed field and blocks unreadable values", asyn
     throw new Error("2551Q long-value fixture must retain its reviewed 98-character Item 17 value");
   }
 
-  for (const value of [longDescription, "W".repeat(100), "W".repeat(320)]) {
+  const reviewedLongFixture = structuredClone(baseFixture);
+  reviewedLongFixture.fields.other_tax_credit_description.value = longDescription;
+  await renderEnvelope(page, reviewedLongFixture);
+  await page.waitForFunction(
+    () => !document.querySelector('[data-adaptive-fit-state="pending"]')
+  );
+
+  const reviewedLong = page.locator(".tax-credit-description");
+  await expect(reviewedLong).toHaveText(longDescription);
+  await expect(reviewedLong).toHaveAttribute(
+    "aria-label",
+    `Item 17 specification: ${longDescription}`
+  );
+  await expect(reviewedLong).toHaveAttribute("data-adaptive-font-size-px", "12.0");
+  await expect(reviewedLong).toHaveAttribute("data-adaptive-fit-state", "fit");
+  const reviewedMeasurement = await reviewedLong.evaluate((element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    return {
+      clientHeight: element.clientHeight,
+      clientWidth: element.clientWidth,
+      lineCount: range.getClientRects().length,
+      scrollHeight: element.scrollHeight,
+      scrollWidth: element.scrollWidth,
+      whiteSpace: getComputedStyle(element).whiteSpace
+    };
+  });
+  expect(reviewedMeasurement.scrollWidth).toBeLessThanOrEqual(
+    reviewedMeasurement.clientWidth + 1
+  );
+  expect(reviewedMeasurement.scrollHeight).toBeLessThanOrEqual(
+    reviewedMeasurement.clientHeight + 1
+  );
+  expect(reviewedMeasurement.whiteSpace).toBe("normal");
+  expect(reviewedMeasurement.lineCount).toBe(2);
+  const reviewedField = await reviewedLong.boundingBox();
+  expect(reviewedField).not.toBeNull();
+  if (officialField && reviewedField) {
+    expect(reviewedField.width).toBeCloseTo(officialField.width, 1);
+    expect(reviewedField.height).toBeCloseTo(officialField.height, 1);
+  }
+  expect(await pageHasNoOverflow(page.locator(".form-page").first())).toBe(true);
+
+  for (const value of ["W".repeat(100), "W".repeat(320)]) {
     const fixture = structuredClone(baseFixture);
     fixture.fields.other_tax_credit_description.value = value;
     await renderEnvelope(page, fixture);
@@ -1379,8 +1436,8 @@ test("2551Q Item 17 measures its fixed field and blocks unreadable values", asyn
       measurement.scrollWidth > measurement.clientWidth + 1 ||
       measurement.scrollHeight > measurement.clientHeight + 1
     ).toBe(true);
-    expect(measurement.whiteSpace).toBe("nowrap");
-    expect(measurement.lineCount).toBe(1);
+    expect(measurement.whiteSpace).toBe("normal");
+    expect(measurement.lineCount).toBeGreaterThanOrEqual(2);
 
     const field = await rendered.boundingBox();
     expect(field).not.toBeNull();
@@ -1583,6 +1640,23 @@ test("2551Q continuation pages preserve every row and move totals to the final p
   );
   await expect(pages.nth(2).locator(".official-atc-table")).toHaveCount(0);
   await expect(pages.nth(2).locator(".declaration, .official-declaration")).toHaveCount(0);
+  await expect(pages.nth(1).locator(".page-two-barcode")).toHaveAttribute(
+    "data-machine-readable-code",
+    "official-pdf417"
+  );
+  await expect(pages.nth(1).locator(".official-pdf417-symbol")).toHaveCount(1);
+  await expect(pages.nth(1).locator(".page-two-barcode > small")).toHaveText(
+    "2551Q 01/18ENCS P2"
+  );
+  await expect(pages.nth(2).locator(".page-two-barcode")).toHaveAttribute(
+    "data-machine-readable-code",
+    "absent"
+  );
+  await expect(pages.nth(2).locator(".official-pdf417-symbol")).toHaveCount(0);
+  await expect(pages.nth(2).locator(".page-two-barcode")).toContainText(
+    "CONTINUATION ATTACHMENT"
+  );
+  await expect(pages.first().locator(".sheets-value .comb-value")).toHaveText("01");
   expect(await pageHasNoOverflow(pages.nth(1))).toBe(true);
   expect(await pageHasNoOverflow(pages.nth(2))).toBe(true);
   await expectRealRowKeys(

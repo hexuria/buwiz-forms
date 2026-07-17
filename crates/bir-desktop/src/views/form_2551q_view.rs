@@ -17,7 +17,8 @@ use std::sync::{Arc, Mutex};
 
 use bir_core::db::Database;
 use bir_core::forms::form_2551q::{
-    Form2551QDraft, Item13Election, OverpaymentDisposition, Schedule1Row, TaxPeriodBasis,
+    FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY, Form2551QDraft, Item13Election, OverpaymentDisposition,
+    Schedule1Row, TaxPeriodBasis,
 };
 use bir_core::forms::{ATC_TABLE_2551Q, FilingStatus};
 use bir_core::parse_bir_receipt_email;
@@ -73,7 +74,10 @@ impl SelectItem for AtcOption {
     }
 }
 
-const MAX_EDITABLE_SCHEDULE_1_ROWS: usize = 6;
+// Schedule rows are ATC aggregates, not business identities. Allow every
+// distinct code in the canonical registry while the domain keeps the verified
+// six-row XML submission boundary separate from saved/printable attachments.
+const MAX_EDITABLE_SCHEDULE_1_ROWS: usize = ATC_TABLE_2551Q.len();
 
 fn available_atc_options(rows: &[Schedule1Row]) -> SearchableVec<AtcOption> {
     let used_codes = rows
@@ -708,6 +712,15 @@ impl Form2551QView {
 
     fn finish_schedule_rows_mutation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.draft.recompute(None);
+        if self.draft.ensure_required_schedule_attachment_sheets() {
+            let required = self.draft.number_of_attached_sheets;
+            self.attached_sheets_input.update(cx, |input, cx| {
+                input.set_value(required.to_string(), window, cx);
+            });
+            self.status_message = Some(format!(
+                "Item 5 was raised to {required} to include the generated Schedule 1 continuation sheet(s). Other attachment counts were preserved."
+            ));
+        }
         let options = available_atc_options(&self.draft.schedule_1);
         self.atc_select.update(cx, |select, cx| {
             select.set_items(options, window, cx);
@@ -2098,24 +2111,19 @@ impl Render for Form2551QView {
             cx,
         );
 
-        // Schedule 1 stores only real ATC lines. The print renderer pads the
-        // official page to six visual slots, while this editor lets the user
-        // add up to the six rows verified by the XML submission contract.
+        // Schedule 1 stores only real, distinct ATC aggregates. The first print
+        // sheet has six lines and subsequent rows remain saved and printable on
+        // explicit continuation attachments. XML submission remains fail-closed
+        // above its independently verified six-row capacity.
         let schedule_row_count = self.draft.schedule_1.len();
+        let required_schedule_attachments = self.draft.required_schedule_attachment_sheets();
         let has_selected_atc = self.atc_select.read(cx).selected_value().is_some();
         let can_add_schedule_row =
             is_editable && schedule_row_count < MAX_EDITABLE_SCHEDULE_1_ROWS && has_selected_atc;
-        let schedule_row_counter = if schedule_row_count <= MAX_EDITABLE_SCHEDULE_1_ROWS {
-            format!(
-                "{} of {} lines",
-                schedule_row_count, MAX_EDITABLE_SCHEDULE_1_ROWS
-            )
-        } else {
-            format!(
-                "{} lines loaded · submission supports {}",
-                schedule_row_count, MAX_EDITABLE_SCHEDULE_1_ROWS
-            )
-        };
+        let schedule_row_counter = format!(
+            "{} of {} distinct ATC lines",
+            schedule_row_count, MAX_EDITABLE_SCHEDULE_1_ROWS
+        );
         let schedule_controls = div()
             .flex()
             .flex_wrap()
@@ -2150,6 +2158,21 @@ impl Render for Form2551QView {
                     .text_xs()
                     .text_color(cx.theme().muted_foreground)
                     .child(schedule_row_counter),
+            )
+            .when(
+                schedule_row_count > FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY,
+                |controls| {
+                controls.child(
+                    div()
+                        .w_full()
+                        .text_xs()
+                        .text_color(cx.theme().warning)
+                        .child(format!(
+                            "{} Schedule 1 continuation sheet(s) will be attached and counted in Item 5. The reviewed XML carries only six ATCs, so this draft can be saved and printed but cannot be queued or submitted until an official attachment protocol is verified.",
+                            required_schedule_attachments
+                        )),
+                )
+            },
             );
 
         let schedule_rows = self

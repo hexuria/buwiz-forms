@@ -82,7 +82,7 @@ const REVIEWED_2551Q_OVERFLOW_FONT_PX = {
   // are measured in the final DOM, so longer values descend before using a
   // second line or becoming unresolved at the readable floor.
   item12A: { max: 21.5, min: 10.5 },
-  item17: { max: 12, min: 10.5 },
+  item17: { max: 21, min: 10.5 },
   pageTwoName: { max: 21.5, min: 10.5 }
 } as const;
 
@@ -224,7 +224,9 @@ export function Form2551Q({ envelope }: { envelope: RenderEnvelope }) {
 }
 
 function PageTwoMasthead({ pageNumber }: { pageNumber: number }) {
-  const barcodeText = `2551Q 01/18ENCS P${pageNumber}`;
+  const isOfficialPageTwo = pageNumber === 2;
+  const barcodeText = "2551Q 01/18ENCS P2";
+  const attachmentNumber = pageNumber - 2;
 
   return (
     <header className="page-two-masthead">
@@ -232,17 +234,33 @@ function PageTwoMasthead({ pageNumber }: { pageNumber: number }) {
         <span>BIR Form No.</span>
         <strong>2551Q</strong>
         <small>January 2018 (ENCS)</small>
-        <b>Page {pageNumber}</b>
+        <b>{isOfficialPageTwo ? "Page 2" : `Attachment ${attachmentNumber}`}</b>
       </div>
       <div className="page-two-form-title">
         <strong>Quarterly Percentage Tax Return</strong>
       </div>
-      <div className="page-two-barcode" aria-label={barcodeText}>
-        <OfficialPdf417
-          path={OFFICIAL_2551Q_PDF417_PAGE_TWO_PATH}
-          title="PDF417 payload 2551Q 01/18ENCS P2"
-        />
-        <small>{barcodeText}</small>
+      <div
+        className={`page-two-barcode ${isOfficialPageTwo ? "official-page-two-code" : "schedule-continuation-mark"}`}
+        aria-label={isOfficialPageTwo
+          ? barcodeText
+          : `Schedule 1 continuation attachment ${attachmentNumber}`}
+        data-machine-readable-code={isOfficialPageTwo ? "official-pdf417" : "absent"}
+      >
+        {isOfficialPageTwo ? (
+          <>
+            <OfficialPdf417
+              path={OFFICIAL_2551Q_PDF417_PAGE_TWO_PATH}
+              title="PDF417 payload 2551Q 01/18ENCS P2"
+            />
+            <small>{barcodeText}</small>
+          </>
+        ) : (
+          <>
+            <strong>Schedule 1</strong>
+            <span>CONTINUATION ATTACHMENT</span>
+            <small>Supplemental sheet {attachmentNumber}</small>
+          </>
+        )}
       </div>
     </header>
   );
@@ -719,7 +737,6 @@ function TaxPayable({
         label={<>Other Tax Credit/Payment <em>(specify)</em></>}
         specification={otherTaxCreditDescription}
         value={decimal(envelope, "other_tax_credit")}
-        className="specify-line"
       />
       <OfficialTaxLine number={18} label={<>Total Tax Credits/Payments <em>(Sum of Items 15 to 17)</em></>} value={decimal(envelope, "total_tax_credits")} />
       <OfficialTaxLine number={19} label={<>Tax Still Payable/(Overpayment) <em>(Item 14 Less Item 18)</em></>} value={decimal(envelope, "tax_payable")} />
@@ -756,21 +773,30 @@ function OfficialTaxLine({
   specification?: string;
 }) {
   return (
-    <div data-item={number} className={`official-tax-line ${strong ? "strong" : ""} ${indent ? "indented" : ""} ${className}`}>
+    <div data-item={number} className={`official-tax-line ${strong ? "strong" : ""} ${indent ? "indented" : ""} ${specification !== undefined ? "specify-line" : ""} ${className}`}>
       <div className="tax-line-label">
-        <b>{number}</b>
-        <span className="tax-line-copy">{label}</span>
-        {specification !== undefined && (
-          <AdaptivePlainValue
-            value={specification}
-            className="tax-credit-description"
-            ariaLabel={specification
-              ? `Item 17 specification: ${specification}`
-              : "Item 17 specification, blank"}
-            maxFontSizePx={REVIEWED_2551Q_OVERFLOW_FONT_PX.item17.max}
-            minFontSizePx={REVIEWED_2551Q_OVERFLOW_FONT_PX.item17.min}
-            fontStepPx={.5}
-          />
+        {specification === undefined ? (
+          <>
+            <b>{number}</b>
+            <span className="tax-line-copy">{label}</span>
+          </>
+        ) : (
+          <>
+            <div className="tax-line-primary">
+              <b>{number}</b>
+              <span className="tax-line-copy">{label}</span>
+            </div>
+            <AdaptivePlainValue
+              value={specification}
+              className="tax-credit-description"
+              ariaLabel={specification
+                ? `Item 17 specification: ${specification}`
+                : "Item 17 specification, blank"}
+              maxFontSizePx={REVIEWED_2551Q_OVERFLOW_FONT_PX.item17.max}
+              minFontSizePx={REVIEWED_2551Q_OVERFLOW_FONT_PX.item17.min}
+              fontStepPx={.5}
+            />
+          </>
         )}
       </div>
       <OfficialMoneyValue value={value} />

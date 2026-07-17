@@ -1260,23 +1260,27 @@ mod tests {
     }
 
     #[test]
-    fn save_and_reopen_2551q_preserves_six_distinct_schedule_rows() {
+    fn save_and_reopen_2551q_preserves_ten_distinct_printable_schedule_rows() {
         let db = test_db();
         let profile = test_profile();
         let mut draft = Form2551QDraft::new_from_profile(&profile, 2026, 1);
-        draft.schedule_1 = ["PT010", "PT040", "PT060", "PT090", "PT140", "PT180"]
-            .into_iter()
-            .enumerate()
-            .map(|(index, code)| {
-                let mut row = Schedule1Row::new(code).expect("test ATC must be canonical");
-                row.taxable_amount = (index as f64 + 1.0) * 1_000.0;
-                row
-            })
-            .collect();
+        draft.schedule_1 = [
+            "PT010", "PT040", "PT041", "PT060", "PT070", "PT090", "PT140", "PT150", "PT160",
+            "PT170",
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(index, code)| {
+            let mut row = Schedule1Row::new(code).expect("test ATC must be canonical");
+            row.taxable_amount = (index as f64 + 1.0) * 1_000.0;
+            row
+        })
+        .collect();
+        assert!(draft.ensure_required_schedule_attachment_sheets());
         draft.recompute(None);
 
         db.save_2551q_draft(&draft)
-            .expect("six-row draft should save");
+            .expect("ten-row printable draft should save without claiming XML fileability");
         let reopened = db
             .get_2551q_draft(&draft.tin, draft.taxable_year, draft.quarter)
             .expect("saved draft lookup should succeed")
@@ -1288,7 +1292,10 @@ mod tests {
                 .iter()
                 .map(|row| row.atc.as_str())
                 .collect::<Vec<_>>(),
-            vec!["PT010", "PT040", "PT060", "PT090", "PT140", "PT180"]
+            vec![
+                "PT010", "PT040", "PT041", "PT060", "PT070", "PT090", "PT140", "PT150", "PT160",
+                "PT170"
+            ]
         );
         assert_eq!(
             reopened
@@ -1296,7 +1303,10 @@ mod tests {
                 .iter()
                 .map(|row| row.taxable_amount)
                 .collect::<Vec<_>>(),
-            vec![1_000.0, 2_000.0, 3_000.0, 4_000.0, 5_000.0, 6_000.0]
+            vec![
+                1_000.0, 2_000.0, 3_000.0, 4_000.0, 5_000.0, 6_000.0, 7_000.0, 8_000.0, 9_000.0,
+                10_000.0
+            ]
         );
         assert_eq!(
             reopened
@@ -1304,9 +1314,13 @@ mod tests {
                 .iter()
                 .map(|row| row.tax_due)
                 .collect::<Vec<_>>(),
-            vec![30.0, 60.0, 60.0, 400.0, 900.0, 1_800.0]
+            vec![
+                30.0, 60.0, 90.0, 80.0, 150.0, 600.0, 1_260.0, 1_440.0, 900.0, 1_500.0
+            ]
         );
-        assert_eq!(reopened.total_tax_due, 3_250.0);
+        assert_eq!(reopened.number_of_attached_sheets, 1);
+        assert_eq!(reopened.required_schedule_attachment_sheets(), 1);
+        assert_eq!(reopened.total_tax_due, 6_110.0);
     }
 
     #[test]
