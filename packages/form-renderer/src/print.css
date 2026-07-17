@@ -1202,9 +1202,14 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   [data-atc-code="PT090"],
   [data-atc-code="PT170"],
   [data-atc-code="PT101"],
-  [data-atc-code="PT103"],
   [data-atc-code="PT113"]
 ) > td { height: 10pt; }
+.official-atc-table .atc-entry[data-atc-code="PT103"] > td {
+  /* At 144 DPI, 10pt rounds this boundary two raster pixels below the
+   * pinned PDF and displaces every following rule. The nearest stable CSS
+   * height that restores the reviewed downstream line peaks is 9.8pt. */
+  height: 9.8pt;
+}
 .official-atc-table .atc-entry:is(
   [data-atc-code="PT104"],
   [data-atc-code="PT120"]
@@ -1226,6 +1231,11 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   font-weight: 700;
 }
 .official-atc-table em { font-weight: 400; }
+.form-2551q-page-two .official-atc-table tbody tr:last-child > td {
+  /* The official closing rule is three raster pixels at 144 DPI. Draw the
+   * two missing pixels inward so table height and pagination remain fixed. */
+  box-shadow: inset 0 -1pt #000;
+}
 
 .official-schedule-continuation .official-schedule-total {
   margin-top: 0;
