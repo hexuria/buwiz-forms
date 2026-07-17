@@ -74,6 +74,17 @@ fn create_test_profile(tin_str: &str) -> TaxpayerProfile {
     profile
 }
 
+fn persisted_forms_sets(db: &Database, tin: &str) -> Vec<(u16, PerYearFormsSet)> {
+    db.list_forms_set_years(tin)
+        .expect("Forms Set year lookup")
+        .into_iter()
+        .map(|year| {
+            let set = db.get_per_year_forms(tin, year).expect("Forms Set lookup");
+            (year, set)
+        })
+        .collect()
+}
+
 #[test]
 fn closest_prior_forms_year_returns_latest_active_unconfigured_year() {
     let mut profile = create_test_profile("010558054000");
@@ -187,6 +198,232 @@ fn profile_save_reconciles_generated_forms_and_preserves_manual_entry() {
         assert!(reconciled.contains_active("2550Q"));
         assert!(!reconciled.contains_active("2551Q"));
         assert!(reconciled.entry("2551Q").is_some());
+    });
+}
+
+#[test]
+fn confirmed_profile_change_reconciles_current_and_stored_intersecting_years() {
+    temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db = Database::open(temp_file.path()).expect("Failed to open DB");
+        let current_year = chrono::Utc::now().year() as u16;
+        let mid_year = current_year - 1;
+        let historical_year = current_year - 2;
+
+        let mut profile = create_test_profile("010558054000");
+        let historical_start = NaiveDate::from_ymd_opt(i32::from(historical_year), 1, 1).unwrap();
+        profile.business_start_date = Some(historical_start);
+        profile.profile_versions[0].id = "percentage-tax-cor".into();
+        profile.profile_versions[0].source = TaxProfileVersionSource::ManualCor;
+        profile.profile_versions[0].effective_from = Some(historical_start);
+        profile.profile_versions[0].cor.registration_date = Some(historical_start);
+        profile.profile_versions[0].registered_tax_types = vec![
+            RegisteredTaxType::IncomeTax,
+            RegisteredTaxType::PercentageTax,
+        ];
+        let saved = save_initial_confirmed_profile(&db, profile);
+        let tin = saved.tin.full();
+
+        let mut historical_manual = PerYearFormsSet::from_codes(
+            historical_year,
+            ["CUSTOM_HISTORICAL", "2551Q"],
+            FormSetSource::Manual,
+        );
+        let suppressed_historical_percentage_tax = historical_manual
+            .entries
+            .iter_mut()
+            .find(|entry| entry.form_code == "2551Q")
+            .expect("historical manual 2551Q entry");
+        suppressed_historical_percentage_tax.active = false;
+        suppressed_historical_percentage_tax.reason =
+            Some("Historical suppression by the taxpayer".into());
+        db.save_per_year_forms(&tin, historical_year, &historical_manual)
+            .expect("historical Forms Set save");
+
+        let mid_year_manual =
+            PerYearFormsSet::from_codes(mid_year, ["CUSTOM_MID_YEAR"], FormSetSource::Manual);
+        db.save_per_year_forms(&tin, mid_year, &mid_year_manual)
+            .expect("mid-year Forms Set save");
+
+        let mut current_set = db
+            .get_per_year_forms(&tin, current_year)
+            .expect("generated current-year Forms Set");
+        current_set.entries.push(FormSetEntry::from_code(
+            "CUSTOM_CURRENT",
+            FormSetSource::Manual,
+        ));
+        db.save_per_year_forms(&tin, current_year, &current_set)
+            .expect("current-year Forms Set save");
+
+        let mut changed = db
+            .get_profile(&tin)
+            .expect("profile lookup")
+            .expect("stored profile");
+        let mut vat_replacement = changed.profile_versions[0].clone();
+        vat_replacement.id = "mid-year-vat-cor".into();
+        vat_replacement.label = "Mid-year VAT COR".into();
+        vat_replacement.status = TaxProfileVersionStatus::Draft;
+        vat_replacement.effective_from = NaiveDate::from_ymd_opt(i32::from(historical_year), 7, 1);
+        vat_replacement.effective_until = None;
+        vat_replacement.is_vat_registered = true;
+        vat_replacement.registered_tax_types = vec![
+            RegisteredTaxType::IncomeTax,
+            RegisteredTaxType::ValueAddedTax,
+        ];
+        changed.profile_versions.push(vat_replacement);
+        let mut changed = db
+            .save_profile(changed)
+            .expect("VAT replacement draft save");
+        let effective_from = NaiveDate::from_ymd_opt(i32::from(historical_year), 7, 1).unwrap();
+        let plan = changed
+            .profile_version_confirmation_plan("mid-year-vat-cor", effective_from)
+            .expect("VAT replacement confirmation plan");
+        assert!(changed.apply_profile_version_confirmation_plan(&plan));
+        db.save_profile_with_confirmation_plan(changed, &plan)
+            .expect("reviewed VAT profile save");
+
+        let historical = db
+            .get_per_year_forms(&tin, historical_year)
+            .expect("reconciled historical Forms Set");
+        let mid_year_set = db
+            .get_per_year_forms(&tin, mid_year)
+            .expect("reconciled mid-year Forms Set");
+        let current = db
+            .get_per_year_forms(&tin, current_year)
+            .expect("reconciled current-year Forms Set");
+        let entry_state = |set: &PerYearFormsSet, code: &str| {
+            set.entry(code).map(|entry| (entry.active, entry.source))
+        };
+        let actual = (
+            db.list_forms_set_years(&tin)
+                .expect("stored Forms Set years"),
+            entry_state(&historical, "CUSTOM_HISTORICAL"),
+            entry_state(&historical, "2551Q"),
+            entry_state(&historical, "2550Q"),
+            historical
+                .entry("2551Q")
+                .and_then(|entry| entry.reason.clone()),
+            entry_state(&mid_year_set, "CUSTOM_MID_YEAR"),
+            entry_state(&mid_year_set, "2551Q"),
+            entry_state(&mid_year_set, "2550Q"),
+            entry_state(&current, "CUSTOM_CURRENT"),
+            entry_state(&current, "2551Q"),
+            entry_state(&current, "2550Q"),
+        );
+        let expected = (
+            vec![current_year, mid_year, historical_year],
+            Some((true, FormSetSource::Manual)),
+            Some((false, FormSetSource::Manual)),
+            Some((true, FormSetSource::InferredTaxType)),
+            Some("Historical suppression by the taxpayer".into()),
+            Some((true, FormSetSource::Manual)),
+            Some((false, FormSetSource::InferredTaxType)),
+            Some((true, FormSetSource::InferredTaxType)),
+            Some((true, FormSetSource::Manual)),
+            Some((false, FormSetSource::InferredTaxType)),
+            Some((true, FormSetSource::InferredTaxType)),
+        );
+
+        assert_eq!(actual, expected);
+    });
+}
+
+#[test]
+fn forms_set_reconcile_failure_rolls_back_profile_timeline_and_forms_sets() {
+    temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db = Database::open(temp_file.path()).expect("Failed to open DB");
+        let current_year = chrono::Utc::now().year() as u16;
+
+        let mut profile = create_test_profile("010558054000");
+        profile.profile_versions[0].id = "percentage-tax-cor".into();
+        profile.profile_versions[0].source = TaxProfileVersionSource::ManualCor;
+        profile.profile_versions[0].effective_from =
+            NaiveDate::from_ymd_opt(i32::from(current_year - 1), 1, 1);
+        profile.profile_versions[0].registered_tax_types = vec![
+            RegisteredTaxType::IncomeTax,
+            RegisteredTaxType::PercentageTax,
+        ];
+        let saved = save_initial_confirmed_profile(&db, profile);
+        let tin = saved.tin.full();
+
+        let mut current_set = db
+            .get_per_year_forms(&tin, current_year)
+            .expect("generated current-year Forms Set");
+        current_set.entries.push(FormSetEntry::from_code(
+            "CUSTOM_KEEP",
+            FormSetSource::Manual,
+        ));
+        db.save_per_year_forms(&tin, current_year, &current_set)
+            .expect("manual Forms Set save");
+
+        let mut changed = db
+            .get_profile(&tin)
+            .expect("profile lookup")
+            .expect("stored profile");
+        let mut vat_replacement = changed.profile_versions[0].clone();
+        vat_replacement.id = "vat-cor".into();
+        vat_replacement.label = "VAT COR".into();
+        vat_replacement.status = TaxProfileVersionStatus::Draft;
+        vat_replacement.effective_from = NaiveDate::from_ymd_opt(i32::from(current_year), 1, 1);
+        vat_replacement.effective_until = None;
+        vat_replacement.is_vat_registered = true;
+        vat_replacement.registered_tax_types = vec![
+            RegisteredTaxType::IncomeTax,
+            RegisteredTaxType::ValueAddedTax,
+        ];
+        changed.profile_versions.push(vat_replacement);
+        let before_profile = db
+            .save_profile(changed)
+            .expect("VAT replacement draft save");
+        let before_forms_sets = persisted_forms_sets(&db, &tin);
+        let before_profile_json =
+            serde_json::to_value(&before_profile).expect("profile snapshot serialization");
+
+        let effective_from = NaiveDate::from_ymd_opt(i32::from(current_year), 1, 1).unwrap();
+        let plan = before_profile
+            .profile_version_confirmation_plan("vat-cor", effective_from)
+            .expect("VAT replacement confirmation plan");
+        let mut submitted = before_profile;
+        assert!(submitted.apply_profile_version_confirmation_plan(&plan));
+
+        let key = Database::get_or_create_master_key().expect("test database key");
+        let trigger_connection =
+            rusqlite::Connection::open(temp_file.path()).expect("trigger connection");
+        trigger_connection
+            .execute_batch(&format!(
+                "PRAGMA key = \"x'{key}'\";
+                 CREATE TRIGGER fail_new_vat_form_write
+                 BEFORE INSERT ON per_year_forms
+                 WHEN NEW.form_code = '2550Q'
+                 BEGIN
+                     SELECT RAISE(ABORT, 'forced Forms Set reconciliation failure');
+                 END;"
+            ))
+            .expect("install deterministic Forms Set failure trigger");
+
+        let error = db
+            .save_profile_with_confirmation_plan(submitted, &plan)
+            .expect_err("the forced Forms Set write must fail the profile save");
+        assert!(
+            error
+                .to_string()
+                .contains("forced Forms Set reconciliation failure"),
+            "unexpected save error: {error}"
+        );
+
+        let after_profile = db
+            .get_profile(&tin)
+            .expect("profile lookup after rollback")
+            .expect("stored profile after rollback");
+        let after_profile_json =
+            serde_json::to_value(after_profile).expect("profile snapshot serialization");
+        let after_forms_sets = persisted_forms_sets(&db, &tin);
+
+        assert_eq!(
+            (after_profile_json, after_forms_sets),
+            (before_profile_json, before_forms_sets)
+        );
     });
 }
 
