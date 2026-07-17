@@ -80,7 +80,7 @@ impl ProfileManagerView {
                         .text_sm()
                         .text_color(cx.theme().danger)
                         .child(
-                            "No Forms Set is configured. Add forms in the Forms Set tab before creating a calendar.",
+                            "No Forms Set is configured. Add forms in COR > Forms & Elections before creating a calendar.",
                         ),
                 )
             })

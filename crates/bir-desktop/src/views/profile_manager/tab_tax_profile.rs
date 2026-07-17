@@ -7,12 +7,11 @@ impl ProfileManagerView {
     ///
     /// Contains: TIN input, duplicate TIN error, RDO/type row, classification/EOPT row,
     /// line-of-business, name, address, zip/phone row, email, date, VAT toggle,
-    /// granular withholding obligation switches, tax election ledger, and excise tax multi-select.
+    /// granular withholding obligation switches and excise tax multi-select.
     pub(super) fn render_tax_profile_tab(
         &self,
         is_individual: bool,
         is_cooperative: bool,
-        is_eligible_for_election: bool,
         date_label: &'static str,
         cx: &Context<Self>,
     ) -> gpui::AnyElement {
@@ -346,10 +345,6 @@ impl ProfileManagerView {
                     cx,
                 ))
             })
-            // ── Tax Election Ledger (replaces 8% checkbox) ──
-            .when(is_eligible_for_election, |this| {
-                this.child(self.render_tax_election_section(cx))
-            })
             .child(
                 v_flex()
                     .w_full()
@@ -442,11 +437,36 @@ impl ProfileManagerView {
                         this.cor_sub_tab = 1;
                         cx.notify();
                     }))
+                    .child("Forms & Elections"),
+            )
+            .child(
+                div()
+                    .id("cor_sub_tab_2")
+                    .px_4()
+                    .py_1p5()
+                    .rounded_md()
+                    .cursor_pointer()
+                    .text_sm()
+                    .when(self.cor_sub_tab == 2, |s| {
+                        s.bg(cx.theme().background)
+                            .shadow_sm()
+                            .text_color(cx.theme().foreground)
+                            .font_weight(FontWeight::SEMIBOLD)
+                    })
+                    .when(self.cor_sub_tab != 2, |s| {
+                        s.hover(|s| s.bg(cx.theme().muted))
+                            .text_color(cx.theme().muted_foreground)
+                            .font_weight(FontWeight::MEDIUM)
+                    })
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.cor_sub_tab = 2;
+                        cx.notify();
+                    }))
                     .child("OCR Settings"),
             );
 
-        // ── Sub-tab 1: OCR Settings ─────────────────────────────────────────
-        if self.cor_sub_tab == 1 {
+        // ── Sub-tab 2: OCR Settings ─────────────────────────────────────────
+        if self.cor_sub_tab == 2 {
             return div()
                 .flex()
                 .flex_col()
@@ -460,6 +480,59 @@ impl ProfileManagerView {
                 )
                 .child(sub_tab_bar)
                 .child(self.render_cor_ocr_settings(cx));
+        }
+
+        // ── Sub-tab 1: Forms Set and annual elections ──────────────────────
+        if self.cor_sub_tab == 1 {
+            let profile = self.current_profile(cx);
+            // Eligibility is a per-year fact resolved from the confirmed
+            // segments effective in the selected Forms Set year — not from
+            // the current flat profile. Fails closed on zero or conflicting
+            // segments.
+            let eligible_for_income_tax_election =
+                profile.eligible_for_income_tax_election_in_year(self.forms_editor_year);
+
+            return div()
+                .flex()
+                .flex_col()
+                .gap_6()
+                .child(
+                    div()
+                        .text_2xl()
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(cx.theme().foreground)
+                        .child("COR — Forms Set & Annual Elections"),
+                )
+                .child(sub_tab_bar)
+                .child(
+                    div()
+                        .p_3()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(cx.theme().border)
+                        .bg(cx.theme().secondary)
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(
+                            "Reviewed COR codes and confirmed registration facts suggest forms. The saved yearly Forms Set is what the app files. Annual income-tax elections are user-confirmed choices for that year; they are shown here with the COR workflow but are not claimed as text extracted from the COR.",
+                        ),
+                )
+                .when(
+                    // Recorded elections keep driving obligation gating even
+                    // when the selected year is not election-eligible, so the
+                    // table (and its Remove actions) must stay reachable;
+                    // only adding new elections is gated per year.
+                    eligible_for_income_tax_election || !self.stored_tax_elections.is_empty(),
+                    |this| {
+                        this.child(
+                            self.render_tax_election_section(
+                                eligible_for_income_tax_election,
+                                cx,
+                            ),
+                        )
+                    },
+                )
+                .child(self.render_active_forms_tab(cx));
         }
 
         // ── Sub-tab 0: Uploads (Card View) ──────────────────────────────────
@@ -488,15 +561,22 @@ impl ProfileManagerView {
                         div()
                             .text_xs()
                             .text_color(cx.theme().muted_foreground)
-                            .child("Use \"Add +\" to create a manual COR draft."),
+                            .child(
+                                "Use \"New from Tax Profile +\" to create a reviewable COR draft.",
+                            ),
                     ),
             );
         } else {
             for version in &self.stored_profile_versions {
                 let version_id_for_review = version.id.clone();
                 let version_id_for_delete = version.id.clone();
+                let version_id_for_correction = version.id.clone();
                 let version_facts_editable =
                     Self::profile_version_facts_are_editable(&version.status);
+                let registration_fee_only = version.registered_tax_types.len() == 1
+                    && version
+                        .registered_tax_types
+                        .contains(&RegisteredTaxType::RegistrationFee);
                 let first_document = version.evidence.first();
                 let document_name = first_document
                     .map(|document| document.file_name.clone())
@@ -643,6 +723,22 @@ impl ProfileManagerView {
                         )
                         // Row 3: Extracted forms chips
                         .child(form_chips)
+                        .when(registration_fee_only, |this| {
+                            this.child(
+                                div()
+                                    .px_3()
+                                    .py_2()
+                                    .rounded_md()
+                                    .border_1()
+                                    .border_color(cx.theme().warning)
+                                    .bg(cx.theme().warning.opacity(0.12))
+                                    .text_xs()
+                                    .text_color(cx.theme().warning_foreground)
+                                    .child(
+                                        "Needs review: Registration Fee by itself is incomplete for an active business profile. Create a correction draft and review the COR tax types and exact form codes.",
+                                    ),
+                            )
+                        })
                         // Row 4: Actions
                         .child(
                             div()
@@ -661,9 +757,6 @@ impl ProfileManagerView {
                                         .text_color(cx.theme().primary)
                                         .hover(|this| this.text_color(cx.theme().primary_hover))
                                         .on_click(cx.listener(move |this, _, window, cx| {
-                                            this.ocr_selected_version_id =
-                                                Some(version_id_for_review.clone());
-                                            this.sync_document_viewer(cx);
                                             if let Err(message) = this.load_cor_version_editor(
                                                 &version_id_for_review,
                                                 window,
@@ -696,6 +789,37 @@ impl ProfileManagerView {
                                                 );
                                             }))
                                             .child("Delete"),
+                                    )
+                                })
+                                .when(!version_facts_editable, |this| {
+                                    this.child(
+                                        div()
+                                            .id(format!(
+                                                "correct_{}",
+                                                version_id_for_correction
+                                            ))
+                                            .cursor_pointer()
+                                            .text_sm()
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(cx.theme().primary)
+                                            .hover(|this| {
+                                                this.text_color(cx.theme().primary_hover)
+                                            })
+                                            .on_click(cx.listener(
+                                                move |this, _, window, cx| {
+                                                    if let Err(message) = this
+                                                        .create_cor_correction_draft(
+                                                            &version_id_for_correction,
+                                                            window,
+                                                            cx,
+                                                        )
+                                                    {
+                                                        this.save_message = Some(message);
+                                                    }
+                                                    cx.notify();
+                                                },
+                                            ))
+                                            .child("Create correction draft"),
                                     )
                                 }),
                         ),
@@ -734,7 +858,7 @@ impl ProfileManagerView {
                             )
                             .child(
                                 gpui_component::button::Button::new("add_manual_cor_btn")
-                                    .label("Add +")
+                                    .label("New from Tax Profile +")
                                     .small()
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.sync_current_profile_to_cor_draft(window, cx);
@@ -794,6 +918,7 @@ impl ProfileManagerView {
 
         let version_id_for_confirm = version.id.clone();
         let version_id_for_review = version.id.clone();
+        let version_id_for_correction = version.id.clone();
         let version_facts_editable = Self::profile_version_facts_are_editable(&version.status);
         let document_id_for_open = first_document.map(|doc| doc.id.clone());
 
@@ -1112,7 +1237,25 @@ impl ProfileManagerView {
                             cx.notify();
                         })),
                 )
+                .child(
+                    gpui_component::button::Button::new("ocr_create_correction")
+                        .label("Create Correction Draft")
+                        .small()
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            if let Err(message) = this.create_cor_correction_draft(
+                                &version_id_for_correction,
+                                window,
+                                cx,
+                            ) {
+                                this.save_message = Some(message);
+                            }
+                            cx.notify();
+                        })),
+                )
         } else {
+            let current_profile_preset_id = version.id.clone();
+            let non_vat_preset_id = version.id.clone();
+            let vat_preset_id = version.id.clone();
             div()
             .flex()
             .flex_col()
@@ -1135,6 +1278,94 @@ impl ProfileManagerView {
                     .text_color(cx.theme().muted_foreground)
                     .child(
                         "Edit fields directly. Changes are kept in memory until you Save Profile.",
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .p_3()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .bg(cx.theme().secondary)
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(cx.theme().foreground)
+                            .child("Starting presets"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(
+                                "Presets only populate a draft. They are not COR evidence and never confirm themselves; review every selected tax type and exact form code.",
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .gap_2()
+                            .child(
+                                gpui_component::button::Button::new(
+                                    "cor_preset_current_profile",
+                                )
+                                .label("Use Current Tax Profile")
+                                .small()
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    if let Err(message) = this.apply_cor_profile_preset(
+                                        &current_profile_preset_id,
+                                        CorProfilePreset::CurrentTaxProfile,
+                                        window,
+                                        cx,
+                                    ) {
+                                        this.save_message = Some(message);
+                                    }
+                                    cx.notify();
+                                })),
+                            )
+                            .child(
+                                gpui_component::button::Button::new(
+                                    "cor_preset_non_vat_business",
+                                )
+                                .label("Non-VAT Business")
+                                .small()
+                                .ghost()
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    if let Err(message) = this.apply_cor_profile_preset(
+                                        &non_vat_preset_id,
+                                        CorProfilePreset::NonVatBusiness,
+                                        window,
+                                        cx,
+                                    ) {
+                                        this.save_message = Some(message);
+                                    }
+                                    cx.notify();
+                                })),
+                            )
+                            .child(
+                                gpui_component::button::Button::new(
+                                    "cor_preset_vat_business",
+                                )
+                                .label("VAT Business")
+                                .small()
+                                .ghost()
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    if let Err(message) = this.apply_cor_profile_preset(
+                                        &vat_preset_id,
+                                        CorProfilePreset::VatBusiness,
+                                        window,
+                                        cx,
+                                    ) {
+                                        this.save_message = Some(message);
+                                    }
+                                    cx.notify();
+                                })),
+                            ),
                     ),
             )
             // Editable fields using the existing cor_*_input entities
@@ -1261,7 +1492,13 @@ impl ProfileManagerView {
                             .flex()
                             .flex_col()
                             .gap_1()
-                            .child(Self::field_label("Reviewed COR form-code evidence", cx))
+                            .child(Self::field_label(
+                                &format!(
+                                    "Reviewed COR form-code evidence ({} official choices)",
+                                    bir_core::forms::registry::FORM_REGISTRY.len()
+                                ),
+                                cx,
+                            ))
                             .child(
                                 div()
                                     .flex()
@@ -1319,9 +1556,10 @@ impl ProfileManagerView {
                                         div()
                                             .text_xs()
                                             .text_color(cx.theme().muted_foreground)
-                                            .child(
-                                                "These are evidence from this COR version. Confirming the version reconciles them into the yearly Forms Set; it does not silently replace manual include/exclude decisions.",
-                                            ),
+                                            .child(format!(
+                                                "Type to filter and check one or more of all {} official form codes. These selections are evidence from this COR version. Confirming the version reconciles them into the yearly Forms Set; it does not silently replace manual include/exclude decisions.",
+                                                bir_core::forms::registry::FORM_REGISTRY.len()
+                                            )),
                                     )
                                     .when(self.editing_id.is_some(), |this| {
                                         this.child(
@@ -1336,9 +1574,8 @@ impl ProfileManagerView {
                                                     if let Some(year) = this
                                                         .cor_effective_from_input
                                                         .read(cx)
-                                                        .value()
-                                                        .get(0..4)
-                                                        .and_then(|year| year.parse::<u16>().ok())
+                                                        .date
+                                                        .map(|date| date.year() as u16)
                                                     {
                                                         this.forms_editor_year = year;
                                                         this.forms_editor_year_select.update(
@@ -1353,7 +1590,9 @@ impl ProfileManagerView {
                                                         );
                                                     }
                                                     this.forms_editor_selected_code = None;
-                                                    this.active_tab = 5;
+                                                    this.ocr_selected_version_id = None;
+                                                    this.active_tab = 1;
+                                                    this.cor_sub_tab = 1;
                                                     cx.notify();
                                                 },
                                             )),
@@ -1389,7 +1628,7 @@ impl ProfileManagerView {
                                         }),
                                     )
                                     .child(Self::field_label("Registration Date", cx))
-                                    .child(Input::new(&self.cor_registration_date_input)),
+                                    .child(DateInput::new(&self.cor_registration_date_input)),
                             ),
                     )
                     .child(
@@ -1404,7 +1643,7 @@ impl ProfileManagerView {
                                     .flex_col()
                                     .gap_1()
                                     .child(Self::field_label("Effective From", cx))
-                                    .child(Input::new(&self.cor_effective_from_input)),
+                                    .child(DateInput::new(&self.cor_effective_from_input)),
                             )
                             .child(
                                 div()
@@ -1414,7 +1653,7 @@ impl ProfileManagerView {
                                     .flex_col()
                                     .gap_1()
                                     .child(Self::field_label("Effective Until", cx))
-                                    .child(Input::new(&self.cor_effective_until_input)),
+                                    .child(DateInput::new(&self.cor_effective_until_input)),
                             ),
                     )
                     .child(
@@ -2331,17 +2570,12 @@ impl ProfileManagerView {
                                             ))
                                             .label("Archive")
                                             .small()
-                                            .on_click(cx.listener(move |this, _, _, cx| {
-                                                if let Some(version) = this
-                                                    .stored_profile_versions
-                                                    .iter_mut()
-                                                    .find(|version| version.id == id_for_archive)
-                                                {
-                                                    version.status = bir_core::profile::TaxProfileVersionStatus::Archived;
-                                                    this.save_message = Some(
-                                                        "COR version archived. Save the profile to persist it.".into(),
-                                                    );
-                                                }
+                                            .on_click(cx.listener(move |this, _, window, cx| {
+                                                this.archive_cor_version(
+                                                    &id_for_archive,
+                                                    window,
+                                                    cx,
+                                                );
                                                 cx.notify();
                                             })),
                                         )
@@ -2808,9 +3042,7 @@ impl ProfileManagerView {
                                 .label("Close")
                                 .small()
                                 .on_click(cx.listener(|this, _, window, cx| {
-                                    this.cor_editing_version_id = None;
-                                    this.clear_cor_version_editor(window, cx);
-                                    cx.notify();
+                                    this.close_cor_version_editor(window, cx);
                                 })),
                         ),
                 );
@@ -2869,7 +3101,7 @@ impl ProfileManagerView {
                                     .flex_col()
                                     .gap_1()
                                     .child(Self::field_label("Registration Date", cx))
-                                    .child(Input::new(&self.cor_registration_date_input)),
+                                    .child(DateInput::new(&self.cor_registration_date_input)),
                             ),
                     )
                     .child(
@@ -2891,7 +3123,7 @@ impl ProfileManagerView {
                                     .flex_col()
                                     .gap_1()
                                     .child(Self::field_label("Effective From", cx))
-                                    .child(Input::new(&self.cor_effective_from_input)),
+                                    .child(DateInput::new(&self.cor_effective_from_input)),
                             )
                             .child(
                                 div()
@@ -2899,7 +3131,7 @@ impl ProfileManagerView {
                                     .flex_col()
                                     .gap_1()
                                     .child(Self::field_label("Effective Until", cx))
-                                    .child(Input::new(&self.cor_effective_until_input)),
+                                    .child(DateInput::new(&self.cor_effective_until_input)),
                             ),
                     )
                     .child(
@@ -3094,9 +3326,7 @@ impl ProfileManagerView {
                             .label("Close")
                             .small()
                             .on_click(cx.listener(|this, _, window, cx| {
-                                this.cor_editing_version_id = None;
-                                this.clear_cor_version_editor(window, cx);
-                                cx.notify();
+                                this.close_cor_version_editor(window, cx);
                             })),
                     ),
             )
@@ -3230,8 +3460,13 @@ impl ProfileManagerView {
                             .label("Remove")
                             .small()
                             .on_click(cx.listener(
-                                move |this, _, _, cx| {
-                                    this.remove_cor_deadline_override(&version_id, index, cx);
+                                move |this, _, window, cx| {
+                                    this.remove_cor_deadline_override(
+                                        &version_id,
+                                        index,
+                                        window,
+                                        cx,
+                                    );
                                     cx.notify();
                                 },
                             )),
@@ -3313,7 +3548,9 @@ impl ProfileManagerView {
                                         cx,
                                     );
                                 });
-                                this.active_tab = 5;
+                                this.ocr_selected_version_id = None;
+                                this.active_tab = 1;
+                                this.cor_sub_tab = 1;
                                 cx.notify();
                             })),
                     ),
@@ -3413,8 +3650,11 @@ impl ProfileManagerView {
         }
     }
 
-    /// Render the tax election ledger section — per-year election management.
-    fn render_tax_election_section(&self, cx: &Context<Self>) -> Div {
+    /// Render user-confirmed per-year income-tax elections alongside COR reconciliation.
+    ///
+    /// `add_allowed` reflects eligibility for the currently selected Forms
+    /// Set year; existing elections are always listed and removable.
+    fn render_tax_election_section(&self, add_allowed: bool, cx: &Context<Self>) -> Div {
         let elections = &self.stored_tax_elections;
 
         div()
@@ -3431,7 +3671,7 @@ impl ProfileManagerView {
                     .text_sm()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(cx.theme().foreground)
-                    .child("Income Tax Rate Elections"),
+                    .child("Annual Income Tax Election (not extracted from COR)"),
             )
             .child(
                 div()
@@ -3487,7 +3727,7 @@ impl ProfileManagerView {
                                 div()
                                     .id(format!("remove_election_{}", year))
                                     .text_xs()
-                                    .text_color(gpui::Hsla::from(gpui::rgba(0xef4444ff)))
+                                    .text_color(cx.theme().danger)
                                     .cursor_pointer()
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         this.stored_tax_elections
@@ -3502,84 +3742,113 @@ impl ProfileManagerView {
                 this.child(table)
             })
             // ── Add new election row ──
-            .child(
-                div()
-                    .flex()
-                    .items_end()
-                    .gap_3()
-                    .mt_2()
-                    .child(
-                        div()
-                            .w(px(80.))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .mb_1()
-                                    .child("Year"),
-                            )
-                            .child(Input::new(&self.tax_election_year_input)),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .mb_1()
-                                    .child("Election"),
-                            )
-                            .child(Combobox::new(&self.tax_election_select)),
-                    )
-                    .child(
-                        gpui_component::button::Button::new("add_election_btn")
-                            .label("Add")
-                            .small()
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                let year_str = this
-                                    .tax_election_year_input
-                                    .read(cx)
-                                    .value()
-                                    .trim()
-                                    .to_string();
-                                let election_val = this
-                                    .tax_election_select
-                                    .read(cx)
-                                    .selected_value(cx);
-                                if let Ok(year) = year_str.parse::<u16>() {
-                                    let election = match election_val.as_str() {
-                                        "8% Flat Rate" => {
-                                            bir_core::profile::IncomeTaxElection::EightPercent
+            .when(!add_allowed, |this| {
+                this.child(
+                    div()
+                        .mt_2()
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(
+                            "The selected Forms Set year has no confirmed Individual segment registered as Self-Employed or Mixed Income, so new elections cannot be added. Existing elections above remain in effect and can be removed.",
+                        ),
+                )
+            })
+            .when(add_allowed, |this| {
+                this.child(
+                    div()
+                        .flex()
+                        .items_end()
+                        .gap_3()
+                        .mt_2()
+                        .child(
+                            div()
+                                .w(px(80.))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .mb_1()
+                                        .child("Year"),
+                                )
+                                .child(Input::new(&self.tax_election_year_input)),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .mb_1()
+                                        .child("Election"),
+                                )
+                                .child(Combobox::new(&self.tax_election_select)),
+                        )
+                        .child(
+                            gpui_component::button::Button::new("add_election_btn")
+                                .label("Add")
+                                .small()
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    let year_str = this
+                                        .tax_election_year_input
+                                        .read(cx)
+                                        .value()
+                                        .trim()
+                                        .to_string();
+                                    let election_val = this
+                                        .tax_election_select
+                                        .read(cx)
+                                        .selected_value(cx);
+                                    if let Ok(year) = year_str.parse::<u16>() {
+                                        // Eligibility is checked for the year
+                                        // being recorded, not the year that
+                                        // made the section visible.
+                                        if !this
+                                            .current_profile(cx)
+                                            .eligible_for_income_tax_election_in_year(year)
+                                        {
+                                            this.pending_notification = Some((
+                                                gpui_component::notification::NotificationType::Error,
+                                                format!(
+                                                    "No confirmed Individual segment registered as Self-Employed or Mixed Income covers {year}, so an income-tax election cannot be recorded for it. Review the COR timeline first."
+                                                ),
+                                            ));
+                                            cx.notify();
+                                            return;
                                         }
-                                        "Graduated + OSD" => {
-                                            bir_core::profile::IncomeTaxElection::GraduatedOsd
-                                        }
-                                        "Graduated + Itemized" => {
-                                            bir_core::profile::IncomeTaxElection::GraduatedItemized
-                                        }
-                                        _ => return,
-                                    };
-                                    // Remove existing election for this year, then add new
-                                    this.stored_tax_elections
-                                        .retain(|e| e.taxable_year != year);
-                                    this.stored_tax_elections
-                                        .push(bir_core::profile::TaxElectionHistory {
-                                            taxable_year: year,
-                                            election,
-                                            elected_at: chrono::Local::now().naive_local(),
-                                            source_form: "profile_manager".to_string(),
-                                        });
-                                    // Sort by year descending for display
-                                    this.stored_tax_elections
-                                        .sort_by_key(|b| std::cmp::Reverse(b.taxable_year));
-                                    this.mark_profile_changed();
-                                    cx.notify();
-                                }
-                            })),
-                    ),
-            )
+                                        let election = match election_val.as_str() {
+                                            "8% Flat Rate" => {
+                                                bir_core::profile::IncomeTaxElection::EightPercent
+                                            }
+                                            "Graduated + OSD" => {
+                                                bir_core::profile::IncomeTaxElection::GraduatedOsd
+                                            }
+                                            "Graduated + Itemized" => {
+                                                bir_core::profile::IncomeTaxElection::GraduatedItemized
+                                            }
+                                            _ => return,
+                                        };
+                                        // Remove existing election for this year, then add new
+                                        this.stored_tax_elections
+                                            .retain(|e| e.taxable_year != year);
+                                        this.stored_tax_elections
+                                            .push(bir_core::profile::TaxElectionHistory {
+                                                taxable_year: year,
+                                                election,
+                                                elected_at: chrono::Local::now().naive_local(),
+                                                source_form: "profile_manager".to_string(),
+                                            });
+                                        // Sort by year descending for display
+                                        this.stored_tax_elections
+                                            .sort_by_key(|b| std::cmp::Reverse(b.taxable_year));
+                                        this.mark_profile_changed();
+                                        cx.notify();
+                                    }
+                                })),
+                        ),
+                )
+            })
     }
 
     /// Reusable checkbox rendering helper.
@@ -3824,16 +4093,43 @@ impl ProfileManagerView {
     }
 
     fn add_custom_form(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
-        let raw_code = self
-            .forms_editor_new_code_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_uppercase();
-        if raw_code.is_empty() {
-            return;
-        }
-        let code = bir_core::forms::registry::canonical_form_code(&raw_code);
+        let code = if self.forms_editor_custom_code_mode {
+            let raw_code = self
+                .forms_editor_new_code_input
+                .read(cx)
+                .value()
+                .trim()
+                .to_uppercase();
+            if raw_code.is_empty() {
+                return;
+            }
+            bir_core::forms::registry::canonical_form_code(&raw_code)
+        } else {
+            // Registry mode: the combobox text may be a raw typed filter, not
+            // just a clicked option, so canonicalize it and require an exact
+            // registry match — a typo or alias must either resolve to the
+            // official code or be rejected, never stored verbatim.
+            let selected = self
+                .forms_editor_registry_form_select
+                .read(cx)
+                .selected_value(cx);
+            let raw = selected.split(" - ").next().unwrap_or("").trim().to_string();
+            if raw.is_empty() {
+                return;
+            }
+            let code = bir_core::forms::registry::canonical_form_code(&raw);
+            if bir_core::forms::registry::find_form(&code).is_none() {
+                self.pending_notification = Some((
+                    gpui_component::notification::NotificationType::Error,
+                    format!(
+                        "'{raw}' does not match an official form in the registry. Pick a form from the list, or switch to Custom code."
+                    ),
+                ));
+                cx.notify();
+                return;
+            }
+            code
+        };
 
         let reason = self
             .forms_editor_new_reason_input
@@ -3895,6 +4191,8 @@ impl ProfileManagerView {
 
         self.forms_editor_new_code_input
             .update(cx, |input, cx| input.set_value("", window, cx));
+        self.forms_editor_registry_form_select
+            .update(cx, |select, cx| select.set_selected_value("", window, cx));
         self.forms_editor_new_reason_input
             .update(cx, |input, cx| input.set_value("", window, cx));
         self.forms_editor_new_frequency_select
@@ -3918,7 +4216,7 @@ impl ProfileManagerView {
     }
 
     pub(super) fn render_active_forms_tab(&self, cx: &Context<Self>) -> gpui::AnyElement {
-        if self.active_tab != 5 || self.editing_id.is_none() {
+        if self.active_tab != 1 || self.cor_sub_tab != 1 || self.editing_id.is_none() {
             return div().into_any_element();
         }
 
@@ -3941,6 +4239,7 @@ impl ProfileManagerView {
 
         div()
             .flex()
+            .flex_col()
             .gap_4()
             .w_full()
             .h_full()
@@ -3948,7 +4247,7 @@ impl ProfileManagerView {
                 div()
                     .flex()
                     .flex_col()
-                    .w(gpui::relative(0.75))
+                    .w_full()
                     .gap_3()
                     .child(self.render_forms_editor_header(cx))
                     .child(
@@ -3986,20 +4285,20 @@ impl ProfileManagerView {
                                 .px_3()
                                 .py_2()
                                 .rounded_md()
-                                .bg(gpui::rgba(0xfee2e230))
+                                .bg(cx.theme().danger.opacity(0.08))
                                 .border_1()
-                                .border_color(gpui::rgba(0xef4444a0))
+                                .border_color(cx.theme().danger.opacity(0.5))
                                 .child(
                                     div()
                                         .text_xs()
                                         .font_weight(FontWeight::BOLD)
-                                        .text_color(gpui::rgb(0xb91c1c))
+                                        .text_color(cx.theme().danger)
                                         .child("Needs review before suggestions can refresh"),
                                 )
                                 .children(resolution_issues.into_iter().map(|message| {
                                     div()
                                         .text_xs()
-                                        .text_color(gpui::rgb(0x991b1b))
+                                        .text_color(cx.theme().danger)
                                         .child(message)
                                 })),
                         )
@@ -4019,20 +4318,20 @@ impl ProfileManagerView {
                                 .px_3()
                                 .py_2()
                                 .rounded_md()
-                                .bg(gpui::Hsla::from(gpui::rgba(0xfef3c720)))
+                                .bg(cx.theme().warning.opacity(0.12))
                                 .border_1()
-                                .border_color(gpui::Hsla::from(gpui::rgba(0xd97706a0)))
+                                .border_color(cx.theme().warning.opacity(0.45))
                                 .child(
                                     div()
                                         .text_sm()
                                         .font_weight(FontWeight::BOLD)
-                                        .text_color(gpui::Hsla::from(gpui::rgba(0xd97706ff)))
+                                        .text_color(cx.theme().warning)
                                         .child("⚠"),
                                 )
                                 .child(
                                     div()
                                         .text_xs()
-                                        .text_color(gpui::Hsla::from(gpui::rgba(0x92400eff)))
+                                        .text_color(cx.theme().warning_foreground)
                                         .child(conflict_msg),
                                 ),
                         )
@@ -4040,14 +4339,16 @@ impl ProfileManagerView {
                     .child(self.render_custom_form_creator(cx))
                     .child(self.render_obligations_table(&forms_set, cx)),
             )
-            .child(
-                div()
-                    .w(gpui::relative(0.25))
-                    .border_l_1()
-                    .border_color(cx.theme().border)
-                    .pl_4()
-                    .child(self.render_obligation_details(&forms_set, cx)),
-            )
+            .when(self.forms_editor_selected_code.is_some(), |this| {
+                this.child(
+                    div()
+                        .w_full()
+                        .border_t_1()
+                        .border_color(cx.theme().border)
+                        .pt_4()
+                        .child(self.render_obligation_details(&forms_set, cx)),
+                )
+            })
             .into_any_element()
     }
 
@@ -4167,6 +4468,7 @@ impl ProfileManagerView {
     }
 
     fn render_custom_form_creator(&self, cx: &Context<Self>) -> gpui::AnyElement {
+        let custom_mode = self.forms_editor_custom_code_mode;
         div()
             .flex()
             .flex_col()
@@ -4178,19 +4480,64 @@ impl ProfileManagerView {
             .bg(cx.theme().muted)
             .child(
                 div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(cx.theme().foreground)
+                            .child(if custom_mode {
+                                "Manually include a custom form code"
+                            } else {
+                                "Manually include an official form"
+                            }),
+                    )
+                    .child(
+                        gpui_component::button::Button::new("toggle_custom_form_code_mode")
+                            .label(if custom_mode {
+                                "Choose from official forms"
+                            } else {
+                                "Custom code…"
+                            })
+                            .small()
+                            .ghost()
+                            .on_click(cx.listener(|this, _ev, _window, cx| {
+                                this.forms_editor_custom_code_mode =
+                                    !this.forms_editor_custom_code_mode;
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .child(
+                div()
                     .text_xs()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(cx.theme().foreground)
-                    .child("Manually include a form"),
+                    .text_color(cx.theme().muted_foreground)
+                    .child(if custom_mode {
+                        "Custom codes are not validated against the official registry and become real filing obligations. Use this only for an obligation the registry does not list."
+                    } else {
+                        "Type to filter the official form registry. Only a selected registry form can be added here; use Custom code for anything else."
+                    }),
             )
             .child(
                 div()
                     .flex()
                     .items_center()
                     .gap_2()
-                    .child(div().flex_grow().child(gpui_component::input::Input::new(
-                        &self.forms_editor_new_code_input,
-                    )))
+                    .when(!custom_mode, |this| {
+                        this.child(
+                            div()
+                                .flex_grow()
+                                .child(Combobox::new(&self.forms_editor_registry_form_select)),
+                        )
+                    })
+                    .when(custom_mode, |this| {
+                        this.child(div().flex_grow().child(gpui_component::input::Input::new(
+                            &self.forms_editor_new_code_input,
+                        )))
+                    })
                     .child(
                         div()
                             .w(px(180.))
