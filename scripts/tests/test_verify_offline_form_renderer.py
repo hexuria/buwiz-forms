@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import importlib.util
+import io
 import json
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "verify_offline_form_renderer.py"
@@ -172,6 +175,117 @@ class VerifyOfflineFormRendererTests(unittest.TestCase):
         verifier.write_evidence(second_path, second, self.root)
         self.assertEqual(first_path.read_bytes(), second_path.read_bytes())
         self.assertEqual(json.loads(first_path.read_text()), first)
+
+    def test_build_identity_is_deterministic_external_and_non_promotional(self) -> None:
+        self.write_valid_bundle()
+        evidence = verifier.build_evidence(self.root, verifier.verify_renderer(self.root))
+        source_revision = {"status": "observed", "value": "a" * 40}
+
+        first = verifier.build_renderer_identity(evidence, source_revision)
+        second = verifier.build_renderer_identity(evidence, dict(source_revision))
+
+        self.assertEqual(first, second)
+        self.assertFalse(first["promotion_eligible"])
+        self.assertTrue(first["offline_verification_passed"])
+        self.assertEqual(first["renderer_bundle_sha256"], evidence["bundle_sha256"])
+        self.assertEqual(first["renderer_bundle_relative_path"], "form-renderer")
+        self.assertEqual(first["source_revision"], source_revision)
+
+        first_path = Path(self.temporary_directory.name) / "first-identity.json"
+        second_path = Path(self.temporary_directory.name) / "second-identity.json"
+        verifier.write_build_identity(first_path, first, self.root)
+        verifier.write_build_identity(second_path, second, self.root)
+        self.assertEqual(first_path.read_bytes(), second_path.read_bytes())
+        with self.assertRaisesRegex(ValueError, "outside the renderer bundle"):
+            verifier.write_build_identity(self.root / "identity.json", first, self.root)
+
+    def test_build_identity_keeps_dirty_source_explicitly_unavailable(self) -> None:
+        self.write_valid_bundle()
+        evidence = verifier.build_evidence(self.root, verifier.verify_renderer(self.root))
+        unavailable = {
+            "status": "unavailable",
+            "reason": "curated renderer source is dirty",
+        }
+
+        identity = verifier.build_renderer_identity(evidence, unavailable)
+
+        self.assertEqual(identity["source_revision"], unavailable)
+        with self.assertRaisesRegex(ValueError, "canonical Git commit"):
+            verifier.build_renderer_identity(
+                evidence,
+                {"status": "observed", "value": "not-a-revision"},
+            )
+
+    def test_source_revision_is_resolved_by_clean_migration_audit(self) -> None:
+        completed = mock.Mock(
+            returncode=0,
+            stdout=f"{'b' * 40}\n",
+        )
+        with mock.patch.object(verifier.subprocess, "run", return_value=completed) as run:
+            availability = verifier.resolve_curated_source_revision(
+                Path(self.temporary_directory.name)
+            )
+
+        self.assertEqual(
+            availability,
+            {"status": "observed", "value": "b" * 40},
+        )
+        arguments = run.call_args.args[0]
+        self.assertIn("--require-clean-source", arguments)
+        self.assertIn("--print-source-revision", arguments)
+
+    def test_source_revision_never_reuses_last_commit_for_dirty_source(self) -> None:
+        completed = mock.Mock(returncode=1, stdout="")
+        with mock.patch.object(verifier.subprocess, "run", return_value=completed):
+            availability = verifier.resolve_curated_source_revision(
+                Path(self.temporary_directory.name)
+            )
+
+        self.assertEqual(availability["status"], "unavailable")
+        self.assertIn("dirty", availability["reason"])
+
+    def test_package_identity_requires_clean_source_and_removes_stale_output(self) -> None:
+        self.write_valid_bundle()
+        identity_path = Path(self.temporary_directory.name) / "build-identity.json"
+        unavailable = {
+            "status": "unavailable",
+            "reason": "curated renderer source is dirty",
+        }
+        standard_arguments = [
+            str(SCRIPT_PATH),
+            str(self.root),
+            "--build-identity-out",
+            str(identity_path),
+        ]
+        with (
+            mock.patch.object(verifier.sys, "argv", standard_arguments),
+            mock.patch.object(
+                verifier,
+                "resolve_curated_source_revision",
+                return_value=unavailable,
+            ),
+            contextlib.redirect_stdout(io.StringIO()),
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            self.assertEqual(verifier.main(), 0)
+        self.assertEqual(
+            json.loads(identity_path.read_text(encoding="utf-8"))["source_revision"],
+            unavailable,
+        )
+
+        strict_arguments = [*standard_arguments, "--require-source-revision"]
+        with (
+            mock.patch.object(verifier.sys, "argv", strict_arguments),
+            mock.patch.object(
+                verifier,
+                "resolve_curated_source_revision",
+                return_value=unavailable,
+            ),
+            contextlib.redirect_stdout(io.StringIO()),
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            self.assertEqual(verifier.main(), 1)
+        self.assertFalse(identity_path.exists(), "strict failure must remove stale identity")
 
     def test_allows_reachable_arimo_license_and_provenance_documents(self) -> None:
         self.write_valid_bundle()

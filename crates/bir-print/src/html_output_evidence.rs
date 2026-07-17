@@ -26,6 +26,9 @@ use crate::html_support::{validate_renderer_geometry, RendererGeometryReport, Re
 
 pub const DEVELOPMENT_NATIVE_OUTPUT_TRANSCRIPT_SCHEMA_VERSION: u8 = 1;
 pub const DEVELOPMENT_NATIVE_OUTPUT_OBSERVATION_SCHEMA_VERSION: u8 = 1;
+pub const OFFLINE_RENDERER_BUILD_IDENTITY_SCHEMA_VERSION: u8 = 1;
+pub const OFFLINE_RENDERER_BUILD_IDENTITY_FILE_NAME: &str = "form-renderer-build-identity.json";
+pub const OFFLINE_RENDERER_BUILD_IDENTITY_RELATIVE_PATH: &str = "form-renderer";
 pub const MACOS_RENDERER_BUNDLE_RELATIVE_PATH: &str = "Contents/Resources/assets/form-renderer";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -347,6 +350,78 @@ impl<T> DevelopmentEvidenceAvailability<T> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OfflineRendererBuildIdentityScope {
+    BuildTimeNonPromotionalIdentity,
+}
+
+/// Deterministic identity emitted by the offline verifier beside the renderer.
+///
+/// This is deliberately not a package attestation. The runtime must hash the
+/// renderer independently and compare that observation with this expected
+/// build-time value; package signing and an external collector remain separate
+/// release-evidence requirements.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OfflineRendererBuildIdentityV1 {
+    pub schema_version: u8,
+    pub scope: OfflineRendererBuildIdentityScope,
+    pub promotion_eligible: bool,
+    pub offline_verification_passed: bool,
+    pub renderer_bundle_relative_path: String,
+    pub renderer_bundle_sha256: String,
+    pub source_revision: DevelopmentEvidenceAvailability<String>,
+}
+
+impl OfflineRendererBuildIdentityV1 {
+    pub fn validate_non_promotional(&self) -> Result<(), DevelopmentNativeOutputEvidenceError> {
+        if self.schema_version != OFFLINE_RENDERER_BUILD_IDENTITY_SCHEMA_VERSION {
+            return invalid(format!(
+                "renderer build identity schema_version must be {}",
+                OFFLINE_RENDERER_BUILD_IDENTITY_SCHEMA_VERSION
+            ));
+        }
+        if self.scope != OfflineRendererBuildIdentityScope::BuildTimeNonPromotionalIdentity {
+            return invalid(
+                "renderer build identity scope must remain build_time_non_promotional_identity",
+            );
+        }
+        if self.promotion_eligible {
+            return invalid("renderer build identity must never be promotion eligible");
+        }
+        if !self.offline_verification_passed {
+            return invalid("renderer build identity requires a passed offline verification");
+        }
+        if self.renderer_bundle_relative_path != OFFLINE_RENDERER_BUILD_IDENTITY_RELATIVE_PATH {
+            return invalid("renderer build identity has an unexpected bundle-relative path");
+        }
+        verify_digest(
+            "renderer build identity bundle sha256",
+            &self.renderer_bundle_sha256,
+        )?;
+        match &self.source_revision {
+            DevelopmentEvidenceAvailability::Observed { value }
+                if value.len() == 40
+                    && value
+                        .bytes()
+                        .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) => {}
+            DevelopmentEvidenceAvailability::Observed { .. } => {
+                return invalid(
+                    "renderer build identity source revision must be a canonical Git commit",
+                );
+            }
+            DevelopmentEvidenceAvailability::Unavailable { reason } if reason.trim().is_empty() => {
+                return invalid(
+                    "renderer build identity source-revision unavailability requires a reason",
+                );
+            }
+            DevelopmentEvidenceAvailability::Unavailable { .. } => {}
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NativeNonceObservationV1 {
@@ -502,6 +577,16 @@ pub fn encode_development_native_output_observation(
     let mut encoded = serde_json::to_vec_pretty(observation)?;
     encoded.push(b'\n');
     Ok(encoded)
+}
+
+/// Decode and validate the build-time identity without treating it as a
+/// package signature or release transcript.
+pub fn decode_offline_renderer_build_identity(
+    bytes: &[u8],
+) -> Result<OfflineRendererBuildIdentityV1, DevelopmentNativeOutputEvidenceError> {
+    let identity: OfflineRendererBuildIdentityV1 = serde_json::from_slice(bytes)?;
+    identity.validate_non_promotional()?;
+    Ok(identity)
 }
 
 pub fn geometry_page_rect_sha256(
@@ -2042,6 +2127,39 @@ mod tests {
             serde_json::from_slice::<DevelopmentNativeOutputTranscriptV1>(&encoded).is_err(),
             "an incomplete runtime observation must not parse as the strict transcript"
         );
+    }
+
+    #[test]
+    fn offline_renderer_build_identity_is_strictly_nonpromotional() {
+        let identity = OfflineRendererBuildIdentityV1 {
+            schema_version: OFFLINE_RENDERER_BUILD_IDENTITY_SCHEMA_VERSION,
+            scope: OfflineRendererBuildIdentityScope::BuildTimeNonPromotionalIdentity,
+            promotion_eligible: false,
+            offline_verification_passed: true,
+            renderer_bundle_relative_path: OFFLINE_RENDERER_BUILD_IDENTITY_RELATIVE_PATH
+                .to_string(),
+            renderer_bundle_sha256: "a".repeat(64),
+            source_revision: DevelopmentEvidenceAvailability::observed("b".repeat(40)),
+        };
+        let encoded = serde_json::to_vec(&identity).expect("build identity JSON");
+        assert_eq!(
+            decode_offline_renderer_build_identity(&encoded).expect("valid build identity"),
+            identity
+        );
+
+        let mut promoting = identity.clone();
+        promoting.promotion_eligible = true;
+        assert!(promoting.validate_non_promotional().is_err());
+
+        let mut wrong_path = identity.clone();
+        wrong_path.renderer_bundle_relative_path = "../different-renderer".to_string();
+        assert!(wrong_path.validate_non_promotional().is_err());
+
+        let mut dirty_source = identity;
+        dirty_source.source_revision = DevelopmentEvidenceAvailability::unavailable(
+            "curated renderer source was dirty during the local build",
+        );
+        assert!(dirty_source.validate_non_promotional().is_ok());
     }
 
     #[test]

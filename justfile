@@ -134,6 +134,13 @@ build-form-renderer:
     npm run build:forms
     npm run verify:forms:offline
 
+# Re-check the generated renderer against a clean curated source revision
+# before copying it into any distributable package. The resulting identity is
+# a non-promotional sibling of assets/form-renderer, so its expected tree hash
+# cannot recursively include itself.
+build-packaged-form-renderer: build-form-renderer
+    npm run verify:forms:offline:package
+
 # Install a built package (auto-detects available artifacts)
 # Usage: just install [format]
 # Formats: exe, msix (Windows) | app, pkg, dmg (macOS) | deb, tar (Linux)
@@ -274,17 +281,27 @@ install format="":
             ;;
     esac
 
-# Build and package the app for Mac App Store submission
+# Build and package the app for Mac App Store submission. Resolve the next
+# counter into the child process environment so the strict renderer source gate
+# runs before any tracked build-number update is needed.
 # Set CODESIGN_IDENTITY env var to override the default ad-hoc signing ("-")
-app *args="": bump-build
+app *args="":
     @if [ "{{os()}}" = "macos" ]; then \
-        just _package-mac-appstore "{{args}}"; \
+        set -a && source .env && set +a; \
+        if ! NEXT_BUILD_NUMBER="$(uv run scripts/bump_build.py --print-next)"; then \
+            echo "Could not resolve the next App Store build number" >&2; exit 1; \
+        fi; \
+        case "$NEXT_BUILD_NUMBER" in \
+            ''|*[!0-9]*) echo "Invalid App Store build number: $NEXT_BUILD_NUMBER" >&2; exit 1 ;; \
+        esac; \
+        echo "Building App Store package with build $NEXT_BUILD_NUMBER"; \
+        BUILD_NUMBER="$NEXT_BUILD_NUMBER" just _package-mac-appstore "{{args}}"; \
     else \
         echo "⚠️ App Store builds are only supported on macOS."; \
     fi
 
 # Build the Inno Setup executable installer (Windows only)
-exe *args="": build-form-renderer
+exe *args="": build-packaged-form-renderer
     #!pwsh -NoProfile
     $ErrorActionPreference = 'Stop'
     
@@ -320,7 +337,7 @@ exe *args="": build-form-renderer
 # This artifact is intentionally excluded from public GitHub releases. Store
 # promotion remains blocked until the manifest artwork dimensions and packaged
 # MSVC runtime behavior pass their separate Windows certification checks.
-msix *args="": build-form-renderer
+msix *args="": build-packaged-form-renderer
     #!pwsh -NoProfile
     $ErrorActionPreference = 'Stop'
     Write-Warning "STORE-ONLY MSIX candidate; not a public GitHub release artifact"
@@ -497,7 +514,7 @@ clean:
 
 # --- Hidden OS-specific packaging tasks ---
 
-_package-mac args="": build-form-renderer
+_package-mac args="": build-packaged-form-renderer
     #!/usr/bin/env bash
     set -e
     FEATURES=""
@@ -551,7 +568,7 @@ _package-mac args="": build-form-renderer
         cd {{RELEASE_DIR}} && zip -r "{{APP_NAME}}-macOS-{{VERSION}}.zip" "{{APP_NAME}}.app"; \
     fi
 
-_package-mac-appstore args="": build-form-renderer
+_package-mac-appstore args="": build-packaged-form-renderer
     #!/usr/bin/env bash
     set -e
     CERT="${CODESIGN_IDENTITY:--}"
@@ -636,7 +653,7 @@ _package-mac-appstore args="": build-form-renderer
 
 # NOTE: _package-win was removed — use 'just exe' or 'just msix' instead.
 
-_package-linux args="": build-form-renderer
+_package-linux args="": build-packaged-form-renderer
     #!/usr/bin/env bash
     set -e
     FEATURES=""

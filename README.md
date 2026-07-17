@@ -197,7 +197,7 @@ The project uses **two independent version identifiers** to satisfy both Apple A
 | Identifier | Source of Truth | Changed By | When |
 |---|---|---|---|
 | **App Version** (semver) | `Cargo.toml` → `version = "0.1.0"` | You, manually | Feature release or hotfix |
-| **Build Number** (counter) | `justfile` → `BUILD_NUMBER := "26"` | `just bump-build` (auto) | Every store submission |
+| **Build Number** (counter) | `BUILD_NUMBER` environment override, with the `justfile` value as the committed cross-store default | `just app` (ephemeral) or `just bump-build` (committed) | Every store submission |
 
 ### Why Two Numbers?
 
@@ -227,14 +227,20 @@ Microsoft Store:
 
 ### Developer Workflow
 
-**Submitting a new build** (most common):
+**Submitting a macOS App Store build** (most common):
 ```bash
-just bump-build    # Queries App Store Connect API, increments BUILD_NUMBER in justfile
+just app  # Queries App Store Connect and passes the next counter without editing tracked source
+```
+
+Keeping the checkout clean lets packaged renderer identity verification bind
+the build to its exact curated source revision before the app is assembled.
+
+**Persisting one counter for both stores:**
+```bash
+just bump-build
 git add justfile && git commit -m "build: bump to $(just --evaluate BUILD_NUMBER)"
-# On macOS:
-just app           # Builds the .app with the newly incremented build number
-# On Windows:
-just msix          # Builds the .msix with the current build number
+just app   # macOS package; the live API counter is passed through the environment
+just msix  # Windows package; uses the committed default counter
 ```
 
 **Releasing a new version** (feature release or hotfix):

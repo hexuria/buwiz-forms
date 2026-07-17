@@ -17,7 +17,8 @@
     "test:forms": "npm run test --workspace @ebirforms/form-renderer",
     "test:forms:visual": "playwright test --config packages/form-renderer/playwright.config.ts",
     "typecheck:forms": "npm run typecheck --workspaces --if-present",
-    "verify:forms:offline": "node scripts/run_python.mjs scripts/verify_offline_form_renderer.py assets/form-renderer"
+    "verify:forms:offline": "node scripts/run_python.mjs scripts/verify_offline_form_renderer.py assets/form-renderer --build-identity-out assets/form-renderer-build-identity.json --source-root .",
+    "verify:forms:offline:package": "npm run verify:forms:offline -- --require-source-revision"
   },
   "devDependencies": {
     "@playwright/test": "1.58.2",

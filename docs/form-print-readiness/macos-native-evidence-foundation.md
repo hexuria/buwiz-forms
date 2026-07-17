@@ -101,9 +101,24 @@ This observation shape is intentionally different from
 `DevelopmentNativeOutputTranscriptV1`, requires at least one concrete strict
 verifier gap, rejects `promotion_eligible: true`, and cannot be deserialized as
 the strict transcript. A cargo-run build records the package hash as unavailable
-rather than treating the executable as a package. Source revision and the
-independently produced offline bundle hash also remain unavailable until the
-build/package pipeline binds them to the running process.
+rather than treating the executable as a package.
+
+The offline verifier now writes
+`assets/form-renderer-build-identity.json` beside (never inside)
+`assets/form-renderer`. It contains the deterministic renderer tree hash and a
+canonical curated source revision only when the migration audit proves that
+source set clean. A dirty developer checkout receives an explicit unavailable
+source revision; the last commit is never mislabeled as the source of dirty
+renderer bytes. Package recipes run the stricter
+`npm run verify:forms:offline:package`, which fails unless that clean revision
+is available before any assets are copied into an installer or app bundle.
+
+The development runtime reads this separate build-time identity, hashes the
+running renderer independently, and binds the source revision only when both
+bundle hashes agree. Missing, malformed, symlinked, oversized, or mismatched
+identity files remain explicit observation gaps. The identity is still
+non-promotional: it is package content, not a package signature or an external
+collector attestation, and it cannot establish the running package hash.
 
 Example opt-in location:
 
@@ -134,6 +149,9 @@ the output document:
    destination preservation and temporary-file cleanup.
 5. Resolve the canonical source, stable package tree, independently produced
    offline bundle tree hash, and immutable envelope artifacts used by that run.
+   The build identity supplies a deterministic expected renderer hash and
+   source revision to compare, but the collector must still attest the signed
+   package containing that identity.
 6. Write the transcript outside the signed application package and invoke this
    verifier as a separate diagnostic step.
 7. Attest one causal run binding the package, independently expected renderer
@@ -151,8 +169,13 @@ Use a workspace-local temporary directory:
 
 ```sh
 TMPDIR=/Volumes/goldcoders/reverse-engineer-ebir-forms/bir-print-parity/target/tmp \
-  rtk cargo test --locked -p bir-print --features native-output-evidence html_output_evidence
+  cargo test --locked -p bir-print --features native-output-evidence html_output_evidence
 
 TMPDIR=/Volumes/goldcoders/reverse-engineer-ebir-forms/bir-print-parity/target/tmp \
-  rtk cargo check --locked -p bir-print --features native-output-evidence
+  cargo check --locked -p bir-print --features native-output-evidence
+
+npm run verify:forms:offline
+
+# Package builds require a clean curated source revision.
+npm run verify:forms:offline:package
 ```

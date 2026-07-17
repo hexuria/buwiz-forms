@@ -81,6 +81,7 @@ test_windows.rs
 # Node JS
 node_modules/
 /assets/form-renderer/
+/assets/form-renderer-build-identity.json
 /test-results/form-renderer/
 
 # Stow directory (managed separately)

@@ -15,6 +15,7 @@ import hashlib
 import json
 import math
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from html.parser import HTMLParser
@@ -64,6 +65,9 @@ ALLOWED_BUNDLE_DOCUMENTS = {
     PurePosixPath("third-party/arimo/LICENSE.txt"),
     PurePosixPath("third-party/arimo/PROVENANCE.json"),
 }
+BUILD_IDENTITY_SCHEMA_VERSION = 1
+BUILD_IDENTITY_SCOPE = "build_time_non_promotional_identity"
+BUILD_IDENTITY_RENDERER_RELATIVE_PATH = "form-renderer"
 
 # The native renderer is loaded from this pinned local origin/custom protocol.
 # Neither origin is permitted for document references, and connect-src remains
@@ -1088,6 +1092,96 @@ def write_evidence(evidence_path: Path, evidence: dict, renderer_dir: Path) -> N
     )
 
 
+def resolve_curated_source_revision(source_root: Path) -> dict:
+    """Resolve a clean curated revision without trusting caller-supplied text.
+
+    The migration audit owns the curated path set. Reusing its public CLI keeps
+    package identity tied to the same revision boundary as release evidence.
+    A dirty or unavailable checkout is recorded explicitly rather than being
+    mislabeled with the last committed revision.
+    """
+
+    audit_script = Path(__file__).resolve().with_name(
+        "audit_html_form_migration.py"
+    )
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(audit_script),
+                "--root",
+                str(source_root.resolve()),
+                "--print-source-revision",
+                "--require-clean-source",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        result = None
+
+    if result is not None:
+        revision = result.stdout.strip()
+        if result.returncode == 0 and re.fullmatch(r"[0-9a-f]{40}", revision):
+            return {"status": "observed", "value": revision}
+
+    return {
+        "status": "unavailable",
+        "reason": (
+            "curated renderer source is dirty or its canonical revision "
+            "could not be resolved by the migration audit"
+        ),
+    }
+
+
+def build_renderer_identity(
+    evidence: dict,
+    source_revision: dict,
+) -> dict:
+    """Create a deterministic, non-promotional build identity.
+
+    This object lives beside, never inside, the renderer directory. Its expected
+    digest therefore cannot become a recursive input to the bundle tree hash.
+    """
+
+    if not evidence.get("passed"):
+        raise ValueError("cannot identify an offline renderer that failed verification")
+    bundle_sha256 = evidence.get("bundle_sha256")
+    if not isinstance(bundle_sha256, str) or not SHA256_PATTERN.fullmatch(
+        bundle_sha256
+    ):
+        raise ValueError("offline renderer evidence has no canonical bundle hash")
+    if source_revision.get("status") == "observed":
+        value = source_revision.get("value")
+        if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{40}", value) is None:
+            raise ValueError("observed source revision is not a canonical Git commit")
+    elif source_revision.get("status") == "unavailable":
+        reason = source_revision.get("reason")
+        if not isinstance(reason, str) or not reason.strip():
+            raise ValueError("unavailable source revision requires a reason")
+    else:
+        raise ValueError("source revision availability is invalid")
+
+    return {
+        "schema_version": BUILD_IDENTITY_SCHEMA_VERSION,
+        "scope": BUILD_IDENTITY_SCOPE,
+        "promotion_eligible": False,
+        "offline_verification_passed": True,
+        "renderer_bundle_relative_path": BUILD_IDENTITY_RENDERER_RELATIVE_PATH,
+        "renderer_bundle_sha256": bundle_sha256,
+        "source_revision": source_revision,
+    }
+
+
+def write_build_identity(
+    identity_path: Path,
+    identity: dict,
+    renderer_dir: Path,
+) -> None:
+    write_evidence(identity_path, identity, renderer_dir)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -1101,7 +1195,36 @@ def main() -> int:
         type=Path,
         help="write deterministic machine-readable static bundle evidence",
     )
+    parser.add_argument(
+        "--build-identity-out",
+        type=Path,
+        help=(
+            "write a deterministic non-promotional identity beside the renderer "
+            "bundle for the native package"
+        ),
+    )
+    parser.add_argument(
+        "--source-root",
+        type=Path,
+        default=Path(__file__).resolve().parent.parent,
+        help="repository root used to resolve the curated source revision",
+    )
+    parser.add_argument(
+        "--require-source-revision",
+        action="store_true",
+        help="fail unless the curated renderer source worktree is clean",
+    )
     args = parser.parse_args()
+
+    if args.require_source_revision and not args.build_identity_out:
+        parser.error("--require-source-revision requires --build-identity-out")
+
+    if args.build_identity_out:
+        try:
+            args.build_identity_out.unlink(missing_ok=True)
+        except OSError as error:
+            print(f"Cannot clear stale renderer build identity: {error}", file=sys.stderr)
+            return 1
 
     errors = verify_renderer(args.renderer_dir)
     evidence = build_evidence(args.renderer_dir, errors)
@@ -1112,16 +1235,44 @@ def main() -> int:
             print(f"Cannot write renderer evidence: {error}", file=sys.stderr)
             return 1
 
+    source_revision = None
+    if args.build_identity_out:
+        source_revision = resolve_curated_source_revision(args.source_root)
+        if (
+            args.require_source_revision
+            and source_revision.get("status") != "observed"
+        ):
+            print(
+                "Cannot write packaged renderer identity: curated renderer source "
+                "must be clean and have a canonical revision",
+                file=sys.stderr,
+            )
+            return 1
+
     if errors:
         print("Offline source-bundle verification failed:", file=sys.stderr)
         for error in errors:
             print(f"- {error}", file=sys.stderr)
         return 1
 
+    if args.build_identity_out:
+        try:
+            identity = build_renderer_identity(evidence, source_revision)
+            write_build_identity(
+                args.build_identity_out,
+                identity,
+                args.renderer_dir,
+            )
+        except (OSError, ValueError) as error:
+            print(f"Cannot write renderer build identity: {error}", file=sys.stderr)
+            return 1
+
     print(
         f"Offline source bundle verified: {args.renderer_dir} "
         f"({evidence['bundle_sha256']})"
     )
+    if args.build_identity_out:
+        print(f"Renderer build identity written: {args.build_identity_out}")
     print("Packaged/native network runtime was not exercised.")
     return 0
 

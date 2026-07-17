@@ -6,13 +6,16 @@
 # ]
 # ///
 
+import argparse
 import os
-import time
+import re
 import sys
+import time
 from pathlib import Path
+
 import jwt
 import requests
-import re
+
 
 def get_latest_build():
     issuer_id = os.environ.get("APP_STORE_ISSUER_ID")
@@ -21,15 +24,21 @@ def get_latest_build():
     bundle_id = "dev.goldcoders.bir"
 
     if not all([issuer_id, key_id, p8_path]):
-        print("Error: Missing App Store Connect API credentials in environment variables.")
-        print("Please set APP_STORE_ISSUER_ID, APP_STORE_KEY_ID, and APP_STORE_P8_PATH.")
+        print(
+            "Error: Missing App Store Connect API credentials in environment variables.",
+            file=sys.stderr,
+        )
+        print(
+            "Please set APP_STORE_ISSUER_ID, APP_STORE_KEY_ID, and APP_STORE_P8_PATH.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     try:
         with open(p8_path, "r") as f:
             private_key = f.read()
     except Exception as e:
-        print(f"Error reading private key at {p8_path}: {e}")
+        print(f"Error reading private key at {p8_path}: {e}", file=sys.stderr)
         sys.exit(1)
 
     # 1. Generate JWT Token
@@ -59,7 +68,10 @@ def get_latest_build():
     apps_data = apps_res.json()
     
     if not apps_data["data"]:
-        print(f"Error: App with bundle ID {bundle_id} not found in App Store Connect.")
+        print(
+            f"Error: App with bundle ID {bundle_id} not found in App Store Connect.",
+            file=sys.stderr,
+        )
         sys.exit(1)
         
     app_id = apps_data["data"][0]["id"]
@@ -73,11 +85,12 @@ def get_latest_build():
     builds_data = builds_res.json()
     
     if not builds_data["data"]:
-        print("No previous builds found. Starting from build 1.")
+        print("No previous builds found. Starting from build 1.", file=sys.stderr)
         return 0
         
     latest_build = builds_data["data"][0]["attributes"]["version"]
     return int(latest_build)
+
 
 def bump_justfile_build(new_build: int):
     justfile_path = Path("justfile")
@@ -101,9 +114,30 @@ def bump_justfile_build(new_build: int):
     justfile_path.write_text(new_content)
     print(f"Successfully updated justfile BUILD_NUMBER to {new_build}")
 
-if __name__ == "__main__":
-    print("Fetching latest build number from App Store Connect...")
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--print-next",
+        action="store_true",
+        help=(
+            "print only the next App Store build number without modifying "
+            "tracked source"
+        ),
+    )
+    args = parser.parse_args(argv)
+
+    print("Fetching latest build number from App Store Connect...", file=sys.stderr)
     latest = get_latest_build()
     next_build = latest + 1
-    print(f"Latest build is {latest}. Bumping to {next_build}...")
+    if args.print_next:
+        print(next_build)
+        return 0
+
+    print(f"Latest build is {latest}. Bumping to {next_build}...", file=sys.stderr)
     bump_justfile_build(next_build)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
