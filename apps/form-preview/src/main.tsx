@@ -32,6 +32,7 @@ let measurementSequence = 0;
 let renderEpoch = 0;
 let hasRenderedEnvelope = false;
 let pendingPrintNonce: number | undefined;
+let layoutInvalidationFrame: number | undefined;
 const readinessDeadlineMs = 4_000;
 const nativePrintModeClass = "ebir-native-print-mode";
 const rendererDocumentRunId = window.__EBIR_RENDER_DOCUMENT_RUN_ID__ ?? "";
@@ -111,11 +112,17 @@ function nextAnimationFrame() {
   });
 }
 
-async function awaitPrintableFonts() {
+async function awaitPrintableFonts(deadline: number) {
   // Font metrics affect every field-cell boundary. Readiness must represent
   // the exact bundled faces, not a fallback-font layout captured one frame
   // early. FontFaceSet.ready alone also resolves after a face fails.
-  await assertBundledPrintableFontsReady(document.fonts);
+  const remainingMs = deadline - performance.now();
+  if (remainingMs <= 0) {
+    throw new Error(
+      "Bundled printable fonts did not settle before the readiness deadline"
+    );
+  }
+  await assertBundledPrintableFontsReady(document.fonts, remainingMs);
 }
 
 async function waitForRenderedPages(
@@ -126,7 +133,7 @@ async function waitForRenderedPages(
   printNonce?: number
 ) {
   try {
-    await awaitPrintableFonts();
+    await awaitPrintableFonts(deadline);
     if (sequence !== measurementSequence) return;
     await nextAnimationFrame();
     if (sequence !== measurementSequence) return;
@@ -249,30 +256,65 @@ window.prepareEbirFormForNativePrint = (nonce) => {
   requestGeometryValidation(nonce);
 };
 
-const invalidateForLayoutChange = () => requestGeometryValidation();
+const invalidateForLayoutChange = () => {
+  if (!hasRenderedEnvelope || layoutInvalidationFrame !== undefined) return;
+  layoutInvalidationFrame = window.requestAnimationFrame(() => {
+    layoutInvalidationFrame = undefined;
+    requestGeometryValidation();
+  });
+};
 const resizeObserver =
   typeof ResizeObserver === "undefined"
     ? undefined
     : new ResizeObserver(invalidateForLayoutChange);
+const observedResizeTargets = new Set<Element>();
 
 const refreshResizeTargets = () => {
   if (!resizeObserver) return;
-  resizeObserver.disconnect();
-  resizeObserver.observe(rootElement);
-  rootElement
-    .querySelectorAll<HTMLElement>(".form-page")
-    .forEach((page) => resizeObserver.observe(page));
+  const nextTargets = new Set<Element>([
+    rootElement,
+    ...rootElement.querySelectorAll<HTMLElement>(".form-page")
+  ]);
+  for (const target of observedResizeTargets) {
+    if (nextTargets.has(target)) continue;
+    resizeObserver.unobserve(target);
+    observedResizeTargets.delete(target);
+  }
+  for (const target of nextTargets) {
+    if (observedResizeTargets.has(target)) continue;
+    resizeObserver.observe(target);
+    observedResizeTargets.add(target);
+  }
 };
 
-new MutationObserver(() => {
-  refreshResizeTargets();
-  invalidateForLayoutChange();
+const rendererOwnedAdaptiveAttributes = new Set([
+  "data-adaptive-fit-state",
+  "data-adaptive-font-size-px",
+  "style"
+]);
+
+new MutationObserver((mutations) => {
+  if (mutations.some((mutation) => mutation.type === "childList")) {
+    refreshResizeTargets();
+  }
+  const hasExternalLayoutMutation = mutations.some((mutation) => {
+    if (mutation.type !== "attributes") return true;
+    return !(
+      mutation.target instanceof HTMLElement &&
+      mutation.target.classList.contains("adaptive-plain-value") &&
+      mutation.attributeName !== null &&
+      rendererOwnedAdaptiveAttributes.has(mutation.attributeName)
+    );
+  });
+  if (hasExternalLayoutMutation) invalidateForLayoutChange();
 }).observe(rootElement, {
   attributes: true,
   characterData: true,
   childList: true,
   subtree: true
 });
+
+refreshResizeTargets();
 
 window.addEventListener("resize", invalidateForLayoutChange);
 document.fonts?.addEventListener("loading", invalidateForLayoutChange);

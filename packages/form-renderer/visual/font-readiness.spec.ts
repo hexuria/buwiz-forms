@@ -1,4 +1,16 @@
 import { expect, test, type Page } from "@playwright/test";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const ADAPTIVE_VALUE_ENVELOPE = JSON.parse(
+  fs.readFileSync(
+    path.resolve(HERE, "../../form-contracts/fixtures/2551q-6-rows.json"),
+    "utf8"
+  )
+) as { taxpayer: { name: string } };
+ADAPTIVE_VALUE_ENVELOPE.taxpayer.name = "N".repeat(27);
 
 type RendererHostMessage = {
   type?: string;
@@ -67,6 +79,49 @@ test("the shipped Arimo faces permit renderer and native-print readiness", async
   expect(messages.some((message) => message.type === "renderer_error")).toBe(
     false
   );
+});
+
+test("adaptive fitting and native print readiness become quiescent", async ({
+  page
+}) => {
+  await installHostMessageRecorder(page);
+  await page.addInitScript((envelope) => {
+    (window as Window & { __EBIR_RENDER_ENVELOPE__?: unknown })
+      .__EBIR_RENDER_ENVELOPE__ = envelope;
+  }, ADAPTIVE_VALUE_ENVELOPE);
+  await page.goto("/");
+  await page.waitForFunction(() => {
+    const encoded =
+      (window as RendererTestWindow).__EBIR_TEST_HOST_MESSAGES__ ?? [];
+    return encoded
+      .map((message) => JSON.parse(message) as RendererHostMessage)
+      .some((message) => message.type === "renderer_ready");
+  });
+  await expect(page.locator('[data-adaptive-fit-state="pending"]')).toHaveCount(0);
+
+  const invalidationsAtReady = await invalidationCount(page);
+  await page.waitForTimeout(350);
+  expect(await invalidationCount(page)).toBe(invalidationsAtReady);
+
+  await page.evaluate(() => {
+    const prepare = (window as RendererTestWindow).prepareEbirFormForNativePrint;
+    if (!prepare) throw new Error("Native print preflight is unavailable");
+    prepare(72);
+  });
+  await page.waitForFunction(() => {
+    const encoded =
+      (window as RendererTestWindow).__EBIR_TEST_HOST_MESSAGES__ ?? [];
+    return encoded
+      .map(
+        (message) =>
+          JSON.parse(message) as RendererHostMessage & { nonce?: number }
+      )
+      .some((message) => message.type === "print_ready" && message.nonce === 72);
+  });
+
+  const invalidationsAtPrintReady = await invalidationCount(page);
+  await page.waitForTimeout(350);
+  expect(await invalidationCount(page)).toBe(invalidationsAtPrintReady);
 });
 
 test("a failed bundled-font request emits only renderer errors", async ({
@@ -138,3 +193,13 @@ test("a failed bundled-font request emits only renderer errors", async ({
     false
   );
 });
+
+async function invalidationCount(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const encoded =
+      (window as RendererTestWindow).__EBIR_TEST_HOST_MESSAGES__ ?? [];
+    return encoded
+      .map((message) => JSON.parse(message) as RendererHostMessage)
+      .filter((message) => message.type === "renderer_invalidated").length;
+  });
+}

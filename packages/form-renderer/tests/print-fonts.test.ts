@@ -128,5 +128,21 @@ describe("bundled printable font readiness", () => {
     await expect(
       assertBundledPrintableFontsReady(rejectedReady)
     ).rejects.toThrow("Bundled printable font set failed to settle");
+
+    const pendingReady = loadedFontSet({
+      ready: new Promise(() => undefined)
+    });
+    await expect(
+      assertBundledPrintableFontsReady(pendingReady, 5)
+    ).rejects.toThrow("Bundled printable font set failed to settle");
+
+    const pendingFace = loadedFontSet({
+      load: vi.fn(
+        () => new Promise<readonly never[]>(() => undefined)
+      )
+    });
+    await expect(
+      assertBundledPrintableFontsReady(pendingFace, 5)
+    ).rejects.toThrow("Required bundled printable font face is unavailable");
   });
 });

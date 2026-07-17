@@ -165,6 +165,9 @@ export function AdaptivePlainValue({
     if (!element) return;
 
     let active = true;
+    const resizeTarget = element.parentElement;
+    let lastFittedTargetWidth: number | undefined;
+    let lastFittedTargetHeight: number | undefined;
     const refit = () => {
       if (!active) return;
       fitAdaptivePlainValue(element, {
@@ -172,6 +175,11 @@ export function AdaptivePlainValue({
         minFontSizePx,
         fontStepPx
       });
+      if (resizeTarget) {
+        const bounds = resizeTarget.getBoundingClientRect();
+        lastFittedTargetWidth = bounds.width;
+        lastFittedTargetHeight = bounds.height;
+      }
     };
 
     refit();
@@ -180,8 +188,26 @@ export function AdaptivePlainValue({
 
     const resizeObserver = typeof ResizeObserver === "undefined"
       ? undefined
-      : new ResizeObserver(refit);
-    resizeObserver?.observe(element);
+      : new ResizeObserver(() => {
+          if (!active || !resizeTarget) return;
+          const bounds = resizeTarget.getBoundingClientRect();
+          if (
+            lastFittedTargetWidth !== undefined &&
+            lastFittedTargetHeight !== undefined &&
+            Math.abs(bounds.width - lastFittedTargetWidth) <=
+              ADAPTIVE_FIT_TOLERANCE_PX &&
+            Math.abs(bounds.height - lastFittedTargetHeight) <=
+              ADAPTIVE_FIT_TOLERANCE_PX
+          ) {
+            return;
+          }
+          refit();
+        });
+    // Observe the field that owns the printable footprint, not the value that
+    // refit() mutates. Observing the value itself lets its font-size changes
+    // schedule another refit, which can feed the document readiness observer
+    // indefinitely in WKWebView even though the enclosing field is stable.
+    if (resizeObserver && resizeTarget) resizeObserver.observe(resizeTarget);
     if (!resizeObserver) window.addEventListener("resize", refit);
 
     return () => {

@@ -145,14 +145,23 @@ function isExactRequiredFace(
  */
 export async function assertBundledPrintableFontsReady(
   fontFaceSet: PrintableFontFaceSetLike | undefined =
-    typeof document === "undefined" ? undefined : document.fonts
+    typeof document === "undefined" ? undefined : document.fonts,
+  timeoutMs = 4_000
 ): Promise<void> {
   if (!fontFaceSet) {
     throw new Error("Printable font loading API is unavailable");
   }
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new Error("Printable font readiness requires a positive timeout");
+  }
+  const deadline = Date.now() + timeoutMs;
 
   try {
-    await fontFaceSet.ready;
+    await settleBeforeDeadline(
+      fontFaceSet.ready,
+      deadline,
+      "Bundled printable font set did not settle before the readiness deadline"
+    );
   } catch {
     throw new Error("Bundled printable font set failed to settle");
   }
@@ -160,7 +169,11 @@ export async function assertBundledPrintableFontsReady(
   for (const face of REQUIRED_PRINTABLE_FONT_FACES) {
     let loadedFaces: readonly PrintableFontFaceLike[];
     try {
-      loadedFaces = await fontFaceSet.load(face.descriptor, face.probe);
+      loadedFaces = await settleBeforeDeadline(
+        fontFaceSet.load(face.descriptor, face.probe),
+        deadline,
+        `Required bundled printable font face did not settle: ${face.label}`
+      );
     } catch {
       throw unavailableFaceError(face);
     }
@@ -181,5 +194,26 @@ export async function assertBundledPrintableFontsReady(
     if (!checked) {
       throw unavailableFaceError(face);
     }
+  }
+}
+
+async function settleBeforeDeadline<T>(
+  value: PromiseLike<T>,
+  deadline: number,
+  timeoutMessage: string
+): Promise<T> {
+  const remainingMs = deadline - Date.now();
+  if (remainingMs <= 0) throw new Error(timeoutMessage);
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve(value),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(timeoutMessage)), remainingMs);
+      })
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
   }
 }
