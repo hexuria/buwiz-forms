@@ -168,8 +168,11 @@ def build_inventory(
         "xml_mapping": [root / f"crates/bir-core/src/forms/form_{slug}_xml.rs"],
         "desktop_editor": [root / f"crates/bir-desktop/src/views/form_{slug}_view.rs"],
         "html_component": [root / f"packages/form-renderer/src/forms/{component}.tsx"],
-        "renderer_tests": list(
-            (root / "packages/form-renderer/tests").glob(f"*{slug}*.test.ts")
+        "renderer_tests": sorted(
+            {
+                *(root / "packages/form-renderer/tests").glob(f"*{slug}*.test.ts"),
+                *(root / "packages/form-renderer/tests").glob(f"*{slug}*.test.tsx"),
+            }
         ),
         "contract_fixtures": list(
             (root / "packages/form-contracts/fixtures").glob(f"{slug}-*.json")
@@ -279,9 +282,17 @@ def self_test() -> None:
         model = root / "crates/bir-core/src/forms/form_1601c.rs"
         model.parent.mkdir(parents=True)
         model.write_text("// 1601C\n", encoding="utf-8")
+        renderer_test = (
+            root / "packages/form-renderer/tests/form-1601c-contract.test.tsx"
+        )
+        renderer_test.parent.mkdir(parents=True)
+        renderer_test.write_text("// 1601C renderer contract\n", encoding="utf-8")
         inventory = build_inventory(root, "1601c", "2018")
         assert inventory["form"]["form_id"] == "1601Cv2018"
         assert inventory["artifacts"]["core_model"][0]["sha256"] == sha256_file(model)
+        assert inventory["artifacts"]["renderer_tests"][0]["path"].endswith(
+            "form-1601c-contract.test.tsx"
+        )
         assert "html_component" in inventory["missing_expected"]
 
         support = root / "crates/bir-core/src/forms/support_level.rs"
