@@ -28,6 +28,7 @@ use gpui_wry::WebView as GpuiWebView;
 use gtk::prelude::*;
 use serde::Deserialize;
 use std::cell::Cell;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex, mpsc};
@@ -40,6 +41,7 @@ use wry::{WebViewBuilderExtUnix, WebViewExtUnix};
 
 const READINESS_TIMEOUT: Duration = Duration::from_secs(5);
 const PDF_EXPORT_TIMEOUT: Duration = Duration::from_secs(30);
+const MAX_TOMBSTONED_OUTPUT_NONCES: usize = 64;
 
 #[derive(Debug, thiserror::Error)]
 pub enum LinuxHtmlPreviewError {
@@ -88,17 +90,30 @@ struct LinuxRendererState {
     page_count: Option<usize>,
     print_mode: bool,
     error: Option<String>,
+    render_epoch: u64,
+    readiness_revision: u64,
     print_ready_nonce: Option<u64>,
     last_geometry: Option<RendererGeometryReport>,
 }
 
 impl LinuxRendererState {
-    fn invalidate(&mut self) {
+    fn invalidate_for_epoch(&mut self, render_epoch: u64) -> bool {
+        if render_epoch == 0 || render_epoch <= self.render_epoch {
+            return false;
+        }
+        self.render_epoch = render_epoch;
         self.ready = false;
         self.page_count = None;
         self.print_mode = false;
+        self.error = None;
         self.print_ready_nonce = None;
         self.last_geometry = None;
+        self.readiness_revision = self.readiness_revision.saturating_add(1);
+        true
+    }
+
+    fn accepts_epoch(&self, render_epoch: u64) -> bool {
+        render_epoch != 0 && render_epoch == self.render_epoch
     }
 
     fn decision(&self) -> RendererReadinessDecision {
@@ -114,6 +129,14 @@ struct PendingLinuxOutput {
     temp_path: Option<PathBuf>,
     requested_at: Instant,
     backend_started: bool,
+    binding: Option<LinuxOutputRendererBinding>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct LinuxOutputRendererBinding {
+    render_epoch: u64,
+    readiness_revision: u64,
+    geometry: RendererGeometryReport,
 }
 
 #[derive(Debug, Clone)]
@@ -128,6 +151,7 @@ struct LinuxHostBridge {
     next_output_nonce: u64,
     pending_output: Option<PendingLinuxOutput>,
     completion: Option<LinuxOutputCompletion>,
+    tombstoned_output_nonces: HashSet<u64>,
     readiness_started_at: Instant,
 }
 
@@ -138,8 +162,117 @@ impl Default for LinuxHostBridge {
             next_output_nonce: 0,
             pending_output: None,
             completion: None,
+            tombstoned_output_nonces: HashSet::new(),
             readiness_started_at: Instant::now(),
         }
+    }
+}
+
+fn bind_renderer_for_linux_output(
+    state: &LinuxRendererState,
+) -> Result<LinuxOutputRendererBinding, String> {
+    if state.render_epoch == 0 {
+        return Err("Linux native output has no validated renderer epoch".to_string());
+    }
+    if !state.print_mode || !matches!(state.decision(), RendererReadinessDecision::Ready { .. }) {
+        return Err("Linux native output renderer epoch is not ready in print mode".to_string());
+    }
+    let geometry = state
+        .last_geometry
+        .clone()
+        .ok_or_else(|| "Linux native output has no validated page geometry".to_string())?;
+    if geometry.pages.is_empty()
+        || state.page_count != Some(geometry.page_count)
+        || geometry.page_count != geometry.pages.len()
+    {
+        return Err("Linux native output has incomplete page rectangles".to_string());
+    }
+    Ok(LinuxOutputRendererBinding {
+        render_epoch: state.render_epoch,
+        readiness_revision: state.readiness_revision,
+        geometry,
+    })
+}
+
+fn linux_renderer_binding_mismatch_reason(
+    state: &LinuxRendererState,
+    binding: &LinuxOutputRendererBinding,
+) -> Option<String> {
+    if state.render_epoch != binding.render_epoch
+        || state.readiness_revision != binding.readiness_revision
+    {
+        return Some("Linux renderer epoch changed after native output started".to_string());
+    }
+    if !state.print_mode || !matches!(state.decision(), RendererReadinessDecision::Ready { .. }) {
+        return Some(
+            "Linux renderer readiness was invalidated after native output started".to_string(),
+        );
+    }
+    if state.last_geometry.as_ref() != Some(&binding.geometry) {
+        return Some(
+            "Linux renderer page geometry changed after native output started".to_string(),
+        );
+    }
+    None
+}
+
+fn pending_output_binding_error(
+    pending: &PendingLinuxOutput,
+    state: &LinuxRendererState,
+    completion_render_epoch: u64,
+) -> Option<String> {
+    if !pending.backend_started {
+        return Some(
+            "Linux native backend completed before its renderer epoch was bound".to_string(),
+        );
+    }
+    let Some(binding) = pending.binding.as_ref() else {
+        return Some("Linux native backend completed without a renderer binding".to_string());
+    };
+    if completion_render_epoch != binding.render_epoch {
+        return Some("Linux native backend completion used a stale renderer epoch".to_string());
+    }
+    linux_renderer_binding_mismatch_reason(state, binding)
+}
+
+fn cancel_pending_output_locked(bridge: &mut LinuxHostBridge, reason: String) {
+    let Some(pending) = bridge.pending_output.take() else {
+        return;
+    };
+    let nonce = pending.nonce;
+    tombstone_output_nonce(bridge, nonce);
+    if let Some(temp_path) = pending.temp_path {
+        let _ = discard_pdf_export_temp(&temp_path);
+    }
+    bridge.renderer.print_ready_nonce = None;
+    bridge.completion = Some(LinuxOutputCompletion {
+        nonce,
+        result: Err(reason),
+    });
+}
+
+fn tombstone_output_nonce(bridge: &mut LinuxHostBridge, nonce: u64) {
+    bridge.tombstoned_output_nonces.insert(nonce);
+    while bridge.tombstoned_output_nonces.len() > MAX_TOMBSTONED_OUTPUT_NONCES {
+        let Some(oldest) = bridge.tombstoned_output_nonces.iter().copied().min() else {
+            break;
+        };
+        bridge.tombstoned_output_nonces.remove(&oldest);
+    }
+}
+
+fn cancel_output_if_renderer_binding_changed(bridge: &mut LinuxHostBridge) {
+    let reason = bridge.pending_output.as_ref().and_then(|pending| {
+        if !pending.backend_started {
+            return None;
+        }
+        match pending.binding.as_ref() {
+            Some(binding) => linux_renderer_binding_mismatch_reason(&bridge.renderer, binding),
+            None => Some("Linux native output started without a renderer binding".to_string()),
+        }
+    });
+    if let Some(reason) = reason {
+        cancel_pending_output_locked(bridge, reason);
     }
 }
 
@@ -164,16 +297,23 @@ fn linux_output_timeout_reason(pending: &PendingLinuxOutput) -> Option<String> {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum RendererMessage {
-    RendererReady,
-    RendererInvalidated,
+    RendererReady {
+        render_epoch: u64,
+    },
+    RendererInvalidated {
+        render_epoch: u64,
+    },
     RendererError {
+        render_epoch: u64,
         message: String,
     },
     PrintReady {
         nonce: u64,
+        render_epoch: u64,
         print_mode: bool,
     },
     PageCount {
+        render_epoch: u64,
         page_count: usize,
         page_width_pt: f64,
         page_height_pt: f64,
@@ -215,13 +355,39 @@ fn accept_renderer_message(
     };
 
     match message {
-        RendererMessage::RendererReady => bridge.renderer.ready = true,
-        RendererMessage::RendererInvalidated => {
-            bridge.renderer.invalidate();
-            bridge.readiness_started_at = Instant::now();
+        RendererMessage::RendererReady { render_epoch } => {
+            if bridge.renderer.accepts_epoch(render_epoch) {
+                bridge.renderer.ready = true;
+            }
         }
-        RendererMessage::RendererError { message } => bridge.renderer.error = Some(message),
-        RendererMessage::PrintReady { nonce, print_mode } => {
+        RendererMessage::RendererInvalidated { render_epoch } => {
+            if bridge.renderer.invalidate_for_epoch(render_epoch) {
+                bridge.readiness_started_at = Instant::now();
+            }
+        }
+        RendererMessage::RendererError {
+            render_epoch,
+            message,
+        } => {
+            if bridge.renderer.accepts_epoch(render_epoch) {
+                bridge.renderer.error = Some(message);
+            }
+        }
+        RendererMessage::PrintReady {
+            nonce,
+            render_epoch,
+            print_mode,
+        } => {
+            if !bridge.renderer.accepts_epoch(render_epoch)
+                || bridge.tombstoned_output_nonces.contains(&nonce)
+            {
+                return;
+            }
+            match bridge.pending_output.as_ref().map(|pending| pending.nonce) {
+                None => return,
+                Some(pending_nonce) if nonce < pending_nonce => return,
+                _ => {}
+            }
             if !print_mode || !bridge.renderer.print_mode {
                 bridge.renderer.error =
                     Some("Linux output preflight was not measured in print mode".to_string());
@@ -243,12 +409,16 @@ fn accept_renderer_message(
             }
         }
         RendererMessage::PageCount {
+            render_epoch,
             page_count,
             page_width_pt,
             page_height_pt,
             print_mode,
             pages,
         } => {
+            if !bridge.renderer.accepts_epoch(render_epoch) {
+                return;
+            }
             let report = RendererGeometryReport {
                 page_count,
                 page_width_pt,
@@ -286,6 +456,7 @@ fn accept_renderer_message(
             }
         }
     }
+    cancel_output_if_renderer_binding_changed(&mut bridge);
 }
 
 fn configured_webview_builder(
@@ -376,6 +547,15 @@ fn begin_system_print(
     expectation: &PdfExpectation,
     bridge: Arc<Mutex<LinuxHostBridge>>,
 ) {
+    let Some(render_epoch) = pending.binding.as_ref().map(|binding| binding.render_epoch) else {
+        complete_output(
+            &bridge,
+            pending.nonce,
+            0,
+            Err("Linux system print started without a renderer binding".to_string()),
+        );
+        return;
+    };
     let operation = webkit2gtk::PrintOperation::new(webview);
     operation.set_page_setup(&page_setup(expectation));
     operation.set_print_settings(&print_settings(expectation));
@@ -386,6 +566,7 @@ fn begin_system_print(
         complete_output(
             &failed_bridge,
             nonce,
+            render_epoch,
             Err(format!("WebKitGTK system print failed: {error}")),
         );
     });
@@ -394,6 +575,7 @@ fn begin_system_print(
         complete_output(
             &finished_bridge,
             nonce,
+            render_epoch,
             Ok("System print job handed to GTK".to_string()),
         );
     });
@@ -403,11 +585,13 @@ fn begin_system_print(
         webkit2gtk::PrintOperationResponse::Cancel => complete_output(
             &bridge,
             nonce,
+            render_epoch,
             Err("System print was cancelled".to_string()),
         ),
         _ => complete_output(
             &bridge,
             nonce,
+            render_epoch,
             Err("WebKitGTK returned an unknown print response".to_string()),
         ),
     }
@@ -419,6 +603,11 @@ fn begin_pdf_export(
     expectation: PdfExpectation,
     bridge: Arc<Mutex<LinuxHostBridge>>,
 ) -> Result<(), String> {
+    let render_epoch = pending
+        .binding
+        .as_ref()
+        .map(|binding| binding.render_epoch)
+        .ok_or_else(|| "Linux PDF export started without a renderer binding".to_string())?;
     let destination = pending
         .destination
         .as_ref()
@@ -453,6 +642,7 @@ fn begin_pdf_export(
         complete_output(
             &failed_bridge,
             nonce,
+            render_epoch,
             Err(format!("WebKitGTK PDF export failed: {error}")),
         );
     });
@@ -467,6 +657,7 @@ fn begin_pdf_export(
         finish_linux_pdf_export(
             &finished_bridge,
             nonce,
+            render_epoch,
             &temp_path,
             &finished_destination,
             &expectation,
@@ -488,7 +679,7 @@ fn register_linux_temp_path(
             return Err("Linux renderer state is unavailable".to_string());
         }
     };
-    let Some(pending) = bridge.pending_output.as_mut() else {
+    let Some(pending) = bridge.pending_output.as_ref() else {
         let _ = discard_pdf_export_temp(&temp_path);
         return Err("Linux PDF output was cancelled before its backend started".to_string());
     };
@@ -496,13 +687,25 @@ fn register_linux_temp_path(
         let _ = discard_pdf_export_temp(&temp_path);
         return Err("Linux PDF output no longer matches its validated nonce".to_string());
     }
-    pending.temp_path = Some(temp_path);
+    let binding_error = pending
+        .binding
+        .as_ref()
+        .and_then(|binding| linux_renderer_binding_mismatch_reason(&bridge.renderer, binding));
+    if let Some(reason) = binding_error {
+        let _ = discard_pdf_export_temp(&temp_path);
+        cancel_pending_output_locked(&mut bridge, reason.clone());
+        return Err(reason);
+    }
+    if let Some(pending) = bridge.pending_output.as_mut() {
+        pending.temp_path = Some(temp_path);
+    }
     Ok(())
 }
 
 fn finish_linux_pdf_export(
     bridge: &Arc<Mutex<LinuxHostBridge>>,
     nonce: u64,
+    render_epoch: u64,
     temp_path: &Path,
     destination: &Path,
     expectation: &PdfExpectation,
@@ -511,12 +714,25 @@ fn finish_linux_pdf_export(
         let _ = discard_pdf_export_temp(temp_path);
         return;
     };
+    if bridge.tombstoned_output_nonces.contains(&nonce) {
+        let _ = discard_pdf_export_temp(temp_path);
+        return;
+    }
     let is_active = bridge
         .pending_output
         .as_ref()
         .is_some_and(|pending| pending.nonce == nonce && pending.backend_started);
     if !is_active {
         let _ = discard_pdf_export_temp(temp_path);
+        return;
+    }
+    let binding_error = bridge
+        .pending_output
+        .as_ref()
+        .and_then(|pending| pending_output_binding_error(pending, &bridge.renderer, render_epoch));
+    if let Some(reason) = binding_error {
+        let _ = discard_pdf_export_temp(temp_path);
+        cancel_pending_output_locked(&mut bridge, reason);
         return;
     }
 
@@ -540,14 +756,27 @@ fn finish_linux_pdf_export(
 fn complete_output(
     bridge: &Arc<Mutex<LinuxHostBridge>>,
     nonce: u64,
+    render_epoch: u64,
     result: Result<String, String>,
 ) {
-    if let Ok(mut bridge) = bridge.lock()
-        && bridge
+    if let Ok(mut bridge) = bridge.lock() {
+        if bridge.tombstoned_output_nonces.contains(&nonce) {
+            return;
+        }
+        let is_active = bridge
             .pending_output
             .as_ref()
-            .is_some_and(|pending| pending.nonce == nonce)
-    {
+            .is_some_and(|pending| pending.nonce == nonce);
+        if !is_active {
+            return;
+        }
+        let binding_error = bridge.pending_output.as_ref().and_then(|pending| {
+            pending_output_binding_error(pending, &bridge.renderer, render_epoch)
+        });
+        if let Some(reason) = binding_error {
+            cancel_pending_output_locked(&mut bridge, reason);
+            return;
+        }
         if let Some(temp_path) = bridge
             .pending_output
             .take()
@@ -564,12 +793,11 @@ fn abandon_pending_output(bridge: &Arc<Mutex<LinuxHostBridge>>) {
     let Ok(mut bridge) = bridge.lock() else {
         return;
     };
-    if let Some(temp_path) = bridge
-        .pending_output
-        .take()
-        .and_then(|pending| pending.temp_path)
-    {
-        let _ = discard_pdf_export_temp(&temp_path);
+    if let Some(pending) = bridge.pending_output.take() {
+        tombstone_output_nonce(&mut bridge, pending.nonce);
+        if let Some(temp_path) = pending.temp_path {
+            let _ = discard_pdf_export_temp(&temp_path);
+        }
     }
     bridge.renderer.print_ready_nonce = None;
     bridge.completion = None;
@@ -608,7 +836,9 @@ fn reset_linux_renderer_for_retry(bridge: &Arc<Mutex<LinuxHostBridge>>) -> Resul
         return Err(message);
     }
 
-    bridge.pending_output = None;
+    if let Some(pending) = bridge.pending_output.take() {
+        tombstone_output_nonce(&mut bridge, pending.nonce);
+    }
     bridge.completion = None;
     bridge.renderer = LinuxRendererState::default();
     bridge.readiness_started_at = Instant::now();
@@ -654,12 +884,11 @@ fn expire_pending_output(
     if !should_expire {
         return;
     }
-    if let Some(temp_path) = bridge
-        .pending_output
-        .take()
-        .and_then(|pending| pending.temp_path)
-    {
-        let _ = discard_pdf_export_temp(&temp_path);
+    if let Some(pending) = bridge.pending_output.take() {
+        tombstone_output_nonce(&mut bridge, pending.nonce);
+        if let Some(temp_path) = pending.temp_path {
+            let _ = discard_pdf_export_temp(&temp_path);
+        }
     }
     bridge.renderer.print_ready_nonce = None;
     bridge.completion = Some(LinuxOutputCompletion {
@@ -725,6 +954,7 @@ fn request_output_preflight(
             temp_path: None,
             requested_at: Instant::now(),
             backend_started: false,
+            binding: None,
         });
         nonce
     };
@@ -737,31 +967,28 @@ fn take_ready_output(bridge: &Arc<Mutex<LinuxHostBridge>>) -> Option<PendingLinu
     let mut bridge = bridge.lock().ok()?;
     let pending = bridge.pending_output.clone()?;
     if let Some(reason) = linux_output_timeout_reason(&pending) {
-        let nonce = pending.nonce;
-        if let Some(temp_path) = bridge
-            .pending_output
-            .take()
-            .and_then(|pending| pending.temp_path)
-        {
-            let _ = discard_pdf_export_temp(&temp_path);
-        }
-        bridge.renderer.print_ready_nonce = None;
-        bridge.completion = Some(LinuxOutputCompletion {
-            nonce,
-            result: Err(reason),
-        });
+        cancel_pending_output_locked(&mut bridge, reason);
         return None;
     }
     if pending.backend_started || bridge.renderer.print_ready_nonce != Some(pending.nonce) {
         return None;
     }
 
+    let binding = match bind_renderer_for_linux_output(&bridge.renderer) {
+        Ok(binding) => binding,
+        Err(reason) => {
+            cancel_pending_output_locked(&mut bridge, reason);
+            return None;
+        }
+    };
     bridge.renderer.print_ready_nonce = None;
     if let Some(stored) = bridge.pending_output.as_mut() {
         stored.backend_started = true;
+        stored.binding = Some(binding.clone());
     }
     let mut started = pending;
     started.backend_started = true;
+    started.binding = Some(binding);
     Some(started)
 }
 
@@ -1009,7 +1236,11 @@ fn run_gtk_top_level(
                         expectation.clone(),
                         poll_bridge.clone(),
                     ) {
-                        complete_output(&poll_bridge, pending.nonce, Err(error));
+                        let render_epoch = pending
+                            .binding
+                            .as_ref()
+                            .map_or(0, |binding| binding.render_epoch);
+                        complete_output(&poll_bridge, pending.nonce, render_epoch, Err(error));
                     }
                 }
             }
@@ -1162,10 +1393,15 @@ impl LinuxEmbeddedHtmlPreviewView {
     }
 
     fn begin_output(&mut self, pending: PendingLinuxOutput, cx: &mut Context<Self>) {
+        let render_epoch = pending
+            .binding
+            .as_ref()
+            .map_or(0, |binding| binding.render_epoch);
         let Some(webview) = self.webview.clone() else {
             complete_output(
                 &self.bridge,
                 pending.nonce,
+                render_epoch,
                 Err("Linux renderer WebView disappeared before output".to_string()),
             );
             return;
@@ -1189,6 +1425,7 @@ impl LinuxEmbeddedHtmlPreviewView {
             complete_output(
                 &self.bridge,
                 pending_for_error.nonce,
+                render_epoch,
                 Err(error.to_string()),
             );
         }
@@ -1332,16 +1569,26 @@ mod tests {
         renderer_host_plan(&envelope).expect("2551Q layout plan")
     }
 
-    fn geometry_message(print_mode: bool, overflow_x: usize) -> String {
+    fn geometry_message(render_epoch: u64, print_mode: bool, overflow_x: usize) -> String {
+        geometry_message_with_x(render_epoch, print_mode, overflow_x, 0.0)
+    }
+
+    fn geometry_message_with_x(
+        render_epoch: u64,
+        print_mode: bool,
+        overflow_x: usize,
+        x: f64,
+    ) -> String {
         serde_json::json!({
             "type": "page_count",
+            "render_epoch": render_epoch,
             "page_count": 2,
             "page_width_pt": 612.0,
             "page_height_pt": 936.0,
             "print_mode": print_mode,
             "pages": [
                 {
-                    "x": 0.0,
+                    "x": x,
                     "y": 0.0,
                     "width": 816.0,
                     "height": 1248.0,
@@ -1355,7 +1602,7 @@ mod tests {
                     "descendant_clipped_y": 0
                 },
                 {
-                    "x": 0.0,
+                    "x": x,
                     "y": 1248.0,
                     "width": 816.0,
                     "height": 1248.0,
@@ -1381,7 +1628,22 @@ mod tests {
             temp_path: None,
             requested_at: Instant::now(),
             backend_started: false,
+            binding: None,
         }
+    }
+
+    fn ready_renderer(bridge: &Arc<Mutex<LinuxHostBridge>>, plan: &RenderLayoutPlan, epoch: u64) {
+        accept_renderer_message(
+            bridge,
+            plan,
+            &format!(r#"{{"type":"renderer_invalidated","render_epoch":{epoch}}}"#),
+        );
+        accept_renderer_message(bridge, plan, &geometry_message(epoch, true, 0));
+        accept_renderer_message(
+            bridge,
+            plan,
+            &format!(r#"{{"type":"renderer_ready","render_epoch":{epoch}}}"#),
+        );
     }
 
     #[test]
@@ -1434,7 +1696,7 @@ mod tests {
 
         expire_renderer_readiness(&bridge);
         assert!(bridge.lock().expect("bridge").renderer.error.is_none());
-        complete_output(&bridge, 17, Ok("late output".to_string()));
+        complete_output(&bridge, 17, 7, Ok("late output".to_string()));
         assert!(bridge.lock().expect("bridge").completion.is_none());
     }
 
@@ -1442,13 +1704,12 @@ mod tests {
     fn print_preflight_consumes_a_matching_nonce_only_once() {
         let bridge = Arc::new(Mutex::new(LinuxHostBridge::default()));
         let plan = test_layout_plan();
-        accept_renderer_message(&bridge, &plan, r#"{"type":"renderer_ready"}"#);
-        accept_renderer_message(&bridge, &plan, &geometry_message(true, 0));
+        ready_renderer(&bridge, &plan, 7);
         bridge.lock().expect("bridge").pending_output = Some(pending_output(42));
         accept_renderer_message(
             &bridge,
             &plan,
-            r#"{"type":"print_ready","nonce":42,"print_mode":true}"#,
+            r#"{"type":"print_ready","nonce":42,"render_epoch":7,"print_mode":true}"#,
         );
 
         let started = take_ready_output(&bridge).expect("matching nonce starts output");
@@ -1463,19 +1724,251 @@ mod tests {
                 .as_ref()
                 .is_some_and(|pending| pending.backend_started)
         );
+        let binding = started.binding.expect("native output renderer binding");
+        assert_eq!(binding.render_epoch, 7);
+        assert_eq!(binding.readiness_revision, 1);
+        assert_eq!(binding.geometry.page_count, 2);
+        assert_eq!(binding.geometry.pages.len(), 2);
     }
 
     #[test]
-    fn print_preflight_rejects_a_mismatched_nonce() {
+    fn successful_output_does_not_retain_a_cancellation_tombstone() {
         let bridge = Arc::new(Mutex::new(LinuxHostBridge::default()));
         let plan = test_layout_plan();
-        accept_renderer_message(&bridge, &plan, r#"{"type":"renderer_ready"}"#);
-        accept_renderer_message(&bridge, &plan, &geometry_message(true, 0));
+        ready_renderer(&bridge, &plan, 7);
         bridge.lock().expect("bridge").pending_output = Some(pending_output(42));
         accept_renderer_message(
             &bridge,
             &plan,
-            r#"{"type":"print_ready","nonce":41,"print_mode":true}"#,
+            r#"{"type":"print_ready","nonce":42,"render_epoch":7,"print_mode":true}"#,
+        );
+        take_ready_output(&bridge).expect("matching nonce starts output");
+
+        complete_output(&bridge, 42, 7, Ok("print complete".to_string()));
+
+        let completion = take_completion(&bridge).expect("successful completion");
+        assert!(completion.result.is_ok());
+        let state = bridge.lock().expect("bridge");
+        assert!(state.pending_output.is_none());
+        assert!(state.tombstoned_output_nonces.is_empty());
+        drop(state);
+
+        complete_output(&bridge, 42, 7, Ok("duplicate callback".to_string()));
+        assert!(take_completion(&bridge).is_none());
+    }
+
+    #[test]
+    fn cancellation_tombstones_are_bounded() {
+        let mut bridge = LinuxHostBridge::default();
+        for nonce in 1..=(MAX_TOMBSTONED_OUTPUT_NONCES as u64 + 1) {
+            tombstone_output_nonce(&mut bridge, nonce);
+        }
+
+        assert_eq!(
+            bridge.tombstoned_output_nonces.len(),
+            MAX_TOMBSTONED_OUTPUT_NONCES
+        );
+        assert!(!bridge.tombstoned_output_nonces.contains(&1));
+        assert!(
+            bridge
+                .tombstoned_output_nonces
+                .contains(&(MAX_TOMBSTONED_OUTPUT_NONCES as u64 + 1))
+        );
+    }
+
+    #[test]
+    fn renderer_ipc_ignores_stale_and_out_of_order_epochs() {
+        let bridge = Arc::new(Mutex::new(LinuxHostBridge::default()));
+        let plan = test_layout_plan();
+        accept_renderer_message(
+            &bridge,
+            &plan,
+            r#"{"type":"renderer_invalidated","render_epoch":5}"#,
+        );
+        accept_renderer_message(
+            &bridge,
+            &plan,
+            r#"{"type":"renderer_ready","render_epoch":4}"#,
+        );
+        accept_renderer_message(
+            &bridge,
+            &plan,
+            r#"{"type":"renderer_error","render_epoch":4,"message":"stale failure"}"#,
+        );
+        accept_renderer_message(&bridge, &plan, &geometry_message(6, true, 0));
+        accept_renderer_message(
+            &bridge,
+            &plan,
+            r#"{"type":"renderer_invalidated","render_epoch":4}"#,
+        );
+
+        {
+            let state = bridge.lock().expect("bridge");
+            assert_eq!(state.renderer.render_epoch, 5);
+            assert_eq!(state.renderer.readiness_revision, 1);
+            assert!(!state.renderer.ready);
+            assert_eq!(state.renderer.page_count, None);
+        }
+
+        accept_renderer_message(&bridge, &plan, &geometry_message(5, true, 0));
+        accept_renderer_message(
+            &bridge,
+            &plan,
+            r#"{"type":"renderer_ready","render_epoch":5}"#,
+        );
+        let state = bridge.lock().expect("bridge");
+        assert!(state.renderer.ready);
+        assert_eq!(state.renderer.page_count, Some(2));
+        assert_eq!(state.renderer.render_epoch, 5);
+        assert_eq!(state.renderer.readiness_revision, 1);
+        drop(state);
+
+        bridge.lock().expect("bridge").pending_output = Some(pending_output(88));
+        accept_renderer_message(
+            &bridge,
+            &plan,
+            r#"{"type":"print_ready","nonce":88,"render_epoch":6,"print_mode":true}"#,
+        );
+        {
+            let state = bridge.lock().expect("bridge");
+            assert_eq!(state.renderer.print_ready_nonce, None);
+            assert_eq!(state.renderer.error, None);
+        }
+        accept_renderer_message(
+            &bridge,
+            &plan,
+            r#"{"type":"print_ready","nonce":88,"render_epoch":5,"print_mode":true}"#,
+        );
+        assert_eq!(
+            bridge.lock().expect("bridge").renderer.print_ready_nonce,
+            Some(88)
+        );
+    }
+
+    #[test]
+    fn invalidation_after_backend_start_tombstones_late_completion() {
+        let bridge = Arc::new(Mutex::new(LinuxHostBridge::default()));
+        let plan = test_layout_plan();
+        ready_renderer(&bridge, &plan, 7);
+        bridge.lock().expect("bridge").pending_output = Some(pending_output(42));
+        accept_renderer_message(
+            &bridge,
+            &plan,
+            r#"{"type":"print_ready","nonce":42,"render_epoch":7,"print_mode":true}"#,
+        );
+        let started = take_ready_output(&bridge).expect("backend starts from epoch 7");
+        assert!(started.backend_started);
+
+        accept_renderer_message(
+            &bridge,
+            &plan,
+            r#"{"type":"renderer_invalidated","render_epoch":8}"#,
+        );
+
+        let completion = take_completion(&bridge).expect("stale output is rejected");
+        assert!(
+            completion
+                .result
+                .is_err_and(|error| error.contains("epoch changed"))
+        );
+        assert!(bridge.lock().expect("bridge").pending_output.is_none());
+        assert!(
+            bridge
+                .lock()
+                .expect("bridge")
+                .tombstoned_output_nonces
+                .contains(&42)
+        );
+
+        complete_output(&bridge, 42, 7, Ok("late print completion".to_string()));
+        assert!(take_completion(&bridge).is_none());
+    }
+
+    #[test]
+    fn geometry_change_after_backend_start_tombstones_output() {
+        let bridge = Arc::new(Mutex::new(LinuxHostBridge::default()));
+        let plan = test_layout_plan();
+        ready_renderer(&bridge, &plan, 7);
+        bridge.lock().expect("bridge").pending_output = Some(pending_output(43));
+        accept_renderer_message(
+            &bridge,
+            &plan,
+            r#"{"type":"print_ready","nonce":43,"render_epoch":7,"print_mode":true}"#,
+        );
+        take_ready_output(&bridge).expect("backend starts from validated geometry");
+
+        accept_renderer_message(&bridge, &plan, &geometry_message_with_x(7, true, 0, 1.0));
+
+        let completion = take_completion(&bridge).expect("changed geometry rejects output");
+        assert!(
+            completion
+                .result
+                .is_err_and(|error| error.contains("page geometry changed"))
+        );
+        assert!(
+            bridge
+                .lock()
+                .expect("bridge")
+                .tombstoned_output_nonces
+                .contains(&43)
+        );
+    }
+
+    #[test]
+    fn renderer_error_after_backend_start_tombstones_output() {
+        let bridge = Arc::new(Mutex::new(LinuxHostBridge::default()));
+        let plan = test_layout_plan();
+        ready_renderer(&bridge, &plan, 7);
+        bridge.lock().expect("bridge").pending_output = Some(pending_output(44));
+        accept_renderer_message(
+            &bridge,
+            &plan,
+            r#"{"type":"print_ready","nonce":44,"render_epoch":7,"print_mode":true}"#,
+        );
+        take_ready_output(&bridge).expect("backend starts from a ready renderer");
+
+        accept_renderer_message(
+            &bridge,
+            &plan,
+            r#"{"type":"renderer_error","render_epoch":7,"message":"font readiness changed"}"#,
+        );
+
+        let completion = take_completion(&bridge).expect("readiness failure rejects output");
+        assert!(
+            completion
+                .result
+                .is_err_and(|error| error.contains("readiness was invalidated"))
+        );
+        assert!(
+            bridge
+                .lock()
+                .expect("bridge")
+                .tombstoned_output_nonces
+                .contains(&44)
+        );
+    }
+
+    #[test]
+    fn print_preflight_ignores_stale_nonce_and_rejects_future_nonce() {
+        let bridge = Arc::new(Mutex::new(LinuxHostBridge::default()));
+        let plan = test_layout_plan();
+        ready_renderer(&bridge, &plan, 7);
+        bridge.lock().expect("bridge").pending_output = Some(pending_output(42));
+        accept_renderer_message(
+            &bridge,
+            &plan,
+            r#"{"type":"print_ready","nonce":41,"render_epoch":7,"print_mode":true}"#,
+        );
+
+        {
+            let state = bridge.lock().expect("bridge");
+            assert_eq!(state.renderer.print_ready_nonce, None);
+            assert_eq!(state.renderer.error, None);
+        }
+        accept_renderer_message(
+            &bridge,
+            &plan,
+            r#"{"type":"print_ready","nonce":43,"render_epoch":7,"print_mode":true}"#,
         );
 
         let bridge = bridge.lock().expect("bridge");
@@ -1493,8 +1986,12 @@ mod tests {
     fn geometry_with_descendant_overflow_fails_closed() {
         let bridge = Arc::new(Mutex::new(LinuxHostBridge::default()));
         let plan = test_layout_plan();
-        accept_renderer_message(&bridge, &plan, r#"{"type":"renderer_ready"}"#);
-        accept_renderer_message(&bridge, &plan, &geometry_message(false, 1));
+        accept_renderer_message(
+            &bridge,
+            &plan,
+            r#"{"type":"renderer_invalidated","render_epoch":7}"#,
+        );
+        accept_renderer_message(&bridge, &plan, &geometry_message(7, false, 1));
 
         let bridge = bridge.lock().expect("bridge");
         assert_eq!(bridge.renderer.page_count, None);
@@ -1592,7 +2089,65 @@ mod tests {
             height_points: 936.0,
         };
 
-        finish_linux_pdf_export(&bridge, 12, &temp_path, &destination, &expectation);
+        finish_linux_pdf_export(&bridge, 12, 7, &temp_path, &destination, &expectation);
+
+        assert_eq!(
+            std::fs::read(&destination).expect("read existing destination"),
+            b"existing"
+        );
+        assert!(!temp_path.exists());
+        std::fs::remove_file(destination).expect("remove test destination");
+    }
+
+    #[test]
+    fn invalidated_pdf_backend_cannot_replace_existing_destination() {
+        let bridge = Arc::new(Mutex::new(LinuxHostBridge::default()));
+        let plan = test_layout_plan();
+        ready_renderer(&bridge, &plan, 7);
+        let suffix = uuid::Uuid::new_v4();
+        let temp_path =
+            std::env::temp_dir().join(format!("ebirforms-linux-invalidated-output-{suffix}.pdf"));
+        let destination = std::env::temp_dir().join(format!(
+            "ebirforms-linux-preserved-destination-{suffix}.pdf"
+        ));
+        std::fs::write(&destination, b"existing").expect("write existing destination");
+
+        let mut pending = pending_output(13);
+        pending.kind = HtmlOutputKind::PdfExport;
+        pending.destination = Some(destination.clone());
+        bridge.lock().expect("bridge").pending_output = Some(pending);
+        accept_renderer_message(
+            &bridge,
+            &plan,
+            r#"{"type":"print_ready","nonce":13,"render_epoch":7,"print_mode":true}"#,
+        );
+        take_ready_output(&bridge).expect("PDF backend starts from epoch 7");
+        std::fs::write(&temp_path, b"partial backend bytes").expect("write partial output");
+        bridge
+            .lock()
+            .expect("bridge")
+            .pending_output
+            .as_mut()
+            .expect("pending output")
+            .temp_path = Some(temp_path.clone());
+
+        accept_renderer_message(
+            &bridge,
+            &plan,
+            r#"{"type":"renderer_invalidated","render_epoch":8}"#,
+        );
+        assert!(!temp_path.exists());
+        std::fs::write(&temp_path, b"late backend bytes").expect("simulate late backend write");
+        let expectation = PdfExpectation {
+            form_code: "2551Q".to_string(),
+            revision: "2018".to_string(),
+            envelope_hash: "a".repeat(64),
+            expected_page_count: 2,
+            width_points: 612.0,
+            height_points: 936.0,
+        };
+
+        finish_linux_pdf_export(&bridge, 13, 7, &temp_path, &destination, &expectation);
 
         assert_eq!(
             std::fs::read(&destination).expect("read existing destination"),
