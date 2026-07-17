@@ -143,6 +143,45 @@ test("0619F 2018 preserves the official declaration bands and grayscale fills", 
   )).toBe("rgb(166, 166, 166)");
 });
 
+test("0619F 2018 preserves the official static wording and reviewed type hierarchy", async ({ page }) => {
+  const fixture = readFixture("packages/form-contracts/fixtures/0619f-minimum.json");
+  await renderEnvelope(page, fixture);
+
+  await expect(page.locator(".header-option-0619f").first().locator("div"))
+    .toHaveText("1 For the month of (MM/YYYY)");
+  await expect(page.locator(".address-0619f .label-0619f")).toContainText(
+    "If registered address is different from the current address"
+  );
+  await expect(page.locator(".declaration-0619f > p")).toContainText(
+    "Further, I/we give consent to the processing"
+  );
+  await expect(page.locator(".item-18d-0619f em")).toHaveText(
+    "(Sum of Items 18A to 18C)"
+  );
+  await expect(page.locator(".item-19-0619f em")).toHaveText(
+    "(Sum of Item 17 and 18D)"
+  );
+
+  expect(await page.locator(".government-wordmark-0619f").evaluate((element) =>
+    getComputedStyle(element).fontWeight
+  )).toBe("600");
+  expect(await page.locator(".part-0619f > h2").first().evaluate((element) =>
+    getComputedStyle(element).fontWeight
+  )).toBe("600");
+  expect(await page.locator(".final-tax-row-0619f strong").first().evaluate((element) =>
+    getComputedStyle(element).fontWeight
+  )).toBe("600");
+
+  expect(await page.locator(".declaration-0619f > p").evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { textAlign: style.textAlign, textIndent: style.textIndent };
+  })).toEqual({ textAlign: "left", textIndent: "14.6667px" });
+
+  expect(await page.locator('[data-payment-row="payment_20"] > span:first-child').evaluate(
+    (element) => ({ clientHeight: element.clientHeight, scrollHeight: element.scrollHeight })
+  )).toEqual({ clientHeight: 24, scrollHeight: 24 });
+});
+
 test("0619F 2018 preserves the official Items 1-5 value-band partitions", async ({ page }) => {
   const fixture = readFixture("packages/form-contracts/fixtures/0619f-normal.json");
   await renderEnvelope(page, fixture);

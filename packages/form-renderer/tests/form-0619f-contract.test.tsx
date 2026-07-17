@@ -100,6 +100,30 @@ describe("0619F:2018 runtime render contract", () => {
     });
   });
 
+  it("preserves the official static wording and emphasis", () => {
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: minimumFixture as RenderEnvelope })
+    );
+
+    expect(markup).toContain("For the month of");
+    expect(markup).not.toContain("For the Month of");
+    expect(markup).toContain(
+      "If registered address is different from the current address"
+    );
+    expect(markup).not.toContain(
+      "If the registered address is different from the current address"
+    );
+    expect(markup).toContain("Further, I/we give consent to the processing");
+    expect(markup).not.toContain("I/we give my/our consent");
+    expect(markup).toContain(
+      "Total Penalties <em>(Sum of Items 18A to 18C)</em>"
+    );
+    expect(markup).toContain(
+      "Total Amount of Remittance <em>(Sum of Item 17 and 18D)</em>"
+    );
+    expect(markup).toContain("<b>*NOTE:</b> Please read the BIR Data Privacy Policy");
+  });
+
   it("renders long legal values through reviewed plain-box mode", () => {
     const fixture = structuredClone(longFixture) as RenderEnvelope;
     const markup = renderToStaticMarkup(

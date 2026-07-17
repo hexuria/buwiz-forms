@@ -91,8 +91,11 @@
   gap: 1.85pt;
   text-align: left;
   font-size: 8.2pt;
+  font-weight: 600;
   line-height: 1.03;
 }
+.government-wordmark-0619f > span > span { display: block; }
+.government-wordmark-0619f > span > span:nth-child(2) { padding-left: 9pt; }
 .government-wordmark-0619f img {
   width: 31.08pt;
   height: 28.08pt;
@@ -200,7 +203,7 @@
   white-space: nowrap;
   font-size: 8.1pt;
 }
-.header-option-0619f > div em { margin-left: auto; }
+.header-option-0619f > div b { font-weight: 600; }
 .header-option-0619f > span {
   height: 19.5pt;
   display: flex;
@@ -243,8 +246,8 @@
   place-items: center;
   border-bottom: .5pt solid #000;
   background: #d9d9d9;
-  font-size: 8.7pt;
-  font-weight: 400;
+  font-size: 9pt;
+  font-weight: 600;
 }
 .background-0619f { height: 155pt; margin-top: 1pt; }
 .tin-rdo-0619f {
@@ -261,6 +264,9 @@
   background: #d9d9d9;
   white-space: nowrap;
 }
+.tin-rdo-0619f > div b,
+.label-0619f > b,
+.contact-category-0619f > div b { font-weight: 600; }
 .tin-rdo-0619f > div:nth-of-type(2) { border-left: .5pt solid #000; }
 .tin-value-0619f {
   display: grid;
@@ -375,6 +381,14 @@
   padding: 0 4pt;
   background: #d9d9d9;
 }
+.final-tax-row-0619f > span:first-child b,
+.final-tax-row-0619f > span:first-child strong {
+  font-weight: 600;
+}
+.final-tax-row-0619f > span:first-child strong {
+  font-size: 10.5pt;
+  letter-spacing: -.4pt;
+}
 .final-tax-row-0619f > span:nth-child(2) {
   display: flex;
   align-items: center;
@@ -400,6 +414,13 @@
   gap: 4pt;
   padding: 0 5pt;
   background: #d9d9d9;
+}
+.remittance-row-0619f > div:first-child b,
+.penalties-heading-0619f > b { font-weight: 600; }
+.remittance-row-0619f > div:first-child em {
+  margin-left: 2pt;
+  font-size: 7pt;
+  font-style: italic;
 }
 .remittance-row-0619f.item-18a-0619f > div:first-child,
 .remittance-row-0619f.item-18b-0619f > div:first-child,
@@ -456,7 +477,8 @@
   background: #d9d9d9;
   font-size: 5.7pt;
   line-height: 1.08;
-  text-align: center;
+  text-align: left;
+  text-indent: 11pt;
 }
 .signature-body-0619f {
   height: 59pt;
@@ -537,9 +559,12 @@
   justify-content: center;
   gap: 2pt;
   border-right: .5pt solid #000;
-  font-size: 6.4pt;
+  font-size: 7pt;
   line-height: 1;
   white-space: nowrap;
+}
+.payment-head-0619f > span:nth-child(2) {
+  letter-spacing: -.45pt;
 }
 .payment-head-0619f > span:last-child { border-right: 0; }
 .payment-row-0619f {
@@ -563,6 +588,12 @@
   gap: 4pt;
   padding-left: 5pt;
   background: #d9d9d9;
+}
+.payment-row-0619f > span:first-child b,
+.payment-other-label-0619f > b { font-weight: 600; }
+.payment-row-0619f[data-payment-row="payment_20"] > span:first-child {
+  letter-spacing: -.5pt;
+  white-space: nowrap;
 }
 .payment-tax-debit-bank-0619f {
   width: auto;

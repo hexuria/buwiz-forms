@@ -45,12 +45,12 @@ const REMITTANCE_LINES = [
   ["18C", "Compromise", "item_18c_compromise"],
   [
     "18D",
-    "Total Penalties (Sum of Items 18A to 18C)",
+    <>Total Penalties <em>(Sum of Items 18A to 18C)</em></>,
     "item_18d_total_penalties"
   ],
   [
     "19",
-    "Total Amount of Remittance (Sum of Item 17 and 18D)",
+    <>Total Amount of Remittance <em>(Sum of Item 17 and 18D)</em></>,
     "item_19_total_amount_of_remittance"
   ]
 ] as const;
@@ -79,7 +79,7 @@ export function Form0619F({ envelope }: { envelope: RenderEnvelope }) {
         <Declaration0619F envelope={envelope} />
         <PaymentDetails0619F envelope={envelope} />
         <p className="privacy-note-0619f">
-          *NOTE: Please read the BIR Data Privacy Policy found in the BIR website (www.bir.gov.ph)
+          <b>*NOTE:</b> Please read the BIR Data Privacy Policy found in the BIR website (www.bir.gov.ph)
         </p>
       </FolioPage>
 
@@ -100,9 +100,9 @@ function GovernmentHeader0619F() {
       <span className="government-wordmark-0619f">
         <img src={OFFICIAL_0619F_SEAL} alt="Bureau of Internal Revenue seal" />
         <span>
-          Republic of the Philippines<br />
-          Department of Finance<br />
-          Bureau of Internal Revenue
+          <span>Republic of the Philippines</span>
+          <span>Department of Finance</span>
+          <span>Bureau of Internal Revenue</span>
         </span>
       </span>
     </header>
@@ -149,7 +149,7 @@ function HeaderOptions0619F({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <section className="header-options-0619f" aria-label="Return period and filing options">
       <HeaderOption0619F
-        label={<><b>1</b> For the Month of <em>(MM/YYYY)</em></>}
+        label={<><b>1</b> For the month of <em>(MM/YYYY)</em></>}
         valueClassName="month-value-0619f"
       >
         <GuidedValue0619F field="1-month" value={monthYear} segments={[2, 4]} />
@@ -214,7 +214,7 @@ function BackgroundInformation0619F({ envelope }: { envelope: RenderEnvelope }) 
       />
       <div className="address-0619f">
         <div className="label-0619f">
-          <b>9</b> Registered Address <em>(Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)</em>
+          <b>9</b> Registered Address <em>(Indicate complete address. If branch, indicate the branch address. If registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)</em>
         </div>
         <GuidedValue0619F field="9-address-line-1" value={envelope.taxpayer.registered_address.toUpperCase()} segments={[40]} />
         <div className="address-second-0619f">
@@ -456,7 +456,7 @@ function Declaration0619F({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <section className="declaration-0619f">
       <p>
-        I/We declare under the penalties of perjury that this remittance form has been made in good faith, verified by me/us, and to the best of my/our knowledge and belief, is true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof. Further, I/we give my/our consent to the processing of my/our information as contemplated under the *Data Privacy Act of 2012 (R.A. No. 10173) for legitimate and lawful purposes. <em>(If Authorized Representative, attach authorization letter)</em>
+        I/We declare under the penalties of perjury that this remittance form has been made in good faith, verified by me/us, and to the best of my/our knowledge and belief, is true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof. Further, I/we give consent to the processing of my/our information as contemplated under the *Data Privacy Act of 2012 (R.A. No. 10173) for legitimate and lawful purposes. <em>(If Authorized Representative, attach authorization letter)</em>
       </p>
       <div className="signature-body-0619f">
         <div><span>For Individual:</span><b>Signature over Printed Name of Taxpayer/Authorized Representative/ Tax Agent</b><em>(Indicate Title/Designation and TIN)</em></div>
