@@ -237,8 +237,11 @@ impl FormMapper for Mapper2551Q {
             }
         }
 
-        // Create draft from profile (pre-fills RDO, name, address, etc.)
-        let mut draft = Form2551QDraft::new_from_profile(profile, year, quarter);
+        // Bind imported data to the one confirmed profile segment that covers
+        // the exact filing quarter. Missing, undated, overlapping, or
+        // out-of-period ledgers remain visible as a blocking resolution error
+        // on the draft instead of falling back to stale compatibility flags.
+        let mut draft = Form2551QDraft::new_from_effective_profile(profile, year, quarter);
 
         // Overlay payload data
         draft.is_amended = payload.is_amended;
@@ -343,7 +346,7 @@ mod tests {
     use crate::naming::Tin;
 
     fn test_profile() -> TaxpayerProfile {
-        TaxpayerProfile {
+        let mut profile = TaxpayerProfile {
             id: Some(1),
             full_name: "JUAN DELA CRUZ".to_string(),
             tin: Tin {
@@ -361,7 +364,7 @@ mod tests {
             default_form_type: "2551Q".to_string(),
             taxpayer_type: crate::profile::TaxpayerType::Individual,
             is_vat_registered: false,
-            business_start_date: None,
+            business_start_date: NaiveDate::from_ymd_opt(2020, 1, 1),
             birth_date: None,
             is_archived: false,
             profile_pin_hash: None,
@@ -395,7 +398,9 @@ mod tests {
             is_top_withholding_agent: false,
             is_government_withholding_entity: false,
             registration_activity_status: Default::default(),
-        }
+        };
+        profile.ensure_profile_version_ledger();
+        profile
     }
 
     fn test_payload() -> UniversalTaxPayload {
@@ -451,6 +456,24 @@ mod tests {
                 assert_eq!(draft.tax_payable, 0.0);
             }
         }
+    }
+
+    #[test]
+    fn test_mapper_2551q_keeps_unresolved_profile_import_fail_closed() {
+        let mapper = Mapper2551Q;
+        let mut profile = test_profile();
+        profile.profile_versions.clear();
+
+        let FormDraftOutput::Form2551Q(draft) = mapper.map(&test_payload(), &profile).unwrap();
+
+        assert!(
+            draft
+                .profile_resolution_error
+                .as_deref()
+                .is_some_and(|message| message.contains("No confirmed"))
+        );
+        assert!(draft.taxpayer_name.is_empty());
+        assert!(draft.rdo_code.is_empty());
     }
 
     #[test]

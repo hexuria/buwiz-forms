@@ -7,7 +7,7 @@ use crate::forms::atc::{AtcRateResolution, find_atc, resolve_2551q_atc_rate};
 use crate::penalties::{
     PenaltyConfig, PenaltyContext, PenaltyEngine, PenaltyProfile, TaxpayerClass,
 };
-use crate::profile::{IncomeTaxElection, TaxpayerProfile, TaxpayerType};
+use crate::profile::{IncomeTaxElection, TaxProfileVersionStatus, TaxpayerProfile, TaxpayerType};
 use chrono::{Datelike, Duration, NaiveDate};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -457,7 +457,40 @@ impl Form2551QDraft {
             self.record_profile_resolution_failure(error.clone());
             return Err(error);
         };
-        let resolved = profile.resolve_tax_profile_for_period(period_start, period_end);
+        // A first-time registrant can begin business inside a quarter. In that
+        // one narrow case the legally relevant filing period starts on the
+        // confirmed registration/effective date, not before the taxpayer
+        // existed. A mid-quarter replacement version is deliberately not
+        // treated this way: any prior confirmed version keeps the full-quarter
+        // resolver active so a profile change inside the period fails closed.
+        let touching_confirmed = profile
+            .profile_versions
+            .iter()
+            .filter(|version| {
+                version.status == TaxProfileVersionStatus::Confirmed
+                    && version.overlaps_period(period_start, period_end)
+            })
+            .collect::<Vec<_>>();
+        let effective_period_start = touching_confirmed
+            .as_slice()
+            .first()
+            .filter(|_| touching_confirmed.len() == 1)
+            .and_then(|version| {
+                let effective_from = version.effective_from?;
+                let is_initial_registration = effective_from > period_start
+                    && effective_from <= period_end
+                    && version.cor.registration_date == Some(effective_from)
+                    && !profile.profile_versions.iter().any(|other| {
+                        other.status == TaxProfileVersionStatus::Confirmed
+                            && other.id != version.id
+                            && other
+                                .effective_from
+                                .is_some_and(|start| start < effective_from)
+                    });
+                is_initial_registration.then_some(effective_from)
+            })
+            .unwrap_or(period_start);
+        let resolved = profile.resolve_tax_profile_for_period(effective_period_start, period_end);
         if resolved.has_blocking_issues() {
             let details = resolved
                 .issues
@@ -1995,6 +2028,31 @@ mod tests {
         assert_eq!(q3.taxpayer_name, "Second Half Name");
         assert_eq!(q3.rdo_code, "019");
         assert!(q3.profile_resolution_error.is_none());
+    }
+
+    #[test]
+    fn first_registration_inside_a_quarter_uses_the_confirmed_registration_date() {
+        let mut profile = test_profile();
+        let registration_date = NaiveDate::from_ymd_opt(2026, 8, 15).unwrap();
+        profile.business_start_date = Some(registration_date);
+        profile.profile_versions = vec![confirmed_profile_version(
+            &profile,
+            "initial-registration",
+            "New Registrant",
+            "018",
+            registration_date,
+            None,
+        )];
+
+        let draft = Form2551QDraft::new_from_effective_profile(&profile, 2026, 3);
+
+        assert_eq!(
+            draft.effective_profile_version_id.as_deref(),
+            Some("initial-registration")
+        );
+        assert_eq!(draft.business_start_date, Some(registration_date));
+        assert_eq!(draft.item_13_is_applicable(), Some(true));
+        assert!(draft.profile_resolution_error.is_none());
     }
 
     #[test]

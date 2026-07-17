@@ -234,7 +234,16 @@ fn prepare_queued_2551q(
         return Queued2551QPreparation::Superseded;
     }
 
-    draft.sync_with_profile(profile);
+    if let Err(error) = draft.reconcile_with_effective_profile(profile) {
+        draft.revert_to_draft();
+        draft.last_error = Some(format!(
+            "Submission blocked because the effective taxpayer profile is unresolved: {error}"
+        ));
+        return Queued2551QPreparation::Rejected {
+            draft,
+            errors: vec![("profile_resolution".to_string(), error)],
+        };
+    }
     match draft.revalidate_queued_before_submission() {
         Ok(()) => Queued2551QPreparation::Ready { draft, revision },
         Err(errors) => Queued2551QPreparation::Rejected { draft, errors },
@@ -836,7 +845,8 @@ mod tests {
             "phone": "09123456789",
             "email": "guard@example.com",
             "default_form_type": "2551Qv2018",
-            "taxpayer_type": "Individual"
+            "taxpayer_type": "Individual",
+            "business_start_date": "2090-01-01"
         }))
         .unwrap()
     }
@@ -849,11 +859,12 @@ mod tests {
             elected_at: chrono::NaiveDateTime::default(),
             source_form: "2551Qv2018".to_string(),
         });
+        profile.ensure_profile_version_ledger();
         profile
     }
 
     fn queued_draft(profile: &TaxpayerProfile) -> Form2551QDraft {
-        let mut draft = Form2551QDraft::new_from_profile(profile, 2099, 1);
+        let mut draft = Form2551QDraft::new_from_effective_profile(profile, 2099, 1);
         draft.item_13_election = Item13Election::Graduated;
         draft
             .transition_to_queued()
@@ -879,10 +890,12 @@ mod tests {
     fn submission_preparation_uses_current_profile_and_rejects_changes() {
         let mut reviewed_profile = reviewed_profile();
         reviewed_profile.eopt_tier = Some(EoptTier::Medium);
+        reviewed_profile.profile_versions[0].eopt_tier = Some(EoptTier::Medium);
         let draft = queued_draft(&reviewed_profile);
 
         let mut current_profile = reviewed_profile;
         current_profile.eopt_tier = Some(EoptTier::Micro);
+        current_profile.profile_versions[0].eopt_tier = Some(EoptTier::Micro);
         let prepared = prepare_queued_2551q(draft, &current_profile, None);
 
         match prepared {
@@ -891,6 +904,30 @@ mod tests {
                 assert!(errors.iter().any(|(field, _)| field == "profile_snapshot"));
             }
             _ => panic!("a changed current profile must reject the queued return"),
+        }
+    }
+
+    #[test]
+    fn submission_preparation_rejects_an_unresolved_effective_profile() {
+        let reviewed_profile = reviewed_profile();
+        let draft = queued_draft(&reviewed_profile);
+        let mut current_profile = reviewed_profile;
+        current_profile.profile_versions.clear();
+
+        match prepare_queued_2551q(draft, &current_profile, None) {
+            Queued2551QPreparation::Rejected { draft, errors } => {
+                assert_eq!(draft.status, FilingStatus::Draft);
+                assert!(
+                    draft
+                        .last_error
+                        .as_deref()
+                        .is_some_and(|message| message.contains("effective taxpayer profile"))
+                );
+                assert!(errors.iter().any(|(field, message)| {
+                    field == "profile_resolution" && message.contains("No confirmed")
+                }));
+            }
+            _ => panic!("an unresolved effective profile must reject the queued return"),
         }
     }
 

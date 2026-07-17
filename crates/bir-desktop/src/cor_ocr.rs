@@ -644,18 +644,42 @@ fn detect_document_type(text: &str) -> Option<String> {
 }
 
 fn extract_form_codes_from_text(text: &str) -> Vec<String> {
-    let known_codes = [
+    const KNOWN_CODES: &[&str] = &[
         "2303", "0605", "0619E", "0619F", "1600", "1600PT", "1600VT", "1601C", "1601EQ", "1601FQ",
         "1602Q", "1603Q", "1604C", "1604CF", "1604E", "1621", "1701", "1701A", "1701MS", "1701Q",
         "1702EX", "1702MX", "1702Q", "1702RT", "1704", "2200M", "2200P", "2316", "2550DS", "2550M",
         "2550Q", "2551Q",
     ];
-    let normalized = normalize(text).replace(' ', "");
-    let mut codes = known_codes
-        .into_iter()
-        .filter(|code| normalized.contains(code))
-        .map(str::to_string)
-        .collect::<Vec<_>>();
+    let normalized = normalize(text);
+    let tokens = normalized.split_whitespace().collect::<Vec<_>>();
+    let mut codes = Vec::new();
+    let mut token_index = 0;
+
+    while token_index < tokens.len() {
+        // OCR commonly separates suffixes around punctuation (for example,
+        // `1701-Q` or `1604-CF`). Prefer the longest exact known code formed
+        // from at most three adjacent tokens. Never use substring/prefix
+        // matching: `1701Q` is not evidence for `1701`, and `1604CF` is not
+        // evidence for `1604C`.
+        let mut candidate = String::new();
+        let mut longest_match = None;
+        for consumed in 1..=3 {
+            let Some(token) = tokens.get(token_index + consumed - 1) else {
+                break;
+            };
+            candidate.push_str(token);
+            if KNOWN_CODES.contains(&candidate.as_str()) {
+                longest_match = Some((candidate.clone(), consumed));
+            }
+        }
+
+        if let Some((code, consumed)) = longest_match {
+            codes.push(code);
+            token_index += consumed;
+        } else {
+            token_index += 1;
+        }
+    }
     codes.sort();
     codes.dedup();
     codes
@@ -1407,6 +1431,39 @@ PERCENTAGE TAX
             infer_tax_types_from_text("WITHHOLDING TAX - VAT AND OTHER PERCENTAGE TAXES"),
             vec![RegisteredTaxType::WithholdingVatAndPercentage]
         );
+    }
+
+    #[test]
+    fn fallback_form_code_extraction_does_not_invent_prefix_codes() {
+        assert_eq!(
+            extract_form_codes_from_text("BIR Form 1701Q"),
+            vec!["1701Q".to_string()]
+        );
+        assert_eq!(
+            extract_form_codes_from_text("BIR Forms 1600PT and 1600VT"),
+            vec!["1600PT".to_string(), "1600VT".to_string()]
+        );
+        assert_eq!(
+            extract_form_codes_from_text("Annual Information Return 1604CF"),
+            vec!["1604CF".to_string()]
+        );
+    }
+
+    #[test]
+    fn fallback_form_code_extraction_accepts_reviewable_code_boundaries() {
+        assert_eq!(
+            extract_form_codes_from_text("BIR Forms 1701-Q, 1600 PT, and 1604-C-F"),
+            vec![
+                "1600PT".to_string(),
+                "1604CF".to_string(),
+                "1701Q".to_string()
+            ]
+        );
+        assert_eq!(
+            extract_form_codes_from_text("BIR Form 1701"),
+            vec!["1701".to_string()]
+        );
+        assert!(extract_form_codes_from_text("OCR artifact X1701QY").is_empty());
     }
 
     #[test]

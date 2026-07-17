@@ -186,11 +186,16 @@ pub fn classify_vat_registration_text(text: &str) -> VatRegistrationTextClassifi
         .collect::<Vec<_>>()
         .join(" ");
 
-    let compact = normalized.replace(' ', "");
-    let is_explicitly_non_vat = normalized.contains("NON VAT")
-        || compact.contains("NONVAT")
-        || normalized.contains("NOT VAT REGISTERED")
-        || normalized.contains("NOT REGISTERED FOR VAT");
+    let tokens = normalized.split_whitespace().collect::<Vec<_>>();
+    let contains_tokens =
+        |needle: &[&str]| tokens.windows(needle.len()).any(|window| window == needle);
+    let is_explicitly_non_vat = tokens.contains(&"NONVAT")
+        || contains_tokens(&["NON", "VAT"])
+        || contains_tokens(&["NOT", "VAT", "REGISTERED"])
+        || contains_tokens(&["NOT", "A", "VAT", "REGISTERED"])
+        || contains_tokens(&["NOT", "REGISTERED", "FOR", "VAT"])
+        || contains_tokens(&["NO", "VAT", "REGISTRATION"])
+        || contains_tokens(&["VAT", "REGISTRATION", "NO"]);
     if is_explicitly_non_vat {
         return VatRegistrationTextClassification::NonVat;
     }
@@ -1395,10 +1400,21 @@ mod tests {
 
     #[test]
     fn vat_text_classification_prefers_non_vat_negation() {
-        assert_eq!(
-            classify_vat_registration_text("Taxpayer classification: NON-VAT registered"),
-            VatRegistrationTextClassification::NonVat
-        );
+        for text in [
+            "Taxpayer classification: NON-VAT registered",
+            "Taxpayer classification: NONVAT",
+            "NOT VAT REGISTERED",
+            "NOT A VAT REGISTERED TAXPAYER",
+            "NOT REGISTERED FOR VAT",
+            "VAT REGISTRATION: NO",
+            "NO VAT REGISTRATION",
+        ] {
+            assert_eq!(
+                classify_vat_registration_text(text),
+                VatRegistrationTextClassification::NonVat,
+                "{text:?} must be treated as explicit non-VAT evidence"
+            );
+        }
     }
 
     #[test]
@@ -1407,6 +1423,21 @@ mod tests {
             classify_vat_registration_text("Monthly remittance return of VAT withheld"),
             VatRegistrationTextClassification::Unknown
         );
+    }
+
+    #[test]
+    fn vat_text_classification_accepts_explicit_registration_only() {
+        for text in [
+            "VAT REGISTERED",
+            "REGISTERED FOR VAT",
+            "VALUE ADDED TAX REGISTERED",
+        ] {
+            assert_eq!(
+                classify_vat_registration_text(text),
+                VatRegistrationTextClassification::VatRegistered,
+                "{text:?} is explicit positive VAT-registration evidence"
+            );
+        }
     }
 
     #[test]

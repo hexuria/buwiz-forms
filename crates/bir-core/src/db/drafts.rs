@@ -391,7 +391,13 @@ impl Database {
         }
 
         let mut verified = draft.clone();
-        verified.sync_with_profile(&profile);
+        verified
+            .reconcile_with_effective_profile(&profile)
+            .map_err(|error| {
+                DbError::Other(format!(
+                    "Cannot queue 2551Q until its exact filing period resolves to one confirmed taxpayer-profile version: {error}"
+                ))
+            })?;
         if let Err(validation_errors) = verified.revalidate_queued_before_submission() {
             let summary = validation_errors
                 .iter()
@@ -556,7 +562,16 @@ impl Database {
                 ))
             })?;
         let profile: crate::profile::TaxpayerProfile = serde_json::from_str(&profile_json)?;
-        draft.sync_with_profile(&profile);
+        if let Err(error) = draft.reconcile_with_effective_profile(&profile) {
+            draft.revert_to_draft();
+            draft.last_error = Some(format!(
+                "Submission blocked because the effective taxpayer profile is unresolved: {error}"
+            ));
+            return Ok(Claim2551QSubmissionResult::Rejected {
+                draft,
+                errors: vec![("profile_resolution".to_string(), error)],
+            });
+        }
         if let Err(errors) = draft.revalidate_queued_before_submission() {
             return Ok(Claim2551QSubmissionResult::Rejected { draft, errors });
         }
@@ -1127,19 +1142,22 @@ mod tests {
     fn insert_test_profile(db: &Database, profile: &TaxpayerProfile) {
         let mut persisted = profile.clone();
         persisted.ensure_profile_version_ledger();
+        insert_raw_test_profile(db, &persisted);
+    }
+
+    fn insert_raw_test_profile(db: &Database, profile: &TaxpayerProfile) {
         db.conn
             .execute(
                 "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
-                params![
-                    profile.tin.full(),
-                    serde_json::to_string(&persisted).unwrap()
-                ],
+                params![profile.tin.full(), serde_json::to_string(profile).unwrap()],
             )
             .unwrap();
     }
 
     fn queued_eight_percent_draft(profile: &TaxpayerProfile) -> Form2551QDraft {
-        let mut draft = Form2551QDraft::new_from_profile(profile, 2026, 1);
+        let mut effective_profile = profile.clone();
+        effective_profile.ensure_profile_version_ledger();
+        let mut draft = Form2551QDraft::new_from_effective_profile(&effective_profile, 2026, 1);
         draft.item_13_election = Item13Election::EightPercent;
         draft
             .transition_to_queued()
@@ -1148,7 +1166,9 @@ mod tests {
     }
 
     fn queued_graduated_draft(profile: &TaxpayerProfile) -> Form2551QDraft {
-        let mut draft = Form2551QDraft::new_from_profile(profile, 2026, 1);
+        let mut effective_profile = profile.clone();
+        effective_profile.ensure_profile_version_ledger();
+        let mut draft = Form2551QDraft::new_from_effective_profile(&effective_profile, 2026, 1);
         draft.item_13_election = Item13Election::Graduated;
         draft
             .transition_to_queued()
@@ -1509,9 +1529,10 @@ mod tests {
         let db = test_db();
         let mut profile = test_profile();
         profile.business_start_date = chrono::NaiveDate::from_ymd_opt(2026, 8, 15);
+        profile.ensure_profile_version_ledger();
         insert_test_profile(&db, &profile);
 
-        let mut draft = Form2551QDraft::new_from_profile(&profile, 2026, 3);
+        let mut draft = Form2551QDraft::new_from_effective_profile(&profile, 2026, 3);
         assert_eq!(draft.item_13_is_applicable(), Some(true));
         draft.item_13_election = Item13Election::EightPercent;
         draft
@@ -1576,6 +1597,66 @@ mod tests {
             let error = db.save_queued_2551q_draft_and_election(&draft).unwrap_err();
             assert!(error.to_string().contains("profile"));
             assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_none());
+        }
+    }
+
+    #[test]
+    fn unresolved_effective_profile_ledgers_reject_queue_without_partial_writes() {
+        let reviewed_profile = test_profile();
+        let cases = [
+            {
+                let mut profile = reviewed_profile.clone();
+                profile.profile_versions.clear();
+                ("missing ledger", profile)
+            },
+            {
+                let mut profile = reviewed_profile.clone();
+                profile.ensure_profile_version_ledger();
+                let mut overlapping = profile.profile_versions[0].clone();
+                overlapping.id = "overlapping-confirmed-version".to_string();
+                overlapping.label = "Overlapping confirmed version".to_string();
+                overlapping.effective_from = chrono::NaiveDate::from_ymd_opt(2025, 1, 1);
+                profile.profile_versions.push(overlapping);
+                ("overlapping ledger", profile)
+            },
+            {
+                let mut profile = reviewed_profile.clone();
+                profile.business_start_date = None;
+                profile.profile_versions.clear();
+                profile.ensure_profile_version_ledger();
+                ("undated ledger", profile)
+            },
+            {
+                let mut profile = reviewed_profile.clone();
+                profile.ensure_profile_version_ledger();
+                profile.profile_versions[0].effective_from =
+                    chrono::NaiveDate::from_ymd_opt(2027, 1, 1);
+                ("out-of-period ledger", profile)
+            },
+        ];
+
+        for (case, current_profile) in cases {
+            let db = test_db();
+            insert_raw_test_profile(&db, &current_profile);
+            let draft = queued_eight_percent_draft(&reviewed_profile);
+
+            let error = db
+                .save_queued_2551q_draft_and_election(&draft)
+                .expect_err(case);
+
+            assert!(
+                error.to_string().contains("exact filing period"),
+                "{case} returned an unexpected error: {error}"
+            );
+            assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_none());
+            assert!(
+                db.get_profile(&draft.tin)
+                    .unwrap()
+                    .unwrap()
+                    .tax_elections
+                    .is_empty(),
+                "{case} must not persist the draft's requested election"
+            );
         }
     }
 
@@ -1735,6 +1816,7 @@ mod tests {
         let db = test_db();
         let mut profile = test_profile();
         profile.eopt_tier = Some(crate::profile::EoptTier::Medium);
+        profile.ensure_profile_version_ledger();
         insert_test_profile(&db, &profile);
         let queued = queued_graduated_draft(&profile);
         db.save_queued_2551q_draft_and_election(&queued)
@@ -1754,6 +1836,7 @@ mod tests {
         ));
 
         profile.eopt_tier = Some(crate::profile::EoptTier::Micro);
+        profile.profile_versions[0].eopt_tier = Some(crate::profile::EoptTier::Micro);
         db.conn
             .execute(
                 "UPDATE profiles SET data_json = ?1 WHERE tin = ?2",
@@ -1784,6 +1867,61 @@ mod tests {
                 .submission_claim_token
                 .is_none()
         );
+    }
+
+    #[test]
+    fn network_claim_rejects_when_the_effective_profile_becomes_unresolved() {
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        let queued = queued_graduated_draft(&profile);
+        db.save_queued_2551q_draft_and_election(&queued)
+            .expect("queued draft should persist before claiming");
+
+        let mut unresolved_profile = db.get_profile(&queued.tin).unwrap().unwrap();
+        unresolved_profile.profile_versions.clear();
+        db.conn
+            .execute(
+                "UPDATE profiles SET data_json = ?1 WHERE tin = ?2",
+                params![
+                    serde_json::to_string(&unresolved_profile).unwrap(),
+                    &queued.tin
+                ],
+            )
+            .unwrap();
+
+        match db
+            .claim_queued_2551q_submission(
+                &queued.tin,
+                queued.taxable_year,
+                queued.quarter,
+                &queued.queued_submission_fingerprint,
+                &queued.next_retry_at,
+                queued.submission_attempts,
+            )
+            .unwrap()
+        {
+            Claim2551QSubmissionResult::Rejected { draft, errors } => {
+                assert_eq!(draft.status, FilingStatus::Draft);
+                assert!(
+                    draft
+                        .last_error
+                        .as_deref()
+                        .is_some_and(|message| message.contains("effective taxpayer profile"))
+                );
+                assert!(errors.iter().any(|(field, message)| {
+                    field == "profile_resolution" && message.contains("No confirmed")
+                }));
+            }
+            _ => panic!("an unresolved profile must reject a network claim"),
+        }
+
+        let stored = db
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.status, FilingStatus::Queued);
+        assert!(stored.submission_claim_token.is_none());
     }
 
     #[test]
