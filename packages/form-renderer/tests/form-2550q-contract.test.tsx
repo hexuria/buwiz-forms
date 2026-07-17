@@ -76,7 +76,7 @@ describe("2550Q:2024 exact semantic preview contract", () => {
       expect(markup.match(/class="[^"]*form-page/g)).toHaveLength(2);
       expect(markup.match(/data-paper="legal"/g)).toHaveLength(2);
       expect(markup).toContain("Part IV – Details of VAT Computation");
-      expect(markup).toContain("Schedule 1 — Amortized Input Tax from Capital Goods");
+      expect(markup).toContain("Schedule 1 – Amortized Input Tax from Capital Goods");
     }
   });
 
@@ -90,6 +90,34 @@ describe("2550Q:2024 exact semantic preview contract", () => {
     expect(markup).toContain("Short Period Return?");
     expect(markup).toContain("04/24ENCS P1");
     expect(markup).toContain("04/24ENCS P2");
+  });
+
+  it("pins official instructions, computation labels, declaration, and schedule wording", () => {
+    const fixture = structuredClone(normalFixture) as RenderEnvelope;
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: fixture })
+    );
+
+    for (const wording of [
+      "Two copies MUST be filed with the BIR and one held by the Taxpayer.",
+      "(From Part IV, Item 61)",
+      "VAT paid in return previously filed, if this is an amended return",
+      "Other Credits/Payment",
+      "Total Tax Credits/Payment",
+      "TOTAL AMOUNT PAYABLE/(Excess Credits)",
+      "Further, I/we give my/our consent to the processing of my/our information",
+      "(If Authorized Representative, attach authorization letter and indicate TIN)",
+      "Officer or Representative/Tax Agent",
+      "(If applicable)",
+      "Machine Validation/Revenue Official Receipt (ROR) Details (if not filed with an Authorized Agent Bank)",
+      "Schedule 2 – Input Tax Attributable to VAT Exempt Sales",
+      "Schedule 3 – Creditable VAT Withheld",
+      "(Attach additional sheet/s, if necessary)"
+    ]) {
+      expect(markup).toContain(wording);
+    }
+    expect(markup).not.toContain("Item 61B");
+    expect(markup).not.toContain("Creditable Value-Added Tax Withheld");
   });
 
   it("uses Rust-owned signed amounts and preserves unentered optional amounts as blank", () => {

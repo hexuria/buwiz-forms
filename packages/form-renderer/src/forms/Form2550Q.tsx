@@ -25,18 +25,18 @@ type AmountRow = Readonly<{
 }>;
 
 const PART_TWO_ROWS: readonly AmountRow[] = [
-  { item: 15, label: <>Net VAT Payable/(Excess Input Tax) <em>(From Part IV, Item 61B)</em></>, key: "item_15" },
+  { item: 15, label: <>Net VAT Payable/(Excess Input Tax) <em>(From Part IV, Item 61)</em></>, key: "item_15" },
   { item: 16, label: <>Creditable VAT Withheld <em>(From Part V - Schedule 3, Column D)</em></>, key: "item_16" },
   { item: 17, label: <>Advance VAT Payments <em>(From Part V - Schedule 4)</em></>, key: "item_17" },
-  { item: 18, label: "VAT Paid in Return Previously Filed, if this is an Amended Return", key: "item_18" },
-  { item: 19, label: <>Other Tax Credits/Payments <em>(specify)</em></>, key: "item_19" },
-  { item: 20, label: <>Total Tax Credits/Payments <em>(Sum of Items 16 to 19)</em></>, key: "item_20", emphasis: "subtotal" },
+  { item: 18, label: "VAT paid in return previously filed, if this is an amended return", key: "item_18" },
+  { item: 19, label: <>Other Credits/Payment <em>(Specify)</em></>, key: "item_19" },
+  { item: 20, label: <>Total Tax Credits/Payment <em>(Sum of Items 16 to 19)</em></>, key: "item_20", emphasis: "subtotal" },
   { item: 21, label: <>Tax Still Payable/(Excess Credits) <em>(Item 15 Less Item 20)</em></>, key: "item_21", emphasis: "subtotal" },
   { item: 22, label: "Surcharge", key: "item_22" },
   { item: 23, label: "Interest", key: "item_23" },
   { item: 24, label: "Compromise", key: "item_24" },
   { item: 25, label: <>Total Penalties <em>(Sum of Items 22 to 24)</em></>, key: "item_25", emphasis: "subtotal" },
-  { item: 26, label: <>TOTAL AMOUNT PAYABLE/(EXCESS CREDITS) <em>(Sum of Items 21 and 25)</em></>, key: "item_26", emphasis: "total" }
+  { item: 26, label: <>TOTAL AMOUNT PAYABLE/(Excess Credits) <em>(Sum of Items 21 and 25)</em></>, key: "item_26", emphasis: "total" }
 ];
 
 const PART_FOUR_ROWS: readonly Readonly<{
@@ -59,12 +59,12 @@ const PART_FOUR_ROWS: readonly Readonly<{
   { item: 39, label: <>Input Tax Deferred on Capital Goods Exceeding P1 Million from Previous Quarter <em>(From Part V - Schedule 1 Col E)</em></>, disabledA: true, b: "item_39b" },
   { item: 40, label: "Transitional Input Tax", disabledA: true, b: "item_40b" },
   { item: 41, label: "Presumptive Input Tax", disabledA: true, b: "item_41b" },
-  { item: 42, label: <>Others <em>(specify)</em></>, disabledA: true, b: "item_42b" },
+  { item: 42, label: <>Others <em>(Specify)</em></>, disabledA: true, b: "item_42b" },
   { item: 43, label: <>Total <em>(Sum of Items 38B to 42B)</em></>, disabledA: true, b: "item_43b", emphasis: "subtotal" },
   { item: 44, label: "Domestic Purchases", a: "item_44a", b: "item_44b" },
   { item: 45, label: "Services Rendered by Non-Residents", a: "item_45a", b: "item_45b" },
   { item: 46, label: "Importations", a: "item_46a", b: "item_46b" },
-  { item: 47, label: <>Others <em>(specify)</em></>, a: "item_47a", b: "item_47b" },
+  { item: 47, label: <>Others <em>(Specify)</em></>, a: "item_47a", b: "item_47b" },
   { item: 48, label: "Domestic Purchases with No Input Tax", a: "item_48a", disabledB: true },
   { item: 49, label: "VAT-Exempt Importations", a: "item_49a", disabledB: true },
   { item: 50, label: <>Total Current Purchases/Input Tax <em>(Sum of Items 44A to 49A)/(Sum of Items 44B to 47B)</em></>, a: "item_50a", b: "item_50b", emphasis: "subtotal" },
@@ -73,7 +73,7 @@ const PART_FOUR_ROWS: readonly Readonly<{
   { item: 53, label: <>Input Tax Attributable to VAT Exempt Sales <em>(From Part V - Schedule 2)</em></>, disabledA: true, b: "item_53b" },
   { item: 54, label: "VAT Refund/TCC Claimed", disabledA: true, b: "item_54b" },
   { item: 55, label: "Input VAT on Unpaid Payables", disabledA: true, b: "item_55b" },
-  { item: 56, label: <>Others <em>(specify)</em></>, disabledA: true, b: "item_56b" },
+  { item: 56, label: <>Others <em>(Specify)</em></>, disabledA: true, b: "item_56b" },
   { item: 57, label: <>Total Deductions from Input Tax <em>(Sum of Items 52B to 56B)</em></>, disabledA: true, b: "item_57b", emphasis: "subtotal" },
   { item: 58, label: "Add: Input VAT on Settled Unpaid Payables Previously Deducted", disabledA: true, b: "item_58b" },
   { item: 59, label: <>Adjusted Deductions from Input Tax <em>(Sum of Items 57B and 58B)</em></>, disabledA: true, b: "item_59b", emphasis: "subtotal" },
@@ -141,7 +141,7 @@ function Masthead2550Q({ page, compact = false }: { page: 1 | 2; compact?: boole
       </div>
       <div className="form-title-2550q">
         <strong>Quarterly Value-Added Tax<br />(VAT) Return</strong>
-        {!compact && <em>Enter all required information in CAPITAL LETTERS using BLACK ink. Mark applicable boxes with an “X”. Two copies must be filed with the BIR and one held by the Taxpayer.</em>}
+        {!compact && <em>Enter all required information in CAPITAL LETTERS using BLACK ink. Mark applicable boxes with an “X”. Two copies MUST be filed with the BIR and one held by the Taxpayer.</em>}
       </div>
       <div className="barcode-2550q" aria-label={payload} data-barcode-page={page}>
         <span className="official-pdf417-object-2550q" aria-hidden="true">
@@ -212,11 +212,11 @@ function PartOne2550Q({ envelope }: { envelope: RenderEnvelope }) {
         <span><b>8</b> RDO Code</span>
         <CombValue value={envelope.taxpayer.rdo_code} cells={3} align="right" />
       </div>
-      <FullWidthField2550Q item="9" label={<>Taxpayer’s Name <em>(Last Name, First Name, Middle Name for Individual OR Registered Name for Non-Individual)</em></>} value={envelope.taxpayer.name} cells={45} className="name-field-2550q" />
+      <FullWidthField2550Q item="9" label={<>Taxpayer’s Name <em>(Last Name, First Name, Middle Name for Individual OR Registered Name for Non-Individual)</em></>} value={envelope.taxpayer.name} cells={40} className="name-field-2550q" />
       <Address2550Q envelope={envelope} />
       <div className="split-row-2550q">
-        <FullWidthField2550Q item="11" label={<>Contact Number <em>(Landline/Cellphone No.)</em></>} value={envelope.taxpayer.contact_number} cells={20} />
-        <FullWidthField2550Q item="12" label="Email Address" value={envelope.taxpayer.email} cells={35} />
+        <FullWidthField2550Q item="11" label={<>Contact Number <em>(Landline/Cellphone No.)</em></>} value={envelope.taxpayer.contact_number} cells={13} />
+        <FullWidthField2550Q item="12" label="Email Address" value={envelope.taxpayer.email} cells={27} />
       </div>
       <div className="classification-2550q">
         <span><b>13</b> Taxpayer Classification</span>
@@ -226,7 +226,7 @@ function PartOne2550Q({ envelope }: { envelope: RenderEnvelope }) {
         <span><b>14</b> Are you availing of tax relief under Special Law or International Tax Treaty?</span>
         <CheckChoice checked={bool(envelope, "is_availing_tax_relief")} label="Yes" />
         <CheckChoice checked={!bool(envelope, "is_availing_tax_relief")} label="No" />
-        <span className="tax-relief-detail-2550q"><span><b>14A</b> If yes, specify</span><AdaptiveCombValue value={text(envelope, "tax_relief_details")} cells={28} /></span>
+        <span className="tax-relief-detail-2550q"><span><b>14A</b> If yes, specify</span><AdaptiveCombValue value={text(envelope, "tax_relief_details")} cells={17} /></span>
       </div>
     </section>
   );
@@ -240,7 +240,7 @@ function PartTwo2550Q({ envelope }: { envelope: RenderEnvelope }) {
         <Fragment key={row.item}>
           <div className={`amount-row-2550q ${row.emphasis ? `${row.emphasis}-2550q` : ""}`}>
             <span className="amount-label-2550q">{row.item === 22 && <span className="penalty-prefix-2550q">Add: Penalties</span>}<b>{row.item}</b>{row.label}{row.item === 19 && <InlineSpecify2550Q value={text(envelope, "item_19_description")} />}</span>
-            <MoneyCell2550Q envelope={envelope} fieldKey={row.key} cells={13} />
+            <MoneyCell2550Q envelope={envelope} fieldKey={row.key} cells={12} />
           </div>
           {row.item === 15 && <div className="part-two-subband-2550q">Less: Tax Credits/Payments</div>}
         </Fragment>
@@ -252,15 +252,15 @@ function PartTwo2550Q({ envelope }: { envelope: RenderEnvelope }) {
 function Declaration2550Q({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <section className="declaration-2550q">
-      <p>I/We declare under the penalties of perjury that this return, and all its attachments, have been made in good faith, verified by me/us, and to the best of my/our knowledge and belief, are true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof.</p>
+      <p>I/We declare under the penalties of perjury that this return, and all its attachments, have been made in good faith, verified by me/us, and to the best of my/our knowledge and belief, is true and correct pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof. Further, I/we give my/our consent to the processing of my/our information as contemplated under the *Data Privacy Act of 2012 (R.A. No. 10173) for legitimate and lawful purposes. <em>(If Authorized Representative, attach authorization letter and indicate TIN)</em></p>
       <div className="signature-panels-2550q">
-        <div>For Individual:<br /><ValueLine2550Q value={text(envelope, "signature_taxpayer_or_representative")} /><span>Signature over Printed Name of Taxpayer/Authorized Representative/Tax Agent</span><ValueLine2550Q value={text(envelope, "signature_representative_title")} /><small>Title/Designation and TIN</small></div>
-        <div>For Non-Individual:<br /><ValueLine2550Q value={text(envelope, "signature_non_individual_officer")} /><span>Signature over Printed Name of President/Vice President/Authorized Officer</span><small>Title/Designation and TIN</small></div>
+        <div><span className="signature-entry-2550q"><span>For Individual:</span><PlainValue2550Q value={text(envelope, "signature_taxpayer_or_representative")} capacity={54} /><PlainValue2550Q value={text(envelope, "signature_representative_title")} capacity={42} /></span><span className="signature-caption-2550q">Signature over Printed Name of Taxpayer/Authorized Representative/Tax Agent<small>(Indicate Title/Designation and TIN)</small></span></div>
+        <div><span className="signature-entry-2550q"><span>For Non-Individual:</span><PlainValue2550Q value={text(envelope, "signature_non_individual_officer")} capacity={50} /></span><span className="signature-caption-2550q">Signature over Printed Name of President/Vice President/Authorized Officer or Representative/Tax Agent<small>(Indicate Title/Designation and TIN)</small></span></div>
       </div>
       <div className="credential-row-2550q">
-        <span>Tax Agent Accreditation No./Attorney’s Roll No.<ValueLine2550Q value={text(envelope, "tax_agent_accreditation_or_roll_number")} /></span>
-        <span>Date of Issue <em>(MM/DD/YYYY)</em><ValueLine2550Q value={text(envelope, "tax_agent_date_of_issue")} /></span>
-        <span>Expiry Date <em>(MM/DD/YYYY)</em><ValueLine2550Q value={text(envelope, "tax_agent_date_of_expiry")} /></span>
+        <span><span>Tax Agent Accreditation No./Attorney’s Roll No. <em>(If applicable)</em></span><ValueLine2550Q value={text(envelope, "tax_agent_accreditation_or_roll_number")} /></span>
+        <span><span>Date of Issue <em>(MM/DD/YYYY)</em></span><ValueLine2550Q value={text(envelope, "tax_agent_date_of_issue")} /></span>
+        <span><span>Expiry Date <em>(MM/DD/YYYY)</em></span><ValueLine2550Q value={text(envelope, "tax_agent_date_of_expiry")} /></span>
       </div>
     </section>
   );
@@ -283,10 +283,10 @@ function PartThree2550Q({ envelope }: { envelope: RenderEnvelope }) {
       ))}
       <div className="payment-other-label-2550q"><b>30</b> Others (Specify below)</div>
       <div className="payment-row-2550q payment-other-values-2550q">
-        <AdaptiveCombValue value={text(envelope, "payment_other_description")} cells={5} /><AdaptiveCombValue value={text(envelope, "payment_other_bank")} cells={5} /><AdaptiveCombValue value={text(envelope, "payment_other_number")} cells={6} /><AdaptiveCombValue value={text(envelope, "payment_other_date")} cells={8} /><MoneyCell2550Q envelope={envelope} fieldKey="payment_other_amount" cells={12} />
+        <AdaptiveCombValue value={text(envelope, "payment_other_description")} cells={6} /><AdaptiveCombValue value={text(envelope, "payment_other_bank")} cells={5} /><AdaptiveCombValue value={text(envelope, "payment_other_number")} cells={6} /><AdaptiveCombValue value={text(envelope, "payment_other_date")} cells={8} /><MoneyCell2550Q envelope={envelope} fieldKey="payment_other_amount" cells={12} />
       </div>
       <div className="receipt-validation-row-2550q">
-        <div className="machine-validation-2550q">Machine Validation/Revenue Official Receipt (ROR) Details <PlainValue2550Q value={text(envelope, "machine_validation_or_receipt_details")} capacity={72} /></div>
+        <div className="machine-validation-2550q">Machine Validation/Revenue Official Receipt (ROR) Details (if not filed with an Authorized Agent Bank) <PlainValue2550Q value={text(envelope, "machine_validation_or_receipt_details")} capacity={72} /></div>
         <div className="receiving-stamp-2550q">Stamp of Receiving Office/AAB and Date of Receipt<br /><em>(RO’s Signature/Bank Teller’s Initial)</em></div>
       </div>
     </section>
@@ -297,7 +297,7 @@ function PageTwoIdentity2550Q({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <div className="page-two-identity-2550q">
       <div><span>TIN</span><Tin2550Q value={envelope.taxpayer.tin} /></div>
-      <div><span>Taxpayer’s Last Name (if Individual)/ Registered Name (if Non-Individual)</span><AdaptiveCombValue value={envelope.taxpayer.name} cells={34} /></div>
+      <div><span>Taxpayer’s Last Name (if Individual)/ Registered Name (if Non-Individual)</span><AdaptiveCombValue value={envelope.taxpayer.name} cells={26} /></div>
     </div>
   );
 }
@@ -314,8 +314,8 @@ function PartFour2550Q({ envelope }: { envelope: RenderEnvelope }) {
           {row.item === 52 && <PartFourSubheader2550Q first="Less: Adjustment/Deductions from Input Tax" third="B. Input Tax" />}
           <div className={`part-four-row-2550q item-${row.item}-2550q ${row.emphasis ? `${row.emphasis}-2550q` : ""} ${row.disabledA && row.b ? "single-b-2550q" : ""}`}>
             <span><b>{row.item}</b>{row.label}{row.item === 42 && <InlineSpecify2550Q value={text(envelope, "item_42_description")} capacity={18} />}{row.item === 47 && <InlineSpecify2550Q value={text(envelope, "item_47_description")} capacity={18} />}{row.item === 56 && <InlineSpecify2550Q value={text(envelope, "item_56_description")} capacity={18} />}</span>
-            <span className={row.disabledA ? "disabled-cell-2550q" : ""}>{row.a && <MoneyCell2550Q envelope={envelope} fieldKey={row.a} cells={9} />}</span>
-            <span className={row.disabledB ? "disabled-cell-2550q" : ""}>{row.b && <MoneyCell2550Q envelope={envelope} fieldKey={row.b} cells={9} />}</span>
+            <span className={row.disabledA ? "disabled-cell-2550q" : ""}>{row.a && <MoneyCell2550Q envelope={envelope} fieldKey={row.a} cells={12} />}</span>
+            <span className={row.disabledB ? "disabled-cell-2550q" : ""}>{row.b && <MoneyCell2550Q envelope={envelope} fieldKey={row.b} cells={12} />}</span>
           </div>
         </Fragment>
       ))}
@@ -342,11 +342,11 @@ function PartFive2550Q({ envelope }: { envelope: RenderEnvelope }) {
 function ScheduleOne2550Q({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <section className="schedule-2550q schedule-one-2550q">
-      <h3>Schedule 1 — Amortized Input Tax from Capital Goods <small>(attach additional sheet/s, if necessary)</small></h3>
-      <div className="schedule-one-grid-2550q schedule-header-2550q"><span>Date Purchased/<br />Imported</span><span>Source<br />Code</span><span>Description</span><span>Amount of Purchases/<br />Importation of Capital Goods</span><span>Balance of Input Tax from Previous Period</span><span>Estimated Life<br />(Months)</span><span>Recognized Life<br />(Months)</span><span>Allowable Input Tax for the Period</span><span>Balance of Input Tax to Next Period</span></div>
+      <h3>Schedule 1 – Amortized Input Tax from Capital Goods <small>(Attach additional sheet/s, if necessary)</small></h3>
+      <div className="schedule-one-grid-2550q schedule-header-2550q"><span>Date Purchased/<br />Imported<br /><em>(MM/DD/YYYY)</em><small className="schedule-column-letter-2550q">(A)</small></span><span>Source<br />Code*<small className="schedule-column-letter-2550q">(B)</small></span><span>Description<small className="schedule-column-letter-2550q">(C)</small></span><span>Amount of Purchases/<br />Importation of Capital<br />Goods Exceeding P 1 M<small className="schedule-column-letter-2550q">(D)</small></span><span>Balance of Input Tax from Previous Period<small className="schedule-column-letter-2550q">(E)</small></span><span>Estimated Life<br />(in months)<small className="schedule-column-letter-2550q">(F)</small></span><span>Recognized Life<br />(in Months)<br /><small>Remaining Life</small><small className="schedule-column-letter-2550q">(G)</small></span><span>Allowable Input Tax<br />for the Period**<small className="schedule-column-letter-2550q">(H)</small></span><span>Balance of Input Tax to<br />be carried to Next<br />Period (E) Less (H)<small className="schedule-column-letter-2550q">(I)</small></span></div>
       {[1, 2].map((row) => <div className="schedule-one-grid-2550q" key={row}><PlainValue2550Q value={text(envelope, `schedule_1_${row}_date`)} capacity={10} /><PlainValue2550Q value={text(envelope, `schedule_1_${row}_source`)} capacity={1} /><PlainValue2550Q value={text(envelope, `schedule_1_${row}_description`)} capacity={22} /><ScheduleMoney2550Q envelope={envelope} fieldKey={`schedule_1_${row}_amount`} /><ScheduleMoney2550Q envelope={envelope} fieldKey={`schedule_1_${row}_input_tax`} /><PlainValue2550Q value={IntegerOrBlank2550Q(envelope, `schedule_1_${row}_estimated_life_months`)} capacity={3} /><PlainValue2550Q value={IntegerOrBlank2550Q(envelope, `schedule_1_${row}_recognized_life_months`)} capacity={3} /><ScheduleMoney2550Q envelope={envelope} fieldKey={`schedule_1_${row}_allowable_input_tax`} /><ScheduleMoney2550Q envelope={envelope} fieldKey={`schedule_1_${row}_balance`} /></div>)}
       <div className="schedule-one-total-2550q"><span>Total (Column E - To Part IV, Item 39B)/(Column I - To Part IV, Item 52B)</span><ScheduleMoney2550Q envelope={envelope} fieldKey="item_39b" /><ScheduleMoney2550Q envelope={envelope} fieldKey="item_52b" /></div>
-      <div className="schedule-one-note-2550q"><span>* D for Domestic Purchase; I for Importation</span><span>** E divided by G multiplied by the Number of months in use during the quarter</span></div>
+      <div className="schedule-one-note-2550q"><span>* D for Domestic Purchase; I for Importation</span><span>**E divided by G multiplied by the Number of months in use during the quarter</span></div>
     </section>
   );
 }
@@ -354,7 +354,7 @@ function ScheduleOne2550Q({ envelope }: { envelope: RenderEnvelope }) {
 function ScheduleTwo2550Q({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <section className="schedule-2550q schedule-two-2550q">
-      <h3>Schedule 2 — Input Tax Attributable to VAT-Exempt Sales</h3>
+      <h3>Schedule 2 – Input Tax Attributable to VAT Exempt Sales</h3>
       <div className="schedule-two-body-2550q">
         <div className="schedule-two-formula-2550q">
           <span className="schedule-two-direct-label-2550q">Input Tax directly attributable to VAT Exempt Sale</span>
@@ -378,7 +378,7 @@ function ScheduleTwo2550Q({ envelope }: { envelope: RenderEnvelope }) {
 function ScheduleThree2550Q({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <section className="schedule-2550q schedule-three-2550q">
-      <h3>Schedule 3 — Creditable Value-Added Tax Withheld <small>(attach additional sheet/s, if necessary)</small></h3>
+      <h3>Schedule 3 – Creditable VAT Withheld <small>(Attach additional sheet/s, if necessary)</small></h3>
       <div className="schedule-three-grid-2550q schedule-header-2550q"><span>(A) Period Covered</span><span>(B) Name of Withholding Agent</span><span>(C) Income Payment</span><span>(D) Total Tax Withheld</span></div>
       {[1, 2].map((row) => <div className="schedule-three-grid-2550q" key={row}><PlainValue2550Q value={dateRange2550Q(envelope, `schedule_3_${row}_from`, `schedule_3_${row}_to`)} capacity={21} /><PlainValue2550Q value={text(envelope, `schedule_3_${row}_agent`)} capacity={48} /><ScheduleMoney2550Q envelope={envelope} fieldKey={`schedule_3_${row}_income_payment`} /><ScheduleMoney2550Q envelope={envelope} fieldKey={`schedule_3_${row}_tax_withheld`} /></div>)}
       <div className="schedule-three-grid-2550q schedule-total-2550q"><span>Total (Column D - To Part II, Item 16)</span><ScheduleMoney2550Q envelope={envelope} fieldKey="schedule_3_total_income_payment" /><ScheduleMoney2550Q envelope={envelope} fieldKey="schedule_3_total_tax_withheld" /></div>
@@ -389,7 +389,7 @@ function ScheduleThree2550Q({ envelope }: { envelope: RenderEnvelope }) {
 function ScheduleFour2550Q({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <section className="schedule-2550q schedule-four-2550q">
-      <h3>Schedule 4 — Advance VAT Payment <small>(attach additional sheet/s, if necessary)</small></h3>
+      <h3>Schedule 4 – Advance VAT Payment <small>(Attach additional sheet/s, if necessary)</small></h3>
       <div className="schedule-four-grid-2550q schedule-header-2550q"><span>(A) Period Covered</span><span>(B) Name of Miller</span><span>(C) Name of Taxpayer</span><span>(D) Official Receipt Number</span><span>(E) Amount Paid</span></div>
       {[1, 2].map((row) => <div className="schedule-four-grid-2550q" key={row}><PlainValue2550Q value={dateRange2550Q(envelope, `schedule_4_${row}_from`, `schedule_4_${row}_to`)} capacity={21} /><PlainValue2550Q value={text(envelope, `schedule_4_${row}_miller`)} capacity={24} /><PlainValue2550Q value={text(envelope, `schedule_4_${row}_taxpayer`)} capacity={24} /><PlainValue2550Q value={text(envelope, `schedule_4_${row}_receipt`)} capacity={20} /><ScheduleMoney2550Q envelope={envelope} fieldKey={`schedule_4_${row}_amount`} /></div>)}
       <div className="schedule-four-grid-2550q schedule-total-2550q"><span>Total (To Part II, Item 17)</span><ScheduleMoney2550Q envelope={envelope} fieldKey="schedule_4_total_amount" /></div>
@@ -403,7 +403,7 @@ function FullWidthField2550Q({ item, label, value, cells, className = "" }: { it
 
 function Address2550Q({ envelope }: { envelope: RenderEnvelope }) {
   const characters = Array.from(envelope.taxpayer.registered_address);
-  return <div className="address-2550q"><span><b>10</b> Registered Address <em>(Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)</em></span><div className="address-value-2550q">{characters.length <= 70 ? <div className="address-comb-lines-2550q"><CombValue value={characters.slice(0, 35).join("")} cells={35} /><CombValue value={characters.slice(35).join("")} cells={35} /></div> : <AdaptiveCombValue value={envelope.taxpayer.registered_address} cells={70} />}<span className="zip-2550q"><span className="zip-label-2550q"><b>10A</b> ZIP Code</span><CombValue value={envelope.taxpayer.zip_code} cells={4} align="right" /></span></div></div>;
+  return <div className="address-2550q"><span><b>10</b> Registered Address <em>(Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)</em></span><div className="address-value-2550q">{characters.length <= 71 ? <div className="address-comb-lines-2550q"><CombValue value={characters.slice(0, 40).join("")} cells={40} /><CombValue value={characters.slice(40).join("")} cells={31} /></div> : <AdaptiveCombValue value={envelope.taxpayer.registered_address} cells={71} />}<span className="zip-2550q"><span className="zip-label-2550q"><b>10A</b> ZIP Code</span><CombValue value={envelope.taxpayer.zip_code} cells={4} align="right" /></span></div></div>;
 }
 
 function Tin2550Q({ value }: { value: string }) {

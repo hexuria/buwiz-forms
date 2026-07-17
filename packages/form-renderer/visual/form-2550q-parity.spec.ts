@@ -149,6 +149,64 @@ test("2550Q April 2024 preserves official disabled panels and page-one payment c
   await expect(blankPayment.locator(".decimal-cell-2550q")).toHaveCount(1);
 });
 
+test("2550Q April 2024 uses only the official guided fields and exact guide capacities", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/2550q-minimum.json"));
+  const pages = page.locator(".form-page");
+  const pageOne = pages.nth(0);
+  const pageTwo = pages.nth(1);
+
+  expect(await combCapacities(pageOne.locator(".year-ended-2550q"))).toEqual([6]);
+  expect(await combCapacities(pageOne.locator(".return-period-values-2550q"))).toEqual([8, 8]);
+  expect(await combCapacities(pageOne.locator(".tin-rdo-2550q .tin-comb-2550q"))).toEqual([3, 3, 3, 5]);
+  expect(await combCapacities(pageOne.locator(".tin-rdo-2550q"))).toEqual([3, 3, 3, 5, 3]);
+  expect(await combCapacities(pageOne.locator(".name-field-2550q"))).toEqual([40]);
+  expect(await combCapacities(pageOne.locator(".address-comb-lines-2550q"))).toEqual([40, 31]);
+  expect(await combCapacities(pageOne.locator(".zip-2550q"))).toEqual([4]);
+  expect(await combCapacities(pageOne.locator(".split-row-2550q"))).toEqual([13, 27]);
+  expect(await combCapacities(pageOne.locator(".tax-relief-detail-2550q"))).toEqual([17]);
+  expect(await combCapacities(pageOne.locator(".part-two-2550q"))).toEqual(
+    Array.from({ length: 12 }, () => [12, 2]).flat()
+  );
+
+  const standardPaymentCapacities = await pageOne.locator(".payment-row-2550q:not(.payment-other-values-2550q)")
+    .evaluateAll((rows) => rows.map((row) => [...row.querySelectorAll(":scope > .comb-value, :scope > .money-cell-2550q > .comb-value")]
+      .map((comb) => comb.children.length)));
+  expect(standardPaymentCapacities).toEqual(Array.from({ length: 3 }, () => [5, 6, 8, 12, 2]));
+  expect(await combCapacities(pageOne.locator(".payment-other-values-2550q"))).toEqual([6, 5, 6, 8, 12, 2]);
+
+  expect(await combCapacities(pageTwo.locator(".page-two-identity-2550q > div:first-child"))).toEqual([3, 3, 3, 5]);
+  expect(await combCapacities(pageTwo.locator(".page-two-identity-2550q > div:nth-child(2)"))).toEqual([26]);
+  expect(await combCapacities(pageTwo.locator(".part-four-2550q"))).toEqual(
+    Array.from({ length: 38 }, () => [12, 2]).flat()
+  );
+
+  await expect(pageOne.locator(".inline-specify-2550q .comb-value")).toHaveCount(0);
+  await expect(pageOne.locator(".machine-validation-2550q .comb-value")).toHaveCount(0);
+  await expect(pageTwo.locator(".part-five-2550q .comb-value")).toHaveCount(0);
+  await expect(pageTwo.locator(".part-five-2550q .plain-value-2550q")).toHaveCount(22);
+  expect(await pageTwo.locator(".part-five-2550q .schedule-money-2550q").count()).toBeGreaterThan(0);
+  await expect(pageTwo.locator(".schedule-one-2550q .schedule-column-letter-2550q")).toHaveText(
+    ["(A)", "(B)", "(C)", "(D)", "(E)", "(F)", "(G)", "(H)", "(I)"]
+  );
+
+  const reviewedGuideRules = await page.locator([
+    ".header-options-2550q .comb-value > span:first-child",
+    ".tin-comb-2550q .comb-value > span:first-child",
+    ".money-cell-2550q .comb-value > span:first-child"
+  ].join(", ")).evaluateAll((cells) => cells.map((cell) => ({
+    border: getComputedStyle(cell).borderRightStyle,
+    guide: getComputedStyle(cell, "::after").borderRightStyle
+  })));
+  expect(reviewedGuideRules.length).toBeGreaterThan(0);
+  expect(reviewedGuideRules.every(({ border, guide }) => border === "none" && guide === "solid")).toBe(true);
+
+  const moneyGuideWidths = await pageOne.locator(".part-two-2550q .money-cell-2550q > .comb-value:first-child")
+    .first().locator(":scope > span")
+    .evaluateAll((cells) => cells.map((cell) => Number.parseFloat(getComputedStyle(cell, "::after").borderRightWidth)));
+  expect(moneyGuideWidths).toHaveLength(12);
+  for (const index of [2, 5, 8]) expect(moneyGuideWidths[index]).toBeGreaterThan(moneyGuideWidths[0]);
+});
+
 test("2550Q April 2024 preserves the official Schedule 2 fraction and result bands", async ({ page }) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/2550q-normal.json"));
   const schedule = page.locator(".schedule-two-2550q");
@@ -297,6 +355,12 @@ async function expectCriticalRegionGeometry(page: Locator, regions: CriticalRegi
     }
   }
   expect(failures).toEqual([]);
+}
+
+async function combCapacities(container: Locator): Promise<number[]> {
+  return container.locator(".comb-value").evaluateAll(
+    (combs) => combs.map((comb) => comb.children.length)
+  );
 }
 
 async function pageHasNoOverflow(locator: Locator) {
