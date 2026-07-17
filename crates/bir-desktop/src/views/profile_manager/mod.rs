@@ -3244,10 +3244,16 @@ impl ProfileManagerView {
                 .spawn(async move {
                     if let Ok(db) = db_arc.lock() {
                         if let Some(reviewed_plan) = reviewed_plan.as_ref() {
-                            db.save_profile_with_confirmation_plan(profile, reviewed_plan)
-                                .map_err(|e| e.to_string())
+                            db.save_profile_with_confirmation_plan_and_post_commit_status(
+                                profile,
+                                reviewed_plan,
+                            )
+                            .map(bir_core::db::PostCommitWrite::into_parts)
+                            .map_err(|e| e.to_string())
                         } else {
-                            db.save_profile(profile).map_err(|e| e.to_string())
+                            db.save_profile_with_post_commit_status(profile)
+                                .map(bir_core::db::PostCommitWrite::into_parts)
+                                .map_err(|e| e.to_string())
                         }
                     } else {
                         Err("Database lock is poisoned".to_string())
@@ -3257,7 +3263,7 @@ impl ProfileManagerView {
 
             let _ = this.update(cx, |this, cx| {
                 match save_result {
-                    Ok(saved) => {
+                    Ok((saved, refresh_status)) => {
                         let Some(saved_id) = saved.id else {
                             this.save_message = None;
                             this.pending_notification = Some((
@@ -3281,10 +3287,16 @@ impl ProfileManagerView {
                             this.clear_profile_changed();
                         }
                         this.save_message = None;
-                        this.pending_notification = Some((
-                            gpui_component::notification::NotificationType::Success,
-                            "Profile saved".to_string(),
-                        ));
+                        this.pending_notification = Some(match refresh_status.warning() {
+                            Some(warning) => (
+                                gpui_component::notification::NotificationType::Warning,
+                                format!("Profile saved. {warning}"),
+                            ),
+                            None => (
+                                gpui_component::notification::NotificationType::Success,
+                                "Profile saved".to_string(),
+                            ),
+                        });
 
                         cx.emit(ProfileEvent::Saved(tin_val.clone()));
                         let bus = cx.global::<crate::events::GlobalEventBus>().0.clone();

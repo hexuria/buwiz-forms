@@ -746,24 +746,28 @@ impl Form2551QView {
 
         let persistence_result = match self.db.lock() {
             Ok(db) => db
-                .save_queued_2551q_draft_and_election(&self.draft)
-                .map(|_| ())
+                .save_queued_2551q_draft_and_election_with_post_commit_status(&self.draft)
+                .map(bir_core::db::PostCommitWrite::into_parts)
+                .map(|(_, refresh_status)| refresh_status)
                 .map_err(|_| "database_write"),
             Err(_) => Err("database_lock"),
         };
-        if let Err(error_category) = persistence_result {
-            tracing::error!(error_category, "Failed to persist queued 2551Q draft");
-            self.draft = draft_before_queue;
-            self.validation_errors.push((
-                "submission".to_string(),
-                "The form could not be queued because its draft and annual election were not saved"
-                    .to_string(),
-            ));
-            self.status_message =
-                Some("Could not queue form. No submission was started.".to_string());
-            cx.notify();
-            return;
-        }
+        let refresh_warning = match persistence_result {
+            Ok(refresh_status) => refresh_status.warning().map(ToOwned::to_owned),
+            Err(error_category) => {
+                tracing::error!(error_category, "Failed to persist queued 2551Q draft");
+                self.draft = draft_before_queue;
+                self.validation_errors.push((
+                    "submission".to_string(),
+                    "The form could not be queued because its draft and annual election were not saved"
+                        .to_string(),
+                ));
+                self.status_message =
+                    Some("Could not queue form. No submission was started.".to_string());
+                cx.notify();
+                return;
+            }
+        };
 
         // The queue transaction may have recorded the taxpayer's first annual
         // Item 13 election. Broadcast only after that transaction succeeds so
@@ -776,15 +780,22 @@ impl Form2551QView {
             });
         });
 
-        bir_core::background_cron::wake();
-
-        cx.emit(Form2551QEvent::PushNotification(
-            "info".to_string(),
-            "Form Queued".to_string(),
-            "Your form has been queued for background submission.".to_string(),
-        ));
+        if let Some(warning) = refresh_warning {
+            self.status_message = Some(format!("Form queued. {warning}"));
+            cx.emit(Form2551QEvent::PushNotification(
+                "warning".to_string(),
+                "Form Queued; Refresh Needs Attention".to_string(),
+                format!("Your form has been queued for background submission. {warning}"),
+            ));
+        } else {
+            self.status_message = None;
+            cx.emit(Form2551QEvent::PushNotification(
+                "info".to_string(),
+                "Form Queued".to_string(),
+                "Your form has been queued for background submission.".to_string(),
+            ));
+        }
         cx.emit(Form2551QEvent::Saved);
-        self.status_message = None;
         cx.notify();
     }
 
