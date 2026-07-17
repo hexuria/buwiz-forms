@@ -455,9 +455,9 @@ pub fn form_suggestions_for_profile_year(
         } else {
             FormSuggestionSource::InferredTaxType
         };
-        let exact_source_reference = reviewed_exact_cor_source_reference(&guarded_version);
-
         for code in reviewed_exact_form_codes_for_version(profile, &guarded_version, year) {
+            let exact_source_reference =
+                reviewed_exact_cor_source_reference(&guarded_version, &code);
             let manually_included = guarded_version.obligation_overrides.iter().any(|rule| {
                 normalize_form_code(&rule.form_code) == code
                     && rule.action == ManualObligationOverrideAction::Include
@@ -553,7 +553,11 @@ fn version_has_exact_cor_codes(version: &TaxProfileVersion) -> bool {
         .any(|code| is_cor_obligation_form_code(code))
 }
 
-fn reviewed_exact_cor_source_reference(version: &TaxProfileVersion) -> Option<String> {
+fn reviewed_exact_cor_source_reference(
+    version: &TaxProfileVersion,
+    form_code: &str,
+) -> Option<String> {
+    let form_code = normalize_form_code(form_code);
     let document_ids = version
         .evidence
         .iter()
@@ -561,7 +565,7 @@ fn reviewed_exact_cor_source_reference(version: &TaxProfileVersion) -> Option<St
             document
                 .extracted_form_codes
                 .iter()
-                .any(|code| is_cor_obligation_form_code(code))
+                .any(|code| normalize_form_code(code) == form_code)
         })
         .map(|document| document.id.as_str())
         .collect::<BTreeSet<_>>();
@@ -2067,6 +2071,42 @@ mod tests {
             suggestions
                 .iter()
                 .all(|suggestion| !suggestion.form_code.starts_with("2550"))
+        );
+    }
+
+    #[test]
+    fn reviewed_exact_cor_suggestions_reference_only_documents_containing_that_form_code() {
+        use std::collections::BTreeMap;
+
+        use crate::profile::RegisteredTaxType;
+
+        let mut profile =
+            profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, false);
+        configure_confirmed_cor_evidence(
+            &mut profile,
+            false,
+            Vec::<RegisteredTaxType>::new(),
+            &["2551Q"],
+            None,
+        );
+        let mut second_document = profile.profile_versions[0].evidence[0].clone();
+        profile.profile_versions[0].evidence[0].id = "cor-2551q".into();
+        second_document.id = "cor-1701q".into();
+        second_document.extracted_form_codes = vec!["1701Q".into()];
+        profile.profile_versions[0].evidence.push(second_document);
+
+        let references = form_suggestions_for_profile_year(&profile, 2026)
+            .into_iter()
+            .filter(|suggestion| suggestion.source == FormSuggestionSource::ReviewedCor)
+            .map(|suggestion| (suggestion.form_code, suggestion.source_reference))
+            .collect::<BTreeMap<_, _>>();
+
+        assert_eq!(
+            references,
+            BTreeMap::from([
+                ("1701Q".to_string(), Some("cor-1701q".to_string())),
+                ("2551Q".to_string(), Some("cor-2551q".to_string())),
+            ])
         );
     }
 
