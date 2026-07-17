@@ -953,7 +953,7 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 .page-two-form-title > strong {
   font-size: 18pt;
   line-height: 1;
-  letter-spacing: -.2pt;
+  letter-spacing: .6pt;
 }
 .page-two-barcode {
   position: relative;
@@ -1177,6 +1177,14 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   padding-right: 3.5pt;
   letter-spacing: .2pt;
   white-space: nowrap;
+}
+.official-atc-table .atc-entry:is(
+  [data-atc-code="PT105"],
+  [data-atc-code="PT101"],
+  [data-atc-code="PT113"],
+  [data-atc-code="PT114"]
+) > td:nth-child(2) {
+  padding-left: 16.5pt;
 }
 .official-atc-table .atc-entry-multiline > td,
 .official-atc-table .atc-note > td { height: 20pt; }
@@ -1455,6 +1463,10 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 
 .form-2551q-page-one .name-field > .field-label em {
   font-size: 8pt;
+}
+
+.form-2551q-page-one .address-continuation > .zip-label {
+  box-shadow: inset 0 -.5pt #000;
 }
 
 .form-2551q-page-one .address-field > .field-label em {

@@ -445,9 +445,13 @@ test("2551Q page-one typography keeps the reviewed bundled-font calibration", as
   expect(
     await page.locator(".page-two-form-title > strong").evaluate((element) => {
       const style = getComputedStyle(element);
-      return { fontSize: style.fontSize, fontWeight: style.fontWeight };
+      return {
+        fontSize: style.fontSize,
+        fontWeight: style.fontWeight,
+        letterSpacing: style.letterSpacing
+      };
     })
-  ).toEqual({ fontSize: "24px", fontWeight: "400" });
+  ).toEqual({ fontSize: "24px", fontWeight: "400", letterSpacing: "0.8px" });
 
   const item25Label = pageOne.locator(".payment-row-25 > span:first-child");
   await expect(item25Label).toHaveText("25 Cash/Bank Debit Memo");
@@ -489,7 +493,21 @@ test("2551Q Schedule 1 keeps black rules and bottom-anchored comb guides", async
     ));
     const masthead = element.querySelector(".page-two-masthead");
     const atcCell = element.querySelector(".official-atc-table td");
-    if (!normalCell || !majorCell || !masthead || !atcCell || tinGroupCells.some((cell) => !cell)) {
+    const indentedAtcCells = ["PT105", "PT101", "PT113", "PT114"].map((code) =>
+      element.querySelector(`.atc-entry[data-atc-code="${code}"] > td:nth-child(2)`)
+    );
+    const normalAtcCell = element.querySelector(
+      '.atc-entry[data-atc-code="PT010"] > td:nth-child(2)'
+    );
+    if (
+      !normalCell ||
+      !majorCell ||
+      !masthead ||
+      !atcCell ||
+      !normalAtcCell ||
+      tinGroupCells.some((cell) => !cell) ||
+      indentedAtcCells.some((cell) => !cell)
+    ) {
       throw new Error("2551Q Schedule 1 calibration targets are missing");
     }
     const normalStyle = getComputedStyle(normalCell);
@@ -505,6 +523,10 @@ test("2551Q Schedule 1 keeps black rules and bottom-anchored comb guides", async
       normalGuideBorderWidth: Number.parseFloat(normalGuide.borderRightWidth),
       normalGuideHeight: Number.parseFloat(normalGuide.height),
       normalGuidePosition: normalGuide.position,
+      normalAtcPaddingLeft: Number.parseFloat(getComputedStyle(normalAtcCell).paddingLeft),
+      indentedAtcPaddingLeft: indentedAtcCells.map((cell) =>
+        Number.parseFloat(getComputedStyle(cell as Element).paddingLeft)
+      ),
       tinGroupGuides: tinGroupCells.map((cell) => {
         const guide = getComputedStyle(cell as Element, "::after");
         return {
@@ -523,6 +545,11 @@ test("2551Q Schedule 1 keeps black rules and bottom-anchored comb guides", async
   expect(styles.normalGuideHeight).toBeCloseTo(9.33, 1);
   expect(styles.majorGuideColor).toBe("rgb(0, 0, 0)");
   expect(styles.majorGuideHeight).toBeGreaterThan(styles.normalGuideHeight);
+  expect(styles.normalAtcPaddingLeft).toBeCloseTo(4.67, 1);
+  expect(styles.indentedAtcPaddingLeft).toHaveLength(4);
+  for (const padding of styles.indentedAtcPaddingLeft) {
+    expect(padding).toBeCloseTo(22, 1);
+  }
   expect(styles.tinGroupGuides).toHaveLength(3);
   for (const guide of styles.tinGroupGuides) {
     expect(guide.height).toBeGreaterThan(styles.normalGuideHeight);
