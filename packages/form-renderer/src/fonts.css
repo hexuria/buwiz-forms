@@ -4,7 +4,8 @@
  * Arimo is an Arial-metric-compatible family distributed under Apache-2.0.
  * Only the Latin and Latin Extended variable WOFF2 faces are bundled. The
  * production build copies the package license and pinned provenance beside
- * the renderer, and the native preflight waits for document.fonts.ready.
+ * the renderer, and renderer readiness explicitly loads and checks every
+ * required style, weight, and subset before geometry can be accepted.
  */
 
 @font-face {

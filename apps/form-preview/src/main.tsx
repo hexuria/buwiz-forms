@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { assertRenderEnvelope } from "@ebirforms/form-contracts";
 import {
+  assertBundledPrintableFontsReady,
   FormDocument,
   geometryStabilityDecision,
   measureRenderedPages,
@@ -84,8 +85,9 @@ function nextAnimationFrame() {
 
 async function awaitPrintableFonts() {
   // Font metrics affect every field-cell boundary. Readiness must represent
-  // the final loaded faces, not a fallback-font layout captured one frame early.
-  await document.fonts.ready;
+  // the exact bundled faces, not a fallback-font layout captured one frame
+  // early. FontFaceSet.ready alone also resolves after a face fails.
+  await assertBundledPrintableFontsReady(document.fonts);
 }
 
 async function waitForRenderedPages(
@@ -211,9 +213,9 @@ new MutationObserver(() => {
 });
 
 window.addEventListener("resize", invalidateForLayoutChange);
-document.fonts.addEventListener("loading", invalidateForLayoutChange);
-document.fonts.addEventListener("loadingdone", invalidateForLayoutChange);
-document.fonts.addEventListener("loadingerror", invalidateForLayoutChange);
+document.fonts?.addEventListener("loading", invalidateForLayoutChange);
+document.fonts?.addEventListener("loadingdone", invalidateForLayoutChange);
+document.fonts?.addEventListener("loadingerror", invalidateForLayoutChange);
 
 const initialEnvelope = window.__EBIR_RENDER_ENVELOPE__;
 if (initialEnvelope !== undefined) {

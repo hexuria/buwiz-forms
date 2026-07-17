@@ -13,6 +13,11 @@ export {
 } from "./geometry";
 export { paginateSchedule, type SchedulePage } from "./pagination";
 export {
+  assertBundledPrintableFontsReady,
+  type PrintableFontFaceLike,
+  type PrintableFontFaceSetLike
+} from "./printFonts";
+export {
   geometryStabilityDecision,
   type GeometryStabilityDecision
 } from "./readiness";
