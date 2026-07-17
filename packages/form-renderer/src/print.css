@@ -987,6 +987,11 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   font-size: 8pt;
 }
 .page-two-identity-label.taxpayer-name-label { border-left: .7pt solid #111; }
+.form-2551q-page-two .page-two-identity-label {
+  position: relative;
+  top: .5px;
+  padding-inline: 5.5pt;
+}
 .page-two-identity > .comb-value {
   height: 100%;
 }
@@ -1051,6 +1056,7 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   background: #d4d4d4;
   font-size: 9pt;
 }
+.form-2551q-page-two .official-schedule-row-number { font-weight: 400; }
 .official-schedule-row > .comb-value { height: 100%; }
 
 .schedule-money {
@@ -1088,6 +1094,7 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   font-weight: 700;
 }
 .schedule-decimal-separator { border-left: .55pt solid #111; border-right: .55pt solid #111; }
+.form-2551q-page-two .schedule-decimal-separator { font-weight: 400; }
 .schedule-money-trailer { border-left: .55pt solid #111; }
 .schedule-rate {
   height: 100%;
@@ -1190,6 +1197,11 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   [data-atc-code="PT114"]
 ) > td:nth-child(2) {
   padding-left: 16.5pt;
+}
+.official-atc-table .atc-entry:not([data-atc-code="PT105"]):not(
+  [data-atc-code="PT101"]
+):not([data-atc-code="PT113"]):not([data-atc-code="PT114"]) > td:nth-child(2) {
+  padding-left: 3.375pt;
 }
 .official-atc-table .atc-entry-multiline > td,
 .official-atc-table .atc-note > td { height: 20pt; }

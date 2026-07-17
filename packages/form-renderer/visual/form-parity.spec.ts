@@ -498,6 +498,28 @@ test("2551Q page-one typography keeps the reviewed bundled-font calibration", as
     })
   ).toEqual({ fontSize: "24px", fontWeight: "400", letterSpacing: "0.8px" });
 
+  expect(await page.locator(".form-2551q-page-two").evaluate((pageTwo) => {
+    const style = (selector: string) => {
+      const element = pageTwo.querySelector(selector);
+      if (!element) throw new Error(`Missing page-two calibration target: ${selector}`);
+      return getComputedStyle(element);
+    };
+    const identity = style(".page-two-identity-label");
+    return {
+      decimalFontWeight: style(".schedule-decimal-separator").fontWeight,
+      identityPaddingLeft: identity.paddingLeft,
+      identityPosition: identity.position,
+      identityTop: identity.top,
+      rowNumberFontWeight: style(".official-schedule-row-number").fontWeight
+    };
+  })).toEqual({
+    decimalFontWeight: "400",
+    identityPaddingLeft: "7.33333px",
+    identityPosition: "relative",
+    identityTop: "0.5px",
+    rowNumberFontWeight: "400"
+  });
+
   const item25Label = pageOne.locator(".payment-row-25 > span:first-child");
   await expect(item25Label).toHaveText("25 Cash/Bank Debit Memo");
   const item25Geometry = await item25Label.evaluate((element) => ({
@@ -590,7 +612,7 @@ test("2551Q Schedule 1 keeps black rules and bottom-anchored comb guides", async
   expect(styles.normalGuideHeight).toBeCloseTo(9.33, 1);
   expect(styles.majorGuideColor).toBe("rgb(0, 0, 0)");
   expect(styles.majorGuideHeight).toBeGreaterThan(styles.normalGuideHeight);
-  expect(styles.normalAtcPaddingLeft).toBeCloseTo(4.67, 1);
+  expect(styles.normalAtcPaddingLeft).toBeCloseTo(4.5, 1);
   expect(styles.indentedAtcPaddingLeft).toHaveLength(4);
   for (const padding of styles.indentedAtcPaddingLeft) {
     expect(padding).toBeCloseTo(22, 1);
