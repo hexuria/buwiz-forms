@@ -138,6 +138,49 @@ test("0619E 2018 preserves official period, declaration, and signature bands", a
   }
 });
 
+test("0619E 2018 preserves the exact official label hierarchy and plain-field modes", async ({ page }) => {
+  const fixture = readFixture("packages/form-contracts/fixtures/0619e-normal.json");
+  await renderEnvelope(page, fixture);
+
+  await expect(page.locator('[data-item="15"]')).toContainText(
+    "Less: Amount Remitted from Previously Filed Form, if this is an amended form"
+  );
+  await expect(page.locator('[data-item="16"] em')).toHaveText(
+    "(Item 14 Less Item 15)"
+  );
+  await expect(page.locator('[data-item="17D"] em')).toHaveText(
+    "(Sum of Items 17A to 17C)"
+  );
+  await expect(page.locator('[data-item="18"] strong')).toHaveText(
+    "Total Amount of Remittance"
+  );
+  await expect(page.locator('[data-item="18"] em')).toHaveText(
+    "(Sum of Items 16 and 17D)"
+  );
+  await expect(page.locator(".privacy-note-0619e > b")).toHaveText("*NOTE:");
+
+  for (const selector of [
+    ".form-title-0619e > em",
+    '[data-item="16"] em',
+    '[data-item="17D"] em',
+    '[data-item="18"] em',
+    ".machine-validation-0619e > span + span"
+  ]) {
+    await expect(page.locator(selector), selector).toHaveCSS("font-style", "italic");
+  }
+
+  const codeFields = page.locator('.code-value-0619e[data-field-mode="plain"]');
+  await expect(codeFields).toHaveCount(2);
+  await expect(codeFields.locator(".comb-value")).toHaveCount(0);
+  await expect(codeFields.nth(0)).toHaveText("WME10");
+  await expect(codeFields.nth(1)).toHaveText("WE");
+  for (const field of await codeFields.evaluateAll((elements) => elements.map(
+    (element) => getComputedStyle(element).backgroundImage
+  ))) {
+    expect(field).toBe("none");
+  }
+});
+
 test("0619E 2018 preserves official payment row partitions", async ({ page }) => {
   const fixture = readFixture("packages/form-contracts/fixtures/0619e-normal.json");
   await renderEnvelope(page, fixture);

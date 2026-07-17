@@ -105,8 +105,8 @@
 .form-title-0619e > em {
   margin-top: 7pt;
   font-size: 6.6pt;
+  font-style: italic;
   line-height: 1.08;
-  font-style: normal;
 }
 .form-title-0619e > em i { font-style: italic; }
 .barcode-0619e {
@@ -345,6 +345,11 @@
 .remittance-row-0619e.item-17c-0619e > div:first-child,
 .remittance-row-0619e.item-17d-0619e > div:first-child { padding-left: 38pt; }
 .remittance-row-0619e.computed > div:first-child { font-weight: 400; }
+.remittance-row-0619e > div:first-child em {
+  font-size: 5.7pt;
+  font-style: italic;
+}
+.remittance-qualifier-0619e { font-size: 8pt; }
 .penalties-heading-0619e {
   height: 10.5pt;
   display: flex;
@@ -385,7 +390,7 @@
   padding: 1pt 4pt;
   border-bottom: .6pt solid #000;
   background: #d9d9d9;
-  font-size: 5.7pt;
+  font-size: 6.667pt;
   line-height: 1.08;
   text-align: center;
 }
@@ -550,6 +555,7 @@
 }
 .machine-validation-0619e > span + span {
   border-left: .6pt solid #000;
+  font-style: italic;
   text-align: center;
 }
 .privacy-note-0619e {

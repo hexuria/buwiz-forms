@@ -161,6 +161,21 @@ describe("0619E:2018 runtime render contract", () => {
     expect(signatureFooter).not.toContain("comb-value");
     expect(markup).toContain('class="rdo-value-0619e"');
     expect(markup).toContain('class="payment-nonapplicable-0619e"');
+    expect(markup.match(/data-field-mode="plain"/g)).toHaveLength(2);
+    expect(markup).toContain(
+      'class="code-value-0619e" data-field-mode="plain">WME10</span>'
+    );
+    expect(markup).toContain(
+      'class="code-value-0619e" data-field-mode="plain">WE</span>'
+    );
+    expect(markup).toContain(
+      "<strong>Total Amount of Remittance</strong>"
+    );
+    expect(markup).toContain("<em>(Item 14 Less Item 15)</em>");
+    expect(markup).toContain("<b>*NOTE:</b>");
+    expect(markup).not.toContain(
+      "<small>(if not filed with an Authorized Agent Bank)</small>"
+    );
 
     const impossible = structuredClone(normalFixture) as RenderEnvelope;
     impossible.fields.payment_21_drawee_bank_or_agency = {

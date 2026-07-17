@@ -69,7 +69,7 @@ export function Form0619E({ envelope }: { envelope: RenderEnvelope }) {
         <Declaration0619E envelope={envelope} />
         <PaymentDetails0619E envelope={envelope} />
         <p className="privacy-note-0619e">
-          *NOTE: Please read the BIR Data Privacy Policy found in the BIR website (www.bir.gov.ph)
+          <b>*NOTE:</b> Please read the BIR Data Privacy Policy found in the BIR website (www.bir.gov.ph)
         </p>
       </FolioPage>
 
@@ -157,10 +157,18 @@ function HeaderOptions0619E({ envelope }: { envelope: RenderEnvelope }) {
         <CheckChoice checked={bool(envelope, "any_taxes_withheld")} label="Yes" />
         <CheckChoice checked={!bool(envelope, "any_taxes_withheld")} label="No" />
       </HeaderOption0619E>
-      <HeaderOption0619E label={<><b>5</b> ATC</>} valueClassName="code-value-0619e">
+      <HeaderOption0619E
+        label={<><b>5</b> ATC</>}
+        valueClassName="code-value-0619e"
+        fieldMode="plain"
+      >
         {text(envelope, "atc")}
       </HeaderOption0619E>
-      <HeaderOption0619E label={<><b>6</b> Tax Type Code</>} valueClassName="code-value-0619e">
+      <HeaderOption0619E
+        label={<><b>6</b> Tax Type Code</>}
+        valueClassName="code-value-0619e"
+        fieldMode="plain"
+      >
         {text(envelope, "tax_type_code")}
       </HeaderOption0619E>
     </section>
@@ -170,16 +178,18 @@ function HeaderOptions0619E({ envelope }: { envelope: RenderEnvelope }) {
 function HeaderOption0619E({
   label,
   children,
-  valueClassName = ""
+  valueClassName = "",
+  fieldMode
 }: {
   label: ReactNode;
   children: ReactNode;
   valueClassName?: string;
+  fieldMode?: "plain";
 }) {
   return (
     <div className="header-option-0619e">
       <div>{label}</div>
-      <span className={valueClassName}>{children}</span>
+      <span className={valueClassName} data-field-mode={fieldMode}>{children}</span>
     </div>
   );
 }
@@ -310,13 +320,53 @@ function TaxRemittance0619E({ envelope }: { envelope: RenderEnvelope }) {
             className={`remittance-row-0619e item-${number.toLowerCase()}-0619e ${["16", "17D", "18"].includes(number) ? "computed" : ""}`}
             data-item={number}
           >
-            <div><b>{number}</b><span>{label}</span></div>
+            <div>
+              <b>{number}</b>
+              <RemittanceLabel0619E number={number} fallback={label} />
+            </div>
             <MoneyComb0619E value={decimal(envelope, key)} />
           </div>
         </div>
       ))}
     </section>
   );
+}
+
+function RemittanceLabel0619E({
+  number,
+  fallback
+}: {
+  number: (typeof REMITTANCE_LINES)[number][0];
+  fallback: string;
+}) {
+  switch (number) {
+    case "15":
+      return (
+        <span>
+          Less: Amount Remitted from Previously Filed Form,{" "}
+          <span className="remittance-qualifier-0619e">
+            if this is an amended form
+          </span>
+        </span>
+      );
+    case "16":
+      return (
+        <span>Net Amount of Remittance <em>(Item 14 Less Item 15)</em></span>
+      );
+    case "17D":
+      return (
+        <span>Total Penalties <em>(Sum of Items 17A to 17C)</em></span>
+      );
+    case "18":
+      return (
+        <span>
+          <strong>Total Amount of Remittance</strong>{" "}
+          <em>(Sum of Items 16 and 17D)</em>
+        </span>
+      );
+    default:
+      return <span>{fallback}</span>;
+  }
 }
 
 function MoneyComb0619E({ value }: { value: number | null }) {
@@ -397,7 +447,7 @@ function PaymentDetails0619E({ envelope }: { envelope: RenderEnvelope }) {
       <div className="payment-other-label-0619e"><b>22</b> Others (specify below)</div>
       <PaymentRow0619E envelope={envelope} prefix="payment_22" />
       <div className="machine-validation-0619e">
-        <span>Machine Validation/Revenue Official Receipt Details <small>(if not filed with an Authorized Agent Bank)</small></span>
+        <span>Machine Validation/Revenue Official Receipt Details <em>(if not filed with an Authorized Agent Bank)</em></span>
         <span>Stamp of Receiving Office/AAB and Date of Receipt<br /><em>(RO’s Signature/Bank Teller’s Initial)</em></span>
       </div>
     </section>
