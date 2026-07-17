@@ -20,6 +20,12 @@
   position: relative;
   border-right: 0;
 }
+.form-1601c-page-one .adaptive-plain-value,
+.form-1601c-page-two .adaptive-plain-value {
+  min-height: 0;
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
 .form-1601c-page-one .comb-value > span::after,
 .form-1601c-page-two .comb-value > span::after {
   position: absolute;
@@ -169,6 +175,11 @@
   background: #fff;
 }
 .header-option-1601c:nth-child(5) > span > .comb-value {
+  flex: 0 0 46pt;
+  width: 46pt;
+  background: #fff;
+}
+.header-option-1601c:nth-child(5) > span > .atc-plain-1601c {
   flex: 0 0 46pt;
   width: 46pt;
   background: #fff;

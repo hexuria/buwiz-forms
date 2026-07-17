@@ -3,6 +3,7 @@ import { getFormSpec } from "@ebirforms/form-specs";
 import type { ReactNode } from "react";
 import {
   AdaptiveCombValue,
+  AdaptivePlainValue,
   CheckChoice,
   CombValue,
   FolioPage,
@@ -151,10 +152,10 @@ function HeaderOptions({ envelope, monthYear }: { envelope: RenderEnvelope; mont
         <CheckChoice checked={!bool(envelope, "any_taxes_withheld")} label="No" />
       </HeaderOption>
       <HeaderOption label={<><b>4</b> Number of Sheet/s Attached</>}>
-        <AdaptiveCombValue value={String(integer(envelope, "number_of_sheets"))} cells={2} align="right" />
+        <AdaptiveComb1601C value={String(integer(envelope, "number_of_sheets"))} cells={2} align="right" />
       </HeaderOption>
       <HeaderOption label={<><b>5</b> ATC</>}>
-        <AdaptiveCombValue value={text(envelope, "atc")} cells={5} />
+        <AdaptivePlainValue value={text(envelope, "atc")} className="atc-plain-1601c" />
       </HeaderOption>
     </section>
   );
@@ -198,16 +199,16 @@ function BackgroundInformation({
       />
       <div className="address-1601c">
         <div className="label-1601c"><b>9</b> Registered Address <em>(Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)</em></div>
-        <AdaptiveCombValue value={envelope.taxpayer.registered_address.toUpperCase()} cells={40} />
+        <AdaptiveComb1601C value={envelope.taxpayer.registered_address.toUpperCase()} cells={40} />
         <div className="address-second-1601c">
-          <AdaptiveCombValue value={addressLineTwo} cells={31} />
+          <AdaptiveComb1601C value={addressLineTwo} cells={31} />
           <span><b>9A</b> ZIP Code</span>
           <CombValue value={envelope.taxpayer.zip_code} cells={4} align="right" />
         </div>
       </div>
       <div className="contact-category-1601c">
         <div><b>10</b> Contact Number</div>
-        <AdaptiveCombValue value={envelope.taxpayer.contact_number.replace(/\D/g, "")} cells={12} />
+        <AdaptiveComb1601C value={envelope.taxpayer.contact_number.replace(/\D/g, "")} cells={12} />
         <div><b>11</b> Category of Withholding Agent</div>
         <span className="category-choices-1601c">
           <CheckChoice checked={category === "P"} label="Private" />
@@ -222,7 +223,7 @@ function BackgroundInformation({
           <CheckChoice checked={!relief} label="No" />
         </span>
         <div><b>13A</b> If yes, specify</div>
-        <AdaptiveCombValue value={text(envelope, "tax_relief_specification").toUpperCase()} cells={24} />
+        <AdaptiveComb1601C value={text(envelope, "tax_relief_specification").toUpperCase()} cells={24} />
       </div>
     </section>
   );
@@ -258,7 +259,7 @@ function LabelValue1601C({
   return (
     <div className={`label-value-1601c ${className}`}>
       <div className="label-1601c"><b>{number}</b> {label}</div>
-      <AdaptiveCombValue value={value} cells={cells} />
+      <AdaptiveComb1601C value={value} cells={cells} />
     </div>
   );
 }
@@ -322,21 +323,15 @@ function TaxLine1601C({
 }
 
 function PlainLine1601C({ value, cells }: { value: string; cells: number }) {
-  const characters = Array.from(value).length;
-  const fontSize = characters === 0
-    ? 7.2
-    : Math.max(3.5, Math.min(7.2, 7.2 * cells / characters));
   return (
-    <span className="adaptive-plain-value" style={{ fontSize: `${fontSize}pt`, whiteSpace: "nowrap" }}>
-      {value}
-    </span>
+    <AdaptivePlainValue value={value} cellCapacity={cells} className="inline-plain-1601c" />
   );
 }
 
 function MoneyComb1601C({ value }: { value: number | null }) {
   const [whole, fraction] = value === null ? ["", ""] : formatMoneyParts(value);
   if (Array.from(whole).length > 11) {
-    return <AdaptiveCombValue value={`${whole}.${fraction}`} cells={14} align="right" className="money-overflow-1601c" />;
+    return <AdaptiveComb1601C value={`${whole}.${fraction}`} cells={14} align="right" className="money-overflow-1601c" />;
   }
   return (
     <span className="money-1601c">
@@ -373,16 +368,16 @@ function PaymentDetails1601C() {
     <section className="payment-1601c">
       <h2>Part III – Details of Payment</h2>
       <div className="payment-head-1601c"><span>Particulars</span><span>Drawee Bank/Agency</span><span>Number</span><span>Date <em>(MM/DD/YYYY)</em></span><span>Amount</span></div>
-      {["37 Cash/Bank Debit Memo", "38 Check"].map((label) => (
-        <div className="payment-row-1601c" key={label}>
-          <span>{label}</span><CombValue value="" cells={4} /><CombValue value="" cells={6} /><CombValue value="" cells={8} /><MoneyComb1601C value={null} />
+      {[["37", "Cash/Bank Debit Memo"], ["38", "Check"]].map(([number, label]) => (
+        <div className="payment-row-1601c" data-payment-line={number} key={number}>
+          <span>{number} {label}</span><CombValue value="" cells={5} /><CombValue value="" cells={6} /><CombValue value="" cells={8} /><MoneyComb1601C value={null} />
         </div>
       ))}
-      <div className="payment-row-1601c payment-tax-debit-1601c">
+      <div className="payment-row-1601c payment-tax-debit-1601c" data-payment-line="39">
         <span>39 Tax Debit Memo</span><CombValue value="" cells={6} /><CombValue value="" cells={8} /><MoneyComb1601C value={null} />
       </div>
       <div className="payment-other-label-1601c">40 Others (specify below)</div>
-      <div className="payment-row-1601c payment-other-1601c"><span /><CombValue value="" cells={4} /><CombValue value="" cells={6} /><CombValue value="" cells={8} /><MoneyComb1601C value={null} /></div>
+      <div className="payment-row-1601c payment-other-1601c" data-payment-line="40"><CombValue value="" cells={7} /><CombValue value="" cells={5} /><CombValue value="" cells={6} /><CombValue value="" cells={8} /><MoneyComb1601C value={null} /></div>
       <div className="machine-validation-1601c"><span>Machine Validation/Revenue Official Receipt Details <small>(if not filed with an Authorized Agent Bank)</small></span><span>Stamp of Receiving Office/AAB and Date of Receipt<br /><em>(RO’s Signature/Bank Teller’s Initial)</em></span></div>
     </section>
   );
@@ -396,8 +391,8 @@ function PageTwo({ envelope, rows }: { envelope: RenderEnvelope; rows: RenderRow
       <Masthead1601C page={2} />
       <div className="identity-1601c-page-two">
         <span className="identity-label-1601c">TIN</span><span className="identity-label-1601c">Withholding Agent’s Name <em>(Last Name for Individual OR Registered Name for Non-Individual)</em></span>
-        <AdaptiveCombValue value={envelope.taxpayer.tin.replace(/\D/g, "")} cells={14} />
-        <AdaptiveCombValue value={envelope.taxpayer.name.toUpperCase()} cells={38} />
+        <AdaptiveComb1601C value={envelope.taxpayer.tin.replace(/\D/g, "")} cells={14} />
+        <AdaptiveComb1601C value={envelope.taxpayer.name.toUpperCase()} cells={38} />
       </div>
       <section className="schedule-1601c">
         <h2>Part IV - Schedule</h2>
@@ -429,12 +424,37 @@ function ScheduleTopRow1601C({ row, number }: { row: RenderRow | null; number: n
   return (
     <div className="schedule-top-row-1601c" {...props}>
       <b>{number}</b>
-      <AdaptiveCombValue value={row ? cellText(row.cells.previous_month) : ""} cells={7} />
-      <AdaptiveCombValue value={row ? cellText(row.cells.date_paid) : ""} cells={10} />
-      <AdaptiveCombValue value={row ? cellText(row.cells.drawee_bank_code_or_agency) : ""} cells={8} />
-      <AdaptiveCombValue value={row ? cellText(row.cells.payment_number) : ""} cells={10} />
+      <AdaptiveComb1601C value={row ? cellText(row.cells.previous_month) : ""} cells={6} />
+      <AdaptiveComb1601C value={row ? cellText(row.cells.date_paid) : ""} cells={8} />
+      <AdaptiveComb1601C value={row ? cellText(row.cells.drawee_bank_code_or_agency) : ""} cells={5} />
+      <AdaptiveComb1601C value={row ? cellText(row.cells.payment_number) : ""} cells={6} />
       <MoneyComb1601C value={row ? cellDecimal(row.cells.tax_paid) : null} />
     </div>
+  );
+}
+
+function AdaptiveComb1601C({
+  value,
+  cells,
+  align = "left",
+  className = ""
+}: {
+  value: string;
+  cells: number;
+  align?: "left" | "right";
+  className?: string;
+}) {
+  return (
+    <AdaptiveCombValue
+      value={value}
+      cells={cells}
+      align={align}
+      className={className}
+      fitToField
+      maxFontSizePx={9.6}
+      minFontSizePx={8}
+      fontStepPx={0.5}
+    />
   );
 }
 

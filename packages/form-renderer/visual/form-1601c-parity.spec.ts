@@ -131,7 +131,7 @@ test("1601C 2018 preserves the official gray and white field partitions", async 
     elements.map((element) => getComputedStyle(element).backgroundColor)
   )).toEqual(Array.from({ length: 5 }, () => "rgb(217, 217, 217)"));
 
-  for (const [optionIndex, expectedWidth] of [[0, 86], [3, 28], [4, 46]] as const) {
+  for (const [optionIndex, expectedWidth] of [[0, 86], [3, 28]] as const) {
     const comb = headerOptions.nth(optionIndex).locator(":scope > span > .comb-value");
     const partition = await comb.evaluate((element) => ({
       backgroundColor: getComputedStyle(element).backgroundColor,
@@ -140,6 +140,13 @@ test("1601C 2018 preserves the official gray and white field partitions", async 
     expect(partition.backgroundColor).toBe("rgb(255, 255, 255)");
     expect(partition.width).toBeCloseTo(expectedWidth * 4 / 3, 1);
   }
+  const atcPartition = await headerOptions.nth(4).locator(":scope > span > .atc-plain-1601c")
+    .evaluate((element) => ({
+      backgroundColor: getComputedStyle(element).backgroundColor,
+      width: element.getBoundingClientRect().width
+    }));
+  expect(atcPartition.backgroundColor).toBe("rgb(255, 255, 255)");
+  expect(atcPartition.width).toBeCloseTo(46 * 4 / 3, 1);
 
   await expectWhiteBackground(pageOne.locator(".address-second-1601c > .comb-value").first());
   await expectGrayBackground(pageOne.locator(".category-choices-1601c"));
@@ -188,6 +195,50 @@ test("1601C 2018 keeps the official inline Schedule I Tax Paid heading", async (
   });
   expect(layout.noteTop).toBeDefined();
   expect(Math.abs(layout.headingTop - (layout.noteTop ?? 0))).toBeLessThanOrEqual(2);
+});
+
+test("1601C 2018 uses the exact reviewed plain fields and character-guide capacities", async ({ page }) => {
+  const fixture = readFixture("packages/form-contracts/fixtures/1601c-normal.json");
+  await renderEnvelope(page, fixture);
+
+  const item5 = page.locator(".header-option-1601c").nth(4).locator(":scope > span");
+  await expect(item5.locator(":scope > .atc-plain-1601c")).toHaveText("WW010");
+  await expect(item5.locator(":scope > .comb-value")).toHaveCount(0);
+
+  for (const line of ["37", "38"] as const) {
+    expect(await directCombCapacities(page.locator(`[data-payment-line="${line}"]`)))
+      .toEqual([5, 6, 8]);
+  }
+  expect(await directCombCapacities(page.locator('[data-payment-line="39"]')))
+    .toEqual([6, 8]);
+  expect(await directCombCapacities(page.locator('[data-payment-line="40"]')))
+    .toEqual([7, 5, 6, 8]);
+
+  const blankScheduleRow = page.locator('.schedule-top-row-1601c[data-visual-placeholder="true"]').first();
+  expect(await directCombCapacities(blankScheduleRow)).toEqual([6, 8, 5, 6]);
+});
+
+test("1601C 2018 fits long plain values by measured field width without clipping", async ({ page }) => {
+  const fixture = readFixture("packages/form-contracts/fixtures/1601c-long-values.json");
+  await renderEnvelope(page, fixture);
+  await page.waitForFunction(() => [...document.querySelectorAll<HTMLElement>(".form-document[data-form-code='1601C'] .adaptive-plain-value")]
+    .every((element) => element.dataset.adaptiveFitState !== "pending"));
+
+  const fitReport = await page.locator(".form-document[data-form-code='1601C'] .adaptive-plain-value").evaluateAll(
+    (elements) => elements.map((element) => ({
+      className: element.className,
+      fontSize: Number.parseFloat(getComputedStyle(element).fontSize),
+      state: (element as HTMLElement).dataset.adaptiveFitState,
+      text: element.textContent
+    }))
+  );
+  expect(fitReport.length).toBeGreaterThan(4);
+  expect(fitReport.filter((entry) => entry.state !== "fit")).toEqual([]);
+  expect(fitReport.filter((entry) => entry.fontSize < 8 || entry.fontSize > 9.6)).toEqual([]);
+
+  const pages = page.locator(".form-page");
+  expect(await pageHasNoOverflow(pages.nth(0))).toBe(true);
+  expect(await pageHasNoOverflow(pages.nth(1))).toBe(true);
 });
 
 test("1601C 2018 matches the complete pinned official pages", async ({ page }, testInfo) => {
@@ -283,6 +334,12 @@ interface CriticalRegion {
   y: number;
   width: number;
   height: number;
+}
+
+async function directCombCapacities(container: Locator): Promise<number[]> {
+  return container.locator(":scope > .comb-value").evaluateAll(
+    (combs) => combs.map((comb) => comb.children.length)
+  );
 }
 
 async function expectGuidelineTypographyAndContent(pageTwo: Locator) {

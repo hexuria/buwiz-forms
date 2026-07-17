@@ -580,17 +580,14 @@ fn long_values_fixture() -> Result<Form1601CDraft, RenderProviderError> {
     draft.email_address = "long.withholding.renderer.verification.address@example.test".to_string();
     draft.line_of_business =
         "Software Development and Information Technology Consulting Services".to_string();
-    draft.tax_relief_specification =
-        "Reviewed special-law or international tax treaty description beyond the official comb"
-            .to_string();
-    draft.tax_20_other_name =
-        "Other non-taxable compensation description beyond the official printed line".to_string();
-    draft.tax_29_other_remittances_name =
-        "Other remittance description beyond the official printed line".to_string();
+    // Exercise the reviewed comb-to-plain transition without inventing values
+    // that cannot fit the official field at the renderer's readable 8 px floor.
+    draft.tax_relief_specification = "Reviewed International Tax Treaty Filing".to_string();
+    draft.tax_20_other_name = "Other non-taxable compensation details".to_string();
+    draft.tax_29_other_remittances_name = "Other remittance from prior filing".to_string();
     for (index, row) in draft.schedule_1.iter_mut().enumerate() {
-        row.drawee_bank_code_or_agency =
-            format!("Authorized Agent Bank Branch Code Number {:02}", index + 1);
-        row.payment_number = format!("PAYMENT-REFERENCE-1601C-2026-{:02}", index + 1);
+        row.drawee_bank_code_or_agency = format!("AAB-{:02}", index + 1);
+        row.payment_number = format!("PAY-{:03}", index + 1);
     }
     draft.compute();
     Ok(draft)

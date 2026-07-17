@@ -58,7 +58,7 @@
     },
     "tax_20_other_name": {
       "type": "text",
-      "value": "Other non-taxable compensation description beyond the official printed line"
+      "value": "Other non-taxable compensation details"
     },
     "tax_21_total_non_taxable": {
       "type": "decimal",
@@ -98,7 +98,7 @@
     },
     "tax_29_other_remittances_name": {
       "type": "text",
-      "value": "Other remittance description beyond the official printed line"
+      "value": "Other remittance from prior filing"
     },
     "tax_30_total_tax_remittances": {
       "type": "decimal",
@@ -134,7 +134,7 @@
     },
     "tax_relief_specification": {
       "type": "text",
-      "value": "Reviewed special-law or international tax treaty description beyond the official comb"
+      "value": "Reviewed International Tax Treaty Filing"
     }
   },
   "form": {
@@ -200,11 +200,11 @@
             },
             "drawee_bank_code_or_agency": {
               "type": "text",
-              "value": "Authorized Agent Bank Branch Code Number 01"
+              "value": "AAB-01"
             },
             "payment_number": {
               "type": "text",
-              "value": "PAYMENT-REFERENCE-1601C-2026-01"
+              "value": "PAY-001"
             },
             "previous_month": {
               "type": "text",
@@ -233,11 +233,11 @@
             },
             "drawee_bank_code_or_agency": {
               "type": "text",
-              "value": "Authorized Agent Bank Branch Code Number 02"
+              "value": "AAB-02"
             },
             "payment_number": {
               "type": "text",
-              "value": "PAYMENT-REFERENCE-1601C-2026-02"
+              "value": "PAY-002"
             },
             "previous_month": {
               "type": "text",
@@ -266,11 +266,11 @@
             },
             "drawee_bank_code_or_agency": {
               "type": "text",
-              "value": "Authorized Agent Bank Branch Code Number 03"
+              "value": "AAB-03"
             },
             "payment_number": {
               "type": "text",
-              "value": "PAYMENT-REFERENCE-1601C-2026-03"
+              "value": "PAY-003"
             },
             "previous_month": {
               "type": "text",

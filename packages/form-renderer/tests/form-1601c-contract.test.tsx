@@ -104,6 +104,22 @@ describe("1601C:2018 runtime render contract", () => {
     }
   });
 
+  it("uses the reviewed plain Item 5 field and measured overflow contract", () => {
+    const normalMarkup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: structuredClone(normalFixture) as RenderEnvelope })
+    );
+    expect(normalMarkup).toContain("atc-plain-1601c");
+    expect(normalMarkup).toContain('aria-label="WW010"');
+
+    const longMarkup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: structuredClone(longFixture) as RenderEnvelope })
+    );
+    expect(longMarkup).toContain('data-adaptive-min-font-px="8"');
+    expect(longMarkup).toContain('data-adaptive-max-font-px="9.6"');
+    expect(longMarkup).toContain('data-adaptive-step-px="0.5"');
+    expect(longMarkup).not.toMatch(/font-size:\s*(?:3\.5|4|5|6|7\.2)pt/);
+  });
+
   it("renders long profile and schedule values through reviewed plain boxes", () => {
     const fixture = structuredClone(longFixture) as RenderEnvelope;
     const markup = renderToStaticMarkup(
