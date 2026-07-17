@@ -3877,9 +3877,7 @@ impl ProfileManagerView {
         let year = self.forms_editor_year;
         let mut removed = false;
         if let Some(set) = self.stored_per_year_forms.get_mut(&year) {
-            let before = set.entries.len();
-            set.entries.retain(|e| !(e.form_code == code && e.custom));
-            removed = set.entries.len() != before;
+            removed = set.remove_manual_custom_entry(&code);
         }
         if self.forms_editor_selected_code.as_ref() == Some(&code) {
             self.forms_editor_selected_code = None;
@@ -4202,6 +4200,7 @@ impl ProfileManagerView {
 
         for entry in &forms_set.entries {
             let code = entry.form_code.clone();
+            let is_user_created_custom = entry.is_user_created_custom();
             let description = bir_core::forms::registry::find_form(&code)
                 .map(|f| f.title)
                 .unwrap_or("Custom Obligation");
@@ -4254,127 +4253,130 @@ impl ProfileManagerView {
                     div()
                 });
 
-            let row_elem =
-                div()
-                    .id(format!("row_{}", code))
-                    .flex()
-                    .items_center()
-                    .w_full()
-                    .py_2()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .cursor_pointer()
-                    .when(is_selected, |this| this.bg(cx.theme().muted))
-                    .on_click(cx.listener({
-                        let code = code.clone();
-                        move |this, _, window, cx| {
-                            this.forms_editor_selected_code = Some(code.clone());
-                            let val = if let Some(set) =
-                                this.stored_per_year_forms.get(&this.forms_editor_year)
-                            {
-                                if let Some(e) = set.entries.iter().find(|e| e.form_code == code) {
-                                    e.reason.clone().unwrap_or_default()
-                                } else {
-                                    "".to_string()
-                                }
+            let row_elem = div()
+                .id(format!("row_{}", code))
+                .flex()
+                .items_center()
+                .w_full()
+                .py_2()
+                .border_b_1()
+                .border_color(cx.theme().border)
+                .cursor_pointer()
+                .when(is_selected, |this| this.bg(cx.theme().muted))
+                .on_click(cx.listener({
+                    let code = code.clone();
+                    move |this, _, window, cx| {
+                        this.forms_editor_selected_code = Some(code.clone());
+                        let val = if let Some(set) =
+                            this.stored_per_year_forms.get(&this.forms_editor_year)
+                        {
+                            if let Some(e) = set.entries.iter().find(|e| e.form_code == code) {
+                                e.reason.clone().unwrap_or_default()
                             } else {
                                 "".to_string()
-                            };
-                            this.forms_editor_active_note_input
-                                .update(cx, |input, cx| input.set_value(&val, window, cx));
-                            cx.notify();
-                        }
-                    }))
-                    .child(
+                            }
+                        } else {
+                            "".to_string()
+                        };
+                        this.forms_editor_active_note_input
+                            .update(cx, |input, cx| input.set_value(&val, window, cx));
+                        cx.notify();
+                    }
+                }))
+                .child(
+                    div()
+                        .w(px(50.))
+                        .flex()
+                        .justify_center()
+                        .child(checkbox_elem),
+                )
+                .child(
+                    div()
+                        .w(px(100.))
+                        .px_3()
+                        .text_sm()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(cx.theme().foreground)
+                        .child(code.clone()),
+                )
+                .child(
+                    div()
+                        .flex_grow()
+                        .px_3()
+                        .text_sm()
+                        .text_color(cx.theme().foreground)
+                        .child(description),
+                )
+                .child(
+                    div()
+                        .w(px(120.))
+                        .px_3()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(frequency_str),
+                )
+                .child(
+                    div()
+                        .w(px(110.))
+                        .px_3()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(source_str),
+                )
+                .child(
+                    div()
+                        .w(px(110.))
+                        .px_3()
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(support_str),
+                )
+                .child(div().w(px(80.)).px_3().child(if entry.custom {
+                    div()
+                        .px_1p5()
+                        .py_0p5()
+                        .rounded_full()
+                        .bg(gpui::rgba(0xf59e0b15))
+                        .border_1()
+                        .border_color(gpui::rgba(0xf59e0b33))
+                        .flex()
+                        .justify_center()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(gpui::rgb(0xd97706))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child(if is_user_created_custom {
+                                    "Custom"
+                                } else {
+                                    "Uncatalogued"
+                                }),
+                        )
+                } else {
+                    div()
+                }))
+                .child(div().w(px(80.)).px_3().flex().justify_center().child(
+                    if is_user_created_custom {
                         div()
-                            .w(px(50.))
-                            .flex()
-                            .justify_center()
-                            .child(checkbox_elem),
-                    )
-                    .child(
-                        div()
-                            .w(px(100.))
-                            .px_3()
-                            .text_sm()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(cx.theme().foreground)
-                            .child(code.clone()),
-                    )
-                    .child(
-                        div()
-                            .flex_grow()
-                            .px_3()
-                            .text_sm()
-                            .text_color(cx.theme().foreground)
-                            .child(description),
-                    )
-                    .child(
-                        div()
-                            .w(px(120.))
-                            .px_3()
-                            .text_sm()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(frequency_str),
-                    )
-                    .child(
-                        div()
-                            .w(px(110.))
-                            .px_3()
-                            .text_sm()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(source_str),
-                    )
-                    .child(
-                        div()
-                            .w(px(110.))
-                            .px_3()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(support_str),
-                    )
-                    .child(div().w(px(80.)).px_3().child(if entry.custom {
-                        div()
-                            .px_1p5()
-                            .py_0p5()
-                            .rounded_full()
-                            .bg(gpui::rgba(0xf59e0b15))
-                            .border_1()
-                            .border_color(gpui::rgba(0xf59e0b33))
-                            .flex()
-                            .justify_center()
+                            .id(format!("delete_{}", code))
+                            .cursor_pointer()
+                            .on_click(cx.listener({
+                                let code = code.clone();
+                                move |this, _, _, cx| {
+                                    this.delete_custom_form(code.clone(), cx);
+                                }
+                            }))
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(gpui::rgb(0xd97706))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child("Custom"),
+                                    .text_color(gpui::rgb(0xef4444))
+                                    .child("Delete"),
                             )
+                            .into_any()
                     } else {
-                        div()
-                    }))
-                    .child(div().w(px(80.)).px_3().flex().justify_center().child(
-                        if entry.custom {
-                            div()
-                                .id(format!("delete_{}", code))
-                                .cursor_pointer()
-                                .on_click(cx.listener({
-                                    let code = code.clone();
-                                    move |this, _, _, cx| {
-                                        this.delete_custom_form(code.clone(), cx);
-                                    }
-                                }))
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(gpui::rgb(0xef4444))
-                                        .child("Delete"),
-                                )
-                                .into_any()
-                        } else {
-                            div().into_any()
-                        },
-                    ));
+                        div().into_any()
+                    },
+                ));
 
             rows.push(row_elem);
         }

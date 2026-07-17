@@ -232,6 +232,20 @@ impl FormSetEntry {
         self.review_status == FormSetReviewStatus::NeedsReview
     }
 
+    /// Whether this is an uncatalogued entry created directly in the Forms Set.
+    ///
+    /// Generated unknown codes retain an evidence reference or effective period
+    /// when a later manual include/exclude decision changes their source to
+    /// [`FormSetSource::Manual`]. They remain auditable generated obligations,
+    /// not deletable user-created rows.
+    pub fn is_user_created_custom(&self) -> bool {
+        self.custom
+            && self.source == FormSetSource::Manual
+            && self.source_reference.is_none()
+            && self.effective_from.is_none()
+            && self.effective_until.is_none()
+    }
+
     /// Record a user-owned include/exclude decision, resolving any generated conflict.
     pub fn apply_manual_decision(&mut self, active: bool, reason: Option<String>) {
         self.active = active;
@@ -310,6 +324,18 @@ impl PerYearFormsSet {
     /// Unresolved entries that must be reviewed before they can drive filing.
     pub fn needs_review_entries(&self) -> impl Iterator<Item = &FormSetEntry> {
         self.entries.iter().filter(|entry| entry.needs_review())
+    }
+
+    /// Remove a custom obligation created by the user.
+    ///
+    /// Registry-unknown codes from reviewed COR or inferred profile evidence
+    /// also carry `custom = true`, but remain generated audit records and must
+    /// be included or excluded rather than erased.
+    pub fn remove_manual_custom_entry(&mut self, form_code: &str) -> bool {
+        let before = self.entries.len();
+        self.entries
+            .retain(|entry| !(entry.form_code == form_code && entry.is_user_created_custom()));
+        self.entries.len() != before
     }
 }
 
@@ -504,6 +530,51 @@ mod tests {
         let entry = FormSetEntry::from_code("ZZZZ", FormSetSource::Manual);
         assert!(entry.custom);
         assert_eq!(entry.frequency, FilingFrequency::OpenEnded);
+    }
+
+    #[test]
+    fn manual_custom_entry_can_be_removed() {
+        let mut set = PerYearFormsSet::from_codes(2026, ["ZZZZ"], FormSetSource::Manual);
+
+        assert!(set.remove_manual_custom_entry("ZZZZ"));
+        assert!(set.entries.is_empty());
+    }
+
+    #[test]
+    fn unsupported_reviewed_cor_entry_cannot_be_erased() {
+        let mut set = PerYearFormsSet::from_codes(2026, ["ZZZZ"], FormSetSource::ReviewedCor);
+
+        assert!(!set.remove_manual_custom_entry("ZZZZ"));
+        assert_eq!(set.entries.len(), 1);
+        assert_eq!(set.entries[0].source, FormSetSource::ReviewedCor);
+        assert!(set.entries[0].custom);
+        assert_eq!(
+            crate::forms::form_support_level("ZZZZ").action_label(),
+            "Manual / external filing"
+        );
+    }
+
+    #[test]
+    fn manually_excluded_unsupported_suggestion_retains_its_evidence() {
+        let mut set = PerYearFormsSet::from_codes(2026, ["ZZZZ"], FormSetSource::ReviewedCor);
+        set.entries[0].source_reference = Some("reviewed-cor-document".to_string());
+        set.entries[0].effective_from = NaiveDate::from_ymd_opt(2026, 1, 1);
+        set.entries[0]
+            .apply_manual_decision(false, Some("Not filed for this taxpayer".to_string()));
+
+        assert!(!set.remove_manual_custom_entry("ZZZZ"));
+        assert_eq!(set.entries.len(), 1);
+        assert!(!set.entries[0].active);
+        assert_eq!(set.entries[0].source, FormSetSource::Manual);
+        assert_eq!(
+            set.entries[0].source_reference.as_deref(),
+            Some("reviewed-cor-document")
+        );
+        assert_eq!(
+            set.entries[0].effective_from,
+            NaiveDate::from_ymd_opt(2026, 1, 1)
+        );
+        assert!(!set.entries[0].is_user_created_custom());
     }
 
     #[test]
