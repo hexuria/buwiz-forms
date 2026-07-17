@@ -13,6 +13,8 @@ import {
 declare global {
   interface Window {
     __EBIR_RENDER_ENVELOPE__?: unknown;
+    __EBIR_RENDER_DOCUMENT_RUN_ID__?: string;
+    __EBIR_RENDER_ENVELOPE_HASH__?: string;
     renderEbirForm?: (value: unknown) => void;
     measureEbirFormGeometry?: () => RendererGeometryMeasurement | null;
     prepareEbirFormForNativePrint?: (nonce: number) => void;
@@ -32,10 +34,23 @@ let hasRenderedEnvelope = false;
 let pendingPrintNonce: number | undefined;
 const readinessDeadlineMs = 4_000;
 const nativePrintModeClass = "ebir-native-print-mode";
+const rendererDocumentRunId = window.__EBIR_RENDER_DOCUMENT_RUN_ID__ ?? "";
+const rendererEnvelopeHash = window.__EBIR_RENDER_ENVELOPE_HASH__ ?? "";
 
-function postRendererHostMessage(message: unknown) {
-  window.ipc?.postMessage(JSON.stringify(message));
+function postRendererHostMessage(message: Record<string, unknown>) {
+  window.ipc?.postMessage(
+    JSON.stringify({
+      ...message,
+      document_run_id: rendererDocumentRunId,
+      envelope_hash: rendererEnvelopeHash
+    })
+  );
 }
+
+// The host-generated identity is a one-use capability for this exact WebView
+// document. A reload repeats this boot message and is rejected by the host
+// before a restarted render epoch can become printable.
+postRendererHostMessage({ type: "renderer_boot" });
 
 function nativePrintModeIsActive() {
   return document.documentElement.classList.contains(nativePrintModeClass);

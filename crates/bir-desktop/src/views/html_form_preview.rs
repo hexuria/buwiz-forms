@@ -272,6 +272,38 @@ pub(crate) struct PreparedHtmlPreview {
     pub(crate) default_pdf_name: String,
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RendererDocumentIdentity {
+    document_run_id: String,
+    envelope_hash: String,
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+impl RendererDocumentIdentity {
+    fn host_generated(envelope_hash: &str) -> Result<Self, String> {
+        if envelope_hash.len() != 64
+            || !envelope_hash
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        {
+            return Err("renderer document envelope hash is not canonical SHA-256 hex".to_string());
+        }
+        Ok(Self {
+            document_run_id: uuid::Uuid::new_v4().to_string(),
+            envelope_hash: envelope_hash.to_string(),
+        })
+    }
+
+    #[cfg(test)]
+    fn test_identity() -> Self {
+        Self {
+            document_run_id: "00000000-0000-4000-8000-000000000001".to_string(),
+            envelope_hash: "a".repeat(64),
+        }
+    }
+}
+
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 pub(crate) fn prepare_html_form_preview(
     envelope: &RenderEnvelopeV1,
@@ -350,7 +382,11 @@ fn renderer_initialization_script(encoded_json: &str) -> String {
         window.__EBIR_RENDER_ENVELOPE__ = JSON.parse({encoded_json});
         const postRendererHostMessage = (message) => {{
             try {{
-                window.ipc.postMessage(JSON.stringify(message));
+                window.ipc.postMessage(JSON.stringify({{
+                    ...message,
+                    document_run_id: window.__EBIR_RENDER_DOCUMENT_RUN_ID__,
+                    envelope_hash: window.__EBIR_RENDER_ENVELOPE_HASH__
+                }}));
             }} catch (_error) {{
                 // Native readiness handling will safely fall back after timeout.
             }}
@@ -557,6 +593,28 @@ fn renderer_initialization_script(encoded_json: &str) -> String {
     )
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn renderer_document_identity_script(identity: &RendererDocumentIdentity) -> String {
+    let document_run_id = serde_json::to_string(&identity.document_run_id)
+        .expect("UUID renderer document run IDs always serialize");
+    let envelope_hash = serde_json::to_string(&identity.envelope_hash)
+        .expect("canonical renderer envelope hashes always serialize");
+    format!(
+        r#"
+        Object.defineProperty(window, "__EBIR_RENDER_DOCUMENT_RUN_ID__", {{
+            value: {document_run_id},
+            writable: false,
+            configurable: false
+        }});
+        Object.defineProperty(window, "__EBIR_RENDER_ENVELOPE_HASH__", {{
+            value: {envelope_hash},
+            writable: false,
+            configurable: false
+        }});
+        "#
+    )
+}
+
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 pub(crate) fn native_print_preflight_script(nonce: u64) -> String {
     format!(
@@ -596,6 +654,7 @@ fn macos_system_print_completion_decision(success: bool) -> Result<(), String> {
 #[cfg(target_os = "macos")]
 struct MacPrintCompletionDelegateIvars {
     nonce: u64,
+    document_identity: RendererDocumentIdentity,
     render_epoch: u64,
     bridge: Arc<Mutex<NativeBackendBridge>>,
 }
@@ -621,6 +680,7 @@ define_class!(
             if let Ok(mut bridge) = self.ivars().bridge.lock() {
                 bridge.record_completion(NativeBackendCompletion::SystemPrint {
                     nonce: self.ivars().nonce,
+                    document_identity: self.ivars().document_identity.clone(),
                     render_epoch: self.ivars().render_epoch,
                     result: macos_system_print_completion_decision(success),
                 });
@@ -643,6 +703,7 @@ impl MacPrintCompletionDelegate {
     fn new(
         main_thread: MainThreadMarker,
         nonce: u64,
+        document_identity: RendererDocumentIdentity,
         render_epoch: u64,
         bridge: Arc<Mutex<NativeBackendBridge>>,
     ) -> Retained<Self> {
@@ -650,6 +711,7 @@ impl MacPrintCompletionDelegate {
             .alloc::<Self>()
             .set_ivars(MacPrintCompletionDelegateIvars {
                 nonce,
+                document_identity,
                 render_epoch,
                 bridge,
             });
@@ -664,6 +726,7 @@ fn start_macos_system_print(
     raw_webview: &wry::WebView,
     expectation: &PdfExpectation,
     nonce: u64,
+    document_identity: RendererDocumentIdentity,
     render_epoch: u64,
     bridge: Arc<Mutex<NativeBackendBridge>>,
 ) -> Result<(), String> {
@@ -710,7 +773,13 @@ fn start_macos_system_print(
     let print_operation = unsafe { webview.printOperationWithPrintInfo(&print_info) };
     print_operation.setCanSpawnSeparateThread(true);
 
-    let delegate = MacPrintCompletionDelegate::new(main_thread, nonce, render_epoch, bridge);
+    let delegate = MacPrintCompletionDelegate::new(
+        main_thread,
+        nonce,
+        document_identity,
+        render_epoch,
+        bridge,
+    );
     let retained_context = Retained::into_raw(delegate.clone()).cast::<c_void>();
     // SAFETY: the window, operation, and delegate are main-thread AppKit
     // objects. The selector has AppKit's documented
@@ -734,6 +803,7 @@ fn start_macos_pdf_capture(
     raw_webview: &wry::WebView,
     page_rects: &[RendererPageRect],
     nonce: u64,
+    document_identity: RendererDocumentIdentity,
     render_epoch: u64,
     bridge: Arc<Mutex<NativeBackendBridge>>,
 ) -> Result<(), String> {
@@ -744,7 +814,7 @@ fn start_macos_pdf_capture(
         return Err("WKWebView PDF capture received no validated page rectangles".to_string());
     }
     if let Ok(mut bridge) = bridge.lock() {
-        bridge.begin_macos_capture(nonce, render_epoch, page_rects.len());
+        bridge.begin_macos_capture(nonce, document_identity, render_epoch, page_rects.len());
     } else {
         return Err("WKWebView PDF capture state is unavailable".to_string());
     }
@@ -844,6 +914,7 @@ fn start_windows_system_print(
     raw_webview: &wry::WebView,
     expectation: &PdfExpectation,
     nonce: u64,
+    document_identity: RendererDocumentIdentity,
     render_epoch: u64,
     bridge: Arc<Mutex<NativeBackendBridge>>,
 ) -> Result<(), String> {
@@ -862,6 +933,7 @@ fn start_windows_system_print(
         if let Ok(mut bridge) = bridge.lock() {
             bridge.record_completion(NativeBackendCompletion::SystemPrint {
                 nonce,
+                document_identity: document_identity.clone(),
                 render_epoch,
                 result,
             });
@@ -881,6 +953,7 @@ fn start_windows_pdf_export(
     temp_path: &Path,
     expectation: &PdfExpectation,
     nonce: u64,
+    document_identity: RendererDocumentIdentity,
     render_epoch: u64,
     bridge: Arc<Mutex<NativeBackendBridge>>,
 ) -> Result<(), String> {
@@ -907,6 +980,7 @@ fn start_windows_pdf_export(
         if let Ok(mut bridge) = callback_bridge.lock() {
             bridge.record_completion(NativeBackendCompletion::PdfFile {
                 nonce,
+                document_identity: document_identity.clone(),
                 render_epoch,
                 result,
             });
@@ -923,6 +997,9 @@ fn start_windows_pdf_export(
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 #[derive(Debug, Clone, Default, PartialEq)]
 struct RendererState {
+    document_identity: Option<RendererDocumentIdentity>,
+    document_boot_accepted: bool,
+    document_identity_rejected: bool,
     ready: bool,
     page_count: Option<usize>,
     page_rects: Vec<RendererPageRect>,
@@ -935,6 +1012,28 @@ struct RendererState {
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 impl RendererState {
+    fn for_document(document_identity: RendererDocumentIdentity) -> Self {
+        Self {
+            document_identity: Some(document_identity),
+            ..Self::default()
+        }
+    }
+
+    fn reject_document_identity(&mut self, reason: impl Into<String>) {
+        self.document_identity_rejected = true;
+        self.ready = false;
+        self.page_count = None;
+        self.page_rects.clear();
+        self.geometry_print_mode = false;
+        self.print_ready_nonce = None;
+        self.error = Some(reason.into());
+        self.readiness_revision = self.readiness_revision.saturating_add(1);
+    }
+
+    fn accepts_document_identity(&self, identity: &RendererDocumentIdentity) -> bool {
+        !self.document_identity_rejected && self.document_identity.as_ref() == Some(identity)
+    }
+
     fn invalidate_for_epoch(&mut self, render_epoch: u64) -> bool {
         if render_epoch == 0 || render_epoch <= self.render_epoch {
             return false;
@@ -1000,6 +1099,7 @@ struct PendingNativeOutput {
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 #[derive(Debug, Clone, PartialEq)]
 struct NativeOutputRendererBinding {
+    document_identity: RendererDocumentIdentity,
     render_epoch: u64,
     readiness_revision: u64,
     page_rects: Vec<RendererPageRect>,
@@ -1024,6 +1124,13 @@ impl PendingNativeOutput {
 fn bind_renderer_for_native_output(
     state: &RendererState,
 ) -> Result<NativeOutputRendererBinding, String> {
+    let document_identity = state
+        .document_identity
+        .clone()
+        .ok_or_else(|| "native output has no bound renderer document identity".to_string())?;
+    if !state.document_boot_accepted || state.document_identity_rejected {
+        return Err("native output renderer document identity is not valid".to_string());
+    }
     if state.render_epoch == 0 {
         return Err("native output has no validated renderer epoch".to_string());
     }
@@ -1034,6 +1141,7 @@ fn bind_renderer_for_native_output(
         return Err("native output renderer epoch has incomplete page rectangles".to_string());
     }
     Ok(NativeOutputRendererBinding {
+        document_identity,
         render_epoch: state.render_epoch,
         readiness_revision: state.readiness_revision,
         page_rects: state.page_rects.clone(),
@@ -1045,6 +1153,12 @@ fn renderer_binding_mismatch_reason(
     state: &RendererState,
     binding: &NativeOutputRendererBinding,
 ) -> Option<String> {
+    if state.document_identity.as_ref() != Some(&binding.document_identity)
+        || !state.document_boot_accepted
+        || state.document_identity_rejected
+    {
+        return Some("renderer document identity changed after native output started".to_string());
+    }
     if state.render_epoch != binding.render_epoch
         || state.readiness_revision != binding.readiness_revision
     {
@@ -1088,18 +1202,21 @@ fn native_output_timeout_reason(
 enum NativeBackendCompletion {
     SystemPrint {
         nonce: u64,
+        document_identity: RendererDocumentIdentity,
         render_epoch: u64,
         result: Result<(), String>,
     },
     #[cfg(target_os = "macos")]
     CapturedPages {
         nonce: u64,
+        document_identity: RendererDocumentIdentity,
         render_epoch: u64,
         pages: Vec<Result<Vec<u8>, String>>,
     },
     #[cfg(target_os = "windows")]
     PdfFile {
         nonce: u64,
+        document_identity: RendererDocumentIdentity,
         render_epoch: u64,
         result: Result<(), String>,
     },
@@ -1109,6 +1226,7 @@ enum NativeBackendCompletion {
 #[derive(Debug)]
 struct MacCaptureBatch {
     nonce: u64,
+    document_identity: RendererDocumentIdentity,
     render_epoch: u64,
     pages: Vec<Option<Result<Vec<u8>, String>>>,
 }
@@ -1230,6 +1348,25 @@ fn native_backend_completion_render_epoch(completion: &NativeBackendCompletion) 
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
+fn native_backend_completion_document_identity(
+    completion: &NativeBackendCompletion,
+) -> &RendererDocumentIdentity {
+    match completion {
+        NativeBackendCompletion::SystemPrint {
+            document_identity, ..
+        } => document_identity,
+        #[cfg(target_os = "macos")]
+        NativeBackendCompletion::CapturedPages {
+            document_identity, ..
+        } => document_identity,
+        #[cfg(target_os = "windows")]
+        NativeBackendCompletion::PdfFile {
+            document_identity, ..
+        } => document_identity,
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn native_backend_completion_binding_error(
     pending: &PendingNativeOutput,
     state: &RendererState,
@@ -1241,6 +1378,9 @@ fn native_backend_completion_binding_error(
     let Some(binding) = pending.binding.as_ref() else {
         return Some("native backend completed without a bound renderer epoch".to_string());
     };
+    if native_backend_completion_document_identity(completion) != &binding.document_identity {
+        return Some("native backend completion reported a stale renderer document".to_string());
+    }
     if native_backend_completion_render_epoch(completion) != binding.render_epoch {
         return Some("native backend completion reported a stale renderer epoch".to_string());
     }
@@ -1249,10 +1389,17 @@ fn native_backend_completion_binding_error(
 
 #[cfg(target_os = "macos")]
 impl NativeBackendBridge {
-    fn begin_macos_capture(&mut self, nonce: u64, render_epoch: u64, page_count: usize) {
+    fn begin_macos_capture(
+        &mut self,
+        nonce: u64,
+        document_identity: RendererDocumentIdentity,
+        render_epoch: u64,
+        page_count: usize,
+    ) {
         self.completion = None;
         self.mac_capture = Some(MacCaptureBatch {
             nonce,
+            document_identity,
             render_epoch,
             pages: (0..page_count).map(|_| None).collect(),
         });
@@ -1285,6 +1432,7 @@ impl NativeBackendBridge {
             };
             self.record_completion(NativeBackendCompletion::CapturedPages {
                 nonce,
+                document_identity: batch.document_identity,
                 render_epoch: batch.render_epoch,
                 pages,
             });
@@ -1294,8 +1442,28 @@ impl NativeBackendBridge {
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 #[derive(Debug, Deserialize)]
+struct RendererIpcMessage {
+    document_run_id: String,
+    envelope_hash: String,
+    #[serde(flatten)]
+    message: RendererMessage,
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+impl RendererIpcMessage {
+    fn document_identity(&self) -> RendererDocumentIdentity {
+        RendererDocumentIdentity {
+            document_run_id: self.document_run_id.clone(),
+            envelope_hash: self.envelope_hash.clone(),
+        }
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum RendererMessage {
+    RendererBoot,
     RendererReady {
         render_epoch: u64,
     },
@@ -1322,6 +1490,40 @@ enum RendererMessage {
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
+fn apply_renderer_ipc_message(
+    state: &mut RendererState,
+    ipc_message: RendererIpcMessage,
+    layout_plan: &RenderLayoutPlan,
+) {
+    let identity = ipc_message.document_identity();
+    if state.document_identity_rejected {
+        return;
+    }
+    if !state.accepts_document_identity(&identity) {
+        state.reject_document_identity(
+            "renderer IPC document run ID or envelope hash did not match the host document",
+        );
+        return;
+    }
+
+    match ipc_message.message {
+        RendererMessage::RendererBoot => {
+            if state.document_boot_accepted {
+                state.reject_document_identity(
+                    "renderer document run ID was replayed by a reload or replacement document",
+                );
+            } else {
+                state.document_boot_accepted = true;
+            }
+        }
+        _ if !state.document_boot_accepted => state.reject_document_identity(
+            "renderer IPC arrived before the host document identity boot handshake",
+        ),
+        message => apply_renderer_message(state, message, layout_plan),
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 #[derive(Debug, Deserialize)]
 struct RendererPageRectMessage {
     x: f64,
@@ -1345,6 +1547,11 @@ fn apply_renderer_message(
     layout_plan: &RenderLayoutPlan,
 ) {
     match message {
+        RendererMessage::RendererBoot => {
+            state.reject_document_identity(
+                "renderer boot messages must pass through the document identity gate",
+            );
+        }
         RendererMessage::RendererReady { render_epoch } => {
             if state.accepts_epoch(render_epoch) {
                 state.ready = true;
@@ -1438,12 +1645,21 @@ impl HtmlFormPreviewView {
         use raw_window_handle::HasWindowHandle;
 
         let retry_prepared = prepared.clone();
-        let bridge_state = Arc::new(Mutex::new(RendererState::default()));
+        let document_identity =
+            RendererDocumentIdentity::host_generated(&prepared.pdf_expectation.envelope_hash)
+                .expect("prepared HTML previews always contain a canonical envelope hash");
+        let renderer_state = RendererState::for_document(document_identity.clone());
+        let bridge_state = Arc::new(Mutex::new(renderer_state.clone()));
         let native_backend_bridge = Arc::new(Mutex::new(NativeBackendBridge::default()));
         let ipc_state = bridge_state.clone();
         let protocol_root = prepared.entry.parent().map(PathBuf::from);
         let layout_plan = prepared.layout_plan;
         let expected_page_count = layout_plan.expected_page_count;
+        let initialization_script = format!(
+            "{}\n{}",
+            renderer_document_identity_script(&document_identity),
+            prepared.initialization_script
+        );
 
         let result = window
             .window_handle()
@@ -1460,7 +1676,7 @@ impl HtmlFormPreviewView {
                         renderer_protocol_response(protocol_root.as_deref(), request)
                     })
                     .with_url(&prepared.url)
-                    .with_initialization_script(&prepared.initialization_script)
+                    .with_initialization_script(&initialization_script)
                     .with_navigation_handler(|candidate| {
                         let Ok(url) = url::Url::parse(&candidate) else {
                             return false;
@@ -1473,18 +1689,26 @@ impl HtmlFormPreviewView {
                         is_renderer_url && renderer_relative_path(url.path()).is_some()
                     })
                     .with_ipc_handler(move |request| {
-                        let Ok(message) = serde_json::from_str::<RendererMessage>(request.body())
-                        else {
+                        let message = match serde_json::from_str::<RendererIpcMessage>(request.body())
+                        {
+                            Ok(message) => message,
+                            Err(_) => {
+                                if let Ok(mut state) = ipc_state.lock() {
+                                    state.reject_document_identity(
+                                        "renderer IPC omitted or malformed the immutable document identity",
+                                    );
+                                }
                             tracing::warn!(
                                 body_bytes = request.body().len(),
                                 "ignored malformed renderer IPC"
                             );
-                            return;
+                                return;
+                            }
                         };
                         let Ok(mut state) = ipc_state.lock() else {
                             return;
                         };
-                        apply_renderer_message(&mut state, message, &layout_plan);
+                        apply_renderer_ipc_message(&mut state, message, &layout_plan);
                     })
                     .build_as_child(&window_handle)
                     .map_err(|error| error.to_string())
@@ -1663,7 +1887,7 @@ impl HtmlFormPreviewView {
             webview,
             bridge_state,
             native_backend_bridge,
-            renderer_state: RendererState::default(),
+            renderer_state,
             status,
             pdf_expectation: prepared.pdf_expectation,
             default_pdf_name: prepared.default_pdf_name,
@@ -1781,6 +2005,7 @@ impl HtmlFormPreviewView {
             return Err("HTML renderer WebView disappeared before native output".to_string());
         };
         let binding = bind_renderer_for_native_output(&self.renderer_state)?;
+        let document_identity = binding.document_identity.clone();
         let render_epoch = binding.render_epoch;
         if let Some(pending) = self.pending_output.as_mut() {
             pending.binding = Some(binding.clone());
@@ -1805,6 +2030,7 @@ impl HtmlFormPreviewView {
                                 webview.raw(),
                                 &expectation,
                                 nonce,
+                                document_identity,
                                 render_epoch,
                                 bridge,
                             )
@@ -1826,6 +2052,7 @@ impl HtmlFormPreviewView {
                                 webview.raw(),
                                 &expectation,
                                 nonce,
+                                document_identity,
                                 render_epoch,
                                 bridge,
                             )
@@ -1868,11 +2095,13 @@ impl HtmlFormPreviewView {
                 #[cfg(target_os = "macos")]
                 let start_result = {
                     let page_rects = binding.page_rects;
+                    let document_identity = document_identity.clone();
                     webview.update(cx, move |webview, _| {
                         start_macos_pdf_capture(
                             webview.raw(),
                             &page_rects,
                             nonce,
+                            document_identity,
                             render_epoch,
                             bridge,
                         )
@@ -1887,6 +2116,7 @@ impl HtmlFormPreviewView {
                             &temp_path,
                             &expectation,
                             nonce,
+                            document_identity,
                             render_epoch,
                             bridge,
                         )
@@ -2339,7 +2569,8 @@ mod tests {
 
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     fn ready_renderer_state(render_epoch: u64) -> RendererState {
-        let mut state = RendererState::default();
+        let mut state = RendererState::for_document(RendererDocumentIdentity::test_identity());
+        state.document_boot_accepted = true;
         assert!(state.invalidate_for_epoch(render_epoch));
         state.ready = true;
         state.page_count = Some(2);
@@ -2374,6 +2605,18 @@ mod tests {
             descendant_overflow_y: 0,
             descendant_clipped_x: 0,
             descendant_clipped_y: 0,
+        }
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    fn renderer_ipc_message(
+        identity: &RendererDocumentIdentity,
+        message: RendererMessage,
+    ) -> RendererIpcMessage {
+        RendererIpcMessage {
+            document_run_id: identity.document_run_id.clone(),
+            envelope_hash: identity.envelope_hash.clone(),
+            message,
         }
     }
 
@@ -2454,48 +2697,196 @@ mod tests {
 
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     #[test]
+    fn renderer_initialization_binds_every_message_to_host_document_identity() {
+        let first = RendererDocumentIdentity::host_generated(&"a".repeat(64))
+            .expect("canonical envelope hash");
+        let second = RendererDocumentIdentity::host_generated(&"a".repeat(64))
+            .expect("canonical envelope hash");
+        assert_ne!(first.document_run_id, second.document_run_id);
+        assert_eq!(first.envelope_hash, second.envelope_hash);
+        assert!(RendererDocumentIdentity::host_generated(&"A".repeat(64)).is_err());
+
+        let identity_script = renderer_document_identity_script(&first);
+        assert!(identity_script.contains(&first.document_run_id));
+        assert!(identity_script.contains(&first.envelope_hash));
+        assert!(identity_script.contains("writable: false"));
+        assert!(identity_script.contains("configurable: false"));
+        let bootstrap_script = renderer_initialization_script("\"{}\"");
+        assert!(bootstrap_script.contains("document_run_id:"));
+        assert!(bootstrap_script.contains("envelope_hash:"));
+
+        let renderer_source = include_str!("../../../../apps/form-preview/src/main.tsx");
+        assert!(renderer_source.contains("postRendererHostMessage({ type: \"renderer_boot\" })"));
+        assert!(renderer_source.contains("document_run_id: rendererDocumentRunId"));
+        assert!(renderer_source.contains("envelope_hash: rendererEnvelopeHash"));
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[test]
+    fn renderer_ipc_fails_closed_for_identity_mismatch_or_reload_replay() {
+        let plan = renderer_layout_plan();
+        let identity = RendererDocumentIdentity::test_identity();
+        let mut state = RendererState::for_document(identity.clone());
+
+        apply_renderer_ipc_message(
+            &mut state,
+            renderer_ipc_message(&identity, RendererMessage::RendererBoot),
+            &plan,
+        );
+        apply_renderer_ipc_message(
+            &mut state,
+            renderer_ipc_message(
+                &identity,
+                RendererMessage::RendererInvalidated { render_epoch: 1 },
+            ),
+            &plan,
+        );
+        assert!(state.document_boot_accepted);
+        assert_eq!(state.render_epoch, 1);
+
+        // A WebView reload restarts JavaScript state and repeats epoch one.
+        // The one-use host run ID is rejected before that epoch can be reused.
+        apply_renderer_ipc_message(
+            &mut state,
+            renderer_ipc_message(&identity, RendererMessage::RendererBoot),
+            &plan,
+        );
+        assert!(state.document_identity_rejected);
+        assert!(!state.ready);
+        assert!(
+            state
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("replayed"))
+        );
+
+        let mut mismatched = RendererDocumentIdentity::test_identity();
+        mismatched.document_run_id = "00000000-0000-4000-8000-000000000002".to_string();
+        let mut replacement_state = RendererState::for_document(identity);
+        apply_renderer_ipc_message(
+            &mut replacement_state,
+            renderer_ipc_message(&mismatched, RendererMessage::RendererBoot),
+            &plan,
+        );
+        assert!(replacement_state.document_identity_rejected);
+        assert!(
+            replacement_state
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("did not match"))
+        );
+
+        let expected = RendererDocumentIdentity::test_identity();
+        let mut wrong_envelope = expected.clone();
+        wrong_envelope.envelope_hash = "b".repeat(64);
+        let mut wrong_envelope_state = RendererState::for_document(expected);
+        apply_renderer_ipc_message(
+            &mut wrong_envelope_state,
+            renderer_ipc_message(&wrong_envelope, RendererMessage::RendererBoot),
+            &plan,
+        );
+        assert!(wrong_envelope_state.document_identity_rejected);
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[test]
+    fn renderer_ipc_requires_boot_before_epoch_messages() {
+        let plan = renderer_layout_plan();
+        let identity = RendererDocumentIdentity::test_identity();
+        let mut state = RendererState::for_document(identity.clone());
+        apply_renderer_ipc_message(
+            &mut state,
+            renderer_ipc_message(
+                &identity,
+                RendererMessage::RendererInvalidated { render_epoch: 1 },
+            ),
+            &plan,
+        );
+        assert!(state.document_identity_rejected);
+        assert_eq!(state.render_epoch, 0);
+        assert!(
+            state
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("before"))
+        );
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[test]
     fn native_print_requires_a_nonce_bound_renderer_preflight() {
         assert!(std::hint::black_box(RENDERER_WEBVIEW_IS_INCOGNITO));
         let script = native_print_preflight_script(42);
         assert!(script.contains("prepareEbirFormForNativePrint"));
         assert!(script.contains("(42)"));
 
-        let invalidated: RendererMessage =
-            serde_json::from_str(r#"{"type":"renderer_invalidated","render_epoch":7}"#)
-                .expect("parse renderer invalidation");
+        let identity = RendererDocumentIdentity::test_identity();
+        let invalidated: RendererIpcMessage = serde_json::from_value(serde_json::json!({
+            "document_run_id": identity.document_run_id,
+            "envelope_hash": identity.envelope_hash,
+            "type": "renderer_invalidated",
+            "render_epoch": 7
+        }))
+        .expect("parse renderer invalidation");
         assert!(matches!(
-            invalidated,
+            invalidated.message,
             RendererMessage::RendererInvalidated { render_epoch: 7 }
         ));
-        let print_ready: RendererMessage = serde_json::from_str(
-            r#"{"type":"print_ready","nonce":42,"render_epoch":7,"print_mode":true}"#,
-        )
+        let identity = RendererDocumentIdentity::test_identity();
+        let print_ready: RendererIpcMessage = serde_json::from_value(serde_json::json!({
+            "document_run_id": identity.document_run_id,
+            "envelope_hash": identity.envelope_hash,
+            "type": "print_ready",
+            "nonce": 42,
+            "render_epoch": 7,
+            "print_mode": true
+        }))
         .expect("parse print readiness");
         assert!(matches!(
-            print_ready,
+            print_ready.message,
             RendererMessage::PrintReady {
                 nonce: 42,
                 render_epoch: 7,
                 print_mode: true
             }
         ));
-        let renderer_error: RendererMessage = serde_json::from_str(
-            r#"{"type":"renderer_error","render_epoch":7,"message":"font failure"}"#,
-        )
+        let identity = RendererDocumentIdentity::test_identity();
+        let renderer_error: RendererIpcMessage = serde_json::from_value(serde_json::json!({
+            "document_run_id": identity.document_run_id,
+            "envelope_hash": identity.envelope_hash,
+            "type": "renderer_error",
+            "render_epoch": 7,
+            "message": "font failure"
+        }))
         .expect("parse renderer error");
         assert!(matches!(
-            renderer_error,
+            renderer_error.message,
             RendererMessage::RendererError {
                 render_epoch: 7,
                 ref message
             } if message == "font failure"
         ));
         assert!(
-            serde_json::from_str::<RendererMessage>(
-                r#"{"type":"renderer_error","message":"unversioned failure"}"#
+            serde_json::from_str::<RendererIpcMessage>(
+                r#"{"type":"renderer_error","render_epoch":7,"message":"unidentified failure"}"#
             )
             .is_err(),
-            "renderer errors must be causally bound to an epoch"
+            "renderer errors must carry the immutable document identity"
+        );
+        assert!(
+            serde_json::from_str::<RendererIpcMessage>(&format!(
+                r#"{{"envelope_hash":"{}","type":"renderer_boot"}}"#,
+                "a".repeat(64)
+            ))
+            .is_err(),
+            "renderer messages without a document run ID must be rejected"
+        );
+        assert!(
+            serde_json::from_str::<RendererIpcMessage>(
+                r#"{"document_run_id":"00000000-0000-4000-8000-000000000001","type":"renderer_boot"}"#
+            )
+            .is_err(),
+            "renderer messages without an envelope hash must be rejected"
         );
 
         let mut state = ready_renderer_state(7);
@@ -2643,11 +3034,13 @@ mod tests {
     fn native_backend_completion_must_match_bound_renderer_epoch() {
         let state = ready_renderer_state(7);
         let binding = bind_renderer_for_native_output(&state).expect("bind ready renderer");
+        let document_identity = binding.document_identity.clone();
         let mut pending = PendingNativeOutput::validating(HtmlOutputKind::SystemPrint, 9, None);
         pending.backend_started = true;
         pending.binding = Some(binding);
         let stale_completion = NativeBackendCompletion::SystemPrint {
             nonce: 9,
+            document_identity: document_identity.clone(),
             render_epoch: 6,
             result: Ok(()),
         };
@@ -2656,8 +3049,22 @@ mod tests {
             .expect("stale completion must fail");
         assert!(reason.contains("stale renderer epoch"));
 
+        let mut other_document = document_identity.clone();
+        other_document.document_run_id = "00000000-0000-4000-8000-000000000002".to_string();
+        let stale_document_completion = NativeBackendCompletion::SystemPrint {
+            nonce: 9,
+            document_identity: other_document,
+            render_epoch: 7,
+            result: Ok(()),
+        };
+        let reason =
+            native_backend_completion_binding_error(&pending, &state, &stale_document_completion)
+                .expect("completion from another document must fail");
+        assert!(reason.contains("stale renderer document"));
+
         let current_completion = NativeBackendCompletion::SystemPrint {
             nonce: 9,
+            document_identity,
             render_epoch: 7,
             result: Ok(()),
         };
@@ -2675,6 +3082,7 @@ mod tests {
 
         bridge.record_completion(NativeBackendCompletion::SystemPrint {
             nonce: 9,
+            document_identity: RendererDocumentIdentity::test_identity(),
             render_epoch: 7,
             result: Ok(()),
         });
@@ -2738,12 +3146,14 @@ mod tests {
     #[test]
     fn macos_page_capture_waits_for_every_page_and_preserves_order() {
         let mut bridge = NativeBackendBridge::default();
-        bridge.begin_macos_capture(9, 7, 2);
+        let document_identity = RendererDocumentIdentity::test_identity();
+        bridge.begin_macos_capture(9, document_identity.clone(), 7, 2);
         bridge.record_macos_page(9, 1, Ok(vec![2]));
         assert!(bridge.completion.is_none());
         bridge.record_macos_page(9, 0, Ok(vec![1]));
         let Some(NativeBackendCompletion::CapturedPages {
             nonce,
+            document_identity: completed_identity,
             render_epoch,
             pages,
         }) = bridge.completion.take()
@@ -2751,6 +3161,7 @@ mod tests {
             panic!("macOS capture should complete after all page callbacks");
         };
         assert_eq!(nonce, 9);
+        assert_eq!(completed_identity, document_identity);
         assert_eq!(render_epoch, 7);
         assert_eq!(pages, vec![Ok(vec![1]), Ok(vec![2])]);
     }
@@ -2767,7 +3178,7 @@ mod tests {
         bridge
             .register_temp_path(9, temp_path.clone())
             .expect("register test temp");
-        bridge.begin_macos_capture(9, 7, 1);
+        bridge.begin_macos_capture(9, RendererDocumentIdentity::test_identity(), 7, 1);
 
         bridge.cancel_output(9);
         bridge.prepare_for_output();
