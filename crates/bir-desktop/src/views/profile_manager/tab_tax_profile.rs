@@ -3760,25 +3760,51 @@ impl ProfileManagerView {
             .cloned()
             .unwrap_or_else(|| self.seed_default_forms(year, cx));
 
-        Self::toggle_manual_form_entry(&mut set, code, year);
+        let Some(entry) = set.entries.iter().find(|entry| entry.form_code == code) else {
+            Self::apply_manual_form_decision(&mut set, code, true, year);
+            self.stored_per_year_forms.insert(year, set);
+            self.mark_profile_changed();
+            cx.notify();
+            return;
+        };
+        if entry.needs_review() {
+            return;
+        }
+
+        let next_active = !entry.is_filing_active();
+        Self::apply_manual_form_decision(&mut set, code, next_active, year);
         self.stored_per_year_forms.insert(year, set);
         self.mark_profile_changed();
         cx.notify();
     }
 
-    fn toggle_manual_form_entry(
+    fn decide_form_obligation(&mut self, code: String, active: bool, cx: &mut Context<Self>) {
+        let year = self.forms_editor_year;
+        let mut set = self
+            .stored_per_year_forms
+            .get(&year)
+            .cloned()
+            .unwrap_or_else(|| self.seed_default_forms(year, cx));
+
+        Self::apply_manual_form_decision(&mut set, code, active, year);
+        self.stored_per_year_forms.insert(year, set);
+        self.mark_profile_changed();
+        cx.notify();
+    }
+
+    fn apply_manual_form_decision(
         set: &mut bir_core::forms::PerYearFormsSet,
         code: String,
+        active: bool,
         year: u16,
     ) {
         if let Some(entry) = set.entries.iter_mut().find(|e| e.form_code == code) {
             let prior_source = Self::form_set_source_label(entry.source);
-            let next_active = !entry.is_filing_active();
             entry.apply_manual_decision(
-                next_active,
+                active,
                 Some(format!(
                     "Manually {} for {} (previous source: {})",
-                    if next_active { "included" } else { "excluded" },
+                    if active { "included" } else { "excluded" },
                     year,
                     prior_source
                 )),
@@ -3788,8 +3814,11 @@ impl ProfileManagerView {
                 code,
                 bir_core::forms::FormSetSource::Manual,
             );
-            new_entry.active = true;
-            new_entry.reason = Some(format!("Manually included for {year}"));
+            new_entry.active = active;
+            new_entry.reason = Some(format!(
+                "Manually {} for {year}",
+                if active { "included" } else { "excluded" }
+            ));
             set.entries.push(new_entry);
         }
     }
@@ -4200,6 +4229,7 @@ impl ProfileManagerView {
 
         for entry in &forms_set.entries {
             let code = entry.form_code.clone();
+            let reason = entry.reason.clone().unwrap_or_default();
             let is_user_created_custom = entry.is_user_created_custom();
             let description = bir_core::forms::registry::find_form(&code)
                 .map(|f| f.title)
@@ -4237,14 +4267,21 @@ impl ProfileManagerView {
                 .flex()
                 .items_center()
                 .justify_center()
-                .cursor_pointer()
-                .on_click(cx.listener({
-                    let code = code.clone();
-                    move |this, _, _, cx| {
-                        this.toggle_form_obligation(code.clone(), cx);
-                    }
-                }))
-                .child(if active {
+                .when(!entry.needs_review(), |this| {
+                    this.cursor_pointer().on_click(cx.listener({
+                        let code = code.clone();
+                        move |this, _, _, cx| {
+                            this.toggle_form_obligation(code.clone(), cx);
+                        }
+                    }))
+                })
+                .child(if entry.needs_review() {
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(gpui::rgb(0xd97706))
+                        .child("!")
+                } else if active {
                     div()
                         .text_xs()
                         .text_color(cx.theme().primary_foreground)
@@ -4265,21 +4302,11 @@ impl ProfileManagerView {
                 .when(is_selected, |this| this.bg(cx.theme().muted))
                 .on_click(cx.listener({
                     let code = code.clone();
+                    let reason = reason.clone();
                     move |this, _, window, cx| {
                         this.forms_editor_selected_code = Some(code.clone());
-                        let val = if let Some(set) =
-                            this.stored_per_year_forms.get(&this.forms_editor_year)
-                        {
-                            if let Some(e) = set.entries.iter().find(|e| e.form_code == code) {
-                                e.reason.clone().unwrap_or_default()
-                            } else {
-                                "".to_string()
-                            }
-                        } else {
-                            "".to_string()
-                        };
                         this.forms_editor_active_note_input
-                            .update(cx, |input, cx| input.set_value(&val, window, cx));
+                            .update(cx, |input, cx| input.set_value(&reason, window, cx));
                         cx.notify();
                     }
                 }))
@@ -4478,10 +4505,17 @@ impl ProfileManagerView {
         let support_label = Self::form_support_label(selected_code);
         let (effective_period, evidence_reference) = Self::form_set_entry_provenance(entry);
         let review_message = entry
-            .conflict
-            .as_ref()
-            .map(|conflict| conflict.message.clone());
+            .needs_review()
+            .then(|| {
+                entry
+                    .conflict
+                    .as_ref()
+                    .map(|conflict| conflict.message.clone())
+            })
+            .flatten();
         let selected_code_for_toggle = selected_code.clone();
+        let selected_code_for_include = selected_code.clone();
+        let selected_code_for_exclude = selected_code.clone();
 
         div()
             .flex()
@@ -4513,19 +4547,56 @@ impl ProfileManagerView {
                             .child(title),
                     ),
             )
-            .child(
-                gpui_component::button::Button::new("toggle_selected_form")
-                    .label(if entry.is_filing_active() {
-                        "Exclude for this year"
-                    } else {
-                        "Include for this year"
-                    })
-                    .small()
-                    .ghost()
-                    .on_click(cx.listener(move |this, _event, _window, cx| {
-                        this.toggle_form_obligation(selected_code_for_toggle.clone(), cx);
-                    })),
-            )
+            .child(if entry.needs_review() {
+                div()
+                    .flex()
+                    .gap_2()
+                    .child(
+                        gpui_component::button::Button::new("include_reviewed_form")
+                            .label("Include for this year")
+                            .small()
+                            .on_click(cx.listener(move |this, _event, _window, cx| {
+                                this.decide_form_obligation(
+                                    selected_code_for_include.clone(),
+                                    true,
+                                    cx,
+                                );
+                            })),
+                    )
+                    .child(
+                        gpui_component::button::Button::new("exclude_reviewed_form")
+                            .label("Exclude for this year")
+                            .small()
+                            .ghost()
+                            .on_click(cx.listener(move |this, _event, _window, cx| {
+                                this.decide_form_obligation(
+                                    selected_code_for_exclude.clone(),
+                                    false,
+                                    cx,
+                                );
+                            })),
+                    )
+                    .into_any()
+            } else {
+                div()
+                    .child(
+                        gpui_component::button::Button::new("toggle_selected_form")
+                            .label(if entry.is_filing_active() {
+                                "Exclude for this year"
+                            } else {
+                                "Include for this year"
+                            })
+                            .small()
+                            .ghost()
+                            .on_click(cx.listener(move |this, _event, _window, cx| {
+                                this.toggle_form_obligation(
+                                    selected_code_for_toggle.clone(),
+                                    cx,
+                                );
+                            })),
+                    )
+                    .into_any()
+            })
             .when_some(review_message, |this, message| {
                 this.child(
                     div()

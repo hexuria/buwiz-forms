@@ -182,7 +182,8 @@ pub struct FormSetEntry {
     /// Explicit resolution state. Filing APIs exclude `NeedsReview` entries.
     #[serde(default)]
     pub review_status: FormSetReviewStatus,
-    /// Full competing evidence when `review_status` is `NeedsReview`.
+    /// Full competing evidence for an unresolved conflict. A manual resolution
+    /// changes `review_status` but retains this payload as audit provenance.
     #[serde(default)]
     pub conflict: Option<FormSetConflict>,
 }
@@ -244,15 +245,16 @@ impl FormSetEntry {
             && self.source_reference.is_none()
             && self.effective_from.is_none()
             && self.effective_until.is_none()
+            && self.conflict.is_none()
     }
 
-    /// Record a user-owned include/exclude decision, resolving any generated conflict.
+    /// Record a user-owned include/exclude decision while retaining generated
+    /// conflict evidence for audit.
     pub fn apply_manual_decision(&mut self, active: bool, reason: Option<String>) {
         self.active = active;
         self.source = FormSetSource::Manual;
         self.reason = reason;
         self.review_status = FormSetReviewStatus::Resolved;
-        self.conflict = None;
     }
 }
 
@@ -421,7 +423,6 @@ pub fn reconcile_forms_set_for_year(
                 let mut preserved = existing_entry.clone();
                 preserved.form_code = code.clone();
                 preserved.review_status = FormSetReviewStatus::Resolved;
-                preserved.conflict = None;
                 entries_by_code.insert(code.clone(), preserved);
                 preserved_manual.push(code.clone());
                 resolved_suggestions.remove(&code);
@@ -683,9 +684,11 @@ mod tests {
     fn manual_decision_resolves_and_survives_conflicting_refresh() {
         let mut include = FormSuggestion::active("2551Q", FormSuggestionSource::ReviewedCor);
         include.source_reference = Some("cor-page-1".into());
+        include.effective_from = NaiveDate::from_ymd_opt(2026, 1, 1);
         let mut exclude = include.clone();
         exclude.active = false;
         exclude.source_reference = Some("cor-page-2".into());
+        exclude.effective_from = NaiveDate::from_ymd_opt(2026, 7, 1);
         let suggestions = [include, exclude];
         let conflicted = reconcile_forms_set_for_year(2026, None, &suggestions);
         let mut existing = conflicted.forms_set;
@@ -698,9 +701,64 @@ mod tests {
         assert!(entry.is_filing_active());
         assert_eq!(entry.source, FormSetSource::Manual);
         assert!(!entry.needs_review());
-        assert!(entry.conflict.is_none());
+        assert_eq!(
+            entry.conflict.as_ref().map(|conflict| {
+                conflict
+                    .competing_suggestions
+                    .iter()
+                    .map(|suggestion| {
+                        (
+                            suggestion.source_reference.as_deref(),
+                            suggestion.effective_from,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            }),
+            Some(vec![
+                (Some("cor-page-2"), NaiveDate::from_ymd_opt(2026, 7, 1)),
+                (Some("cor-page-1"), NaiveDate::from_ymd_opt(2026, 1, 1)),
+            ])
+        );
         assert!(refreshed.conflicts.is_empty());
         assert_eq!(refreshed.preserved_manual, vec!["2551Q"]);
+    }
+
+    #[test]
+    fn manual_exclusion_resolves_conflict_and_retains_evidence() {
+        let mut include = FormSuggestion::active("2551Q", FormSuggestionSource::ReviewedCor);
+        include.source_reference = Some("cor-page-1".into());
+        include.effective_from = NaiveDate::from_ymd_opt(2026, 1, 1);
+        let mut exclude = include.clone();
+        exclude.active = false;
+        exclude.source_reference = Some("cor-page-2".into());
+        exclude.effective_from = NaiveDate::from_ymd_opt(2026, 7, 1);
+        let suggestions = [include, exclude];
+        let mut existing = reconcile_forms_set_for_year(2026, None, &suggestions).forms_set;
+
+        existing.entries[0]
+            .apply_manual_decision(false, Some("Accountant excluded this form".into()));
+        let refreshed = reconcile_forms_set_for_year(2026, Some(&existing), &suggestions);
+        let entry = refreshed.forms_set.entry("2551Q").unwrap();
+
+        assert_eq!(
+            (
+                entry.active,
+                entry.needs_review(),
+                entry.source,
+                entry
+                    .conflict
+                    .as_ref()
+                    .map(|conflict| conflict.competing_suggestions.len()),
+                refreshed.preserved_manual,
+            ),
+            (
+                false,
+                false,
+                FormSetSource::Manual,
+                Some(2),
+                vec!["2551Q".to_string()],
+            )
+        );
     }
 
     #[test]
