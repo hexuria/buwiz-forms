@@ -20,7 +20,8 @@ use sha2::{Digest, Sha256};
 use crate::html::{RenderEnvelopeV1, RENDER_CONTRACT_VERSION};
 use crate::html_forms::{render_layout_plan, RenderLayoutPlan};
 use crate::html_output::{
-    validate_pdf_bytes, HtmlOutputError, PdfExpectation, PdfValidationReport,
+    normalize_wkpdf_page_from_css_pixels, validate_pdf_bytes, HtmlOutputError, PdfExpectation,
+    PdfValidationReport,
 };
 use crate::html_support::{validate_renderer_geometry, RendererGeometryReport, RendererPageRect};
 
@@ -1102,7 +1103,7 @@ fn verify_wkpdf_completion(
             &page.sha256,
             &sha256_bytes(payload),
         )?;
-        captured_contents.push(verify_single_page_wkpdf(payload, page_number)?);
+        captured_contents.push(verify_single_page_wkpdf(payload, page_number, expectation)?);
     }
     Ok(captured_contents)
 }
@@ -1110,10 +1111,17 @@ fn verify_wkpdf_completion(
 fn verify_single_page_wkpdf(
     payload: &[u8],
     page_number: usize,
+    expectation: &PdfExpectation,
 ) -> Result<String, DevelopmentNativeOutputEvidenceError> {
-    let document = Document::load_mem(payload).map_err(|error| {
+    let normalized =
+        normalize_wkpdf_page_from_css_pixels(payload, expectation).map_err(|error| {
+            DevelopmentNativeOutputEvidenceError::Invalid(format!(
+                "WKPDF page {page_number} could not be normalized from CSS pixels: {error}"
+            ))
+        })?;
+    let document = Document::load_mem(&normalized).map_err(|error| {
         DevelopmentNativeOutputEvidenceError::Invalid(format!(
-            "WKPDF page {page_number} is not a valid PDF: {error}"
+            "normalized WKPDF page {page_number} is not a valid PDF: {error}"
         ))
     })?;
     reject_unsupported_pdf_visual_state(&document, &format!("WKPDF page {page_number}"))?;
@@ -1807,7 +1815,10 @@ mod tests {
 
     use super::*;
     use crate::html_forms::{render_form_provider, render_layout_plan, RenderFixtureKind};
-    use crate::html_output::{create_pdf_export_temp, finalize_pdf_export, merge_single_page_pdfs};
+    use crate::html_output::{
+        create_pdf_export_temp, finalize_pdf_export, merge_single_page_pdfs,
+        normalize_wkpdf_page_from_css_pixels,
+    };
 
     struct Fixture {
         _directory: tempfile::TempDir,
@@ -1867,11 +1878,19 @@ mod tests {
         };
 
         let page_payloads = (0..layout_plan.expected_page_count)
-            .map(|_| one_page_pdf(612, 936, b"q 1 0 0 1 0 0 cm Q"))
+            .map(|_| one_page_pdf(816, 1248, b"q 1 0 0 1 0 0 cm Q"))
+            .collect::<Vec<_>>();
+        let normalized_page_payloads = page_payloads
+            .iter()
+            .map(|page| {
+                normalize_wkpdf_page_from_css_pixels(page, &expectation)
+                    .expect("normalize synthetic WKPDF capture")
+            })
             .collect::<Vec<_>>();
         let output_pdf = directory.path().join("selected.pdf");
         let raw_temp = create_pdf_export_temp(&output_pdf).expect("export temp");
-        let merged = merge_single_page_pdfs(&page_payloads).expect("merge WKPDF captures");
+        let merged =
+            merge_single_page_pdfs(&normalized_page_payloads).expect("merge WKPDF captures");
         fs::write(&raw_temp, merged).expect("write merged platform PDF");
         let validation =
             finalize_pdf_export(&raw_temp, &output_pdf, &expectation).expect("finalized PDF");
@@ -2322,7 +2341,7 @@ mod tests {
             &fixture.layout_plan,
         )
         .expect_err("page semantics must remain bound to the WKPDF capture");
-        assert!(error.to_string().contains("not bound to its WKPDF capture"));
+        assert!(error.to_string().contains("unexpected rotation"));
     }
 
     fn replace_first_capture(fixture: &mut Fixture, mutate: impl FnOnce(&mut Document)) {
@@ -2334,6 +2353,36 @@ mod tests {
         fixture.transcript.wkpdf_completion.pages[0].byte_count = fixture.page_payloads[0].len();
         fixture.transcript.wkpdf_completion.pages[0].sha256 =
             sha256_bytes(&fixture.page_payloads[0]);
+    }
+
+    #[test]
+    fn rejects_raw_wkpdf_content_not_bound_to_final_normalized_page() {
+        let mut fixture = make_fixture();
+        replace_first_capture(&mut fixture, |capture| {
+            let page_id = *capture.get_pages().values().next().expect("capture page");
+            let content_id = capture
+                .get_dictionary(page_id)
+                .expect("capture page dictionary")
+                .get(b"Contents")
+                .expect("capture page content")
+                .as_reference()
+                .expect("capture content reference");
+            capture
+                .get_object_mut(content_id)
+                .expect("capture content object")
+                .as_stream_mut()
+                .expect("capture content stream")
+                .set_plain_content(b"q 1 0 0 1 42 0 cm Q".to_vec());
+        });
+
+        let error = verify_development_native_output_transcript(
+            &fixture.transcript,
+            &fixture.artifacts(),
+            &fixture.expectation,
+            &fixture.layout_plan,
+        )
+        .expect_err("normalized raw callback content must remain bound to final output");
+        assert!(error.to_string().contains("not bound to its WKPDF capture"));
     }
 
     #[test]
@@ -2360,7 +2409,7 @@ mod tests {
                 &fixture.layout_plan,
             )
             .expect_err("catalog-level visual state must fail closed");
-            assert!(error.to_string().contains("outside the page render graph"));
+            assert!(error.to_string().contains("unsupported catalog"));
         }
 
         let mut fixture = make_fixture();

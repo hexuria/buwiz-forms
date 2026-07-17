@@ -4,13 +4,13 @@ use bir_print::html::RenderEnvelopeV1;
 use bir_print::html_forms::RenderLayoutPlan;
 #[cfg(any(target_os = "macos", all(feature = "dev-tools", target_os = "windows")))]
 use bir_print::html_output::PdfValidationReport;
-#[cfg(target_os = "macos")]
-use bir_print::html_output::merge_single_page_pdfs;
 use bir_print::html_output::{
     HtmlOutputKind, HtmlOutputState, HtmlOutputTimeoutStage, PdfExpectation,
     create_pdf_export_temp, discard_pdf_export_temp, finalize_pdf_export,
     html_output_timeout_stage,
 };
+#[cfg(target_os = "macos")]
+use bir_print::html_output::{merge_single_page_pdfs, normalize_wkpdf_page_from_css_pixels};
 use bir_print::html_support::{
     HtmlRendererSupport, RendererGeometryReport, RendererPageRect, RendererReadinessDecision,
     bundled_html_renderer_support, renderer_host_plan, renderer_readiness_decision,
@@ -891,6 +891,17 @@ fn finalize_macos_pdf_capture(
     let result = pages
         .into_iter()
         .collect::<Result<Vec<_>, _>>()
+        .and_then(|pages| {
+            pages
+                .iter()
+                .enumerate()
+                .map(|(index, page)| {
+                    normalize_wkpdf_page_from_css_pixels(page, expectation).map_err(|error| {
+                        format!("captured page {} normalization failed: {error}", index + 1)
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()
+        })
         .and_then(|pages| merge_single_page_pdfs(&pages).map_err(|error| error.to_string()))
         .and_then(|merged| std::fs::write(temp_path, merged).map_err(|error| error.to_string()))
         .and_then(|()| {
@@ -3998,7 +4009,7 @@ mod tests {
         let objects = [
             "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
             "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 936] /CropBox [0 0 612 936] /Resources << >> /Contents 4 0 R >>".to_string(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 816 1248] /CropBox [0 0 816 1248] /Resources << >> /Contents 4 0 R >>".to_string(),
             format!(
                 "<< /Length {} >>\nstream\n{}endstream",
                 stream.len(),

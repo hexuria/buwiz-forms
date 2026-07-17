@@ -3,7 +3,7 @@
 //! Platform WebViews create the PDF bytes, but every platform hands the result
 //! through this module before a user-selected destination can be replaced.
 
-use lopdf::{dictionary, Dictionary, Document, Object, ObjectId};
+use lopdf::{dictionary, Dictionary, Document, Object, ObjectId, Stream};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -12,6 +12,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 const GEOMETRY_TOLERANCE_POINTS: f64 = 0.25;
+const WKPDF_CSS_PIXELS_PER_POINT: f64 = 96.0 / 72.0;
+const WKPDF_NORMALIZATION_MATRIX: &[u8] = b"q\n0.75 0 0 0.75 0 0 cm\n";
 const FORM_CODE_INFO_KEY: &[u8] = b"BirFormCode";
 const REVISION_INFO_KEY: &[u8] = b"BirFormRevision";
 const ENVELOPE_HASH_INFO_KEY: &[u8] = b"BirEnvelopeSha256";
@@ -247,6 +249,96 @@ pub fn validate_pdf_bytes(
     validate_pdf_document(&document, expectation)
 }
 
+/// Normalize one raw macOS `WKWebView.createPDF` page from CSS pixels to PDF points.
+///
+/// WebKit emits the configured DOM capture rectangle using one PDF point per
+/// CSS pixel. The renderer measures paper at 96 CSS pixels per inch, while PDF
+/// paper uses 72 points per inch. This function accepts only that exact 4:3
+/// source geometry, materializes the expected page boxes, and wraps the
+/// decoded vector content in a 0.75 coordinate transform.
+///
+/// # Errors
+///
+/// Returns an error for malformed or multi-page PDFs, pre-stamped evidence,
+/// arbitrary page geometry, nonzero rotation, external streams, interactive
+/// or alternate visual state, empty content, or serialization failure.
+pub fn normalize_wkpdf_page_from_css_pixels(
+    raw_page: &[u8],
+    expectation: &PdfExpectation,
+) -> Result<Vec<u8>, HtmlOutputError> {
+    expectation.validate()?;
+    let mut document = Document::load_mem(raw_page)
+        .map_err(|error| HtmlOutputError::InvalidPdf(error.to_string()))?;
+    ensure_reserved_evidence_absent(&document)?;
+    reject_unsupported_wkpdf_state(&document)?;
+
+    let pages = document.get_pages();
+    if pages.len() != 1 {
+        return Err(HtmlOutputError::PageCount {
+            expected: 1,
+            actual: pages.len(),
+        });
+    }
+    let (page_number, page_id) = pages
+        .into_iter()
+        .next()
+        .ok_or_else(|| HtmlOutputError::InvalidPdf("WKPDF capture has no page".to_string()))?;
+
+    let raw_width = expectation.width_points * WKPDF_CSS_PIXELS_PER_POINT;
+    let raw_height = expectation.height_points * WKPDF_CSS_PIXELS_PER_POINT;
+    let media_box = inherited_page_box(&document, page_id, b"MediaBox", page_number)?;
+    validate_page_geometry(page_number, "MediaBox", media_box, raw_width, raw_height)?;
+    // Per ISO 32000, an absent CropBox inherits the MediaBox. That is the
+    // exact shape emitted by WKWebView.createPDF on current macOS, so validate
+    // the effective CropBox rather than requiring a redundant dictionary key.
+    let crop_box = match inherited_page_value(&document, page_id, b"CropBox") {
+        Some(value) => parse_page_box(&document, value, page_number, "CropBox")?,
+        None => media_box,
+    };
+    validate_page_geometry(page_number, "CropBox", crop_box, raw_width, raw_height)?;
+    validate_zero_rotation(&document, page_id, page_number)?;
+
+    let content = document
+        .get_page_content(page_id)
+        .map_err(|error| HtmlOutputError::InvalidPdf(error.to_string()))?;
+    if content.iter().all(u8::is_ascii_whitespace) {
+        return Err(HtmlOutputError::EmptyPage { page: page_number });
+    }
+    let mut normalized_content =
+        Vec::with_capacity(WKPDF_NORMALIZATION_MATRIX.len() + content.len() + b"\nQ\n".len());
+    normalized_content.extend_from_slice(WKPDF_NORMALIZATION_MATRIX);
+    normalized_content.extend_from_slice(&content);
+    if !content.ends_with(b"\n") {
+        normalized_content.push(b'\n');
+    }
+    normalized_content.extend_from_slice(b"Q\n");
+    let content_id = document.add_object(Stream::new(dictionary! {}, normalized_content));
+    let page = document
+        .get_dictionary_mut(page_id)
+        .map_err(|error| HtmlOutputError::InvalidPdf(error.to_string()))?;
+    let normalized_box = vec![
+        Object::Integer(0),
+        Object::Integer(0),
+        pdf_number(expectation.width_points),
+        pdf_number(expectation.height_points),
+    ];
+    page.set("MediaBox", normalized_box.clone());
+    page.set("CropBox", normalized_box);
+    page.set("Rotate", 0);
+    page.set("Contents", content_id);
+
+    let mut normalized = Vec::new();
+    document
+        .save_to(&mut normalized)
+        .map_err(|error| HtmlOutputError::Io(std::io::Error::other(error.to_string())))?;
+    let normalized_document = Document::load_mem(&normalized)
+        .map_err(|error| HtmlOutputError::InvalidPdf(error.to_string()))?;
+    let mut page_expectation = expectation.clone();
+    page_expectation.expected_page_count = 1;
+    validate_pdf_structure(&normalized_document, &page_expectation)?;
+    Ok(normalized)
+}
+
 /// Merge platform captures that each contain exactly one page.
 ///
 /// WKWebView is intentionally captured one validated DOM rectangle at a time;
@@ -261,7 +353,8 @@ pub fn merge_single_page_pdfs(page_pdfs: &[Vec<u8>]) -> Result<Vec<u8>, HtmlOutp
 
     let mut merged = Document::with_version("1.7");
     let pages_root_id = merged.new_object_id();
-    let mut next_object_id = pages_root_id.0.saturating_add(1);
+    let catalog_id = merged.new_object_id();
+    let mut next_object_id = catalog_id.0.saturating_add(1);
     let mut merged_pages = BTreeMap::new();
 
     for (index, page_bytes) in page_pdfs.iter().enumerate() {
@@ -319,10 +412,13 @@ pub fn merge_single_page_pdfs(page_pdfs: &[Vec<u8>]) -> Result<Vec<u8>, HtmlOutp
             "Count" => page_ids.len() as i64,
         }),
     );
-    let catalog_id = merged.add_object(dictionary! {
-        "Type" => "Catalog",
-        "Pages" => pages_root_id,
-    });
+    merged.objects.insert(
+        catalog_id,
+        Object::Dictionary(dictionary! {
+            "Type" => "Catalog",
+            "Pages" => pages_root_id,
+        }),
+    );
     merged.trailer.set("Root", catalog_id);
     merged.max_id = merged
         .objects
@@ -432,21 +528,7 @@ fn validate_pdf_structure(
             expectation.height_points,
         )?;
 
-        if let Some(rotation) = inherited_page_value(document, page_id, b"Rotate") {
-            let rotation = object_number(document, rotation).ok_or_else(|| {
-                HtmlOutputError::InvalidPageBox {
-                    page: page_number,
-                    box_name: "Rotate",
-                    reason: "rotation must be a finite number".to_string(),
-                }
-            })?;
-            if rotation.abs() > f64::EPSILON {
-                return Err(HtmlOutputError::UnexpectedRotation {
-                    page: page_number,
-                    rotation,
-                });
-            }
-        }
+        validate_zero_rotation(document, page_id, page_number)?;
 
         let content = document
             .get_page_content(page_id)
@@ -553,6 +635,88 @@ fn ensure_reserved_evidence_absent(document: &Document) -> Result<(), HtmlOutput
         }
     }
     Ok(())
+}
+
+fn reject_unsupported_wkpdf_state(document: &Document) -> Result<(), HtmlOutputError> {
+    let catalog = document
+        .catalog()
+        .map_err(|error| HtmlOutputError::InvalidPdf(format!("WKPDF catalog: {error}")))?;
+    for (key, description) in [
+        (b"AcroForm".as_slice(), "catalog AcroForm state"),
+        (b"OCProperties".as_slice(), "catalog optional-content state"),
+        (b"OutputIntents".as_slice(), "catalog output-intent state"),
+        (b"OpenAction".as_slice(), "catalog open action"),
+        (b"AA".as_slice(), "catalog additional actions"),
+        (
+            b"ViewerPreferences".as_slice(),
+            "catalog viewer/print preferences",
+        ),
+    ] {
+        if catalog.has(key) {
+            return Err(HtmlOutputError::InvalidPdf(format!(
+                "WKPDF capture contains unsupported {description}"
+            )));
+        }
+    }
+    for (page_number, page_id) in document.get_pages() {
+        for (key, description) in [
+            (b"Annots".as_slice(), "annotations"),
+            (b"AA".as_slice(), "page additional actions"),
+            (b"UserUnit".as_slice(), "custom user units"),
+            (b"BleedBox".as_slice(), "BleedBox"),
+            (b"TrimBox".as_slice(), "TrimBox"),
+            (b"ArtBox".as_slice(), "ArtBox"),
+            (b"PresSteps".as_slice(), "presentation steps"),
+            (b"Trans".as_slice(), "page transitions"),
+            (b"Dur".as_slice(), "page duration"),
+        ] {
+            if inherited_page_value(document, page_id, key).is_some() {
+                return Err(HtmlOutputError::InvalidPdf(format!(
+                    "WKPDF page {page_number} contains unsupported {description}"
+                )));
+            }
+        }
+    }
+    if document
+        .objects
+        .values()
+        .chain(document.trailer.iter().map(|(_, value)| value))
+        .any(contains_external_stream)
+    {
+        return Err(HtmlOutputError::InvalidPdf(
+            "WKPDF capture contains an unsupported stream backed by external file data".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn contains_external_stream(root: &Object) -> bool {
+    let mut pending = vec![root];
+    while let Some(object) = pending.pop() {
+        match object {
+            Object::Array(values) => pending.extend(values),
+            Object::Dictionary(dictionary) => {
+                pending.extend(dictionary.iter().map(|(_, value)| value));
+            }
+            Object::Stream(stream) => {
+                if stream.dict.has(b"F")
+                    || stream.dict.has(b"FFilter")
+                    || stream.dict.has(b"FDecodeParms")
+                {
+                    return true;
+                }
+                pending.extend(stream.dict.iter().map(|(_, value)| value));
+            }
+            Object::Null
+            | Object::Boolean(_)
+            | Object::Integer(_)
+            | Object::Real(_)
+            | Object::Name(_)
+            | Object::String(_, _)
+            | Object::Reference(_) => {}
+        }
+    }
+    false
 }
 
 fn render_binding_hash(
@@ -900,6 +1064,37 @@ fn validate_page_geometry(
     Ok(())
 }
 
+fn validate_zero_rotation(
+    document: &Document,
+    page_id: ObjectId,
+    page_number: u32,
+) -> Result<(), HtmlOutputError> {
+    let Some(rotation) = inherited_page_value(document, page_id, b"Rotate") else {
+        return Ok(());
+    };
+    let rotation =
+        object_number(document, rotation).ok_or_else(|| HtmlOutputError::InvalidPageBox {
+            page: page_number,
+            box_name: "Rotate",
+            reason: "rotation must be a finite number".to_string(),
+        })?;
+    if rotation.abs() > f64::EPSILON {
+        return Err(HtmlOutputError::UnexpectedRotation {
+            page: page_number,
+            rotation,
+        });
+    }
+    Ok(())
+}
+
+fn pdf_number(value: f64) -> Object {
+    if value.fract().abs() <= f64::EPSILON && value <= i64::MAX as f64 {
+        Object::Integer(value as i64)
+    } else {
+        Object::Real(value as f32)
+    }
+}
+
 fn object_number(document: &Document, value: &Object) -> Option<f64> {
     let value = resolved_object(document, value)?;
     let number = match value {
@@ -1043,6 +1238,110 @@ mod tests {
         });
         document.trailer.set("Root", catalog_id);
         document.save(path).expect("test PDF should save");
+    }
+
+    fn pdf_bytes(page_count: usize, width: i64, height: i64, content: &[u8]) -> Vec<u8> {
+        let directory = tempfile::tempdir().expect("test PDF directory");
+        let path = directory.path().join("page.pdf");
+        write_pdf(&path, page_count, width, height, content);
+        fs::read(path).expect("test PDF bytes")
+    }
+
+    #[test]
+    fn normalizes_exact_wkpdf_css_pixel_page_to_expected_points() {
+        let expectation = expectation(2);
+        let raw = pdf_bytes(1, 816, 1248, b"0 0 m 100 100 l S");
+        let normalized = normalize_wkpdf_page_from_css_pixels(&raw, &expectation)
+            .expect("exact WKPDF CSS-pixel capture should normalize");
+        let document = Document::load_mem(&normalized).expect("normalized PDF");
+        let (page_number, page_id) = document
+            .get_pages()
+            .into_iter()
+            .next()
+            .expect("normalized page");
+        let media_box = inherited_page_box(&document, page_id, b"MediaBox", page_number)
+            .expect("normalized MediaBox");
+        let crop_box = parse_page_box(
+            &document,
+            inherited_page_value(&document, page_id, b"CropBox").expect("normalized CropBox"),
+            page_number,
+            "CropBox",
+        )
+        .expect("parse normalized CropBox");
+        let content = document
+            .get_page_content(page_id)
+            .expect("normalized vector content");
+
+        assert_eq!(
+            (media_box, crop_box, content),
+            (
+                [0.0, 0.0, 612.0, 936.0],
+                [0.0, 0.0, 612.0, 936.0],
+                b"q\n0.75 0 0 0.75 0 0 cm\n0 0 m 100 100 l S\nQ\n".to_vec(),
+            )
+        );
+    }
+
+    #[test]
+    fn rejects_already_normalized_wkpdf_page() {
+        let error = normalize_wkpdf_page_from_css_pixels(
+            &pdf_bytes(1, 612, 936, b"0 0 m 100 100 l S"),
+            &expectation(1),
+        )
+        .expect_err("already-normalized input must not be scaled twice");
+        assert!(matches!(error, HtmlOutputError::PageGeometry { .. }));
+    }
+
+    #[test]
+    fn rejects_wkpdf_page_with_arbitrary_geometry() {
+        let error = normalize_wkpdf_page_from_css_pixels(
+            &pdf_bytes(1, 800, 1200, b"0 0 m 100 100 l S"),
+            &expectation(1),
+        )
+        .expect_err("arbitrary WKPDF geometry must fail closed");
+        assert!(matches!(error, HtmlOutputError::PageGeometry { .. }));
+    }
+
+    #[test]
+    fn rejects_rotated_wkpdf_page_before_normalization() {
+        let raw = pdf_bytes(1, 816, 1248, b"0 0 m 100 100 l S");
+        let mut document = Document::load_mem(&raw).expect("raw WKPDF test page");
+        let page_id = *document
+            .get_pages()
+            .values()
+            .next()
+            .expect("raw WKPDF test page ID");
+        document
+            .get_dictionary_mut(page_id)
+            .expect("raw WKPDF page dictionary")
+            .set("Rotate", 90);
+        let mut rotated = Vec::new();
+        document.save_to(&mut rotated).expect("rotated WKPDF bytes");
+
+        let error = normalize_wkpdf_page_from_css_pixels(&rotated, &expectation(1))
+            .expect_err("rotated WKPDF capture must fail closed");
+        assert!(matches!(
+            error,
+            HtmlOutputError::UnexpectedRotation { rotation, .. } if rotation == 90.0
+        ));
+    }
+
+    #[test]
+    fn rejects_wkpdf_catalog_visual_state_before_normalization() {
+        let raw = pdf_bytes(1, 816, 1248, b"0 0 m 100 100 l S");
+        let mut document = Document::load_mem(&raw).expect("raw WKPDF test page");
+        document
+            .catalog_mut()
+            .expect("raw WKPDF catalog")
+            .set("AcroForm", dictionary! {});
+        let mut interactive = Vec::new();
+        document
+            .save_to(&mut interactive)
+            .expect("interactive WKPDF bytes");
+
+        let error = normalize_wkpdf_page_from_css_pixels(&interactive, &expectation(1))
+            .expect_err("interactive WKPDF capture must fail closed");
+        assert!(error.to_string().contains("unsupported catalog AcroForm"));
     }
 
     fn replace_first_page_content(path: &Path, content: &[u8]) {
@@ -1329,6 +1628,26 @@ mod tests {
             fs::read(second).expect("second capture should be readable"),
         ])
         .expect("captures should merge");
+        let merged = Document::load_mem(&bytes).expect("merged PDF should load");
+        assert_eq!(merged.get_pages().len(), 2);
+    }
+
+    #[test]
+    fn merges_normalized_wkpdf_pages_without_catalog_id_collision() {
+        let expectation = expectation(2);
+        let first = normalize_wkpdf_page_from_css_pixels(
+            &pdf_bytes(1, 816, 1248, b"q 1 0 0 1 1 1 cm Q"),
+            &expectation,
+        )
+        .expect("normalize first WKPDF page");
+        let second = normalize_wkpdf_page_from_css_pixels(
+            &pdf_bytes(1, 816, 1248, b"q 1 0 0 1 2 2 cm Q"),
+            &expectation,
+        )
+        .expect("normalize second WKPDF page");
+
+        let bytes =
+            merge_single_page_pdfs(&[first, second]).expect("normalized pages should merge");
         let merged = Document::load_mem(&bytes).expect("merged PDF should load");
         assert_eq!(merged.get_pages().len(), 2);
     }
