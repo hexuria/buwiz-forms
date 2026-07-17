@@ -24,6 +24,82 @@ pub enum LinuxHtmlHostStrategy {
     GtkTopLevel,
 }
 
+const REQUIRED_FORM_WIDTH_POINTS: f64 = 612.0;
+const REQUIRED_FORM_HEIGHT_POINTS: f64 = 936.0;
+
+/// Immutable GTK/WebKit print contract for the 8.5 x 13 inch BIR paper used by
+/// the HTML renderer. Keeping this part independent of GTK makes the required
+/// geometry testable on every development host, including macOS CI.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct LinuxNativePrintContract {
+    pub width_points: f64,
+    pub height_points: f64,
+    pub margin_top_points: f64,
+    pub margin_right_points: f64,
+    pub margin_bottom_points: f64,
+    pub margin_left_points: f64,
+    pub scale_percent: f64,
+    pub print_backgrounds: bool,
+    /// WebKitGTK's `WebKitPrintOperation` exposes page setup and GTK print
+    /// settings, but no browser-generated header/footer setting. The backend
+    /// must not invent an unsupported key; native output evidence must verify
+    /// the resulting document rather than claiming suppression from an API that
+    /// does not exist.
+    pub webkitgtk_exposes_header_footer_control: bool,
+}
+
+#[derive(Debug, thiserror::Error, Clone, PartialEq)]
+pub(super) enum LinuxNativePrintContractError {
+    #[error(
+        "Linux HTML output paper geometry must be finite and positive; got {width_points} x {height_points} points"
+    )]
+    InvalidGeometry {
+        width_points: f64,
+        height_points: f64,
+    },
+    #[error(
+        "Linux HTML output requires exactly 612 x 936 point (8.5 x 13 inch) paper; got {width_points} x {height_points} points"
+    )]
+    UnsupportedPaper {
+        width_points: f64,
+        height_points: f64,
+    },
+}
+
+pub(super) fn linux_native_print_contract(
+    width_points: f64,
+    height_points: f64,
+) -> Result<LinuxNativePrintContract, LinuxNativePrintContractError> {
+    if !width_points.is_finite()
+        || !height_points.is_finite()
+        || width_points <= 0.0
+        || height_points <= 0.0
+    {
+        return Err(LinuxNativePrintContractError::InvalidGeometry {
+            width_points,
+            height_points,
+        });
+    }
+    if width_points != REQUIRED_FORM_WIDTH_POINTS || height_points != REQUIRED_FORM_HEIGHT_POINTS {
+        return Err(LinuxNativePrintContractError::UnsupportedPaper {
+            width_points,
+            height_points,
+        });
+    }
+
+    Ok(LinuxNativePrintContract {
+        width_points,
+        height_points,
+        margin_top_points: 0.0,
+        margin_right_points: 0.0,
+        margin_bottom_points: 0.0,
+        margin_left_points: 0.0,
+        scale_percent: 100.0,
+        print_backgrounds: true,
+        webkitgtk_exposes_header_footer_control: false,
+    })
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum LinuxRendererRetryAction {
     Hidden,
@@ -312,6 +388,67 @@ mod tests {
             error
                 .to_string()
                 .contains("invalid Linux HTML host lifecycle")
+        );
+    }
+
+    #[test]
+    fn native_print_contract_is_exact_folio_with_zero_margins() {
+        let contract = linux_native_print_contract(8.5 * 72.0, 13.0 * 72.0)
+            .expect("the required BIR paper is accepted");
+
+        assert_eq!(contract.width_points, 612.0);
+        assert_eq!(contract.height_points, 936.0);
+        assert_eq!(contract.margin_top_points, 0.0);
+        assert_eq!(contract.margin_right_points, 0.0);
+        assert_eq!(contract.margin_bottom_points, 0.0);
+        assert_eq!(contract.margin_left_points, 0.0);
+        assert_eq!(contract.scale_percent, 100.0);
+        assert!(contract.print_backgrounds);
+        assert!(!contract.webkitgtk_exposes_header_footer_control);
+    }
+
+    #[test]
+    fn native_print_contract_rejects_other_or_non_finite_paper() {
+        assert!(matches!(
+            linux_native_print_contract(612.0, 792.0),
+            Err(LinuxNativePrintContractError::UnsupportedPaper { .. })
+        ));
+        assert!(matches!(
+            linux_native_print_contract(f64::NAN, 936.0),
+            Err(LinuxNativePrintContractError::InvalidGeometry { .. })
+        ));
+        assert!(matches!(
+            linux_native_print_contract(612.0, f64::INFINITY),
+            Err(LinuxNativePrintContractError::InvalidGeometry { .. })
+        ));
+    }
+
+    #[test]
+    fn explicit_x11_session_wins_over_a_stale_wayland_environment() {
+        let environment = environment(Some("x11"), Some("wayland-0"), Some(":0"), None);
+        assert_eq!(
+            select_linux_html_host(&environment),
+            Ok(LinuxHtmlHostStrategy::GpuiWryChild)
+        );
+    }
+
+    #[test]
+    fn x11_can_explicitly_use_the_application_owned_gtk_host() {
+        let environment = environment(Some("x11"), None, Some(":0"), Some(" GTK "));
+        assert_eq!(
+            select_linux_html_host(&environment),
+            Ok(LinuxHtmlHostStrategy::GtkTopLevel)
+        );
+    }
+
+    #[test]
+    fn invalid_host_override_fails_closed() {
+        let environment = environment(Some("x11"), None, Some(":0"), Some("browser"));
+        assert_eq!(
+            select_linux_html_host(&environment),
+            Err(LinuxHostSelectionError::InvalidOverride(
+                "browser".to_string()
+            ))
         );
     }
 }

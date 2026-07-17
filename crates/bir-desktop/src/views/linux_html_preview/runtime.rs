@@ -1,7 +1,7 @@
 use super::{
     LinuxDisplayEnvironment, LinuxHostLifecycle, LinuxHostLifecycleEvent, LinuxHtmlHostStrategy,
-    LinuxLifecycleError, LinuxRendererRetryAction, linux_renderer_retry_action,
-    select_linux_html_host,
+    LinuxLifecycleError, LinuxNativePrintContract, LinuxRendererRetryAction,
+    linux_native_print_contract, linux_renderer_retry_action, select_linux_html_host,
 };
 use crate::views::html_form_preview::{
     PreparedHtmlPreview, native_output_cleanup_script, native_print_preflight_script,
@@ -31,6 +31,7 @@ use std::cell::Cell;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 use webkit2gtk::{
@@ -485,10 +486,9 @@ fn configured_webview_builder(
         })
 }
 
-fn harden_webkit(webview: &webkit2gtk::WebView) {
-    let Some(settings) = WebKitWebViewExt::settings(webview) else {
-        return;
-    };
+fn harden_webkit(webview: &webkit2gtk::WebView) -> Result<(), String> {
+    let settings = WebKitWebViewExt::settings(webview)
+        .ok_or_else(|| "WebKitGTK did not expose renderer settings".to_string())?;
     settings.set_print_backgrounds(true);
     settings.set_enable_developer_extras(false);
     settings.set_enable_dns_prefetching(false);
@@ -505,39 +505,114 @@ fn harden_webkit(webview: &webkit2gtk::WebView) {
     settings.set_enable_webrtc(false);
     settings.set_javascript_can_access_clipboard(false);
     settings.set_javascript_can_open_windows_automatically(false);
+    if !settings.is_print_backgrounds() {
+        return Err("WebKitGTK refused to enable printed CSS backgrounds".to_string());
+    }
+    Ok(())
 }
 
 fn evaluate_script(webview: &webkit2gtk::WebView, script: &str) {
     webview.run_javascript(script, gio::Cancellable::NONE, |_| {});
 }
 
-fn page_setup(expectation: &PdfExpectation) -> gtk::PageSetup {
-    let paper = gtk::PaperSize::new_custom(
+fn custom_paper(contract: LinuxNativePrintContract) -> gtk::PaperSize {
+    gtk::PaperSize::new_custom(
         "ebirforms-folio",
         "eBIRForms 8.5 x 13 in",
-        expectation.width_points,
-        expectation.height_points,
+        contract.width_points,
+        contract.height_points,
         gtk::Unit::Points,
-    );
+    )
+}
+
+fn point_value_matches(actual: f64, expected: f64) -> bool {
+    actual.is_finite() && (actual - expected).abs() <= 0.001
+}
+
+fn page_setup(contract: LinuxNativePrintContract) -> Result<gtk::PageSetup, String> {
+    let paper = custom_paper(contract);
     let setup = gtk::PageSetup::new();
     setup.set_orientation(gtk::PageOrientation::Portrait);
     setup.set_paper_size(&paper);
-    setup.set_top_margin(0.0, gtk::Unit::Points);
-    setup.set_right_margin(0.0, gtk::Unit::Points);
-    setup.set_bottom_margin(0.0, gtk::Unit::Points);
-    setup.set_left_margin(0.0, gtk::Unit::Points);
-    setup
+    setup.set_top_margin(contract.margin_top_points, gtk::Unit::Points);
+    setup.set_right_margin(contract.margin_right_points, gtk::Unit::Points);
+    setup.set_bottom_margin(contract.margin_bottom_points, gtk::Unit::Points);
+    setup.set_left_margin(contract.margin_left_points, gtk::Unit::Points);
+    if setup.orientation() != gtk::PageOrientation::Portrait
+        || !point_value_matches(setup.paper_width(gtk::Unit::Points), contract.width_points)
+        || !point_value_matches(
+            setup.paper_height(gtk::Unit::Points),
+            contract.height_points,
+        )
+        || !point_value_matches(
+            setup.top_margin(gtk::Unit::Points),
+            contract.margin_top_points,
+        )
+        || !point_value_matches(
+            setup.right_margin(gtk::Unit::Points),
+            contract.margin_right_points,
+        )
+        || !point_value_matches(
+            setup.bottom_margin(gtk::Unit::Points),
+            contract.margin_bottom_points,
+        )
+        || !point_value_matches(
+            setup.left_margin(gtk::Unit::Points),
+            contract.margin_left_points,
+        )
+    {
+        return Err(
+            "GTK did not retain the required 612 x 936 point paper and zero margins".to_string(),
+        );
+    }
+    Ok(setup)
 }
 
-fn print_settings(expectation: &PdfExpectation) -> gtk::PrintSettings {
+fn print_settings(contract: LinuxNativePrintContract) -> Result<gtk::PrintSettings, String> {
     let settings = gtk::PrintSettings::new();
     settings.set_orientation(gtk::PageOrientation::Portrait);
-    settings.set_paper_width(expectation.width_points, gtk::Unit::Points);
-    settings.set_paper_height(expectation.height_points, gtk::Unit::Points);
-    settings.set_scale(100.0);
+    settings.set_paper_size(&custom_paper(contract));
+    settings.set_paper_width(contract.width_points, gtk::Unit::Points);
+    settings.set_paper_height(contract.height_points, gtk::Unit::Points);
+    settings.set_page_set(gtk::PageSet::All);
+    settings.set_print_pages(gtk::PrintPages::All);
+    settings.set_n_copies(1);
+    settings.set_number_up(1);
+    settings.set_scale(contract.scale_percent);
     settings.set_use_color(true);
-    settings.set_bool("print-backgrounds", true);
-    settings
+    // CSS backgrounds are a WebKitSettings property and are verified by
+    // `harden_webkit`; `GtkPrintSettings` has no standard background key.
+    // WebKitGTK's print operation also exposes no browser header/footer API,
+    // so there is no synthetic setting name to write here.
+    if settings.orientation() != gtk::PageOrientation::Portrait
+        || !point_value_matches(
+            settings.paper_width(gtk::Unit::Points),
+            contract.width_points,
+        )
+        || !point_value_matches(
+            settings.paper_height(gtk::Unit::Points),
+            contract.height_points,
+        )
+        || settings.page_set() != gtk::PageSet::All
+        || settings.print_pages() != gtk::PrintPages::All
+        || settings.n_copies() != 1
+        || settings.number_up() != 1
+        || !point_value_matches(settings.scale(), contract.scale_percent)
+        || !settings.uses_color()
+        || !contract.print_backgrounds
+        || contract.webkitgtk_exposes_header_footer_control
+    {
+        return Err("GTK did not retain the required native print settings".to_string());
+    }
+    Ok(settings)
+}
+
+fn native_print_configuration(
+    expectation: &PdfExpectation,
+) -> Result<(gtk::PageSetup, gtk::PrintSettings), String> {
+    let contract = linux_native_print_contract(expectation.width_points, expectation.height_points)
+        .map_err(|error| error.to_string())?;
+    Ok((page_setup(contract)?, print_settings(contract)?))
 }
 
 fn begin_system_print(
@@ -556,9 +631,16 @@ fn begin_system_print(
         );
         return;
     };
+    let (page_setup, print_settings) = match native_print_configuration(expectation) {
+        Ok(configuration) => configuration,
+        Err(error) => {
+            complete_output(&bridge, pending.nonce, render_epoch, Err(error));
+            return;
+        }
+    };
     let operation = webkit2gtk::PrintOperation::new(webview);
-    operation.set_page_setup(&page_setup(expectation));
-    operation.set_print_settings(&print_settings(expectation));
+    operation.set_page_setup(&page_setup);
+    operation.set_print_settings(&print_settings);
 
     let failed_bridge = bridge.clone();
     let nonce = pending.nonce;
@@ -617,7 +699,7 @@ fn begin_pdf_export(
     let output_uri = url::Url::from_file_path(&temp_path)
         .map_err(|_| format!("cannot convert {} to a file URI", temp_path.display()))?;
 
-    let settings = print_settings(&expectation);
+    let (page_setup, settings) = native_print_configuration(&expectation)?;
     settings.set_printer("Print to File");
     settings.set(
         gtk::PRINT_SETTINGS_OUTPUT_URI.as_str(),
@@ -626,7 +708,7 @@ fn begin_pdf_export(
     settings.set(gtk::PRINT_SETTINGS_OUTPUT_FILE_FORMAT.as_str(), Some("pdf"));
 
     let operation = webkit2gtk::PrintOperation::new(webview);
-    operation.set_page_setup(&page_setup(&expectation));
+    operation.set_page_setup(&page_setup);
     operation.set_print_settings(&settings);
 
     let completed = Rc::new(Cell::new(false));
@@ -1001,10 +1083,13 @@ fn launch_gtk_top_level(
     lifecycle: LinuxHostLifecycle,
 ) -> Result<(), LinuxHtmlPreviewError> {
     let (startup_tx, startup_rx) = mpsc::sync_channel(1);
+    let startup_cancelled = Arc::new(AtomicBool::new(false));
+    let thread_cancelled = startup_cancelled.clone();
     std::thread::Builder::new()
         .name("ebirforms-html-preview-gtk".to_string())
         .spawn(move || {
-            let result = run_gtk_top_level(prepared, lifecycle, &startup_tx);
+            let result =
+                run_gtk_top_level(prepared, lifecycle, &startup_tx, thread_cancelled.as_ref());
             if let Err(error) = result {
                 let _ = startup_tx.send(Err(error));
             }
@@ -1014,10 +1099,14 @@ fn launch_gtk_top_level(
     match startup_rx.recv_timeout(READINESS_TIMEOUT) {
         Ok(Ok(())) => Ok(()),
         Ok(Err(error)) => Err(LinuxHtmlPreviewError::Startup(error)),
-        Err(mpsc::RecvTimeoutError::Timeout) => Err(LinuxHtmlPreviewError::Startup(
-            "GTK/WebKit host initialization timed out".to_string(),
-        )),
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            startup_cancelled.store(true, Ordering::Release);
+            Err(LinuxHtmlPreviewError::Startup(
+                "GTK/WebKit host initialization timed out".to_string(),
+            ))
+        }
         Err(mpsc::RecvTimeoutError::Disconnected) => {
+            startup_cancelled.store(true, Ordering::Release);
             Err(LinuxHtmlPreviewError::StartupDisconnected)
         }
     }
@@ -1027,8 +1116,12 @@ fn run_gtk_top_level(
     prepared: PreparedHtmlPreview,
     lifecycle: LinuxHostLifecycle,
     startup_tx: &mpsc::SyncSender<Result<(), String>>,
+    startup_cancelled: &AtomicBool,
 ) -> Result<(), String> {
     gtk::init().map_err(|error| format!("GTK initialization failed: {error}"))?;
+    if startup_cancelled.load(Ordering::Acquire) {
+        return Err("GTK/WebKit host startup was cancelled".to_string());
+    }
     let lifecycle = lifecycle
         .transition(LinuxHostLifecycleEvent::Started)
         .map_err(|error| error.to_string())?;
@@ -1072,7 +1165,8 @@ fn run_gtk_top_level(
         .map_err(|error| format!("WebKitGTK host construction failed: {error}"))?;
     let webview = Rc::new(webview);
     let webkit = webview.webview();
-    harden_webkit(&webkit);
+    harden_webkit(&webkit)
+        .map_err(|error| format!("WebKitGTK renderer hardening failed: {error}"))?;
 
     let print_webkit = webkit.clone();
     let print_bridge = bridge.clone();
@@ -1166,6 +1260,7 @@ fn run_gtk_top_level(
         gtk::main_quit();
     });
 
+    let startup_shutdown_bridge = bridge.clone();
     let poll_bridge = bridge;
     let poll_webkit = webkit;
     let poll_window = window.clone();
@@ -1257,9 +1352,17 @@ fn run_gtk_top_level(
         glib::ControlFlow::Continue
     });
 
-    window.show_all();
+    if startup_cancelled.load(Ordering::Acquire) {
+        abandon_pending_output(&startup_shutdown_bridge);
+        return Err("GTK/WebKit host startup was cancelled".to_string());
+    }
     // The launcher waits only for construction, not for renderer readiness.
-    let _ = startup_tx.send(Ok(()));
+    // If its receiver has already timed out, do not leave a late ghost window
+    // running in an otherwise failed launch.
+    startup_tx
+        .send(Ok(()))
+        .map_err(|_| "GTK/WebKit host launcher disconnected".to_string())?;
+    window.show_all();
     gtk::main();
     Ok(())
 }
@@ -1288,13 +1391,19 @@ impl LinuxEmbeddedHtmlPreviewView {
             });
 
         let (webview, status) = match result {
-            Ok(webview) => {
-                harden_webkit(&webview.webview());
-                (
+            Ok(webview) => match harden_webkit(&webview.webview()) {
+                Ok(()) => (
                     Some(cx.new(|cx| GpuiWebView::new(webview, window, cx))),
                     "HTML renderer: preparing X11 child preview...".to_string(),
-                )
-            }
+                ),
+                Err(error) => {
+                    if let Ok(mut bridge) = bridge.lock() {
+                        bridge.renderer.error =
+                            Some(format!("X11 WebKit renderer hardening failed: {error}"));
+                    }
+                    (None, format!("Linux HTML renderer failed: {error}"))
+                }
+            },
             Err(error) => {
                 if let Ok(mut bridge) = bridge.lock() {
                     bridge.renderer.error = Some(format!(
@@ -1630,6 +1739,73 @@ mod tests {
             backend_started: false,
             binding: None,
         }
+    }
+
+    fn test_pdf_expectation(width_points: f64, height_points: f64) -> PdfExpectation {
+        PdfExpectation {
+            form_code: "2551Q".to_string(),
+            revision: "2018".to_string(),
+            envelope_hash: "a".repeat(64),
+            expected_page_count: 2,
+            width_points,
+            height_points,
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display; run under Xvfb in headless Linux CI"]
+    fn gtk_native_print_configuration_retains_exact_folio_contract() {
+        gtk::init().expect("GTK display initializes");
+        let (setup, settings) = native_print_configuration(&test_pdf_expectation(612.0, 936.0))
+            .expect("GTK retains the native BIR print contract");
+
+        assert_eq!(setup.orientation(), gtk::PageOrientation::Portrait);
+        assert!(point_value_matches(
+            setup.paper_width(gtk::Unit::Points),
+            612.0
+        ));
+        assert!(point_value_matches(
+            setup.paper_height(gtk::Unit::Points),
+            936.0
+        ));
+        assert!(point_value_matches(
+            setup.top_margin(gtk::Unit::Points),
+            0.0
+        ));
+        assert!(point_value_matches(
+            setup.right_margin(gtk::Unit::Points),
+            0.0
+        ));
+        assert!(point_value_matches(
+            setup.bottom_margin(gtk::Unit::Points),
+            0.0
+        ));
+        assert!(point_value_matches(
+            setup.left_margin(gtk::Unit::Points),
+            0.0
+        ));
+        assert_eq!(settings.orientation(), gtk::PageOrientation::Portrait);
+        assert!(point_value_matches(
+            settings.paper_width(gtk::Unit::Points),
+            612.0
+        ));
+        assert!(point_value_matches(
+            settings.paper_height(gtk::Unit::Points),
+            936.0
+        ));
+        assert_eq!(settings.page_set(), gtk::PageSet::All);
+        assert_eq!(settings.print_pages(), gtk::PrintPages::All);
+        assert_eq!(settings.n_copies(), 1);
+        assert_eq!(settings.number_up(), 1);
+        assert!(point_value_matches(settings.scale(), 100.0));
+        assert!(settings.uses_color());
+    }
+
+    #[test]
+    fn gtk_native_print_configuration_rejects_non_folio_geometry() {
+        let error = native_print_configuration(&test_pdf_expectation(612.0, 792.0))
+            .expect_err("letter paper must fail closed");
+        assert!(error.contains("exactly 612 x 936 point"));
     }
 
     fn ready_renderer(bridge: &Arc<Mutex<LinuxHostBridge>>, plan: &RenderLayoutPlan, epoch: u64) {
