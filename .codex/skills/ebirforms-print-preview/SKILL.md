@@ -29,9 +29,13 @@ Fix an already-migrated form through the owning layer. Do not create a second re
   official guide. Only a valid value longer than that field's official
   capacity switches to one plain text box in the same footprint, without
   truncation. Fit that plain text against its actual rendered field after the
-  bundled font loads: start at the reviewed normal size, reduce only in 0.5px
-  steps to the reviewed readable floor, and block preview/print/export if it
-  still does not fit. Never derive its font size from a character-count ratio.
+  bundled font loads: start at the field's reviewed normal maximum so wide
+  fields use readable type rather than inheriting the smaller comb-glyph size,
+  reduce only in 0.5px steps to the reviewed readable floor, and block
+  preview/print/export if it still does not fit. Prefer a reviewed wrapped
+  layout over crossing that floor only when the fixed row can contain it with
+  unchanged geometry and zero clipping. Never derive its font size from a
+  character-count ratio.
   Merged or gray non-applicable cells never receive comb guides.
   Keep explicit empty, short, exact-capacity, and capacity-plus-one tests for
   every adaptive field pattern that the renderer introduces.

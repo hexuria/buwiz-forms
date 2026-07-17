@@ -64,12 +64,16 @@ function Adaptive2551QValue({
   value,
   cells,
   align = "left",
-  className = ""
+  className = "",
+  maxFontSizePx = 13,
+  minFontSizePx = 10.5
 }: {
   value: string;
   cells: number;
   align?: "left" | "right";
   className?: string;
+  maxFontSizePx?: number;
+  minFontSizePx?: number;
 }) {
   return (
     <AdaptiveCombValue
@@ -78,8 +82,8 @@ function Adaptive2551QValue({
       align={align}
       className={className}
       fitToField
-      maxFontSizePx={9.6}
-      minFontSizePx={8}
+      maxFontSizePx={maxFontSizePx}
+      minFontSizePx={minFontSizePx}
       fontStepPx={.5}
     />
   );
@@ -634,7 +638,12 @@ function BackgroundInformation({
           <CheckChoice checked={!bool(envelope, "tax_relief")} label="No" />
         </div>
         <div className="tax-relief-spec"><b>12A</b> If yes, specify</div>
-        <Adaptive2551QValue value={text(envelope, "tax_relief_specification").toUpperCase()} cells={26} />
+        <Adaptive2551QValue
+          value={text(envelope, "tax_relief_specification").toUpperCase()}
+          cells={26}
+          className="tax-relief-overflow-value"
+          maxFontSizePx={11}
+        />
       </div>
       <div className="income-rate-field">
         <b>13</b>

@@ -118,6 +118,11 @@ body { margin: 0; }
   overflow-wrap: normal;
   white-space: nowrap;
 }
+
+.form-2551q-page-one .adaptive-plain-value.tax-relief-overflow-value {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
 .money-value { display: flex; width: 100%; min-height: 18pt; }
 .money-value .decimal-separator { display: grid; place-items: center; width: 14pt; background: #bbb; font-weight: 700; }
 .check-choice { display: inline-flex; align-items: center; gap: 3pt; white-space: nowrap; }

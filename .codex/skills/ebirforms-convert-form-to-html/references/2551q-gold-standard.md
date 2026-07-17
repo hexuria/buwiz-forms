@@ -27,6 +27,11 @@ Use 2551Q to understand the current HTML pipeline, not as evidence that another 
   derivation provenance; other forms must verify their own exact artwork rather
   than reuse 2551Q blindly.
 - Schedule 1 exercises deterministic multi-page behavior and capacity fixtures.
+- Overflow plain fields begin at 13px and step down by 0.5px only to the
+  reviewed 10.5px floor. The long address resolves to 12.5px. Item 12A alone
+  uses a reviewed two-line 11px maximum because its narrow fixed row contains
+  both lines without changing geometry; values that still cannot fit block
+  output.
 - Readiness measures geometry and reports overflow before native output.
 - Official pages are calibration-only.
 

@@ -846,7 +846,19 @@ test("2551Q plain-box overflow uses the largest readable font that fits the real
   await expect(values).toHaveCount(5);
   const measurements = await values.evaluateAll((elements) => elements.map((element) => {
     const fontSize = Number.parseFloat(getComputedStyle(element).fontSize);
-    const nextSize = Math.min(9.6, Math.round((fontSize + .5) * 10) / 10);
+    const maxFontSize = Number.parseFloat(
+      element.getAttribute("data-adaptive-max-font-px") ?? "NaN"
+    );
+    const minFontSize = Number.parseFloat(
+      element.getAttribute("data-adaptive-min-font-px") ?? "NaN"
+    );
+    const fontStep = Number.parseFloat(
+      element.getAttribute("data-adaptive-step-px") ?? "NaN"
+    );
+    const nextSize = Math.min(
+      maxFontSize,
+      Math.round((fontSize + fontStep) * 10) / 10
+    );
     const originalSize = element.style.fontSize;
     element.style.fontSize = `${nextSize}px`;
     const nextStepOverflows =
@@ -857,6 +869,9 @@ test("2551Q plain-box overflow uses the largest readable font that fits the real
       clientHeight: element.clientHeight,
       clientWidth: element.clientWidth,
       fontSize,
+      fontStep,
+      maxFontSize,
+      minFontSize,
       nextSize,
       nextStepOverflows,
       scrollHeight: element.scrollHeight,
@@ -868,30 +883,60 @@ test("2551Q plain-box overflow uses the largest readable font that fits the real
 
   for (const measurement of measurements) {
     expect(measurement.state, measurement.text).toBe("fit");
-    expect(measurement.fontSize, measurement.text).toBeGreaterThanOrEqual(8);
-    expect(measurement.fontSize, measurement.text).toBeLessThanOrEqual(9.6);
+    expect(measurement.fontStep, measurement.text).toBe(.5);
+    expect(measurement.fontSize, measurement.text)
+      .toBeGreaterThanOrEqual(measurement.minFontSize);
+    expect(measurement.fontSize, measurement.text)
+      .toBeLessThanOrEqual(measurement.maxFontSize);
     expect(measurement.scrollWidth, measurement.text)
       .toBeLessThanOrEqual(measurement.clientWidth + 1);
     expect(measurement.scrollHeight, measurement.text)
       .toBeLessThanOrEqual(measurement.clientHeight + 1);
-    if (measurement.fontSize < 9.6) {
+    if (measurement.fontSize < measurement.maxFontSize) {
       expect(measurement.nextStepOverflows, measurement.text).toBe(true);
     }
   }
 
+  const expectedFontSizes = [
+    [".name-field > .adaptive-plain-value", "13.0"],
+    [".address-field > .adaptive-plain-value", "12.5"],
+    [".contact-email-field > .adaptive-plain-value", "13.0"],
+    [".tax-relief-field > .adaptive-plain-value", "11.0"],
+    [".page-two-identity > .adaptive-plain-value", "13.0"]
+  ] as const;
+  for (const [selector, fontSize] of expectedFontSizes) {
+    await expect(page.locator(selector)).toHaveAttribute(
+      "data-adaptive-font-size-px",
+      fontSize
+    );
+  }
+
+  expect(await page.locator(
+    ".tax-relief-field > .adaptive-plain-value"
+  ).evaluate((element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    return range.getClientRects().length;
+  })).toBeGreaterThanOrEqual(2);
+
   const pageTwoName = page.locator(
     ".page-two-identity > .adaptive-plain-value"
   );
-  await expect(pageTwoName).toHaveAttribute("data-adaptive-font-size-px", "9.6");
+  await expect(pageTwoName).toHaveAttribute("data-adaptive-font-size-px", "13.0");
   await pageTwoName.evaluate((element) => {
-    element.style.width = "320px";
+    element.style.width = "400px";
   });
-  await expect(pageTwoName).toHaveAttribute("data-adaptive-font-size-px", "8.6");
   await expect(pageTwoName).toHaveAttribute("data-adaptive-fit-state", "fit");
+  expect(Number.parseFloat(
+    await pageTwoName.getAttribute("data-adaptive-font-size-px") ?? "NaN"
+  )).toBeLessThan(13);
+  expect(Number.parseFloat(
+    await pageTwoName.getAttribute("data-adaptive-font-size-px") ?? "NaN"
+  )).toBeGreaterThanOrEqual(10.5);
   await pageTwoName.evaluate((element) => {
     element.style.width = "";
   });
-  await expect(pageTwoName).toHaveAttribute("data-adaptive-font-size-px", "9.6");
+  await expect(pageTwoName).toHaveAttribute("data-adaptive-font-size-px", "13.0");
 
   const unfitFixture = structuredClone(fixture) as {
     taxpayer: { name: string };
@@ -906,7 +951,7 @@ test("2551Q plain-box overflow uses the largest readable font that fits the real
   );
   await expect(unfitNames).toHaveCount(2);
   for (const unfitName of await unfitNames.all()) {
-    await expect(unfitName).toHaveAttribute("data-adaptive-font-size-px", "8.0");
+    await expect(unfitName).toHaveAttribute("data-adaptive-font-size-px", "10.5");
     await expect(unfitName).toHaveAttribute("data-adaptive-fit-state", "unresolved");
   }
   const unfitGeometry = await page.evaluate(() => (
