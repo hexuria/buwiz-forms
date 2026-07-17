@@ -706,22 +706,36 @@ impl Form2551QView {
 
     fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.sync_from_inputs(cx);
-        if let Ok(db) = self.db.lock() {
-            let _ = db.save_2551q_draft(&self.draft);
-            tracing::info!(
-                draft_id = ?self.draft.id,
-                status = ?self.draft.status,
-                "Form saved to database"
-            );
-            use gpui_component::WindowExt;
-            window.push_notification(
+        let save_result = match self.db.lock() {
+            Ok(db) => db
+                .save_2551q_draft(&self.draft)
+                .map_err(|error| error.to_string()),
+            Err(_) => Err("The form database is temporarily unavailable".to_string()),
+        };
+        use gpui_component::WindowExt;
+        match save_result {
+            Ok(_) => {
+                tracing::info!(
+                    draft_id = ?self.draft.id,
+                    status = ?self.draft.status,
+                    "Form saved to database"
+                );
+                window.push_notification(
+                    gpui_component::notification::Notification::new()
+                        .message("Form saved.".to_string())
+                        .with_type(gpui_component::notification::NotificationType::Success)
+                        .autohide(true),
+                    cx,
+                );
+                cx.emit(Form2551QEvent::Saved);
+            }
+            Err(error) => window.push_notification(
                 gpui_component::notification::Notification::new()
-                    .message("Form saved.".to_string())
-                    .with_type(gpui_component::notification::NotificationType::Success)
-                    .autohide(true),
+                    .message(format!("Form was not saved: {error}"))
+                    .with_type(gpui_component::notification::NotificationType::Error)
+                    .autohide(false),
                 cx,
-            );
-            cx.emit(Form2551QEvent::Saved);
+            ),
         }
     }
 
@@ -812,9 +826,21 @@ impl Form2551QView {
         if !matches!(self.draft.status, FilingStatus::Confirmed) {
             return; // Guard: only Confirmed forms can be marked as Paid
         }
+        let before_transition = self.draft.clone();
         self.draft.transition_to_paid();
-        if let Ok(db) = self.db.lock() {
-            let _ = db.save_2551q_draft(&self.draft);
+        let save_result = match self.db.lock() {
+            Ok(db) => db
+                .save_2551q_draft(&self.draft)
+                .map_err(|error| error.to_string()),
+            Err(_) => Err("The form database is temporarily unavailable".to_string()),
+        };
+        if let Err(error) = save_result {
+            self.draft = before_transition;
+            self.status_message = Some(format!(
+                "The return remains Confirmed because Paid status could not be saved: {error}"
+            ));
+            cx.notify();
+            return;
         }
         self.status_message = Some("Paid. Filing complete.".to_string());
         cx.emit(Form2551QEvent::Saved);
@@ -1092,13 +1118,23 @@ impl Form2551QView {
                                 || self.draft.submission_filename.as_deref()
                                     == Some(&saved.filename)
                             {
+                                let before_confirmation = self.draft.clone();
                                 self.draft.transition_to_confirmed(
                                     format!("{}T{}", saved.received_date, saved.received_time),
                                     saved.id,
                                     Some(saved.filename),
                                 );
-                                let _ = db.save_2551q_draft(&self.draft);
-                                cx.emit(Form2551QEvent::Confirmed);
+                                match db.save_2551q_draft(&self.draft) {
+                                    Ok(_) => cx.emit(Form2551QEvent::Confirmed),
+                                    Err(error) => {
+                                        self.draft = before_confirmation;
+                                        self.status_message = Some(format!(
+                                            "Receipt was imported, but Confirmed status could not be saved: {error}"
+                                        ));
+                                        cx.notify();
+                                        return;
+                                    }
+                                }
                             }
                             self.status_message = Some("Receipt imported".to_string());
                         }
@@ -1258,25 +1294,67 @@ impl Form2551QView {
                 .parent()
                 .unwrap()
                 .join("receipts");
-            let _ = std::fs::create_dir_all(&data_dir);
             let ext = file.extension().and_then(|s| s.to_str()).unwrap_or("bin");
-            let new_filename = format!("receipt-{}-{}-{}.{}", tin, year, quarter, ext);
+            let new_filename = format!(
+                "receipt-{}-{}-{}-{}.{}",
+                tin,
+                year,
+                quarter,
+                uuid::Uuid::new_v4(),
+                ext
+            );
             let new_path = data_dir.join(new_filename);
 
-            let copy_result = std::fs::read(&file).and_then(|data| std::fs::write(&new_path, data));
+            let copy_result = std::fs::create_dir_all(&data_dir)
+                .and_then(|_| std::fs::read(&file))
+                .and_then(|data| std::fs::write(&new_path, data));
             match copy_result {
                 Ok(_) => {
                     let path_str = new_path.to_string_lossy().to_string();
-                    let _ = this.update(cx, |this, cx| {
+                    let copied_path = new_path.clone();
+                    let cleanup_path = copied_path.clone();
+                    let update_result = this.update(cx, |this, cx| {
+                        let previous_path = this.draft.payment_receipt_path.clone();
                         this.draft.payment_receipt_path = Some(path_str);
-                        if let Ok(db) = this.db.lock() {
-                            let _ = db.save_2551q_draft(&this.draft);
+                        let save_result = match this.db.lock() {
+                            Ok(db) => db
+                                .save_2551q_draft(&this.draft)
+                                .map_err(|error| error.to_string()),
+                            Err(_) => {
+                                Err("The form database is temporarily unavailable".to_string())
+                            }
+                        };
+                        if let Err(error) = save_result {
+                            this.draft.payment_receipt_path = previous_path;
+                            if let Err(cleanup_error) = std::fs::remove_file(&copied_path) {
+                                tracing::warn!(
+                                    %cleanup_error,
+                                    path = %copied_path.display(),
+                                    "Failed to remove an unreferenced receipt copy"
+                                );
+                            }
+                            this.status_message = Some(format!(
+                                "Receipt was copied but could not be attached to the return: {error}"
+                            ));
                         }
                         cx.notify();
                     });
+                    if update_result.is_err()
+                        && let Err(cleanup_error) = std::fs::remove_file(&cleanup_path)
+                    {
+                        tracing::warn!(
+                            %cleanup_error,
+                            path = %cleanup_path.display(),
+                            "Failed to remove a receipt copy after its form closed"
+                        );
+                    }
                 }
                 Err(e) => {
                     tracing::warn!(error_bytes = e.to_string().len(), "Failed to copy receipt");
+                    let _ = this.update(cx, |this, cx| {
+                        this.status_message = Some(format!("Receipt upload failed: {e}"));
+                        cx.notify();
+                    });
                 }
             }
         })
@@ -2642,10 +2720,27 @@ impl Render for Form2551QView {
                                             .child(
                                                 gpui_component::button::Button::new("mark_confirmed_manually_btn")
                                                     .label("Mark as Confirmed Manually")
-                                                    .on_click(cx.listener(|this, _, _window, cx| {
+                                                    .on_click(cx.listener(|this, _, window, cx| {
+                                                        let before_confirmation = this.draft.clone();
                                                         this.draft.status = FilingStatus::Confirmed;
-                                                        if let Ok(db) = this.db.lock() {
-                                                            let _ = db.save_2551q_draft(&this.draft);
+                                                        let save_result = match this.db.lock() {
+                                                            Ok(db) => db
+                                                                .save_2551q_draft(&this.draft)
+                                                                .map_err(|error| error.to_string()),
+                                                            Err(_) => Err("The form database is temporarily unavailable".to_string()),
+                                                        };
+                                                        use gpui_component::WindowExt;
+                                                        if let Err(error) = save_result {
+                                                            this.draft = before_confirmation;
+                                                            window.push_notification(
+                                                                gpui_component::notification::Notification::new()
+                                                                    .message(format!("Confirmed status was not saved: {error}"))
+                                                                    .with_type(gpui_component::notification::NotificationType::Error)
+                                                                    .autohide(false),
+                                                                cx,
+                                                            );
+                                                            cx.notify();
+                                                            return;
                                                         }
                                                         cx.emit(Form2551QEvent::Confirmed);
                                                         cx.notify();
