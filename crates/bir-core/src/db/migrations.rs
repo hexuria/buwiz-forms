@@ -288,10 +288,6 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
                 migrate_v9_per_year_forms_heal(conn)?;
             }
 
-            if version == 11 {
-                migrate_v11_forms_set_provenance(conn)?;
-            }
-
             if version == 12 {
                 migrate_v12_profile_version_ledger(conn)?;
             }
@@ -303,6 +299,11 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
             break;
         }
     }
+
+    // Heal partially upgraded databases even when their user_version already
+    // reports the current schema. Early builds could advance past v11 after
+    // adding only a subset of these columns.
+    migrate_v11_forms_set_provenance(conn)?;
 
     Ok(())
 }
@@ -430,6 +431,7 @@ fn migrate_v11_forms_set_provenance(conn: &Connection) -> Result<(), DbError> {
             .collect::<Result<std::collections::BTreeSet<_>, _>>()?
     };
 
+    let mut added_columns = 0usize;
     for (column, definition) in [
         ("source_reference", "TEXT"),
         ("effective_from", "TEXT"),
@@ -442,10 +444,16 @@ fn migrate_v11_forms_set_provenance(conn: &Connection) -> Result<(), DbError> {
                 &format!("ALTER TABLE per_year_forms ADD COLUMN {column} {definition}"),
                 [],
             )?;
+            added_columns += 1;
         }
     }
 
-    info!("v11 migration: added Forms Set provenance and conflict state");
+    if added_columns > 0 {
+        info!(
+            "v11 migration: added {} missing Forms Set provenance columns",
+            added_columns
+        );
+    }
     Ok(())
 }
 
@@ -1102,6 +1110,86 @@ mod tests {
             .unwrap();
 
         assert_eq!(row, ("resolved".into(), None, None, None));
+    }
+
+    #[test]
+    fn test_current_version_heals_partial_forms_set_schema_without_losing_data() {
+        let conn = test_conn();
+        conn.execute_batch(
+            "CREATE TABLE per_year_forms (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tin TEXT NOT NULL,
+                taxable_year INTEGER NOT NULL,
+                form_code TEXT NOT NULL,
+                frequency TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1,
+                source TEXT NOT NULL,
+                custom INTEGER NOT NULL DEFAULT 0,
+                reason TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                source_reference TEXT,
+                UNIQUE(tin, taxable_year, form_code)
+            );
+            INSERT INTO per_year_forms
+                (tin, taxable_year, form_code, frequency, active, source, custom, reason,
+                 source_reference)
+            VALUES
+                ('27447643300000', 2026, '2551Q', 'quarterly', 1, 'reviewed_cor', 0,
+                 'Existing reviewed decision', 'cor-document-1');
+            PRAGMA user_version = 13;",
+        )
+        .unwrap();
+
+        migrate_database(&conn).unwrap();
+        migrate_database(&conn).unwrap();
+
+        let row: (
+            String,
+            i64,
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            String,
+            Option<String>,
+        ) = conn
+            .query_row(
+                "SELECT tin, taxable_year, form_code, reason, source_reference,
+                        effective_from, effective_until, review_status, conflict_json
+                 FROM per_year_forms WHERE form_code = '2551Q'",
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                        row.get(6)?,
+                        row.get(7)?,
+                        row.get(8)?,
+                    ))
+                },
+            )
+            .unwrap();
+
+        assert_eq!(
+            row,
+            (
+                "27447643300000".to_string(),
+                2026,
+                "2551Q".to_string(),
+                "Existing reviewed decision".to_string(),
+                Some("cor-document-1".to_string()),
+                None,
+                None,
+                "resolved".to_string(),
+                None,
+            )
+        );
     }
 
     #[test]
