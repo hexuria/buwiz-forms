@@ -172,6 +172,7 @@
   align-items: center;
   justify-content: space-evenly;
   min-width: 0;
+  background: #d9d9d9;
 }
 .header-option-0619e .check-box {
   width: 13pt;
@@ -196,8 +197,10 @@
 .header-option-0619e > :is(.month-value-0619e, .due-date-value-0619e) > .comb-value {
   width: 100%;
   height: 100%;
+  background: #fff;
 }
 .header-option-0619e .code-value-0619e {
+  background: #fff;
   font-size: 11.5pt;
   justify-content: center;
 }
@@ -245,6 +248,13 @@
   background: #d9d9d9;
   font-style: normal;
 }
+.rdo-value-0619e {
+  display: grid;
+  grid-template-columns: 43.5pt minmax(0, 1fr);
+  min-width: 0;
+}
+.rdo-value-0619e > .comb-value { height: 100%; }
+.rdo-value-0619e > i { background: #d9d9d9; }
 .label-value-0619e { width: 100%; }
 .label-0619e {
   display: flex;
@@ -301,6 +311,7 @@
   display: flex;
   align-items: center;
   justify-content: space-evenly;
+  background: #d9d9d9;
 }
 .category-choices-0619e .check-box {
   width: 13pt;
@@ -437,6 +448,10 @@
 .signature-footer-0619e > .adaptive-plain-value {
   height: 100%;
 }
+.signature-footer-0619e > .adaptive-plain-value {
+  padding: 0 3pt;
+  white-space: nowrap;
+}
 
 .payment-0619e {
   width: 577pt;
@@ -477,16 +492,20 @@
   border-right: .6pt solid #000;
 }
 .payment-row-0619e > *:last-child { border-right: 0; }
-.payment-row-0619e > span:first-child {
+.payment-row-0619e > .payment-label-0619e {
   display: flex;
   align-items: center;
-  gap: 4pt;
-  padding-left: 5pt;
+  gap: 2pt;
+  padding-left: 3pt;
+  background: #d9d9d9;
+  font-size: 7.6pt;
+  white-space: nowrap;
+}
+.payment-tax-debit-0619e > .payment-label-0619e { border-right: 0; }
+.payment-row-0619e > .payment-nonapplicable-0619e {
   background: #d9d9d9;
 }
-.payment-row-0619e[data-payment-row="payment_21"] > :nth-child(2) {
-  background: #d9d9d9;
-}
+.payment-other-0619e > :first-child { background: #fff; }
 .payment-row-0619e > .comb-value:nth-child(4),
 .payment-row-0619e > .adaptive-plain-value:nth-child(4) {
   position: relative;

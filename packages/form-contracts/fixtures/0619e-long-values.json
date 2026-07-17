@@ -66,11 +66,11 @@
     },
     "payment_19_drawee_bank_or_agency": {
       "type": "text",
-      "value": "AUTHORIZED AGENT BANK LONG BRANCH NAME"
+      "value": "AAB-01"
     },
     "payment_19_number": {
       "type": "text",
-      "value": "PAYMENT-REFERENCE-0619E-2026-0000000001"
+      "value": "PAY-001"
     },
     "payment_20_amount": {
       "type": "decimal",
@@ -158,7 +158,7 @@
     },
     "tax_agent_accreditation_number": {
       "type": "text",
-      "value": "LONG-TAX-AGENT-ACCREDITATION-REFERENCE-0619E"
+      "value": "12-3456-789-0619E"
     },
     "tax_agent_date_of_expiry": {
       "type": "text",

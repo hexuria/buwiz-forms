@@ -408,11 +408,9 @@ fn long_values_fixture() -> Result<Form0619EDraft, RenderProviderError> {
     draft
         .payment_details
         .cash_or_bank_debit_memo
-        .drawee_bank_or_agency = "AUTHORIZED AGENT BANK LONG BRANCH NAME".to_string();
-    draft.payment_details.cash_or_bank_debit_memo.number =
-        "PAYMENT-REFERENCE-0619E-2026-0000000001".to_string();
-    draft.tax_agent_accreditation_number =
-        "LONG-TAX-AGENT-ACCREDITATION-REFERENCE-0619E".to_string();
+        .drawee_bank_or_agency = "AAB-01".to_string();
+    draft.payment_details.cash_or_bank_debit_memo.number = "PAY-001".to_string();
+    draft.tax_agent_accreditation_number = "12-3456-789-0619E".to_string();
     draft.recompute();
     Ok(draft)
 }
@@ -432,7 +430,7 @@ fn payment_fixture() -> Result<Form0619EDraft, RenderProviderError> {
     let mut draft = normal_fixture()?;
     draft.payment_details.cash_or_bank_debit_memo = payment_row("AAB", "BDM-001", 31_000.0);
     draft.payment_details.check = payment_row("DBP", "CHECK-002", 31_000.0);
-    draft.payment_details.tax_debit_memo = payment_row("BIR", "TDM-003", 31_000.0);
+    draft.payment_details.tax_debit_memo = payment_row("", "TDM-003", 31_000.0);
     draft.payment_details.others = payment_row("RCO", "OTHER-004", 31_250.0);
     draft.payment_details.others_description = "REVENUE COLLECTION OFFICER".to_string();
     Ok(draft)

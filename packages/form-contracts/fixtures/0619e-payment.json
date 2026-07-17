@@ -106,7 +106,7 @@
     },
     "payment_21_drawee_bank_or_agency": {
       "type": "text",
-      "value": "BIR"
+      "value": ""
     },
     "payment_21_number": {
       "type": "text",

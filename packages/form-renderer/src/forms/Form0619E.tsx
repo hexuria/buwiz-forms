@@ -3,6 +3,7 @@ import { getFormSpec } from "@ebirforms/form-specs";
 import type { ReactNode } from "react";
 import {
   AdaptiveCombValue,
+  AdaptivePlainValue,
   CheckChoice,
   CombValue,
   FolioPage,
@@ -146,7 +147,7 @@ function HeaderOptions0619E({ envelope }: { envelope: RenderEnvelope }) {
         label={<><b>2</b> Due Date <em>(MM/DD/YYYY)</em></>}
         valueClassName="due-date-value-0619e"
       >
-        <AdaptiveCombValue value={text(envelope, "due_date").replace(/\D/g, "")} cells={8} align="right" />
+        <AdaptiveComb0619E value={text(envelope, "due_date").replace(/\D/g, "")} cells={8} align="right" />
       </HeaderOption0619E>
       <HeaderOption0619E label={<><b>3</b> Amended Form?</>}>
         <CheckChoice checked={bool(envelope, "is_amended")} label="Yes" />
@@ -198,7 +199,10 @@ function BackgroundInformation0619E({ envelope }: { envelope: RenderEnvelope }) 
         <div><b>7</b> Taxpayer Identification Number (TIN)</div>
         <Tin0619E segments={tinSegments} />
         <div><b>8</b> RDO Code</div>
-        <CombValue value={envelope.taxpayer.rdo_code} cells={3} align="right" />
+        <span className="rdo-value-0619e">
+          <CombValue value={envelope.taxpayer.rdo_code} cells={3} align="right" />
+          <i aria-hidden="true" />
+        </span>
       </div>
       <LabelValue0619E
         number="9"
@@ -211,16 +215,16 @@ function BackgroundInformation0619E({ envelope }: { envelope: RenderEnvelope }) 
         <div className="label-0619e">
           <b>10</b> Registered Address <em>(Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)</em>
         </div>
-        <AdaptiveCombValue value={envelope.taxpayer.registered_address.toUpperCase()} cells={40} />
+        <AdaptiveComb0619E value={envelope.taxpayer.registered_address.toUpperCase()} cells={40} />
         <div className="address-second-0619e">
-          <AdaptiveCombValue value={text(envelope, "registered_address_2").toUpperCase()} cells={31} />
+          <AdaptiveComb0619E value={text(envelope, "registered_address_2").toUpperCase()} cells={31} />
           <span><b>10A</b> ZIP Code</span>
           <CombValue value={envelope.taxpayer.zip_code} cells={4} align="right" />
         </div>
       </div>
       <div className="contact-category-0619e">
         <div><b>11</b> Contact Number</div>
-        <AdaptiveCombValue value={envelope.taxpayer.contact_number.replace(/\D/g, "")} cells={12} />
+        <AdaptiveComb0619E value={envelope.taxpayer.contact_number.replace(/\D/g, "")} cells={12} />
         <div><b>12</b> Category of Withholding Agent</div>
         <span className="category-choices-0619e">
           <CheckChoice checked={category === "private"} label="Private" />
@@ -290,7 +294,7 @@ function LabelValue0619E({
   return (
     <div className={`label-value-0619e ${className}`}>
       <div className="label-0619e"><b>{number}</b> {label}</div>
-      <AdaptiveCombValue value={value} cells={cells} />
+      <AdaptiveComb0619E value={value} cells={cells} />
     </div>
   );
 }
@@ -328,7 +332,7 @@ function MoneyComb0619E({ value }: { value: number | null }) {
   const [whole, fraction] = formatMoneyParts(value);
   if (Array.from(whole).length > 11) {
     return (
-      <AdaptiveCombValue
+      <AdaptiveComb0619E
         value={`${whole}.${fraction}`}
         cells={14}
         align="right"
@@ -361,11 +365,20 @@ function Declaration0619E({ envelope }: { envelope: RenderEnvelope }) {
       </div>
       <div className="signature-footer-0619e">
         <span>Tax Agent Accreditation No./<br />Attorney’s Roll No. <em>(if applicable)</em></span>
-        <AdaptiveCombValue value={text(envelope, "tax_agent_accreditation_number")} cells={18} />
+        <AdaptivePlainValue
+          value={text(envelope, "tax_agent_accreditation_number")}
+          className="tax-agent-number-plain-0619e"
+        />
         <span>Date of Issue<br /><em>(MM/DD/YYYY)</em></span>
-        <AdaptiveCombValue value={text(envelope, "tax_agent_date_of_issue").replace(/\D/g, "")} cells={8} />
+        <AdaptivePlainValue
+          value={text(envelope, "tax_agent_date_of_issue")}
+          className="tax-agent-date-plain-0619e"
+        />
         <span>Date of Expiry<br /><em>(MM/DD/YYYY)</em></span>
-        <AdaptiveCombValue value={text(envelope, "tax_agent_date_of_expiry").replace(/\D/g, "")} cells={8} />
+        <AdaptivePlainValue
+          value={text(envelope, "tax_agent_date_of_expiry")}
+          className="tax-agent-date-plain-0619e"
+        />
       </div>
     </section>
   );
@@ -402,18 +415,65 @@ function PaymentRow0619E({
   number?: string;
   label?: string;
 }) {
+  const isTaxDebitMemo = prefix === "payment_21";
+  const isOther = prefix === "payment_22";
+  const bankOrAgency = text(envelope, `${prefix}_drawee_bank_or_agency`).toUpperCase();
+  if (isTaxDebitMemo && bankOrAgency !== "") {
+    throw new Error(
+      "0619E Item 21 Drawee Bank/Agency is non-applicable on the official January 2018 form"
+    );
+  }
   const amount = bool(envelope, `${prefix}_amount_present`)
     ? decimal(envelope, `${prefix}_amount`)
     : null;
   return (
-    <div className="payment-row-0619e" data-payment-row={prefix}>
-      <span>
-        {number ? <><b>{number}</b> {label}</> : text(envelope, "payment_22_particular").toUpperCase()}
-      </span>
-      <AdaptiveCombValue value={text(envelope, `${prefix}_drawee_bank_or_agency`).toUpperCase()} cells={5} />
-      <AdaptiveCombValue value={text(envelope, `${prefix}_number`).toUpperCase()} cells={6} />
-      <AdaptiveCombValue value={text(envelope, `${prefix}_date`).replace(/\D/g, "")} cells={8} />
+    <div
+      className={`payment-row-0619e${isTaxDebitMemo ? " payment-tax-debit-0619e" : ""}${isOther ? " payment-other-0619e" : ""}`}
+      data-payment-row={prefix}
+    >
+      {isOther ? (
+        <AdaptiveComb0619E
+          value={text(envelope, "payment_22_particular").toUpperCase()}
+          cells={7}
+        />
+      ) : (
+        <span className="payment-label-0619e">
+          <b>{number}</b> {label}
+        </span>
+      )}
+      {isTaxDebitMemo ? (
+        <span className="payment-nonapplicable-0619e" aria-hidden="true" />
+      ) : (
+        <AdaptiveComb0619E value={bankOrAgency} cells={5} />
+      )}
+      <AdaptiveComb0619E value={text(envelope, `${prefix}_number`).toUpperCase()} cells={6} />
+      <AdaptiveComb0619E value={text(envelope, `${prefix}_date`).replace(/\D/g, "")} cells={8} />
       <MoneyComb0619E value={amount} />
     </div>
+  );
+}
+
+function AdaptiveComb0619E({
+  value,
+  cells,
+  align = "left",
+  className = ""
+}: {
+  value: string;
+  cells: number;
+  align?: "left" | "right";
+  className?: string;
+}) {
+  return (
+    <AdaptiveCombValue
+      value={value}
+      cells={cells}
+      align={align}
+      className={className}
+      fitToField
+      maxFontSizePx={9.6}
+      minFontSizePx={8}
+      fontStepPx={0.5}
+    />
   );
 }

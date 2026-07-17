@@ -126,6 +126,16 @@ test("0619E 2018 preserves official period, declaration, and signature bands", a
   expect(await page.locator(".signature-footer-0619e").evaluate(
     (element) => element.scrollHeight - element.clientHeight
   )).toBe(0);
+  await expect(page.locator(".signature-footer-0619e > .comb-value")).toHaveCount(0);
+  await expect(page.locator(".signature-footer-0619e > .adaptive-plain-value")).toHaveCount(3);
+  for (const value of await page.locator(
+    ".signature-footer-0619e > .adaptive-plain-value"
+  ).evaluateAll((elements) => elements.map((element) => ({
+    fit: (element as HTMLElement).dataset.adaptiveFitState,
+    overflowMode: (element as HTMLElement).dataset.overflowMode
+  })))) {
+    expect(value).toEqual({ fit: "fit", overflowMode: "plain" });
+  }
 });
 
 test("0619E 2018 preserves official payment row partitions", async ({ page }) => {
@@ -146,6 +156,9 @@ test("0619E 2018 preserves official payment row partitions", async ({ page }) =>
   await expect(
     page.locator("[data-payment-row='payment_21'] > :nth-child(2)")
   ).toHaveCSS("background-color", "rgb(217, 217, 217)");
+  await expect(
+    page.locator("[data-payment-row='payment_21'] > :first-child")
+  ).toHaveCSS("border-right-width", "0px");
 
   const datePartitions = await page
     .locator("[data-payment-row='payment_19'] > :nth-child(4)")
@@ -169,6 +182,64 @@ test("0619E 2018 preserves official payment row partitions", async ({ page }) =>
   );
   await expect(decimalPartition).toHaveCSS("border-left-width", "1px");
   await expect(decimalPartition).toHaveCSS("border-right-width", "1px");
+});
+
+test("0619E 2018 uses only the exact reviewed field guides", async ({ page }) => {
+  const fixture = readFixture("packages/form-contracts/fixtures/0619e-minimum.json");
+  await renderEnvelope(page, fixture);
+
+  expect(await directCombCapacities(page.locator("[data-payment-row='payment_19']")))
+    .toEqual([5, 6, 8]);
+  expect(await directCombCapacities(page.locator("[data-payment-row='payment_20']")))
+    .toEqual([5, 6, 8]);
+  expect(await directCombCapacities(page.locator("[data-payment-row='payment_21']")))
+    .toEqual([6, 8]);
+  expect(await directCombCapacities(page.locator("[data-payment-row='payment_22']")))
+    .toEqual([7, 5, 6, 8]);
+
+  await expect(
+    page.locator("[data-payment-row='payment_21'] .payment-nonapplicable-0619e .comb-value")
+  ).toHaveCount(0);
+  await expect(page.locator(".rdo-value-0619e > .comb-value > span")).toHaveCount(3);
+  await expect(page.locator(".rdo-value-0619e > i")).toHaveCSS(
+    "background-color",
+    "rgb(217, 217, 217)"
+  );
+
+  await expect(page.locator(".header-option-0619e").nth(2).locator(":scope > span"))
+    .toHaveCSS("background-color", "rgb(217, 217, 217)");
+  await expect(page.locator(".header-option-0619e").nth(4).locator(":scope > span"))
+    .toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(page.locator(".category-choices-0619e")).toHaveCSS(
+    "background-color",
+    "rgb(217, 217, 217)"
+  );
+});
+
+test("0619E 2018 measures overflow text at the reviewed readable floor", async ({ page }) => {
+  const fixture = readFixture("packages/form-contracts/fixtures/0619e-long-values.json");
+  await renderEnvelope(page, fixture);
+  const adaptiveValues = page.locator(".form-0619e-page-one .adaptive-plain-value");
+  expect(await adaptiveValues.count()).toBeGreaterThan(3);
+  await expect(page.locator(
+    '.form-0619e-page-one .adaptive-plain-value[data-adaptive-fit-state="pending"]'
+  )).toHaveCount(0);
+  await expect(page.locator(
+    '.form-0619e-page-one .adaptive-plain-value[data-adaptive-fit-state="unresolved"]'
+  )).toHaveCount(0);
+
+  for (const value of await adaptiveValues.evaluateAll((elements) => elements.map((element) => ({
+    fontSize: Number((element as HTMLElement).dataset.adaptiveFontSizePx),
+    max: Number((element as HTMLElement).dataset.adaptiveMaxFontPx),
+    min: Number((element as HTMLElement).dataset.adaptiveMinFontPx),
+    step: Number((element as HTMLElement).dataset.adaptiveStepPx)
+  })))) {
+    expect(value.max).toBe(9.6);
+    expect(value.min).toBe(8);
+    expect(value.step).toBe(0.5);
+    expect(value.fontSize).toBeGreaterThanOrEqual(value.min);
+    expect(value.fontSize).toBeLessThanOrEqual(value.max);
+  }
 });
 
 test("0619E 2018 matches the complete pinned official page", async ({ page }, testInfo) => {
@@ -313,6 +384,12 @@ async function pageHasNoOverflow(locator: Locator) {
     console.warn(`0619E overflow report: ${JSON.stringify({ report, offenders })}`);
   }
   return valid;
+}
+
+async function directCombCapacities(row: Locator): Promise<number[]> {
+  return row.locator(":scope > .comb-value").evaluateAll(
+    (elements) => elements.map((element) => element.children.length)
+  );
 }
 
 function readFixture(relativePath: string): unknown {

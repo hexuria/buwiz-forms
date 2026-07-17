@@ -136,12 +136,42 @@ describe("0619E:2018 runtime render contract", () => {
     for (const reference of ["BDM-001", "CHECK-002", "TDM-003", "OTHER-004"]) {
       expect(paymentMarkup).toContain(reference);
     }
+    expect(payment.fields.payment_21_drawee_bank_or_agency).toEqual({
+      type: "text",
+      value: ""
+    });
 
     const minimum = structuredClone(minimumFixture) as RenderEnvelope;
     expect(minimum.fields.payment_19_amount_present).toEqual({
       type: "boolean",
       value: false
     });
+  });
+
+  it("keeps reviewed plain fields plain and rejects data in the non-applicable Item 21 bank cell", () => {
+    const fixture = structuredClone(normalFixture) as RenderEnvelope;
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: fixture })
+    );
+    const signatureFooter = markup.match(
+      /<div class="signature-footer-0619e">([\s\S]*?)<\/div>/
+    )?.[1];
+    expect(signatureFooter).toBeDefined();
+    expect(signatureFooter?.match(/data-overflow-mode="plain"/g)).toHaveLength(3);
+    expect(signatureFooter).not.toContain("comb-value");
+    expect(markup).toContain('class="rdo-value-0619e"');
+    expect(markup).toContain('class="payment-nonapplicable-0619e"');
+
+    const impossible = structuredClone(normalFixture) as RenderEnvelope;
+    impossible.fields.payment_21_drawee_bank_or_agency = {
+      type: "text",
+      value: "BIR"
+    };
+    expect(() => renderToStaticMarkup(
+      createElement(FormDocument, { envelope: impossible })
+    )).toThrow(
+      "0619E Item 21 Drawee Bank/Agency is non-applicable"
+    );
   });
 
   it("preserves the exact official PDF417 matrix and live caption", () => {
