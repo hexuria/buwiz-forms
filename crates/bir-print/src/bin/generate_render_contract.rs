@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 #[cfg(test)]
 const CONTINUATION_FIXTURE_SHA256: &str =
-    "d4d0a3fb939d53ad684c17b13a7b34c376ad52dbe7be71f135d7fcbbd38c269e";
+    "4ad6bf24f8a8cc01b13c1357f1746e20b9c32465d614322ce2c29be7d8a298e2";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum FormSelection {
@@ -783,7 +783,11 @@ mod tests {
         );
         assert_eq!(continuation.validation.len(), 1);
         assert_eq!(continuation.validation[0].field_path, "schedule_1");
-        assert!(continuation.validation[0].message.contains("at most six"));
+        assert!(continuation.validation[0].message.contains("at most 6"));
+        assert_eq!(
+            continuation.fields["number_of_attached_sheets"],
+            RenderValue::Integer(1)
+        );
 
         let minimum = read_fixture(output.path(), "2551q-minimum.json");
         assert_eq!(minimum.schedules[0].rows.len(), 1);
