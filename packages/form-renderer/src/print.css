@@ -1402,7 +1402,15 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 }
 
 .form-2551q-page-one .tax-line-label b {
-  font-weight: 600;
+  font-weight: 500;
+}
+
+.form-2551q-page-one .tax-subheading {
+  font-weight: 500;
+}
+
+.form-2551q-page-one .tax-agent-strip {
+  font-size: 6.5pt;
 }
 
 .form-2551q-page-one .tax-line-label em {

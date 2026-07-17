@@ -425,7 +425,7 @@ test("2551Q page-one typography keeps the reviewed bundled-font calibration", as
     taxLineNumber: {
       fontFamily: bundledFont,
       fontSize: "12px",
-      fontWeight: "600",
+      fontWeight: "500",
       transform: "none"
     },
     taxLineNote: {
@@ -993,17 +993,19 @@ test("2551Q plain-box overflow uses the largest readable font that fits the real
   await pageTwoName.evaluate((element) => {
     element.style.width = "400px";
   });
-  await expect(pageTwoName).toHaveAttribute("data-adaptive-fit-state", "fit");
-  expect(Number.parseFloat(
+  await expect.poll(async () => Number.parseFloat(
     await pageTwoName.getAttribute("data-adaptive-font-size-px") ?? "NaN"
   )).toBeLessThan(13);
+  await expect(pageTwoName).toHaveAttribute("data-adaptive-fit-state", "fit");
   expect(Number.parseFloat(
     await pageTwoName.getAttribute("data-adaptive-font-size-px") ?? "NaN"
   )).toBeGreaterThanOrEqual(10.5);
   await pageTwoName.evaluate((element) => {
     element.style.width = "";
   });
-  await expect(pageTwoName).toHaveAttribute("data-adaptive-font-size-px", "13.0");
+  await expect.poll(async () => (
+    await pageTwoName.getAttribute("data-adaptive-font-size-px")
+  )).toBe("13.0");
 
   const unfitFixture = structuredClone(fixture) as {
     taxpayer: { name: string };
