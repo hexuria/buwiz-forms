@@ -85,7 +85,7 @@ export function Form1701Q({ envelope }: { envelope: RenderEnvelope }) {
 
   return (
     <main className="form-document" data-form-code="1701Q">
-      <FolioPage pageNumber={1} paper="legal" className="form-1701q-page form-1701q-page-one">
+      <FolioPage pageNumber={1} paper="folio" className="form-1701q-page form-1701q-page-one">
         <GovernmentHeader1701Q />
         <Masthead1701Q page={1} />
         <HeaderOptions1701Q envelope={envelope} />
@@ -101,7 +101,7 @@ export function Form1701Q({ envelope }: { envelope: RenderEnvelope }) {
         </p>
       </FolioPage>
 
-      <FolioPage pageNumber={2} paper="legal" className="form-1701q-page form-1701q-page-two">
+      <FolioPage pageNumber={2} paper="folio" className="form-1701q-page form-1701q-page-two">
         <Masthead1701Q page={2} compact />
         <PageTwoIdentity1701Q envelope={envelope} />
         <PartFive1701Q envelope={envelope} />

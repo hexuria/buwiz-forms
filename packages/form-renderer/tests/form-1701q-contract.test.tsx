@@ -74,7 +74,7 @@ describe("1701Q:2018 experimental preview contract", () => {
         createElement(FormDocument, { envelope: value as RenderEnvelope })
       );
       expect(markup.match(/class="[^"]*form-page/g)).toHaveLength(2);
-      expect(markup.match(/data-paper="legal"/g)).toHaveLength(2);
+      expect(markup.match(/data-paper="folio"/g)).toHaveLength(2);
       expect(markup).toContain("PART V – COMPUTATION OF TAX DUE");
       expect(markup).toContain("Schedule IV - Penalties");
     }

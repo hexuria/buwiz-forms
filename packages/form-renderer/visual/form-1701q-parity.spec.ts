@@ -25,7 +25,7 @@ test("1701Q 2018 renders every Rust fixture as two stable unclipped Folio pages"
     const pages = page.locator(".form-page");
     await expect(pages, fixtureName).toHaveCount(2);
     for (let pageIndex = 0; pageIndex < 2; pageIndex += 1) {
-      await expect(pages.nth(pageIndex)).toHaveAttribute("data-paper", "legal");
+      await expect(pages.nth(pageIndex)).toHaveAttribute("data-paper", "folio");
       expect(await pageHasNoOverflow(pages.nth(pageIndex)), `${fixtureName} page ${pageIndex + 1}`).toBe(true);
     }
   }
