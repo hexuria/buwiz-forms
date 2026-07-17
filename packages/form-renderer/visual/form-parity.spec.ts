@@ -763,7 +763,7 @@ test("development preview fallback renders without a contract error", async ({ p
   expect(pageErrors).toEqual([]);
 });
 
-test("every canonical fixture produces stable, unclipped pages", async ({ page }) => {
+test("canonical fixtures render safely or fail closed at the readable floor", async ({ page }) => {
   const fixtures = [
     "2551q-10-rows.json",
     "2551q-6-rows.json",
@@ -798,14 +798,24 @@ test("every canonical fixture produces stable, unclipped pages", async ({ page }
         `Item 17 specification: ${description}`
       );
       await expect(renderedDescription).toHaveAttribute("data-overflow-mode", "plain");
+      await expect(renderedDescription).toHaveAttribute(
+        "data-adaptive-font-size-px",
+        "10.5"
+      );
+      await expect(renderedDescription).toHaveAttribute(
+        "data-adaptive-fit-state",
+        "unresolved"
+      );
       const descriptionGeometry = await renderedDescription.evaluate((element) => ({
         clientHeight: element.clientHeight,
         clientWidth: element.clientWidth,
         scrollHeight: element.scrollHeight,
         scrollWidth: element.scrollWidth
       }));
-      expect(descriptionGeometry.scrollWidth).toBeLessThanOrEqual(descriptionGeometry.clientWidth + 1);
-      expect(descriptionGeometry.scrollHeight).toBeLessThanOrEqual(descriptionGeometry.clientHeight + 1);
+      expect(
+        descriptionGeometry.scrollWidth > descriptionGeometry.clientWidth + 1 ||
+        descriptionGeometry.scrollHeight > descriptionGeometry.clientHeight + 1
+      ).toBe(true);
     }
     if (fixture === "2551q-validation-edge.json") {
       await expect(page.locator(".tax-credit-description")).toHaveText("");
@@ -815,7 +825,15 @@ test("every canonical fixture produces stable, unclipped pages", async ({ page }
       );
     }
     for (let index = 0; index < expectedPages; index += 1) {
-      expect(await pageHasNoOverflow(pages.nth(index)), `${fixture} page ${index + 1}`).toBe(true);
+      if (fixture === "2551q-long-values.json" && index === 0) {
+        const geometry = await measuredPage(pages.nth(index));
+        expect(
+          geometry.descendant_overflow_x + geometry.descendant_overflow_y,
+          `${fixture} page ${index + 1}`
+        ).toBeGreaterThan(0);
+      } else {
+        expect(await pageHasNoOverflow(pages.nth(index)), `${fixture} page ${index + 1}`).toBe(true);
+      }
     }
   }
 
@@ -909,7 +927,7 @@ test("2551Q plain-box overflow uses the largest readable font that fits the real
     () => !document.querySelector('[data-adaptive-fit-state="pending"]')
   );
 
-  const values = page.locator(".adaptive-plain-value");
+  const values = page.locator(".adaptive-plain-value:not(.tax-credit-description)");
   await expect(values).toHaveCount(5);
   const measurements = await values.evaluateAll((elements) => elements.map((element) => {
     const fontSize = Number.parseFloat(getComputedStyle(element).fontSize);
@@ -1087,6 +1105,160 @@ test("2551Q plain-box overflow uses the largest readable font that fits the real
   expect(unfitGeometry?.pages.some((renderedPage) =>
     renderedPage.descendant_overflow_x > 0
   )).toBe(true);
+});
+
+test("2551Q Item 17 measures its fixed field and blocks unreadable values", async ({
+  page
+}) => {
+  const baseFixture = readFixture(
+    "packages/form-contracts/fixtures/2551q-6-rows.json"
+  ) as {
+    fields: Record<string, { type: string; value: unknown }>;
+  };
+  await renderEnvelope(page, baseFixture);
+  await page.waitForFunction(
+    () => !document.querySelector('[data-adaptive-fit-state="pending"]')
+  );
+
+  const normalDescription = page.locator(".tax-credit-description");
+  await expect(normalDescription).toHaveText("Validated prior payment");
+  await expect(normalDescription).toHaveAttribute("data-adaptive-fit-state", "fit");
+  await expect(normalDescription).toHaveAttribute("data-adaptive-font-size-px", "12.0");
+  await expect(normalDescription).toHaveAttribute("data-adaptive-max-font-px", "12");
+  await expect(normalDescription).toHaveAttribute("data-adaptive-min-font-px", "10.5");
+  await expect(normalDescription).toHaveAttribute("data-adaptive-step-px", "0.5");
+  const officialField = await normalDescription.boundingBox();
+  expect(officialField).not.toBeNull();
+
+  const longFixture = readFixture(
+    "packages/form-contracts/fixtures/2551q-long-values.json"
+  ) as {
+    fields: Record<string, { type: string; value: unknown }>;
+  };
+  const longDescription = longFixture.fields.other_tax_credit_description?.value;
+  if (typeof longDescription !== "string" || Array.from(longDescription).length !== 98) {
+    throw new Error("2551Q long-value fixture must retain its reviewed 98-character Item 17 value");
+  }
+
+  for (const value of [longDescription, "W".repeat(100), "W".repeat(320)]) {
+    const fixture = structuredClone(baseFixture);
+    fixture.fields.other_tax_credit_description.value = value;
+    await renderEnvelope(page, fixture);
+    await page.waitForFunction(
+      () => !document.querySelector('[data-adaptive-fit-state="pending"]')
+    );
+
+    const rendered = page.locator(".tax-credit-description");
+    await expect(rendered).toHaveText(value);
+    await expect(rendered).toHaveAttribute(
+      "aria-label",
+      `Item 17 specification: ${value}`
+    );
+    await expect(rendered).toHaveAttribute("data-adaptive-font-size-px", "10.5");
+    await expect(rendered).toHaveAttribute("data-adaptive-fit-state", "unresolved");
+
+    const measurement = await rendered.evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      return {
+        clientHeight: element.clientHeight,
+        clientWidth: element.clientWidth,
+        lineCount: range.getClientRects().length,
+        scrollHeight: element.scrollHeight,
+        scrollWidth: element.scrollWidth,
+        whiteSpace: getComputedStyle(element).whiteSpace
+      };
+    });
+    expect(
+      measurement.scrollWidth > measurement.clientWidth + 1 ||
+      measurement.scrollHeight > measurement.clientHeight + 1
+    ).toBe(true);
+    expect(measurement.whiteSpace).toBe("nowrap");
+    expect(measurement.lineCount).toBe(1);
+
+    const field = await rendered.boundingBox();
+    expect(field).not.toBeNull();
+    if (officialField && field) {
+      expect(field.width).toBeCloseTo(officialField.width, 1);
+      expect(field.height).toBeCloseTo(officialField.height, 1);
+    }
+
+    const geometry = await measuredPage(page.locator(".form-page").first());
+    expect(
+      geometry.descendant_overflow_x + geometry.descendant_overflow_y
+    ).toBeGreaterThan(0);
+  }
+});
+
+test("2551Q adaptive fields retain domain-boundary text and report unsafe geometry", async ({
+  page
+}) => {
+  const fixture = readFixture(
+    "packages/form-contracts/fixtures/2551q-long-values.json"
+  ) as {
+    fields: Record<string, { type: string; value: unknown }>;
+    taxpayer: {
+      email: string;
+      name: string;
+      registered_address: string;
+    };
+  };
+  const name = "N".repeat(160);
+  const address = "A".repeat(320);
+  const email = `${"E".repeat(242)}@EXAMPLE.COM`;
+  const relief = "R".repeat(160);
+  const item17 = "C".repeat(100);
+  fixture.taxpayer.name = name;
+  fixture.taxpayer.registered_address = address;
+  fixture.taxpayer.email = email;
+  fixture.fields.tax_relief_specification.value = relief;
+  fixture.fields.other_tax_credit_description.value = item17;
+
+  await renderEnvelope(page, fixture);
+  await page.waitForFunction(
+    () => !document.querySelector('[data-adaptive-fit-state="pending"]')
+  );
+
+  const boundaries = [
+    [".name-field > .adaptive-plain-value", name, name],
+    [".address-field > .adaptive-plain-value", address, address],
+    [".contact-email-field > .adaptive-plain-value", email, email],
+    [".tax-relief-field > .adaptive-plain-value", relief, relief],
+    [".page-two-identity > .adaptive-plain-value", name, name],
+    [".tax-credit-description", item17, `Item 17 specification: ${item17}`]
+  ] as const;
+
+  for (const [selector, expectedText, expectedLabel] of boundaries) {
+    const rendered = page.locator(selector);
+    await expect(rendered).toHaveCount(1);
+    await expect(rendered).toHaveText(expectedText);
+    await expect(rendered).toHaveAttribute("aria-label", expectedLabel);
+    const measurement = await rendered.evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      clientWidth: element.clientWidth,
+      fontSize: Number.parseFloat(getComputedStyle(element).fontSize),
+      maxFontSize: Number.parseFloat(element.getAttribute("data-adaptive-max-font-px") ?? "NaN"),
+      minFontSize: Number.parseFloat(element.getAttribute("data-adaptive-min-font-px") ?? "NaN"),
+      scrollHeight: element.scrollHeight,
+      scrollWidth: element.scrollWidth,
+      state: element.getAttribute("data-adaptive-fit-state")
+    }));
+    expect(["fit", "unresolved"], selector).toContain(measurement.state);
+    expect(measurement.fontSize, selector).toBeGreaterThanOrEqual(measurement.minFontSize);
+    expect(measurement.fontSize, selector).toBeLessThanOrEqual(measurement.maxFontSize);
+    if (measurement.state === "fit") {
+      expect(measurement.scrollWidth, selector)
+        .toBeLessThanOrEqual(measurement.clientWidth + 1);
+      expect(measurement.scrollHeight, selector)
+        .toBeLessThanOrEqual(measurement.clientHeight + 1);
+    } else {
+      expect(measurement.fontSize, selector).toBe(measurement.minFontSize);
+    }
+  }
+
+  const geometry = await measuredPage(page.locator(".form-page").first());
+  expect(geometry.descendant_overflow_x + geometry.descendant_overflow_y)
+    .toBeGreaterThan(0);
 });
 
 function writeVisualEvidence() {

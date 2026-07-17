@@ -674,27 +674,16 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   width: 151.5pt;
   top: 2.5pt;
   height: 11.5pt;
-  display: block;
+  display: flex;
+  align-items: center;
   min-width: 0;
   padding: 0 2pt;
   border: 0;
   border-bottom: .55pt solid #111;
   background: #fff;
-  font-size: 7pt;
   font-style: normal;
-  line-height: 1;
+  line-height: 1.02;
   white-space: nowrap;
-}
-.tax-credit-description[data-fit="compact"] {
-  font-size: 5pt;
-  overflow-wrap: anywhere;
-  white-space: normal;
-}
-.tax-credit-description[data-fit="wrapped"] {
-  font-size: 3.5pt;
-  line-height: .95;
-  overflow-wrap: anywhere;
-  white-space: normal;
 }
 .tax-subheading {
   height: 11.5pt;

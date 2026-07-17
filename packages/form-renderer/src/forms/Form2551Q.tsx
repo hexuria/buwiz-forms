@@ -7,6 +7,7 @@ import {
 import { getFormSpec } from "@ebirforms/form-specs";
 import {
   AdaptiveCombValue,
+  AdaptivePlainValue,
   CheckChoice,
   CombValue,
   FolioPage,
@@ -74,6 +75,7 @@ const REVIEWED_2551Q_OVERFLOW_FONT_PX = {
   pageOneAddress: { max: 15, min: 10.5 },
   pageOneEmail: { max: 17.5, min: 10.5 },
   item12A: { max: 11.5, min: 10.5 },
+  item17: { max: 12, min: 10.5 },
   pageTwoName: { max: 13, min: 10.5 }
 } as const;
 
@@ -746,38 +748,27 @@ function OfficialTaxLine({
   className?: string;
   specification?: string;
 }) {
-  const specificationFit = specification === undefined
-    ? undefined
-    : item17SpecificationFit(specification);
-
   return (
     <div data-item={number} className={`official-tax-line ${strong ? "strong" : ""} ${indent ? "indented" : ""} ${className}`}>
       <div className="tax-line-label">
         <b>{number}</b>
         <span className="tax-line-copy">{label}</span>
         {specification !== undefined && (
-          <output
+          <AdaptivePlainValue
+            value={specification}
             className="tax-credit-description"
-            data-fit={specificationFit}
-            data-overflow-mode={specificationFit === "normal" ? undefined : "plain"}
-            aria-label={specification
+            ariaLabel={specification
               ? `Item 17 specification: ${specification}`
               : "Item 17 specification, blank"}
-          >
-            {specification}
-          </output>
+            maxFontSizePx={REVIEWED_2551Q_OVERFLOW_FONT_PX.item17.max}
+            minFontSizePx={REVIEWED_2551Q_OVERFLOW_FONT_PX.item17.min}
+            fontStepPx={.5}
+          />
         )}
       </div>
       <OfficialMoneyValue value={value} />
     </div>
   );
-}
-
-function item17SpecificationFit(value: string): "normal" | "compact" | "wrapped" {
-  const length = Array.from(value).length;
-  if (length <= 32) return "normal";
-  if (length <= 64) return "compact";
-  return "wrapped";
 }
 
 function OfficialMoneyValue({ value }: { value: number }) {

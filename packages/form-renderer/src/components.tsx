@@ -129,7 +129,7 @@ export function AdaptiveCombValue({
   return (
     <AdaptivePlainValue
       value={value}
-      cells={cells}
+      cellCapacity={cells}
       align={align}
       className={className}
       maxFontSizePx={maxFontSizePx}
@@ -139,22 +139,24 @@ export function AdaptiveCombValue({
   );
 }
 
-function AdaptivePlainValue({
+export function AdaptivePlainValue({
   value,
-  cells,
-  align,
-  className,
-  maxFontSizePx,
-  minFontSizePx,
-  fontStepPx
+  cellCapacity,
+  align = "left",
+  className = "",
+  ariaLabel = value,
+  maxFontSizePx = ADAPTIVE_MAX_FONT_SIZE_PX,
+  minFontSizePx = ADAPTIVE_MIN_FONT_SIZE_PX,
+  fontStepPx = ADAPTIVE_FONT_STEP_PX
 }: {
   value: string;
-  cells: number;
-  align: "left" | "right";
-  className: string;
-  maxFontSizePx: number;
-  minFontSizePx: number;
-  fontStepPx: number;
+  cellCapacity?: number;
+  align?: "left" | "right";
+  className?: string;
+  ariaLabel?: string;
+  maxFontSizePx?: number;
+  minFontSizePx?: number;
+  fontStepPx?: number;
 }) {
   validateAdaptiveFontRange(maxFontSizePx, minFontSizePx, fontStepPx);
   const valueRef = useRef<HTMLSpanElement>(null);
@@ -188,19 +190,19 @@ function AdaptivePlainValue({
       if (!resizeObserver) window.removeEventListener("resize", refit);
       document.fonts?.removeEventListener("loadingdone", refit);
     };
-  }, [align, cells, className, fontStepPx, maxFontSizePx, minFontSizePx, value]);
+  }, [align, cellCapacity, className, fontStepPx, maxFontSizePx, minFontSizePx, value]);
 
   return (
     <span
       ref={valueRef}
       className={`adaptive-plain-value adaptive-align-${align} ${className}`.trim()}
-      data-cell-capacity={cells}
+      data-cell-capacity={cellCapacity}
       data-adaptive-fit-state="pending"
       data-adaptive-max-font-px={maxFontSizePx}
       data-adaptive-min-font-px={minFontSizePx}
       data-adaptive-step-px={fontStepPx}
       data-overflow-mode="plain"
-      aria-label={value}
+      aria-label={ariaLabel}
       style={{ fontSize: `${maxFontSizePx}px` }}
     >
       {value}

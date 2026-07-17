@@ -171,7 +171,12 @@ describe("2551Q runtime render contract", () => {
     expect(markup).toContain(
       `aria-label="Item 17 specification: ${item17Description.value}"`
     );
-    expect(markup).toContain('data-fit="wrapped" data-overflow-mode="plain"');
+    expect(markup).toContain('class="adaptive-plain-value adaptive-align-left tax-credit-description"');
+    expect(markup).toContain('data-adaptive-fit-state="pending"');
+    expect(markup).toContain('data-adaptive-max-font-px="12"');
+    expect(markup).toContain('data-adaptive-min-font-px="10.5"');
+    expect(markup).toContain('data-adaptive-step-px="0.5"');
+    expect(markup).toContain('data-overflow-mode="plain"');
   });
 
   it("fails closed beyond defensive document-rendering limits", () => {
