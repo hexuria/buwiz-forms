@@ -1345,13 +1345,14 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
  * The pinned PDF declares Arial Bold/Italic faces, while the renderer uses
  * the bundled Arimo family so output stays deterministic and offline. These
  * page-one values are the measured Chromium equivalents of the Poppler
- * reference: medium Arimo weight matches the source's non-embedded Arial Bold
- * raster more closely than either synthetic 400 or Arimo 700. Keep the
- * transforms on the live text only; masthead and table geometry stay fixed.
+ * reference: regular Arimo matches the source's rasterized masthead title and
+ * number more closely than the true variable 500 face or Arimo 700, while the
+ * smaller tax-line labels below remain closest at 500. Keep the transforms on
+ * the live text only; masthead and table geometry stay fixed.
  */
 .form-2551q-page-one .official-form-number > strong {
   font-size: 24pt;
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: 0;
   transform: translate(-1pt, -1pt);
 }
@@ -1363,7 +1364,7 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 
 .form-2551q-page-one .official-form-title > strong {
   font-size: 17.75pt;
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: .7pt;
   transform: translate(-.5pt, -1.5pt);
 }

@@ -389,7 +389,7 @@ test("2551Q page-one typography keeps the reviewed bundled-font calibration", as
     formNumber: {
       fontFamily: bundledFont,
       fontSize: "32px",
-      fontWeight: "500",
+      fontWeight: "400",
       transform: "matrix(1, 0, 0, 1, -1.33333, -1.33333)"
     },
     formRevision: {
@@ -401,7 +401,7 @@ test("2551Q page-one typography keeps the reviewed bundled-font calibration", as
     formTitle: {
       fontFamily: bundledFont,
       fontSize: "23.6667px",
-      fontWeight: "500",
+      fontWeight: "400",
       transform: "matrix(1, 0, 0, 1, -0.666667, -2)"
     },
     instructions: {
