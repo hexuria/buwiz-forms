@@ -5,13 +5,70 @@
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;
+use gpui_component::WindowExt;
 use gpui_component::input::Input;
+use gpui_component::notification::{Notification, NotificationType};
 use gpui_component::*;
 
 use crate::app::{ActiveView, AppState, AppThemeMode, ProfileTargetAction};
 use bir_core::profile::TaxpayerProfile;
 
 impl AppState {
+    fn persist_profile_archived(
+        &mut self,
+        mut profile: TaxpayerProfile,
+        archived: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        profile.is_archived = archived;
+        let save_result = match self.db.lock() {
+            Ok(db) => db
+                .save_profile_with_post_commit_status(profile)
+                .map(bir_core::db::PostCommitWrite::into_parts)
+                .map_err(|error| error.to_string()),
+            Err(_) => Err("The profile database is temporarily unavailable".to_string()),
+        };
+
+        match save_result {
+            Ok((saved, refresh_status)) => {
+                let tin = saved.tin.full();
+                if let Some(existing) = self
+                    .profiles
+                    .iter_mut()
+                    .find(|candidate| candidate.tin.full() == tin)
+                {
+                    *existing = saved;
+                }
+                if let Some(warning) = refresh_status.warning() {
+                    window.push_notification(
+                        Notification::new()
+                            .message(format!(
+                                "Profile {}. {warning}",
+                                if archived { "archived" } else { "restored" }
+                            ))
+                            .with_type(NotificationType::Warning)
+                            .autohide(false),
+                        cx,
+                    );
+                }
+                cx.notify();
+            }
+            Err(error) => {
+                window.push_notification(
+                    Notification::new()
+                        .message(format!(
+                            "Profile was not {}: {error}",
+                            if archived { "archived" } else { "restored" }
+                        ))
+                        .with_type(NotificationType::Error)
+                        .autohide(false),
+                    cx,
+                );
+            }
+        }
+    }
+
     pub(crate) fn render_sidebar(
         &self,
         window: &mut Window,
@@ -412,21 +469,12 @@ impl AppState {
                                                                         .label("Archive")
                                                                         .on_click(cx.listener({
                                                                             let profile_clone = profile.clone();
-                                                                            let tin = profile_clone.tin.full();
                                                                             move |this, _ev, window, cx| {
                                                                                 cx.stop_propagation();
                                                                                 if this.block_unsaved_compliance_navigation(window, cx) {
                                                                                     return;
                                                                                 }
-                                                                                let mut profile_mut = profile_clone.clone();
-                                                                                profile_mut.is_archived = true;
-                                                                                if let Ok(db) = this.db.lock() {
-                                                                                    let _ = db.save_profile(profile_mut);
-                                                                                }
-                                                                                if let Some(p) = this.profiles.iter_mut().find(|p| p.tin.full() == tin) {
-                                                                                    p.is_archived = true;
-                                                                                }
-                                                                                cx.notify();
+                                                                                this.persist_profile_archived(profile_clone.clone(), true, window, cx);
                                                                             }
                                                                         })),
                                                                 )
@@ -439,21 +487,12 @@ impl AppState {
                                                                     .label("Restore")
                                                                     .on_click(cx.listener({
                                                                         let profile_clone = profile.clone();
-                                                                        let tin = profile_clone.tin.full();
                                                                         move |this, _ev, window, cx| {
                                                                             cx.stop_propagation();
                                                                             if this.block_unsaved_compliance_navigation(window, cx) {
                                                                                 return;
                                                                             }
-                                                                            let mut profile_mut = profile_clone.clone();
-                                                                            profile_mut.is_archived = false;
-                                                                            if let Ok(db) = this.db.lock() {
-                                                                                let _ = db.save_profile(profile_mut);
-                                                                            }
-                                                                            if let Some(p) = this.profiles.iter_mut().find(|p| p.tin.full() == tin) {
-                                                                                p.is_archived = false;
-                                                                            }
-                                                                            cx.notify();
+                                                                            this.persist_profile_archived(profile_clone.clone(), false, window, cx);
                                                                         }
                                                                     })),
                                                             )
