@@ -637,6 +637,30 @@ impl TaxpayerProfile {
         })
     }
 
+    /// Whether the taxpayer may manage an annual income-tax election
+    /// (8% flat rate, graduated + OSD, …) for the given taxable year.
+    ///
+    /// Eligibility is a per-year fact: it derives from the confirmed profile
+    /// segments effective in that year, not from the current flat profile.
+    /// A segment qualifies when it is an Individual registered as
+    /// Self-Employed or Mixed Income; a mid-year classification change keeps
+    /// the year eligible as long as one qualifying segment exists. Fails
+    /// closed when the year resolves to zero segments or the confirmed
+    /// timeline has unresolved issues.
+    pub fn eligible_for_income_tax_election_in_year(&self, year: u16) -> bool {
+        let resolved = self.resolve_tax_profile_for_year(year);
+        if resolved.has_blocking_issues() || resolved.effective_segments.is_empty() {
+            return false;
+        }
+        resolved.effective_segments.iter().any(|segment| {
+            segment.taxpayer_type == TaxpayerType::Individual
+                && matches!(
+                    segment.tax_classification,
+                    Some(TaxClassification::SelfEmployed) | Some(TaxClassification::MixedIncome)
+                )
+        })
+    }
+
     /// Returns true if email tracking is active.
     pub fn is_email_tracking_active(&self) -> bool {
         self.email_tracking_enabled
@@ -1335,6 +1359,111 @@ mod tests {
                 .effective_segments
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn election_eligibility_follows_the_selected_years_confirmed_segments() {
+        let mut profile = test_profile();
+        let mut self_employed_years = confirmed_version(
+            &profile,
+            "self-employed",
+            "Self-Employed COR",
+            NaiveDate::from_ymd_opt(2020, 1, 1),
+            NaiveDate::from_ymd_opt(2024, 12, 31),
+        );
+        self_employed_years.taxpayer_type = TaxpayerType::Individual;
+        self_employed_years.tax_classification = Some(TaxClassification::SelfEmployed);
+        let mut compensation_years = confirmed_version(
+            &profile,
+            "compensation",
+            "Compensation COR",
+            NaiveDate::from_ymd_opt(2025, 1, 1),
+            None,
+        );
+        compensation_years.taxpayer_type = TaxpayerType::Individual;
+        compensation_years.tax_classification = Some(TaxClassification::PurelyCompensation);
+        profile.profile_versions = vec![self_employed_years, compensation_years];
+
+        // Historical years resolve to the segment that was effective then,
+        // even though the current registration is compensation-only.
+        assert!(profile.eligible_for_income_tax_election_in_year(2024));
+        assert!(!profile.eligible_for_income_tax_election_in_year(2026));
+        // Years before any confirmed segment fail closed.
+        assert!(!profile.eligible_for_income_tax_election_in_year(2019));
+    }
+
+    #[test]
+    fn mid_year_classification_change_keeps_the_year_election_eligible() {
+        let mut profile = test_profile();
+        let mut compensation_half = confirmed_version(
+            &profile,
+            "compensation-half",
+            "Compensation Jan-Jun",
+            NaiveDate::from_ymd_opt(2025, 1, 1),
+            NaiveDate::from_ymd_opt(2026, 6, 30),
+        );
+        compensation_half.taxpayer_type = TaxpayerType::Individual;
+        compensation_half.tax_classification = Some(TaxClassification::PurelyCompensation);
+        let mut mixed_income_half = confirmed_version(
+            &profile,
+            "mixed-half",
+            "Mixed Income Jul-Dec",
+            NaiveDate::from_ymd_opt(2026, 7, 1),
+            None,
+        );
+        mixed_income_half.taxpayer_type = TaxpayerType::Individual;
+        mixed_income_half.tax_classification = Some(TaxClassification::MixedIncome);
+        profile.profile_versions = vec![compensation_half, mixed_income_half];
+
+        // One qualifying segment in the year is enough.
+        assert!(profile.eligible_for_income_tax_election_in_year(2026));
+        // The purely-compensation-only year stays ineligible.
+        assert!(!profile.eligible_for_income_tax_election_in_year(2025));
+    }
+
+    #[test]
+    fn election_eligibility_fails_closed_without_confirmed_segments() {
+        let mut profile = test_profile();
+        profile.taxpayer_type = TaxpayerType::Individual;
+        profile.tax_classification = Some(TaxClassification::SelfEmployed);
+        profile.profile_versions.clear();
+
+        // The flat profile alone is not evidence for a taxable year.
+        assert!(!profile.eligible_for_income_tax_election_in_year(2026));
+
+        // A draft version is not a confirmed segment either.
+        let mut draft = draft_version(&profile, "draft", "Draft COR");
+        draft.tax_classification = Some(TaxClassification::SelfEmployed);
+        profile.profile_versions = vec![draft];
+        assert!(!profile.eligible_for_income_tax_election_in_year(2026));
+    }
+
+    #[test]
+    fn election_eligibility_fails_closed_on_conflicting_segments() {
+        let mut profile = test_profile();
+        let mut first = confirmed_version(
+            &profile,
+            "first",
+            "First COR",
+            NaiveDate::from_ymd_opt(2025, 1, 1),
+            None,
+        );
+        first.taxpayer_type = TaxpayerType::Individual;
+        first.tax_classification = Some(TaxClassification::SelfEmployed);
+        let mut overlapping = confirmed_version(
+            &profile,
+            "overlapping",
+            "Overlapping COR",
+            NaiveDate::from_ymd_opt(2026, 1, 1),
+            None,
+        );
+        overlapping.taxpayer_type = TaxpayerType::Individual;
+        overlapping.tax_classification = Some(TaxClassification::SelfEmployed);
+        profile.profile_versions = vec![first, overlapping];
+
+        // Overlapping confirmed versions are a timeline conflict; the year
+        // must not claim eligibility until the conflict is resolved.
+        assert!(!profile.eligible_for_income_tax_election_in_year(2026));
     }
 
     #[test]
