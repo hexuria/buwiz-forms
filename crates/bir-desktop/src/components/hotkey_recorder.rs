@@ -5,7 +5,8 @@ use gpui_component::*;
 
 /// Event emitted when the user records a new hotkey or clears it.
 pub enum HotkeyRecorderEvent {
-    /// The user pressed a valid key. The `String` is the uppercase letter/key name (e.g. "E", "B").
+    /// The user pressed a valid combo. The `String` is the stored combo
+    /// (e.g. "control+alt+F12", "alt+F12").
     Changed(String),
     /// The user cleared the hotkey binding.
     Cleared,
@@ -18,10 +19,12 @@ pub enum HotkeyRecorderEvent {
 /// Click to enter recording mode — the next qualifying keypress becomes the new binding.
 /// Supports an empty/unset state when the user doesn't want a global hotkey.
 pub struct HotkeyRecorder {
-    /// The currently bound key, or None if unset.
+    /// The currently bound combo (e.g. "control+alt+F12"), or None if unset.
     current_key: Option<String>,
     /// Whether we're waiting for the user to press a key.
     recording: bool,
+    /// Transient hint shown while recording (e.g. "hold a modifier").
+    recording_hint: Option<String>,
     focus_handle: FocusHandle,
 }
 
@@ -34,17 +37,16 @@ impl HotkeyRecorder {
         cx: &mut Context<'_, Self>,
     ) -> Self {
         Self {
-            current_key: initial_key
-                .map(|k| k.to_uppercase())
-                .filter(|k| !k.is_empty()),
+            current_key: initial_key.filter(|k| !k.is_empty()),
             recording: false,
+            recording_hint: None,
             focus_handle: cx.focus_handle(),
         }
     }
 
-    /// Update the displayed key externally (e.g. after loading from DB).
+    /// Update the displayed combo externally (e.g. after loading from DB).
     pub fn set_key(&mut self, key: Option<String>, _cx: &mut Context<'_, Self>) {
-        self.current_key = key.map(|k| k.to_uppercase()).filter(|k| !k.is_empty());
+        self.current_key = key.filter(|k| !k.is_empty());
     }
 
     pub fn current_key(&self) -> Option<&str> {
@@ -53,25 +55,29 @@ impl HotkeyRecorder {
 
     fn start_recording(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
         self.recording = true;
+        self.recording_hint = None;
         self.focus_handle.focus(window, cx);
         cx.notify();
     }
 
     fn cancel_recording(&mut self, cx: &mut Context<'_, Self>) {
         self.recording = false;
+        self.recording_hint = None;
         cx.notify();
     }
 
-    fn accept_key(&mut self, key: String, cx: &mut Context<'_, Self>) {
-        self.current_key = Some(key.clone());
+    fn accept_combo(&mut self, combo: String, cx: &mut Context<'_, Self>) {
+        self.current_key = Some(combo.clone());
         self.recording = false;
-        cx.emit(HotkeyRecorderEvent::Changed(key));
+        self.recording_hint = None;
+        cx.emit(HotkeyRecorderEvent::Changed(combo));
         cx.notify();
     }
 
     fn clear_key(&mut self, cx: &mut Context<'_, Self>) {
         self.current_key = None;
         self.recording = false;
+        self.recording_hint = None;
         cx.emit(HotkeyRecorderEvent::Cleared);
         cx.notify();
     }
@@ -190,8 +196,29 @@ impl Render for HotkeyRecorder {
                         }
 
                         let upper = key_str.to_uppercase();
-                        if Self::is_valid_key(&upper) {
-                            this.accept_key(upper, cx);
+                        if !Self::is_valid_key(&upper) {
+                            return;
+                        }
+
+                        // Capture the exact modifiers the user is holding. A
+                        // global hotkey needs at least one modifier, otherwise
+                        // it would hijack the bare key system-wide.
+                        let mods = &event.keystroke.modifiers;
+                        match crate::platform::build_hotkey_combo(
+                            mods.control,
+                            mods.alt,
+                            mods.shift,
+                            mods.platform,
+                            &upper,
+                        ) {
+                            Some(combo) => this.accept_combo(combo, cx),
+                            None => {
+                                this.recording_hint = Some(
+                                    "Hold at least one modifier (e.g. Ctrl / Option) with the key."
+                                        .to_string(),
+                                );
+                                cx.notify();
+                            }
                         }
                     }))
                     .child(if self.recording {
@@ -217,12 +244,20 @@ impl Render for HotkeyRecorder {
                             .child(
                                 div()
                                     .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("Press a key… (Backspace to clear)"),
+                                    .text_color(if self.recording_hint.is_some() {
+                                        cx.theme().danger
+                                    } else {
+                                        cx.theme().muted_foreground
+                                    })
+                                    .child(self.recording_hint.clone().unwrap_or_else(|| {
+                                        "Press modifiers + a key… (Backspace to clear)".to_string()
+                                    })),
                             )
-                    } else if let Some(ref key) = self.current_key {
-                        // Display mode: show modifier pills + key pill (platform-aware)
-                        let labels = platform::hotkey_modifier_labels();
+                    } else if let Some(ref combo) = self.current_key {
+                        // Display mode: parse the stored combo into modifier
+                        // pills + key pill (shows the actual captured combo).
+                        let (labels, key) = platform::parse_hotkey_display(combo)
+                            .unwrap_or_else(|| (Vec::new(), combo.clone()));
                         let mut row = div().flex().items_center().gap_1();
 
                         for (i, label) in labels.iter().enumerate() {
@@ -233,24 +268,26 @@ impl Render for HotkeyRecorder {
                         }
 
                         // Final separator + the actual bound key (highlighted with accent)
-                        row = row.child(Self::plus_separator(cx));
+                        if !labels.is_empty() {
+                            row = row.child(Self::plus_separator(cx));
+                        }
                         row = row.child(
                             div()
                                 .px_1p5()
                                 .py_0p5()
                                 .rounded(px(4.0))
                                 .border_1()
-                                .border_color(cx.theme().accent)
-                                .bg(cx.theme().accent.opacity(0.1))
+                                .border_color(cx.theme().primary.opacity(0.5))
+                                .bg(cx.theme().primary.opacity(0.1))
                                 .text_xs()
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(cx.theme().accent)
+                                .text_color(cx.theme().primary)
                                 .flex_shrink_0()
                                 .flex()
                                 .items_center()
                                 .justify_center()
                                 .min_w(px(22.0))
-                                .child(key.clone()),
+                                .child(key),
                         );
 
                         row

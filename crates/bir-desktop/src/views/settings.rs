@@ -262,7 +262,7 @@ impl SettingsView {
                         .text_sm()
                         .text_color(cx.theme().danger)
                         .child(
-                            "Google OAuth is not configured in this build. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, then rebuild the app.",
+                            "Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (e.g. copy .env.example to .env and fill it in), then restart the app.",
                         ),
                 )
             })
@@ -426,7 +426,7 @@ impl SettingsView {
                                 .text_sm()
                                 .text_color(cx.theme().muted_foreground)
                                 .child(
-                                    "For local or release builds, set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET before rebuilding. Tokens are stored in the operating-system credential store, not in the project environment.",
+                                    "Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in a .env file (see .env.example) and restart, or bake them in at build time for release builds. Tokens are stored in the operating-system credential store, not in the project environment.",
                                 ),
                         )
                         .child(
@@ -743,12 +743,8 @@ impl Render for SettingsView {
                     )
                     // Global Toggle Hotkey
                     .child({
-                        let labels = crate::platform::hotkey_modifier_labels();
-                        let combo_str = labels.join(" + ");
-                        let description = format!(
-                            "Press {} + [Key] to toggle eBIRForms from anywhere. Click the shortcut, then press a letter or number to reassign.",
-                            combo_str
-                        );
+                        let description =
+                            "Toggle eBIRForms from anywhere. Click the shortcut, then press your desired modifiers (Ctrl / Option / Shift / Cmd) together with a letter, number, or F-key.".to_string();
 
                         div()
                             .flex()

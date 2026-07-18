@@ -70,7 +70,8 @@ pub fn default_hotkey_key() -> &'static str {
     "E"
 }
 
-/// Human-readable modifier labels for the platform's global hotkey combo.
+/// Human-readable modifier labels for the platform's default global hotkey
+/// combo. Used as the fallback display for legacy bare-key bindings.
 /// Returns a slice of label strings (e.g. `["Ctrl", "Option"]` on macOS).
 pub fn hotkey_modifier_labels() -> &'static [&'static str] {
     if cfg!(target_os = "macos") {
@@ -82,23 +83,116 @@ pub fn hotkey_modifier_labels() -> &'static [&'static str] {
     }
 }
 
-/// Build a `global_hotkey::hotkey::HotKey` from a key character string.
-/// Uses platform-appropriate modifiers.
-pub fn build_hotkey(key_char: &str) -> Option<global_hotkey::hotkey::HotKey> {
-    use global_hotkey::hotkey::{Code, HotKey, Modifiers};
+/// The default modifier tokens (in stored-combo form) for this platform.
+fn default_modifier_tokens() -> &'static [&'static str] {
+    if cfg!(target_os = "macos") {
+        &["control", "alt"]
+    } else {
+        &["platform", "shift"]
+    }
+}
 
-    let code = key_char_to_code(key_char)?;
+/// A human-readable label for one stored modifier token on this platform.
+fn modifier_label(token: &str) -> Option<&'static str> {
+    match token.to_ascii_lowercase().as_str() {
+        "control" | "ctrl" => Some("Ctrl"),
+        "alt" | "option" | "opt" => Some(if cfg!(target_os = "macos") {
+            "Option"
+        } else {
+            "Alt"
+        }),
+        "shift" => Some("Shift"),
+        "platform" | "super" | "cmd" | "meta" | "win" => Some(if cfg!(target_os = "macos") {
+            "Cmd"
+        } else if cfg!(target_os = "windows") {
+            "Win"
+        } else {
+            "Super"
+        }),
+        _ => None,
+    }
+}
 
-    #[cfg(target_os = "macos")]
-    let modifiers = Modifiers::CONTROL | Modifiers::ALT; // Ctrl+Option
+/// Split a stored combo ("control+alt+F12") into `(modifier tokens, key)`.
+/// A bare key ("F12") returns the platform default modifier tokens.
+fn split_combo(combo: &str) -> Option<(Vec<String>, String)> {
+    let parts: Vec<&str> = combo
+        .split('+')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect();
+    let (key, mods) = parts.split_last()?;
+    let key = key.to_uppercase();
+    if mods.is_empty() {
+        // Legacy bare-key binding: apply the platform default modifiers.
+        return Some((
+            default_modifier_tokens().iter().map(|s| s.to_string()).collect(),
+            key,
+        ));
+    }
+    Some((mods.iter().map(|s| s.to_string()).collect(), key))
+}
 
-    #[cfg(target_os = "windows")]
-    let modifiers = Modifiers::SUPER | Modifiers::SHIFT; // Win+Shift
+/// Parse a stored combo into display modifier labels and the key label,
+/// e.g. `"control+alt+F12"` → `(["Ctrl", "Option"], "F12")`.
+pub fn parse_hotkey_display(combo: &str) -> Option<(Vec<&'static str>, String)> {
+    let (mods, key) = split_combo(combo)?;
+    let labels: Vec<&'static str> = mods.iter().filter_map(|m| modifier_label(m)).collect();
+    Some((labels, key))
+}
 
-    #[cfg(target_os = "linux")]
-    let modifiers = Modifiers::SUPER | Modifiers::SHIFT; // Super+Shift
+/// Build a stored-combo string from the pressed modifiers and key.
+/// Returns `None` when no modifier is held (a global hotkey needs one).
+pub fn build_hotkey_combo(
+    control: bool,
+    alt: bool,
+    shift: bool,
+    platform: bool,
+    key: &str,
+) -> Option<String> {
+    let mut parts: Vec<&str> = Vec::new();
+    if control {
+        parts.push("control");
+    }
+    if alt {
+        parts.push("alt");
+    }
+    if shift {
+        parts.push("shift");
+    }
+    if platform {
+        parts.push("platform");
+    }
+    if parts.is_empty() {
+        return None;
+    }
+    Some(format!("{}+{}", parts.join("+"), key.to_uppercase()))
+}
 
-    Some(HotKey::new(Some(modifiers), code))
+/// Build a `global_hotkey::hotkey::HotKey` from a stored combo string.
+/// A bare key falls back to the platform default modifiers (legacy bindings).
+pub fn build_hotkey(combo: &str) -> Option<global_hotkey::hotkey::HotKey> {
+    use global_hotkey::hotkey::{HotKey, Modifiers};
+
+    let (mod_tokens, key) = split_combo(combo)?;
+    let code = key_char_to_code(&key)?;
+
+    let mut modifiers = Modifiers::empty();
+    for token in &mod_tokens {
+        match token.to_ascii_lowercase().as_str() {
+            "control" | "ctrl" => modifiers |= Modifiers::CONTROL,
+            "alt" | "option" | "opt" => modifiers |= Modifiers::ALT,
+            "shift" => modifiers |= Modifiers::SHIFT,
+            "platform" | "super" | "cmd" | "meta" | "win" => modifiers |= Modifiers::SUPER,
+            _ => {}
+        }
+    }
+    let modifiers = if modifiers.is_empty() {
+        None
+    } else {
+        Some(modifiers)
+    };
+    Some(HotKey::new(modifiers, code))
 }
 
 /// Map a single-character key string to a `global_hotkey::hotkey::Code`.

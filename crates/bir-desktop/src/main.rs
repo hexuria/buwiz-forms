@@ -143,12 +143,15 @@ fn main() {
     let file_appender = tracing_appender::rolling::never(&logs_dir, "ebirforms.log");
 
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        // The binary crate is `bir` (bin target name); its modules log under
+        // that target, not `bir_desktop`, so both are listed to avoid silently
+        // dropping app-level logs.
         if developer_mode {
-            "bir_desktop=debug,bir_print=debug,bir_core=info"
+            "bir=debug,bir_desktop=debug,bir_print=debug,bir_core=info"
                 .parse()
                 .unwrap()
         } else {
-            "bir_desktop=info,bir_print=error,bir_core=info"
+            "bir=info,bir_desktop=info,bir_print=error,bir_core=info"
                 .parse()
                 .unwrap()
         }
@@ -249,41 +252,13 @@ fn main() {
                 }
             });
 
-            // Phase 2b: Global Hotkey Listener (all platforms, except Mac App Store)
+            // Phase 2b: Global Hotkey Listener (all platforms, except Mac App
+            // Store). The hotkey manager is created and kept alive inside the
+            // polling task below — a manager dropped here would immediately
+            // unregister the hotkey. This DB handle lets that task re-read the
+            // stored combo and re-register when the user changes it.
             #[cfg(not(feature = "mas_build"))]
-            let _hotkey_manager = {
-                let hotkey_key: Option<String> = if let Ok(guard) = db.lock() {
-                    guard
-                        .get_setting("global_hotkey_key")
-                        .ok()
-                        .flatten()
-                        .map(|k| k.to_uppercase())
-                        .filter(|k| !k.is_empty())
-                } else {
-                    None
-                };
-
-                match global_hotkey::GlobalHotKeyManager::new() {
-                    Ok(manager) => {
-                        if let Some(ref key) = hotkey_key {
-                            if let Some(hotkey) = crate::platform::build_hotkey(key) {
-                                if let Err(e) = manager.register(hotkey) {
-                                    tracing::warn!("Failed to register global hotkey: {e}");
-                                } else {
-                                    tracing::info!("Global hotkey registered: {key}");
-                                }
-                            }
-                        } else {
-                            tracing::info!("No global hotkey configured — skipping registration");
-                        }
-                        Some(manager)
-                    }
-                    Err(e) => {
-                        tracing::warn!("Failed to initialize global hotkey manager: {e}");
-                        None
-                    }
-                }
-            };
+            let hotkey_db = db.clone();
 
             // Phase 3: System Tray Integration
             let tray_menu = tray_icon::menu::Menu::new();
@@ -349,6 +324,24 @@ fn main() {
 
                 cx.spawn(async move |cx| {
                     let mut tray = Some(tray);
+
+                    // Own the global hotkey manager here so it stays alive for
+                    // the app's lifetime (dropping it unregisters the hotkey).
+                    #[cfg(not(feature = "mas_build"))]
+                    let hotkey_manager = match global_hotkey::GlobalHotKeyManager::new() {
+                        Ok(manager) => Some(manager),
+                        Err(error) => {
+                            tracing::warn!(%error, "Failed to initialize global hotkey manager");
+                            None
+                        }
+                    };
+                    #[cfg(not(feature = "mas_build"))]
+                    let mut registered_hotkey: Option<global_hotkey::hotkey::HotKey> = None;
+                    #[cfg(not(feature = "mas_build"))]
+                    let mut current_combo: Option<String> = None;
+                    #[cfg(not(feature = "mas_build"))]
+                    let mut hotkey_tick: u32 = 0;
+
                     loop {
                         if let Ok(event) = menu_channel.try_recv() {
                             if event.id == show_i.id() {
@@ -386,13 +379,64 @@ fn main() {
                         // This allows native tray menus to open without side effects.
                         if let Ok(_event) = tray_channel.try_recv() {}
 
-                        // Poll global hotkey events (cross-platform toggle)
+                        // Poll global hotkey events (cross-platform toggle).
+                        // The crate emits an event for both key press AND
+                        // release; toggling on both would hide then instantly
+                        // re-show the window. Act only on the press.
                         #[cfg(not(feature = "mas_build"))]
-                        if let Ok(_event) = global_hotkey::GlobalHotKeyEvent::receiver().try_recv()
+                        while let Ok(event) = global_hotkey::GlobalHotKeyEvent::receiver().try_recv()
                         {
-                            cx.update(|_cx| {
-                                crate::platform::toggle_app_visibility();
-                            });
+                            if event.state == global_hotkey::HotKeyState::Pressed {
+                                let _ = cx.update(|_cx| {
+                                    crate::platform::toggle_app_visibility();
+                                });
+                            }
+                        }
+
+                        // Re-register the global hotkey when the stored combo
+                        // changes (checked immediately, then ~once per second)
+                        // so Settings changes apply without a restart.
+                        #[cfg(not(feature = "mas_build"))]
+                        {
+                            hotkey_tick = hotkey_tick.wrapping_add(1);
+                            if hotkey_tick == 1 || hotkey_tick % 10 == 0 {
+                                let stored = hotkey_db
+                                    .lock()
+                                    .ok()
+                                    .and_then(|db| {
+                                        db.get_setting("global_hotkey_key").ok().flatten()
+                                    })
+                                    .filter(|value| !value.is_empty());
+                                if stored != current_combo {
+                                    if let (Some(manager), Some(old)) =
+                                        (hotkey_manager.as_ref(), registered_hotkey.take())
+                                    {
+                                        let _ = manager.unregister(old);
+                                    }
+                                    if let (Some(manager), Some(combo)) =
+                                        (hotkey_manager.as_ref(), stored.as_deref())
+                                    {
+                                        match crate::platform::build_hotkey(combo) {
+                                            Some(hotkey) => match manager.register(hotkey) {
+                                                Ok(()) => {
+                                                    registered_hotkey = Some(hotkey);
+                                                    tracing::info!(
+                                                        "Global hotkey registered: {combo}"
+                                                    );
+                                                }
+                                                Err(error) => tracing::warn!(
+                                                    %error,
+                                                    "Failed to register global hotkey '{combo}'"
+                                                ),
+                                            },
+                                            None => tracing::warn!(
+                                                "Invalid global hotkey combo '{combo}'"
+                                            ),
+                                        }
+                                    }
+                                    current_combo = stored;
+                                }
+                            }
                         }
 
                         cx.background_executor()
