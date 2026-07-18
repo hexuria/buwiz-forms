@@ -60,6 +60,20 @@
   border-right-color: #000;
 }
 
+/* The official Poppler rasters place these independently boxed regions on
+ * half-point boundaries. Keep the reviewed offsets local to this revision. */
+.government-header-1601c,
+.masthead-1601c {
+  transform: translate(-.5pt, .5pt);
+}
+.header-options-1601c { transform: translate(-.5pt, 1pt); }
+.background-1601c,
+.computation-1601c { transform: translateY(-.5pt); }
+.declaration-1601c { transform: translate(-.5pt, 1pt); }
+.payment-1601c { transform: translate(-.5pt, .5pt); }
+.identity-1601c-page-two { transform: translate(-.5pt, .5pt); }
+.schedule-1601c { transform: translate(-.5pt, 1pt); }
+
 .government-header-1601c {
   position: relative;
   height: 29pt;
