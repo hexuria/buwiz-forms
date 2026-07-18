@@ -55,6 +55,13 @@ to the clean source revision and renderer bundle while permanently recording:
 These bundles are inputs for the platform collectors. They are not the signed,
 notarized, or installer-level package evidence required for promotion.
 
+The current operator-only macOS candidate binder and strict attestation
+contract are documented in
+[macOS candidate certification collector/verifier foundation](macos-candidate-certification.md).
+The current macOS archive is ad-hoc signed, so that strict verifier correctly
+cannot pass Developer ID, notarization, or stapling for the exact workflow
+artifact yet.
+
 ## Promotion remains a separate milestone
 
 The next collector milestone must run the unchanged candidate on its native

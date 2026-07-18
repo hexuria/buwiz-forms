@@ -269,9 +269,15 @@ Do not weaken the release preflight to work around those missing collectors.
 The manually dispatched, non-publishing candidate construction path is
 documented in `html-candidate-certification.md`. It breaks the build bootstrap
 cycle without changing this diagnostic driver's trust level or the tagged
-release gate. The next evidence milestone remains an external macOS driver that
-exercises the unchanged signed package and emits reviewable artifacts satisfying
-the trust boundary above.
+release gate. The next evidence milestone now has an operator-only candidate
+binder, closed attestation/report schemas, and a strict verifier foundation
+documented in
+[`macos-candidate-certification.md`](macos-candidate-certification.md). It
+re-runs the owned Rust PDF validator and fails closed on unavailable
+Accessibility, printer, Developer ID, notarization, stapling, or rollback
+proof. It remains untrusted and non-promotional. The workflow candidate is
+currently ad-hoc signed, and no reviewed external UI/print collector exists, so
+the platform gate remains incomplete.
 
 ## Verification
 

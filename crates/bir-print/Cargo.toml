@@ -15,6 +15,11 @@ name = "verify_native_output_observation"
 path = "src/bin/verify_native_output_observation.rs"
 required-features = ["native-output-evidence"]
 
+[[bin]]
+name = "verify_certification_pdf"
+path = "src/bin/verify_certification_pdf.rs"
+required-features = ["native-output-evidence"]
+
 [dependencies]
 bir-core = { path = "../bir-core" }
 tempfile = "3.27.0"

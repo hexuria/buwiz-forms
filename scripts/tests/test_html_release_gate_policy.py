@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from pathlib import Path
 
@@ -133,6 +134,39 @@ class HtmlReleaseGatePolicyTests(unittest.TestCase):
         self.assertIn('"promotion_eligible": False', driver)
         self.assertIn('"trusted_producer": False', driver)
         self.assertNotIn("form-release-evidence.json\"", driver)
+
+    def test_candidate_certification_foundation_cannot_promote_or_register_trust(self) -> None:
+        verifier = (
+            REPOSITORY_ROOT / "scripts/macos_candidate_certification.py"
+        ).read_text(encoding="utf-8")
+        attestation_schema = json.loads(
+            (
+                REPOSITORY_ROOT
+                / "packages/form-specs/schema/macos-candidate-certification-attestation-v1.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+        report_schema = json.loads(
+            (
+                REPOSITORY_ROOT
+                / "packages/form-specs/schema/macos-candidate-certification-report-v1.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+
+        self.assertIn('"promotion_eligible": False', verifier)
+        self.assertIn('"trusted_producer": False', verifier)
+        self.assertIn('"promotion_satisfied": False', verifier)
+        self.assertNotIn("form-release-evidence.json", verifier)
+        self.assertNotIn("TRUSTED_PLATFORM_EVIDENCE_PRODUCERS", verifier)
+        self.assertNotIn("TRUSTED_ROLLBACK_EVIDENCE_PRODUCERS", verifier)
+        self.assertEqual(
+            attestation_schema["properties"]["promotion_eligible"], {"const": False}
+        )
+        self.assertEqual(
+            report_schema["properties"]["trusted_producer"], {"const": False}
+        )
+        self.assertEqual(
+            report_schema["properties"]["promotion_satisfied"], {"const": False}
+        )
 
 
 if __name__ == "__main__":
