@@ -762,10 +762,12 @@ mod tests {
         draft.schedule_1 = vec![schedule_row("05/2026", 1.0, 1.0); 4];
         draft.compute();
 
-        assert!(draft
-            .validate()
-            .iter()
-            .any(|(field, _)| field == "schedule_1"));
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "schedule_1")
+        );
     }
 
     #[test]
@@ -791,16 +793,20 @@ mod tests {
         draft.any_taxes_withheld = false;
         draft.tax_relief = true;
 
-        assert!(draft
-            .validate()
-            .iter()
-            .any(|(field, _)| field == "tax_relief_specification"));
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "tax_relief_specification")
+        );
 
         draft.tax_relief_specification = "Special Law 123".to_string();
-        assert!(draft
-            .validate()
-            .iter()
-            .all(|(field, _)| field != "tax_relief_specification"));
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .all(|(field, _)| field != "tax_relief_specification")
+        );
     }
 
     #[test]
@@ -809,10 +815,12 @@ mod tests {
         draft.any_taxes_withheld = false;
         draft.contact_number = "6391234567890".to_string();
 
-        assert!(draft
-            .validate()
-            .iter()
-            .any(|(field, _)| field == "contact_number"));
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "contact_number")
+        );
     }
 
     #[test]
@@ -831,9 +839,11 @@ mod tests {
         assert!(errors.iter().any(|(field, message)| {
             field == "category_of_agent" && message.contains("Item 11")
         }));
-        assert!(errors
-            .iter()
-            .all(|(_, message)| !message.contains("Item 12")));
+        assert!(
+            errors
+                .iter()
+                .all(|(_, message)| !message.contains("Item 12"))
+        );
     }
 
     #[test]
@@ -849,12 +859,16 @@ mod tests {
         draft.tax_29_other_remittances_amount = f64::NAN;
 
         let errors = draft.validate();
-        assert!(errors
-            .iter()
-            .any(|(field, _)| field == "tax_21_total_non_taxable"));
-        assert!(errors
-            .iter()
-            .any(|(field, _)| field == "tax_29_other_remittances_amount"));
+        assert!(
+            errors
+                .iter()
+                .any(|(field, _)| field == "tax_21_total_non_taxable")
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|(field, _)| field == "tax_29_other_remittances_amount")
+        );
     }
 
     #[test]

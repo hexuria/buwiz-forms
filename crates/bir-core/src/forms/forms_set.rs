@@ -623,11 +623,8 @@ mod tests {
 
     #[test]
     fn deactivate_redundant_annual_itrs_falls_back_to_group_order() {
-        let mut set = PerYearFormsSet::from_codes(
-            2026,
-            ["1701A", "1701MS"],
-            FormSetSource::InferredTaxType,
-        );
+        let mut set =
+            PerYearFormsSet::from_codes(2026, ["1701A", "1701MS"], FormSetSource::InferredTaxType);
 
         // The implied primary (1701) is not among the active entries, so the
         // first active member in canonical group order (1701A) survives.
@@ -640,11 +637,8 @@ mod tests {
     fn deactivate_redundant_annual_itrs_ignores_single_and_cross_group() {
         // One active individual ITR + one active corporate ITR: no conflict
         // within either group, nothing changes.
-        let mut set = PerYearFormsSet::from_codes(
-            2026,
-            ["1701", "1702RT"],
-            FormSetSource::InferredTaxType,
-        );
+        let mut set =
+            PerYearFormsSet::from_codes(2026, ["1701", "1702RT"], FormSetSource::InferredTaxType);
         assert!(!set.deactivate_redundant_annual_itrs(Some("1701"), Some("1702RT")));
         assert!(set.contains_active("1701"));
         assert!(set.contains_active("1702RT"));

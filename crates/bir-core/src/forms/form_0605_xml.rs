@@ -6,12 +6,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use super::FormValidator;
 use super::form_0605::{
     Form0605ApprovalSelection, Form0605Date, Form0605Draft, Form0605FilingBasis,
     Form0605IndexedCode, Form0605MannerOfPayment, Form0605PaymentDetails, Form0605SignatureDetails,
     Form0605TaxpayerClassification, Form0605TypeOfPayment,
 };
-use super::FormValidator;
 
 const ATC_INDEX_COUNT: u16 = 142;
 const TAX_TYPE_INDEX_COUNT: u16 = 37;
@@ -1043,9 +1043,11 @@ mod tests {
         let mut missing = reviewed_sample_fields(ReviewedSample::January2026);
         missing.remove("TaxTypeCode37");
         let missing_errors = Form0605Draft::from_bir_field_map(&missing).unwrap_err();
-        assert!(missing_errors
-            .iter()
-            .any(|(field, _)| field == "TaxTypeCode37"));
+        assert!(
+            missing_errors
+                .iter()
+                .any(|(field, _)| field == "TaxTypeCode37")
+        );
     }
 
     #[test]

@@ -213,14 +213,12 @@ impl AdminCalendarDashboard {
         }
 
         if self.new_override_orig_date.read(cx).has_invalid_value(cx) {
-            self.override_editor_error =
-                Some("Original deadline must use MM/DD/YYYY.".into());
+            self.override_editor_error = Some("Original deadline must use MM/DD/YYYY.".into());
             cx.notify();
             return;
         }
         if self.new_override_adj_date.read(cx).has_invalid_value(cx) {
-            self.override_editor_error =
-                Some("Adjusted deadline must use MM/DD/YYYY.".into());
+            self.override_editor_error = Some("Adjusted deadline must use MM/DD/YYYY.".into());
             cx.notify();
             return;
         }
@@ -237,10 +235,7 @@ impl AdminCalendarDashboard {
 
         let saved_title = title.clone();
         if let Some(editing_id) = self.editing_override_id.clone() {
-            let Some(existing) = self
-                .overrides
-                .iter_mut()
-                .find(|item| item.id == editing_id)
+            let Some(existing) = self.overrides.iter_mut().find(|item| item.id == editing_id)
             else {
                 self.override_editor_error =
                     Some("The override being edited no longer exists.".into());
@@ -543,82 +538,85 @@ impl AdminCalendarDashboard {
         for (idx, ovr) in self.overrides.iter().enumerate() {
             let delete_idx = idx;
             let edit_id = ovr.id.clone();
-            container = container.child(
-                div()
-                    .id(SharedString::from(format!("override-{}", idx)))
-                    .w_full()
-                    .p_4()
-                    .bg(cx.theme().background)
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .rounded_xl()
-                    .shadow_sm()
-                    .flex()
-                    .justify_between()
-                    .items_center()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .text_lg()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(cx.theme().foreground)
-                                    .child(ovr.title.clone()),
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(format!(
-                                        "Source: {} | Forms: {}",
-                                        ovr.source_reference,
-                                        ovr.affected_form_codes.join(", ")
+            container =
+                container.child(
+                    div()
+                        .id(SharedString::from(format!("override-{}", idx)))
+                        .w_full()
+                        .p_4()
+                        .bg(cx.theme().background)
+                        .border_1()
+                        .border_color(cx.theme().border)
+                        .rounded_xl()
+                        .shadow_sm()
+                        .flex()
+                        .justify_between()
+                        .items_center()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_1()
+                                .child(
+                                    div()
+                                        .text_lg()
+                                        .font_weight(FontWeight::BOLD)
+                                        .text_color(cx.theme().foreground)
+                                        .child(ovr.title.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child(format!(
+                                            "Source: {} | Forms: {}",
+                                            ovr.source_reference,
+                                            ovr.affected_form_codes.join(", ")
+                                        )),
+                                )
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child(format!(
+                                            "{} → {}",
+                                            ovr.original_deadline.format("%Y-%m-%d"),
+                                            ovr.adjusted_deadline.format("%Y-%m-%d")
+                                        )),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .child(
+                                    gpui_component::button::Button::new(SharedString::from(
+                                        format!("edit-override-{}", idx),
+                                    ))
+                                    .label("Edit")
+                                    .small()
+                                    .on_click(cx.listener(
+                                        move |this, _, window, cx| {
+                                            this.open_edit_override_editor(&edit_id, window, cx);
+                                        },
                                     )),
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(format!(
-                                        "{} → {}",
-                                        ovr.original_deadline.format("%Y-%m-%d"),
-                                        ovr.adjusted_deadline.format("%Y-%m-%d")
+                                )
+                                .child(
+                                    gpui_component::button::Button::new(SharedString::from(
+                                        format!("del-override-{}", idx),
+                                    ))
+                                    .icon(IconName::Close)
+                                    .ghost()
+                                    .small()
+                                    .on_click(cx.listener(
+                                        move |this, _, _, cx| {
+                                            this.delete_override(delete_idx, cx);
+                                        },
                                     )),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                gpui_component::button::Button::new(SharedString::from(format!(
-                                    "edit-override-{}",
-                                    idx
-                                )))
-                                .label("Edit")
-                                .small()
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.open_edit_override_editor(&edit_id, window, cx);
-                                })),
-                            )
-                            .child(
-                                gpui_component::button::Button::new(SharedString::from(format!(
-                                    "del-override-{}",
-                                    idx
-                                )))
-                                .icon(IconName::Close)
-                                .ghost()
-                                .small()
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.delete_override(delete_idx, cx);
-                                })),
-                            ),
-                    ),
-            );
+                                ),
+                        ),
+                );
         }
 
         if self.overrides.is_empty() {

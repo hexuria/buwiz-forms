@@ -163,11 +163,7 @@ impl DateInputState {
                 });
                 if let Some(d) = date {
                     self.calendar.update(cx, |cal, cx| {
-                        cal.set_date(
-                            gpui_component::calendar::Date::Single(Some(d)),
-                            window,
-                            cx,
-                        );
+                        cal.set_date(gpui_component::calendar::Date::Single(Some(d)), window, cx);
                     });
                 }
                 cx.notify();

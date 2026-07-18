@@ -44,11 +44,7 @@ impl Render for RdoSelector {
                             .text_color(cx.theme().foreground)
                             .child(self.selected_rdo.clone()),
                     )
-                    .child(
-                        div()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("▼"),
-                    ),
+                    .child(div().text_color(cx.theme().muted_foreground).child("▼")),
             )
     }
 }

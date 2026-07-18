@@ -689,7 +689,10 @@ impl ProfileManagerView {
             // Deadline draft fields feed the dirty snapshot, so typing in
             // them (without pressing Add) must arm the navigation guard.
             cx.subscribe(&cor_deadline_title_input, Self::on_cor_deadline_draft_event),
-            cx.subscribe(&cor_deadline_source_input, Self::on_cor_deadline_draft_event),
+            cx.subscribe(
+                &cor_deadline_source_input,
+                Self::on_cor_deadline_draft_event,
+            ),
             cx.subscribe(&cor_deadline_forms_input, Self::on_cor_deadline_draft_event),
             cx.subscribe(
                 &cor_deadline_original_input,
@@ -699,7 +702,10 @@ impl ProfileManagerView {
                 &cor_deadline_adjusted_input,
                 Self::on_cor_deadline_draft_event,
             ),
-            cx.subscribe(&cor_deadline_reason_input, Self::on_cor_deadline_draft_event),
+            cx.subscribe(
+                &cor_deadline_reason_input,
+                Self::on_cor_deadline_draft_event,
+            ),
             cx.subscribe(&cor_rdo_select, Self::on_combobox_event),
             cx.subscribe(&cor_taxpayer_type_select, Self::on_combobox_event),
             cx.subscribe(&cor_tax_classification_select, Self::on_combobox_event),
@@ -1105,7 +1111,8 @@ impl ProfileManagerView {
         if !self.cor_editor_has_unapplied_changes(cx) {
             return false;
         }
-        let message = format!("Apply the COR editor changes or use Discard before {action_clause}.");
+        let message =
+            format!("Apply the COR editor changes or use Discard before {action_clause}.");
         self.save_message = Some(message.clone());
         window.push_notification(
             Notification::error(message).title("Unapplied COR changes"),
@@ -1674,9 +1681,7 @@ impl ProfileManagerView {
         self.calendar_form_selection = self
             .db
             .lock()
-            .map(|db| {
-                bir_core::google_calendar::calendar_form_selection(&db, &profile.tin.full())
-            })
+            .map(|db| bir_core::google_calendar::calendar_form_selection(&db, &profile.tin.full()))
             .unwrap_or_default();
         let select_val = self.forms_editor_year_select.read(cx).selected_value(cx);
         if let Ok(y) = select_val.parse::<u16>() {
@@ -3539,10 +3544,9 @@ impl ProfileManagerView {
         // A COR registers exactly one annual income tax return; two members
         // of the same annual-ITR group would later reconcile into a
         // conflicting Forms Set, so refuse the selection here.
-        if let Some(group) = bir_core::integration::conflicting_annual_itr_code_groups(
-            &self.cor_extracted_forms,
-        )
-        .first()
+        if let Some(group) =
+            bir_core::integration::conflicting_annual_itr_code_groups(&self.cor_extracted_forms)
+                .first()
         {
             return Err(format!(
                 "The exact COR form codes list more than one annual income tax return ({}). A taxpayer files only one annual ITR per year — keep only the code this COR actually registers.",
@@ -5196,10 +5200,7 @@ mod save_revision_tests {
 
         assert_eq!(
             (elections.len(), &elections[0].election),
-            (
-                1,
-                &bir_core::profile::IncomeTaxElection::GraduatedOsd
-            )
+            (1, &bir_core::profile::IncomeTaxElection::GraduatedOsd)
         );
     }
 

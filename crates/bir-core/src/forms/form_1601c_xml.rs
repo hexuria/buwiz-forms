@@ -5,8 +5,8 @@
 //! empty second-address field. Neither source proves submission semantics, so
 //! queueing remains disabled independently in the form capability registry.
 
-use super::form_1601c::{Form1601CDraft, Form1601CSchedule1Row, MAX_SCHEDULE_1_ROWS};
 use super::FormValidator;
+use super::form_1601c::{Form1601CDraft, Form1601CSchedule1Row, MAX_SCHEDULE_1_ROWS};
 use std::collections::BTreeMap;
 
 impl Form1601CDraft {

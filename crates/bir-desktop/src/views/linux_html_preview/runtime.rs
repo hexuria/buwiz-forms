@@ -1809,7 +1809,10 @@ impl Render for LinuxEmbeddedHtmlPreviewView {
                                 |toolbar| {
                                     toolbar.child(
                                         Button::new("linux-html-preview-retry")
-                                            .icon(gpui_component::Icon::empty().path("svg/refresh.svg"))
+                                            .icon(
+                                                gpui_component::Icon::empty()
+                                                    .path("svg/refresh.svg"),
+                                            )
                                             .tooltip("Refresh preview")
                                             .outline()
                                             .loading(refreshing)

@@ -126,7 +126,10 @@ fn split_combo(combo: &str) -> Option<(Vec<String>, String)> {
     if mods.is_empty() {
         // Legacy bare-key binding: apply the platform default modifiers.
         return Some((
-            default_modifier_tokens().iter().map(|s| s.to_string()).collect(),
+            default_modifier_tokens()
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             key,
         ));
     }
