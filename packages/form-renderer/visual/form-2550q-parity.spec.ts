@@ -7,6 +7,13 @@ import { compareCompleteOfficialPage } from "./official-page-diff";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "../../..");
+const staticTextInventory = JSON.parse(fs.readFileSync(path.join(
+  REPO_ROOT,
+  "packages/form-renderer/references/2550q-2024-static-text-inventory.json"
+), "utf8")) as {
+  official_source_sha256: string;
+  regions: Array<{ selector: string; text: string }>;
+};
 const DEVICE_SCALE_FACTOR = 1.5;
 const MAX_CHANGED_PERCENT = 1;
 const STRUCTURAL_INK_THRESHOLD = 100;
@@ -17,7 +24,6 @@ test("2550Q April 2024 renders every Rust fixture as two stable unclipped 8.5x14
   for (const fixtureName of [
     "2550q-minimum.json",
     "2550q-normal.json",
-    "2550q-long-values.json",
     "2550q-validation-edge.json",
     "2550q-two-row-capacity.json"
   ]) {
@@ -28,6 +34,76 @@ test("2550Q April 2024 renders every Rust fixture as two stable unclipped 8.5x14
       await expect(pages.nth(pageIndex)).toHaveAttribute("data-paper", "legal");
       expect(await pageHasNoOverflow(pages.nth(pageIndex)), `${fixtureName} page ${pageIndex + 1}`).toBe(true);
     }
+  }
+});
+
+test("2550Q April 2024 preserves long values and fails closed at the reviewed readable floor", async ({ page }) => {
+  const fixture = readFixture(
+    "packages/form-contracts/fixtures/2550q-long-values.json"
+  ) as {
+    taxpayer: { email: string; name: string; registered_address: string };
+    fields: Record<string, { type: string; value: string | number | boolean }>;
+  };
+  await renderEnvelope(page, fixture);
+
+  await expect(page.locator('[data-adaptive-fit-state="pending"]')).toHaveCount(0);
+  const adaptiveValues = page.locator(".form-2550q-page .adaptive-plain-value");
+  expect(await adaptiveValues.count()).toBeGreaterThan(20);
+
+  for (const expectedValue of [
+    fixture.taxpayer.name,
+    fixture.taxpayer.registered_address,
+    fixture.taxpayer.email,
+    fixture.fields.item_19_description.value,
+    fixture.fields.item_42_description.value,
+    fixture.fields.item_47_description.value,
+    fixture.fields.item_56_description.value,
+    fixture.fields.schedule_1_1_description.value,
+    fixture.fields.schedule_3_1_agent.value,
+    fixture.fields.schedule_4_1_receipt.value
+  ].map(String)) {
+    expect(
+      await adaptiveValues.evaluateAll(
+        (elements, value) => elements.some((element) => element.textContent === value),
+        expectedValue
+      ),
+      expectedValue
+    ).toBe(true);
+  }
+
+  const measurements = await adaptiveValues.evaluateAll((elements) => elements.map((element) => ({
+    fontSize: Number((element as HTMLElement).dataset.adaptiveFontSizePx),
+    max: Number((element as HTMLElement).dataset.adaptiveMaxFontPx),
+    min: Number((element as HTMLElement).dataset.adaptiveMinFontPx),
+    state: (element as HTMLElement).dataset.adaptiveFitState,
+    step: Number((element as HTMLElement).dataset.adaptiveStepPx)
+  })));
+  for (const measurement of measurements) {
+    expect(measurement.step).toBe(0.5);
+    expect(measurement.fontSize).toBeGreaterThanOrEqual(measurement.min);
+    expect(measurement.fontSize).toBeLessThanOrEqual(measurement.max + 0.05);
+    expect(["fit", "unresolved"]).toContain(measurement.state);
+    expect([[9.6, 8], [8.25, 6.75]]).toContainEqual([
+      measurement.max,
+      measurement.min
+    ]);
+  }
+  expect(measurements.some(({ state }) => state === "unresolved")).toBe(true);
+
+  const pages = page.locator(".form-page");
+  expect(await pageHasNoOverflow(pages.nth(0)), "long fixture page 1").toBe(true);
+  expect(await pageHasNoOverflow(pages.nth(1)), "long fixture page 2 must fail closed").toBe(false);
+});
+
+test("2550Q April 2024 preserves every reviewed official static label", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/2550q-minimum.json"));
+
+  expect(staticTextInventory.official_source_sha256).toBe(
+    "18eb16925010fdda820cef958221ba2c0d073066efa93a898113e39b31135a25"
+  );
+  for (const region of staticTextInventory.regions) {
+    const visibleText = await reviewedStaticText(page.locator(region.selector));
+    expect(visibleText, region.selector).toBe(region.text);
   }
 });
 
@@ -416,6 +492,29 @@ async function renderEnvelope(page: Page, envelope: unknown) {
   await page.locator(".form-document").waitFor();
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   await page.evaluate(() => document.fonts.ready);
+  await page.waitForFunction(
+    () => !document.querySelector('[data-adaptive-fit-state="pending"]')
+  );
+}
+
+async function reviewedStaticText(locator: Locator) {
+  await expect(locator).toHaveCount(1);
+  return locator.evaluate((element) => {
+    const dynamicValues = [...element.querySelectorAll<HTMLElement>([
+      ".comb-value",
+      ".adaptive-plain-value",
+      ".check-box",
+      ".schedule-money-2550q",
+      ".value-line-2550q"
+    ].join(", "))];
+    const priorDisplays = dynamicValues.map((dynamicValue) => dynamicValue.style.display);
+    dynamicValues.forEach((dynamicValue) => { dynamicValue.style.display = "none"; });
+    const visibleText = (element as HTMLElement).innerText.replace(/\s+/g, " ").trim();
+    dynamicValues.forEach((dynamicValue, index) => {
+      dynamicValue.style.display = priorDisplays[index] ?? "";
+    });
+    return visibleText;
+  });
 }
 
 function compareOfficialStructure(expected: PNG, actual: PNG) {

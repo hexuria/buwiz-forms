@@ -3,6 +3,7 @@ import { getFormSpec } from "@ebirforms/form-specs";
 import { Fragment, type ReactNode } from "react";
 import {
   AdaptiveCombValue,
+  AdaptivePlainValue,
   CheckChoice,
   CombValue,
   FolioPage,
@@ -16,6 +17,12 @@ import {
   OFFICIAL_2550Q_SEAL
 } from "./official2550QAssets";
 import "./Form2550Q.css";
+
+const GUIDED_OVERFLOW_MAX_FONT_PX = 9.6;
+const GUIDED_OVERFLOW_MIN_FONT_PX = 8;
+const PLAIN_FIELD_MAX_FONT_PX = 8.25;
+const PLAIN_FIELD_MIN_FONT_PX = 6.75;
+const ADAPTIVE_FONT_STEP_PX = 0.5;
 
 type AmountRow = Readonly<{
   item: number;
@@ -66,7 +73,7 @@ const PART_FOUR_ROWS: readonly Readonly<{
   { item: 46, label: "Importations", a: "item_46a", b: "item_46b" },
   { item: 47, label: <>Others <em>(Specify)</em></>, a: "item_47a", b: "item_47b" },
   { item: 48, label: "Domestic Purchases with No Input Tax", a: "item_48a", disabledB: true },
-  { item: 49, label: "VAT-Exempt Importations", a: "item_49a", disabledB: true },
+  { item: 49, label: "VAT- Exempt Importations", a: "item_49a", disabledB: true },
   { item: 50, label: <>Total Current Purchases/Input Tax <em>(Sum of Items 44A to 49A)/(Sum of Items 44B to 47B)</em></>, a: "item_50a", b: "item_50b", emphasis: "subtotal" },
   { item: 51, label: <>Total Available Input Tax <em>(Sum of Items 43B and 50B)</em></>, disabledA: true, b: "item_51b", emphasis: "subtotal" },
   { item: 52, label: <>Input Tax on Purchases/Importation of Capital Goods exceeding P1 Million deferred for the succeeding period <em>(From Part V Schedule 1, Column I)</em></>, disabledA: true, b: "item_52b" },
@@ -184,8 +191,8 @@ function HeaderOptions2550Q({ envelope }: { envelope: RenderEnvelope }) {
         <div className="header-cell-2550q return-period-2550q">
           <span><b>4</b> Return Period <em>(MM/DD/YYYY)</em></span>
           <div className="return-period-values-2550q">
-            <span>From</span><AdaptiveCombValue value={text(envelope, "return_period_from").replace(/\D/g, "")} cells={8} />
-            <span>To</span><AdaptiveCombValue value={text(envelope, "return_period_to").replace(/\D/g, "")} cells={8} />
+            <span>From</span><AdaptiveGuidedValue2550Q value={text(envelope, "return_period_from").replace(/\D/g, "")} cells={8} />
+            <span>To</span><AdaptiveGuidedValue2550Q value={text(envelope, "return_period_to").replace(/\D/g, "")} cells={8} />
           </div>
         </div>
         <div className="header-cell-2550q binary-option-2550q">
@@ -226,7 +233,7 @@ function PartOne2550Q({ envelope }: { envelope: RenderEnvelope }) {
         <span><b>14</b> Are you availing of tax relief under Special Law or International Tax Treaty?</span>
         <CheckChoice checked={bool(envelope, "is_availing_tax_relief")} label="Yes" />
         <CheckChoice checked={!bool(envelope, "is_availing_tax_relief")} label="No" />
-        <span className="tax-relief-detail-2550q"><span><b>14A</b> If yes, specify</span><AdaptiveCombValue value={text(envelope, "tax_relief_details")} cells={17} /></span>
+        <span className="tax-relief-detail-2550q"><span><b>14A</b> If yes, specify</span><AdaptiveGuidedValue2550Q value={text(envelope, "tax_relief_details")} cells={17} /></span>
       </div>
     </section>
   );
@@ -238,7 +245,7 @@ function PartTwo2550Q({ envelope }: { envelope: RenderEnvelope }) {
       <h2>Part II – Total Tax Payable</h2>
       {PART_TWO_ROWS.map((row) => (
         <Fragment key={row.item}>
-          <div className={`amount-row-2550q ${row.emphasis ? `${row.emphasis}-2550q` : ""}`}>
+          <div className={`amount-row-2550q ${row.emphasis ? `${row.emphasis}-2550q` : ""}`} data-item-number={row.item}>
             <span className="amount-label-2550q">{row.item === 22 && <span className="penalty-prefix-2550q">Add: Penalties</span>}<b>{row.item}</b>{row.label}{row.item === 19 && <InlineSpecify2550Q value={text(envelope, "item_19_description")} />}</span>
             <MoneyCell2550Q envelope={envelope} fieldKey={row.key} cells={12} />
           </div>
@@ -254,8 +261,8 @@ function Declaration2550Q({ envelope }: { envelope: RenderEnvelope }) {
     <section className="declaration-2550q">
       <p>I/We declare under the penalties of perjury that this return, and all its attachments, have been made in good faith, verified by me/us, and to the best of my/our knowledge and belief, is true and correct pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof. Further, I/we give my/our consent to the processing of my/our information as contemplated under the *Data Privacy Act of 2012 (R.A. No. 10173) for legitimate and lawful purposes. <em>(If Authorized Representative, attach authorization letter and indicate TIN)</em></p>
       <div className="signature-panels-2550q">
-        <div><span className="signature-entry-2550q"><span>For Individual:</span><PlainValue2550Q value={text(envelope, "signature_taxpayer_or_representative")} capacity={54} /><PlainValue2550Q value={text(envelope, "signature_representative_title")} capacity={42} /></span><span className="signature-caption-2550q">Signature over Printed Name of Taxpayer/Authorized Representative/Tax Agent<small>(Indicate Title/Designation and TIN)</small></span></div>
-        <div><span className="signature-entry-2550q"><span>For Non-Individual:</span><PlainValue2550Q value={text(envelope, "signature_non_individual_officer")} capacity={50} /></span><span className="signature-caption-2550q">Signature over Printed Name of President/Vice President/Authorized Officer or Representative/Tax Agent<small>(Indicate Title/Designation and TIN)</small></span></div>
+        <div><span className="signature-entry-2550q"><span>For Individual:</span><PlainValue2550Q value={text(envelope, "signature_taxpayer_or_representative")} capacity={54} /><PlainValue2550Q value={text(envelope, "signature_representative_title")} capacity={42} /></span><span className="signature-caption-2550q">Signature over Printed Name of Taxpayer/Authorized Representative/Tax Agent{" "}<small>(Indicate Title/Designation and TIN)</small></span></div>
+        <div><span className="signature-entry-2550q"><span>For Non-Individual:</span><PlainValue2550Q value={text(envelope, "signature_non_individual_officer")} capacity={50} /></span><span className="signature-caption-2550q">Signature over Printed Name of President/Vice President/Authorized Officer or Representative/Tax Agent{" "}<small>(Indicate Title/Designation and TIN)</small></span></div>
       </div>
       <div className="credential-row-2550q">
         <span><span>Tax Agent Accreditation No./Attorney’s Roll No. <em>(If applicable)</em></span><ValueLine2550Q value={text(envelope, "tax_agent_accreditation_or_roll_number")} /></span>
@@ -275,15 +282,15 @@ function PartThree2550Q({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <section className="part-three-2550q">
       <h2>Part III – Details of Payment</h2>
-      <div className="payment-header-2550q"><span>Particulars</span><span>Drawee Bank/Agency</span><span>Number</span><span>Date <em>(MM/DD/YYYY)</em></span><span>Amount</span></div>
+      <div className="payment-header-2550q"><span>Particulars</span><span>Drawee Bank/Agency</span><span>Number</span><span>Date <em>(MM/DD/YYY)</em></span><span>Amount</span></div>
       {rows.map(([item, label, bank, number, date, amount]) => (
         <div className="payment-row-2550q" key={item}>
-          <span><b>{item}</b> {label}</span><AdaptiveCombValue value={bank ? text(envelope, bank) : ""} cells={5} /><AdaptiveCombValue value={number ? text(envelope, number) : ""} cells={6} /><AdaptiveCombValue value={date ? text(envelope, date) : ""} cells={8} /><MoneyCell2550Q envelope={envelope} fieldKey={amount} cells={12} />
+          <span><b>{item}</b> {label}</span><AdaptiveGuidedValue2550Q value={bank ? text(envelope, bank) : ""} cells={5} /><AdaptiveGuidedValue2550Q value={number ? text(envelope, number) : ""} cells={6} /><AdaptiveGuidedValue2550Q value={date ? text(envelope, date) : ""} cells={8} /><MoneyCell2550Q envelope={envelope} fieldKey={amount} cells={12} />
         </div>
       ))}
       <div className="payment-other-label-2550q"><b>30</b> Others (Specify below)</div>
       <div className="payment-row-2550q payment-other-values-2550q">
-        <AdaptiveCombValue value={text(envelope, "payment_other_description")} cells={6} /><AdaptiveCombValue value={text(envelope, "payment_other_bank")} cells={5} /><AdaptiveCombValue value={text(envelope, "payment_other_number")} cells={6} /><AdaptiveCombValue value={text(envelope, "payment_other_date")} cells={8} /><MoneyCell2550Q envelope={envelope} fieldKey="payment_other_amount" cells={12} />
+        <AdaptiveGuidedValue2550Q value={text(envelope, "payment_other_description")} cells={6} /><AdaptiveGuidedValue2550Q value={text(envelope, "payment_other_bank")} cells={5} /><AdaptiveGuidedValue2550Q value={text(envelope, "payment_other_number")} cells={6} /><AdaptiveGuidedValue2550Q value={text(envelope, "payment_other_date")} cells={8} /><MoneyCell2550Q envelope={envelope} fieldKey="payment_other_amount" cells={12} />
       </div>
       <div className="receipt-validation-row-2550q">
         <div className="machine-validation-2550q">Machine Validation/Revenue Official Receipt (ROR) Details (if not filed with an Authorized Agent Bank) <PlainValue2550Q value={text(envelope, "machine_validation_or_receipt_details")} capacity={72} /></div>
@@ -297,7 +304,7 @@ function PageTwoIdentity2550Q({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <div className="page-two-identity-2550q">
       <div><span>TIN</span><Tin2550Q value={envelope.taxpayer.tin} /></div>
-      <div><span>Taxpayer’s Last Name (if Individual)/ Registered Name (if Non-Individual)</span><AdaptiveCombValue value={envelope.taxpayer.name} cells={26} /></div>
+      <div><span>Taxpayer’s Last Name (if Individual)/ Registered Name (if Non-Individual)</span><AdaptiveGuidedValue2550Q value={envelope.taxpayer.name} cells={26} /></div>
     </div>
   );
 }
@@ -398,12 +405,12 @@ function ScheduleFour2550Q({ envelope }: { envelope: RenderEnvelope }) {
 }
 
 function FullWidthField2550Q({ item, label, value, cells, className = "" }: { item: string; label: ReactNode; value: string; cells: number; className?: string }) {
-  return <div className={`full-field-2550q ${className}`.trim()}><span><b>{item}</b>{label}</span><AdaptiveCombValue value={value} cells={cells} /></div>;
+  return <div className={`full-field-2550q ${className}`.trim()}><span><b>{item}</b>{label}</span><AdaptiveGuidedValue2550Q value={value} cells={cells} /></div>;
 }
 
 function Address2550Q({ envelope }: { envelope: RenderEnvelope }) {
   const characters = Array.from(envelope.taxpayer.registered_address);
-  return <div className="address-2550q"><span><b>10</b> Registered Address <em>(Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)</em></span><div className="address-value-2550q">{characters.length <= 71 ? <div className="address-comb-lines-2550q"><CombValue value={characters.slice(0, 40).join("")} cells={40} /><CombValue value={characters.slice(40).join("")} cells={31} /></div> : <AdaptiveCombValue value={envelope.taxpayer.registered_address} cells={71} />}<span className="zip-2550q"><span className="zip-label-2550q"><b>10A</b> ZIP Code</span><CombValue value={envelope.taxpayer.zip_code} cells={4} align="right" /></span></div></div>;
+  return <div className="address-2550q"><span><b>10</b> Registered Address <em>(Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)</em></span><div className="address-value-2550q">{characters.length <= 71 ? <div className="address-comb-lines-2550q"><CombValue value={characters.slice(0, 40).join("")} cells={40} /><CombValue value={characters.slice(40).join("")} cells={31} /></div> : <AdaptiveGuidedValue2550Q value={envelope.taxpayer.registered_address} cells={71} />}<span className="zip-2550q"><span className="zip-label-2550q"><b>10A</b> ZIP Code</span><CombValue value={envelope.taxpayer.zip_code} cells={4} align="right" /></span></div></div>;
 }
 
 function Tin2550Q({ value }: { value: string }) {
@@ -421,9 +428,9 @@ function ValueLine2550Q({ value }: { value: string }) {
 
 function MoneyCell2550Q({ envelope, fieldKey, cells }: { envelope: RenderEnvelope; fieldKey: string; cells: number }) {
   const value = field(envelope, fieldKey);
-  if (value?.type !== "decimal") return <span className="money-cell-2550q blank-money-2550q"><AdaptiveCombValue value="" cells={cells} align="right" /><span className="decimal-cell-2550q">.</span><CombValue value="" cells={2} align="right" /></span>;
+  if (value?.type !== "decimal") return <span className="money-cell-2550q blank-money-2550q"><AdaptiveGuidedValue2550Q value="" cells={cells} align="right" /><span className="decimal-cell-2550q">.</span><CombValue value="" cells={2} align="right" /></span>;
   const [whole, decimal] = formatMoneyParts(value.value);
-  return <span className="money-cell-2550q"><AdaptiveCombValue value={whole} cells={cells} align="right" /><span className="decimal-cell-2550q">.</span><CombValue value={decimal} cells={2} align="right" /></span>;
+  return <span className="money-cell-2550q"><AdaptiveGuidedValue2550Q value={whole} cells={cells} align="right" /><span className="decimal-cell-2550q">.</span><CombValue value={decimal} cells={2} align="right" /></span>;
 }
 
 function ScheduleMoney2550Q({ envelope, fieldKey }: { envelope: RenderEnvelope; fieldKey: string }) {
@@ -443,8 +450,36 @@ function dateRange2550Q(envelope: RenderEnvelope, fromKey: string, toKey: string
 }
 
 function PlainValue2550Q({ value, capacity, className = "" }: { value: string; capacity: number; className?: string }) {
-  const length = Array.from(value).length;
-  const long = length > capacity;
-  const fontSize = long ? Math.max(1.6, Math.min(6.2, 4.9 * capacity / length)) : 6.2;
-  return <span className={`plain-value-2550q ${className}`.trim()} data-overflow-mode={long ? "plain" : undefined} aria-label={long ? value : undefined} style={{ fontSize: `${fontSize}pt` }}>{value}</span>;
+  return (
+    <AdaptivePlainValue
+      value={value}
+      cellCapacity={capacity}
+      className={`plain-value-2550q ${className}`.trim()}
+      maxFontSizePx={PLAIN_FIELD_MAX_FONT_PX}
+      minFontSizePx={PLAIN_FIELD_MIN_FONT_PX}
+      fontStepPx={ADAPTIVE_FONT_STEP_PX}
+    />
+  );
+}
+
+function AdaptiveGuidedValue2550Q({
+  value,
+  cells,
+  align = "left"
+}: {
+  value: string;
+  cells: number;
+  align?: "left" | "right";
+}) {
+  return (
+    <AdaptiveCombValue
+      value={value}
+      cells={cells}
+      align={align}
+      fitToField
+      maxFontSizePx={GUIDED_OVERFLOW_MAX_FONT_PX}
+      minFontSizePx={GUIDED_OVERFLOW_MIN_FONT_PX}
+      fontStepPx={ADAPTIVE_FONT_STEP_PX}
+    />
+  );
 }

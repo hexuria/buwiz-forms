@@ -342,7 +342,7 @@
     },
     "schedule_1_2_description": {
       "type": "text",
-      "value": "IMPORTED MANUFACTURING EQUIPMENT"
+      "value": "IMPORTED EQUIPMENT"
     },
     "schedule_1_2_estimated_life_months": {
       "type": "integer",

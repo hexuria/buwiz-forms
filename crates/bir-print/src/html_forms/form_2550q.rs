@@ -809,7 +809,7 @@ fn capacity_fixture() -> Result<Form2550QDraft, RenderProviderError> {
     draft.schedule_1[1] = capital_good_row(
         date(2025, 2, 1)?,
         "I",
-        "IMPORTED MANUFACTURING EQUIPMENT",
+        "IMPORTED EQUIPMENT",
         240_000.0,
         28_800.0,
         120,

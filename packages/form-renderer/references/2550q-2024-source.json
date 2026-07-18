@@ -7,6 +7,11 @@
     "official_source": "https://bir-cdn.bir.gov.ph/BIR/pdf/2550Q%20%20April%202024%20ENCS_Final.pdf",
     "official_source_file": "external:2550Q  April 2024 ENCS_Final.pdf",
     "official_source_sha256": "18eb16925010fdda820cef958221ba2c0d073066efa93a898113e39b31135a25",
+    "official_guidelines_file": "external:2550Q guidelines April 2024_final.pdf",
+    "official_guidelines_sha256": "b6ee4f090cb48963a44b1ef58fd6cdb4b5865ba4674963c3661c7f164895b120",
+    "official_guidelines_page_count": 1,
+    "official_guidelines_page_height_pt": 1008.0,
+    "official_guidelines_page_width_pt": 612.0,
     "page_count": 2,
     "page_height_pt": 1008.0,
     "page_width_pt": 612.0,
@@ -31,6 +36,23 @@
       "replacement_required": false,
       "runtime_eligible": false
     },
+    "reviewed_xml_sources": [
+      {
+        "field_count": 160,
+        "file": "external:00000000000000-2550Qv2024-122025Q1.xml",
+        "kind": "editable_plain",
+        "sha256": "43577fdd70b8959b16dbada9ff7d8418a1fdc5d18e61302c8cbfc8e9bbab4520",
+        "transport_evidence": "Exact checked editable-save field map; not queue or submission evidence"
+      },
+      {
+        "decrypted_field_count": 160,
+        "file": "external:00000000000000-2550Qv2024-122025Q1#CODEITLIKEMILEY@GMAIL.COM#.xml",
+        "final_flag": "0",
+        "kind": "encrypted_companion",
+        "sha256": "57ccf9d8132c490d54bceaf5c55fc2b4bec01b780951a63600402c61a595cdbe",
+        "transport_evidence": "Decryptable companion payload; exact semantic replay only, not queue or submission support"
+      }
+    ],
     "revision": "2024"
   },
   "generator": "prepare_official_reference.py (Poppler)",

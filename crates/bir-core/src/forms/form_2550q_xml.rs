@@ -1894,6 +1894,9 @@ mod tests {
         let plain_draft = Form2550QDraft::from_bir_field_map(&plain_fields)
             .expect("plain source must satisfy the semantic contract");
         assert_eq!(plain_draft.to_bir_field_map(), plain_fields);
+        let plain_replay = Form2550QDraft::from_bir_xml_payload(&plain_draft.to_bir_xml_payload())
+            .expect("generated editable payload must replay through the checked parser");
+        assert_eq!(plain_replay.to_bir_field_map(), plain_fields);
 
         let encrypted_path = std::path::Path::new(&source_dir)
             .join("00000000000000-2550Qv2024-122025Q1#CODEITLIKEMILEY@GMAIL.COM#.xml");
@@ -1902,15 +1905,35 @@ mod tests {
             hex::encode(Sha256::digest(&encrypted)),
             super::super::form_2550q::REVIEWED_ENCRYPTED_XML_SHA256
         );
+        assert!(
+            std::str::from_utf8(&encrypted)
+                .ok()
+                .and_then(|payload| crate::bir_xml::parse_bir_xml_checked(payload).ok())
+                .is_none(),
+            "encrypted source bytes must never be accepted as a plain editable payload"
+        );
         let decrypted =
             crate::crypto::decrypt_and_decompress(&encrypted, crate::crypto::BIR_IAF_PASSPHRASE)
                 .expect("encrypted companion must decrypt with the reviewed reader");
         let decrypted_xml = std::str::from_utf8(&decrypted).expect("decrypted source is UTF-8");
-        let encrypted_draft = Form2550QDraft::from_bir_xml_payload(decrypted_xml)
+        let mut decrypted_fields = crate::bir_xml::parse_bir_xml_checked(decrypted_xml)
+            .expect("decrypted source must parse through the checked parser");
+        if !decrypted_fields.contains_key("dateFiled")
+            && let Some(value) = standalone_element(decrypted_xml, "dateFiled")
+        {
+            decrypted_fields.insert("dateFiled".to_string(), value);
+        }
+        assert_eq!(decrypted_fields.len(), EXACT_SOURCE_FIELD_COUNT);
+        let encrypted_draft = Form2550QDraft::from_bir_field_map(&decrypted_fields)
             .expect("decrypted source must satisfy the semantic contract");
         let encrypted_fields = encrypted_draft.to_bir_field_map();
         assert_eq!(encrypted_fields.len(), EXACT_SOURCE_FIELD_COUNT);
         assert_eq!(encrypted_fields["txtFinalFlag"], "0");
+        assert_eq!(encrypted_fields, decrypted_fields);
+        let encrypted_replay =
+            Form2550QDraft::from_bir_xml_payload(&encrypted_draft.to_bir_xml_payload())
+                .expect("generated companion semantics must replay through the checked parser");
+        assert_eq!(encrypted_replay.to_bir_field_map(), decrypted_fields);
 
         for (filename, expected_hash) in [
             (

@@ -379,6 +379,10 @@
 .schedule-total-2550q > span:first-child { justify-content: flex-start; grid-column: 1 / 3; }
 .schedule-four-grid-2550q.schedule-total-2550q > span:first-child { grid-column: 1 / 5; }
 .plain-value-2550q { min-width: 0; display: flex; align-items: center; overflow-wrap: anywhere; line-height: 1; }
+.form-2550q-page .adaptive-plain-value.plain-value-2550q {
+  height: auto;
+  padding: 0;
+}
 .schedule-one-grid-2550q > .plain-value-2550q,
 .schedule-three-grid-2550q > .plain-value-2550q,
 .schedule-four-grid-2550q > .plain-value-2550q { justify-content: center; text-align: center; white-space: nowrap; overflow-wrap: normal; }

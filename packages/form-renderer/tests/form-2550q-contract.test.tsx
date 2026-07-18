@@ -147,7 +147,7 @@ describe("2550Q:2024 exact semantic preview contract", () => {
     expect(fixture.schedules).toHaveLength(0);
   });
 
-  it("keeps long valid identity, description, and schedule text in reviewed plain boxes", () => {
+  it("keeps long valid identity, description, and schedule text in measured reviewed plain boxes", () => {
     const fixture = structuredClone(longFixture) as RenderEnvelope;
     const markup = renderToStaticMarkup(
       createElement(FormDocument, { envelope: fixture })
@@ -162,7 +162,52 @@ describe("2550Q:2024 exact semantic preview contract", () => {
     ]) {
       expect(markup).toContain(`aria-label="${value.replaceAll("&", "&amp;").replaceAll('"', "&quot;")}"`);
     }
-    expect(markup.match(/data-overflow-mode="plain"/g)?.length).toBeGreaterThan(5);
+    expect(markup.match(/data-overflow-mode="plain"/g)?.length).toBeGreaterThan(20);
+    expect(markup.match(/data-adaptive-step-px="0.5"/g)?.length).toBeGreaterThan(20);
+    expect(markup).toContain('data-adaptive-max-font-px="9.6"');
+    expect(markup).toContain('data-adaptive-min-font-px="8"');
+    expect(markup).toContain('data-adaptive-max-font-px="8.25"');
+    expect(markup).toContain('data-adaptive-min-font-px="6.75"');
+    expect(markup).not.toContain("font-size:1.6pt");
+  });
+
+  it("pins the official form, guidelines, and both reviewed XML transports", () => {
+    const source = JSON.parse(fs.readFileSync(path.resolve(
+      HERE,
+      "../references/2550q-2024-source.json"
+    ), "utf8")) as {
+      form: {
+        official_source_sha256: string;
+        official_guidelines_sha256: string;
+        reviewed_xml_sources: Array<{
+          field_count?: number;
+          decrypted_field_count?: number;
+          final_flag?: string;
+          kind: string;
+          sha256: string;
+        }>;
+      };
+    };
+
+    expect(source.form.official_source_sha256).toBe(
+      "18eb16925010fdda820cef958221ba2c0d073066efa93a898113e39b31135a25"
+    );
+    expect(source.form.official_guidelines_sha256).toBe(
+      "b6ee4f090cb48963a44b1ef58fd6cdb4b5865ba4674963c3661c7f164895b120"
+    );
+    expect(source.form.reviewed_xml_sources).toEqual([
+      expect.objectContaining({
+        field_count: 160,
+        kind: "editable_plain",
+        sha256: "43577fdd70b8959b16dbada9ff7d8418a1fdc5d18e61302c8cbfc8e9bbab4520"
+      }),
+      expect.objectContaining({
+        decrypted_field_count: 160,
+        final_flag: "0",
+        kind: "encrypted_companion",
+        sha256: "57ccf9d8132c490d54bceaf5c55fc2b4bec01b780951a63600402c61a595cdbe"
+      })
+    ]);
   });
 
   it("preserves both exact official PDF417 matrices and live captions", () => {
