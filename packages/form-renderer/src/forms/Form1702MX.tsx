@@ -175,7 +175,15 @@ export function Form1702MX({ envelope }: { envelope: RenderEnvelope }) {
         />
         <NolcoComputation1702MX
           className="schedule-eight-1702mx"
-          title="Schedule 8 – Computation of Net Operating Loss Carry Over (NOLCO) for Special Rate"
+          title={(
+            <>
+              <span>
+                Schedule 8 – Computation of Net Operating Loss Carry Over (NOLCO) for Special Rate{" "}
+                <strong>(except those availing fiscal incentives)</strong>
+              </span>
+              <small>(Attach Additional Sheet/s, if necessary)</small>
+            </>
+          )}
           prefix="schedule_8"
           envelope={envelope}
         />
@@ -648,30 +656,55 @@ function ScheduleSix1702MX({ envelope }: { envelope: RenderEnvelope }) {
   );
 }
 
-function NolcoComputation1702MX({ className, title, prefix, envelope }: { className: string; title: string; prefix: string; envelope: RenderEnvelope }) {
-  const rows = [
-    "Gross Income",
-    "Less: Ordinary Allowable Itemized Deductions",
-    "Net Operating Loss (Item 1 Less Item 2)"
-  ];
+function NolcoComputation1702MX({ className, title, prefix, envelope }: { className: string; title: ReactNode; prefix: string; envelope: RenderEnvelope }) {
+  const rows: ReactNode[] = prefix === "schedule_8"
+    ? [
+        <>Gross Income <small>(From Part IV-Schedule 2 Item 7B)</small></>,
+        <>Less: Ordinary Allowable Itemized Deductions <small>(From Part IV-Schedule 2 Item 8B)</small></>,
+        <>Net Operating Loss (Item 1 Less Item 2) <small>(To Part IV-Schedule 8.1 Item 7A)</small></>
+      ]
+    : [
+        "Gross Income",
+        "Less: Ordinary Allowable Itemized Deductions",
+        "Net Operating Loss (Item 1 Less Item 2)"
+      ];
   return (
     <section className={`${className} schedule-block-1702mx nolco-computation-1702mx`}>
       <ScheduleTitle1702MX>{title}</ScheduleTitle1702MX>
-      {rows.map((label, index) => <AmountRow1702MX key={label} number={index + 1} label={label} value={amount(envelope, `${prefix}_item_${index + 1}`)} />)}
+      {rows.map((label, index) => <AmountRow1702MX key={index} number={index + 1} label={label} value={amount(envelope, `${prefix}_item_${index + 1}`)} />)}
     </section>
   );
 }
 
 function NolcoTable1702MX({ className, title, prefix, envelope }: { className: string; title: string; prefix: string; envelope: RenderEnvelope }) {
+  const totalDestination = prefix === "schedule_7_1" ? "10C" : "10B";
   return (
     <section className={`${className} schedule-block-1702mx nolco-table-1702mx`}>
-      <ScheduleTitle1702MX>{title}</ScheduleTitle1702MX>
-      <div className="nolco-grid-1702mx nolco-header-1702mx"><span>Year Incurred</span><span>A. Amount</span><span>B. NOLCO Applied Previous Year/s</span><span>C. NOLCO Expired</span><span>D. NOLCO Applied Current Year</span><span>E. Net Operating Loss (Unapplied)</span></div>
+      <ScheduleTitle1702MX>
+        <span>{title}</span>
+        <small>DO NOT enter Centavos; 49 Centavos or Less drop down; 50 or more round up)</small>
+      </ScheduleTitle1702MX>
+      <div className="nolco-grid-1702mx nolco-header-1702mx">
+        <span className="nolco-loss-heading-1702mx">Net Operating Loss</span>
+        <span className="nolco-year-heading-1702mx">Year<br />Incurred</span>
+        <span className="nolco-amount-heading-1702mx">A. Amount</span>
+        <span className="nolco-b-heading-1702mx">B. NOLCO Applied<br />Previous Year/s</span>
+        <span className="nolco-c-heading-1702mx">C. NOLCO Expired</span>
+        <span className="nolco-d-heading-1702mx">D. NOLCO Applied<br />Current Year</span>
+        <span className="nolco-e-heading-1702mx">E. Net Operating Loss<br />(Unapplied)<br />[(E) = A - (B+C+D)]</span>
+      </div>
       {[4, 5, 6, 7].map((item) => {
         const row = `${prefix}_row_${item}`;
-        return <div key={item} className="nolco-grid-1702mx"><span>{item} <PlainValue1702MX value={text(envelope, `${row}_year`)} /></span><AmountCell1702MX value={amount(envelope, `${row}_amount`)} /><AmountCell1702MX value={amount(envelope, `${row}_applied_previous_years`)} /><AmountCell1702MX value={amount(envelope, `${row}_expired`)} /><AmountCell1702MX value={amount(envelope, `${row}_applied_current_year`)} /><AmountCell1702MX value={amount(envelope, `${row}_unapplied`)} /></div>;
+        return <div key={item} className="nolco-grid-1702mx nolco-data-row-1702mx"><span className="nolco-year-cell-1702mx"><b>{item}</b><PlainValue1702MX value={text(envelope, `${row}_year`)} /></span><AmountCell1702MX value={amount(envelope, `${row}_amount`)} /><AmountCell1702MX value={amount(envelope, `${row}_applied_previous_years`)} /><AmountCell1702MX value={amount(envelope, `${row}_expired`)} /><AmountCell1702MX value={amount(envelope, `${row}_applied_current_year`)} /><AmountCell1702MX value={amount(envelope, `${row}_unapplied`)} /></div>;
       })}
-      <div className="nolco-grid-1702mx total-row-1702mx"><span>8 Total NOLCO</span><span /><span /><span /><AmountCell1702MX value={amount(envelope, `${prefix}_item_8_total`)} /><span /></div>
+      <div className="nolco-total-row-1702mx total-row-1702mx">
+        <b>8</b>
+        <span>
+          Total NOLCO <small>(Sum of Items 4D to 7D) (To Part IV-Schedule 2 Item {totalDestination})</small>
+        </span>
+        <AmountCell1702MX value={amount(envelope, `${prefix}_item_8_total`)} />
+        <span aria-hidden="true" />
+      </div>
     </section>
   );
 }
@@ -680,18 +713,22 @@ function ScheduleNine1702MX({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <section className="schedule-nine-1702mx schedule-block-1702mx">
       <ScheduleTitle1702MX>Schedule 9 – Computation of Minimum Corporate Income Tax (MCIT)</ScheduleTitle1702MX>
-      <div className="mcit-first-grid-1702mx regime-header-1702mx"><span>Year</span><span>A. Normal Income Tax as Adjusted</span><span>B. MCIT</span><span>C. Excess MCIT over Normal Income Tax</span></div>
+      <div className="mcit-first-grid-1702mx regime-header-1702mx"><span>Year</span><span>A) Normal Income Tax as Adjusted</span><span>B) MCIT</span><span>C) Excess MCIT over Normal Income Tax</span></div>
       {[1, 2, 3].map((item) => {
         const prefix = `schedule_9_row_${item}`;
-        return <div key={item} className="mcit-first-grid-1702mx"><span>{item} <PlainValue1702MX value={text(envelope, `${prefix}_year`)} /></span><AmountCell1702MX value={amount(envelope, `${prefix}_normal_income_tax`)} /><AmountCell1702MX value={amount(envelope, `${prefix}_mcit`)} /><AmountCell1702MX value={amount(envelope, `${prefix}_excess_mcit`)} /></div>;
+        return <div key={item} className="mcit-first-grid-1702mx mcit-data-row-1702mx"><span className="mcit-year-cell-1702mx"><b>{item}</b><PlainValue1702MX value={text(envelope, `${prefix}_year`)} /></span><AmountCell1702MX value={amount(envelope, `${prefix}_normal_income_tax`)} /><AmountCell1702MX value={amount(envelope, `${prefix}_mcit`)} /><AmountCell1702MX value={amount(envelope, `${prefix}_excess_mcit`)} /></div>;
       })}
-      <ScheduleTitle1702MX>Continuation of Schedule 9</ScheduleTitle1702MX>
-      <div className="mcit-second-grid-1702mx regime-header-1702mx"><span>D. Excess MCIT Applied/Used in Previous Years</span><span>E. Expired Portion of Excess MCIT</span><span>F. Excess MCIT Applied this Current Taxable Year</span><span>G. Balance of Excess MCIT Allowable as Tax Credit</span></div>
+      <ScheduleTitle1702MX>Continuation of Schedule 9 <small>(Item numbers continue from table above)</small></ScheduleTitle1702MX>
+      <div className="mcit-second-grid-1702mx regime-header-1702mx"><span>D) Excess MCIT Applied/<br />Used in Previous Years</span><span>E) Expired Portion of<br />Excess MCIT</span><span>F) Excess MCIT Applied this<br />Current Taxable Year</span><span>G) Balance of Excess MCIT Allowable<br />as Tax Credit for Succeeding Year/s<br />[ G = C Less (D + E + F) ]</span></div>
       {[1, 2, 3].map((item) => {
         const prefix = `schedule_9_row_${item}`;
-        return <div key={item} className="mcit-second-grid-1702mx"><AmountCell1702MX value={amount(envelope, `${prefix}_applied_previous_years`)} /><AmountCell1702MX value={amount(envelope, `${prefix}_expired`)} /><AmountCell1702MX value={amount(envelope, `${prefix}_applied_current_year`)} /><AmountCell1702MX value={amount(envelope, `${prefix}_balance`)} /></div>;
+        return <div key={item} className="mcit-second-grid-1702mx mcit-continuation-row-1702mx"><span className="mcit-numbered-amount-1702mx"><b>{item}</b><AmountCell1702MX value={amount(envelope, `${prefix}_applied_previous_years`)} /></span><AmountCell1702MX value={amount(envelope, `${prefix}_expired`)} /><AmountCell1702MX value={amount(envelope, `${prefix}_applied_current_year`)} /><AmountCell1702MX value={amount(envelope, `${prefix}_balance`)} /></div>;
       })}
-      <div className="mcit-second-grid-1702mx total-row-1702mx"><span>4 Total Excess MCIT Applied</span><span /><AmountCell1702MX value={amount(envelope, "schedule_9_item_4_total")} /><span /></div>
+      <div className="mcit-total-row-1702mx total-row-1702mx">
+        <span><b>4</b> Total Excess MCIT Applied <small>(Sum of Items 1F to 3F) (To Part IV-Schedule 3 Item 23)</small></span>
+        <AmountCell1702MX value={amount(envelope, "schedule_9_item_4_total")} />
+        <span aria-hidden="true" />
+      </div>
     </section>
   );
 }
@@ -700,7 +737,6 @@ function ScheduleTen1702MX({ envelope }: { envelope: RenderEnvelope }) {
   const row = (item: number, defaultLabel = "") => {
     const prefix = `schedule_10_item_${item}`;
     const description = text(envelope, `schedule_10_description_${item}`);
-    const label = description || defaultLabel;
     const acceptsDescription = [2, 3, 5, 6, 7, 8].includes(item);
     return (
       <div key={item} className={`regime-grid-1702mx regime-row-1702mx schedule-ten-row-1702mx item-${item}-1702mx`}>
@@ -708,7 +744,9 @@ function ScheduleTen1702MX({ envelope }: { envelope: RenderEnvelope }) {
           {item}{" "}
           {acceptsDescription
             ? <PlainValue1702MX value={description} className="schedule-ten-description-1702mx" />
-            : <PlainValue1702MX value={label} />}
+            : description
+              ? <PlainValue1702MX value={description} />
+              : defaultLabel}
         </span>
         <AmountCell1702MX value={amount(envelope, `${prefix}_exempt`)} />
         <AmountCell1702MX value={amount(envelope, `${prefix}_special`)} />

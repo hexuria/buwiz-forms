@@ -288,6 +288,37 @@ test("1702MX January 2018C preserves the official Schedule 10 reconciliation gro
   await expect(groups.nth(2)).toHaveText("B) Special Deductions (specify below)");
   await expect(scheduleTen.locator(":scope > .item-2-1702mx .schedule-ten-description-1702mx")).toHaveCount(1);
   await expect(scheduleTen.locator(":scope > .item-8-1702mx .schedule-ten-description-1702mx")).toHaveCount(1);
+  await expect(scheduleTen.locator(":scope > .item-1-1702mx > span:first-child")).toHaveText("1 Net Income/(Loss) per Books");
+  await expect(scheduleTen.locator(":scope > .item-4-1702mx > span:first-child")).toHaveText("4 Total (Sum of Items 1 to 3)");
+  await expect(scheduleTen.locator(":scope > .item-9-1702mx > span:first-child")).toHaveText("9 Total (Sum of Items 5 to 8)");
+  await expect(scheduleTen.locator(":scope > .item-10-1702mx > span:first-child")).toHaveText("10 Net Taxable Income/(Loss) (Item 4 Less Item 9)");
+  expect(await scheduleTen.locator(".amount-cell-1702mx").first().evaluate(
+    (cell) => getComputedStyle(cell, "::after").display
+  )).toBe("none");
+  expect(await pageHasNoOverflow(pageFour)).toBe(true);
+});
+
+test("1702MX January 2018C preserves the official page 4 NOLCO and MCIT hierarchy", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-normal.json"));
+  const pageFour = page.locator(".form-page").nth(3);
+
+  for (const selector of [".schedule-seven-one-1702mx", ".schedule-eight-one-1702mx"]) {
+    const schedule = pageFour.locator(selector);
+    await expect(schedule.locator(":scope > .nolco-header-1702mx")).toHaveCount(1);
+    await expect(schedule.locator(":scope > .nolco-data-row-1702mx")).toHaveCount(4);
+    await expect(schedule.locator(":scope > .nolco-total-row-1702mx")).toHaveCount(1);
+    await expect(schedule.locator(":scope > .nolco-data-row-1702mx .nolco-year-cell-1702mx > b")).toHaveText(["4", "5", "6", "7"]);
+    expect(await schedule.locator(".amount-cell-1702mx").first().evaluate(
+      (cell) => getComputedStyle(cell, "::after").display
+    )).toBe("none");
+  }
+
+  const scheduleNine = pageFour.locator(".schedule-nine-1702mx");
+  await expect(scheduleNine.locator(":scope > .mcit-data-row-1702mx")).toHaveCount(3);
+  await expect(scheduleNine.locator(":scope > .mcit-continuation-row-1702mx")).toHaveCount(3);
+  await expect(scheduleNine.locator(":scope > .mcit-total-row-1702mx")).toHaveCount(1);
+  await expect(scheduleNine.locator(":scope > .mcit-data-row-1702mx .mcit-year-cell-1702mx > b")).toHaveText(["1", "2", "3"]);
+  await expect(scheduleNine.locator(":scope > .mcit-continuation-row-1702mx .mcit-numbered-amount-1702mx > b")).toHaveText(["1", "2", "3"]);
   expect(await pageHasNoOverflow(pageFour)).toBe(true);
 });
 
@@ -322,10 +353,11 @@ test("1702MX January 2018C matches the complete official pages", async ({ page }
   await expectCriticalRegionGeometry(pages.nth(3), [
     { name: "masthead", selector: ".masthead-1702mx", x: 36, y: 57, width: 1152, height: 115 },
     { name: "identity", selector: ".page-identity-1702mx", x: 36, y: 172, width: 1152, height: 63 },
-    { name: "Schedule 7.1", selector: ".schedule-seven-one-1702mx", x: 36, y: 241, width: 1152, height: 239 },
-    { name: "Schedule 8.1", selector: ".schedule-eight-one-1702mx", x: 36, y: 650, width: 1152, height: 236 },
-    { name: "Schedule 9", selector: ".schedule-nine-1702mx", x: 36, y: 891, width: 1152, height: 416 },
-    { name: "Schedule 10", selector: ".schedule-ten-1702mx", x: 36, y: 1310, width: 1152, height: 441 }
+    { name: "Schedule 7.1", selector: ".schedule-seven-one-1702mx", x: 36, y: 238, width: 1152, height: 242 },
+    { name: "Schedule 8", selector: ".schedule-eight-1702mx", x: 36, y: 482, width: 1152, height: 164 },
+    { name: "Schedule 8.1", selector: ".schedule-eight-one-1702mx", x: 36, y: 646, width: 1152, height: 240 },
+    { name: "Schedule 9", selector: ".schedule-nine-1702mx", x: 36, y: 888, width: 1152, height: 419 },
+    { name: "Schedule 10", selector: ".schedule-ten-1702mx", x: 36, y: 1309, width: 1152, height: 443 }
   ]);
 
   expect(await pages.nth(0).locator("img").count()).toBe(1);
