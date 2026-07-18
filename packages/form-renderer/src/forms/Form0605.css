@@ -583,17 +583,13 @@
 .signature-lines-0605 { position: absolute; left: 16pt; right: 7pt; bottom: 8pt; display: grid; grid-template-columns: 2fr 1fr; gap: 14pt; }
 .signature-line-0605 { position: relative; min-width: 0; }
 .signature-line-0605 > b { position: absolute; left: -15pt; top: 2pt; }
-.signature-line-0605 > .adaptive-plain-value,
-.signature-line-0605 > .comb-value { height: 14pt; border-bottom: .8pt solid #111; }
-.signature-line-0605 > .adaptive-plain-value {
-  display: block;
+.signature-line-0605 > .signature-value-0605 { height: 14pt; border-bottom: .8pt solid #111; }
+.signature-line-0605 > .signature-value-0605 .adaptive-plain-value {
   padding-right: 0;
   padding-left: 0;
-  white-space: normal;
-  overflow-wrap: anywhere;
   line-height: .92;
 }
-.signature-line-0605 > span:not(.comb-value):not(.adaptive-plain-value) {
+.signature-line-0605 > span:not(.signature-value-0605) {
   display: block;
   margin-top: 1pt;
   font-size: 6.5pt;
@@ -652,8 +648,15 @@
   background: #fff;
 }
 .machine-validation-0605 > span:first-child { display: block; height: 13pt; padding: 1pt; background: #fff; }
-.machine-validation-0605 > .adaptive-plain-value,
-.machine-validation-0605 > .comb-value { height: 46pt; align-items: flex-start; padding: 2pt; white-space: normal; }
+.machine-validation-value-0605 { display: block; height: 46pt; overflow: hidden; }
+.machine-validation-value-0605 > .machine-validation-text-0605 {
+  width: 100%;
+  height: 100%;
+  align-items: flex-start;
+  padding: 2pt;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .classification-note-0605 { margin: 3pt 0 0 15pt !important; font-size: 5.7pt; }
 
 /* Page two: static official code tables and instructions, rebuilt as semantic

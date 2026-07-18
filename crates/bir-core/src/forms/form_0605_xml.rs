@@ -6,12 +6,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::FormValidator;
 use super::form_0605::{
     Form0605ApprovalSelection, Form0605Date, Form0605Draft, Form0605FilingBasis,
     Form0605IndexedCode, Form0605MannerOfPayment, Form0605PaymentDetails, Form0605SignatureDetails,
     Form0605TaxpayerClassification, Form0605TypeOfPayment,
 };
+use super::FormValidator;
 
 const ATC_INDEX_COUNT: u16 = 142;
 const TAX_TYPE_INDEX_COUNT: u16 = 37;
@@ -1043,11 +1043,9 @@ mod tests {
         let mut missing = reviewed_sample_fields(ReviewedSample::January2026);
         missing.remove("TaxTypeCode37");
         let missing_errors = Form0605Draft::from_bir_field_map(&missing).unwrap_err();
-        assert!(
-            missing_errors
-                .iter()
-                .any(|(field, _)| field == "TaxTypeCode37")
-        );
+        assert!(missing_errors
+            .iter()
+            .any(|(field, _)| field == "TaxTypeCode37"));
     }
 
     #[test]
@@ -1102,62 +1100,91 @@ mod tests {
 
     #[test]
     #[ignore = "requires EBIRFORMS_0605_SOURCE_DIR pointing to the reviewed external source pack"]
-    fn locked_external_plain_sources_match_hashes_and_roundtrip_all_235_fields() {
+    fn locked_external_pdf_plain_and_encrypted_sources_match_and_semantically_replay() {
         let source_dir = std::env::var("EBIRFORMS_0605_SOURCE_DIR")
             .expect("set EBIRFORMS_0605_SOURCE_DIR to the exact reviewed 0605 folder");
-        for (filename, expected_sha256) in [
+        let directory = std::path::Path::new(&source_dir);
+        for (plain_filename, plain_sha256, encrypted_filename, encrypted_sha256) in [
             (
                 "00000000000000-0605-01312026102841.xml",
                 "01992fcdaef50493e756b89728af8d107ec1a0cafa94e677edbac1e2f08dc499",
-            ),
-            (
-                "00000000000000-0605-12312025143024.xml",
-                "f8659d2011d2914073725ccef1fc4f2e74d4f315bf333d5ec3084a1fdff524f7",
-            ),
-        ] {
-            let path = std::path::Path::new(&source_dir).join(filename);
-            let bytes = std::fs::read(&path).expect("reviewed source must be readable");
-            assert_eq!(hex::encode(Sha256::digest(&bytes)), expected_sha256);
-            let xml = std::str::from_utf8(&bytes).expect("plain source must be UTF-8");
-            let source_fields = crate::bir_xml::parse_bir_xml_checked(xml)
-                .expect("reviewed source must parse through the checked parser");
-            assert_eq!(source_fields.len(), EXACT_SOURCE_FIELD_COUNT);
-
-            let draft = Form0605Draft::from_bir_field_map(&source_fields)
-                .expect("reviewed source must satisfy the semantic contract");
-            assert_eq!(draft.to_bir_field_map(), source_fields);
-            assert_eq!(
-                crate::bir_xml::parse_bir_xml_checked(&draft.to_bir_xml_payload()).unwrap(),
-                source_fields
-            );
-        }
-
-        for (filename, expected_sha256) in [
-            (
                 "00000000000000-0605-01312026102841#codeitlikemiley@gmail.com#.xml",
                 "09cd3626efd6a7490b5922c9dbb6fad98b0b066ffb5de87c3ea6a6677210620f",
             ),
             (
+                "00000000000000-0605-12312025143024.xml",
+                "f8659d2011d2914073725ccef1fc4f2e74d4f315bf333d5ec3084a1fdff524f7",
                 "00000000000000-0605-12312025143024#codeitlikemiley@gmail.com#.xml",
                 "c53a196dcfe1fb585fefc7b48c2a4f2abe9ec9114d55541e44a40e4399c39928",
             ),
         ] {
-            let path = std::path::Path::new(&source_dir).join(filename);
-            let bytes = std::fs::read(&path).expect("encrypted companion must be readable");
-            assert_eq!(hex::encode(Sha256::digest(&bytes)), expected_sha256);
+            let plain = std::fs::read(directory.join(plain_filename))
+                .expect("reviewed editable source must be readable");
+            assert_eq!(hex::encode(Sha256::digest(&plain)), plain_sha256);
+            let plain_xml =
+                std::str::from_utf8(&plain).expect("reviewed editable source must be UTF-8");
+            let plain_fields = crate::bir_xml::parse_bir_xml_checked(plain_xml)
+                .expect("reviewed editable source must pass the checked parser");
+            assert_eq!(plain_fields.len(), EXACT_SOURCE_FIELD_COUNT);
+
+            let plain_draft = Form0605Draft::from_bir_field_map(&plain_fields)
+                .expect("reviewed editable source must satisfy the semantic contract");
+            assert_eq!(plain_draft.to_bir_field_map(), plain_fields);
+            assert_eq!(
+                crate::bir_xml::parse_bir_xml_checked(&plain_draft.to_bir_xml_payload()).unwrap(),
+                plain_fields
+            );
+
+            let encrypted = std::fs::read(directory.join(encrypted_filename))
+                .expect("reviewed encrypted companion must be readable");
+            assert_eq!(hex::encode(Sha256::digest(&encrypted)), encrypted_sha256);
             assert!(
-                std::str::from_utf8(&bytes)
+                std::str::from_utf8(&encrypted)
                     .ok()
                     .and_then(|text| crate::bir_xml::parse_bir_xml_checked(text).ok())
                     .is_none(),
                 "encrypted companion must never be accepted as plain editable XML"
             );
+
+            let decrypted = crate::crypto::decrypt_and_decompress(
+                &encrypted,
+                crate::crypto::BIR_IAF_PASSPHRASE,
+            )
+            .expect("reviewed encrypted companion must decrypt");
+            let decrypted_xml =
+                std::str::from_utf8(&decrypted).expect("decrypted companion must be UTF-8");
+            let encrypted_fields = crate::bir_xml::parse_bir_xml_checked(decrypted_xml)
+                .expect("decrypted companion must pass the checked parser");
+            assert_eq!(encrypted_fields.len(), EXACT_SOURCE_FIELD_COUNT);
+            assert_eq!(encrypted_fields["txtFinalFlag"], "0");
+
+            let encrypted_draft = Form0605Draft::from_bir_field_map(&encrypted_fields)
+                .expect("decrypted companion must satisfy the semantic contract");
+            assert_eq!(encrypted_draft.taxpayer_name, plain_draft.taxpayer_name);
+            assert_eq!(
+                encrypted_draft.line_of_business,
+                plain_draft.line_of_business
+            );
+            assert_eq!(encrypted_draft.tin, plain_draft.tin);
+            assert_eq!(encrypted_draft.atc, plain_draft.atc);
+            assert_eq!(encrypted_draft.tax_type, plain_draft.tax_type);
+            assert_eq!(
+                encrypted_draft.item_20d_total_penalties,
+                plain_draft.item_20d_total_penalties
+            );
+            assert_eq!(
+                encrypted_draft.item_21_total_amount_payable,
+                plain_draft.item_21_total_amount_payable
+            );
+            assert_eq!(encrypted_draft.to_bir_field_map(), encrypted_fields);
+            let encrypted_reimport =
+                Form0605Draft::from_bir_xml_payload(&encrypted_draft.to_bir_xml_payload())
+                    .expect("canonical encrypted-companion replay must re-import");
+            assert_eq!(encrypted_reimport.to_bir_field_map(), encrypted_fields);
         }
 
-        let pdf = std::fs::read(
-            std::path::Path::new(&source_dir).join("0605version1999_09.02.2022_copy.pdf"),
-        )
-        .expect("locked official PDF must be readable");
+        let pdf = std::fs::read(directory.join("0605version1999_09.02.2022_copy.pdf"))
+            .expect("locked official PDF must be readable");
         assert_eq!(
             hex::encode(Sha256::digest(&pdf)),
             "de04419766c59bf27fdeb854c0f7c3f98601900caa20630442e671e2313e536f"

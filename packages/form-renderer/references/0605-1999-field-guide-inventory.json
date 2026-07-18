@@ -18,6 +18,9 @@
     { "field": "17-other-manner", "mode": "plain", "short_tick_count": 0 },
     { "field": "18-installment-count", "mode": "plain_unframed", "short_tick_count": 0 },
     { "field": "19-through-21-money", "mode": "plain_decimal_box", "short_tick_count": 0, "decimal_marker": true },
+    { "field": "22a-taxpayer-signature", "mode": "plain", "short_tick_count": 0, "fit_rule": "measured_width_0.5px_steps" },
+    { "field": "22a-title-position", "mode": "plain", "short_tick_count": 0, "fit_rule": "measured_width_0.5px_steps" },
+    { "field": "22b-head-of-office-signature", "mode": "plain", "short_tick_count": 0, "fit_rule": "measured_width_0.5px_steps" },
     { "field": "23-amount", "mode": "plain_decimal_box", "short_tick_count": 0, "decimal_marker": true },
     { "field": "24a-bank", "mode": "plain", "short_tick_count": 0 },
     { "field": "24b-number", "mode": "plain", "short_tick_count": 0 },
@@ -30,7 +33,7 @@
     { "field": "26b-number", "mode": "plain", "short_tick_count": 0 },
     { "field": "26c-date", "mode": "guided", "segments": [2, 2, 4], "short_tick_count": 5 },
     { "field": "26d-amount", "mode": "plain_decimal_box", "short_tick_count": 0, "decimal_marker": true },
-    { "field": "machine-validation", "mode": "plain_multiline", "short_tick_count": 0 }
+    { "field": "machine-validation", "mode": "plain_multiline", "short_tick_count": 0, "fit_rule": "measured_width_0.5px_steps" }
   ],
   "form": {
     "code": "0605",

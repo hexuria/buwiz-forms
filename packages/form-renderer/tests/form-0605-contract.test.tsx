@@ -125,9 +125,13 @@ describe("0605:1999 runtime render contract", () => {
       "17-other-manner",
       "18-installment-count",
       "19-basic-tax",
+      "22a-taxpayer-signature",
+      "22a-title-position",
+      "22b-head-of-office-signature",
       "24a-bank",
       "24b-number",
-      "24d-amount"
+      "24d-amount",
+      "machine-validation"
     ]) {
       const tag = officialFieldTag(markup, field);
       expect(tag, field).toContain('data-field-mode="plain"');
@@ -161,6 +165,29 @@ describe("0605:1999 runtime render contract", () => {
       expect(tag, field).toContain(`data-guide-count="${guides}"`);
       expect(inventory.get(field)?.short_tick_count, field).toBe(guides);
     }
+  });
+
+  it("uses measured 0.5px adaptive fitting for reviewed long plain fields", () => {
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: longFixture as RenderEnvelope })
+    );
+
+    for (const field of [
+      "13-taxpayer-name",
+      "15-registered-address",
+      "22a-taxpayer-signature",
+      "22a-title-position",
+      "22b-head-of-office-signature",
+      "machine-validation"
+    ]) {
+      const tag = officialFieldTag(markup, field);
+      expect(tag, field).toContain('data-field-mode="plain"');
+      expect(tag, field).toContain('data-guide-count="0"');
+    }
+    expect(markup).toContain('data-adaptive-max-font-px="10"');
+    expect(markup).toContain('data-adaptive-min-font-px="6"');
+    expect(markup).toContain('data-adaptive-step-px="0.5"');
+    expect(markup).not.toMatch(/font-size:[^;]*calc\(/);
   });
 
   it("switches the whole TIN field to plain mode only when it exceeds the official 12 guides", () => {

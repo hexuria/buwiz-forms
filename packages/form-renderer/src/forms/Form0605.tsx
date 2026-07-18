@@ -26,7 +26,7 @@ const ATC_ROWS = [
   [["II 011", "Pure Compensation Income"], ["", "Sweetened Products"], ["XP060", "Premium (Unleaded) Gasoline"]],
   [["II 012", "Pure Business Income"], ["XB010", "Sweetened Juice Drinks"], ["XP080", "Regular Gasoline"]],
   [["II 013", "Mixed (Compensation and Business)"], ["XB020", "Sweetened Tea"], ["XP090 & XP100", "Naptha & Other Similar Products"]],
-  [["MC 180", "VAT/Non-VAT Registration Fee"], ["XB030", "Carbonated Beverages"], ["XP110", "Aviation Gasoline"]],
+  [["MC 180", "VAT/Non-VAT Registration Fee"], ["XB030", "Carbonated Beverages"], ["XP 110", "Aviation Gasoline"]],
   [["MC 190", "Travel Tax"], ["XB040", "Flavored Water"], ["XP140", "Diesel Gas"]],
   [["MC 090", "Tin Card Fees"], ["XB050", "Energy and Sports Drinks"], ["XP180", "Bunker Fuel Oil"]],
   [["MC010 & MC020", "Tax Amnesty"], ["XB060", "Powdered Drinks not Classified as Milk, Juice, Tea and Coffee"], ["XP120", "Avturbo Jet Fuel"]],
@@ -55,7 +55,7 @@ const TAX_TYPE_ROWS = [
   [["TR", "TRAVEL TAX-PTA"], ["ES", "ESTATE TAX"], ["WE", "WITHHOLDING TAX-EXPANDED"]],
   [["ET", "ENERGY TAX"], ["DN", "DONOR'S TAX"], ["WF", "WITHHOLDING TAX-FINAL"]],
   [["QP", "QUALIFYING FEES-PAGCOR"], ["VT", "VALUE-ADDED TAX"], ["WG", "WITHHOLDING TAX - VAT AND OTHER PERCENTAGE TAXES"]],
-  [["MC", "MISCELLANEOUS TAX"], ["PT", "PERCENTAGE TAX"], ["WO", "WITHHOLDING TAX-OTHERS (ONE-TIME TRANSACTION NOT SUBJECT TO CAPITAL GAINS TAX)"]],
+  [["MC", "MISCELLANEOUS TAX"], ["PT", "PERCENTAGE TAX"], ["", ""]],
   [["XV", "EXCISE-AD VALOREM"], ["ST", "PERCENTAGE TAX - STOCKS"], ["WO", "WITHHOLDING TAX-OTHERS (ONE-TIME TRANSACTION NOT SUBJECT TO CAPITAL GAINS TAX)"]],
   [["XS", "EXCISE-SPECIFIC"], ["SO", "PERCENTAGE TAX - STOCKS (IPO)"], ["", ""]],
   [["XF", "TOBACCO INSPECTION AND MONITORING FEES"], ["SL", "PERCENTAGE TAX - SPECIAL LAWS"], ["", ""]],
@@ -347,16 +347,15 @@ function Money0605({ field, value, present = true }: { field: string; value: num
 function Declaration0605({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <section className="declaration-0605">
-      <div className="voluntary-signature-0605"><h3>For Voluntary Payment</h3><p>I declare, under the penalties of perjury, that this document has been made in good faith, verified by me, and to the best of my knowledge and belief, is true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof.</p><div className="signature-lines-0605"><SignatureLine0605 number="22A" value={text(envelope, "signature_taxpayer_or_representative")} label="Signature over Printed Name of Taxpayer /Authorized Representative" /><SignatureLine0605 value={text(envelope, "signature_title_or_position")} label="Title/Position of Signatory" /></div></div>
-      <div className="deficiency-signature-0605"><h3>For Payment of Deficiency Taxes<br />From Audit/Investigation/<br />Delinquent Accounts</h3><p>APPROVED BY:</p><SignatureLine0605 number="22B" value={text(envelope, "signature_head_of_office")} label="Signature over Printed Name of Head of Office" /></div>
+      <div className="voluntary-signature-0605"><h3>For Voluntary Payment</h3><p>I declare, under the penalties of perjury, that this document has been made in good faith, verified by me, and to the best of my knowledge and belief, is true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof.</p><div className="signature-lines-0605"><SignatureLine0605 field="22a-taxpayer-signature" number="22A" value={text(envelope, "signature_taxpayer_or_representative")} label="Signature over Printed Name of Taxpayer /Authorized Representative" /><SignatureLine0605 field="22a-title-position" value={text(envelope, "signature_title_or_position")} label="Title/Position of Signatory" /></div></div>
+      <div className="deficiency-signature-0605"><h3>For Payment of Deficiency Taxes<br />From Audit/Investigation/<br />Delinquent Accounts</h3><p>APPROVED BY:</p><SignatureLine0605 field="22b-head-of-office-signature" number="22B" value={text(envelope, "signature_head_of_office")} label="Signature over Printed Name of Head of Office" /></div>
       <div className="receiving-stamp-0605">Stamp of Receiving<br />Office<br /><br />and Date of Receipt</div>
     </section>
   );
 }
 
-function SignatureLine0605({ number, value, label }: { number?: string; value: string; label: string }) {
-  const fontSize = Math.max(3.4, Math.min(5.4, 5.4 * 27 / Math.max(27, Array.from(value).length)));
-  return <div className="signature-line-0605">{number && <b>{number}</b>}<span className="adaptive-plain-value" data-cell-capacity="44" data-overflow-mode="plain" aria-label={value} style={{ fontSize: `${fontSize}pt` }}>{value}</span><span>{label}</span></div>;
+function SignatureLine0605({ field, number, value, label }: { field: string; number?: string; value: string; label: string }) {
+  return <div className="signature-line-0605">{number && <b>{number}</b>}<PlainValue0605 field={field} value={value} className="signature-value-0605" /><span>{label}</span></div>;
 }
 
 function PaymentDetails0605({ envelope }: { envelope: RenderEnvelope }) {
@@ -364,11 +363,11 @@ function PaymentDetails0605({ envelope }: { envelope: RenderEnvelope }) {
     <section className="part-three-0605">
       <h2><span>Part III</span><b>Details of Payment</b></h2>
       <div className="payment-table-head-0605"><span>Particulars</span><span>Drawee Bank/Agency</span><span>Number</span><span>MM</span><span>DD</span><span>YYYY</span><span>Amount</span></div>
-      <div className="cash-payment-0605"><span><b>23</b> Cash/Bank<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Debit Memo</span><Money0605 field="23-amount" value={decimal(envelope, "payment_23_amount")} present={bool(envelope, "payment_23_amount_present")} /></div>
+      <div className="cash-payment-0605" data-payment-row="payment_23"><span><b>23</b> Cash/Bank<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Debit Memo</span><Money0605 field="23-amount" value={decimal(envelope, "payment_23_amount")} present={bool(envelope, "payment_23_amount_present")} /></div>
       <PaymentRow0605 envelope={envelope} number="24" label="Check" prefix="payment_24" bankItem="24A" numberItem="24B" dateItem="24C" amountItem="24D" />
       <PaymentRow0605 envelope={envelope} number="25" label={<>Tax Debit<br />Memo</>} prefix="payment_25" numberItem="25A" dateItem="25B" amountItem="25C" hideBank />
       <PaymentRow0605 envelope={envelope} number="26" label="Others" prefix="payment_26" bankItem="26A" numberItem="26B" dateItem="26C" amountItem="26D" />
-      <div className="machine-validation-0605"><span>Machine Validation/Revenue Official Receipt Details (If not filed with the bank)</span><span className="adaptive-plain-value" data-cell-capacity="100" data-overflow-mode="plain" aria-label={text(envelope, "machine_validation_or_receipt_details")}>{text(envelope, "machine_validation_or_receipt_details")}</span></div>
+      <div className="machine-validation-0605"><span>Machine Validation/Revenue Official Receipt Details (If not filed with the bank)</span><span className="machine-validation-value-0605" data-official-field="machine-validation" data-field-mode="plain" data-guide-count="0"><AdaptivePlainValue value={text(envelope, "machine_validation_or_receipt_details")} className="machine-validation-text-0605" maxFontSizePx={9} minFontSizePx={6} fontStepPx={0.5} /></span></div>
     </section>
   );
 }
@@ -376,7 +375,7 @@ function PaymentDetails0605({ envelope }: { envelope: RenderEnvelope }) {
 function PaymentRow0605({ envelope, number, label, prefix, bankItem, numberItem, dateItem, amountItem, hideBank = false }: { envelope: RenderEnvelope; number: string; label: ReactNode; prefix: string; bankItem?: string; numberItem: string; dateItem: string; amountItem: string; hideBank?: boolean }) {
   const date = text(envelope, `${prefix}_date`).replace(/\D/g, "");
   return (
-    <div className={`payment-row-0605 ${hideBank ? "no-bank-0605" : ""}`}>
+    <div className={`payment-row-0605 ${hideBank ? "no-bank-0605" : ""}`} data-payment-row={prefix}>
       <span><b>{number}</b> {label}</span>
       {!hideBank && <FieldWithItem0605 field={`${number.toLowerCase()}a-bank`} item={bankItem} value={text(envelope, `${prefix}_drawee_bank_or_agency`)} className="payment-bank-0605" />}
       <FieldWithItem0605 field={`${number.toLowerCase()}${hideBank ? "a" : "b"}-number`} item={numberItem} value={text(envelope, `${prefix}_number`)} className="payment-number-0605" />

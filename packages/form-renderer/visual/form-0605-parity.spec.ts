@@ -7,6 +7,15 @@ import { compareCompleteOfficialPage } from "./official-page-diff";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "../../..");
+const staticTextInventory = JSON.parse(fs.readFileSync(path.join(
+  REPO_ROOT,
+  "packages/form-renderer/references/0605-1999-static-text-inventory.json"
+), "utf8")) as {
+  official_source_sha256: string;
+  regions: Array<{ selector: string; text: string }>;
+  atc_rows: string[][];
+  tax_type_rows: string[][];
+};
 const DEVICE_SCALE_FACTOR = 1.5;
 const MAX_CHANGED_PERCENT = 1;
 const STRUCTURAL_INK_THRESHOLD = 100;
@@ -172,6 +181,34 @@ test("0605 1999 preserves the official page-two ATC category bands and merged pe
   )).toEqual(Array(9).fill("rgb(191, 191, 191)"));
 });
 
+test("0605 1999 preserves exact official static wording and page-two code tables", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/0605-minimum.json"));
+
+  expect(staticTextInventory.official_source_sha256).toBe(
+    "de04419766c59bf27fdeb854c0f7c3f98601900caa20630442e671e2313e536f"
+  );
+  for (const region of staticTextInventory.regions) {
+    const visibleText = await page.locator(region.selector).evaluate((element) =>
+      (element as HTMLElement).innerText.replace(/\s+/g, " ").trim()
+    );
+    expect(visibleText, region.selector).toBe(region.text);
+  }
+
+  const atcRows = await page.locator(".atc-table-0605 tbody tr").evaluateAll((rows) =>
+    rows.map((row) => [...row.querySelectorAll("td")].map((cell) =>
+      (cell as HTMLElement).innerText.replace(/\s+/g, " ").trim()
+    ))
+  );
+  expect(atcRows).toEqual(staticTextInventory.atc_rows);
+
+  const taxTypeRows = await page.locator(".tax-type-table-0605 tbody tr").evaluateAll((rows) =>
+    rows.map((row) => [...row.querySelectorAll("td")].map((cell) =>
+      (cell as HTMLElement).innerText.replace(/\s+/g, " ").trim()
+    ))
+  );
+  expect(taxTypeRows).toEqual(staticTextInventory.tax_type_rows);
+});
+
 test("0605 1999 preserves the official Part II amount-box partitions", async ({ page }) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/0605-normal.json"));
   const firstPage = page.locator(".form-page").nth(0);
@@ -207,7 +244,11 @@ test("0605 1999 uses plain rectangles and only the pinned short-guide counts", a
     "25c-amount",
     "26a-bank",
     "26b-number",
-    "26d-amount"
+    "26d-amount",
+    "22a-taxpayer-signature",
+    "22a-title-position",
+    "22b-head-of-office-signature",
+    "machine-validation"
   ]) {
     const locator = page.locator(`[data-official-field="${field}"]`);
     await expect(locator, field).toHaveAttribute("data-field-mode", "plain");
@@ -286,6 +327,148 @@ test("0605 1999 uses plain rectangles and only the pinned short-guide counts", a
   );
   await expect(enteredInstallmentCount.locator("xpath=preceding-sibling::*[2]"))
     .toHaveClass(/checked/);
+});
+
+test("0605 1999 keeps reviewed plain fields plain when empty or populated", async ({ page }) => {
+  for (const populated of [false, true]) {
+    const fixture = structuredClone(
+      readFixture("packages/form-contracts/fixtures/0605-minimum.json")
+    ) as Record<string, any>;
+    const value = populated ? "REVIEWED PLAIN FIELD VALUE" : "";
+    fixture.fields.other_manner_description.value = value;
+    fixture.fields.payment_24_drawee_bank_or_agency.value = value;
+    fixture.fields.payment_24_number.value = value;
+    fixture.fields.signature_taxpayer_or_representative.value = value;
+    fixture.fields.signature_title_or_position.value = value;
+    fixture.fields.signature_head_of_office.value = value;
+    fixture.fields.machine_validation_or_receipt_details.value = value;
+    await renderEnvelope(page, fixture);
+
+    for (const field of [
+      "17-other-manner",
+      "24a-bank",
+      "24b-number",
+      "22a-taxpayer-signature",
+      "22a-title-position",
+      "22b-head-of-office-signature",
+      "machine-validation"
+    ]) {
+      const locator = page.locator(`[data-official-field="${field}"]`);
+      await expect(locator, `${field} populated=${populated}`).toHaveAttribute(
+        "data-field-mode",
+        "plain"
+      );
+      await expect(locator).toHaveAttribute("data-guide-count", "0");
+      await expect(locator.locator(".comb-value"), `${field} invented comb`).toHaveCount(0);
+      await expect(locator).toHaveCSS("background-image", "none");
+    }
+  }
+});
+
+test("0605 1999 switches whole guided fields only after exact official capacity", async ({ page }) => {
+  const cases: Array<{
+    field: string;
+    values: Array<{ value: string | number; mode: "guided" | "plain" }>;
+    mutate: (fixture: Record<string, any>, value: string | number) => void;
+  }> = [
+    {
+      field: "4-due-date",
+      values: [
+        { value: "", mode: "guided" },
+        { value: "1", mode: "guided" },
+        { value: "01022026", mode: "guided" },
+        { value: "010220260", mode: "plain" }
+      ],
+      mutate: (fixture, value) => { fixture.fields.due_date.value = value; }
+    },
+    {
+      field: "8-tax-type",
+      values: [
+        { value: "", mode: "guided" },
+        { value: "I", mode: "guided" },
+        { value: "IT", mode: "guided" },
+        { value: "ITX", mode: "plain" }
+      ],
+      mutate: (fixture, value) => { fixture.fields.tax_type_code.value = value; }
+    },
+    {
+      field: "9-tin",
+      values: [
+        { value: "", mode: "guided" },
+        { value: "1", mode: "guided" },
+        { value: "123456789000", mode: "guided" },
+        { value: "1234567890001", mode: "plain" }
+      ],
+      mutate: (fixture, value) => { fixture.taxpayer.tin = value; }
+    },
+    {
+      field: "10-rdo",
+      values: [
+        { value: "", mode: "guided" },
+        { value: "1", mode: "guided" },
+        { value: "018", mode: "guided" },
+        { value: "0180", mode: "plain" }
+      ],
+      mutate: (fixture, value) => { fixture.taxpayer.rdo_code = value; }
+    },
+    {
+      field: "14-telephone",
+      values: [
+        { value: "", mode: "guided" },
+        { value: "1", mode: "guided" },
+        { value: "1234567", mode: "guided" },
+        { value: "12345678", mode: "plain" }
+      ],
+      mutate: (fixture, value) => { fixture.taxpayer.contact_number = value; }
+    },
+    {
+      field: "16-zip",
+      values: [
+        { value: "", mode: "guided" },
+        { value: "1", mode: "guided" },
+        { value: "2200", mode: "guided" },
+        { value: "22000", mode: "plain" }
+      ],
+      mutate: (fixture, value) => { fixture.taxpayer.zip_code = value; }
+    },
+    {
+      field: "24c-date",
+      values: [
+        { value: "", mode: "guided" },
+        { value: "1", mode: "guided" },
+        { value: "01022026", mode: "guided" },
+        { value: "010220260", mode: "plain" }
+      ],
+      mutate: (fixture, value) => { fixture.fields.payment_24_date.value = value; }
+    },
+    {
+      field: "5-sheets",
+      values: [
+        { value: 2, mode: "guided" },
+        { value: 123, mode: "plain" }
+      ],
+      mutate: (fixture, value) => { fixture.fields.number_of_sheets.value = value; }
+    }
+  ];
+
+  for (const boundary of cases) {
+    for (const sample of boundary.values) {
+      const fixture = structuredClone(
+        readFixture("packages/form-contracts/fixtures/0605-normal.json")
+      ) as Record<string, any>;
+      boundary.mutate(fixture, sample.value);
+      await renderEnvelope(page, fixture);
+      const locator = page.locator(`[data-official-field="${boundary.field}"]`);
+      await expect(
+        locator,
+        `${boundary.field} value=${JSON.stringify(sample.value)}`
+      ).toHaveAttribute("data-field-mode", sample.mode);
+      if (sample.mode === "plain") {
+        await expect(locator).toHaveAttribute("data-guide-count", "0");
+        await expect(locator.locator(".comb-value")).toHaveCount(0);
+      }
+    }
+  }
 });
 
 test("0605 1999 matches the complete pinned official pages", async ({ page }, testInfo) => {
