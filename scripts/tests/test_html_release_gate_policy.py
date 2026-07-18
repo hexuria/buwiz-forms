@@ -72,6 +72,25 @@ class HtmlReleaseGatePolicyTests(unittest.TestCase):
             package_recipe,
         )
 
+    def test_external_macos_driver_remains_non_promotional_and_untrusted(self) -> None:
+        recipe = self.justfile.split(
+            "native-evidence-macos-external", maxsplit=1
+        )[1]
+        recipe = recipe.split("# Install a built package", maxsplit=1)[0]
+
+        self.assertIn("macos_native_evidence_driver.py", recipe)
+        self.assertIn("--network-denied", recipe)
+        self.assertIn("non-promotional", recipe)
+        self.assertNotIn("release_ready", recipe)
+        self.assertNotIn("form-release-evidence.json", recipe)
+
+        driver = (
+            REPOSITORY_ROOT / "scripts/macos_native_evidence_driver.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('"promotion_eligible": False', driver)
+        self.assertIn('"trusted_producer": False', driver)
+        self.assertNotIn("form-release-evidence.json\"", driver)
+
 
 if __name__ == "__main__":
     unittest.main()

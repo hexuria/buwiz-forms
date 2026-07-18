@@ -161,6 +161,60 @@ and inconsistent destination outcomes. Its success is still development-only.
 The ad-hoc package, app-written observation, and schema validator are not an
 independent platform attestation.
 
+### External packaged-runtime driver foundation
+
+The repository also contains a deliberately non-promotional external driver:
+
+```sh
+just native-evidence-macos-external
+```
+
+The default recipe builds the dev-tools package from a clean curated source,
+then launches that unchanged package with the committed deterministic
+`2551q-6-rows.json` envelope. The Python process remains outside the package
+and independently:
+
+- hashes the complete `.app` and its exact
+  `Contents/Resources/assets/form-renderer` tree twice before and after the
+  exercise;
+- compares the renderer hash with the separately generated build identity;
+- verifies the existing package signature without treating an ad-hoc
+  signature as Developer ID or notarization evidence;
+- drives a real Export PDF over a pre-existing destination through macOS
+  Accessibility and cross-checks the app-written observation;
+- retains each actual WKPDF callback payload separately from the validated
+  final PDF, with hashes bound back to the callback observation;
+- induces a second real export failure by denying sibling-temp creation and
+  verifies that the pre-existing destination is byte-identical with no
+  `.partial.pdf` leak;
+- can launch the packaged runtime under `sandbox-exec` with `deny network*` and
+  records that invocation in the transcript; and
+- optionally requests the existing system-print path and cancels the native
+  dialog, while honestly retaining the missing printer/operator completion as
+  a blocking gap.
+
+The driver writes
+`target/macos-native-evidence-driver/macos-native-evidence-driver.transcript.json`
+outside the application package. Re-verify it independently with:
+
+```sh
+python3 scripts/macos_native_evidence_driver.py verify \
+  target/macos-native-evidence-driver/macos-native-evidence-driver.transcript.json
+```
+
+macOS Accessibility permission for the invoking terminal or Codex process is
+required. The run fails closed if the package changes, the renderer identity
+does not match, the accessibility operation cannot be observed, the PDF
+observation/artifacts disagree, destination preservation fails, or a temporary
+file remains.
+
+This driver does not modify `form-release-evidence.json`, does not register a
+trusted producer, and its schema requires both `promotion_eligible: false` and
+`trusted_producer: false`. It is a useful packaged-runtime diagnostic, not a
+platform attestation. Developer ID signing, notarization/stapling, a trusted
+collector identity, successful printer completion, rollback proof, and the
+Windows/Linux equivalents remain external release blockers.
+
 ## Attested runtime collector still required
 
 A later, narrow macOS collector must gather real runtime facts without changing
@@ -199,9 +253,10 @@ reruns the no-legacy package audit. That is the correct package-construction
 path, but it intentionally cannot produce promotional native evidence yet:
 
 - the signed build does not compile the development observer;
-- no external attested driver binds user-visible system print and PDF export to
-  the signed/notarized package and immutable envelope;
-- no network-denied packaged-runtime driver exists;
+- the external diagnostic driver is not attested and cannot bind a user-visible
+  print completion to a signed/notarized package;
+- the network-denied diagnostic launch is not a trusted packaged-runtime
+  attestation;
 - no trusted platform or rollback producer is registered in the migration
   audit.
 

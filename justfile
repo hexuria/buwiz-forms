@@ -170,6 +170,34 @@ native-evidence-macos:
     npm run verify:native-output:observation -- "${observations[@]}"
     echo "Development observations validated. They are non-promotional and must not be added to form-release-evidence.json."
 
+# Exercise an already-built package through the external diagnostic driver.
+# The driver hashes the unchanged app and renderer before/after, launches the
+# deterministic committed 2551Q fixture, retains WKPDF/final artifacts, and
+# proves a failed overwrite preserves its destination. Accessibility permission
+# is required. Set system_print=true only when an operator can review the native
+# print dialog; the driver cancels it and keeps the print gate incomplete.
+[macos]
+native-evidence-macos-external app=MAC_APP output="target/macos-native-evidence-driver" network_denied="true" system_print="false":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "{{app}}" = "{{MAC_APP}}" ]; then
+        python3 scripts/audit_html_form_migration.py --require-clean-source
+        just _package-mac --native-evidence
+    fi
+    rm -rf "{{output}}"
+    args=(
+        run
+        --app "{{app}}"
+        --envelope packages/form-contracts/fixtures/2551q-6-rows.json
+        --output-dir "{{output}}"
+    )
+    if [ "{{network_denied}}" = "true" ]; then args+=(--network-denied); fi
+    if [ "{{system_print}}" = "true" ]; then args+=(--exercise-system-print); fi
+    python3 scripts/macos_native_evidence_driver.py "${args[@]}"
+    python3 scripts/macos_native_evidence_driver.py verify \
+        "{{output}}/macos-native-evidence-driver.transcript.json"
+    echo "External macOS diagnostic validated. It is non-promotional and is not trusted release evidence."
+
 # Install a built package (auto-detects available artifacts)
 # Usage: just install [format]
 # Formats: exe, msix (Windows) | app, pkg, dmg (macOS) | deb, tar (Linux)

@@ -1504,6 +1504,39 @@ fn development_backend_observation(
     }
 }
 
+#[cfg(all(feature = "dev-tools", target_os = "macos"))]
+fn development_wkpdf_page_artifacts(
+    completion: &NativeBackendCompletion,
+) -> Result<Vec<Vec<u8>>, String> {
+    match completion {
+        NativeBackendCompletion::CapturedPages { pages, .. } => pages
+            .iter()
+            .enumerate()
+            .map(|(index, page)| {
+                page.as_ref().cloned().map_err(|error| {
+                    format!(
+                        "WKPDF page {} cannot be retained as evidence: {error}",
+                        index + 1
+                    )
+                })
+            })
+            .collect(),
+        NativeBackendCompletion::SystemPrint { .. } => {
+            Err("system print has no WKPDF page artifacts".to_string())
+        }
+    }
+}
+
+#[cfg(all(feature = "dev-tools", target_os = "windows"))]
+fn development_wkpdf_page_artifacts(
+    _completion: &NativeBackendCompletion,
+) -> Result<Vec<Vec<u8>>, String> {
+    Err(
+        "WebView2 PrintToPdf exposes only the completed PDF file, not WKPDF page artifacts"
+            .to_string(),
+    )
+}
+
 #[cfg(all(feature = "dev-tools", any(target_os = "macos", target_os = "windows")))]
 fn development_evidence_dir() -> Option<PathBuf> {
     std::env::var_os("EBIR_NATIVE_OUTPUT_EVIDENCE_DIR")
@@ -2695,6 +2728,8 @@ impl HtmlFormPreviewView {
 
         #[cfg(feature = "dev-tools")]
         let development_backend = development_backend_observation(&completion);
+        #[cfg(feature = "dev-tools")]
+        let development_wkpdf_pages = development_wkpdf_page_artifacts(&completion);
 
         #[cfg(target_os = "macos")]
         let backend_result = match completion {
@@ -2737,6 +2772,7 @@ impl HtmlFormPreviewView {
                                 backend,
                                 &validation,
                                 &destination,
+                                development_wkpdf_pages.as_ref().ok().map(Vec::as_slice),
                             )
                         });
                     match evidence_result {
@@ -2769,6 +2805,7 @@ impl HtmlFormPreviewView {
         backend: &DevelopmentBackendObservation,
         validation: &PdfValidationReport,
         destination: &Path,
+        wkpdf_pages: Option<&[Vec<u8>]>,
     ) -> Result<Option<PathBuf>, String> {
         let Some(evidence_dir) = development_evidence_dir() else {
             return Ok(None);
@@ -2944,6 +2981,28 @@ impl HtmlFormPreviewView {
             );
         }
         write_development_evidence_file(&envelope_path, self.prepared.envelope_json.as_bytes())?;
+
+        if let Some(pages) = wkpdf_pages {
+            if pages.len() != self.pdf_expectation.expected_page_count {
+                return Err(format!(
+                    "retained WKPDF artifact count {} does not match expected page count {}",
+                    pages.len(),
+                    self.pdf_expectation.expected_page_count
+                ));
+            }
+            for (index, bytes) in pages.iter().enumerate() {
+                let page_path = evidence_dir.join(format!("{stem}.wkpdf-page-{}.pdf", index + 1));
+                write_development_evidence_file(&page_path, bytes)?;
+            }
+        }
+
+        let final_bytes = std::fs::read(destination).map_err(|error| {
+            format!(
+                "finalized PDF could not be retained separately for diagnostic evidence: {error}"
+            )
+        })?;
+        let final_path = evidence_dir.join(format!("{stem}.final.pdf"));
+        write_development_evidence_file(&final_path, &final_bytes)?;
         let observation_path = evidence_dir.join(format!("{stem}.observation.json"));
         write_development_evidence_file(&observation_path, &encoded)?;
         Ok(Some(observation_path))
@@ -4188,6 +4247,51 @@ mod tests {
         assert_eq!(
             payloads[1].sha256.as_deref(),
             Some(format!("{:x}", Sha256::digest(&second)).as_str())
+        );
+    }
+
+    #[cfg(all(feature = "dev-tools", target_os = "macos"))]
+    #[test]
+    fn macos_development_evidence_retains_only_successful_wkpdf_pages() {
+        let first = captured_pdf_page("q 1 0 0 1 1 1 cm Q");
+        let second = captured_pdf_page("q 1 0 0 1 2 2 cm Q");
+        let successful = NativeBackendCompletion::CapturedPages {
+            nonce: 17,
+            document_identity: RendererDocumentIdentity::test_identity(),
+            render_epoch: 23,
+            pages: vec![Ok(first.clone()), Ok(second.clone())],
+        };
+
+        assert_eq!(
+            development_wkpdf_page_artifacts(&successful)
+                .expect("successful WKPDF callbacks should remain separately reviewable"),
+            vec![first, second]
+        );
+
+        let failed = NativeBackendCompletion::CapturedPages {
+            nonce: 18,
+            document_identity: RendererDocumentIdentity::test_identity(),
+            render_epoch: 24,
+            pages: vec![
+                Ok(captured_pdf_page("q Q")),
+                Err("forced callback error".into()),
+            ],
+        };
+        let error = development_wkpdf_page_artifacts(&failed)
+            .expect_err("a failed callback must prevent incomplete WKPDF evidence");
+        assert!(error.contains("WKPDF page 2"));
+        assert!(error.contains("forced callback error"));
+
+        let system_print = NativeBackendCompletion::SystemPrint {
+            nonce: 19,
+            document_identity: RendererDocumentIdentity::test_identity(),
+            render_epoch: 25,
+            result: Ok(()),
+        };
+        assert_eq!(
+            development_wkpdf_page_artifacts(&system_print)
+                .expect_err("system print must not claim WKPDF callback evidence"),
+            "system print has no WKPDF page artifacts"
         );
     }
 
