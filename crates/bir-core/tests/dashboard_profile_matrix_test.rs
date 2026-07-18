@@ -16,15 +16,18 @@ use chrono::NaiveDate;
 use std::collections::BTreeSet;
 
 const TAXABLE_YEAR: u16 = 2026;
-const SELF_EMPLOYED_NON_VAT: &[&str] = &["1701", "1701Q", "2551Q", "1701A"];
-const SELF_EMPLOYED_NON_VAT_MICRO_SMALL: &[&str] = &["1701MS", "1701", "1701Q", "2551Q", "1701A"];
-const SELF_EMPLOYED_NON_VAT_8_PERCENT: &[&str] = &["1701A", "1701Q", "1701"];
-const SELF_EMPLOYED_NON_VAT_MICRO_SMALL_8_PERCENT: &[&str] = &["1701MS", "1701A", "1701Q", "1701"];
-const SELF_EMPLOYED_VAT: &[&str] = &["1701", "1701Q", "2550Q", "1701A"];
-const SELF_EMPLOYED_VAT_MICRO_SMALL: &[&str] = &["1701MS", "1701", "1701Q", "2550Q", "1701A"];
-const SELF_EMPLOYED_VAT_8_PERCENT: &[&str] = &["1701A", "1701Q", "2550Q", "1701"];
-const SELF_EMPLOYED_VAT_MICRO_SMALL_8_PERCENT: &[&str] =
-    &["1701MS", "1701A", "1701Q", "2550Q", "1701"];
+// One annual ITR per year: the primary is selected by classification, EOPT
+// tier, and deduction election. Self-employed defaults to 1701; an 8%/OSD
+// election maps to 1701A; a Micro/Small tier (2024+) without such an election
+// maps to the simplified 1701MS.
+const SELF_EMPLOYED_NON_VAT: &[&str] = &["1701", "1701Q", "2551Q"];
+const SELF_EMPLOYED_NON_VAT_MICRO_SMALL: &[&str] = &["1701MS", "1701Q", "2551Q"];
+const SELF_EMPLOYED_NON_VAT_8_PERCENT: &[&str] = &["1701A", "1701Q"];
+const SELF_EMPLOYED_NON_VAT_MICRO_SMALL_8_PERCENT: &[&str] = &["1701A", "1701Q"];
+const SELF_EMPLOYED_VAT: &[&str] = &["1701", "1701Q", "2550Q"];
+const SELF_EMPLOYED_VAT_MICRO_SMALL: &[&str] = &["1701MS", "1701Q", "2550Q"];
+const SELF_EMPLOYED_VAT_8_PERCENT: &[&str] = &["1701A", "1701Q", "2550Q"];
+const SELF_EMPLOYED_VAT_MICRO_SMALL_8_PERCENT: &[&str] = &["1701A", "1701Q", "2550Q"];
 const MIXED_NON_VAT: &[&str] = &["1701", "1701Q", "2551Q"];
 const MIXED_NON_VAT_8_PERCENT: &[&str] = &["1701", "1701Q"];
 const MIXED_VAT: &[&str] = &["1701", "1701Q", "2550Q"];
@@ -542,7 +545,7 @@ fn dashboard_profile_matrix_excise_modifiers() {
         assert_forms(
             &format!("excise category {:?}", category),
             &profile,
-            &["1701", "1701Q", *form_code, "2551Q", "1701A"],
+            &["1701", "1701Q", *form_code, "2551Q"],
         );
     }
 
@@ -552,7 +555,7 @@ fn dashboard_profile_matrix_excise_modifiers() {
         "all excise categories",
         &all_excise,
         &[
-            "1701", "1701Q", "2200A", "2200AN", "2200M", "2200P", "2200T", "2551Q", "1701A",
+            "1701", "1701Q", "2200A", "2200AN", "2200M", "2200P", "2200T", "2551Q",
         ],
     );
 }

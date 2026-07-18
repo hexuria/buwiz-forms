@@ -339,6 +339,66 @@ impl PerYearFormsSet {
             .retain(|entry| !(entry.form_code == form_code && entry.is_user_created_custom()));
         self.entries.len() != before
     }
+
+    /// Enforce "one annual ITR per year" on already-stored data.
+    ///
+    /// When two or more members of an annual-ITR group are active, keep the
+    /// one the current tax facts imply (`keep_individual` / `keep_corporate`)
+    /// active and deactivate the rest. When none of the active entries matches
+    /// the implied primary — e.g. legacy data with no clear match — the first
+    /// active member in canonical group order is kept so exactly one survives.
+    /// Returns whether any entry changed. Idempotent.
+    pub fn deactivate_redundant_annual_itrs(
+        &mut self,
+        keep_individual: Option<&str>,
+        keep_corporate: Option<&str>,
+    ) -> bool {
+        const INDIVIDUAL: &[&str] = &["1700", "1701", "1701A", "1701MS"];
+        const CORPORATE: &[&str] = &["1702", "1702RT", "1702EX", "1702MX"];
+
+        let mut changed = false;
+        for (group, preferred) in [(INDIVIDUAL, keep_individual), (CORPORATE, keep_corporate)] {
+            let active: Vec<String> = self
+                .entries
+                .iter()
+                .filter(|entry| {
+                    entry.is_filing_active() && group.contains(&entry.form_code.as_str())
+                })
+                .map(|entry| entry.form_code.clone())
+                .collect();
+            if active.len() < 2 {
+                continue;
+            }
+            // Choose the survivor: the implied primary if it is one of the
+            // active entries, otherwise the first active member in group order.
+            let keep = preferred
+                .filter(|code| active.iter().any(|active_code| active_code == code))
+                .map(str::to_string)
+                .or_else(|| {
+                    group
+                        .iter()
+                        .find(|code| active.iter().any(|active_code| active_code == *code))
+                        .map(|code| code.to_string())
+                });
+            let Some(keep) = keep else {
+                continue;
+            };
+            for entry in &mut self.entries {
+                if entry.form_code != keep
+                    && group.contains(&entry.form_code.as_str())
+                    && entry.is_filing_active()
+                {
+                    entry.active = false;
+                    entry.review_status = FormSetReviewStatus::Resolved;
+                    entry.reason = Some(format!(
+                        "Deactivated automatically: a taxpayer files only one annual ITR per year, and {keep} is active."
+                    ));
+                    changed = true;
+                }
+            }
+        }
+        changed
+    }
 }
 
 /// Reconciles generated suggestions with the user-owned Forms Set.
@@ -539,6 +599,55 @@ mod tests {
 
         assert!(set.remove_manual_custom_entry("ZZZZ"));
         assert!(set.entries.is_empty());
+    }
+
+    #[test]
+    fn deactivate_redundant_annual_itrs_keeps_the_primary_only() {
+        let mut set = PerYearFormsSet::from_codes(
+            2026,
+            ["1701", "1701A", "1701MS", "2551Q"],
+            FormSetSource::InferredTaxType,
+        );
+
+        // Self-employed default primary is 1701; the other ITRs deactivate,
+        // non-ITR forms are untouched.
+        assert!(set.deactivate_redundant_annual_itrs(Some("1701"), None));
+        assert!(set.contains_active("1701"));
+        assert!(!set.contains_active("1701A"));
+        assert!(!set.contains_active("1701MS"));
+        assert!(set.contains_active("2551Q"));
+
+        // Idempotent: a second pass changes nothing.
+        assert!(!set.deactivate_redundant_annual_itrs(Some("1701"), None));
+    }
+
+    #[test]
+    fn deactivate_redundant_annual_itrs_falls_back_to_group_order() {
+        let mut set = PerYearFormsSet::from_codes(
+            2026,
+            ["1701A", "1701MS"],
+            FormSetSource::InferredTaxType,
+        );
+
+        // The implied primary (1701) is not among the active entries, so the
+        // first active member in canonical group order (1701A) survives.
+        assert!(set.deactivate_redundant_annual_itrs(Some("1701"), None));
+        assert!(set.contains_active("1701A"));
+        assert!(!set.contains_active("1701MS"));
+    }
+
+    #[test]
+    fn deactivate_redundant_annual_itrs_ignores_single_and_cross_group() {
+        // One active individual ITR + one active corporate ITR: no conflict
+        // within either group, nothing changes.
+        let mut set = PerYearFormsSet::from_codes(
+            2026,
+            ["1701", "1702RT"],
+            FormSetSource::InferredTaxType,
+        );
+        assert!(!set.deactivate_redundant_annual_itrs(Some("1701"), Some("1702RT")));
+        assert!(set.contains_active("1701"));
+        assert!(set.contains_active("1702RT"));
     }
 
     #[test]

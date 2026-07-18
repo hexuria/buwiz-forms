@@ -559,7 +559,14 @@ impl Database {
         let years = self.list_forms_set_years(&tin)?;
         let mut per_year_forms = std::collections::BTreeMap::new();
         for y in years {
-            let set = self.get_per_year_forms(&tin, y)?;
+            let mut set = self.get_per_year_forms(&tin, y)?;
+            // Enforce "one annual ITR per year" on already-stored data so a
+            // legacy conflicting Forms Set surfaces a single active ITR
+            // everywhere it is displayed; the healed set persists on the next
+            // save. Idempotent for already-clean sets.
+            let (keep_individual, keep_corporate) =
+                crate::integration::primary_annual_itrs_for_profile_year(profile, y);
+            set.deactivate_redundant_annual_itrs(keep_individual, keep_corporate);
             per_year_forms.insert(y, set);
         }
         profile.per_year_forms = per_year_forms;

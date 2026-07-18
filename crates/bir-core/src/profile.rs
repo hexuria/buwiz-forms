@@ -637,6 +637,14 @@ impl TaxpayerProfile {
         })
     }
 
+    /// The recorded income-tax election for a taxable year, if any.
+    pub fn income_tax_election_for_year(&self, year: u16) -> Option<IncomeTaxElection> {
+        self.tax_elections
+            .iter()
+            .find(|history| history.taxable_year == year)
+            .map(|history| history.election.clone())
+    }
+
     /// Whether the taxpayer may manage an annual income-tax election
     /// (8% flat rate, graduated + OSD, …) for the given taxable year.
     ///

@@ -872,15 +872,18 @@ fn obligation_allowed_for_version_and_profile_with_evidence(
         return false;
     }
 
-    // 6. 1701MS (EOPT Micro/Small simplified return)
-    if def.code == "1701MS" {
-        let is_micro_or_small = matches!(
-            version.eopt_tier,
-            Some(crate::profile::EoptTier::Micro) | Some(crate::profile::EoptTier::Small)
-        );
-        if year < 2024 || !is_micro_or_small {
-            return false;
-        }
+    // 6. Annual ITR mutual exclusivity (individual and corporate).
+    // A taxpayer files exactly one annual income tax return per year. The
+    // coarse tax facts pick a single primary ITR by taxpayer type,
+    // classification, and deduction election; every other member of the group
+    // is suppressed from automatic inference. A reviewed exact COR code or a
+    // manual include can still bring back a specific return, and the editors
+    // block creating a second active one.
+    if is_annual_itr(def.code)
+        && !reviewed_exact_form_code
+        && primary_annual_itr(version, profile, year) != Some(def.code)
+    {
+        return false;
     }
 
     // 7. Substituted Filing (1700 suppression for Compensation earner with single employer)
@@ -908,64 +911,9 @@ fn obligation_allowed_for_version_and_profile_with_evidence(
         return false;
     }
 
-    // 9. Corporate ITR mutual exclusivity
-    // Suffix-specific: 1702RT, 1702EX, 1702MX
-    // Suffix-specific versions win according to the effective tax classification
-    let effective_class = match version.taxpayer_type {
-        crate::profile::TaxpayerType::Individual => version.tax_classification.clone(),
-        crate::profile::TaxpayerType::Corporation | crate::profile::TaxpayerType::Partnership => {
-            Some(crate::profile::TaxClassification::Corporation)
-        }
-        crate::profile::TaxpayerType::Cooperative => match version.tax_classification {
-            Some(ref c)
-                if matches!(
-                    c,
-                    crate::profile::TaxClassification::CooperativeExempt
-                        | crate::profile::TaxClassification::CooperativeTaxable
-                        | crate::profile::TaxClassification::CooperativeMixed
-                ) =>
-            {
-                Some(c.clone())
-            }
-            _ => Some(crate::profile::TaxClassification::CooperativeTaxable),
-        },
-        crate::profile::TaxpayerType::Estate | crate::profile::TaxpayerType::Trust => {
-            Some(crate::profile::TaxClassification::EstateOrTrust)
-        }
-    };
-
-    if def.code == "1702" {
-        return matches!(
-            version.taxpayer_type,
-            crate::profile::TaxpayerType::Corporation
-                | crate::profile::TaxpayerType::Partnership
-                | crate::profile::TaxpayerType::Cooperative
-        );
-    }
-    if def.code == "1702EX"
-        && effective_class != Some(crate::profile::TaxClassification::CooperativeExempt)
-    {
-        return false;
-    }
-    if def.code == "1702MX"
-        && effective_class != Some(crate::profile::TaxClassification::CooperativeMixed)
-    {
-        return false;
-    }
-    if def.code == "1702RT"
-        && effective_class != Some(crate::profile::TaxClassification::Corporation)
-        && effective_class != Some(crate::profile::TaxClassification::CooperativeTaxable)
-    {
-        return false;
-    }
-
-    // 10. Individual ITR mutual exclusivity
-    // For MixedIncome earners, 1701A and 1701MS must be suppressed
-    if let Some(crate::profile::TaxClassification::MixedIncome) = version.tax_classification {
-        if def.code == "1701A" || def.code == "1701MS" {
-            return false;
-        }
-    }
+    // (Corporate ITR exclusivity is handled by the unified annual-ITR block
+    // above; the primary resolver selects 1702RT / 1702EX / 1702MX by the
+    // cooperative sub-type and suppresses the legacy 1702 umbrella.)
 
     // 11. Excise forms category filtering
     if is_excise_form(def.code) {
@@ -1404,17 +1352,187 @@ pub fn all_form_codes() -> Vec<String> {
 
 /// Checks for mutual exclusion conflicts among annual ITR forms.
 ///
+const INDIVIDUAL_ANNUAL_ITR_GROUP: &[&str] = &["1700", "1701", "1701A", "1701MS"];
+const CORPORATE_ANNUAL_ITR_GROUP: &[&str] = &["1702", "1702RT", "1702EX", "1702MX"];
+
+fn is_annual_itr(code: &str) -> bool {
+    INDIVIDUAL_ANNUAL_ITR_GROUP.contains(&code) || CORPORATE_ANNUAL_ITR_GROUP.contains(&code)
+}
+
+/// The single annual income tax return the coarse tax facts imply for a
+/// profile version and year. Used to suppress every other member of the
+/// group during automatic inference so a taxpayer never gets more than one.
+///
+/// Routing (BIR form scope):
+/// - Purely compensation earners file **1700**.
+/// - Mixed income earners file **1701**.
+/// - Purely business/professional (self-employed) earners file **1701** when
+///   they elected graduated rates with itemized deductions, otherwise
+///   **1701A** (8% flat rate or OSD — the common case and the default when no
+///   deduction election is recorded).
+/// - Estates and trusts file **1701**.
+/// - Corporations and partnerships file **1702RT**.
+/// - Cooperatives file **1702EX** (exempt), **1702MX** (mixed), or **1702RT**
+///   (taxable / default).
+///
+/// **1701MS** (the optional EOPT Micro/Small simplified return) and the legacy
+/// umbrella **1702** are never chosen automatically: taxpayers opt into them
+/// via a manual include or a reviewed exact COR code, which then supersedes
+/// the default through the manual-override path.
+fn primary_annual_itr_for(
+    taxpayer_type: &crate::profile::TaxpayerType,
+    classification: Option<&crate::profile::TaxClassification>,
+    election: Option<&crate::profile::IncomeTaxElection>,
+    eopt_tier: Option<&crate::profile::EoptTier>,
+    year: u16,
+) -> Option<&'static str> {
+    use crate::profile::{EoptTier, IncomeTaxElection, TaxClassification, TaxpayerType};
+
+    match taxpayer_type {
+        TaxpayerType::Individual => match classification {
+            Some(TaxClassification::PurelyCompensation) => Some("1700"),
+            Some(TaxClassification::MixedIncome) => Some("1701"),
+            Some(TaxClassification::SelfEmployed) => {
+                let micro_or_small =
+                    matches!(eopt_tier, Some(EoptTier::Micro) | Some(EoptTier::Small));
+                match election {
+                    // An explicit 8% flat-rate or graduated+OSD election maps
+                    // to 1701A and takes precedence over the size-based form.
+                    Some(IncomeTaxElection::EightPercent)
+                    | Some(IncomeTaxElection::GraduatedOsd) => Some("1701A"),
+                    // EOPT Micro/Small simplified annual return for graduated
+                    // filers (2024+).
+                    _ if micro_or_small && year >= 2024 => Some("1701MS"),
+                    // Itemized deductions, unspecified, or none: the
+                    // comprehensive 1701 is the safe default.
+                    _ => Some("1701"),
+                }
+            }
+            // Unknown/unspecified individual classification: default to the
+            // general individual return so exactly one ITR remains active.
+            _ => Some("1701"),
+        },
+        TaxpayerType::Estate | TaxpayerType::Trust => Some("1701"),
+        TaxpayerType::Corporation | TaxpayerType::Partnership => Some("1702RT"),
+        TaxpayerType::Cooperative => match classification {
+            Some(TaxClassification::CooperativeExempt) => Some("1702EX"),
+            Some(TaxClassification::CooperativeMixed) => Some("1702MX"),
+            _ => Some("1702RT"),
+        },
+    }
+}
+
+fn primary_annual_itr(
+    version: &TaxProfileVersion,
+    profile: &TaxpayerProfile,
+    year: u16,
+) -> Option<&'static str> {
+    primary_annual_itr_for(
+        &version.taxpayer_type,
+        version.tax_classification.as_ref(),
+        profile.income_tax_election_for_year(year).as_ref(),
+        version.eopt_tier.as_ref(),
+        year,
+    )
+}
+
+/// The individual and corporate ITRs that should stay active for a profile in
+/// a taxable year, used to heal already-stored Forms Sets. Prefers the
+/// confirmed segment effective for the year, falling back to the flat
+/// profile's current classification.
+pub fn primary_annual_itrs_for_profile_year(
+    profile: &TaxpayerProfile,
+    year: u16,
+) -> (Option<&'static str>, Option<&'static str>) {
+    let election = profile.income_tax_election_for_year(year);
+    let resolved = profile.resolve_tax_profile_for_year(year);
+    let primary = match resolved.effective_segments.first() {
+        Some(version) => primary_annual_itr_for(
+            &version.taxpayer_type,
+            version.tax_classification.as_ref(),
+            election.as_ref(),
+            version.eopt_tier.as_ref(),
+            year,
+        ),
+        None => primary_annual_itr_for(
+            &profile.taxpayer_type,
+            profile.effective_classification().as_ref(),
+            election.as_ref(),
+            profile.eopt_tier.as_ref(),
+            year,
+        ),
+    };
+    match primary {
+        Some(code) if INDIVIDUAL_ANNUAL_ITR_GROUP.contains(&code) => (Some(code), None),
+        Some(code) if CORPORATE_ANNUAL_ITR_GROUP.contains(&code) => (None, Some(code)),
+        _ => (None, None),
+    }
+}
+
+/// The mutually exclusive annual-ITR group a form code belongs to, if any.
+/// A taxpayer files exactly one annual income tax return per year.
+pub fn annual_itr_group(form_code: &str) -> Option<&'static [&'static str]> {
+    if INDIVIDUAL_ANNUAL_ITR_GROUP.contains(&form_code) {
+        Some(INDIVIDUAL_ANNUAL_ITR_GROUP)
+    } else if CORPORATE_ANNUAL_ITR_GROUP.contains(&form_code) {
+        Some(CORPORATE_ANNUAL_ITR_GROUP)
+    } else {
+        None
+    }
+}
+
+/// Active Forms Set entries that would conflict with activating `candidate`:
+/// other members of the same annual-ITR group already filing-active. Used by
+/// the editors to refuse creating a conflict instead of warning afterwards.
+pub fn conflicting_active_annual_itrs(
+    entries: &[crate::forms::FormSetEntry],
+    candidate: &str,
+) -> Vec<String> {
+    let Some(group) = annual_itr_group(candidate) else {
+        return Vec::new();
+    };
+    entries
+        .iter()
+        .filter(|entry| {
+            entry.form_code != candidate
+                && entry.is_filing_active()
+                && group.contains(&entry.form_code.as_str())
+        })
+        .map(|entry| entry.form_code.clone())
+        .collect()
+}
+
+/// Subsets of `codes` that fall in the same annual-ITR group (two or more),
+/// e.g. reviewed COR evidence listing both 1701 and 1701A. Callers block the
+/// selection until only one member per group remains.
+pub fn conflicting_annual_itr_code_groups(codes: &[String]) -> Vec<Vec<String>> {
+    [INDIVIDUAL_ANNUAL_ITR_GROUP, CORPORATE_ANNUAL_ITR_GROUP]
+        .iter()
+        .filter_map(|group| {
+            let mut hits: Vec<String> = codes
+                .iter()
+                .filter(|code| group.contains(&code.as_str()))
+                .cloned()
+                .collect();
+            hits.sort();
+            hits.dedup();
+            (hits.len() >= 2).then_some(hits)
+        })
+        .collect()
+}
+
 /// Groups:
 /// - Individual annual ITRs: 1700, 1701, 1701A, 1701MS
 /// - Corporate annual ITRs: 1702, 1702RT, 1702EX, 1702MX
 ///
 /// Returns a warning issue for each group that has 2+ active entries.
-/// This is a non-blocking warning — the user can still proceed.
+/// This warning is the safety net for data that already contains a conflict;
+/// the editors refuse to create new conflicts at selection time.
 pub fn check_annual_itr_conflicts(
     entries: &[crate::forms::FormSetEntry],
 ) -> Vec<ProfileConsistencyIssue> {
-    let individual_group: &[&str] = &["1700", "1701", "1701A", "1701MS"];
-    let corporate_group: &[&str] = &["1702", "1702RT", "1702EX", "1702MX"];
+    let individual_group: &[&str] = INDIVIDUAL_ANNUAL_ITR_GROUP;
+    let corporate_group: &[&str] = CORPORATE_ANNUAL_ITR_GROUP;
 
     let mut issues = Vec::new();
 
@@ -2188,6 +2306,52 @@ mod tests {
             issues.is_empty(),
             "Single active 1702RT should not produce a conflict"
         );
+    }
+
+    #[test]
+    fn activating_a_second_annual_itr_is_detected_as_a_conflict() {
+        let mut existing =
+            crate::forms::FormSetEntry::from_code("1701A", crate::forms::FormSetSource::Manual);
+        existing.active = true;
+        let mut excluded =
+            crate::forms::FormSetEntry::from_code("1700", crate::forms::FormSetSource::Manual);
+        excluded.active = false;
+        let quarterly =
+            crate::forms::FormSetEntry::from_code("2551Q", crate::forms::FormSetSource::Manual);
+        let entries = vec![existing, excluded, quarterly];
+
+        // Adding another Individual annual ITR conflicts with the active 1701A.
+        assert_eq!(
+            conflicting_active_annual_itrs(&entries, "1701"),
+            vec!["1701A".to_string()]
+        );
+        // Re-activating the same code is not a self-conflict.
+        assert!(conflicting_active_annual_itrs(&entries, "1701A").is_empty());
+        // Inactive group members do not conflict.
+        assert!(conflicting_active_annual_itrs(&entries, "1701MS").len() == 1);
+        // Non-ITR forms never conflict.
+        assert!(conflicting_active_annual_itrs(&entries, "2550Q").is_empty());
+        // A corporate ITR does not conflict with the Individual group.
+        assert!(conflicting_active_annual_itrs(&entries, "1702RT").is_empty());
+    }
+
+    #[test]
+    fn evidence_code_lists_with_two_group_members_are_flagged() {
+        let codes = vec![
+            "1701".to_string(),
+            "1701A".to_string(),
+            "2551Q".to_string(),
+            "1702RT".to_string(),
+        ];
+        let groups = conflicting_annual_itr_code_groups(&codes);
+        assert_eq!(
+            groups,
+            vec![vec!["1701".to_string(), "1701A".to_string()]]
+        );
+
+        // One member per group is fine.
+        let clean = vec!["1701".to_string(), "1702RT".to_string()];
+        assert!(conflicting_annual_itr_code_groups(&clean).is_empty());
     }
 
     #[test]
