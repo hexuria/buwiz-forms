@@ -20,6 +20,7 @@ const CALENDAR_SCOPE: &str = "https://www.googleapis.com/auth/calendar.app.creat
 const KEYCHAIN_SERVICE: &str = "dev.goldcoders.ebirforms.google-calendar";
 const KEYCHAIN_ACCOUNT: &str = "global-oauth";
 const CONNECTED_EMAIL_SETTING: &str = "google_calendar_connected_email";
+const FORM_SELECTION_SETTING_PREFIX: &str = "google_calendar_form_selection:";
 
 #[derive(Debug, Error)]
 #[error("Google Calendar resource was not found")]
@@ -51,6 +52,116 @@ impl GoogleCalendarConnection {
                 .as_deref()
                 .is_some_and(|email| !email.trim().is_empty())
     }
+}
+
+/// Which Forms Set entries feed a profile's Google calendar by default.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CalendarFormPreset {
+    /// Every active form in the yearly Forms Sets (current behavior).
+    #[default]
+    AllForms,
+    /// Only forms whose official filing frequency recurs (monthly, quarterly,
+    /// annual). Event-driven forms such as one-time registrations are left
+    /// off the calendar unless manually included.
+    RecurringOnly,
+}
+
+impl CalendarFormPreset {
+    fn allows(self, form_code: &str) -> bool {
+        match self {
+            CalendarFormPreset::AllForms => true,
+            CalendarFormPreset::RecurringOnly => crate::forms::registry::find_form(form_code)
+                .map(|definition| {
+                    !matches!(
+                        definition.frequency,
+                        crate::forms::FilingFrequency::OpenEnded
+                    )
+                })
+                // Custom codes have no official frequency; fail closed under
+                // the recurring preset and let a manual include rescue them.
+                .unwrap_or(false),
+        }
+    }
+}
+
+/// Per-profile choice of which forms produce Google Calendar events.
+///
+/// The preset supplies the default; manual lists override it per form code.
+/// An exclude always wins over an include.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CalendarFormSelection {
+    #[serde(default)]
+    pub preset: CalendarFormPreset,
+    #[serde(default)]
+    pub manual_include: Vec<String>,
+    #[serde(default)]
+    pub manual_exclude: Vec<String>,
+}
+
+impl CalendarFormSelection {
+    pub fn allows(&self, form_code: &str) -> bool {
+        if self.manual_exclude.iter().any(|code| code == form_code) {
+            return false;
+        }
+        if self.manual_include.iter().any(|code| code == form_code) {
+            return true;
+        }
+        self.preset.allows(form_code)
+    }
+
+    pub fn is_overridden(&self, form_code: &str) -> bool {
+        self.manual_include.iter().any(|code| code == form_code)
+            || self.manual_exclude.iter().any(|code| code == form_code)
+    }
+
+    /// Flip one form's effective state, recording a manual override only when
+    /// the desired state differs from what the preset already produces.
+    pub fn toggle(&mut self, form_code: &str) {
+        let turn_on = !self.allows(form_code);
+        self.manual_include.retain(|code| code != form_code);
+        self.manual_exclude.retain(|code| code != form_code);
+        let preset_allows = self.preset.allows(form_code);
+        if turn_on && !preset_allows {
+            self.manual_include.push(form_code.to_string());
+            self.manual_include.sort();
+        } else if !turn_on && preset_allows {
+            self.manual_exclude.push(form_code.to_string());
+            self.manual_exclude.sort();
+        }
+    }
+
+    /// Switch presets and drop overrides made redundant by the new default.
+    pub fn set_preset(&mut self, preset: CalendarFormPreset) {
+        self.preset = preset;
+        self.manual_include.retain(|code| !preset.allows(code));
+        self.manual_exclude.retain(|code| preset.allows(code));
+    }
+
+    pub fn clear_overrides(&mut self) {
+        self.manual_include.clear();
+        self.manual_exclude.clear();
+    }
+}
+
+pub fn calendar_form_selection(db: &Database, tin: &str) -> CalendarFormSelection {
+    db.get_setting(&format!("{FORM_SELECTION_SETTING_PREFIX}{tin}"))
+        .ok()
+        .flatten()
+        .and_then(|json| serde_json::from_str(&json).ok())
+        .unwrap_or_default()
+}
+
+pub fn save_calendar_form_selection(
+    db: &Database,
+    tin: &str,
+    selection: &CalendarFormSelection,
+) -> Result<(), anyhow::Error> {
+    db.set_setting(
+        &format!("{FORM_SELECTION_SETTING_PREFIX}{tin}"),
+        &serde_json::to_string(selection)?,
+    )?;
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -408,9 +519,16 @@ pub fn build_desired_events(
     let tin = profile.tin.full();
     let years = db.list_forms_set_years(&tin)?;
     let global_overrides = db.get_deadline_overrides();
+    let selection = calendar_form_selection(db, &tin);
 
     for year in years {
-        let form_codes = db.active_form_codes_for_year(&tin, year)?;
+        // The user's calendar form selection decides which Forms Set entries
+        // become events; deselected forms also stay out of the undated count.
+        let form_codes = db
+            .active_form_codes_for_year(&tin, year)?
+            .into_iter()
+            .filter(|code| selection.allows(code))
+            .collect::<Vec<_>>();
         let mut overrides = global_overrides.clone();
         overrides.extend(crate::integration::profile_deadline_overrides_for_year(
             profile, year,
@@ -958,6 +1076,100 @@ mod tests {
     use crate::naming::Tin;
     use crate::profile::{TaxpayerProfile, TaxpayerType};
     use tempfile::NamedTempFile;
+
+    #[test]
+    fn default_selection_allows_every_form() {
+        let selection = CalendarFormSelection::default();
+        assert!(selection.allows("2551Q"));
+        assert!(selection.allows("0605"));
+        assert!(selection.allows("CUSTOM_FORM"));
+    }
+
+    #[test]
+    fn recurring_preset_drops_event_driven_and_unknown_forms() {
+        let selection = CalendarFormSelection {
+            preset: CalendarFormPreset::RecurringOnly,
+            ..Default::default()
+        };
+        assert!(selection.allows("2551Q"));
+        assert!(selection.allows("1601C"));
+        // 0605 is an event-driven payment form (OpenEnded frequency).
+        assert!(!selection.allows("0605"));
+        // Custom codes have no official frequency: fail closed.
+        assert!(!selection.allows("CUSTOM_FORM"));
+    }
+
+    #[test]
+    fn manual_overrides_beat_the_preset_and_exclude_beats_include() {
+        let mut selection = CalendarFormSelection {
+            preset: CalendarFormPreset::RecurringOnly,
+            ..Default::default()
+        };
+        selection.toggle("0605"); // preset denies -> becomes manual include
+        assert!(selection.allows("0605"));
+        assert!(selection.is_overridden("0605"));
+
+        selection.toggle("2551Q"); // preset allows -> becomes manual exclude
+        assert!(!selection.allows("2551Q"));
+
+        // Toggling back removes the override instead of stacking lists.
+        selection.toggle("0605");
+        assert!(!selection.allows("0605"));
+        assert!(!selection.is_overridden("0605"));
+
+        // Exclude wins if both lists ever contain the same code.
+        let conflicted = CalendarFormSelection {
+            preset: CalendarFormPreset::AllForms,
+            manual_include: vec!["2550Q".to_string()],
+            manual_exclude: vec!["2550Q".to_string()],
+        };
+        assert!(!conflicted.allows("2550Q"));
+    }
+
+    #[test]
+    fn switching_presets_drops_redundant_overrides() {
+        let mut selection = CalendarFormSelection {
+            preset: CalendarFormPreset::RecurringOnly,
+            manual_include: vec!["0605".to_string()],
+            manual_exclude: vec!["2551Q".to_string()],
+        };
+        // Under AllForms the 0605 include is redundant; the 2551Q exclude
+        // still differs from the preset and must survive.
+        selection.set_preset(CalendarFormPreset::AllForms);
+        assert!(selection.manual_include.is_empty());
+        assert_eq!(selection.manual_exclude, vec!["2551Q".to_string()]);
+        assert!(selection.allows("0605"));
+        assert!(!selection.allows("2551Q"));
+    }
+
+    #[test]
+    fn selection_round_trips_through_settings() {
+        let file = NamedTempFile::new().unwrap();
+        let db = Database::open(file.path()).unwrap();
+        let tin = "123456789000";
+
+        // Absent -> default.
+        assert_eq!(
+            calendar_form_selection(&db, tin),
+            CalendarFormSelection::default()
+        );
+
+        let mut selection = CalendarFormSelection {
+            preset: CalendarFormPreset::RecurringOnly,
+            ..Default::default()
+        };
+        selection.toggle("0605");
+        save_calendar_form_selection(&db, tin, &selection).unwrap();
+        assert_eq!(calendar_form_selection(&db, tin), selection);
+
+        // Corrupt JSON falls back to default instead of erroring.
+        db.set_setting(&format!("{FORM_SELECTION_SETTING_PREFIX}{tin}"), "not json")
+            .unwrap();
+        assert_eq!(
+            calendar_form_selection(&db, tin),
+            CalendarFormSelection::default()
+        );
+    }
 
     fn test_profile() -> TaxpayerProfile {
         let mut profile = TaxpayerProfile {
