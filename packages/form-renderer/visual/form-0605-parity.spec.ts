@@ -368,6 +368,92 @@ test("0605 1999 keeps reviewed plain fields plain when empty or populated", asyn
   }
 });
 
+test("0605 1999 preserves the official Part III row field types without invented combs", async ({ page }) => {
+  for (const fixtureName of ["0605-minimum.json", "0605-variant.json"]) {
+    await renderEnvelope(
+      page,
+      readFixture(`packages/form-contracts/fixtures/${fixtureName}`)
+    );
+
+    const expectedRows = [
+      {
+        row: "payment_23",
+        fields: [["23-amount", "plain", "0"]]
+      },
+      {
+        row: "payment_24",
+        fields: [
+          ["24a-bank", "plain", "0"],
+          ["24b-number", "plain", "0"],
+          ["24c-date", "guided", "5"],
+          ["24d-amount", "plain", "0"]
+        ]
+      },
+      {
+        row: "payment_25",
+        fields: [
+          ["25a-number", "plain", "0"],
+          ["25b-date", "guided", "5"],
+          ["25c-amount", "plain", "0"]
+        ]
+      },
+      {
+        row: "payment_26",
+        fields: [
+          ["26a-bank", "plain", "0"],
+          ["26b-number", "plain", "0"],
+          ["26c-date", "guided", "5"],
+          ["26d-amount", "plain", "0"]
+        ]
+      }
+    ] as const;
+
+    for (const expectedRow of expectedRows) {
+      const row = page.locator(`[data-payment-row="${expectedRow.row}"]`);
+      await expect(row, `${fixtureName} ${expectedRow.row}`).toHaveCount(1);
+      await expect(row.locator("[data-official-field]")).toHaveCount(
+        expectedRow.fields.length
+      );
+      for (const [field, mode, guides] of expectedRow.fields) {
+        const locator = row.locator(`[data-official-field="${field}"]`);
+        await expect(locator, `${fixtureName} ${field}`).toHaveAttribute(
+          "data-field-mode",
+          mode
+        );
+        await expect(locator).toHaveAttribute("data-guide-count", guides);
+        if (mode === "plain") {
+          await expect(locator.locator(".comb-value"), `${field} invented comb`)
+            .toHaveCount(0);
+          await expect(locator).toHaveCSS("background-image", "none");
+        }
+      }
+    }
+
+    await expect(
+      page.locator('[data-payment-row="payment_25"] [data-official-field="25a-bank"]'),
+      "the official Tax Debit Memo row has no drawee-bank field"
+    ).toHaveCount(0);
+  }
+});
+
+test("0605 1999 reports an unreadable legal plain value as unsafe instead of clipping it", async ({ page }) => {
+  const fixture = structuredClone(
+    readFixture("packages/form-contracts/fixtures/0605-minimum.json")
+  ) as Record<string, any>;
+  const value = "N".repeat(160);
+  fixture.fields.payment_24_number.value = value;
+  await renderEnvelope(page, fixture);
+
+  const field = page.locator('[data-official-field="24b-number"]');
+  await expect(field).toHaveAttribute("data-field-mode", "plain");
+  await expect(field).toHaveAttribute("data-guide-count", "0");
+  await expect(field.locator(".comb-value")).toHaveCount(0);
+  const renderedValue = field.locator(".adaptive-plain-value");
+  await expect(renderedValue).toHaveAttribute("aria-label", value);
+  await expect(renderedValue).toHaveAttribute("data-adaptive-fit-state", "unresolved");
+  expect(await pageHasNoOverflow(page.locator(".form-page").nth(0))).toBe(false);
+});
+
 test("0605 1999 switches whole guided fields only for valid values beyond official capacity", async ({ page }) => {
   const cases: Array<{
     field: string;

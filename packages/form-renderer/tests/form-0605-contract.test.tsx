@@ -125,12 +125,23 @@ describe("0605:1999 runtime render contract", () => {
       "17-other-manner",
       "18-installment-count",
       "19-basic-tax",
+      "20a-surcharge",
+      "20b-interest",
+      "20c-compromise",
+      "20d-total-penalties",
+      "21-total-payable",
       "22a-taxpayer-signature",
       "22a-title-position",
       "22b-head-of-office-signature",
+      "23-amount",
       "24a-bank",
       "24b-number",
       "24d-amount",
+      "25a-number",
+      "25c-amount",
+      "26a-bank",
+      "26b-number",
+      "26d-amount",
       "machine-validation"
     ]) {
       const tag = officialFieldTag(markup, field);
@@ -157,7 +168,9 @@ describe("0605:1999 runtime render contract", () => {
       ["8-tax-type", "2", 1],
       ["10-rdo", "3", 2],
       ["16-zip", "4", 3],
-      ["24c-date", "2-2-4", 5]
+      ["24c-date", "2-2-4", 5],
+      ["25b-date", "2-2-4", 5],
+      ["26c-date", "2-2-4", 5]
     ] as const) {
       const tag = officialFieldTag(markup, field);
       expect(tag, field).toContain('data-field-mode="guided"');
@@ -207,6 +220,98 @@ describe("0605:1999 runtime render contract", () => {
     expect(tag).toContain('data-field-mode="guided"');
     expect(tag).toContain('data-guide-segments="3-3-3-3"');
     expect(tag).toContain('data-guide-count="8"');
+  });
+
+  it("switches only contract-valid guide overflow to one plain field", () => {
+    const cases: Array<{
+      field: string;
+      exact: string | number;
+      overflow: string | number;
+      mutate: (fixture: Record<string, any>, value: string | number) => void;
+    }> = [
+      {
+        field: "5-sheets",
+        exact: 99,
+        overflow: 100,
+        mutate: (fixture, value) => { fixture.fields.number_of_sheets.value = value; }
+      },
+      {
+        field: "8-tax-type",
+        exact: "IT",
+        overflow: "ITX",
+        mutate: (fixture, value) => { fixture.fields.tax_type_code.value = value; }
+      },
+      {
+        field: "9-tin",
+        exact: "123456789000",
+        overflow: "1234567890001",
+        mutate: (fixture, value) => { fixture.taxpayer.tin = value; }
+      },
+      {
+        field: "14-telephone",
+        exact: "1234567",
+        overflow: "12345678",
+        mutate: (fixture, value) => { fixture.taxpayer.contact_number = value; }
+      }
+    ];
+
+    for (const boundary of cases) {
+      for (const [value, expectedMode] of [
+        [boundary.exact, "guided"],
+        [boundary.overflow, "plain"]
+      ] as const) {
+        const fixture = structuredClone(normalFixture) as Record<string, any>;
+        boundary.mutate(fixture, value);
+        expect(() => assertRenderEnvelope(fixture)).not.toThrow();
+        const markup = renderToStaticMarkup(
+          createElement(FormDocument, { envelope: fixture as RenderEnvelope })
+        );
+        const tag = officialFieldTag(markup, boundary.field);
+        expect(tag, `${boundary.field} value=${String(value)}`).toContain(
+          `data-field-mode="${expectedMode}"`
+        );
+        if (expectedMode === "plain") {
+          expect(tag).toContain('data-guide-count="0"');
+          expect(tag).not.toContain("data-guide-segments");
+        }
+      }
+    }
+  });
+
+  it("fails closed when fixed identifiers or dates exceed their legal contract", () => {
+    const invalidCases: Array<{
+      path: string;
+      mutate: (fixture: Record<string, any>) => void;
+    }> = [
+      {
+        path: "envelope.fields.due_date.value",
+        mutate: (fixture) => { fixture.fields.due_date.value = "01/02/20260"; }
+      },
+      {
+        path: "envelope.fields.return_period.value",
+        mutate: (fixture) => { fixture.fields.return_period.value = "01/02/20260"; }
+      },
+      {
+        path: "envelope.fields.payment_24_date.value",
+        mutate: (fixture) => { fixture.fields.payment_24_date.value = "01/02/20260"; }
+      },
+      {
+        path: "envelope.taxpayer.rdo_code",
+        mutate: (fixture) => { fixture.taxpayer.rdo_code = "0180"; }
+      },
+      {
+        path: "envelope.taxpayer.zip_code",
+        mutate: (fixture) => { fixture.taxpayer.zip_code = "22000"; }
+      }
+    ];
+
+    for (const invalidCase of invalidCases) {
+      const fixture = structuredClone(normalFixture) as Record<string, any>;
+      invalidCase.mutate(fixture);
+      expect(() => assertRenderEnvelope(fixture), invalidCase.path).toThrow(
+        invalidCase.path
+      );
+    }
   });
 
   it("distinguishes official blank payment amounts from entered zero", () => {
