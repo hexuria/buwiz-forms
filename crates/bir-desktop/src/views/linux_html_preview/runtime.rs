@@ -1742,11 +1742,21 @@ impl Render for LinuxEmbeddedHtmlPreviewView {
                 && self.webview.is_some()
         });
         let retry_action = renderer_retry_action(&self.bridge, self.webview.is_some());
+        // Spin the refresh control while the renderer is still working, but
+        // never when it failed — the user must be able to click to retry.
+        let refreshing = self
+            .bridge
+            .lock()
+            .is_ok_and(|bridge| !bridge.renderer.ready && bridge.renderer.error.is_none());
 
         div()
             .size_full()
             .flex()
             .flex_col()
+            // Without an explicit background the preview window falls through
+            // to black in both themes; follow the app theme instead.
+            .bg(cx.theme().background)
+            .text_color(cx.theme().foreground)
             .child(
                 div()
                     .h(px(48.))
@@ -1754,6 +1764,9 @@ impl Render for LinuxEmbeddedHtmlPreviewView {
                     .flex()
                     .items_center()
                     .justify_between()
+                    .bg(cx.theme().secondary)
+                    .text_sm()
+                    .text_color(cx.theme().foreground)
                     .border_b_1()
                     .border_color(cx.theme().border)
                     .child(self.status.clone())
@@ -1765,6 +1778,7 @@ impl Render for LinuxEmbeddedHtmlPreviewView {
                             .child(
                                 Button::new("linux-html-export-pdf")
                                     .label("Export PDF")
+                                    .primary()
                                     .disabled(!output_enabled)
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         let destination = rfd::FileDialog::new()
@@ -1784,6 +1798,7 @@ impl Render for LinuxEmbeddedHtmlPreviewView {
                             .child(
                                 Button::new("linux-html-print")
                                     .label("Print")
+                                    .primary()
                                     .disabled(!output_enabled)
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.request_output(HtmlOutputKind::SystemPrint, None, cx);
@@ -1794,8 +1809,10 @@ impl Render for LinuxEmbeddedHtmlPreviewView {
                                 |toolbar| {
                                     toolbar.child(
                                         Button::new("linux-html-preview-retry")
-                                            .label("Retry")
+                                            .icon(gpui_component::Icon::empty().path("svg/refresh.svg"))
+                                            .tooltip("Refresh preview")
                                             .outline()
+                                            .loading(refreshing)
                                             .disabled(
                                                 retry_action != LinuxRendererRetryAction::Enabled,
                                             )

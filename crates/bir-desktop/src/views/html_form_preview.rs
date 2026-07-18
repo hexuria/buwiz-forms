@@ -3081,10 +3081,18 @@ impl Render for HtmlFormPreviewView {
                 HtmlOutputState::Validating { .. } | HtmlOutputState::Running { .. }
             );
 
+        // Spin the refresh control while the renderer is still working, but
+        // never when it failed — the user must be able to click to retry.
+        let refreshing = !self.renderer_state.ready && self.renderer_state.error.is_none();
+
         div()
             .size_full()
             .flex()
             .flex_col()
+            // Without an explicit background the preview window falls through
+            // to black in both themes; follow the app theme instead.
+            .bg(cx.theme().background)
+            .text_color(cx.theme().foreground)
             .child(
                 div()
                     .h(px(48.))
@@ -3092,6 +3100,9 @@ impl Render for HtmlFormPreviewView {
                     .flex()
                     .items_center()
                     .justify_between()
+                    .bg(cx.theme().secondary)
+                    .text_sm()
+                    .text_color(cx.theme().foreground)
                     .border_b_1()
                     .border_color(cx.theme().border)
                     .child(self.status.clone())
@@ -3103,6 +3114,7 @@ impl Render for HtmlFormPreviewView {
                             .child(
                                 Button::new("html-export-pdf")
                                     .label("Export PDF")
+                                    .primary()
                                     .disabled(!native_output_enabled)
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.choose_pdf_destination(cx);
@@ -3111,6 +3123,7 @@ impl Render for HtmlFormPreviewView {
                             .child(
                                 Button::new("html-print")
                                     .label("Print")
+                                    .primary()
                                     .disabled(!native_output_enabled)
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         match native_print_decision(
@@ -3141,21 +3154,22 @@ impl Render for HtmlFormPreviewView {
                                         }
                                     })),
                             )
+                            // Refresh re-renders the preview. While the
+                            // renderer is still working the button shows a
+                            // rotating spinner and is not clickable; on error
+                            // it stays clickable so the user can retry.
+                            // The window's own close control replaces the
+                            // former Close button.
                             .child(
                                 Button::new("html-preview-retry")
-                                    .label("Retry")
+                                    .icon(gpui_component::Icon::empty().path("svg/refresh.svg"))
+                                    .tooltip("Refresh preview")
                                     .outline()
+                                    .loading(refreshing)
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.request_retry(window, cx);
                                     })),
-                            )
-                            .child(Button::new("html-preview-close").label("Close").on_click(
-                                cx.listener(|this, _, window, cx| {
-                                    this.cancel_pending_output_state();
-                                    this.leave_native_output_mode(cx);
-                                    window.remove_window();
-                                }),
-                            )),
+                            ),
                     ),
             )
             .child(
