@@ -363,7 +363,9 @@ impl GlobalDashboardView {
         let badge_bg: gpui::Hsla = match notice.source_kind {
             bir_core::db::NoticeSourceKind::BirCms => cx.theme().primary,
             bir_core::db::NoticeSourceKind::FacebookGraph => gpui::rgb(0x1877f2).into(), // Facebook Blue
-            bir_core::db::NoticeSourceKind::Rss => cx.theme().accent,
+            // RSS orange; the theme accent is a neutral surface color and is
+            // unreadable as badge text on its own tint.
+            bir_core::db::NoticeSourceKind::Rss => gpui::rgb(0xf59e0b).into(),
             bir_core::db::NoticeSourceKind::Manual => cx.theme().muted_foreground,
         };
 
@@ -391,7 +393,7 @@ impl GlobalDashboardView {
                             .rounded_md()
                             .text_xs()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(badge_bg)
+                            .text_color(crate::theme::hue_on_tint(cx.theme(), badge_bg))
                             .child(notice.source.to_string()),
                     )
                     .child(

@@ -337,9 +337,9 @@ impl DashboardView {
                 "Queued",
             ),
             QuarterState::Draft => (
-                gpui::rgba(0xfacc1520).into(),
-                gpui::rgba(0xfacc15ff).into(),
-                gpui::rgba(0xfacc15ff).into(),
+                cx.theme().warning.opacity(0.12),
+                cx.theme().warning,
+                crate::theme::warning_on_tint(cx.theme()),
                 "~",
                 "Draft",
             ),
@@ -1736,8 +1736,11 @@ impl Render for DashboardView {
                                                         .text_xs()
                                                         .px_2()
                                                         .py(px(2.))
-                                                        .bg(status_color)
-                                                        .text_color(gpui::white())
+                                                        .bg(status_color.opacity(0.15))
+                                                        .text_color(crate::theme::hue_on_tint(
+                                                            cx.theme(),
+                                                            status_color,
+                                                        ))
                                                         .rounded(px(4.))
                                                         .child(format!("{:?}", f.status)),
                                                 ),
@@ -1840,13 +1843,13 @@ impl Render for DashboardView {
                                 .gap_2()
                                 .p_3()
                                 .rounded_lg()
-                                .bg(gpui::rgba(0xfef3c715))
+                                .bg(cx.theme().warning.opacity(0.12))
                                 .border_1()
-                                .border_color(gpui::rgba(0xf59e0b40))
+                                .border_color(cx.theme().warning.opacity(0.45))
                                 .child(
                                     div()
                                         .text_sm()
-                                        .text_color(gpui::rgb(0x92400e))
+                                        .text_color(crate::theme::warning_on_tint(cx.theme()))
                                         .child(format!("\u{26a0} {}", issue.message)),
                                 ),
                         );

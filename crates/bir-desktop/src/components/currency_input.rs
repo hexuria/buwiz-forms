@@ -30,7 +30,8 @@ impl CurrencyInput {
 }
 
 impl Render for CurrencyInput {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<'_, Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+        use gpui_component::ActiveTheme as _;
         div()
             .flex()
             .flex_col()
@@ -40,7 +41,7 @@ impl Render for CurrencyInput {
                 div()
                     .text_sm()
                     .font_weight(FontWeight::BOLD)
-                    .text_color(rgb(0xcdd6f4))
+                    .text_color(cx.theme().foreground)
                     .child(self.label.clone()),
             )
             .child(
@@ -48,8 +49,8 @@ impl Render for CurrencyInput {
                     div()
                         .p_2()
                         .border_r_1()
-                        .border_color(rgb(0x45475a))
-                        .text_color(rgb(0xa6adc8))
+                        .border_color(cx.theme().border)
+                        .text_color(cx.theme().muted_foreground)
                         .child("₱"),
                 ),
             )

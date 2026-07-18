@@ -717,7 +717,7 @@ impl Render for Form1601CView {
                         .border_b_1()
                         .border_color(cx.theme().warning.opacity(0.4))
                         .text_sm()
-                        .text_color(cx.theme().warning_foreground)
+                        .text_color(crate::theme::warning_on_tint(cx.theme()))
                         .child(
                             self.status_message
                                 .clone()

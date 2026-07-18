@@ -307,7 +307,7 @@ where
                                 .justify_center()
                                 .child(if is_valid {
                                     div()
-                                        .text_color(gpui::rgba(0x22c55eff))
+                                        .text_color(crate::theme::success_on_tint(cx.theme()))
                                         .font_weight(FontWeight::BLACK)
                                         .text_lg()
                                         .child("✓")

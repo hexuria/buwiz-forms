@@ -14,7 +14,8 @@ impl RdoSelector {
 }
 
 impl Render for RdoSelector {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<'_, Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+        use gpui_component::ActiveTheme as _;
         div()
             .flex()
             .flex_col()
@@ -24,26 +25,30 @@ impl Render for RdoSelector {
                 div()
                     .text_sm()
                     .font_weight(FontWeight::BOLD)
-                    .text_color(rgb(0xcdd6f4))
+                    .text_color(cx.theme().foreground)
                     .child("Revenue District Office (RDO)"),
             )
             .child(
                 div()
                     .w_full()
                     .p_2()
-                    .bg(rgb(0x11111b))
+                    .bg(cx.theme().secondary)
                     .border_1()
-                    .border_color(rgb(0x45475a))
+                    .border_color(cx.theme().border)
                     .rounded_md()
                     .flex()
                     .justify_between()
                     .items_center()
                     .child(
                         div()
-                            .text_color(rgb(0xcdd6f4))
+                            .text_color(cx.theme().foreground)
                             .child(self.selected_rdo.clone()),
                     )
-                    .child(div().text_color(rgb(0x6c7086)).child("▼")),
+                    .child(
+                        div()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("▼"),
+                    ),
             )
     }
 }

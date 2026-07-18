@@ -21,13 +21,31 @@ impl StatusBadge {
 }
 
 impl Render for StatusBadge {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<'_, Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+        use gpui_component::ActiveTheme as _;
+        let theme = cx.theme();
         let (bg_col, text_col, label) = match self.status {
-            FormStatus::Draft => (rgba(0x45475a66), rgb(0xa6adc8), "Draft"),
-            FormStatus::Valid => (rgba(0xa6e3a133), rgb(0xa6e3a1), "Valid"),
-            FormStatus::Error => (rgba(0xf38ba833), rgb(0xf38ba8), "Error"),
-            FormStatus::Submitted => (rgba(0xfacc1533), rgb(0xfacc15), "Submitted"),
-            FormStatus::Confirmed => (rgba(0x22c55e33), rgb(0x22c55e), "Confirmed"),
+            FormStatus::Draft => (theme.secondary, theme.muted_foreground, "Draft"),
+            FormStatus::Valid => (
+                theme.success.opacity(0.15),
+                crate::theme::success_on_tint(theme),
+                "Valid",
+            ),
+            FormStatus::Error => (
+                theme.danger.opacity(0.15),
+                crate::theme::danger_on_tint(theme),
+                "Error",
+            ),
+            FormStatus::Submitted => (
+                theme.warning.opacity(0.15),
+                crate::theme::warning_on_tint(theme),
+                "Submitted",
+            ),
+            FormStatus::Confirmed => (
+                theme.success.opacity(0.15),
+                crate::theme::success_on_tint(theme),
+                "Confirmed",
+            ),
         };
 
         div()

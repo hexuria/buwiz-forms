@@ -486,7 +486,7 @@ impl ProfileManagerView {
                             .child(if self.email_tracking_enabled {
                                 div()
                                     .text_sm()
-                                    .text_color(gpui::Hsla::from(gpui::rgba(0x22c55eff)))
+                                    .text_color(crate::theme::success_on_tint(cx.theme()))
                                     .child("● Automated BIR Receipt Tracking is active")
                             } else {
                                 div()
