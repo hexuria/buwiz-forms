@@ -35,6 +35,12 @@ its page-indexed static-copy checks pass and its non-promoting two-pixel edge
 F1 scores are approximately 0.965 and 0.990. `0619E:2018` and `0619F:2018`
 remain blocked at approximately 9.37% and 10.35%, respectively. These values
 must not be replaced by the much smaller structure-only percentages.
+`0605:1999` remains blocked at approximately 7.79% on page 1 and 11.04% on
+page 2 even though its structure-only diagnostics are approximately 0.26% and
+0.20%. `1701Q:2018` remains blocked at approximately 15.79% on page 1 and
+10.04% on page 2; its structure-only diagnostics are approximately 0.35% and
+0.12%. The latter two forms pass their page geometry, overflow, capacity, and
+reviewed-copy checks, but those narrower checks do not establish visual parity.
 
 A July 18 cross-rasterizer diagnostic also rendered the first official 2551Q
 page itself through Poppler and through Chromium from Poppler's vector SVG;
