@@ -7,6 +7,15 @@ import { compareCompleteOfficialPage } from "./official-page-diff";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "../../..");
+const staticTextInventory = JSON.parse(fs.readFileSync(path.join(
+  REPO_ROOT,
+  "packages/form-renderer/references/1601c-2018-static-text-inventory.json"
+), "utf8")) as {
+  coverage_status: string;
+  known_gaps: string[];
+  official_source_sha256: string;
+  regions: Array<{ selector: string; text: string }>;
+};
 const DEVICE_SCALE_FACTOR = 1.5;
 const MAX_CHANGED_PERCENT = 1;
 const STRUCTURAL_INK_THRESHOLD = 100;
@@ -27,6 +36,20 @@ test("1601C 2018 renders every Rust fixture as two stable unclipped folio pages"
     await expect(pages, fixtureName).toHaveCount(2);
     expect(await pageHasNoOverflow(pages.nth(0)), `${fixtureName} page 1`).toBe(true);
     expect(await pageHasNoOverflow(pages.nth(1)), `${fixtureName} page 2`).toBe(true);
+  }
+});
+
+test("1601C 2018 locks every currently represented reviewed static-copy region without hiding known gaps", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1601c-minimum.json"));
+
+  expect(staticTextInventory.official_source_sha256).toBe(
+    "c8faaa71015337a73b4ceb96bfb265c539589ab5e10eb27899bb81f87f417397"
+  );
+  expect(staticTextInventory.coverage_status).toBe("partial_reviewed");
+  expect(staticTextInventory.known_gaps).toHaveLength(3);
+  for (const region of staticTextInventory.regions) {
+    const visibleText = await reviewedStaticText(page.locator(region.selector));
+    expect(visibleText, region.selector).toBe(region.text);
   }
 });
 
@@ -218,6 +241,79 @@ test("1601C 2018 uses the exact reviewed plain fields and character-guide capaci
   expect(await directCombCapacities(blankScheduleRow)).toEqual([6, 8, 5, 6]);
 });
 
+test("1601C 2018 switches each reviewed adaptive field only after its official character capacity", async ({ page }) => {
+  const minimum = readFixture("packages/form-contracts/fixtures/1601c-minimum.json") as Mutable1601CEnvelope;
+  const profileCases: Array<{
+    capacity: number;
+    exact: string;
+    mutate: (fixture: Mutable1601CEnvelope, value: string) => void;
+    selector: string;
+  }> = [
+    {
+      capacity: 40,
+      exact: "N".repeat(40),
+      mutate: (fixture, value) => { fixture.taxpayer.name = value; },
+      selector: ".form-1601c-page-one .name-1601c > :nth-child(2)"
+    },
+    {
+      capacity: 40,
+      exact: "A".repeat(40),
+      mutate: (fixture, value) => { fixture.taxpayer.registered_address = value; },
+      selector: ".form-1601c-page-one .address-1601c > :nth-child(2)"
+    },
+    {
+      capacity: 31,
+      exact: "B".repeat(31),
+      mutate: (fixture, value) => { fixture.fields.registered_address_2.value = value; },
+      selector: ".form-1601c-page-one .address-second-1601c > :nth-child(1)"
+    },
+    {
+      capacity: 34,
+      exact: "E".repeat(34),
+      mutate: (fixture, value) => { fixture.taxpayer.email = value; },
+      selector: ".form-1601c-page-one .email-1601c > :nth-child(2)"
+    },
+    {
+      capacity: 24,
+      exact: "R".repeat(24),
+      mutate: (fixture, value) => { fixture.fields.tax_relief_specification.value = value; },
+      selector: ".form-1601c-page-one .tax-relief-1601c > :nth-child(4)"
+    },
+    {
+      capacity: 38,
+      exact: "C".repeat(38),
+      mutate: (fixture, value) => { fixture.taxpayer.name = value; },
+      selector: ".form-1601c-page-two .identity-1601c-page-two > :nth-child(4)"
+    }
+  ];
+
+  for (const boundary of profileCases) {
+    await expectAdaptiveCapacityBoundary(page, minimum, boundary);
+  }
+
+  const schedule = readFixture("packages/form-contracts/fixtures/1601c-3-rows.json") as Mutable1601CEnvelope;
+  for (const boundary of [
+    {
+      capacity: 5,
+      exact: "BANK1",
+      mutate: (fixture: Mutable1601CEnvelope, value: string) => {
+        fixture.schedules[0].rows[0].cells.drawee_bank_code_or_agency.value = value;
+      },
+      selector: '.schedule-top-row-1601c[data-row-key="schedule-1-1"] > :nth-child(4)'
+    },
+    {
+      capacity: 6,
+      exact: "PAY001",
+      mutate: (fixture: Mutable1601CEnvelope, value: string) => {
+        fixture.schedules[0].rows[0].cells.payment_number.value = value;
+      },
+      selector: '.schedule-top-row-1601c[data-row-key="schedule-1-1"] > :nth-child(5)'
+    }
+  ]) {
+    await expectAdaptiveCapacityBoundary(page, schedule, boundary);
+  }
+});
+
 test("1601C 2018 fits long plain values by measured field width without clipping", async ({ page }) => {
   const fixture = readFixture("packages/form-contracts/fixtures/1601c-long-values.json");
   await renderEnvelope(page, fixture);
@@ -334,6 +430,76 @@ interface CriticalRegion {
   y: number;
   width: number;
   height: number;
+}
+
+interface Mutable1601CEnvelope {
+  taxpayer: {
+    contact_number: string;
+    email: string;
+    name: string;
+    registered_address: string;
+  };
+  fields: Record<string, {
+    type: string;
+    value: string | number | boolean;
+  }>;
+  schedules: Array<{
+    rows: Array<{
+      cells: Record<string, {
+        type: string;
+        value: string | number | boolean;
+      }>;
+    }>;
+  }>;
+}
+
+async function expectAdaptiveCapacityBoundary(
+  page: Page,
+  source: Mutable1601CEnvelope,
+  boundary: {
+    capacity: number;
+    exact: string;
+    mutate: (fixture: Mutable1601CEnvelope, value: string) => void;
+    selector: string;
+  }
+) {
+  const exactFixture = structuredClone(source);
+  boundary.mutate(exactFixture, boundary.exact);
+  await renderEnvelope(page, exactFixture);
+  const guided = page.locator(boundary.selector);
+  await expect(guided, `${boundary.selector} at capacity`).toHaveClass(/comb-value/);
+  await expect(guided.locator(":scope > span"), `${boundary.selector} comb cells`).toHaveCount(boundary.capacity);
+
+  const overflowValue = `${boundary.exact}X`;
+  const overflowFixture = structuredClone(source);
+  boundary.mutate(overflowFixture, overflowValue);
+  await renderEnvelope(page, overflowFixture);
+  const plain = page.locator(boundary.selector);
+  await expect(plain, `${boundary.selector} above capacity`).toHaveClass(/adaptive-plain-value/);
+  await expect(plain).toHaveAttribute("data-cell-capacity", String(boundary.capacity));
+  await expect(plain).toHaveAttribute("data-overflow-mode", "plain");
+  await expect(plain).toHaveAttribute("aria-label", overflowValue);
+  await expect(plain).toHaveAttribute("data-adaptive-fit-state", "fit");
+}
+
+async function reviewedStaticText(locator: Locator) {
+  await expect(locator).toHaveCount(1);
+  return locator.evaluate((element) => {
+    const dynamicValues = [...element.querySelectorAll<HTMLElement>([
+      ".comb-value",
+      ".adaptive-plain-value",
+      ".check-box",
+      ".money-1601c",
+      ".inline-description-1601c",
+      ".schedule-top-row-1601c",
+      ".schedule-bottom-row-1601c"
+    ].join(", "))];
+    const priorDisplays = dynamicValues.map((dynamicValue) => dynamicValue.style.display);
+    dynamicValues.forEach((dynamicValue) => { dynamicValue.style.display = "none"; });
+    const visibleText = (element as HTMLElement).innerText.replace(/\s+/g, " ").trim();
+    dynamicValues.forEach((dynamicValue, index) => { dynamicValue.style.display = priorDisplays[index] ?? ""; });
+    return visibleText;
+  });
 }
 
 async function directCombCapacities(container: Locator): Promise<number[]> {

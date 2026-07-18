@@ -1,16 +1,13 @@
 //! Checked editable-save mapping for exact form `1601Cv2018`.
 //!
 //! The reviewed plaintext save is a 100-field editable snapshot. Its binary
-//! encrypted companion is hash-locked as provenance but is not treated as
-//! plaintext XML or as evidence of submission semantics. Queueing therefore
-//! remains disabled independently in the form capability registry.
+//! encrypted companion decrypts to the same semantic values plus one explicit
+//! empty second-address field. Neither source proves submission semantics, so
+//! queueing remains disabled independently in the form capability registry.
 
-use super::FormValidator;
 use super::form_1601c::{Form1601CDraft, Form1601CSchedule1Row, MAX_SCHEDULE_1_ROWS};
+use super::FormValidator;
 use std::collections::BTreeMap;
-
-#[cfg(test)]
-const EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT: usize = 100;
 
 impl Form1601CDraft {
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
@@ -676,6 +673,7 @@ fn insert_money(map: &mut BTreeMap<String, String>, key: &str, value: f64) {
 
 #[cfg(test)]
 mod tests {
+    use super::super::form_1601c::EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT;
     use super::*;
     use crate::naming::Tin;
     use crate::profile::{TaxpayerProfile, TaxpayerType};
@@ -1003,7 +1001,7 @@ frm1601c:txtLineBus
             .expect("reviewed plaintext source must be readable");
         assert_eq!(
             hex::encode(Sha256::digest(&plain)),
-            "794892fc33c0fd7882a91327095f396fb1683d5b3c0d4cb1cb63916f981cad4c"
+            super::super::form_1601c::REVIEWED_EDITABLE_XML_SHA256
         );
         let plain_xml =
             std::str::from_utf8(&plain).expect("reviewed plaintext source must be UTF-8");
@@ -1033,7 +1031,7 @@ frm1601c:txtLineBus
         .expect("reviewed encrypted companion must be readable");
         assert_eq!(
             hex::encode(Sha256::digest(&encrypted)),
-            "4501f3514a1883d0137d126101d02b3f0fa94daf7f6e39398b3729c9104c51d3"
+            super::super::form_1601c::REVIEWED_ENCRYPTED_XML_SHA256
         );
         assert!(
             std::str::from_utf8(&encrypted)
@@ -1041,6 +1039,36 @@ frm1601c:txtLineBus
                 .and_then(|text| crate::bir_xml::parse_bir_xml_checked(text).ok())
                 .is_none(),
             "encrypted companion must never be accepted as plaintext editable XML"
+        );
+
+        let decrypted =
+            crate::crypto::decrypt_and_decompress(&encrypted, crate::crypto::BIR_IAF_PASSPHRASE)
+                .expect("reviewed encrypted companion must decrypt");
+        let decrypted_xml =
+            std::str::from_utf8(&decrypted).expect("decrypted companion must be UTF-8");
+        let mut encrypted_fields = crate::bir_xml::parse_bir_xml_checked(decrypted_xml)
+            .expect("decrypted companion must pass the checked parser");
+        assert_eq!(
+            encrypted_fields.len(),
+            super::super::form_1601c::EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT
+        );
+        assert_eq!(
+            encrypted_fields.remove(super::super::form_1601c::REVIEWED_ENCRYPTED_XML_EXTRA_FIELD),
+            Some(String::new())
+        );
+        assert_eq!(
+            encrypted_fields, source_fields,
+            "the encrypted companion may differ only by its reviewed empty optional address field"
+        );
+        let encrypted_draft = Form1601CDraft::from_bir_field_map(&encrypted_fields)
+            .expect("decrypted companion must satisfy the typed semantic contract");
+        assert_eq!(encrypted_draft.to_bir_field_map(), source_fields);
+
+        let official_pdf = std::fs::read(directory.join("1601C final Jan 2018 with DPA.pdf"))
+            .expect("reviewed official PDF must be readable");
+        assert_eq!(
+            hex::encode(Sha256::digest(&official_pdf)),
+            super::super::form_1601c::OFFICIAL_FORM_SHA256
         );
     }
 }

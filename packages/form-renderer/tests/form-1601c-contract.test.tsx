@@ -21,6 +21,18 @@ import {
 } from "../src/forms/official1601CAssets";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const sourceMetadata = JSON.parse(fs.readFileSync(path.resolve(
+  HERE,
+  "../references/1601c-2018-source.json"
+), "utf8")) as {
+  form: {
+    official_source_sha256: string;
+    page_count: number;
+    page_height_pt: number;
+    page_width_pt: number;
+    reviewed_supporting_sources: Array<Record<string, unknown>>;
+  };
+};
 
 function pdf417ModuleDigest(pathData: string): {
   digest: string;
@@ -66,6 +78,32 @@ const fixtures = [
 ] as const;
 
 describe("1601C:2018 runtime render contract", () => {
+  it("pins the exact official PDF and both reviewed editable-source variants", () => {
+    expect(sourceMetadata.form).toMatchObject({
+      official_source_sha256: "c8faaa71015337a73b4ceb96bfb265c539589ab5e10eb27899bb81f87f417397",
+      page_count: 2,
+      page_height_pt: 936,
+      page_width_pt: 612,
+      reviewed_supporting_sources: [
+        {
+          field_count: 100,
+          kind: "editable_xml",
+          semantic_replay: "exact",
+          source_file: "external:00000000000000-1601Cv2018-052026.xml",
+          source_sha256: "794892fc33c0fd7882a91327095f396fb1683d5b3c0d4cb1cb63916f981cad4c"
+        },
+        {
+          decrypted_extra_fields: ["frm1601c:txtAddress2"],
+          field_count: 101,
+          kind: "encrypted_editable_xml",
+          semantic_replay: "exact_after_decryption_and_empty_optional_field_canonicalization",
+          source_file: "external:00000000000000-1601Cv2018-052026#codeitlikemiley@gmail.com#.xml",
+          source_sha256: "4501f3514a1883d0137d126101d02b3f0fa94daf7f6e39398b3729c9104c51d3"
+        }
+      ]
+    });
+  });
+
   it("accepts and renders every Rust-generated fixture as exactly two folio pages", () => {
     for (const fixture of fixtures) {
       const value = structuredClone(fixture);

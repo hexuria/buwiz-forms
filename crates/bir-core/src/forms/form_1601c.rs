@@ -13,6 +13,17 @@ use serde::{Deserialize, Serialize};
 /// The 1601-C January 2018 XML contract exposes exactly three Schedule I rows.
 pub const MAX_SCHEDULE_1_ROWS: usize = 3;
 
+/// Hash-locked source evidence for the exact January 2018 revision.
+pub const OFFICIAL_FORM_SHA256: &str =
+    "c8faaa71015337a73b4ceb96bfb265c539589ab5e10eb27899bb81f87f417397";
+pub const REVIEWED_EDITABLE_XML_SHA256: &str =
+    "794892fc33c0fd7882a91327095f396fb1683d5b3c0d4cb1cb63916f981cad4c";
+pub const REVIEWED_ENCRYPTED_XML_SHA256: &str =
+    "4501f3514a1883d0137d126101d02b3f0fa94daf7f6e39398b3729c9104c51d3";
+pub const EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT: usize = 100;
+pub const EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT: usize = 101;
+pub const REVIEWED_ENCRYPTED_XML_EXTRA_FIELD: &str = "frm1601c:txtAddress2";
+
 /// Fixed Item 5 ATC for BIR Form 1601-C January 2018.
 ///
 /// Evidence: the pinned official blank PDF
@@ -751,12 +762,10 @@ mod tests {
         draft.schedule_1 = vec![schedule_row("05/2026", 1.0, 1.0); 4];
         draft.compute();
 
-        assert!(
-            draft
-                .validate()
-                .iter()
-                .any(|(field, _)| field == "schedule_1")
-        );
+        assert!(draft
+            .validate()
+            .iter()
+            .any(|(field, _)| field == "schedule_1"));
     }
 
     #[test]
@@ -782,20 +791,28 @@ mod tests {
         draft.any_taxes_withheld = false;
         draft.tax_relief = true;
 
-        assert!(
-            draft
-                .validate()
-                .iter()
-                .any(|(field, _)| field == "tax_relief_specification")
-        );
+        assert!(draft
+            .validate()
+            .iter()
+            .any(|(field, _)| field == "tax_relief_specification"));
 
         draft.tax_relief_specification = "Special Law 123".to_string();
-        assert!(
-            draft
-                .validate()
-                .iter()
-                .all(|(field, _)| field != "tax_relief_specification")
-        );
+        assert!(draft
+            .validate()
+            .iter()
+            .all(|(field, _)| field != "tax_relief_specification"));
+    }
+
+    #[test]
+    fn validation_rejects_contact_numbers_beyond_the_official_twelve_digit_field() {
+        let mut draft = Form1601CDraft::new_from_profile(&test_profile(), 2026, 6);
+        draft.any_taxes_withheld = false;
+        draft.contact_number = "6391234567890".to_string();
+
+        assert!(draft
+            .validate()
+            .iter()
+            .any(|(field, _)| field == "contact_number"));
     }
 
     #[test]
@@ -814,11 +831,9 @@ mod tests {
         assert!(errors.iter().any(|(field, message)| {
             field == "category_of_agent" && message.contains("Item 11")
         }));
-        assert!(
-            errors
-                .iter()
-                .all(|(_, message)| !message.contains("Item 12"))
-        );
+        assert!(errors
+            .iter()
+            .all(|(_, message)| !message.contains("Item 12")));
     }
 
     #[test]
@@ -834,16 +849,12 @@ mod tests {
         draft.tax_29_other_remittances_amount = f64::NAN;
 
         let errors = draft.validate();
-        assert!(
-            errors
-                .iter()
-                .any(|(field, _)| field == "tax_21_total_non_taxable")
-        );
-        assert!(
-            errors
-                .iter()
-                .any(|(field, _)| field == "tax_29_other_remittances_amount")
-        );
+        assert!(errors
+            .iter()
+            .any(|(field, _)| field == "tax_21_total_non_taxable"));
+        assert!(errors
+            .iter()
+            .any(|(field, _)| field == "tax_29_other_remittances_amount"));
     }
 
     #[test]
