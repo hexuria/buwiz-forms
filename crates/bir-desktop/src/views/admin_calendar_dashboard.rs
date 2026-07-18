@@ -27,6 +27,15 @@ pub enum AdminTab {
     Overrides,
 }
 
+#[derive(Default)]
+struct OverrideEditorFields {
+    title: String,
+    source: String,
+    form_codes: Vec<String>,
+    original: Option<chrono::NaiveDate>,
+    adjusted: Option<chrono::NaiveDate>,
+}
+
 pub struct AdminCalendarDashboard {
     db: Arc<Mutex<Database>>,
     active_tab: AdminTab,
@@ -132,18 +141,21 @@ impl AdminCalendarDashboard {
 
     fn set_editor_fields(
         &mut self,
-        title: &str,
-        source: &str,
-        form_codes: Vec<String>,
-        original: Option<chrono::NaiveDate>,
-        adjusted: Option<chrono::NaiveDate>,
+        fields: OverrideEditorFields,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
+        let OverrideEditorFields {
+            title,
+            source,
+            form_codes,
+            original,
+            adjusted,
+        } = fields;
         self.new_override_title
-            .update(cx, |s, cx| s.set_value(title.to_string(), window, cx));
+            .update(cx, |s, cx| s.set_value(title, window, cx));
         self.new_override_source
-            .update(cx, |s, cx| s.set_value(source.to_string(), window, cx));
+            .update(cx, |s, cx| s.set_value(source, window, cx));
         self.new_override_form_codes = form_codes.clone();
         self.new_override_forms_select
             .update(cx, |select, cx| select.set_selected_ids(form_codes, cx));
@@ -154,7 +166,7 @@ impl AdminCalendarDashboard {
     }
 
     fn open_new_override_editor(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
-        self.set_editor_fields("", "", Vec::new(), None, None, window, cx);
+        self.set_editor_fields(OverrideEditorFields::default(), window, cx);
         self.editing_override_id = None;
         self.override_editor_error = None;
         self.override_editor_open = true;
@@ -178,11 +190,13 @@ impl AdminCalendarDashboard {
             return;
         };
         self.set_editor_fields(
-            &existing.title,
-            &existing.source_reference,
-            existing.affected_form_codes.clone(),
-            Some(existing.original_deadline),
-            Some(existing.adjusted_deadline),
+            OverrideEditorFields {
+                title: existing.title,
+                source: existing.source_reference,
+                form_codes: existing.affected_form_codes,
+                original: Some(existing.original_deadline),
+                adjusted: Some(existing.adjusted_deadline),
+            },
             window,
             cx,
         );

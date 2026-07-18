@@ -614,7 +614,7 @@ fn main() {
                         #[cfg(not(feature = "mas_build"))]
                         {
                             hotkey_tick = hotkey_tick.wrapping_add(1);
-                            if hotkey_tick == 1 || hotkey_tick % 10 == 0 {
+                            if hotkey_tick == 1 || hotkey_tick.is_multiple_of(10) {
                                 let stored = hotkey_db
                                     .lock()
                                     .ok()
