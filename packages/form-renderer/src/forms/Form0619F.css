@@ -299,7 +299,11 @@
   border-bottom: .5pt solid #000;
 }
 .address-0619f .label-0619f { height: 10.5pt; border-bottom: .5pt solid #000; }
-.address-0619f .label-0619f em { font-size: 5.3pt; letter-spacing: -.06pt; }
+.address-0619f .label-0619f em {
+  font-family: "eBIRForms Roboto Condensed", sans-serif;
+  font-size: 5.3pt;
+  letter-spacing: -.06pt;
+}
 .address-0619f > :is(.guided-field-0619f, .plain-field-shell-0619f) {
   height: 18pt;
   border-bottom: .5pt solid #000;
@@ -560,13 +564,16 @@
   justify-content: center;
   gap: 2pt;
   border-right: .5pt solid #000;
-  font-size: 7pt;
+  font-size: 9.333pt;
   line-height: 1;
   white-space: nowrap;
 }
 .payment-head-0619f > span:nth-child(2) {
+  font-family: "eBIRForms Roboto Condensed", sans-serif;
+  font-size: 8pt;
   letter-spacing: -.45pt;
 }
+.payment-head-0619f > span em { font-size: 6.667pt; }
 .payment-head-0619f > span:last-child { border-right: 0; }
 .payment-row-0619f {
   height: 18pt;
@@ -589,6 +596,13 @@
   gap: 4pt;
   padding-left: 5pt;
   background: #d9d9d9;
+  font-size: 9.333pt;
+}
+.payment-row-0619f[data-payment-row="payment_20"] > span:first-child {
+  font-family: "eBIRForms Roboto Condensed", sans-serif;
+}
+.payment-row-0619f[data-payment-row="payment_20"] > span:first-child b {
+  font-family: "eBIRForms Arimo", sans-serif;
 }
 .payment-row-0619f > span:first-child b,
 .payment-other-label-0619f > b { font-weight: 600; }
@@ -630,6 +644,7 @@
   padding-left: 5pt;
   border-bottom: .5pt solid #000;
   background: #d9d9d9;
+  font-size: 9.333pt;
 }
 .machine-validation-0619f {
   height: 51pt;

@@ -41,12 +41,12 @@
   align-items: center;
   padding-left: 1pt;
   background: #d9d9d9;
-  font-size: 8.3pt;
+  font-size: 8pt;
   line-height: 1.05;
 }
 .bcs-0619e {
   padding-left: 1pt;
-  font-size: 8.3pt;
+  font-size: 8pt;
   line-height: 1.05;
 }
 .government-wordmark-0619e {
@@ -57,7 +57,7 @@
   align-items: center;
   gap: .17pt;
   text-align: left;
-  font-size: 8.2pt;
+  font-size: 8pt;
   line-height: 1.03;
 }
 .government-wordmark-0619e img {
@@ -83,23 +83,23 @@
   text-align: center;
 }
 .form-number-0619e { border-right: .6pt solid #000; }
-.form-number-0619e > span { font-size: 9.5pt; }
+.form-number-0619e > span { font-size: 9.333pt; }
 .form-number-0619e > strong {
   margin-top: 1pt;
-  font-size: 24pt;
+  font-size: 22pt;
   line-height: 1.1;
   letter-spacing: -.6pt;
 }
-.form-number-0619e > small { margin-top: 2pt; font-size: 8.5pt; }
-.form-number-0619e > b { margin-top: 1pt; font-size: 8.2pt; }
+.form-number-0619e > small { margin-top: 2pt; font-size: 9.333pt; }
+.form-number-0619e > b { margin-top: 1pt; font-size: 8pt; }
 .form-title-0619e > strong {
-  font-size: 18.5pt;
+  font-size: 18pt;
   line-height: 1.02;
   letter-spacing: -.35pt;
 }
 .form-title-0619e > span {
   margin-top: 1pt;
-  font-size: 14.2pt;
+  font-size: 12.667pt;
   line-height: 1.02;
 }
 .form-title-0619e > em {
@@ -272,7 +272,11 @@
   border-bottom: .6pt solid #000;
 }
 .address-0619e .label-0619e { height: 10.5pt; border-bottom: .6pt solid #000; }
-.address-0619e .label-0619e em { font-size: 5.3pt; letter-spacing: -.06pt; }
+.address-0619e .label-0619e em {
+  font-family: "eBIRForms Roboto Condensed", sans-serif;
+  font-size: 5.3pt;
+  letter-spacing: -.06pt;
+}
 .address-0619e > .comb-value,
 .address-0619e > .adaptive-plain-value {
   height: 18pt;
@@ -402,7 +406,7 @@
 }
 .signature-body-0619e > div {
   padding: 3pt 5pt;
-  font-size: 7.2pt;
+  font-size: 8pt;
 }
 .signature-body-0619e > div + div { border-left: .6pt solid #000; }
 .signature-body-0619e span { display: block; }
@@ -420,7 +424,7 @@
   align-items: center;
   justify-content: center;
   padding: 1pt 2pt;
-  font-size: 7.2pt;
+  font-size: 8pt;
   line-height: 1.08;
   text-align: center;
 }
@@ -550,7 +554,7 @@
 }
 .machine-validation-0619e > span {
   padding: 3pt 5pt;
-  font-size: 7.6pt;
+  font-size: 8pt;
   line-height: 1.08;
 }
 .machine-validation-0619e > span + span {
@@ -562,5 +566,5 @@
   height: 11pt;
   margin: 0;
   padding-top: 2pt;
-  font-size: 7.6pt;
+  font-size: 8pt;
 }
