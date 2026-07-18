@@ -173,8 +173,10 @@ native-evidence-macos:
 # Exercise an already-built package through the external diagnostic driver.
 # The driver hashes the unchanged app and renderer before/after, launches the
 # deterministic committed 2551Q fixture, retains WKPDF/final artifacts, and
-# proves a failed overwrite preserves its destination. Accessibility permission
-# is required. Set system_print=true only when an operator can review the native
+# proves a failed overwrite preserves its destination. The PDF exercise uses a
+# development-only destination queue into the same output state machine as the
+# toolbar; it does not claim save-chooser activation. Accessibility permission
+# is required only when system_print=true so an operator can review the native
 # print dialog; the driver cancels it and keeps the print gate incomplete.
 [macos]
 native-evidence-macos-external app=MAC_APP output="target/macos-native-evidence-driver" network_denied="true" system_print="false":
