@@ -100,9 +100,37 @@ describe("1601C:2018 runtime render contract", () => {
     expect(markup).toContain("receiving P250,000 &amp; below for the year");
     expect(markup).not.toContain("receiving ₱250,000");
     expect(markup).toContain("is true and correct, pursuant to the provisions");
+    expect(markup).toContain("the tenth (10<sup>th</sup>) day of the month");
     expect(markup.match(/identity-label-1601c/g)).toHaveLength(2);
     for (const marker of ["a.1", "a.2", "b.1", "b.2", "b.3", "b.4"]) {
       expect(markup).toContain(`>${marker}</b>`);
+    }
+  });
+
+  it("keeps the complete reviewed page labels instead of abbreviated scaffold copy", () => {
+    const fixture = structuredClone(normalFixture) as RenderEnvelope;
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: fixture })
+    );
+
+    for (const label of [
+      "For the Month",
+      "Number of Sheet/s Attached",
+      "Taxpayer Identification Number (TIN)",
+      "Withholding Agent’s Name",
+      "Category of Withholding Agent",
+      "Are there payees availing of tax relief under",
+      "Total Amount of Compensation",
+      "Taxable compensation not subject to withholding tax",
+      "TOTAL AMOUNT STILL DUE/(Over-remittance)",
+      "Cash/Bank Debit Memo",
+      "Machine Validation/Revenue Official Receipt Details",
+      "Schedule I – Adjustment of Taxes Withheld on Compensation from Previous Months",
+      "Tax Paid ",
+      "Should be Tax Due for the Month",
+      "Required Attachments:"
+    ]) {
+      expect(markup).toContain(label);
     }
   });
 
