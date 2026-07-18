@@ -92,7 +92,7 @@
 }
 .form-number-1701 { border-right: .6pt solid #111; }
 .form-number-1701 > span { font-size: 8pt; }
-.form-number-1701 > strong { display: block; height: 21pt; font-size: 21pt; line-height: 21pt; }
+.form-number-1701 > strong { display: block; height: 21pt; font-size: 20.04pt; line-height: 21pt; }
 .form-number-1701 > small,
 .form-number-1701 > b { font-size: 7.5pt; }
 .form-title-1701 > strong { font-size: 17pt; line-height: 1; }
@@ -218,7 +218,7 @@
 }
 .tin-rdo-1701 > span { min-width: 0; display: flex; align-items: center; gap: 3pt; padding: 1pt 5pt; border-right: .6pt solid #111; }
 .tin-value-1701 { min-width: 0; display: grid !important; grid-template-columns: 3fr 13pt 3fr 13pt 3fr 13pt 5fr; padding: 0 !important; background: #fff; }
-.tin-value-1701 > i { display: grid; place-items: center; background: #aaa; font-style: normal; }
+.tin-value-1701 > i { display: grid; place-items: center; background: #a6a6a6; font-style: normal; }
 .tin-value-1701 .comb-value { min-width: 0; }
 .tin-rdo-1701 > .comb-value { background: #fff; }
 
