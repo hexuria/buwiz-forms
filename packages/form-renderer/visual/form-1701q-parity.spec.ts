@@ -7,6 +7,13 @@ import { compareCompleteOfficialPage } from "./official-page-diff";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "../../..");
+const staticTextInventory = JSON.parse(fs.readFileSync(path.join(
+  REPO_ROOT,
+  "packages/form-renderer/references/1701q-2018-static-text-inventory.json"
+), "utf8")) as {
+  official_source_sha256: string;
+  regions: Array<{ selector: string; text: string }>;
+};
 const MAX_CHANGED_PERCENT = 1;
 const DEVICE_SCALE_FACTOR = 1.5;
 const STRUCTURAL_INK_THRESHOLD = 100;
@@ -26,9 +33,145 @@ test("1701Q 2018 renders every Rust fixture as two stable unclipped Folio pages"
     await expect(pages, fixtureName).toHaveCount(2);
     for (let pageIndex = 0; pageIndex < 2; pageIndex += 1) {
       await expect(pages.nth(pageIndex)).toHaveAttribute("data-paper", "folio");
+      const box = await pages.nth(pageIndex).boundingBox();
+      expect(box, `${fixtureName} page ${pageIndex + 1}`).not.toBeNull();
+      expect(box?.width, `${fixtureName} page ${pageIndex + 1} width`).toBeCloseTo(816, 1);
+      expect(box?.height, `${fixtureName} page ${pageIndex + 1} height`).toBeCloseTo(1248, 1);
       expect(await pageHasNoOverflow(pages.nth(pageIndex)), `${fixtureName} page ${pageIndex + 1}`).toBe(true);
     }
   }
+});
+
+test("1701Q 2018 preserves every reviewed official static label", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701q-minimum.json"));
+
+  expect(staticTextInventory.official_source_sha256).toBe(
+    "c731d3f12556e6f19ab81f6113ca7c4a23f7ed099675c03451ac0074d96b85ed"
+  );
+  for (const region of staticTextInventory.regions) {
+    const visibleText = await reviewedStaticText(page.locator(region.selector));
+    expect(visibleText, region.selector).toBe(region.text);
+  }
+});
+
+test("1701Q 2018 uses only the pinned official comb capacities and plain cells", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701q-minimum.json"));
+
+  for (const [item, capacity] of [
+    ["9", 40], ["11", 8], ["12", 32], ["13", 16], ["14", 16],
+    ["21", 40], ["22", 16], ["23", 16]
+  ] as const) {
+    const locator = page.locator(`.label-comb-1701q[data-item-number="${item}"]`);
+    await expect(locator, `Item ${item}`).toHaveAttribute("data-field-mode", "guided");
+    await expect(locator, `Item ${item}`).toHaveAttribute("data-cell-capacity", String(capacity));
+    await expect(locator.locator(":scope > .comb-value > span"), `Item ${item}`).toHaveCount(capacity);
+  }
+
+  for (const tin of await page.locator(".tin-1701q").all()) {
+    expect(await tin.locator(":scope > .comb-value").evaluateAll((groups) =>
+      groups.map((group) => group.children.length)
+    )).toEqual([3, 3, 3, 5]);
+  }
+  await expect(page.locator(".address-1701q > .comb-value > span")).toHaveCount(40);
+  await expect(page.locator(".address-second-1701q > .comb-value:first-child > span")).toHaveCount(31);
+  await expect(page.locator(".address-second-1701q > .comb-value:last-child > span")).toHaveCount(4);
+  await expect(page.locator(".page-two-identity-1701q > .comb-value:nth-child(3) > span")).toHaveCount(14);
+  await expect(page.locator(".page-two-identity-1701q > .comb-value:nth-child(4) > span")).toHaveCount(26);
+
+  for (const [fieldName, capacity] of [
+    ["payment_32_bank", 6], ["payment_32_number", 11], ["payment_32_date", 8],
+    ["payment_33_bank", 6], ["payment_33_number", 11], ["payment_33_date", 8],
+    ["payment_34_number", 11], ["payment_34_date", 8],
+    ["payment_35_particular", 7], ["payment_35_bank", 6], ["payment_35_number", 11], ["payment_35_date", 8]
+  ] as const) {
+    const locator = page.locator(`[data-field-name="${fieldName}"]`);
+    await expect(locator, fieldName).toHaveAttribute("data-field-mode", "guided");
+    await expect(locator, fieldName).toHaveAttribute("data-cell-capacity", String(capacity));
+    await expect(locator.locator(".comb-value > span"), fieldName).toHaveCount(capacity);
+  }
+
+  const item34Bank = page.locator('[data-field-name="payment_34_bank"]');
+  await expect(item34Bank).toHaveAttribute("data-field-mode", "not-applicable");
+  await expect(item34Bank.locator(".comb-value")).toHaveCount(0);
+  expect(await item34Bank.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgb(217, 217, 217)");
+
+  for (const fieldName of ["item_43_description", "item_48_description", "item_61_description", "machine_validation_or_receipt_details"]) {
+    const locator = page.locator(`[data-field-name="${fieldName}"]`);
+    await expect(locator, fieldName).toHaveAttribute("data-field-mode", "plain");
+    await expect(locator.locator(".comb-value"), `${fieldName} invented comb`).toHaveCount(0);
+  }
+
+  for (const amount of await page.locator(".amount-1701q").all()) {
+    const fieldName = await amount.getAttribute("data-field-name");
+    await expect(amount, fieldName ?? "amount").toHaveAttribute(
+      "data-cell-capacity",
+      fieldName === "item_31" ? "12" : "8"
+    );
+  }
+});
+
+test("1701Q 2018 switches exact-capacity overflow to plain text without dropping characters", async ({ page }) => {
+  const fixture = readFixture("packages/form-contracts/fixtures/1701q-minimum.json") as MutableEnvelope;
+
+  fixture.taxpayer.email = `${"A".repeat(30)}@B`;
+  fixture.fields.taxpayer_last_name = { type: "text", value: `D${"E".repeat(24)}.` };
+  fixture.fields.payment_32_bank = { type: "text", value: "A B.C!" };
+  await renderEnvelope(page, fixture);
+  await expect(page.locator('.label-comb-1701q[data-item-number="12"]')).toHaveAttribute("data-field-mode", "guided");
+  await expect(page.locator('.label-comb-1701q[data-item-number="12"] > .comb-value > span')).toHaveCount(32);
+  await expect(page.locator(".page-two-identity-1701q > .comb-value:nth-child(4) > span")).toHaveCount(26);
+  await expect(page.locator('[data-field-name="payment_32_bank"] .comb-value > span')).toHaveCount(6);
+
+  fixture.taxpayer.email += "C";
+  fixture.fields.taxpayer_last_name = { type: "text", value: `D${"E".repeat(25)}.` };
+  fixture.fields.payment_32_bank = { type: "text", value: "A B.C!D" };
+  await renderEnvelope(page, fixture);
+  const email = page.locator('.label-comb-1701q[data-item-number="12"]');
+  await expect(email).toHaveAttribute("data-field-mode", "plain");
+  await expect(email.locator(":scope > .comb-value")).toHaveCount(0);
+  await expect(email.locator(":scope > .adaptive-plain-value")).toHaveText(fixture.taxpayer.email);
+  await expect(page.locator(".page-two-identity-1701q > .adaptive-plain-value:nth-child(4)")).toHaveText(
+    String(fixture.fields.taxpayer_last_name.value)
+  );
+  const paymentBank = page.locator('[data-field-name="payment_32_bank"]');
+  await expect(paymentBank).toHaveAttribute("data-field-mode", "plain");
+  await expect(paymentBank.locator(".comb-value")).toHaveCount(0);
+  await expect(paymentBank.locator(".adaptive-plain-value")).toHaveText("A B.C!D");
+
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701q-long-values.json"));
+  for (const locator of [
+    page.locator('.label-comb-1701q[data-item-number="9"]'),
+    page.locator('.label-comb-1701q[data-item-number="12"]'),
+    page.locator('[data-field-name="payment_32_bank"]')
+  ]) {
+    await expect(locator).toHaveAttribute("data-field-mode", "plain");
+    await expect(locator.locator(".comb-value")).toHaveCount(0);
+  }
+  await expect(page.locator(".address-1701q > .adaptive-plain-value")).toHaveText(
+    "UNIT 1201, A DELIBERATELY LONG REGISTERED ADDRESS USED TO PROVE THAT THE HTML FORM PRESERVES EVERY VALID CHARACTER"
+  );
+  await expect(page.locator(".page-two-identity-1701q > .adaptive-plain-value:nth-child(4)")).toHaveText(
+    "DELA CRUZ-SANTOS WITH A VALID LAST NAME LONGER THAN THE OFFICIAL COMB"
+  );
+});
+
+test("1701Q 2018 all-lines fixture renders every official computation row once", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701q-all-lines.json"));
+
+  const expectedRows = [
+    ...Array.from({ length: 11 }, (_, index) => index + 36),
+    ...Array.from({ length: 8 }, (_, index) => index + 47),
+    ...Array.from({ length: 8 }, (_, index) => index + 55),
+    ...Array.from({ length: 4 }, (_, index) => index + 64)
+  ];
+  for (const number of expectedRows) {
+    const row = page.locator(`.item-${number}-1701q`);
+    await expect(row, `Item ${number}`).toHaveCount(1);
+    await expect(row.locator(":scope > .amount-1701q"), `Item ${number} amounts`).toHaveCount(2);
+  }
+  await expect(page.locator(".single-total-1701q:not(.final-total-1701q)")).toHaveCount(1);
+  await expect(page.locator(".final-total-1701q")).toHaveCount(1);
+  await expect(page.locator(".part-five-1701q [data-schedule-start]")).toHaveCount(4);
 });
 
 test("1701Q 2018 keeps verified page-specific PDF417, caption, and seal geometry", async ({ page }) => {
@@ -246,6 +389,37 @@ async function pageHasNoOverflow(locator: Locator) {
     console.warn(`1701Q overflow report: ${JSON.stringify({ report, offenders })}`);
   }
   return valid;
+}
+
+interface MutableEnvelope {
+  taxpayer: {
+    email: string;
+  };
+  fields: Record<string, {
+    type: string;
+    value: string | number | boolean;
+  }>;
+}
+
+async function reviewedStaticText(locator: Locator) {
+  await expect(locator).toHaveCount(1);
+  return locator.evaluate((element) => {
+    const dynamicValues = [...element.querySelectorAll<HTMLElement>([
+      ".comb-value",
+      ".adaptive-plain-value",
+      ".check-box",
+      ".amount-1701q",
+      ".guided-payment-field-1701q",
+      ".not-applicable-payment-field-1701q",
+      ".line-description-1701q",
+      ".receipt-value-1701q"
+    ].join(", "))];
+    const priorDisplays = dynamicValues.map((dynamicValue) => dynamicValue.style.display);
+    dynamicValues.forEach((dynamicValue) => { dynamicValue.style.display = "none"; });
+    const visibleText = (element as HTMLElement).innerText.replace(/\s+/g, " ").trim();
+    dynamicValues.forEach((dynamicValue, index) => { dynamicValue.style.display = priorDisplays[index] ?? ""; });
+    return visibleText;
+  });
 }
 
 interface CriticalRegion {

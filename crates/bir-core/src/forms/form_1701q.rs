@@ -17,6 +17,8 @@ use crate::validation::{validate_email, validate_zip};
 pub const FORM_CODE: &str = "1701Q";
 pub const FORM_REVISION: &str = "2018";
 pub const FORM_TYPE_ID: &str = "1701Qv2018";
+pub const OFFICIAL_FORM_SHA256: &str =
+    "c731d3f12556e6f19ab81f6113ca7c4a23f7ed099675c03451ac0074d96b85ed";
 pub const XML_ROUND_TRIP_SUPPORTED: bool = false;
 pub const QUEUE_SUBMISSION_SUPPORTED: bool = false;
 
@@ -1280,6 +1282,20 @@ fn validate_payment_details(draft: &Form1701QDraft, errors: &mut Vec<(String, St
             ));
         }
     }
+
+    if !draft
+        .payment_details
+        .item_34_tax_debit_memo
+        .drawee_bank_or_agency
+        .trim()
+        .is_empty()
+    {
+        errors.push((
+            "payment_34_tax_debit_memo.drawee_bank_or_agency".to_string(),
+            "Item 34 Drawee Bank/Agency is a non-applicable cell on the official January 2018 form"
+                .to_string(),
+        ));
+    }
 }
 
 fn validate_computed_values(draft: &Form1701QDraft, errors: &mut Vec<(String, String)>) {
@@ -1615,6 +1631,20 @@ mod tests {
                 .iter()
                 .any(|(field, _)| field == "item_61_other_tax_credit_description")
         );
+    }
+
+    #[test]
+    fn validation_should_keep_item_34_drawee_bank_cell_non_applicable() {
+        let mut draft = valid_draft();
+        draft
+            .payment_details
+            .item_34_tax_debit_memo
+            .drawee_bank_or_agency = "SHOULD NOT PRINT".to_string();
+
+        assert!(draft.validate().iter().any(|(field, message)| {
+            field == "payment_34_tax_debit_memo.drawee_bank_or_agency"
+                && message.contains("non-applicable")
+        }));
     }
 
     #[test]
