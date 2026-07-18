@@ -322,7 +322,52 @@
 }
 .schedule-two-1702mx .group-before-12-1702mx { flex-basis: 3.5pt; }
 .total-row-1702mx { background: #d9d9d9; font-weight: 700; }
-.schedule-one-1702mx { height: 129pt; }
+.schedule-one-1702mx { height: 131pt; margin-top: 0; }
+.schedule-one-1702mx > .schedule-title-1702mx { flex-basis: 10.5pt; }
+.schedule-one-1702mx > .relief-header-1702mx { flex-basis: 18.5pt; }
+.schedule-one-1702mx > .relief-row-1702mx { flex: 0 0 auto; }
+.schedule-one-1702mx > .relief-row-1-1702mx { height: 17.5pt; }
+.schedule-one-1702mx > :is(.relief-row-2-1702mx, .relief-row-3-1702mx, .relief-row-4-1702mx) { height: 16pt; }
+.schedule-one-1702mx > .relief-row-5-1702mx { height: 17.5pt; }
+.schedule-one-1702mx > .relief-row-6-1702mx { height: 16.5pt; }
+.relief-field-1702mx {
+  display: grid !important;
+  align-items: stretch !important;
+  padding: 0 !important;
+  background: #fff;
+}
+.relief-field-1702mx[data-guide-cells="10"],
+.relief-rate-field-1702mx[data-field-cells="10"],
+.relief-date-field-1702mx[data-guide-cells="10"] { grid-template-columns: repeat(10, minmax(0, 1fr)); }
+.relief-field-1702mx[data-guide-cells="9"] { grid-template-columns: repeat(9, minmax(0, 1fr)); }
+.relief-field-1702mx > i {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+}
+.relief-character-field-1702mx > i:not(:last-child)::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  height: 8pt;
+  border-right: .45pt solid #222;
+  content: "";
+}
+.relief-date-field-1702mx > i,
+.relief-rate-field-1702mx > i { border-right: .5pt solid #111; }
+.relief-date-field-1702mx > i:last-child,
+.relief-rate-field-1702mx > i:last-child { border-right: 0; }
+.relief-cell-unavailable-1702mx,
+.relief-unavailable-field-1702mx { background: #d9d9d9; }
+.relief-rate-prefix-1702mx { grid-column: span 5; }
+.relief-rate-decimal-1702mx { background: #808080; }
+.relief-rate-percent-1702mx { background: #a6a6a6; }
+.relief-rate-field-1702mx > :is(.relief-rate-decimal-1702mx, .relief-rate-percent-1702mx) {
+  font-size: 11pt;
+  line-height: 1;
+}
 .schedule-two-1702mx { height: 403.5pt; }
 .schedule-two-1702mx > .schedule-title-1702mx { min-height: 0; flex-basis: 10.5pt; }
 .schedule-two-1702mx > .regime-header-1702mx { flex: 0 0 10pt; }

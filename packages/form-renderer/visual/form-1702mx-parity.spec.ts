@@ -176,6 +176,66 @@ test("1702MX January 2018C preserves the official Schedule 2 group rows", async 
   expect(await pageHasNoOverflow(pageTwo)).toBe(true);
 });
 
+test("1702MX January 2018C preserves the official Schedule 1 guides and unavailable cells", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-normal.json"));
+  const pageTwo = page.locator(".form-page").nth(1);
+  const scheduleOne = pageTwo.locator(".schedule-one-1702mx");
+  const rows = scheduleOne.locator(":scope > .relief-row-1702mx");
+
+  await expectCriticalRegionGeometry(pageTwo, [
+    { name: "Schedule 1", selector: ".schedule-one-1702mx", x: 36, y: 312, width: 1152, height: 262 }
+  ]);
+  await expect(rows).toHaveCount(6);
+  expect(await rows.evaluateAll((elements) => elements.map(
+    (element) => Math.round(element.getBoundingClientRect().height * 1.5)
+  ))).toEqual([35, 32, 32, 32, 35, 33]);
+
+  await expect(rows.locator(":scope > span:first-child")).toHaveText([
+    "1 Investment Promotion Agency (IPA)/Implementing Government Entity",
+    "2 Legal Basis",
+    "3 Registered Activity/Program (Reg. No.)",
+    "4 Special Tax Rate",
+    "5 Effectivity Date of Tax Relief/Exemption FROM (MM/DD/YYYY)",
+    "6 Expiration Date of Tax Relief/Exemption TO (MM/DD/YYYY)"
+  ]);
+
+  for (const rowIndex of [0, 1, 2]) {
+    const fields = rows.nth(rowIndex).locator(":scope > .relief-character-field-1702mx");
+    await expect(fields).toHaveCount(3);
+    await expect(fields.nth(0)).toHaveAttribute("data-guide-cells", "10");
+    await expect(fields.nth(1)).toHaveAttribute("data-guide-cells", "10");
+    await expect(fields.nth(2)).toHaveAttribute("data-guide-cells", "9");
+    await expect(fields.nth(0).locator(":scope > i")).toHaveCount(10);
+    await expect(fields.nth(1).locator(":scope > i")).toHaveCount(10);
+    await expect(fields.nth(2).locator(":scope > i")).toHaveCount(9);
+  }
+
+  const rateRow = rows.nth(3);
+  await expect(rateRow.locator(":scope > .relief-unavailable-field-1702mx")).toHaveCount(2);
+  const rate = rateRow.locator(":scope > .relief-rate-field-1702mx");
+  await expect(rate).toHaveAttribute("data-rate-format", "00.0%");
+  await expect(rate).toHaveAttribute("data-unavailable-cells", "5");
+  await expect(rate).toHaveAttribute("data-applicable-character-cells", "3");
+  await expect(rate).toHaveAttribute("data-static-cells", "2");
+  await expect(rate).toHaveText(".%");
+
+  for (const rowIndex of [4, 5]) {
+    const fields = rows.nth(rowIndex).locator(":scope > .relief-date-field-1702mx");
+    await expect(fields).toHaveCount(3);
+    await expect(fields.nth(0)).toHaveAttribute("data-guide-cells", "10");
+    await expect(fields.nth(1)).toHaveAttribute("data-guide-cells", "10");
+    await expect(fields.nth(2)).toHaveAttribute("data-guide-cells", "9");
+    await expect(fields.nth(0).locator(":scope > .relief-cell-unavailable-1702mx")).toHaveCount(2);
+    await expect(fields.nth(1).locator(":scope > .relief-cell-unavailable-1702mx")).toHaveCount(2);
+    await expect(fields.nth(2).locator(":scope > .relief-cell-unavailable-1702mx")).toHaveCount(1);
+  }
+
+  expect(await rateRow.locator(".relief-unavailable-field-1702mx").evaluateAll((fields) => fields.map(
+    (field) => getComputedStyle(field).backgroundColor
+  ))).toEqual(["rgb(217, 217, 217)", "rgb(217, 217, 217)"]);
+  expect(await pageHasNoOverflow(pageTwo)).toBe(true);
+});
+
 test("1702MX January 2018C preserves the official Part II penalty heading", async ({ page }) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-normal.json"));
   const pageOne = page.locator(".form-page").nth(0);

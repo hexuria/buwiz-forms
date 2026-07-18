@@ -193,6 +193,23 @@ describe("1702MX:2018C semantic HTML contract", () => {
     }
   });
 
+  it("preserves the official Schedule 1 field map without guides in merged unavailable cells", () => {
+    const markup = renderToStaticMarkup(
+      createElement(Form1702MX, { envelope: structuredClone(normalFixture) as RenderEnvelope })
+    );
+
+    expect(markup.match(/data-relief-row="[1-6]"/g)).toHaveLength(6);
+    expect(markup.match(/relief-character-field-1702mx/g)).toHaveLength(9);
+    expect(markup.match(/relief-date-field-1702mx/g)).toHaveLength(6);
+    expect(markup.match(/data-guide-cells="10"/g)).toHaveLength(10);
+    expect(markup.match(/data-guide-cells="9"/g)).toHaveLength(5);
+    expect(markup.match(/data-unavailable-field="true"/g)).toHaveLength(2);
+    expect(markup).toContain('data-rate-format="00.0%"');
+    expect(markup).toContain('data-applicable-character-cells="3"');
+    expect(markup).toContain('data-static-cells="2"');
+    expect(markup).toContain('data-applicable-cells="8"');
+  });
+
   it("prints all fixed official capacities without TypeScript calculation", () => {
     const fixture = structuredClone(capacityFixture) as RenderEnvelope;
     const markup = renderToStaticMarkup(

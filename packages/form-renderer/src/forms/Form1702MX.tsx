@@ -411,10 +411,124 @@ function ScheduleOne1702MX({ envelope }: { envelope: RenderEnvelope }) {
     <section className="schedule-one-1702mx schedule-block-1702mx">
       <ScheduleTitle1702MX>Schedule 1 – Basis of Tax Relief</ScheduleTitle1702MX>
       <div className="relief-grid-1702mx relief-header-1702mx"><span>Particulars</span><span>A. Exempt</span><span>B. Special</span><span>C. Special Tax Relief<br />(Under Regular/Normal Rate)</span></div>
-      {rows.map(([number, label]) => (
-        <div key={number} className="relief-grid-1702mx"><span>{number} {label}</span><span /><span>{number === "4" ? formatPercent(amount(envelope, "relief_special_tax_rate")) : ""}</span><span /></div>
-      ))}
+      {rows.map(([number, label]) => {
+        const rowNumber = Number(number);
+        return (
+          <div
+            key={number}
+            className={`relief-grid-1702mx relief-row-1702mx relief-row-${number}-1702mx`}
+            data-relief-row={number}
+          >
+            <span>{number} {label}</span>
+            {rowNumber <= 3 ? (
+              <>
+                <ReliefCharacterField1702MX column="exempt" cells={10} />
+                <ReliefCharacterField1702MX column="special" cells={10} />
+                <ReliefCharacterField1702MX column="regular-relief" cells={9} />
+              </>
+            ) : rowNumber === 4 ? (
+              <>
+                <ReliefUnavailableField1702MX column="exempt" />
+                <ReliefRateField1702MX value={amount(envelope, "relief_special_tax_rate")} />
+                <ReliefUnavailableField1702MX column="regular-relief" />
+              </>
+            ) : (
+              <>
+                <ReliefDateField1702MX column="exempt" cells={10} unavailable={[0, 9]} />
+                <ReliefDateField1702MX column="special" cells={10} unavailable={[0, 9]} />
+                <ReliefDateField1702MX column="regular-relief" cells={9} unavailable={[0]} />
+              </>
+            )}
+          </div>
+        );
+      })}
     </section>
+  );
+}
+
+type ReliefColumn1702MX = "exempt" | "special" | "regular-relief";
+
+function ReliefCharacterField1702MX({ column, cells }: { column: ReliefColumn1702MX; cells: number }) {
+  return (
+    <span
+      className="relief-field-1702mx relief-character-field-1702mx"
+      data-relief-column={column}
+      data-guide-cells={cells}
+    >
+      {Array.from({ length: cells }, (_, index) => <i key={index} aria-hidden="true" />)}
+    </span>
+  );
+}
+
+function ReliefUnavailableField1702MX({ column }: { column: ReliefColumn1702MX }) {
+  return (
+    <span
+      className="relief-field-1702mx relief-unavailable-field-1702mx"
+      data-relief-column={column}
+      data-unavailable-field="true"
+    />
+  );
+}
+
+function ReliefDateField1702MX({
+  column,
+  cells,
+  unavailable
+}: {
+  column: ReliefColumn1702MX;
+  cells: number;
+  unavailable: readonly number[];
+}) {
+  const unavailableCells = new Set(unavailable);
+  return (
+    <span
+      className="relief-field-1702mx relief-date-field-1702mx"
+      data-relief-column={column}
+      data-guide-cells={cells}
+      data-applicable-cells={cells - unavailable.length}
+      data-unavailable-cells={unavailable.length}
+    >
+      {Array.from({ length: cells }, (_, index) => (
+        <i
+          key={index}
+          className={unavailableCells.has(index) ? "relief-cell-unavailable-1702mx" : undefined}
+          aria-hidden="true"
+        />
+      ))}
+    </span>
+  );
+}
+
+function ReliefRateField1702MX({ value }: { value: number | null }) {
+  const rate = value === null ? "" : value.toFixed(1);
+  const [whole = "", fraction = ""] = rate.split(".");
+  const wholeDigits = whole.slice(-2).padStart(2, " ");
+  const values = [...wholeDigits, ".", fraction.slice(0, 1), "%"];
+  return (
+    <span
+      className="relief-field-1702mx relief-rate-field-1702mx"
+      data-relief-column="special"
+      data-field-cells="10"
+      data-applicable-character-cells="3"
+      data-unavailable-cells="5"
+      data-static-cells="2"
+      data-rate-format="00.0%"
+    >
+      <i className="relief-cell-unavailable-1702mx relief-rate-prefix-1702mx" aria-hidden="true" />
+      {values.map((cellValue, index) => (
+        <i
+          key={index}
+          className={index === 2
+              ? "relief-rate-decimal-1702mx"
+              : index === 4
+                ? "relief-rate-percent-1702mx"
+                : undefined}
+          aria-hidden={cellValue === "." || cellValue === "%" ? undefined : "true"}
+        >
+          {cellValue}
+        </i>
+      ))}
+    </span>
   );
 }
 
