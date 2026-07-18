@@ -425,6 +425,12 @@
 .schedule-two-1702mx .item-17-1702mx { flex: 0 0 18.5pt; }
 .schedule-two-1702mx .item-18-1702mx { flex: 0 0 12.5pt; }
 .schedule-two-1702mx .item-19-1702mx { flex: 1 1 34pt; }
+.schedule-two-1702mx .regime-row-1702mx:not(.item-14-1702mx) .amount-cell-1702mx::after,
+.schedule-three-1702mx .amount-cell-1702mx::after,
+.schedule-four-1702mx .amount-cell-1702mx::after,
+.schedule-six-1702mx .amount-cell-1702mx::after {
+  display: none;
+}
 .schedule-three-1702mx { height: 184.5pt; margin-top: 4pt; }
 .schedule-three-1702mx .regime-row-1702mx > span:first-child { line-height: .8; }
 .schedule-three-1702mx .item-32-1702mx,
