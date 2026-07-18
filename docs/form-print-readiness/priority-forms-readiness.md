@@ -1,6 +1,6 @@
 # Priority HTML Form Readiness
 
-Last verified: **July 16, 2026**.
+Last verified: **July 18, 2026**.
 
 The machine-readable authority is
 `packages/form-specs/form-migration-status.json`, cross-checked against
@@ -30,8 +30,19 @@ official calibration references. Every form is still `ScaffoldOnly`, every
 
 The current complete-page comparisons are all above the strict 1% release
 threshold. Structural line-only diagnostics are not a substitute for that
-gate. In particular, `1702RT:2018C` currently differs by approximately 13.30%,
-10.68%, 14.01%, and 21.94% across its four physical pages.
+gate. The current honest raw 2551Q results are approximately 7.20% and 5.32%;
+its page-indexed static-copy checks pass and its non-promoting two-pixel edge
+F1 scores are approximately 0.965 and 0.990. `0619E:2018` and `0619F:2018`
+remain blocked at approximately 9.37% and 10.35%, respectively. These values
+must not be replaced by the much smaller structure-only percentages.
+
+A July 18 cross-rasterizer diagnostic also rendered the first official 2551Q
+page itself through Poppler and through Chromium from Poppler's vector SVG;
+those two official-source rasters differed by approximately 3.61% under the
+same pixel comparison. That diagnostic is not promotion evidence and does not
+relax the 1% gate. It records why font/rasterizer work must be evaluated with
+the raw result, exact static copy, critical geometry, and edge evidence shown
+separately rather than reporting one masked percentage as overall parity.
 
 ## Status meanings
 
