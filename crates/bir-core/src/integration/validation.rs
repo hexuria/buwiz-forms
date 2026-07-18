@@ -1285,7 +1285,13 @@ pub(crate) fn registered_tax_types_allow_form(version: &TaxProfileVersion, code:
         return tax_types.contains(&RegisteredTaxType::RegistrationFee);
     }
 
-    true
+    // Event-driven and specialized forms that do not map to one of the
+    // registered-tax-type categories above require reviewed exact COR
+    // evidence or an explicit manual include. A coarse Income Tax,
+    // Percentage Tax, or Registration Fee fact must never invent capital
+    // gains, estate, donor, documentary-stamp, registration-update, or other
+    // transaction-specific obligations.
+    false
 }
 
 fn is_income_tax_form(code: &str) -> bool {
@@ -1860,6 +1866,51 @@ mod tests {
     }
 
     #[test]
+    fn coarse_tax_types_do_not_invent_event_or_specialized_forms() {
+        use crate::profile::RegisteredTaxType;
+
+        let mut profile =
+            profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, false);
+        configure_confirmed_cor_evidence(
+            &mut profile,
+            false,
+            vec![
+                RegisteredTaxType::IncomeTax,
+                RegisteredTaxType::PercentageTax,
+                RegisteredTaxType::RegistrationFee,
+            ],
+            &[],
+            None,
+        );
+        profile.profile_versions[0].cor.registration_date = NaiveDate::from_ymd_opt(2026, 7, 18);
+
+        let inferred = form_suggestions_for_profile_year(&profile, 2026)
+            .into_iter()
+            .filter(|suggestion| {
+                suggestion.active && suggestion.source == FormSuggestionSource::InferredTaxType
+            })
+            .map(|suggestion| suggestion.form_code)
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(
+            inferred,
+            ["0605", "1701", "1701Q", "2551Q"]
+                .into_iter()
+                .map(str::to_string)
+                .collect()
+        );
+
+        for code in [
+            "1706", "1707A", "1800", "1801", "1905", "2000", "2552", "2553",
+        ] {
+            assert!(
+                !inferred.contains(code),
+                "{code} requires reviewed exact COR evidence or a manual include"
+            );
+        }
+    }
+
+    #[test]
     fn form_applicability_requires_a_stored_forms_set() {
         let profile = profile_for_dashboard(crate::profile::TaxClassification::SelfEmployed, false);
 
@@ -2344,10 +2395,7 @@ mod tests {
             "1702RT".to_string(),
         ];
         let groups = conflicting_annual_itr_code_groups(&codes);
-        assert_eq!(
-            groups,
-            vec![vec!["1701".to_string(), "1701A".to_string()]]
-        );
+        assert_eq!(groups, vec![vec!["1701".to_string(), "1701A".to_string()]]);
 
         // One member per group is fine.
         let clean = vec!["1701".to_string(), "1702RT".to_string()];
