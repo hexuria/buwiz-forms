@@ -1033,8 +1033,12 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   font-size: 8pt;
 }
 .page-two-form-title > strong {
+  display: block;
   font-size: 18pt;
-  line-height: 1;
+  /* Arimo's 18pt glyph box is 26 CSS px in the pinned Chromium build. Give
+   * the live title a matching line box so the semantic overflow preflight
+   * does not mistake font ascenders/descenders for clipped content. */
+  line-height: 1.1;
   letter-spacing: .6pt;
 }
 .page-two-barcode {
