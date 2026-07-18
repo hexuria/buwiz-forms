@@ -616,9 +616,11 @@ impl ProfileManagerView {
                         cx.theme().success.opacity(0.15),
                         crate::theme::success_on_tint(cx.theme()),
                     ),
-                    bir_core::profile::TaxProfileVersionStatus::Archived => {
-                        ("Archived", cx.theme().secondary, cx.theme().muted_foreground)
-                    }
+                    bir_core::profile::TaxProfileVersionStatus::Archived => (
+                        "Archived",
+                        cx.theme().secondary,
+                        cx.theme().muted_foreground,
+                    ),
                 };
 
                 let action_label = if matches!(
@@ -915,9 +917,11 @@ impl ProfileManagerView {
                 cx.theme().success.opacity(0.15),
                 crate::theme::success_on_tint(cx.theme()),
             ),
-            bir_core::profile::TaxProfileVersionStatus::Archived => {
-                ("Archived", cx.theme().secondary, cx.theme().muted_foreground)
-            }
+            bir_core::profile::TaxProfileVersionStatus::Archived => (
+                "Archived",
+                cx.theme().secondary,
+                cx.theme().muted_foreground,
+            ),
         };
 
         let version_id_for_confirm = version.id.clone();
@@ -4148,7 +4152,12 @@ impl ProfileManagerView {
                 .forms_editor_registry_form_select
                 .read(cx)
                 .selected_value(cx);
-            let raw = selected.split(" - ").next().unwrap_or("").trim().to_string();
+            let raw = selected
+                .split(" - ")
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string();
             if raw.is_empty() {
                 return;
             }
