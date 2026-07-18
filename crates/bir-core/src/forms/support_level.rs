@@ -232,6 +232,7 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         revision: "2018",
         form_id: "1701Qv2018",
         capabilities: FormCapabilities {
+            xml_round_trip: true,
             formula_evidence: true,
             render_contract: true,
             html_component: true,

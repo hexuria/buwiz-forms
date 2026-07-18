@@ -1,9 +1,10 @@
 //! BIR Form 1701Q, January 2018 (ENCS).
 //!
-//! This semantic draft is backed by the locked two-page official PDF. The
-//! source pack has no exact-revision saved XML, so local draft persistence and
-//! preview data are supported while XML export and electronic submission stay
-//! fail-closed.
+//! This semantic draft is backed by the locked two-page official PDF and the
+//! hash-locked `BIR-Form1701Qv2018.hta` source embedded in eBIRForms 7.9.5.0.
+//! The HTA proves its editable-save field contract. Electronic submission
+//! remains fail-closed because its external encryption and FTP executables are
+//! absent from the reviewed package.
 
 use std::collections::BTreeMap;
 
@@ -19,7 +20,42 @@ pub const FORM_REVISION: &str = "2018";
 pub const FORM_TYPE_ID: &str = "1701Qv2018";
 pub const OFFICIAL_FORM_SHA256: &str =
     "c731d3f12556e6f19ab81f6113ca7c4a23f7ed099675c03451ac0074d96b85ed";
-pub const XML_ROUND_TRIP_SUPPORTED: bool = false;
+pub const OFFICIAL_PACKAGE_SHA256: &str =
+    "3d087545564531de1fbe8fb28f086ce6398e18608c54a0ea33353042665917eb";
+pub const OFFICIAL_PACKAGE_FILE_VERSION: &str = "7.9.5.0";
+pub const OFFICIAL_PACKAGE_PRODUCT_VERSION: &str = "7.9.5.0";
+pub const OFFICIAL_PACKAGE_RESOURCE_TYPE: u32 = 23;
+pub const OFFICIAL_PACKAGE_MANIFEST_RESOURCE_ID: u32 = 129;
+pub const OFFICIAL_PACKAGE_MANIFEST_FILE_OFFSET: usize = 369_216;
+pub const OFFICIAL_PACKAGE_MANIFEST_SIZE: usize = 26_828;
+pub const OFFICIAL_PACKAGE_MANIFEST_SHA256: &str =
+    "c8811837405fd76d8924a1c04a6f283a9ed448e3792753da21aaf6ceea191249";
+pub const OFFICIAL_HTA_MANIFEST_INDEX: u32 = 41;
+pub const OFFICIAL_HTA_RESOURCE_ID: u32 = 170;
+pub const OFFICIAL_HTA_RESOURCE_FILE_OFFSET: usize = 12_963_640;
+pub const OFFICIAL_HTA_RESOURCE_DECODED_SIZE: usize = 377_887;
+pub const OFFICIAL_HTA_RESOURCE_DECODED_SHA256: &str =
+    "42f25e268aefe881a2e1fa1d73ac4c47ef17d3ad236b3cbfb7b62af22949592d";
+pub const OFFICIAL_EBIRTOOLS_RESOURCE_ID: u32 = 553;
+pub const OFFICIAL_EBIRTOOLS_RESOURCE_FILE_OFFSET: usize = 54_862_324;
+pub const OFFICIAL_EBIRTOOLS_RESOURCE_DECODED_SIZE: usize = 6_451;
+pub const OFFICIAL_EBIRTOOLS_RESOURCE_DECODED_SHA256: &str =
+    "aaf5dbe9593ca81f808540e537353f297f9bd8638e488ea5161673e3985a91bc";
+pub const OFFICIAL_ENVIRONMENT_RESOURCE_DECODED_SHA256: &str =
+    "01de5f90ad3c5a65af5c1ccdb61a8968d3c61e5d542eb160b6e0eb3432a3be4e";
+pub const OFFICIAL_STRING_UTIL_RESOURCE_DECODED_SHA256: &str =
+    "8d3f3527e044a5325b1f9019d234717d60c5bb1f72692ea302eb4f9e9cb43d6f";
+pub const EXACT_EDITABLE_XML_FIELD_COUNT: usize = 172;
+pub const EXACT_OUTBOUND_XML_FIELD_COUNT: usize = 173;
+pub const EXACT_RUNTIME_SERIALIZABLE_ELEMENT_COUNT: usize = 173;
+/// SHA-256 of the newline-terminated runtime element IDs in DOM order, before
+/// the editable serializer combines its two address controls into one field.
+pub const EXACT_RUNTIME_ELEMENT_IDS_SHA256: &str =
+    "f6ad924c5263f7c543b5ebadc939258bf0e3182f6ff07cd92a0e6fa1195f453e";
+/// SHA-256 of the newline-terminated editable-save field IDs in emitted order.
+pub const EXACT_EDITABLE_FIELD_IDS_SHA256: &str =
+    "a135fd015a3e3c349f4e6baffce52317734cb478e8a3a1d62072901c050acb3d";
+pub const XML_ROUND_TRIP_SUPPORTED: bool = true;
 pub const QUEUE_SUBMISSION_SUPPORTED: bool = false;
 
 /// Item 7 on page 1.
@@ -353,8 +389,7 @@ impl Form1701QAmounts {
     }
 }
 
-/// One row in Part IV. The exact saved-file transport mapping is intentionally
-/// unknown, but these official PDF fields persist in the app-owned draft.
+/// One row in Part IV and its exact editable-save transport fields.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Form1701QPaymentRow {
     pub drawee_bank_or_agency: String,
@@ -437,6 +472,10 @@ pub struct Form1701QDraft {
     /// Profile metadata retained for the generic render envelope. The official
     /// January 2018 Form 1701Q does not print a contact-number field.
     pub contact_number: String,
+    /// Submission/profile metadata serialized by the official HTA but not
+    /// printed in the two-page January 2018 form.
+    #[serde(default)]
+    pub line_of_business: String,
 
     // Items 17-25A.
     #[serde(default)]
@@ -571,6 +610,7 @@ impl Form1701QDraft {
             tax_rate,
             deduction_method,
             contact_number: profile.phone.clone(),
+            line_of_business: profile.line_of_business.clone(),
             has_spouse: false,
             spouse_tin: String::new(),
             spouse_rdo_code: String::new(),
@@ -770,9 +810,9 @@ impl Form1701QDraft {
 
     pub fn evidence_warnings(&self) -> Vec<String> {
         vec![
-            "No exact-revision 1701Qv2018 saved XML is present in the reviewed source pack; XML round-trip and electronic submission are disabled."
+            "The hash-locked eBIRForms 7.9.5.0 HTA proves a 172-field editable-save XML contract; it does not prove accepted outbound transport."
                 .to_string(),
-            "The available BIRForm1701QScript.js targets an older incompatible Items 26-41 layout and is not used for January 2018 formulas or transport mapping."
+            "Queue submission remains disabled because the HTA delegates encryption and FTP upload to companion Encrypt.exe and cFTPSend.exe binaries that are absent from the reviewed package."
                 .to_string(),
             "Only arithmetic and rate tables printed on the locked January 2018 official PDF are computed by this draft."
                 .to_string(),
@@ -783,7 +823,7 @@ impl Form1701QDraft {
         let mut errors = self.validate();
         errors.push((
             "submission".to_string(),
-            "1701Qv2018 is manual/external until an exact-revision XML and submission contract is reviewed"
+            "1701Qv2018 queueing is disabled until the external encryption/upload binaries, accepted endpoint semantics, and credential-bearing outbound payload are reviewed"
                 .to_string(),
         ));
         Err(errors)
@@ -1414,7 +1454,7 @@ impl TypedBirForm for Form1701QDraft {
     }
 
     fn to_bir_xml(&self) -> String {
-        String::new()
+        self.to_bir_xml_payload().unwrap_or_default()
     }
 }
 

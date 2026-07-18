@@ -78,8 +78,9 @@
       "official_source_url": "https://bir-cdn.bir.gov.ph/local/pdf/1701Q%20Jan%202018%20final%20rev2_copy.pdf",
       "source_review": "verified_official_bytes",
       "implementation_blockers": [
-        "missing_saved_xml",
-        "extracted_efps_template_is_not_the_locked_2018_revision"
+        "missing_hash_locked_runtime_produced_editable_and_decrypted_outbound_replay_samples",
+        "missing_reviewed_encrypt_and_ftp_companion_binaries_and_current_endpoint_acceptance_semantics",
+        "credential_and_enrollment_fields_in_outbound_shape_are_not_approved_for_persistence"
       ]
     },
     {

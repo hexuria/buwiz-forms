@@ -22,7 +22,7 @@ official calibration references. Every form is still `ScaffoldOnly`, every
 | `0619E:2018` | Blocked | `experimental` | PDF + plain/encrypted XML | Queue, calibrated parity, native, and packaged-offline evidence |
 | `0619F:2018` | Blocked | `experimental` | PDF + plain/encrypted XML | Queue, calibrated parity, native, and packaged-offline evidence |
 | `0605:1999` | Blocked | `experimental` | PDF + XML | Queue, calibrated parity, native, and packaged-offline evidence; exact revision is 1999 |
-| `1701Q:2018` | Blocked | `experimental` | Locked 2018 PDF; no reviewed saved XML | Exact-revision XML proof, queue, parity, native, and packaged-offline evidence |
+| `1701Q:2018` | Blocked | `experimental` | Locked 2018 PDF + hash-locked 7.9.5.0 HTA editable XML source | Runtime XML replay, reviewed outbound helpers/credential handling, queue, parity, native, and packaged-offline evidence |
 | `2550Q:2024` | Blocked | `experimental` | PDF + guide + XML | Queue, calibrated parity, native, and packaged-offline evidence; official paper is 612 by 1008 points |
 | `1701:2018` | Blocked | `experimental` | Main PDF + conditional attachments + XML | Queue, conditional-page parity, native, and packaged-offline evidence |
 | `1702RT:2018C` | Blocked | `experimental` | Four-page PDF + XML | Queue and full-page parity; native and packaged-offline evidence |

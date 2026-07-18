@@ -134,7 +134,7 @@
       "route": "experimental",
       "capabilities": {
         "typed_model": true,
-        "xml_round_trip": false,
+        "xml_round_trip": true,
         "formula_evidence": true,
         "persistence": true,
         "queue_submission": false,

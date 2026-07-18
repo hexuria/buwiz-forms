@@ -1,34 +1,1315 @@
-//! Fail-closed transport boundary for exact form `1701Qv2018`.
+//! Exact editable-save contract for form `1701Qv2018`.
 //!
-//! The reviewed source pack contains the official January 2018 PDF but no
-//! exact-revision saved XML. The available `BIRForm1701QScript.js` describes an
-//! older Items 26-41 layout and therefore cannot establish this revision's
-//! field names, option indexes, final flag, or round-trip behavior.
+//! The field order and encoding behavior come from resource 170,
+//! `forms\BIR-Form1701Qv2018.hta`, in the hash-locked eBIRForms 7.9.5.0
+//! package. This module deliberately implements `saveXML(false)`, not the
+//! credential-bearing `saveEncryptedProfile`/FTP submission path.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-use super::form_1701q::Form1701QDraft;
+use super::form_1701q::{
+    Form1701QAmounts, Form1701QAtc, Form1701QDeductionMethod, Form1701QDraft, Form1701QFilerType,
+    Form1701QParty, Form1701QPaymentDetails, Form1701QPaymentRow, Form1701QSpouseType,
+    Form1701QTaxRate, USER_ENTERED_AMOUNT_ITEMS,
+};
+use super::{FilingStatus, FormValidator};
 
-pub const XML_UNSUPPORTED_REASON: &str =
-    "1701Qv2018 XML is unavailable: no exact-revision saved XML has been reviewed";
+const EDITABLE_XML_CLOSE: &str = "All Rights Reserved BIR 2012.";
+const XML_FORMAT: &str = "\t\r\n            ";
+const JAVASCRIPT_ESCAPED_FIELDS: [&str; 3] = [
+    "frm1701q:txtTaxpayerName",
+    "frm1701q:txtAddress",
+    "frm1701q:txtLOB",
+];
+const PAIRED_AMOUNT_ITEMS: &[u8] = &[
+    26, 27, 28, 29, 30, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54,
+    55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68,
+];
+const DERIVED_AMOUNT_ITEMS: &[u8] = &[
+    26, 27, 28, 29, 30, 38, 40, 41, 45, 46, 49, 51, 52, 53, 54, 62, 63, 67, 68,
+];
+
+/// The exact 172 fields emitted by `saveXML(false)`, in live `frmMain.elements`
+/// order. The two dynamic RDO selects are included where their host cells occur;
+/// `txtAddress2` is omitted because the HTA appends it to `txtAddress`.
+pub const OFFICIAL_EDITABLE_FIELD_IDS: &[&str] = &[
+    "frm1701q:txtYear",
+    "frm1701q:DateQuarter_1",
+    "frm1701q:DateQuarter_2",
+    "frm1701q:DateQuarter_3",
+    "frm1701q:AmendedRtn_1",
+    "frm1701q:AmendedRtn_2",
+    "frm1701q:txtSheets",
+    "frm1701q:txtTIN1",
+    "frm1701q:txtTIN2",
+    "frm1701q:txtTIN3",
+    "frm1701q:txtBranchCode",
+    "frm1701q:txtRDOCode",
+    "frm1701q:optType_1",
+    "frm1701q:optType_2",
+    "frm1701q:optType_3",
+    "frm1701q:optType_4",
+    "frm1701q:optATC_1",
+    "frm1701q:optATC_2",
+    "frm1701q:optATC_3",
+    "frm1701q:optATC_4",
+    "frm1701q:optATC_5",
+    "frm1701q:optATC_6",
+    "frm1701q:txtTaxpayerName",
+    "frm1701q:txtAddress",
+    "frm1701q:txtZipCode",
+    "frm1701q:txtBirthMonth",
+    "frm1701q:txtBirthDay",
+    "frm1701q:txtBirthYear",
+    "txtEmail",
+    "frm1701q:txtCitizenship",
+    "frm1701q:txtForeignTaxNumber",
+    "frm1701q:optForeignTaxCredits_1",
+    "frm1701q:optForeignTaxCredits_2",
+    "frm1701q:optTaxRate_1",
+    "frm1701q:optMethodOfDeduction:_1",
+    "frm1701q:optMethodOfDeduction:_2",
+    "frm1701q:optTaxRate_2",
+    "frm1701q:txtSpouseTIN1",
+    "frm1701q:txtSpouseTIN2",
+    "frm1701q:txtSpouseTIN3",
+    "frm1701q:txtSpouseBranchCode",
+    "frm1701q:txtSpouseRDOCode",
+    "frm1701q:optSpouseType_1",
+    "frm1701q:optSpouseType_2",
+    "frm1701q:optSpouseType_3",
+    "frm1701q:optSpouseATC_1",
+    "frm1701q:optSpouseATC_2",
+    "frm1701q:optSpouseATC_3",
+    "frm1701q:optSpouseATC_4",
+    "frm1701q:optSpouseATC_5",
+    "frm1701q:optSpouseATC_6",
+    "frm1701q:optSpouseATC_7",
+    "frm1701q:txtSpouseName",
+    "frm1701q:txtSpouseCitizenship",
+    "frm1701q:txtSpouseForeignTaxNum",
+    "frm1701q:optSpouseForeignTaxCred_1",
+    "frm1701q:optSpouseForeignTaxCred_2",
+    "frm1701q:optSpouseTaxRate_1",
+    "frm1701q:optSpouseMethod:_1",
+    "frm1701q:optSpouseMethod:_2",
+    "frm1701q:optSpouseTaxRate_2",
+    "frm1701q:txt26A",
+    "frm1701q:txt26B",
+    "frm1701q:txt27A",
+    "frm1701q:txt27B",
+    "frm1701q:txt28A",
+    "frm1701q:txt28B",
+    "frm1701q:txt29A",
+    "frm1701q:txt29B",
+    "frm1701q:txt30A",
+    "frm1701q:txt30B",
+    "frm1701q:txt31",
+    "frm1701q:txtAgency32",
+    "frm1701q:txtNumber32",
+    "frm1701q:txtDate32",
+    "frm1701q:txtAmount32",
+    "frm1701q:txtAgency33",
+    "frm1701q:txtNumber33",
+    "frm1701q:txtDate33",
+    "frm1701q:txtAmount33",
+    "frm1701q:txtNumber34",
+    "frm1701q:txtDate34",
+    "frm1701q:txtAmount34",
+    "frm1701q:txtParticular35",
+    "frm1701q:txtAgency35",
+    "frm1701q:txtNumber35",
+    "frm1701q:txtDate35",
+    "frm1701q:txtAmount35",
+    "frm1701q:txtPg2TIN1",
+    "frm1701q:txtPg2TIN2",
+    "frm1701q:txtPg2TIN3",
+    "frm1701q:txtPg2BranchCode",
+    "frm1701q:txtPg2TaxpayerName",
+    "frm1701q:txt36A",
+    "frm1701q:txt36B",
+    "frm1701q:txt37A",
+    "frm1701q:txt37B",
+    "frm1701q:txt38A",
+    "frm1701q:txt38B",
+    "frm1701q:txt39A",
+    "frm1701q:txt39B",
+    "frm1701q:txt40A",
+    "frm1701q:txt40B",
+    "frm1701q:txt41A",
+    "frm1701q:txt41B",
+    "frm1701q:txt42A",
+    "frm1701q:txt42B",
+    "frm1701q:txt43Desc",
+    "frm1701q:txt43A",
+    "frm1701q:txt43B",
+    "frm1701q:txt44A",
+    "frm1701q:txt44B",
+    "frm1701q:txt45A",
+    "frm1701q:txt45B",
+    "frm1701q:txt46A",
+    "frm1701q:txt46B",
+    "frm1701q:txt47A",
+    "frm1701q:txt47B",
+    "frm1701q:txt48Desc",
+    "frm1701q:txt48A",
+    "frm1701q:txt48B",
+    "frm1701q:txt49A",
+    "frm1701q:txt49B",
+    "frm1701q:txt50A",
+    "frm1701q:txt50B",
+    "frm1701q:txt51A",
+    "frm1701q:txt51B",
+    "frm1701q:txt52A",
+    "frm1701q:txt52B",
+    "frm1701q:txt53A",
+    "frm1701q:txt53B",
+    "frm1701q:txt54A",
+    "frm1701q:txt54B",
+    "frm1701q:txt55A",
+    "frm1701q:txt55B",
+    "frm1701q:txt56A",
+    "frm1701q:txt56B",
+    "frm1701q:txt57A",
+    "frm1701q:txt57B",
+    "frm1701q:txt58A",
+    "frm1701q:txt58B",
+    "frm1701q:txt59A",
+    "frm1701q:txt59B",
+    "frm1701q:txt60A",
+    "frm1701q:txt60B",
+    "frm1701q:txt61Desc",
+    "frm1701q:txt61A",
+    "frm1701q:txt61B",
+    "frm1701q:txt62A",
+    "frm1701q:txt62B",
+    "frm1701q:txt63A",
+    "frm1701q:txt63B",
+    "frm1701q:txt64A",
+    "frm1701q:txt64B",
+    "frm1701q:txt65A",
+    "frm1701q:txt65B",
+    "frm1701q:txt66A",
+    "frm1701q:txt66B",
+    "frm1701q:txt67A",
+    "frm1701q:txt67B",
+    "frm1701q:txt68A",
+    "frm1701q:txt68B",
+    "frm1701q:txtCurrentPage",
+    "frm1701q:txtMaxPage",
+    "txtFinalFlag",
+    "txtEnroll",
+    "ebirOnlineConfirmUsername",
+    "ebirOnlineUsername",
+    "ebirOnlineSecret",
+    "frm1701q:txtLOB",
+    "frm1701q:txtTelno",
+    "driveSelectTPExport",
+];
 
 impl Form1701QDraft {
-    /// Returns no transport fields. Callers that need export must use the
-    /// checked API and handle its explicit unsupported result.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
-        BTreeMap::new()
+        let mut fields = BTreeMap::new();
+        let (tin1, tin2, tin3, branch) = split_tin(&self.tin);
+        let (spouse_tin1, spouse_tin2, spouse_tin3, spouse_branch) = split_tin(&self.spouse_tin);
+        let (birth_month, birth_day, birth_year) = split_date(&self.date_of_birth);
+
+        insert(
+            &mut fields,
+            "frm1701q:txtYear",
+            self.taxable_year.to_string(),
+        );
+        for quarter in 1..=3 {
+            insert_bool(
+                &mut fields,
+                &format!("frm1701q:DateQuarter_{quarter}"),
+                self.quarter == quarter,
+            );
+        }
+        insert_bool(&mut fields, "frm1701q:AmendedRtn_1", self.is_amended);
+        insert_bool(&mut fields, "frm1701q:AmendedRtn_2", !self.is_amended);
+        insert(
+            &mut fields,
+            "frm1701q:txtSheets",
+            self.number_of_sheets.to_string(),
+        );
+        insert(&mut fields, "frm1701q:txtTIN1", tin1.clone());
+        insert(&mut fields, "frm1701q:txtTIN2", tin2.clone());
+        insert(&mut fields, "frm1701q:txtTIN3", tin3.clone());
+        insert(&mut fields, "frm1701q:txtBranchCode", branch.clone());
+        insert(&mut fields, "frm1701q:txtRDOCode", self.rdo_code.clone());
+
+        insert_choice(
+            &mut fields,
+            &[
+                ("frm1701q:optType_1", Form1701QFilerType::SingleProprietor),
+                ("frm1701q:optType_2", Form1701QFilerType::Professional),
+                ("frm1701q:optType_3", Form1701QFilerType::Estate),
+                ("frm1701q:optType_4", Form1701QFilerType::Trust),
+            ],
+            self.filer_type,
+        );
+        insert_choice(
+            &mut fields,
+            &[
+                ("frm1701q:optATC_1", Form1701QAtc::Ii012),
+                ("frm1701q:optATC_2", Form1701QAtc::Ii014),
+                ("frm1701q:optATC_3", Form1701QAtc::Ii013),
+                ("frm1701q:optATC_4", Form1701QAtc::Ii015),
+                ("frm1701q:optATC_5", Form1701QAtc::Ii017),
+                ("frm1701q:optATC_6", Form1701QAtc::Ii016),
+            ],
+            self.atc,
+        );
+        insert(
+            &mut fields,
+            "frm1701q:txtTaxpayerName",
+            self.taxpayer_name.clone(),
+        );
+        insert(
+            &mut fields,
+            "frm1701q:txtAddress",
+            format!("{}{}", self.registered_address, self.registered_address_2),
+        );
+        insert(&mut fields, "frm1701q:txtZipCode", self.zip_code.clone());
+        insert(&mut fields, "frm1701q:txtBirthMonth", birth_month);
+        insert(&mut fields, "frm1701q:txtBirthDay", birth_day);
+        insert(&mut fields, "frm1701q:txtBirthYear", birth_year);
+        insert(&mut fields, "txtEmail", self.email.clone());
+        insert(
+            &mut fields,
+            "frm1701q:txtCitizenship",
+            self.citizenship.clone(),
+        );
+        insert(
+            &mut fields,
+            "frm1701q:txtForeignTaxNumber",
+            self.foreign_tax_number.clone(),
+        );
+        insert_optional_bool_pair(
+            &mut fields,
+            "frm1701q:optForeignTaxCredits_1",
+            "frm1701q:optForeignTaxCredits_2",
+            self.claims_foreign_tax_credits,
+        );
+        insert_bool(
+            &mut fields,
+            "frm1701q:optTaxRate_1",
+            self.tax_rate == Some(Form1701QTaxRate::Graduated),
+        );
+        insert_bool(
+            &mut fields,
+            "frm1701q:optMethodOfDeduction:_1",
+            self.deduction_method == Some(Form1701QDeductionMethod::Itemized),
+        );
+        insert_bool(
+            &mut fields,
+            "frm1701q:optMethodOfDeduction:_2",
+            self.deduction_method == Some(Form1701QDeductionMethod::Osd),
+        );
+        insert_bool(
+            &mut fields,
+            "frm1701q:optTaxRate_2",
+            self.tax_rate == Some(Form1701QTaxRate::EightPercent),
+        );
+
+        insert(&mut fields, "frm1701q:txtSpouseTIN1", spouse_tin1);
+        insert(&mut fields, "frm1701q:txtSpouseTIN2", spouse_tin2);
+        insert(&mut fields, "frm1701q:txtSpouseTIN3", spouse_tin3);
+        insert(&mut fields, "frm1701q:txtSpouseBranchCode", spouse_branch);
+        insert(
+            &mut fields,
+            "frm1701q:txtSpouseRDOCode",
+            self.spouse_rdo_code.clone(),
+        );
+        insert_choice(
+            &mut fields,
+            &[
+                (
+                    "frm1701q:optSpouseType_1",
+                    Form1701QSpouseType::SingleProprietor,
+                ),
+                (
+                    "frm1701q:optSpouseType_2",
+                    Form1701QSpouseType::Professional,
+                ),
+                (
+                    "frm1701q:optSpouseType_3",
+                    Form1701QSpouseType::CompensationEarner,
+                ),
+            ],
+            self.has_spouse.then_some(self.spouse_type).flatten(),
+        );
+        insert_choice(
+            &mut fields,
+            &[
+                ("frm1701q:optSpouseATC_1", Form1701QAtc::Ii012),
+                ("frm1701q:optSpouseATC_2", Form1701QAtc::Ii014),
+                ("frm1701q:optSpouseATC_3", Form1701QAtc::Ii013),
+                ("frm1701q:optSpouseATC_4", Form1701QAtc::Ii011),
+                ("frm1701q:optSpouseATC_5", Form1701QAtc::Ii015),
+                ("frm1701q:optSpouseATC_6", Form1701QAtc::Ii017),
+                ("frm1701q:optSpouseATC_7", Form1701QAtc::Ii016),
+            ],
+            self.has_spouse.then_some(self.spouse_atc).flatten(),
+        );
+        insert(
+            &mut fields,
+            "frm1701q:txtSpouseName",
+            self.spouse_name.clone(),
+        );
+        insert(
+            &mut fields,
+            "frm1701q:txtSpouseCitizenship",
+            self.spouse_citizenship.clone(),
+        );
+        insert(
+            &mut fields,
+            "frm1701q:txtSpouseForeignTaxNum",
+            self.spouse_foreign_tax_number.clone(),
+        );
+        insert_optional_bool_pair(
+            &mut fields,
+            "frm1701q:optSpouseForeignTaxCred_1",
+            "frm1701q:optSpouseForeignTaxCred_2",
+            self.has_spouse
+                .then_some(self.spouse_claims_foreign_tax_credits)
+                .flatten(),
+        );
+        insert_bool(
+            &mut fields,
+            "frm1701q:optSpouseTaxRate_1",
+            self.has_spouse && self.spouse_tax_rate == Some(Form1701QTaxRate::Graduated),
+        );
+        insert_bool(
+            &mut fields,
+            "frm1701q:optSpouseMethod:_1",
+            self.has_spouse
+                && self.spouse_deduction_method == Some(Form1701QDeductionMethod::Itemized),
+        );
+        insert_bool(
+            &mut fields,
+            "frm1701q:optSpouseMethod:_2",
+            self.has_spouse && self.spouse_deduction_method == Some(Form1701QDeductionMethod::Osd),
+        );
+        insert_bool(
+            &mut fields,
+            "frm1701q:optSpouseTaxRate_2",
+            self.has_spouse && self.spouse_tax_rate == Some(Form1701QTaxRate::EightPercent),
+        );
+
+        for item in 26..=30 {
+            insert_amount_pair(&mut fields, self, item);
+        }
+        insert_money(
+            &mut fields,
+            "frm1701q:txt31",
+            self.item_31_aggregate_amount_payable.unwrap_or(0.0),
+        );
+        insert_payment_row(
+            &mut fields,
+            32,
+            &self.payment_details.item_32_cash_or_bank_debit_memo,
+            true,
+        );
+        insert_payment_row(&mut fields, 33, &self.payment_details.item_33_check, true);
+        insert_payment_row(
+            &mut fields,
+            34,
+            &self.payment_details.item_34_tax_debit_memo,
+            false,
+        );
+        insert(
+            &mut fields,
+            "frm1701q:txtParticular35",
+            self.payment_details.item_35_others_description.clone(),
+        );
+        insert_payment_row(&mut fields, 35, &self.payment_details.item_35_others, true);
+
+        insert(&mut fields, "frm1701q:txtPg2TIN1", tin1);
+        insert(&mut fields, "frm1701q:txtPg2TIN2", tin2);
+        insert(&mut fields, "frm1701q:txtPg2TIN3", tin3);
+        insert(&mut fields, "frm1701q:txtPg2BranchCode", branch);
+        insert(
+            &mut fields,
+            "frm1701q:txtPg2TaxpayerName",
+            self.taxpayer_last_name.clone(),
+        );
+
+        for item in 36..=68 {
+            if item == 43 {
+                insert(
+                    &mut fields,
+                    "frm1701q:txt43Desc",
+                    self.item_43_non_operating_income_description.clone(),
+                );
+            }
+            if item == 48 {
+                insert(
+                    &mut fields,
+                    "frm1701q:txt48Desc",
+                    self.item_48_non_operating_income_description.clone(),
+                );
+            }
+            if item == 61 {
+                insert(
+                    &mut fields,
+                    "frm1701q:txt61Desc",
+                    self.item_61_other_tax_credit_description.clone(),
+                );
+            }
+            insert_amount_pair(&mut fields, self, item);
+        }
+
+        insert(&mut fields, "frm1701q:txtCurrentPage", "1");
+        insert(&mut fields, "frm1701q:txtMaxPage", "2");
+        insert(&mut fields, "txtFinalFlag", "0");
+        insert(&mut fields, "txtEnroll", "N");
+        insert(&mut fields, "ebirOnlineConfirmUsername", "");
+        insert(&mut fields, "ebirOnlineUsername", "");
+        insert(&mut fields, "ebirOnlineSecret", "");
+        insert(
+            &mut fields,
+            "frm1701q:txtLOB",
+            self.line_of_business.clone(),
+        );
+        insert(
+            &mut fields,
+            "frm1701q:txtTelno",
+            self.contact_number.clone(),
+        );
+        insert(&mut fields, "driveSelectTPExport", "");
+
+        debug_assert_eq!(fields.len(), OFFICIAL_EDITABLE_FIELD_IDS.len());
+        fields
     }
 
-    pub fn to_bir_field_map_checked(&self) -> Result<BTreeMap<String, String>, String> {
-        Err(XML_UNSUPPORTED_REASON.to_string())
+    pub fn to_bir_field_map_checked(
+        &self,
+    ) -> Result<BTreeMap<String, String>, Vec<(String, String)>> {
+        let fields = self.to_bir_field_map();
+        let mut errors = self.validate();
+        for (field_id, value) in &fields {
+            if !JAVASCRIPT_ESCAPED_FIELDS.contains(&field_id.as_str())
+                && (value.contains("<div") || value.contains("</div>"))
+            {
+                errors.push((
+                    field_id.clone(),
+                    "The official editable serializer does not escape nested div markup in this field"
+                        .to_string(),
+                ));
+            }
+            if value.chars().any(|character| character == '\0') {
+                errors.push((
+                    field_id.clone(),
+                    "XML fields cannot contain NUL".to_string(),
+                ));
+            }
+        }
+        if fields.len() != super::form_1701q::EXACT_EDITABLE_XML_FIELD_COUNT {
+            errors.push((
+                "xml_contract".to_string(),
+                format!(
+                    "Expected {} exact editable fields, generated {}",
+                    super::form_1701q::EXACT_EDITABLE_XML_FIELD_COUNT,
+                    fields.len()
+                ),
+            ));
+        }
+        if errors.is_empty() {
+            Ok(fields)
+        } else {
+            Err(errors)
+        }
     }
 
-    pub fn to_bir_xml_payload(&self) -> Result<String, String> {
-        Err(XML_UNSUPPORTED_REASON.to_string())
+    /// Generate the exact editable (non-final, non-submission) HTA shape.
+    pub fn to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
+        self.to_bir_field_map_checked()
+            .map(|fields| serialize_editable_xml(&fields))
     }
 
-    pub fn from_bir_xml_payload(_xml: &str) -> Result<Self, String> {
-        Err(XML_UNSUPPORTED_REASON.to_string())
+    pub fn from_bir_xml_payload(xml: &str) -> Result<Self, Vec<(String, String)>> {
+        let mut errors = Vec::new();
+        if !xml.starts_with("<?xml version='1.0'?>") {
+            errors.push((
+                "xml_payload".to_string(),
+                "1701Q editable XML must start with the official declaration".to_string(),
+            ));
+        }
+        if !xml.trim_end().ends_with(EDITABLE_XML_CLOSE) {
+            errors.push((
+                "xml_payload".to_string(),
+                "Only the editable saveXML(false) envelope is supported; final/outbound copies remain disabled"
+                    .to_string(),
+            ));
+        }
+
+        let mut fields = crate::bir_xml::parse_bir_xml_encoded_checked(xml).map_err(|error| {
+            vec![(
+                "xml_payload".to_string(),
+                format!("Invalid 1701Q pseudo-XML: {error}"),
+            )]
+        })?;
+        for field_id in JAVASCRIPT_ESCAPED_FIELDS {
+            let Some(encoded) = fields.get(field_id).cloned() else {
+                continue;
+            };
+            match crate::bir_xml::decode_bir_value(&encoded) {
+                Some(value) => {
+                    fields.insert(field_id.to_string(), value);
+                }
+                None => errors.push((
+                    field_id.to_string(),
+                    "Invalid legacy JavaScript escape sequence".to_string(),
+                )),
+            }
+        }
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        Self::from_bir_field_map(&fields)
+    }
+
+    pub fn from_bir_field_map(
+        fields: &BTreeMap<String, String>,
+    ) -> Result<Self, Vec<(String, String)>> {
+        let mut errors = validate_exact_keys(fields);
+        validate_editable_metadata(fields, &mut errors);
+
+        let taxable_year = parse_required::<u16>(fields, "frm1701q:txtYear", &mut errors);
+        let quarter = parse_one_of(
+            fields,
+            &[
+                ("frm1701q:DateQuarter_1", 1_u8),
+                ("frm1701q:DateQuarter_2", 2_u8),
+                ("frm1701q:DateQuarter_3", 3_u8),
+            ],
+            true,
+            "quarter",
+            &mut errors,
+        );
+        let is_amended = parse_required_bool_pair(
+            fields,
+            "frm1701q:AmendedRtn_1",
+            "frm1701q:AmendedRtn_2",
+            "is_amended",
+            &mut errors,
+        );
+        let number_of_sheets = parse_required::<u8>(fields, "frm1701q:txtSheets", &mut errors);
+        let filer_type = parse_one_of(
+            fields,
+            &[
+                ("frm1701q:optType_1", Form1701QFilerType::SingleProprietor),
+                ("frm1701q:optType_2", Form1701QFilerType::Professional),
+                ("frm1701q:optType_3", Form1701QFilerType::Estate),
+                ("frm1701q:optType_4", Form1701QFilerType::Trust),
+            ],
+            true,
+            "filer_type",
+            &mut errors,
+        );
+        let atc = parse_one_of(
+            fields,
+            &[
+                ("frm1701q:optATC_1", Form1701QAtc::Ii012),
+                ("frm1701q:optATC_2", Form1701QAtc::Ii014),
+                ("frm1701q:optATC_3", Form1701QAtc::Ii013),
+                ("frm1701q:optATC_4", Form1701QAtc::Ii015),
+                ("frm1701q:optATC_5", Form1701QAtc::Ii017),
+                ("frm1701q:optATC_6", Form1701QAtc::Ii016),
+            ],
+            true,
+            "atc",
+            &mut errors,
+        );
+        let claims_foreign_tax_credits = parse_optional_bool_pair(
+            fields,
+            "frm1701q:optForeignTaxCredits_1",
+            "frm1701q:optForeignTaxCredits_2",
+            "claims_foreign_tax_credits",
+            &mut errors,
+        );
+        let tax_rate = parse_one_of(
+            fields,
+            &[
+                ("frm1701q:optTaxRate_1", Form1701QTaxRate::Graduated),
+                ("frm1701q:optTaxRate_2", Form1701QTaxRate::EightPercent),
+            ],
+            true,
+            "tax_rate",
+            &mut errors,
+        );
+        let deduction_method = parse_one_of(
+            fields,
+            &[
+                (
+                    "frm1701q:optMethodOfDeduction:_1",
+                    Form1701QDeductionMethod::Itemized,
+                ),
+                (
+                    "frm1701q:optMethodOfDeduction:_2",
+                    Form1701QDeductionMethod::Osd,
+                ),
+            ],
+            false,
+            "deduction_method",
+            &mut errors,
+        );
+
+        let spouse_type = parse_one_of(
+            fields,
+            &[
+                (
+                    "frm1701q:optSpouseType_1",
+                    Form1701QSpouseType::SingleProprietor,
+                ),
+                (
+                    "frm1701q:optSpouseType_2",
+                    Form1701QSpouseType::Professional,
+                ),
+                (
+                    "frm1701q:optSpouseType_3",
+                    Form1701QSpouseType::CompensationEarner,
+                ),
+            ],
+            false,
+            "spouse_type",
+            &mut errors,
+        );
+        let spouse_atc = parse_one_of(
+            fields,
+            &[
+                ("frm1701q:optSpouseATC_1", Form1701QAtc::Ii012),
+                ("frm1701q:optSpouseATC_2", Form1701QAtc::Ii014),
+                ("frm1701q:optSpouseATC_3", Form1701QAtc::Ii013),
+                ("frm1701q:optSpouseATC_4", Form1701QAtc::Ii011),
+                ("frm1701q:optSpouseATC_5", Form1701QAtc::Ii015),
+                ("frm1701q:optSpouseATC_6", Form1701QAtc::Ii017),
+                ("frm1701q:optSpouseATC_7", Form1701QAtc::Ii016),
+            ],
+            false,
+            "spouse_atc",
+            &mut errors,
+        );
+        let spouse_claims_foreign_tax_credits = parse_optional_bool_pair(
+            fields,
+            "frm1701q:optSpouseForeignTaxCred_1",
+            "frm1701q:optSpouseForeignTaxCred_2",
+            "spouse_claims_foreign_tax_credits",
+            &mut errors,
+        );
+        let spouse_tax_rate = parse_one_of(
+            fields,
+            &[
+                ("frm1701q:optSpouseTaxRate_1", Form1701QTaxRate::Graduated),
+                (
+                    "frm1701q:optSpouseTaxRate_2",
+                    Form1701QTaxRate::EightPercent,
+                ),
+            ],
+            false,
+            "spouse_tax_rate",
+            &mut errors,
+        );
+        let spouse_deduction_method = parse_one_of(
+            fields,
+            &[
+                (
+                    "frm1701q:optSpouseMethod:_1",
+                    Form1701QDeductionMethod::Itemized,
+                ),
+                ("frm1701q:optSpouseMethod:_2", Form1701QDeductionMethod::Osd),
+            ],
+            false,
+            "spouse_deduction_method",
+            &mut errors,
+        );
+
+        let mut source_amounts = BTreeMap::new();
+        for item in PAIRED_AMOUNT_ITEMS {
+            let taxpayer = parse_money(fields, &format!("frm1701q:txt{item}A"), &mut errors);
+            let spouse = parse_money(fields, &format!("frm1701q:txt{item}B"), &mut errors);
+            source_amounts.insert(*item, (taxpayer, spouse));
+        }
+        let source_item_31 = parse_money(fields, "frm1701q:txt31", &mut errors);
+
+        let spouse_identity_present = [
+            "frm1701q:txtSpouseTIN1",
+            "frm1701q:txtSpouseTIN2",
+            "frm1701q:txtSpouseTIN3",
+            "frm1701q:txtSpouseBranchCode",
+            "frm1701q:txtSpouseName",
+            "frm1701q:txtSpouseCitizenship",
+            "frm1701q:txtSpouseForeignTaxNum",
+        ]
+        .iter()
+        .any(|key| !field(fields, key).trim().is_empty());
+        let spouse_amount_present = source_amounts
+            .values()
+            .any(|(_, spouse)| spouse.is_some_and(|value| value.abs() > 0.000_001));
+        let has_spouse = spouse_identity_present
+            || spouse_amount_present
+            || spouse_type.is_some()
+            || spouse_atc.is_some()
+            || spouse_claims_foreign_tax_credits.is_some()
+            || spouse_tax_rate.is_some()
+            || spouse_deduction_method.is_some();
+
+        verify_repeated_identity(fields, &mut errors);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        let now = chrono::Utc::now().to_rfc3339();
+        let mut draft = Form1701QDraft {
+            id: None,
+            taxable_year: taxable_year.unwrap_or_default(),
+            quarter: quarter.unwrap_or_default(),
+            is_amended: is_amended.unwrap_or_default(),
+            number_of_sheets: number_of_sheets.unwrap_or_default(),
+            tin: joined_tin(fields, ""),
+            rdo_code: field(fields, "frm1701q:txtRDOCode").to_string(),
+            filer_type,
+            atc,
+            taxpayer_name: field(fields, "frm1701q:txtTaxpayerName").to_string(),
+            taxpayer_last_name: field(fields, "frm1701q:txtPg2TaxpayerName").to_string(),
+            registered_address: field(fields, "frm1701q:txtAddress").to_string(),
+            registered_address_2: String::new(),
+            zip_code: field(fields, "frm1701q:txtZipCode").to_string(),
+            date_of_birth: joined_date(fields),
+            email: field(fields, "txtEmail").to_string(),
+            citizenship: field(fields, "frm1701q:txtCitizenship").to_string(),
+            foreign_tax_number: field(fields, "frm1701q:txtForeignTaxNumber").to_string(),
+            claims_foreign_tax_credits,
+            tax_rate,
+            deduction_method,
+            contact_number: field(fields, "frm1701q:txtTelno").to_string(),
+            line_of_business: field(fields, "frm1701q:txtLOB").to_string(),
+            has_spouse,
+            spouse_tin: joined_tin(fields, "Spouse"),
+            spouse_rdo_code: normalize_empty_rdo(field(fields, "frm1701q:txtSpouseRDOCode")),
+            spouse_type,
+            spouse_atc,
+            spouse_name: field(fields, "frm1701q:txtSpouseName").to_string(),
+            spouse_citizenship: field(fields, "frm1701q:txtSpouseCitizenship").to_string(),
+            spouse_foreign_tax_number: field(fields, "frm1701q:txtSpouseForeignTaxNum").to_string(),
+            spouse_claims_foreign_tax_credits,
+            spouse_tax_rate,
+            spouse_deduction_method,
+            amounts: Form1701QAmounts::default(),
+            item_31_aggregate_amount_payable: None,
+            item_43_non_operating_income_description: field(fields, "frm1701q:txt43Desc")
+                .to_string(),
+            item_48_non_operating_income_description: field(fields, "frm1701q:txt48Desc")
+                .to_string(),
+            item_61_other_tax_credit_description: field(fields, "frm1701q:txt61Desc").to_string(),
+            payment_details: Form1701QPaymentDetails {
+                item_32_cash_or_bank_debit_memo: parse_payment_row(fields, 32, true, &mut errors),
+                item_33_check: parse_payment_row(fields, 33, true, &mut errors),
+                item_34_tax_debit_memo: parse_payment_row(fields, 34, false, &mut errors),
+                item_35_others: parse_payment_row(fields, 35, true, &mut errors),
+                item_35_others_description: field(fields, "frm1701q:txtParticular35").to_string(),
+                machine_validation_or_receipt_details: String::new(),
+            },
+            total_tax_due: 0.0,
+            total_amount_payable: 0.0,
+            status: FilingStatus::Draft,
+            created_at: Some(now.clone()),
+            updated_at: Some(now),
+            submitted_at: None,
+            confirmed_at: None,
+            submission_filename: None,
+            receipt_id: None,
+            submission_attempts: 0,
+            next_retry_at: None,
+            last_error: None,
+        };
+
+        for item in USER_ENTERED_AMOUNT_ITEMS {
+            if let Some((taxpayer, spouse)) = source_amounts.get(item) {
+                if taxpayer.is_some_and(|value| value.abs() > 0.000_001) {
+                    draft.set_amount(*item, Form1701QParty::Taxpayer, *taxpayer);
+                }
+                if has_spouse && spouse.is_some_and(|value| value.abs() > 0.000_001) {
+                    draft.set_amount(*item, Form1701QParty::Spouse, *spouse);
+                }
+            }
+        }
+        draft.recompute();
+
+        for item in DERIVED_AMOUNT_ITEMS {
+            if let Some((source_taxpayer, source_spouse)) = source_amounts.get(item) {
+                verify_computed_amount(
+                    &format!("frm1701q:txt{item}A"),
+                    *source_taxpayer,
+                    draft.amount(*item, Form1701QParty::Taxpayer),
+                    &mut errors,
+                );
+                verify_computed_amount(
+                    &format!("frm1701q:txt{item}B"),
+                    *source_spouse,
+                    draft.amount(*item, Form1701QParty::Spouse),
+                    &mut errors,
+                );
+            }
+        }
+        verify_computed_amount(
+            "frm1701q:txt31",
+            source_item_31,
+            draft.item_31_aggregate_amount_payable,
+            &mut errors,
+        );
+        errors.extend(draft.validate());
+
+        if errors.is_empty() {
+            Ok(draft)
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+fn serialize_editable_xml(fields: &BTreeMap<String, String>) -> String {
+    let mut output = String::from("<?xml version='1.0'?>");
+    output.push_str(XML_FORMAT);
+    for field_id in OFFICIAL_EDITABLE_FIELD_IDS {
+        let value = fields
+            .get(*field_id)
+            .expect("exact 1701Q field map contains every official ID");
+        let encoded = if JAVASCRIPT_ESCAPED_FIELDS.contains(field_id) {
+            javascript_escape(value)
+        } else {
+            value.clone()
+        };
+        output.push_str("<div>");
+        output.push_str(field_id);
+        output.push('=');
+        output.push_str(&encoded);
+        output.push_str(field_id);
+        output.push_str("=</div>");
+        output.push_str(XML_FORMAT);
+    }
+    output.push_str(XML_FORMAT);
+    output.push_str(EDITABLE_XML_CLOSE);
+    output
+}
+
+fn javascript_escape(value: &str) -> String {
+    let mut output = String::new();
+    for unit in value.encode_utf16() {
+        if unit <= 0x7f && is_javascript_escape_safe(unit as u8) {
+            output.push(char::from(unit as u8));
+        } else if unit <= 0xff {
+            output.push_str(&format!("%{unit:02X}"));
+        } else {
+            output.push_str(&format!("%u{unit:04X}"));
+        }
+    }
+    output
+}
+
+fn is_javascript_escape_safe(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'@' | b'*' | b'_' | b'+' | b'-' | b'.' | b'/')
+}
+
+fn validate_exact_keys(fields: &BTreeMap<String, String>) -> Vec<(String, String)> {
+    let expected = OFFICIAL_EDITABLE_FIELD_IDS
+        .iter()
+        .map(|field| (*field).to_string())
+        .collect::<BTreeSet<_>>();
+    let actual = fields.keys().cloned().collect::<BTreeSet<_>>();
+    let mut errors = Vec::new();
+    for missing in expected.difference(&actual) {
+        errors.push((
+            missing.clone(),
+            format!("Required exact 1701Q editable field {missing} is missing"),
+        ));
+    }
+    for unknown in actual.difference(&expected) {
+        errors.push((
+            unknown.clone(),
+            format!("Unknown field {unknown} is not in the 172-field editable contract"),
+        ));
+    }
+    errors
+}
+
+fn validate_editable_metadata(
+    fields: &BTreeMap<String, String>,
+    errors: &mut Vec<(String, String)>,
+) {
+    for (key, expected) in [
+        ("frm1701q:txtCurrentPage", "1"),
+        ("frm1701q:txtMaxPage", "2"),
+        ("txtFinalFlag", "0"),
+        ("txtEnroll", "N"),
+        ("ebirOnlineConfirmUsername", ""),
+        ("ebirOnlineUsername", ""),
+        ("ebirOnlineSecret", ""),
+        ("driveSelectTPExport", ""),
+    ] {
+        if fields.get(key).is_some_and(|actual| actual != expected) {
+            errors.push((
+                key.to_string(),
+                format!(
+                    "Editable 1701Q import requires {key}={expected:?}; final, enrollment, credential, and export-device state is not persisted"
+                ),
+            ));
+        }
+    }
+}
+
+fn verify_repeated_identity(fields: &BTreeMap<String, String>, errors: &mut Vec<(String, String)>) {
+    for (page_1, page_2) in [
+        ("frm1701q:txtTIN1", "frm1701q:txtPg2TIN1"),
+        ("frm1701q:txtTIN2", "frm1701q:txtPg2TIN2"),
+        ("frm1701q:txtTIN3", "frm1701q:txtPg2TIN3"),
+        ("frm1701q:txtBranchCode", "frm1701q:txtPg2BranchCode"),
+    ] {
+        if field(fields, page_1) != field(fields, page_2) {
+            errors.push((
+                page_2.to_string(),
+                format!("Repeated page-2 value must match {page_1}"),
+            ));
+        }
+    }
+}
+
+fn parse_required_bool_pair(
+    fields: &BTreeMap<String, String>,
+    yes_key: &str,
+    no_key: &str,
+    semantic_field: &str,
+    errors: &mut Vec<(String, String)>,
+) -> Option<bool> {
+    match (
+        parse_bool(fields, yes_key, errors),
+        parse_bool(fields, no_key, errors),
+    ) {
+        (Some(true), Some(false)) => Some(true),
+        (Some(false), Some(true)) => Some(false),
+        (Some(_), Some(_)) => {
+            errors.push((
+                semantic_field.to_string(),
+                "Exactly one paired official flag must be true".to_string(),
+            ));
+            None
+        }
+        _ => None,
+    }
+}
+
+fn parse_optional_bool_pair(
+    fields: &BTreeMap<String, String>,
+    yes_key: &str,
+    no_key: &str,
+    semantic_field: &str,
+    errors: &mut Vec<(String, String)>,
+) -> Option<bool> {
+    match (
+        parse_bool(fields, yes_key, errors),
+        parse_bool(fields, no_key, errors),
+    ) {
+        (Some(true), Some(false)) => Some(true),
+        (Some(false), Some(true)) => Some(false),
+        (Some(false), Some(false)) => None,
+        (Some(true), Some(true)) => {
+            errors.push((
+                semantic_field.to_string(),
+                "Paired official flags cannot both be true".to_string(),
+            ));
+            None
+        }
+        _ => None,
+    }
+}
+
+fn parse_one_of<T: Copy>(
+    fields: &BTreeMap<String, String>,
+    choices: &[(&str, T)],
+    required: bool,
+    semantic_field: &str,
+    errors: &mut Vec<(String, String)>,
+) -> Option<T> {
+    let selected = choices
+        .iter()
+        .filter_map(|(key, value)| {
+            parse_bool(fields, key, errors)
+                .filter(|flag| *flag)
+                .map(|_| *value)
+        })
+        .collect::<Vec<_>>();
+    match selected.as_slice() {
+        [value] => Some(*value),
+        [] if !required => None,
+        [] => {
+            errors.push((
+                semantic_field.to_string(),
+                "Exactly one official option must be true".to_string(),
+            ));
+            None
+        }
+        _ => {
+            errors.push((
+                semantic_field.to_string(),
+                "Official option flags contain conflicting true values".to_string(),
+            ));
+            None
+        }
+    }
+}
+
+fn parse_bool(
+    fields: &BTreeMap<String, String>,
+    key: &str,
+    errors: &mut Vec<(String, String)>,
+) -> Option<bool> {
+    match fields.get(key).map(String::as_str) {
+        Some("true") => Some(true),
+        Some("false") => Some(false),
+        Some(value) => {
+            errors.push((
+                key.to_string(),
+                format!("Official boolean must be lowercase true or false, found {value:?}"),
+            ));
+            None
+        }
+        None => None,
+    }
+}
+
+fn parse_required<T: std::str::FromStr>(
+    fields: &BTreeMap<String, String>,
+    key: &str,
+    errors: &mut Vec<(String, String)>,
+) -> Option<T> {
+    match fields.get(key).and_then(|value| value.parse::<T>().ok()) {
+        Some(value) => Some(value),
+        None => {
+            errors.push((key.to_string(), format!("Invalid required value for {key}")));
+            None
+        }
+    }
+}
+
+fn parse_money(
+    fields: &BTreeMap<String, String>,
+    key: &str,
+    errors: &mut Vec<(String, String)>,
+) -> Option<f64> {
+    let value = fields.get(key)?;
+    let normalized = value.replace(',', "");
+    match normalized.parse::<f64>() {
+        Ok(value) if value.is_finite() => Some(value),
+        _ => {
+            errors.push((key.to_string(), format!("Invalid money value {value:?}")));
+            None
+        }
+    }
+}
+
+fn parse_optional_money(
+    fields: &BTreeMap<String, String>,
+    key: &str,
+    errors: &mut Vec<(String, String)>,
+) -> Option<f64> {
+    if field(fields, key).trim().is_empty() {
+        None
+    } else {
+        parse_money(fields, key, errors)
+    }
+}
+
+fn parse_payment_row(
+    fields: &BTreeMap<String, String>,
+    item: u8,
+    has_agency: bool,
+    errors: &mut Vec<(String, String)>,
+) -> Form1701QPaymentRow {
+    Form1701QPaymentRow {
+        drawee_bank_or_agency: if has_agency {
+            field(fields, &format!("frm1701q:txtAgency{item}")).to_string()
+        } else {
+            String::new()
+        },
+        number: field(fields, &format!("frm1701q:txtNumber{item}")).to_string(),
+        date: field(fields, &format!("frm1701q:txtDate{item}")).to_string(),
+        amount: parse_optional_money(fields, &format!("frm1701q:txtAmount{item}"), errors),
+    }
+}
+
+fn verify_computed_amount(
+    key: &str,
+    source: Option<f64>,
+    computed: Option<f64>,
+    errors: &mut Vec<(String, String)>,
+) {
+    if let Some(source) = source {
+        let computed = computed.unwrap_or(0.0);
+        if (source - computed).abs() >= 0.001 {
+            errors.push((
+                key.to_string(),
+                format!(
+                    "Saved computed value {source:.2} does not match Rust-owned value {computed:.2}"
+                ),
+            ));
+        }
+    }
+}
+
+fn joined_tin(fields: &BTreeMap<String, String>, spouse: &str) -> String {
+    format!(
+        "{}{}{}{}",
+        field(fields, &format!("frm1701q:txt{spouse}TIN1")),
+        field(fields, &format!("frm1701q:txt{spouse}TIN2")),
+        field(fields, &format!("frm1701q:txt{spouse}TIN3")),
+        field(fields, &format!("frm1701q:txt{spouse}BranchCode")),
+    )
+}
+
+fn joined_date(fields: &BTreeMap<String, String>) -> String {
+    let month = field(fields, "frm1701q:txtBirthMonth");
+    let day = field(fields, "frm1701q:txtBirthDay");
+    let year = field(fields, "frm1701q:txtBirthYear");
+    if month.is_empty() && day.is_empty() && year.is_empty() {
+        String::new()
+    } else {
+        format!("{month}/{day}/{year}")
+    }
+}
+
+fn normalize_empty_rdo(value: &str) -> String {
+    if value == "000" {
+        String::new()
+    } else {
+        value.to_string()
+    }
+}
+
+fn field<'a>(fields: &'a BTreeMap<String, String>, key: &str) -> &'a str {
+    fields.get(key).map(String::as_str).unwrap_or_default()
+}
+
+fn insert(map: &mut BTreeMap<String, String>, key: &str, value: impl Into<String>) {
+    map.insert(key.to_string(), value.into());
+}
+
+fn insert_bool(map: &mut BTreeMap<String, String>, key: &str, value: bool) {
+    insert(map, key, if value { "true" } else { "false" });
+}
+
+fn insert_optional_bool_pair(
+    map: &mut BTreeMap<String, String>,
+    yes_key: &str,
+    no_key: &str,
+    value: Option<bool>,
+) {
+    insert_bool(map, yes_key, value == Some(true));
+    insert_bool(map, no_key, value == Some(false));
+}
+
+fn insert_choice<T: Copy + PartialEq>(
+    map: &mut BTreeMap<String, String>,
+    choices: &[(&str, T)],
+    selected: Option<T>,
+) {
+    for (key, value) in choices {
+        insert_bool(map, key, selected == Some(*value));
+    }
+}
+
+fn insert_amount_pair(map: &mut BTreeMap<String, String>, draft: &Form1701QDraft, item: u8) {
+    insert_money(
+        map,
+        &format!("frm1701q:txt{item}A"),
+        draft.amount(item, Form1701QParty::Taxpayer).unwrap_or(0.0),
+    );
+    insert_money(
+        map,
+        &format!("frm1701q:txt{item}B"),
+        draft.amount(item, Form1701QParty::Spouse).unwrap_or(0.0),
+    );
+}
+
+fn insert_payment_row(
+    map: &mut BTreeMap<String, String>,
+    item: u8,
+    row: &Form1701QPaymentRow,
+    has_agency: bool,
+) {
+    if has_agency {
+        insert(
+            map,
+            &format!("frm1701q:txtAgency{item}"),
+            row.drawee_bank_or_agency.clone(),
+        );
+    }
+    insert(
+        map,
+        &format!("frm1701q:txtNumber{item}"),
+        row.number.clone(),
+    );
+    insert(map, &format!("frm1701q:txtDate{item}"), row.date.clone());
+    insert(
+        map,
+        &format!("frm1701q:txtAmount{item}"),
+        row.amount.map(format_money).unwrap_or_default(),
+    );
+}
+
+fn insert_money(map: &mut BTreeMap<String, String>, key: &str, value: f64) {
+    insert(map, key, format_money(value));
+}
+
+fn format_money(value: f64) -> String {
+    let negative = value.is_sign_negative() && value != 0.0;
+    let cents = (value.abs() * 100.0 + 0.000_000_000_01).floor() as u128;
+    let integer = cents / 100;
+    let fractional = cents % 100;
+    let digits = integer.to_string();
+    let mut grouped = String::new();
+    for (index, character) in digits.chars().enumerate() {
+        if index > 0 && (digits.len() - index).is_multiple_of(3) {
+            grouped.push(',');
+        }
+        grouped.push(character);
+    }
+    format!(
+        "{}{grouped}.{fractional:02}",
+        if negative { "-" } else { "" }
+    )
+}
+
+fn split_tin(tin: &str) -> (String, String, String, String) {
+    let digits = tin
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .collect::<String>();
+    let segment = |start: usize, end: usize| {
+        digits
+            .get(start..end.min(digits.len()))
+            .unwrap_or_default()
+            .to_string()
+    };
+    (
+        segment(0, 3),
+        segment(3, 6),
+        segment(6, 9),
+        digits.get(9..).unwrap_or_default().to_string(),
+    )
+}
+
+fn split_date(value: &str) -> (String, String, String) {
+    let parts = value.split('/').collect::<Vec<_>>();
+    if parts.len() == 3 {
+        (
+            parts[0].to_string(),
+            parts[1].to_string(),
+            parts[2].to_string(),
+        )
+    } else {
+        (String::new(), String::new(), String::new())
     }
 }
 
@@ -37,69 +1318,309 @@ mod tests {
     use super::*;
     use sha2::{Digest, Sha256};
 
-    #[test]
-    fn exact_revision_field_map_should_be_empty_without_source_evidence() {
-        let draft = Form1701QDraft::default();
-
-        assert!(draft.to_bir_field_map().is_empty());
+    fn valid_draft() -> Form1701QDraft {
+        let mut draft = Form1701QDraft {
+            taxable_year: 2021,
+            quarter: 2,
+            tin: "12345678900000".to_string(),
+            rdo_code: "018".to_string(),
+            filer_type: Some(Form1701QFilerType::SingleProprietor),
+            atc: Some(Form1701QAtc::Ii012),
+            taxpayer_name: "PEÑA, JUAN".to_string(),
+            taxpayer_last_name: "PEÑA".to_string(),
+            registered_address: "53 SANTOL EXTENSION, ".to_string(),
+            registered_address_2: "NEW CABALAN".to_string(),
+            zip_code: "2200".to_string(),
+            date_of_birth: "01/15/1990".to_string(),
+            email: "juan+1701q@example.com".to_string(),
+            citizenship: "FILIPINO".to_string(),
+            claims_foreign_tax_credits: Some(false),
+            tax_rate: Some(Form1701QTaxRate::Graduated),
+            deduction_method: Some(Form1701QDeductionMethod::Osd),
+            contact_number: "1234567".to_string(),
+            line_of_business: "SOFTWARE / R&D".to_string(),
+            status: FilingStatus::Draft,
+            ..Default::default()
+        };
+        draft.set_amount(36, Form1701QParty::Taxpayer, Some(1_000_000.0));
+        draft.set_amount(55, Form1701QParty::Taxpayer, Some(10_000.0));
+        draft.set_amount(64, Form1701QParty::Taxpayer, Some(1_000.0));
+        draft.recompute();
+        draft
     }
 
     #[test]
-    fn xml_export_should_fail_closed() {
-        let draft = Form1701QDraft::default();
-
-        let error = draft
-            .to_bir_xml_payload()
-            .expect_err("XML export must remain disabled");
-
-        assert!(error.contains("no exact-revision saved XML"));
-    }
-
-    #[test]
-    fn xml_import_should_fail_closed() {
-        let error = Form1701QDraft::from_bir_xml_payload("<xml />")
-            .expect_err("XML import must remain disabled");
-
-        assert!(error.contains("1701Qv2018 XML is unavailable"));
-    }
-
-    #[test]
-    #[ignore = "requires EBIRFORMS_1701Q_SOURCE_DIR pointing to the reviewed external source pack"]
-    fn locked_external_source_pack_has_exact_pdf_and_no_saved_xml_contract() {
-        let source_dir = std::env::var("EBIRFORMS_1701Q_SOURCE_DIR")
-            .expect("set EBIRFORMS_1701Q_SOURCE_DIR to the exact reviewed 1701Qv2018 folder");
-        let directory = std::path::Path::new(&source_dir);
-        let pdf = std::fs::read(directory.join("1701Q Jan 2018 final rev2_copy.pdf"))
-            .expect("official PDF must be readable");
+    fn exact_editable_inventory_is_locked() {
         assert_eq!(
-            hex::encode(Sha256::digest(&pdf)),
-            super::super::form_1701q::OFFICIAL_FORM_SHA256
+            OFFICIAL_EDITABLE_FIELD_IDS.len(),
+            super::super::form_1701q::EXACT_EDITABLE_XML_FIELD_COUNT
         );
+        assert_eq!(
+            OFFICIAL_EDITABLE_FIELD_IDS
+                .iter()
+                .copied()
+                .collect::<BTreeSet<_>>()
+                .len(),
+            OFFICIAL_EDITABLE_FIELD_IDS.len()
+        );
+        let inventory = format!("{}\n", OFFICIAL_EDITABLE_FIELD_IDS.join("\n"));
+        assert_eq!(
+            hex::encode(Sha256::digest(inventory.as_bytes())),
+            super::super::form_1701q::EXACT_EDITABLE_FIELD_IDS_SHA256
+        );
+    }
 
-        let saved_xml_files = std::fs::read_dir(directory)
-            .expect("reviewed source directory must be readable")
-            .filter_map(Result::ok)
-            .filter(|entry| {
-                entry
-                    .path()
-                    .extension()
-                    .is_some_and(|extension| extension.eq_ignore_ascii_case("xml"))
-            })
-            .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .collect::<Vec<_>>();
+    #[test]
+    fn field_map_contains_all_and_only_the_editable_contract() {
+        let fields = valid_draft().to_bir_field_map_checked().unwrap();
+
+        assert_eq!(fields.len(), 172);
+        assert!(!fields.contains_key("frm1701q:txtAddress2"));
+        assert_eq!(
+            fields["frm1701q:txtAddress"],
+            "53 SANTOL EXTENSION, NEW CABALAN"
+        );
+        assert_eq!(fields["frm1701q:txt36A"], "1,000,000.00");
+        assert_eq!(fields["frm1701q:DateQuarter_2"], "true");
+        assert_eq!(fields["frm1701q:txtCurrentPage"], "1");
+        assert_eq!(fields["txtFinalFlag"], "0");
+        assert_eq!(fields["txtEnroll"], "N");
+        assert_eq!(fields["ebirOnlineSecret"], "");
+    }
+
+    #[test]
+    fn editable_xml_uses_official_order_envelope_and_javascript_escape() {
+        let mut draft = valid_draft();
+        draft.taxpayer_name = "PEÑA 你好 😀".to_string();
+        let xml = draft.to_bir_xml_payload().unwrap();
+
+        assert!(xml.starts_with("<?xml version='1.0'?>\t\r\n            <div>frm1701q:txtYear="));
+        assert!(xml.contains("PE%D1A%20%u4F60%u597D%20%uD83D%uDE00"));
+        assert!(xml.ends_with(EDITABLE_XML_CLOSE));
+        assert!(!xml.ends_with("All Rights Reserved BIR 2012.0"));
         assert!(
-            saved_xml_files.is_empty(),
-            "a newly supplied exact-revision XML must be reviewed before this fail-closed test is replaced: {saved_xml_files:?}"
+            xml.find("frm1701q:txtAddress=").unwrap() < xml.find("frm1701q:txtZipCode=").unwrap()
+        );
+    }
+
+    #[test]
+    fn generated_editable_payload_round_trips_its_exact_field_map() {
+        let mut draft = valid_draft();
+        draft.item_43_non_operating_income_description = "5% ADJUSTMENT".to_string();
+        draft.set_amount(43, Form1701QParty::Taxpayer, Some(1_000.0));
+        draft.recompute();
+        let original_fields = draft.to_bir_field_map_checked().unwrap();
+        let xml = draft.to_bir_xml_payload().unwrap();
+        let imported = Form1701QDraft::from_bir_xml_payload(&xml).unwrap();
+
+        assert!(xml.contains("frm1701q:txt43Desc=5% ADJUSTMENT"));
+        assert_eq!(imported.to_bir_field_map(), original_fields);
+        assert_eq!(imported.status, FilingStatus::Draft);
+        assert!(!imported.can_queue_for_submission());
+    }
+
+    #[test]
+    fn spouse_and_payment_fields_round_trip_without_enabling_submission() {
+        let mut draft = valid_draft();
+        draft.has_spouse = true;
+        draft.spouse_tin = "98765432100000".to_string();
+        draft.spouse_rdo_code = "018".to_string();
+        draft.spouse_type = Some(Form1701QSpouseType::Professional);
+        draft.spouse_atc = Some(Form1701QAtc::Ii014);
+        draft.spouse_name = "MARIA PEÑA".to_string();
+        draft.spouse_claims_foreign_tax_credits = Some(false);
+        draft.spouse_tax_rate = Some(Form1701QTaxRate::Graduated);
+        draft.spouse_deduction_method = Some(Form1701QDeductionMethod::Itemized);
+        draft.set_amount(36, Form1701QParty::Spouse, Some(500_000.0));
+        draft.set_amount(37, Form1701QParty::Spouse, Some(100_000.0));
+        draft.set_amount(39, Form1701QParty::Spouse, Some(50_000.0));
+        draft.payment_details.item_33_check = Form1701QPaymentRow {
+            drawee_bank_or_agency: "LANDBANK".to_string(),
+            number: "12345".to_string(),
+            date: "07/19/2026".to_string(),
+            amount: Some(1_234.5),
+        };
+        draft.recompute();
+
+        let fields = draft.to_bir_field_map_checked().unwrap();
+        let imported =
+            Form1701QDraft::from_bir_xml_payload(&draft.to_bir_xml_payload().unwrap()).unwrap();
+
+        assert_eq!(imported.to_bir_field_map(), fields);
+        assert_eq!(imported.payment_details.item_33_check.amount, Some(1_234.5));
+        assert!(!imported.can_queue_for_submission());
+    }
+
+    #[test]
+    fn eight_percent_and_signed_input_round_trip_canonically() {
+        let mut draft = valid_draft();
+        draft.atc = Some(Form1701QAtc::Ii015);
+        draft.tax_rate = Some(Form1701QTaxRate::EightPercent);
+        draft.deduction_method = None;
+        draft.set_amount(36, Form1701QParty::Taxpayer, None);
+        draft.set_amount(47, Form1701QParty::Taxpayer, Some(500_000.0));
+        draft.set_amount(48, Form1701QParty::Taxpayer, Some(10_000.0));
+        draft.item_48_non_operating_income_description = "INTEREST".to_string();
+        draft.set_amount(50, Form1701QParty::Taxpayer, Some(-1_000.0));
+        draft.recompute();
+
+        let fields = draft.to_bir_field_map_checked().unwrap();
+        let imported =
+            Form1701QDraft::from_bir_xml_payload(&draft.to_bir_xml_payload().unwrap()).unwrap();
+
+        assert_eq!(fields["frm1701q:txt50A"], "-1,000.00");
+        assert_eq!(imported.to_bir_field_map(), fields);
+    }
+
+    #[test]
+    fn malformed_missing_unknown_and_credential_fields_fail_closed() {
+        let draft = valid_draft();
+        let mut fields = draft.to_bir_field_map_checked().unwrap();
+
+        fields.remove("frm1701q:txtYear");
+        assert!(Form1701QDraft::from_bir_field_map(&fields).is_err());
+
+        let mut fields = draft.to_bir_field_map_checked().unwrap();
+        fields.insert("unknown".to_string(), "value".to_string());
+        assert!(Form1701QDraft::from_bir_field_map(&fields).is_err());
+
+        let mut fields = draft.to_bir_field_map_checked().unwrap();
+        fields.insert(
+            "ebirOnlineSecret".to_string(),
+            "must-not-persist".to_string(),
+        );
+        let errors = Form1701QDraft::from_bir_xml_payload(&serialize_editable_xml(&fields))
+            .expect_err("credential-bearing source shape must fail closed");
+        assert!(errors.iter().any(|(field, _)| field == "ebirOnlineSecret"));
+
+        let final_copy = format!("{}0", draft.to_bir_xml_payload().unwrap());
+        let errors = Form1701QDraft::from_bir_xml_payload(&final_copy)
+            .expect_err("final/outbound envelopes are outside editable support");
+        assert!(errors.iter().any(|(field, _)| field == "xml_payload"));
+    }
+
+    #[test]
+    fn inconsistent_saved_computed_amount_is_rejected() {
+        let draft = valid_draft();
+        let mut fields = draft.to_bir_field_map_checked().unwrap();
+        fields.insert("frm1701q:txt46A".to_string(), "999,999.00".to_string());
+
+        let errors = Form1701QDraft::from_bir_xml_payload(&serialize_editable_xml(&fields))
+            .expect_err("Rust-owned derived amount must win");
+
+        assert!(errors.iter().any(|(field, _)| field == "frm1701q:txt46A"));
+    }
+
+    #[test]
+    fn checked_in_provenance_matches_rust_capability_boundary() {
+        let provenance: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../packages/form-renderer/references/1701q-2018-source.json"
+        ))
+        .unwrap();
+
+        assert_eq!(
+            provenance["official_package_evidence"]["package_sha256"],
+            super::super::form_1701q::OFFICIAL_PACKAGE_SHA256
+        );
+        assert_eq!(
+            provenance["official_package_evidence"]["source_resources"]["hta_decoded_sha256"],
+            super::super::form_1701q::OFFICIAL_HTA_RESOURCE_DECODED_SHA256
+        );
+        assert_eq!(
+            provenance["official_package_evidence"]["editable_saved_xml"]["field_count"],
+            super::super::form_1701q::EXACT_EDITABLE_XML_FIELD_COUNT
+        );
+        assert_eq!(
+            provenance["official_package_evidence"]["submission_boundary"]["queue_submission_supported"],
+            super::super::form_1701q::QUEUE_SUBMISSION_SUPPORTED
+        );
+        assert!(super::super::form_1701q::XML_ROUND_TRIP_SUPPORTED);
+        assert!(!super::super::form_1701q::QUEUE_SUBMISSION_SUPPORTED);
+        assert_eq!(
+            super::super::form_1701q::OFFICIAL_PACKAGE_MANIFEST_RESOURCE_ID
+                + super::super::form_1701q::OFFICIAL_HTA_MANIFEST_INDEX,
+            super::super::form_1701q::OFFICIAL_HTA_RESOURCE_ID
+        );
+    }
+
+    #[test]
+    #[ignore = "requires EBIRFORMS_PACKAGE_PATH pointing to the reviewed BIRForms.exe"]
+    fn locked_external_package_contains_the_exact_reviewed_hta_resource() {
+        let path = std::env::var("EBIRFORMS_PACKAGE_PATH")
+            .expect("set EBIRFORMS_PACKAGE_PATH to reviewed BIRForms.exe");
+        let package = std::fs::read(path).expect("official package must be readable");
+        assert_eq!(
+            hex::encode(Sha256::digest(&package)),
+            super::super::form_1701q::OFFICIAL_PACKAGE_SHA256
         );
 
-        let draft = Form1701QDraft::default();
+        let manifest_start = super::super::form_1701q::OFFICIAL_PACKAGE_MANIFEST_FILE_OFFSET;
+        let manifest_end =
+            manifest_start + super::super::form_1701q::OFFICIAL_PACKAGE_MANIFEST_SIZE;
+        let manifest_bytes = &package[manifest_start..manifest_end];
         assert_eq!(
-            draft.to_bir_field_map_checked(),
-            Err(XML_UNSUPPORTED_REASON.to_string())
+            hex::encode(Sha256::digest(manifest_bytes)),
+            super::super::form_1701q::OFFICIAL_PACKAGE_MANIFEST_SHA256
         );
+        let manifest_units = manifest_bytes
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect::<Vec<_>>();
+        let manifest = String::from_utf16(&manifest_units).expect("manifest is raw UTF-16LE");
+        let manifest_entries = manifest
+            .trim_start_matches('\u{feff}')
+            .split('|')
+            .collect::<Vec<_>>();
         assert_eq!(
-            draft.to_bir_xml_payload(),
-            Err(XML_UNSUPPORTED_REASON.to_string())
+            manifest_entries[super::super::form_1701q::OFFICIAL_HTA_MANIFEST_INDEX as usize],
+            "forms\\BIR-Form1701Qv2018.hta"
         );
+        assert!(manifest_entries.iter().all(|entry| {
+            let entry = entry.to_ascii_lowercase();
+            !entry.ends_with("encrypt.exe") && !entry.ends_with("cftpsend.exe")
+        }));
+
+        let start = super::super::form_1701q::OFFICIAL_HTA_RESOURCE_FILE_OFFSET;
+        let end = start + super::super::form_1701q::OFFICIAL_HTA_RESOURCE_DECODED_SIZE;
+        let decoded = package[start..end]
+            .iter()
+            .map(|byte| byte ^ 0xff)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            hex::encode(Sha256::digest(&decoded)),
+            super::super::form_1701q::OFFICIAL_HTA_RESOURCE_DECODED_SHA256
+        );
+        let source = String::from_utf8_lossy(&decoded);
+        for anchor in [
+            "function saveXML(isFinalCopy)",
+            "function saveEncryptedProfile(isFromSubmit)",
+            "function sendEmail(sourceElement)",
+            "RenameAndSendFile(emailFilePath",
+            "frm1701q:txtAddress2",
+        ] {
+            assert!(
+                source.contains(anchor),
+                "missing reviewed source anchor {anchor}"
+            );
+        }
+
+        let tools_start = super::super::form_1701q::OFFICIAL_EBIRTOOLS_RESOURCE_FILE_OFFSET;
+        let tools_end =
+            tools_start + super::super::form_1701q::OFFICIAL_EBIRTOOLS_RESOURCE_DECODED_SIZE;
+        let tools = package[tools_start..tools_end]
+            .iter()
+            .map(|byte| byte ^ 0xff)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            hex::encode(Sha256::digest(&tools)),
+            super::super::form_1701q::OFFICIAL_EBIRTOOLS_RESOURCE_DECODED_SHA256
+        );
+        let tools_source = String::from_utf8_lossy(&tools);
+        for anchor in ["Encrypt.exe", "cFTPSend.exe", "RenameAndSendFile"] {
+            assert!(
+                tools_source.contains(anchor),
+                "missing reviewed transport helper anchor {anchor}"
+            );
+        }
     }
 }

@@ -9,7 +9,6 @@
 //! Values are URL-encoded. Keys appear twice as delimiters. Official payloads
 //! are not guaranteed to contain line breaks, so parsing is tag-oriented.
 
-use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
@@ -42,6 +41,21 @@ pub enum BirXmlParseError {
 /// fields. Text outside the divs is retained only as envelope noise; official
 /// payloads commonly contain an XML declaration and a trailing copyright line.
 pub fn parse_bir_xml_checked(content: &str) -> Result<BTreeMap<String, String>, BirXmlParseError> {
+    parse_bir_xml_encoded_checked(content)?
+        .into_iter()
+        .map(|(field_id, encoded_value)| {
+            let value = decode_bir_value(&encoded_value).unwrap_or(encoded_value);
+            Ok((field_id, value))
+        })
+        .collect()
+}
+
+/// Parse the pseudo-XML structure while retaining field bodies exactly as
+/// emitted. This is needed for HTAs that apply JavaScript `escape()` to only a
+/// documented subset of fields and leave literal percent signs in the rest.
+pub fn parse_bir_xml_encoded_checked(
+    content: &str,
+) -> Result<BTreeMap<String, String>, BirXmlParseError> {
     let mut fields = BTreeMap::new();
     let mut cursor = 0;
 
@@ -86,12 +100,7 @@ pub fn parse_bir_xml_checked(content: &str) -> Result<BTreeMap<String, String>, 
         };
         validate_field_id(&field_id, start)?;
 
-        let value = urlencoding::decode(&encoded_value)
-            .map(Cow::into_owned)
-            .map_err(|_| BirXmlParseError::InvalidEncoding {
-                field_id: field_id.clone(),
-            })?;
-        if fields.insert(field_id.clone(), value).is_some() {
+        if fields.insert(field_id.clone(), encoded_value).is_some() {
             return Err(BirXmlParseError::DuplicateFieldId { field_id });
         }
 
@@ -109,6 +118,82 @@ pub fn parse_bir_xml_checked(content: &str) -> Result<BTreeMap<String, String>, 
     }
 
     Ok(fields)
+}
+
+/// Decode both modern UTF-8 percent encoding and the legacy JavaScript
+/// `escape()` representation used by older eBIRForms HTAs. The latter emits
+/// Latin-1 bytes such as `%D1` and UTF-16 code units such as `%u4F60` (including
+/// surrogate pairs), neither of which `urlencoding` accepts as UTF-8.
+pub fn decode_bir_value(value: &str) -> Option<String> {
+    let bytes = value.as_bytes();
+    let mut cursor = 0;
+    let mut has_utf16_escape = false;
+    while cursor < bytes.len() {
+        if bytes[cursor] != b'%' {
+            cursor += 1;
+            continue;
+        }
+        if bytes
+            .get(cursor + 1)
+            .is_some_and(|byte| matches!(byte, b'u' | b'U'))
+        {
+            has_utf16_escape = true;
+            if cursor + 6 > bytes.len()
+                || !bytes[cursor + 2..cursor + 6]
+                    .iter()
+                    .all(u8::is_ascii_hexdigit)
+            {
+                return None;
+            }
+            cursor += 6;
+        } else {
+            if cursor + 3 > bytes.len()
+                || !bytes[cursor + 1..cursor + 3]
+                    .iter()
+                    .all(u8::is_ascii_hexdigit)
+            {
+                return None;
+            }
+            cursor += 3;
+        }
+    }
+
+    if !has_utf16_escape && let Ok(decoded) = urlencoding::decode(value) {
+        return Some(decoded.into_owned());
+    }
+
+    let mut units = Vec::new();
+    let mut characters = value.char_indices().peekable();
+    while let Some((offset, character)) = characters.next() {
+        if character != '%' {
+            let mut encoded = [0; 2];
+            units.extend(character.encode_utf16(&mut encoded).iter().copied());
+            continue;
+        }
+
+        let remaining = &value[offset..];
+        if remaining.len() >= 6
+            && remaining
+                .as_bytes()
+                .get(1)
+                .is_some_and(|byte| matches!(byte, b'u' | b'U'))
+        {
+            let unit = u16::from_str_radix(&remaining[2..6], 16).ok()?;
+            units.push(unit);
+            for _ in 0..5 {
+                characters.next()?;
+            }
+        } else if remaining.len() >= 3 {
+            let byte = u8::from_str_radix(&remaining[1..3], 16).ok()?;
+            units.push(u16::from(byte));
+            characters.next()?;
+            characters.next()?;
+        } else {
+            return None;
+        }
+    }
+
+    String::from_utf16(&units).ok()
 }
 
 fn parse_id_attribute(attributes: &str, offset: usize) -> Result<Option<&str>, BirXmlParseError> {
@@ -284,5 +369,25 @@ mod tests {
         let xml = generate_bir_xml(&fields);
         assert!(xml.contains("GALANG%2C%20ANDREA%20MAE"));
         assert_eq!(parse_bir_xml_checked(&xml).unwrap(), fields);
+    }
+
+    #[test]
+    fn legacy_javascript_escape_values_decode_as_utf16() {
+        let xml = concat!(
+            "<div>name=PE%D1A%20%u4F60%u597Dname=</div>",
+            "<div>emoji=%uD83D%uDE00emoji=</div>"
+        );
+
+        let parsed = parse_bir_xml_checked(xml).unwrap();
+
+        assert_eq!(parsed["name"], "PEÑA 你好");
+        assert_eq!(parsed["emoji"], "😀");
+    }
+
+    #[test]
+    fn malformed_legacy_javascript_escape_values_are_rejected() {
+        for encoded in ["%u123", "%uD83D", "%GG"] {
+            assert_eq!(decode_bir_value(encoded), None);
+        }
     }
 }

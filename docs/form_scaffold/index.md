@@ -25,7 +25,7 @@ in `packages/form-renderer/references/source-catalog.json`.
 | 3 | `0619Ev2018` | Domain/XML conversion in progress |
 | 4 | `0619Fv2018` | PDF and XML source locked |
 | 5 | `0605v1999` | PDF and XML source locked |
-| 6 | `1701Qv2018` | Preview can use the locked 2018 PDF; XML/filing remain blocked because the reviewed pack has no saved XML and the extracted eFPS template is an older, incompatible item layout |
+| 6 | `1701Qv2018` | Locked 2018 PDF plus the hash-locked eBIRForms 7.9.5.0 HTA prove the 172-field editable-save XML contract. Queue/filing remains blocked because the outbound path delegates encryption and FTP to unreviewed companion binaries and includes credential/enrollment fields. |
 | 7 | `2550Qv2024` | PDF and XML source locked |
 | 8 | `1701v2018` | PDF, companion forms, and XML source locked |
 | 9 | `1702RTv2018C` | PDF and XML source locked |
