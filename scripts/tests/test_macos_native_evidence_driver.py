@@ -156,6 +156,51 @@ class MacosNativeEvidenceDriverTests(unittest.TestCase):
         self.assertIn("- 210", driver.PRINT_CANCEL_SCRIPT)
         self.assertNotIn("first button of targetWindow", driver.PRINT_CANCEL_SCRIPT)
 
+    def test_failure_observation_binds_and_preserves_the_existing_destination(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            destination = root / "preserved.pdf"
+            destination.write_bytes(b"existing destination")
+            before = driver.file_record(destination)
+            snapshot = {"state": "file", "sha256": before["sha256"]}
+            observation_path = root / "native-output-failure-2.failure.json"
+            observation_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "scope": "development_diagnostic",
+                        "promotion_eligible": False,
+                        "outcome": "export_failed",
+                        "form_code": "2551Q",
+                        "form_revision": "2018",
+                        "nonce": 2,
+                        "destination": str(destination),
+                        "destination_before": snapshot,
+                        "destination_after": snapshot,
+                        "temporary_file_remaining": False,
+                        "error": "reviewed induced failure",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            observation = driver.validate_failure_observation(
+                observation_path,
+                destination=destination,
+                destination_before=before,
+            )
+
+            self.assertEqual(observation["outcome"], "export_failed")
+
+            observation["destination_after"] = {"state": "absent"}
+            observation_path.write_text(json.dumps(observation), encoding="utf-8")
+            with self.assertRaisesRegex(driver.EvidenceError, "preserve"):
+                driver.validate_failure_observation(
+                    observation_path,
+                    destination=destination,
+                    destination_before=before,
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

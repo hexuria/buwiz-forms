@@ -180,11 +180,11 @@ and independently:
 - compares the renderer hash with the separately generated build identity;
 - verifies the existing package signature without treating an ad-hoc
   signature as Developer ID or notarization evidence;
-- raises the fixed, visible diagnostic window through macOS Accessibility and
-  activates the existing GPUI Export PDF control at its reviewed
-  window-relative center (GPUI does not expose custom toolbar controls as
-  semantic `AXButton` children), then drives the native AppKit save panel and
-  cross-checks the app-written observation;
+- queues reviewed success and induced-failure destinations through a
+  development-only environment contract into the same immutable-envelope
+  preflight, WKPDF capture, validation, and atomic-finalization state machine
+  used by the GPUI Export PDF control, then cross-checks the app-written
+  observations;
 - retains each actual WKPDF callback payload separately from the validated
   final PDF, with hashes bound back to the callback observation;
 - induces a second real export failure by denying sibling-temp creation and
@@ -205,8 +205,10 @@ python3 scripts/macos_native_evidence_driver.py verify \
   target/macos-native-evidence-driver/macos-native-evidence-driver.transcript.json
 ```
 
-macOS Accessibility permission for the invoking terminal or Codex process is
-required. The run fails closed if the package changes, the renderer identity
+macOS Accessibility permission is required only when the optional system-print
+dialog exercise is requested. The PDF driver intentionally does not claim that
+toolbar activation or the native save chooser was exercised; those remain an
+explicit diagnostic gap. The run fails closed if the package changes, the renderer identity
 does not match, the accessibility operation cannot be observed, the PDF
 observation/artifacts disagree, destination preservation fails, or a temporary
 file remains.

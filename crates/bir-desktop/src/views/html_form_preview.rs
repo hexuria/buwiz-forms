@@ -101,6 +101,32 @@ const PDF_EXPORT_TIMEOUT: Duration = Duration::from_secs(30);
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 const RENDERER_WEBVIEW_IS_INCOGNITO: bool = true;
 
+#[cfg(all(feature = "dev-tools", target_os = "macos"))]
+const DEV_NATIVE_EVIDENCE_SUCCESS_DESTINATION: &str =
+    "EBIR_NATIVE_EVIDENCE_AUTO_EXPORT_DESTINATION";
+
+#[cfg(all(feature = "dev-tools", target_os = "macos"))]
+const DEV_NATIVE_EVIDENCE_FAILURE_DESTINATION: &str =
+    "EBIR_NATIVE_EVIDENCE_AUTO_FAILURE_DESTINATION";
+
+#[cfg(all(feature = "dev-tools", target_os = "macos"))]
+fn development_native_output_auto_destinations() -> Vec<PathBuf> {
+    [
+        DEV_NATIVE_EVIDENCE_SUCCESS_DESTINATION,
+        DEV_NATIVE_EVIDENCE_FAILURE_DESTINATION,
+    ]
+    .into_iter()
+    .filter_map(std::env::var_os)
+    .filter(|value| !value.is_empty())
+    .map(PathBuf::from)
+    .collect()
+}
+
+#[cfg(not(all(feature = "dev-tools", target_os = "macos")))]
+fn development_native_output_auto_destinations() -> Vec<PathBuf> {
+    Vec::new()
+}
+
 #[cfg(any(test, target_os = "windows"))]
 const POINTS_PER_INCH: f64 = 72.0;
 
@@ -2241,6 +2267,7 @@ impl HtmlFormPreviewView {
         let overall_initial_readiness_deadline = initial_readiness_deadline;
         let poll_state = bridge_state.clone();
         let poll_native_backend = native_backend_bridge.clone();
+        let mut development_auto_destinations = development_native_output_auto_destinations();
         let readiness_task = cx.spawn(async move |this, cx| {
             let mut reported_page_count = None;
             let mut initial_readiness_completed = false;
@@ -2324,6 +2351,29 @@ impl HtmlFormPreviewView {
                             if reported_page_count != Some(page_count) {
                                 this.status = format!("{page_count} printable page(s) ready");
                                 reported_page_count = Some(page_count);
+                                should_notify = true;
+                            }
+
+                            // The packaged macOS evidence exercise can queue
+                            // deterministic destinations through development-
+                            // only environment variables. This enters the
+                            // exact same immutable-envelope preflight and
+                            // native backend as the toolbar; it merely removes
+                            // the fragile save-panel click from the evidence
+                            // producer. Production builds cannot compile this
+                            // queue.
+                            if this.pending_output.is_none()
+                                && let Some(destination) =
+                                    development_auto_destinations.first().cloned()
+                            {
+                                development_auto_destinations.remove(0);
+                                if let Err(error) = this.begin_native_output(
+                                    HtmlOutputKind::PdfExport,
+                                    Some(destination),
+                                    cx,
+                                ) {
+                                    this.fail_pending_output(error, cx);
+                                }
                                 should_notify = true;
                             }
                         }
@@ -3008,6 +3058,46 @@ impl HtmlFormPreviewView {
         Ok(Some(observation_path))
     }
 
+    #[cfg(all(feature = "dev-tools", target_os = "macos"))]
+    fn write_development_pdf_failure_observation(
+        &self,
+        pending: &PendingNativeOutput,
+        error: &str,
+    ) -> Result<Option<PathBuf>, String> {
+        let Some(evidence_dir) = development_evidence_dir() else {
+            return Ok(None);
+        };
+        let Some(destination) = pending.destination.as_deref() else {
+            return Ok(None);
+        };
+        let after = development_destination_snapshot(destination);
+        let observation = serde_json::json!({
+            "schema_version": 1,
+            "scope": "development_diagnostic",
+            "promotion_eligible": false,
+            "outcome": "export_failed",
+            "form_code": self.pdf_expectation.form_code.clone(),
+            "form_revision": self.pdf_expectation.revision.clone(),
+            "nonce": pending.nonce,
+            "destination": destination,
+            "destination_before": pending.destination_before.clone(),
+            "destination_after": after,
+            "temporary_file_remaining": pending
+                .temp_path
+                .as_deref()
+                .is_some_and(Path::exists),
+            "error": error,
+        });
+        let encoded = serde_json::to_vec_pretty(&observation)
+            .map_err(|serialization_error| serialization_error.to_string())?;
+        let path = evidence_dir.join(format!(
+            "native-output-failure-{}.failure.json",
+            pending.nonce
+        ));
+        write_development_evidence_file(&path, &encoded)?;
+        Ok(Some(path))
+    }
+
     fn leave_native_output_mode(&self, cx: &mut Context<Self>) {
         if let Some(webview) = self.webview.clone() {
             let _ = webview.update(cx, |webview, _| {
@@ -3041,6 +3131,16 @@ impl HtmlFormPreviewView {
     }
 
     fn fail_pending_output(&mut self, error: String, cx: &mut Context<Self>) {
+        #[cfg(all(feature = "dev-tools", target_os = "macos"))]
+        if let Some(pending) = self.pending_output.as_ref()
+            && let Err(observation_error) =
+                self.write_development_pdf_failure_observation(pending, &error)
+        {
+            tracing::warn!(
+                error_bytes = observation_error.len(),
+                "could not write non-promotional native-output failure observation"
+            );
+        }
         self.cancel_pending_output_state();
         self.output_state = HtmlOutputState::Failed(error.clone());
         self.status = error;

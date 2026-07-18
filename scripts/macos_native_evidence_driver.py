@@ -3,9 +3,10 @@
 
 The driver never builds or modifies the application package. It independently
 hashes a prepared ``.app`` and its bundled renderer twice, launches the
-development-only deterministic 2551Q preview, drives the existing Export PDF
-button through exact-process CoreGraphics events, and writes a reviewable transcript outside
-the package. A second invocation with ``verify`` recomputes every available
+development-only deterministic 2551Q preview, queues reviewed destinations
+through the development-only harness into the same immutable-envelope output
+state machine used by the Export PDF toolbar button, and writes a reviewable
+transcript outside the package. A second invocation with ``verify`` recomputes every available
 artifact hash and rejects promotion/trust claims.
 
 This remains a diagnostic foundation. Accessibility permission, a prepared
@@ -522,6 +523,55 @@ def wait_for_observation(directory: Path, previous: set[Path], timeout: float) -
     raise EvidenceError("timed out waiting for the app-written PDF observation")
 
 
+def wait_for_failure_observation(
+    directory: Path, previous: set[Path], timeout: float
+) -> Path:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        current = set(directory.glob("*.failure.json"))
+        created = sorted(current - previous)
+        if len(created) == 1:
+            return created[0]
+        if len(created) > 1:
+            raise EvidenceError("one failed PDF export produced multiple failure observations")
+        time.sleep(0.1)
+    raise EvidenceError("timed out waiting for the app-written PDF failure observation")
+
+
+def validate_failure_observation(
+    path: Path, *, destination: Path, destination_before: dict[str, Any]
+) -> dict[str, Any]:
+    try:
+        observation = json.loads(read_stable_file(path, limit=1024 * 1024))
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise EvidenceError(f"invalid app-written failure observation: {error}") from error
+    if observation.get("schema_version") != 1:
+        raise EvidenceError("app-written failure observation has an unsupported schema")
+    if observation.get("scope") != "development_diagnostic":
+        raise EvidenceError("app-written failure observation has an unexpected scope")
+    if observation.get("promotion_eligible") is not False:
+        raise EvidenceError("app-written failure observation must remain non-promotional")
+    if observation.get("outcome") != "export_failed":
+        raise EvidenceError("app-written failure observation did not record export_failed")
+    if (observation.get("form_code"), observation.get("form_revision")) != (
+        "2551Q",
+        "2018",
+    ):
+        raise EvidenceError("app-written failure observation does not describe 2551Q:2018")
+    if Path(observation.get("destination", "")).resolve() != destination.resolve():
+        raise EvidenceError("app-written failure observation names the wrong destination")
+    expected_snapshot = {"state": "file", "sha256": destination_before["sha256"]}
+    if observation.get("destination_before") != expected_snapshot:
+        raise EvidenceError("failed export did not bind the pre-existing destination")
+    if observation.get("destination_after") != expected_snapshot:
+        raise EvidenceError("failed export did not preserve the destination snapshot")
+    if observation.get("temporary_file_remaining") is not False:
+        raise EvidenceError("failed export retained a temporary file at observation time")
+    if not str(observation.get("error", "")).strip():
+        raise EvidenceError("failed export observation omitted its failure reason")
+    return observation
+
+
 def temporary_pdf_paths(directory: Path) -> list[Path]:
     return sorted(
         path for path in directory.iterdir() if path.is_file() and PARTIAL_PDF.match(path.name)
@@ -668,6 +718,12 @@ def run_driver(arguments: argparse.Namespace) -> int:
 
     environment = os.environ.copy()
     environment["EBIR_NATIVE_OUTPUT_EVIDENCE_DIR"] = str(observation_dir)
+    environment["EBIR_NATIVE_EVIDENCE_AUTO_EXPORT_DESTINATION"] = str(
+        success_destination
+    )
+    environment["EBIR_NATIVE_EVIDENCE_AUTO_FAILURE_DESTINATION"] = str(
+        failure_destination
+    )
     environment["DEVELOPER_MODE"] = "true"
     command = [str(binary), DEV_FLAG, str(envelope)]
     network = {
@@ -695,6 +751,7 @@ def run_driver(arguments: argparse.Namespace) -> int:
     process: subprocess.Popen[str] | None = None
     app_pid: int | None = None
     observation_path: Path | None = None
+    failure_observation_path: Path | None = None
     page_artifacts: list[dict[str, Any]] = []
     runtime_envelope: dict[str, Any] | None = None
     observation: dict[str, Any] | None = None
@@ -713,7 +770,7 @@ def run_driver(arguments: argparse.Namespace) -> int:
         )
         app_pid = find_child_pid(binary, process.pid, arguments.timeout)
         existing_observations = set(observation_dir.glob("*.observation.json"))
-        run_native_export(app_pid, success_destination, timeout=arguments.timeout)
+        existing_failure_observations = set(observation_dir.glob("*.failure.json"))
         observation_path = wait_for_observation(
             observation_dir, existing_observations, arguments.timeout
         )
@@ -725,10 +782,15 @@ def run_driver(arguments: argparse.Namespace) -> int:
             final_pdf=success_destination,
             artifact_dir=observation_dir,
         )
-        failure_observation_count = len(list(observation_dir.glob("*.observation.json")))
-        run_native_export(app_pid, failure_destination, timeout=arguments.timeout)
-        time.sleep(2.0)
-        if len(list(observation_dir.glob("*.observation.json"))) != failure_observation_count:
+        failure_observation_path = wait_for_failure_observation(
+            observation_dir, existing_failure_observations, arguments.timeout
+        )
+        validate_failure_observation(
+            failure_observation_path,
+            destination=failure_destination,
+            destination_before=failure_before,
+        )
+        if len(list(observation_dir.glob("*.observation.json"))) != 1:
             raise EvidenceError("induced failed export unexpectedly emitted a success observation")
 
         if arguments.exercise_system_print:
@@ -756,6 +818,7 @@ def run_driver(arguments: argparse.Namespace) -> int:
     strict_gaps = [
         "driver and app package are diagnostic and not independently attested",
         "ad-hoc or Developer ID signature detail is recorded but notarization is not independently verified",
+        "the development-only destination queue exercises the toolbar output state machine but not toolbar activation or the native save chooser",
         "system-print completion requires an operator and configured printer",
         "rollback evidence and Windows/Linux platform evidence are outside this transcript",
     ]
@@ -802,6 +865,7 @@ def run_driver(arguments: argparse.Namespace) -> int:
         },
         "induced_failure": {
             "mechanism": "read-only sibling directory prevents temp creation",
+            "app_observation": file_record(failure_observation_path),
             "destination_before": failure_before,
             "destination_after": failure_after,
             "destination_preserved": True,
@@ -875,6 +939,7 @@ def verify_transcript(path: Path) -> None:
     for index, record in enumerate(transcript["pdf_export"]["native_page_artifacts"], 1):
         verify_file_record(record, f"WKPDF page {index}")
     failure = transcript.get("induced_failure", {})
+    verify_file_record(failure["app_observation"], "failed export observation")
     if failure.get("destination_preserved") is not True or failure.get(
         "temporary_files_remaining"
     ) != 0:
