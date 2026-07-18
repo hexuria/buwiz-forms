@@ -168,6 +168,44 @@ class HtmlReleaseGatePolicyTests(unittest.TestCase):
             report_schema["properties"]["promotion_satisfied"], {"const": False}
         )
 
+    def test_windows_candidate_foundation_is_untrusted_and_keeps_installer_policy_closed(self) -> None:
+        verifier = (
+            REPOSITORY_ROOT / "scripts/windows_candidate_certification.py"
+        ).read_text(encoding="utf-8")
+        attestation_schema = json.loads(
+            (
+                REPOSITORY_ROOT
+                / "packages/form-specs/schema/windows-candidate-certification-attestation-v1.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+        report_schema = json.loads(
+            (
+                REPOSITORY_ROOT
+                / "packages/form-specs/schema/windows-candidate-certification-report-v1.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+
+        self.assertIn('"promotion_eligible": False', verifier)
+        self.assertIn('"trusted_producer": False', verifier)
+        self.assertIn('"promotion_satisfied": False', verifier)
+        self.assertNotIn("form-release-evidence.json\"", verifier)
+        self.assertNotIn("TRUSTED_PLATFORM_EVIDENCE_PRODUCERS", verifier)
+        self.assertNotIn("TRUSTED_ROLLBACK_EVIDENCE_PRODUCERS", verifier)
+        self.assertEqual(
+            attestation_schema["properties"]["promotion_eligible"], {"const": False}
+        )
+        self.assertEqual(
+            report_schema["properties"]["trusted_producer"], {"const": False}
+        )
+        policy = attestation_schema["properties"]["package_security"]["properties"][
+            "distribution_policy"
+        ]["properties"]
+        self.assertEqual(policy["public_release_allows_msix"], {"const": False})
+        self.assertEqual(
+            policy["public_release_formats"],
+            {"const": ["signed_inno_setup_exe", "signed_msi"]},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
