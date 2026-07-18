@@ -440,6 +440,11 @@ impl Form1601CDraft {
             status: super::FilingStatus::Draft,
             created_at: now.clone(),
             updated_at: now,
+            submitted_at: None,
+            submission_filename: None,
+            queued_submission_fingerprint: None,
+            submission_claim_token: None,
+            submission_claimed_at: None,
             submission_attempts: 0,
             submission_error: None,
             next_retry_at: None,
@@ -1023,6 +1028,10 @@ frm1601c:txtLineBus
             crate::bir_xml::parse_bir_xml_checked(&draft.to_bir_xml_payload())
                 .expect("generated replay must pass the checked parser"),
             source_fields
+        );
+        assert_eq!(
+            draft.default_submission_filename(),
+            "00000000000000-1601Cv2018-052026#codeitlikemiley@gmail.com#.xml"
         );
 
         let encrypted = std::fs::read(

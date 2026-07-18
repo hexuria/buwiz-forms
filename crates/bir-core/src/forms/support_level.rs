@@ -158,15 +158,17 @@ pub const FORM_CAPABILITY_REGISTRY: &[FormCapabilityRecord] = &[
         revision: "2018",
         form_id: "1601Cv2018",
         // XML evidence is an exact 100-field replay of the hash-locked
-        // plaintext editable save. The encrypted companion is provenance-only,
-        // and queue submission remains disabled. Formula evidence covers the
-        // printed arithmetic; penalty components remain reviewed manual inputs.
+        // plaintext editable save. Its hash-locked encrypted companion proves
+        // the reviewed #email# filename and the shared audited IAF crypto path.
+        // Queue persistence freezes that exact field map behind a fingerprint
+        // and durable claim token. Formula evidence covers the printed
+        // arithmetic; penalty components remain reviewed manual inputs.
         capabilities: FormCapabilities {
             typed_model: true,
             xml_round_trip: true,
             formula_evidence: true,
             persistence: true,
-            queue_submission: false,
+            queue_submission: true,
             editor: true,
             render_contract: true,
             html_component: true,
@@ -445,10 +447,11 @@ mod tests {
     fn queue_gate_is_semantic_and_registry_owned() {
         assert!(can_queue_for_submission("2551Q"));
         assert_eq!(fileable_form_type_id("2551Q"), Some("2551Qv2018"));
+        assert!(can_queue_for_submission("1601C"));
+        assert_eq!(fileable_form_type_id("1601C"), Some("1601Cv2018"));
 
         for code in [
-            "1601C", "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX",
-            "1700", "9999",
+            "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "1700", "9999",
         ] {
             assert!(!can_queue_for_submission(code), "{code} must fail closed");
             assert_eq!(fileable_form_type_id(code), None);

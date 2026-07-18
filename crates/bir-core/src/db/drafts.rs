@@ -3,6 +3,7 @@
 use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
 
 use super::{Database, DbError};
+use crate::forms::form_1601c::Form1601CDraft;
 use crate::forms::form_2551q::{
     AnnualIncomeTaxElection, Form2551QDraft, Item13Election, annual_income_tax_election,
 };
@@ -19,6 +20,18 @@ pub(crate) enum Claim2551QSubmissionResult {
     },
     Rejected {
         draft: Form2551QDraft,
+        errors: Vec<(String, String)>,
+    },
+    Superseded,
+}
+
+pub(crate) enum Claim1601CSubmissionResult {
+    Claimed {
+        draft: Form1601CDraft,
+        token: String,
+    },
+    Rejected {
+        draft: Form1601CDraft,
         errors: Vec<(String, String)>,
     },
     Superseded,
@@ -802,37 +815,474 @@ impl Database {
         Ok(())
     }
 
-    /// Save or update a Form 1601C draft.
-    /// Uses UPSERT on (tin, form_code, taxable_year, quarter) where quarter = month.
-    pub fn save_1601c_draft(
-        &self,
-        draft: &crate::forms::form_1601c::Form1601CDraft,
-    ) -> Result<i64, DbError> {
+    /// Save or update an editable Form 1601C draft.
+    ///
+    /// Generic saves may never create or replace Queued and later snapshots.
+    /// Queue, cancellation, claim, and completion each use a dedicated CAS path.
+    pub fn save_1601c_draft(&self, draft: &Form1601CDraft) -> Result<i64, DbError> {
+        if !matches!(draft.status, FilingStatus::Draft) {
+            return Err(DbError::Other(
+                "Only an editable Draft 1601C return may use the generic save path".to_string(),
+            ));
+        }
+
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
         let json = serde_json::to_string(draft)?;
-        let status = filing_status_to_db(&draft.status);
-        let quarter = draft.month as i64; // Repurpose quarter column
+        let month = i64::from(draft.month); // Legacy quarter column stores the month.
         let period_key = FilingPeriod::Monthly(draft.month).to_period_key();
+        let existing = tx
+            .query_row(
+                "SELECT id, status, data_json FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '1601C'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![&draft.tin, i64::from(draft.taxable_year), month],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?;
 
-        self.conn.execute(
-            "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-             ON CONFLICT(tin, form_code, taxable_year, quarter)
-             DO UPDATE SET status = excluded.status,
-                           data_json = excluded.data_json,
-                           period_key = excluded.period_key,
-                           updated_at = datetime('now')",
-            params![
-                draft.tin,
-                "1601C",
-                draft.taxable_year as i64,
-                quarter,
-                period_key,
-                status,
-                json
-            ],
+        let id = if let Some((id, db_status, raw_json)) = existing {
+            if db_status != "Draft" {
+                return Err(DbError::Other(
+                    "An immutable queued or filed 1601C snapshot cannot be replaced by a generic draft save"
+                        .to_string(),
+                ));
+            }
+            let stored: Form1601CDraft = serde_json::from_str(&raw_json)?;
+            if !matches!(stored.status, FilingStatus::Draft) {
+                return Err(DbError::Other(
+                    "An immutable queued or filed 1601C snapshot cannot be replaced by a generic draft save"
+                        .to_string(),
+                ));
+            }
+            let updated = tx.execute(
+                "UPDATE form_drafts
+                 SET data_json = ?1, period_key = ?2, updated_at = datetime('now')
+                 WHERE id = ?3 AND status = 'Draft' AND data_json = ?4",
+                params![json, period_key, id, raw_json],
+            )?;
+            if updated != 1 {
+                return Err(DbError::Other(
+                    "1601C draft changed before the editable save completed".to_string(),
+                ));
+            }
+            id
+        } else {
+            tx.execute(
+                "INSERT INTO form_drafts
+                    (tin, form_code, taxable_year, quarter, period_key, status, data_json)
+                 VALUES (?1, '1601C', ?2, ?3, ?4, 'Draft', ?5)",
+                params![
+                    &draft.tin,
+                    i64::from(draft.taxable_year),
+                    month,
+                    period_key,
+                    json
+                ],
+            )?;
+            tx.last_insert_rowid()
+        };
+
+        tx.commit()?;
+        let _ = self.request_google_calendar_sync();
+        Ok(id)
+    }
+
+    /// Validate and atomically persist the exact user-reviewed queue snapshot.
+    pub fn save_queued_1601c_draft(&self, draft: &Form1601CDraft) -> Result<i64, DbError> {
+        if !matches!(draft.status, FilingStatus::Queued) {
+            return Err(DbError::Other(
+                "Only a queued 1601C draft can be saved through the submission path".to_string(),
+            ));
+        }
+
+        let mut verified = draft.clone();
+        if let Err(errors) = verified.revalidate_queued_before_submission() {
+            let summary = errors
+                .iter()
+                .map(|(field, message)| format!("{field}: {message}"))
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(DbError::Other(format!(
+                "Queued 1601C draft failed queue-fingerprint validation: {summary}"
+            )));
+        }
+        verified.try_to_bir_xml_payload().map_err(|errors| {
+            DbError::Other(format!(
+                "Queued 1601C draft failed exact XML generation: {}",
+                errors
+                    .iter()
+                    .map(|(field, message)| format!("{field}: {message}"))
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            ))
+        })?;
+
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let month = i64::from(verified.month);
+        let period_key = FilingPeriod::Monthly(verified.month).to_period_key();
+        let json = serde_json::to_string(&verified)?;
+        let existing = tx
+            .query_row(
+                "SELECT id, status, data_json FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '1601C'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![&verified.tin, i64::from(verified.taxable_year), month],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?;
+
+        let id = if let Some((id, db_status, raw_json)) = existing {
+            if db_status != "Draft" {
+                return Err(DbError::Other(
+                    "1601C must be canceled back to Draft before a new queue snapshot can replace it"
+                        .to_string(),
+                ));
+            }
+            let stored: Form1601CDraft = serde_json::from_str(&raw_json)?;
+            if !matches!(stored.status, FilingStatus::Draft) {
+                return Err(DbError::Other(
+                    "1601C must be canceled back to Draft before a new queue snapshot can replace it"
+                        .to_string(),
+                ));
+            }
+            let updated = tx.execute(
+                "UPDATE form_drafts
+                 SET status = 'Queued', data_json = ?1, period_key = ?2,
+                     updated_at = datetime('now')
+                 WHERE id = ?3 AND status = 'Draft' AND data_json = ?4",
+                params![json, period_key, id, raw_json],
+            )?;
+            if updated != 1 {
+                return Err(DbError::Other(
+                    "1601C draft changed before its queue snapshot was persisted".to_string(),
+                ));
+            }
+            id
+        } else {
+            tx.execute(
+                "INSERT INTO form_drafts
+                    (tin, form_code, taxable_year, quarter, period_key, status, data_json)
+                 VALUES (?1, '1601C', ?2, ?3, ?4, 'Queued', ?5)",
+                params![
+                    &verified.tin,
+                    i64::from(verified.taxable_year),
+                    month,
+                    period_key,
+                    json
+                ],
+            )?;
+            tx.last_insert_rowid()
+        };
+
+        tx.commit()?;
+        let _ = self.request_google_calendar_sync();
+        Ok(id)
+    }
+
+    /// CAS-replace an unclaimed queue generation with a retry update or a
+    /// deliberate Draft rejection/cancellation. The caller must identify the
+    /// exact generation it previously loaded.
+    pub(crate) fn replace_unclaimed_queued_1601c_submission(
+        &self,
+        replacement: &Form1601CDraft,
+        expected_fingerprint: &Option<String>,
+        expected_next_retry_at: &Option<String>,
+        expected_submission_attempts: u32,
+    ) -> Result<bool, DbError> {
+        let mut replacement = replacement.clone();
+        if !matches!(
+            replacement.status,
+            FilingStatus::Draft | FilingStatus::Queued
+        ) {
+            return Err(DbError::Other(
+                "An unclaimed 1601C queue generation may only remain Queued or return to Draft"
+                    .to_string(),
+            ));
+        }
+        if matches!(replacement.status, FilingStatus::Queued)
+            && &replacement.queued_submission_fingerprint != expected_fingerprint
+        {
+            return Err(DbError::Other(
+                "A retry update cannot change the reviewed 1601C queue fingerprint".to_string(),
+            ));
+        }
+        if matches!(replacement.status, FilingStatus::Queued) {
+            if let Err(errors) = replacement.revalidate_queued_before_submission() {
+                return Err(DbError::Other(format!(
+                    "A retry update cannot persist invalid 1601C submission fields: {}",
+                    errors
+                        .iter()
+                        .map(|(field, message)| format!("{field}: {message}"))
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                )));
+            }
+        }
+        if replacement.submission_claim_token.is_some() {
+            return Err(DbError::Other(
+                "An unclaimed 1601C replacement cannot carry a network claim".to_string(),
+            ));
+        }
+
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json, db_status)) = tx
+            .query_row(
+                "SELECT id, data_json, status FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '1601C'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![
+                    &replacement.tin,
+                    i64::from(replacement.taxable_year),
+                    i64::from(replacement.month)
+                ],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?
+        else {
+            return Ok(false);
+        };
+        let current: Form1601CDraft = serde_json::from_str(&raw_json)?;
+        if db_status != "Queued"
+            || !matches!(current.status, FilingStatus::Queued)
+            || current.submission_claim_token.is_some()
+            || &current.queued_submission_fingerprint != expected_fingerprint
+            || &current.next_retry_at != expected_next_retry_at
+            || current.submission_attempts != expected_submission_attempts
+        {
+            return Ok(false);
+        }
+
+        let json = serde_json::to_string(&replacement)?;
+        let status = filing_status_to_db(&replacement.status);
+        let updated = tx.execute(
+            "UPDATE form_drafts
+             SET status = ?1, data_json = ?2, updated_at = datetime('now')
+             WHERE id = ?3 AND status = 'Queued' AND data_json = ?4",
+            params![status, json, id, raw_json],
         )?;
+        if updated != 1 {
+            return Ok(false);
+        }
+        tx.commit()?;
+        let _ = self.request_google_calendar_sync();
+        Ok(true)
+    }
 
-        let id = self.conn.last_insert_rowid();
+    /// Cancel one exact, still-unclaimed 1601C queue generation.
+    pub fn cancel_queued_1601c_submission(
+        &self,
+        queued: &Form1601CDraft,
+    ) -> Result<Form1601CDraft, DbError> {
+        if !matches!(queued.status, FilingStatus::Queued) || queued.submission_claim_token.is_some()
+        {
+            return Err(DbError::Other(
+                "Only an unclaimed queued 1601C snapshot can be canceled".to_string(),
+            ));
+        }
+        let mut verified = queued.clone();
+        if let Err(errors) = verified.revalidate_queued_before_submission() {
+            return Err(DbError::Other(format!(
+                "Only the exact reviewed 1601C queue snapshot can be canceled: {}",
+                errors
+                    .iter()
+                    .map(|(field, message)| format!("{field}: {message}"))
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            )));
+        }
+        let expected_fingerprint = verified.queued_submission_fingerprint.clone();
+        let expected_retry = verified.next_retry_at.clone();
+        let expected_attempts = verified.submission_attempts;
+        let mut draft = verified;
+        draft.revert_to_draft();
+        if !self.replace_unclaimed_queued_1601c_submission(
+            &draft,
+            &expected_fingerprint,
+            &expected_retry,
+            expected_attempts,
+        )? {
+            return Err(DbError::Other(
+                "1601C submission has already started or the queue generation changed".to_string(),
+            ));
+        }
+        Ok(draft)
+    }
+
+    /// Atomically revalidate and claim the exact queued 1601C generation
+    /// immediately before the irreversible network boundary.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn claim_queued_1601c_submission(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        month: u8,
+        expected_fingerprint: &Option<String>,
+        expected_next_retry_at: &Option<String>,
+        expected_submission_attempts: u32,
+    ) -> Result<Claim1601CSubmissionResult, DbError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json, db_status)) = tx
+            .query_row(
+                "SELECT id, data_json, status FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '1601C'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![tin, i64::from(taxable_year), i64::from(month)],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?
+        else {
+            return Ok(Claim1601CSubmissionResult::Superseded);
+        };
+        let mut draft: Form1601CDraft = serde_json::from_str(&raw_json)?;
+        if db_status != "Queued"
+            || !matches!(draft.status, FilingStatus::Queued)
+            || draft.submission_claim_token.is_some()
+            || &draft.queued_submission_fingerprint != expected_fingerprint
+            || &draft.next_retry_at != expected_next_retry_at
+            || draft.submission_attempts != expected_submission_attempts
+        {
+            return Ok(Claim1601CSubmissionResult::Superseded);
+        }
+
+        if let Err(errors) = draft.revalidate_queued_before_submission() {
+            let rejected_json = serde_json::to_string(&draft)?;
+            let updated = tx.execute(
+                "UPDATE form_drafts
+                 SET status = 'Draft', data_json = ?1, updated_at = datetime('now')
+                 WHERE id = ?2 AND status = 'Queued' AND data_json = ?3",
+                params![rejected_json, id, raw_json],
+            )?;
+            if updated != 1 {
+                return Ok(Claim1601CSubmissionResult::Superseded);
+            }
+            tx.commit()?;
+            return Ok(Claim1601CSubmissionResult::Rejected { draft, errors });
+        }
+
+        let token = uuid::Uuid::new_v4().to_string();
+        draft.submission_claim_token = Some(token.clone());
+        draft.submission_claimed_at = Some(chrono::Utc::now().to_rfc3339());
+        draft.submission_error = Some(
+            "Submission outcome pending. Automatic retry is disabled; keep any BIR confirmation or receipt and contact support for manual reconciliation before taking another submission action."
+                .to_string(),
+        );
+        let claimed_json = serde_json::to_string(&draft)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts
+             SET data_json = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND status = 'Queued' AND data_json = ?3",
+            params![claimed_json, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Ok(Claim1601CSubmissionResult::Superseded);
+        }
+        tx.commit()?;
+        Ok(Claim1601CSubmissionResult::Claimed { draft, token })
+    }
+
+    /// Finalize a claimed 1601C network attempt. Only the worker holding the
+    /// durable token may replace the claimed snapshot.
+    pub(crate) fn finish_claimed_1601c_submission(
+        &self,
+        draft: &Form1601CDraft,
+        claim_token: &str,
+    ) -> Result<i64, DbError> {
+        if !matches!(draft.status, FilingStatus::Submitted) {
+            return Err(DbError::Other(
+                "Only a Submitted 1601C snapshot can finish a network claim".to_string(),
+            ));
+        }
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json, db_status)) = tx
+            .query_row(
+                "SELECT id, data_json, status FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '1601C'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![
+                    &draft.tin,
+                    i64::from(draft.taxable_year),
+                    i64::from(draft.month)
+                ],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?
+        else {
+            return Err(DbError::Other(
+                "Claimed 1601C draft disappeared before the network attempt finished".to_string(),
+            ));
+        };
+        let existing: Form1601CDraft = serde_json::from_str(&raw_json)?;
+        if db_status != "Queued" || existing.submission_claim_token.as_deref() != Some(claim_token)
+        {
+            return Err(DbError::Other(
+                "1601C submission claim no longer belongs to this worker".to_string(),
+            ));
+        }
+        if draft.queued_submission_fingerprint != existing.queued_submission_fingerprint
+            || draft.to_bir_field_map() != existing.to_bir_field_map()
+        {
+            return Err(DbError::Other(
+                "Claimed 1601C submission fields changed before completion".to_string(),
+            ));
+        }
+        let expected_filename = existing.default_submission_filename();
+        if draft.submission_filename.as_deref() != Some(expected_filename.as_str())
+            || draft.submitted_at.is_none()
+        {
+            return Err(DbError::Other(
+                "Claimed 1601C submission completion did not preserve the reviewed IAF filename and timestamp"
+                    .to_string(),
+            ));
+        }
+
+        let mut finished = draft.clone();
+        finished.submission_claim_token = None;
+        finished.submission_claimed_at = None;
+        let json = serde_json::to_string(&finished)?;
+        let period_key = FilingPeriod::Monthly(finished.month).to_period_key();
+        let updated = tx.execute(
+            "UPDATE form_drafts
+             SET status = 'Submitted', data_json = ?1, period_key = ?2,
+                 updated_at = datetime('now')
+             WHERE id = ?3 AND status = 'Queued' AND data_json = ?4",
+            params![json, period_key, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Err(DbError::Other(
+                "1601C submission claim changed before completion".to_string(),
+            ));
+        }
+        tx.commit()?;
         let _ = self.request_google_calendar_sync();
         Ok(id)
     }
@@ -843,7 +1293,7 @@ impl Database {
         tin: &str,
         year: u16,
         month: u8,
-    ) -> Result<Option<crate::forms::form_1601c::Form1601CDraft>, DbError> {
+    ) -> Result<Option<Form1601CDraft>, DbError> {
         let mut stmt = self.conn.prepare(
             "SELECT data_json FROM form_drafts
              WHERE tin = ?1 AND form_code = '1601C'
@@ -852,7 +1302,7 @@ impl Database {
         let mut rows = stmt.query(params![tin, year as i64, month as i64])?;
         if let Some(row) = rows.next()? {
             let json: String = row.get(0)?;
-            let draft: crate::forms::form_1601c::Form1601CDraft = serde_json::from_str(&json)?;
+            let draft: Form1601CDraft = serde_json::from_str(&json)?;
             Ok(Some(draft))
         } else {
             Ok(None)
@@ -885,6 +1335,65 @@ impl Database {
         let period = period_from_legacy_slot(form_code, legacy_slot, default_open_ended_key);
         let legacy_slot = legacy_slot_for_period(&period);
         let period_key = period.to_period_key();
+
+        if form_code == "1601C" {
+            let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+            let existing = tx
+                .query_row(
+                    "SELECT id, status, data_json FROM form_drafts
+                     WHERE tin = ?1 AND form_code = '1601C'
+                       AND taxable_year = ?2 AND period_key = ?3",
+                    params![tin, i64::from(year), &period_key],
+                    |row| {
+                        Ok((
+                            row.get::<_, i64>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, String>(2)?,
+                        ))
+                    },
+                )
+                .optional()?;
+
+            let id = if let Some((id, status, raw_json)) = existing {
+                if status != "Draft" {
+                    return Err(DbError::Other(
+                        "An imported 1601C return cannot replace a queued or filed snapshot"
+                            .to_string(),
+                    ));
+                }
+                let stored: Form1601CDraft = serde_json::from_str(&raw_json)?;
+                if !matches!(stored.status, FilingStatus::Draft) {
+                    return Err(DbError::Other(
+                        "An imported 1601C return cannot replace a queued or filed snapshot"
+                            .to_string(),
+                    ));
+                }
+                let updated = tx.execute(
+                    "UPDATE form_drafts
+                     SET quarter = ?1, status = 'Submitted', data_json = '{}',
+                         updated_at = datetime('now')
+                     WHERE id = ?2 AND status = 'Draft' AND data_json = ?3",
+                    params![legacy_slot, id, raw_json],
+                )?;
+                if updated != 1 {
+                    return Err(DbError::Other(
+                        "1601C draft changed before the imported return was saved".to_string(),
+                    ));
+                }
+                id
+            } else {
+                tx.execute(
+                    "INSERT INTO form_drafts
+                        (tin, form_code, taxable_year, quarter, period_key, status, data_json)
+                     VALUES (?1, '1601C', ?2, ?3, ?4, 'Submitted', '{}')",
+                    params![tin, i64::from(year), legacy_slot, &period_key],
+                )?;
+                tx.last_insert_rowid()
+            };
+            tx.commit()?;
+            let _ = self.request_google_calendar_sync();
+            return Ok(id);
+        }
 
         let rows_updated = self.conn.execute(
             "UPDATE form_drafts
@@ -1089,6 +1598,13 @@ impl Database {
         status: &FilingStatus,
         draft: &T,
     ) -> Result<i64, DbError> {
+        if form_code == "1601C" {
+            return Err(DbError::Other(
+                "1601C must use its dedicated immutable draft or queue persistence path"
+                    .to_string(),
+            ));
+        }
+
         if matches!(status, FilingStatus::Queued)
             && !crate::forms::can_queue_for_submission(form_code)
         {
@@ -1259,6 +1775,21 @@ mod tests {
         draft
     }
 
+    fn editable_1601c_draft(profile: &TaxpayerProfile) -> Form1601CDraft {
+        let mut draft = Form1601CDraft::new_from_profile(profile, 2026, 5);
+        draft.any_taxes_withheld = false;
+        draft.compute();
+        draft
+    }
+
+    fn queued_1601c_draft(profile: &TaxpayerProfile) -> Form1601CDraft {
+        let mut draft = editable_1601c_draft(profile);
+        draft
+            .transition_to_queued()
+            .expect("the reviewed 1601C draft should queue");
+        draft
+    }
+
     #[test]
     fn save_and_reopen_2551q_preserves_ten_distinct_printable_schedule_rows() {
         let db = test_db();
@@ -1360,6 +1891,246 @@ mod tests {
             "International Tax Treaty"
         );
         assert_eq!(reopened.tax_26_adjustment, 150.0);
+    }
+
+    #[test]
+    fn editable_1601c_to_exact_xml_queue_claim_and_completion_is_immutable() {
+        let db = test_db();
+        let profile = test_profile();
+        let editable = editable_1601c_draft(&profile);
+        db.save_1601c_draft(&editable)
+            .expect("editable 1601C should save");
+
+        let mut queued = editable.clone();
+        queued
+            .transition_to_queued()
+            .expect("validated editable 1601C should queue");
+        let queued_fields = queued.to_bir_field_map();
+        let xml = queued
+            .try_to_bir_xml_payload()
+            .expect("queued 1601C should produce checked XML");
+        assert_eq!(
+            crate::bir_xml::parse_bir_xml_checked(&xml).unwrap(),
+            queued_fields
+        );
+        assert_eq!(
+            queued.default_submission_filename(),
+            "123456789000-1601Cv2018-052026#test@example.com#.xml"
+        );
+
+        db.save_queued_1601c_draft(&queued)
+            .expect("reviewed queue snapshot should persist");
+        let stored = db
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.status, FilingStatus::Queued);
+        assert_eq!(stored.to_bir_field_map(), queued_fields);
+        assert_eq!(
+            stored.queued_submission_fingerprint,
+            queued.queued_submission_fingerprint
+        );
+        let mut tampered_cancellation = stored.clone();
+        tampered_cancellation.tax_14_total_compensation = 42.0;
+        assert!(
+            db.cancel_queued_1601c_submission(&tampered_cancellation)
+                .is_err()
+        );
+
+        let mut stale_editable = editable.clone();
+        stale_editable.tax_14_total_compensation = 99_999.0;
+        assert!(db.save_1601c_draft(&stale_editable).is_err());
+        assert!(
+            db.save_form_draft_v2(
+                &stale_editable.tin,
+                "1601C",
+                stale_editable.taxable_year,
+                &FilingPeriod::Monthly(stale_editable.month),
+                &FilingStatus::Draft,
+                &stale_editable,
+            )
+            .is_err()
+        );
+        assert!(
+            db.save_form_draft(
+                &stale_editable.tin,
+                "1601C",
+                stale_editable.taxable_year,
+                Some(stale_editable.month),
+                &FilingStatus::Draft,
+                &stale_editable,
+            )
+            .is_err()
+        );
+        assert!(
+            db.save_imported_form(
+                &stale_editable.tin,
+                "1601C",
+                stale_editable.taxable_year,
+                None,
+                Some(stale_editable.month),
+            )
+            .is_err()
+        );
+        assert_eq!(
+            db.get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+                .unwrap()
+                .unwrap()
+                .to_bir_field_map(),
+            queued_fields
+        );
+
+        let expected_fingerprint = stored.queued_submission_fingerprint.clone();
+        let expected_retry = stored.next_retry_at.clone();
+        let expected_attempts = stored.submission_attempts;
+        let (mut claimed, token) = match db
+            .claim_queued_1601c_submission(
+                &stored.tin,
+                stored.taxable_year,
+                stored.month,
+                &expected_fingerprint,
+                &expected_retry,
+                expected_attempts,
+            )
+            .unwrap()
+        {
+            Claim1601CSubmissionResult::Claimed { draft, token } => (draft, token),
+            _ => panic!("the unchanged queue generation should be claimed"),
+        };
+        assert_eq!(claimed.to_bir_field_map(), queued_fields);
+        assert_eq!(
+            claimed.submission_claim_token.as_deref(),
+            Some(token.as_str())
+        );
+
+        let mut stale_cancellation = queued.clone();
+        stale_cancellation.revert_to_draft();
+        assert!(
+            !db.replace_unclaimed_queued_1601c_submission(
+                &stale_cancellation,
+                &expected_fingerprint,
+                &expected_retry,
+                expected_attempts,
+            )
+            .unwrap(),
+            "a claimed queue generation must reject stale cancellation"
+        );
+        assert!(db.save_1601c_draft(&stale_editable).is_err());
+
+        let filename = claimed.default_submission_filename();
+        let mut wrong_filename = claimed.clone();
+        wrong_filename.transition_to_submitted("wrong.xml".to_string());
+        assert!(
+            db.finish_claimed_1601c_submission(&wrong_filename, &token)
+                .is_err()
+        );
+        claimed.transition_to_submitted(filename.clone());
+        assert!(
+            db.finish_claimed_1601c_submission(&claimed, "wrong-token")
+                .is_err()
+        );
+        db.finish_claimed_1601c_submission(&claimed, &token)
+            .expect("the claim owner should finalize the exact submitted snapshot");
+
+        let submitted = db
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(submitted.status, FilingStatus::Submitted);
+        assert_eq!(submitted.to_bir_field_map(), queued_fields);
+        assert_eq!(
+            submitted.submission_filename.as_deref(),
+            Some(filename.as_str())
+        );
+        assert!(submitted.submission_claim_token.is_none());
+        assert!(db.save_1601c_draft(&stale_editable).is_err());
+    }
+
+    #[test]
+    fn claimed_1601c_revalidation_atomically_rejects_tampered_queue_data() {
+        let db = test_db();
+        let profile = test_profile();
+        let queued = queued_1601c_draft(&profile);
+        db.save_queued_1601c_draft(&queued).unwrap();
+
+        let expected_fingerprint = queued.queued_submission_fingerprint.clone();
+        let expected_retry = queued.next_retry_at.clone();
+        let expected_attempts = queued.submission_attempts;
+        let mut tampered = db
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap();
+        tampered.tax_14_total_compensation = 42.0;
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET data_json = ?1
+                 WHERE tin = ?2 AND form_code = '1601C'
+                   AND taxable_year = ?3 AND quarter = ?4",
+                params![
+                    serde_json::to_string(&tampered).unwrap(),
+                    &queued.tin,
+                    i64::from(queued.taxable_year),
+                    i64::from(queued.month)
+                ],
+            )
+            .unwrap();
+
+        match db
+            .claim_queued_1601c_submission(
+                &queued.tin,
+                queued.taxable_year,
+                queued.month,
+                &expected_fingerprint,
+                &expected_retry,
+                expected_attempts,
+            )
+            .unwrap()
+        {
+            Claim1601CSubmissionResult::Rejected { draft, errors } => {
+                assert_eq!(draft.status, FilingStatus::Draft);
+                assert!(errors.iter().any(|(field, _)| {
+                    field == "queued_submission_fingerprint" || field == "tax_22_total_taxable"
+                }));
+            }
+            _ => panic!("tampered queue data must be rejected before a claim"),
+        }
+
+        let rejected = db
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(rejected.status, FilingStatus::Draft);
+        assert!(rejected.submission_claim_token.is_none());
+        assert!(
+            rejected
+                .submission_error
+                .as_deref()
+                .is_some_and(|message| message.contains("queue revalidation"))
+        );
+    }
+
+    #[test]
+    fn exact_unclaimed_1601c_queue_can_be_canceled_edited_and_requeued() {
+        let db = test_db();
+        let profile = test_profile();
+        let queued = queued_1601c_draft(&profile);
+        db.save_queued_1601c_draft(&queued).unwrap();
+
+        let mut canceled = db.cancel_queued_1601c_submission(&queued).unwrap();
+        assert_eq!(canceled.status, FilingStatus::Draft);
+        assert!(canceled.queued_submission_fingerprint.is_none());
+        canceled.tax_14_total_compensation = 123.45;
+        canceled.compute();
+        db.save_1601c_draft(&canceled).unwrap();
+
+        canceled.transition_to_queued().unwrap();
+        db.save_queued_1601c_draft(&canceled).unwrap();
+        let requeued = db
+            .get_1601c_draft(&canceled.tin, canceled.taxable_year, canceled.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(requeued.status, FilingStatus::Queued);
+        assert_eq!(requeued.to_bir_field_map(), canceled.to_bir_field_map());
     }
 
     #[test]
@@ -2376,18 +3147,11 @@ mod tests {
     #[test]
     fn monthly_and_quarterly_summaries_follow_period_keys() {
         let db = test_db();
-        db.save_form_draft_v2(
-            "123456789000",
-            "1601C",
-            2026,
-            &FilingPeriod::Monthly(12),
-            // 1601C remains a persisted editor scaffold until its formula and
-            // XML round-trip evidence is reviewed; do not make this period-key
-            // test bypass the capability registry's queue gate.
-            &FilingStatus::Draft,
-            &TestDraft { value: 1 },
-        )
-        .unwrap();
+        let profile = test_profile();
+        let mut monthly = editable_1601c_draft(&profile);
+        monthly.month = 12;
+        monthly.compute();
+        db.save_1601c_draft(&monthly).unwrap();
         db.save_form_draft_v2(
             "123456789000",
             "2551Q",

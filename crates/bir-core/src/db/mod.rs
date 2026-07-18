@@ -13,7 +13,7 @@
 //! - `notices` — BIR notices, announcements, deadlines, penalties
 
 mod drafts;
-pub(crate) use drafts::Claim2551QSubmissionResult;
+pub(crate) use drafts::{Claim1601CSubmissionResult, Claim2551QSubmissionResult};
 mod forms_set;
 mod google_calendar;
 mod jobs;

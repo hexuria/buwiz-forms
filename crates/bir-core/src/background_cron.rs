@@ -1,6 +1,7 @@
-use crate::db::{Claim2551QSubmissionResult, Database};
-use crate::forms::FilingStatus;
+use crate::db::{Claim1601CSubmissionResult, Claim2551QSubmissionResult, Database};
+use crate::forms::form_1601c::Form1601CDraft;
 use crate::forms::form_2551q::Form2551QDraft;
+use crate::forms::{FilingStatus, FormDraftSummary};
 use crate::profile::TaxpayerProfile;
 use chrono::{Datelike, Utc};
 use std::collections::HashSet;
@@ -276,12 +277,260 @@ fn prepare_queued_2551q(
     }
 }
 
+/// Identity of one user-reviewed 1601C queue generation. Retry metadata makes
+/// cancellation followed by an identical requeue distinguishable.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Queued1601CRevision {
+    fingerprint: Option<String>,
+    next_retry_at: Option<String>,
+    submission_attempts: u32,
+}
+
+enum Queued1601CPreparation {
+    Ready {
+        draft: Form1601CDraft,
+        revision: Queued1601CRevision,
+    },
+    Rejected {
+        draft: Form1601CDraft,
+        revision: Queued1601CRevision,
+        errors: Vec<(String, String)>,
+    },
+    Superseded,
+}
+
+fn queued_1601c_revision(draft: &Form1601CDraft) -> Option<Queued1601CRevision> {
+    (matches!(draft.status, FilingStatus::Queued) && draft.submission_claim_token.is_none()).then(
+        || Queued1601CRevision {
+            fingerprint: draft.queued_submission_fingerprint.clone(),
+            next_retry_at: draft.next_retry_at.clone(),
+            submission_attempts: draft.submission_attempts,
+        },
+    )
+}
+
+fn prepare_queued_1601c(
+    mut draft: Form1601CDraft,
+    expected_revision: Option<&Queued1601CRevision>,
+) -> Queued1601CPreparation {
+    let Some(revision) = queued_1601c_revision(&draft) else {
+        return Queued1601CPreparation::Superseded;
+    };
+    if expected_revision.is_some_and(|expected| expected != &revision) {
+        return Queued1601CPreparation::Superseded;
+    }
+
+    match draft.revalidate_queued_before_submission() {
+        Ok(()) => Queued1601CPreparation::Ready { draft, revision },
+        Err(errors) => Queued1601CPreparation::Rejected {
+            draft,
+            revision,
+            errors,
+        },
+    }
+}
+
 fn validation_reason(errors: &[(String, String)]) -> String {
     errors
         .iter()
         .map(|(field, message)| format!("{field}: {message}"))
         .collect::<Vec<_>>()
         .join("; ")
+}
+
+async fn process_queued_1601c(
+    summary: &FormDraftSummary,
+    profile: &TaxpayerProfile,
+    db: Arc<Mutex<Database>>,
+) {
+    let Some(month) = summary.month else {
+        warn!("Cron: Refusing 1601C queue row without a monthly period");
+        return;
+    };
+    let loaded_draft = {
+        let db_guard = match db.lock() {
+            Ok(guard) => guard,
+            Err(_) => return,
+        };
+        match db_guard.get_1601c_draft(&summary.tin, summary.taxable_year, month) {
+            Ok(Some(draft)) => draft,
+            _ => return,
+        }
+    };
+
+    if loaded_draft.submission_claim_token.is_some() {
+        warn!(
+            "Cron: 1601C {} has an unresolved submission outcome; automatic retry is disabled and support-assisted manual reconciliation is required",
+            loaded_draft.period_code()
+        );
+        crate::ipc::post_db_changed();
+        return;
+    }
+
+    let (mut draft, queue_revision) = match prepare_queued_1601c(loaded_draft, None) {
+        Queued1601CPreparation::Ready { draft, revision } => (draft, revision),
+        Queued1601CPreparation::Rejected {
+            draft,
+            revision,
+            errors,
+        } => {
+            let reason = validation_reason(&errors);
+            warn!(
+                "Cron: Refusing invalid queued 1601C {} before XML generation: {}",
+                draft.period_code(),
+                reason
+            );
+            if let Ok(db_guard) = db.lock() {
+                let _ = db_guard.replace_unclaimed_queued_1601c_submission(
+                    &draft,
+                    &revision.fingerprint,
+                    &revision.next_retry_at,
+                    revision.submission_attempts,
+                );
+            }
+            crate::ipc::post_db_changed();
+            return;
+        }
+        Queued1601CPreparation::Superseded => return,
+    };
+
+    if let Some(next_retry) = &draft.next_retry_at
+        && let Ok(next_time) = chrono::DateTime::parse_from_rfc3339(next_retry)
+        && Utc::now() < next_time.with_timezone(&Utc)
+    {
+        return;
+    }
+
+    info!(
+        "Cron: Attempting to submit queued 1601C {} for {}",
+        draft.period_code(),
+        draft.tin
+    );
+    let filename = draft.default_submission_filename();
+    let xml_payload = match draft.try_to_bir_xml_payload() {
+        Ok(payload) => payload,
+        Err(errors) => {
+            let reason = validation_reason(&errors);
+            draft.revert_to_draft();
+            draft.submission_error = Some(format!(
+                "Submission blocked at XML generation boundary: {reason}"
+            ));
+            if let Ok(db_guard) = db.lock() {
+                let _ = db_guard.replace_unclaimed_queued_1601c_submission(
+                    &draft,
+                    &queue_revision.fingerprint,
+                    &queue_revision.next_retry_at,
+                    queue_revision.submission_attempts,
+                );
+            }
+            crate::ipc::post_db_changed();
+            return;
+        }
+    };
+    let encrypted = match crate::crypto::compress_and_encrypt(
+        xml_payload.as_bytes(),
+        crate::crypto::BIR_IAF_PASSPHRASE,
+    ) {
+        Ok(encrypted) => encrypted,
+        Err(error) => {
+            fail_draft_1601c(&mut draft, &queue_revision, db.clone(), error.to_string());
+            return;
+        }
+    };
+
+    let Some(form_type) = crate::forms::fileable_form_type_id("1601C") else {
+        warn!(
+            "Cron: Refusing to submit {} because 1601C is not authorized for queue submission",
+            draft.period_code()
+        );
+        return;
+    };
+
+    let claim_result = {
+        let db_guard = match db.lock() {
+            Ok(guard) => guard,
+            Err(_) => return,
+        };
+        db_guard.claim_queued_1601c_submission(
+            &draft.tin,
+            draft.taxable_year,
+            draft.month,
+            &queue_revision.fingerprint,
+            &queue_revision.next_retry_at,
+            queue_revision.submission_attempts,
+        )
+    };
+    let claim_token = match claim_result {
+        Ok(Claim1601CSubmissionResult::Claimed {
+            draft: claimed_draft,
+            token,
+        }) => {
+            draft = claimed_draft;
+            crate::ipc::post_db_changed();
+            token
+        }
+        Ok(Claim1601CSubmissionResult::Rejected { draft, errors }) => {
+            warn!(
+                "Cron: 1601C submission claim rejected {}: {}",
+                draft.period_code(),
+                validation_reason(&errors)
+            );
+            crate::ipc::post_db_changed();
+            return;
+        }
+        Ok(Claim1601CSubmissionResult::Superseded) => {
+            info!(
+                "Cron: 1601C submission job for {} was canceled or superseded before network I/O",
+                draft.period_code()
+            );
+            return;
+        }
+        Err(error) => {
+            warn!(
+                "Cron: Could not claim queued 1601C {} because the database claim failed: {}",
+                draft.period_code(),
+                error
+            );
+            return;
+        }
+    };
+
+    match crate::transport::submit_iaf(form_type, &filename, &encrypted).await {
+        Ok(()) => {
+            info!("Cron: Successfully submitted queued 1601C {}", filename);
+            crate::notification::send_notification(
+                "BIR Form Submitted",
+                &format!(
+                    "Filename: {}\nTimestamp: {}",
+                    filename,
+                    Utc::now().format("%I:%M %p")
+                ),
+            );
+            draft.transition_to_submitted(filename);
+            if let Ok(db_guard) = db.lock() {
+                match db_guard.finish_claimed_1601c_submission(&draft, &claim_token) {
+                    Ok(_) => schedule_email_poll(profile, "1601C", &db_guard),
+                    Err(error) => warn!(
+                        "Cron: 1601C {} was transmitted but its submission claim could not be finalized: {}",
+                        draft.period_code(),
+                        error
+                    ),
+                }
+            }
+        }
+        Err(error) => {
+            let error_category = match error {
+                crate::transport::TransportError::Ftp(_) => "ftp",
+                crate::transport::TransportError::Io(_) => "io",
+                crate::transport::TransportError::Rejected => "rejected",
+            };
+            warn!(
+                error_category,
+                "Cron: 1601C transport ended after the network claim; outcome is unknown and support-assisted manual reconciliation is required"
+            );
+            crate::ipc::post_db_changed();
+        }
+    }
 }
 
 async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Database>>) {
@@ -545,6 +794,8 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                         crate::ipc::post_db_changed();
                     }
                 }
+            } else if summary.form_code == "1601C" {
+                process_queued_1601c(&summary, &profile_clone, db_clone.clone()).await;
             }
 
             crate::ipc::post_db_changed();
@@ -627,6 +878,39 @@ fn fail_draft_2551q(
                 draft.period_code(),
                 error
             );
+        }
+    }
+}
+
+fn fail_draft_1601c(
+    draft: &mut Form1601CDraft,
+    revision: &Queued1601CRevision,
+    db: Arc<Mutex<Database>>,
+    error_message: String,
+) {
+    warn!(
+        "Cron: 1601C submission preparation failed for {}: {}",
+        draft.period_code(),
+        error_message
+    );
+    draft.record_submission_failure(error_message);
+    if let Ok(db_guard) = db.lock() {
+        match db_guard.replace_unclaimed_queued_1601c_submission(
+            draft,
+            &revision.fingerprint,
+            &revision.next_retry_at,
+            revision.submission_attempts,
+        ) {
+            Ok(true) => {}
+            Ok(false) => info!(
+                "Cron: 1601C {} was canceled or superseded before retry state persisted",
+                draft.period_code()
+            ),
+            Err(error) => warn!(
+                "Cron: Failed to persist 1601C submission preparation failure for {}: {}",
+                draft.period_code(),
+                error
+            ),
         }
     }
 }
@@ -850,6 +1134,7 @@ impl Drop for JobCleanup {
 mod tests {
     use super::*;
     use crate::db::Database;
+    use crate::forms::form_1601c::Form1601CDraft;
     use crate::forms::form_2551q::Item13Election;
     use crate::profile::{EoptTier, IncomeTaxElection, TaxElectionHistory, TaxpayerProfile};
     use tempfile::NamedTempFile;
@@ -895,6 +1180,15 @@ mod tests {
         draft
             .transition_to_queued()
             .expect("the reviewed draft should queue");
+        draft
+    }
+
+    fn queued_1601c_draft(profile: &TaxpayerProfile) -> Form1601CDraft {
+        let mut draft = Form1601CDraft::new_from_profile(profile, 2099, 5);
+        draft.any_taxes_withheld = false;
+        draft
+            .transition_to_queued()
+            .expect("the reviewed 1601C draft should queue");
         draft
     }
 
@@ -992,6 +1286,54 @@ mod tests {
         assert!(matches!(
             prepare_queued_2551q(draft, &profile, None),
             Queued2551QPreparation::Superseded
+        ));
+    }
+
+    #[test]
+    fn queued_1601c_preparation_binds_exact_fields_and_queue_generation() {
+        let profile = test_profile();
+        let draft = queued_1601c_draft(&profile);
+        let revision = match prepare_queued_1601c(draft.clone(), None) {
+            Queued1601CPreparation::Ready { draft, revision } => {
+                assert!(draft.try_to_bir_xml_payload().is_ok());
+                revision
+            }
+            _ => panic!("the unchanged 1601C queue snapshot should prepare"),
+        };
+
+        let mut tampered = draft.clone();
+        tampered.tax_14_total_compensation = 10.0;
+        match prepare_queued_1601c(tampered, Some(&revision)) {
+            Queued1601CPreparation::Rejected { draft, errors, .. } => {
+                assert_eq!(draft.status, FilingStatus::Draft);
+                assert!(
+                    errors
+                        .iter()
+                        .any(|(field, _)| field == "queued_submission_fingerprint")
+                );
+            }
+            _ => panic!("tampered 1601C fields must fail before XML generation"),
+        }
+
+        let mut requeued = draft;
+        requeued.next_retry_at = Some("2099-01-01T00:00:00Z".to_string());
+        assert!(matches!(
+            prepare_queued_1601c(requeued, Some(&revision)),
+            Queued1601CPreparation::Superseded
+        ));
+    }
+
+    #[test]
+    fn unresolved_1601c_claim_is_never_eligible_for_automatic_retry() {
+        let profile = test_profile();
+        let mut draft = queued_1601c_draft(&profile);
+        draft.submission_claim_token = Some("unknown-network-outcome".to_string());
+        draft.submission_claimed_at = Some("2099-01-01T00:00:00Z".to_string());
+
+        assert!(queued_1601c_revision(&draft).is_none());
+        assert!(matches!(
+            prepare_queued_1601c(draft, None),
+            Queued1601CPreparation::Superseded
         ));
     }
 }

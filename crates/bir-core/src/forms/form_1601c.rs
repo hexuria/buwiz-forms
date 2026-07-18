@@ -7,8 +7,9 @@
 
 use super::{FilingStatus, FormValidator};
 use crate::profile::TaxpayerProfile;
-use crate::validation::{validate_ph_phone, validate_zip};
+use crate::validation::{validate_email, validate_ph_phone, validate_zip};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 /// The 1601-C January 2018 XML contract exposes exactly three Schedule I rows.
 pub const MAX_SCHEDULE_1_ROWS: usize = 3;
@@ -197,6 +198,22 @@ pub struct Form1601CDraft {
     pub created_at: String,
     pub updated_at: String,
 
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub submitted_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub submission_filename: Option<String>,
+
+    /// SHA-256 over the exact reviewed 1601Cv2018 field map at the moment the
+    /// user queues the return. Queue retries must reproduce this fingerprint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub queued_submission_fingerprint: Option<String>,
+    /// Durable claim established immediately before network I/O. It has no
+    /// automatic lease expiry because a crash can leave an unknown BIR result.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub submission_claim_token: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub submission_claimed_at: Option<String>,
+
     #[serde(default)]
     pub submission_attempts: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -262,6 +279,11 @@ impl Form1601CDraft {
             status: FilingStatus::Draft,
             created_at: now.clone(),
             updated_at: now,
+            submitted_at: None,
+            submission_filename: None,
+            queued_submission_fingerprint: None,
+            submission_claim_token: None,
+            submission_claimed_at: None,
             submission_attempts: 0,
             submission_error: None,
             next_retry_at: None,
@@ -274,30 +296,147 @@ impl Form1601CDraft {
 
     pub fn default_submission_filename(&self) -> String {
         format!(
-            "{}-1601Cv2018-{}.xml",
+            "{}-1601Cv2018-{}#{}#.xml",
             self.tin.replace("-", ""),
-            self.period_code()
+            self.period_code(),
+            self.email_address
         )
     }
 
-    pub fn transition_to_submitted(&mut self, _filename: String) {
-        self.status = FilingStatus::Submitted;
+    fn submission_fingerprint(&self) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(b"ebirforms:1601Cv2018:queued-submission:v1\0");
+        hasher.update(
+            serde_json::to_vec(&self.to_bir_field_map())
+                .expect("a BTreeMap<String, String> always serializes to JSON"),
+        );
+        hex::encode(hasher.finalize())
+    }
+
+    pub fn is_editable(&self) -> bool {
+        matches!(self.status, FilingStatus::Draft)
+    }
+
+    /// Transition an editable, validated snapshot into the background queue.
+    /// Manual penalty inputs are frozen into the field-map fingerprint.
+    pub fn transition_to_queued(&mut self) -> Result<(), Vec<(String, String)>> {
+        assert!(
+            matches!(self.status, FilingStatus::Draft),
+            "Cannot queue form in {:?} status - must be Draft",
+            self.status
+        );
+        self.compute();
+        let errors = self.validate();
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        self.queued_submission_fingerprint = Some(self.submission_fingerprint());
+        self.submission_claim_token = None;
+        self.submission_claimed_at = None;
+        self.status = FilingStatus::Queued;
+        self.submission_attempts = 0;
+        self.submission_error = None;
+        self.next_retry_at = Some(chrono::Utc::now().to_rfc3339());
         self.updated_at = chrono::Utc::now().to_rfc3339();
+        Ok(())
+    }
+
+    pub fn transition_to_submitted(&mut self, filename: String) {
+        assert!(
+            matches!(self.status, FilingStatus::Queued),
+            "Cannot submit form in {:?} status - must be Queued",
+            self.status
+        );
+        let now = chrono::Utc::now().to_rfc3339();
+        self.status = FilingStatus::Submitted;
+        self.submitted_at = Some(now.clone());
+        self.submission_filename = Some(filename);
+        self.submission_attempts = 0;
         self.submission_error = None;
         self.next_retry_at = None;
+        self.submission_claim_token = None;
+        self.submission_claimed_at = None;
+        self.updated_at = now;
     }
 
     pub fn revert_to_draft(&mut self) {
+        assert!(
+            !matches!(self.status, FilingStatus::Paid),
+            "Cannot revert a Paid form to Draft"
+        );
         self.status = FilingStatus::Draft;
+        self.submitted_at = None;
+        self.submission_filename = None;
+        self.queued_submission_fingerprint = None;
+        self.submission_claim_token = None;
+        self.submission_claimed_at = None;
         self.submission_attempts = 0;
         self.submission_error = None;
         self.next_retry_at = None;
         self.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
+    /// Recompute and validate an immutable queued snapshot immediately before
+    /// XML generation or a database claim. Any drift returns it to Draft.
+    pub fn revalidate_queued_before_submission(&mut self) -> Result<(), Vec<(String, String)>> {
+        assert!(
+            matches!(self.status, FilingStatus::Queued),
+            "Cannot revalidate a form in {:?} status - must be Queued",
+            self.status
+        );
+        let reviewed_fingerprint = self.queued_submission_fingerprint.clone();
+        self.compute();
+        let refreshed_fingerprint = self.submission_fingerprint();
+        let mut errors = self.validate();
+        match reviewed_fingerprint {
+            Some(fingerprint) if fingerprint == refreshed_fingerprint => {}
+            Some(_) => errors.push((
+                "queued_submission_fingerprint".to_string(),
+                "Submission fields changed after the return was queued; review the return and queue it again"
+                    .to_string(),
+            )),
+            None => errors.push((
+                "queued_submission_fingerprint".to_string(),
+                "Queued return has no review fingerprint; reopen and queue it again before submission"
+                    .to_string(),
+            )),
+        }
+        if errors.is_empty() {
+            return Ok(());
+        }
+
+        let summary = errors
+            .iter()
+            .map(|(field, message)| format!("{field}: {message}"))
+            .collect::<Vec<_>>()
+            .join("; ");
+        self.revert_to_draft();
+        self.submission_error = Some(format!(
+            "Submission blocked by queue revalidation: {summary}"
+        ));
+        Err(errors)
+    }
+
     pub fn record_submission_failure(&mut self, error_msg: String) {
+        assert!(
+            matches!(self.status, FilingStatus::Queued),
+            "Cannot record submission failure in {:?} status - must be Queued",
+            self.status
+        );
         self.submission_attempts += 1;
         self.submission_error = Some(error_msg);
+        self.submission_claim_token = None;
+        self.submission_claimed_at = None;
+        if self.submission_attempts >= 5 {
+            self.status = FilingStatus::Draft;
+            self.next_retry_at = None;
+            self.queued_submission_fingerprint = None;
+        } else {
+            let delay_minutes = 2i64.pow(self.submission_attempts - 1);
+            self.next_retry_at =
+                Some((chrono::Utc::now() + chrono::Duration::minutes(delay_minutes)).to_rfc3339());
+        }
         self.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
@@ -380,6 +519,18 @@ impl FormValidator for Form1601CDraft {
 
         if self.tin.trim().is_empty() {
             errors.push(("tin".to_string(), "TIN is required".to_string()));
+        }
+
+        if self.email_address.trim().is_empty() {
+            errors.push((
+                "email_address".to_string(),
+                "Email address is required for the reviewed IAF filename".to_string(),
+            ));
+        } else if !validate_email(&self.email_address) {
+            errors.push((
+                "email_address".to_string(),
+                "Email address is invalid".to_string(),
+            ));
         }
 
         if self.rdo_code.trim().is_empty() {

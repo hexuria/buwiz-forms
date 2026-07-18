@@ -37,7 +37,7 @@
         "xml_round_trip": true,
         "formula_evidence": true,
         "persistence": true,
-        "queue_submission": false,
+        "queue_submission": true,
         "editor": true,
         "render_contract": true,
         "html_component": true,

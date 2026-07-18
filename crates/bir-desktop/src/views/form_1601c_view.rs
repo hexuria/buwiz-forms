@@ -25,7 +25,7 @@ pub enum Form1601CEvent {
 
 impl EventEmitter<Form1601CEvent> for Form1601CView {}
 
-const SCAFFOLD_MESSAGE: &str = "1601-C January 2018 is available for draft preparation only. Filing remains manual / external until its HTML renderer, formula, XML, and native output evidence gates pass.";
+const SCAFFOLD_MESSAGE: &str = "1601-C January 2018 is available for draft preparation only in this build. Electronic queue submission remains unavailable.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SubmissionDisposition {
@@ -261,6 +261,34 @@ impl Form1601CView {
                 },
             ));
         }
+
+        let bus = cx.global::<crate::events::GlobalEventBus>().0.clone();
+        subscriptions.push(cx.subscribe(
+            &bus,
+            |this: &mut Self, _bus, event: &crate::events::AppEvent, cx| {
+                if !matches!(event, crate::events::AppEvent::DatabaseChanged) {
+                    return;
+                }
+                let tin = this.draft.tin.clone();
+                let year = this.draft.taxable_year;
+                let month = this.draft.month;
+                if let Ok(db) = this.db.lock()
+                    && let Ok(Some(updated)) = db.get_1601c_draft(&tin, year, month)
+                    && (this.draft.status != updated.status
+                        || this.draft.submission_claim_token != updated.submission_claim_token
+                        || this.draft.submission_error != updated.submission_error)
+                {
+                    let became_submitted = this.draft.status != FilingStatus::Submitted
+                        && updated.status == FilingStatus::Submitted;
+                    this.status_message = updated.submission_error.clone();
+                    this.draft = updated;
+                    if became_submitted {
+                        cx.emit(Form1601CEvent::Submitted);
+                    }
+                    cx.notify();
+                }
+            },
+        ));
 
         Self {
             is_amended: draft.is_amended,
@@ -534,7 +562,7 @@ impl FormViewTrait for Form1601CView {
     }
 
     fn submitted_at(&self) -> Option<&str> {
-        None
+        self.draft.submitted_at.as_deref()
     }
 
     fn confirmed_at(&self) -> Option<&str> {
@@ -584,21 +612,103 @@ impl FormViewTrait for Form1601CView {
             self.show_scaffold_message(window, cx);
             return;
         }
-        self.draft.status = FilingStatus::Queued;
-        self.save_draft(window, cx);
+        if !self.draft.is_editable() {
+            self.status_message = Some(
+                "This return is already queued or filed and cannot be queued again.".to_string(),
+            );
+            cx.notify();
+            return;
+        }
+        self.sync_from_inputs(cx);
+        if !self.validation_errors.is_empty() {
+            self.status_message = Some("Fix validation errors before submitting.".to_string());
+            cx.notify();
+            return;
+        }
+
+        let before_queue = self.draft.clone();
+        if let Err(errors) = self.draft.transition_to_queued() {
+            self.validation_errors = errors;
+            self.status_message = Some("Fix validation errors before submitting.".to_string());
+            cx.notify();
+            return;
+        }
+        let save_result = match self.db.lock() {
+            Ok(db) => db
+                .save_queued_1601c_draft(&self.draft)
+                .map_err(|error| error.to_string()),
+            Err(error) => Err(format!("Could not access the form database: {error}")),
+        };
+        if let Err(error) = save_result {
+            self.draft = before_queue;
+            self.status_message = Some(format!(
+                "Could not queue Form 1601-C. No submission was started: {error}"
+            ));
+            cx.notify();
+            return;
+        }
+
+        self.status_message = Some("Form queued for background submission.".to_string());
+        cx.emit(Form1601CEvent::Saved);
         bir_core::background_cron::wake();
         cx.notify();
     }
 
-    fn mark_paid(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.draft.status = FilingStatus::Paid;
-        self.save_draft(window, cx);
+    fn mark_paid(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.status_message = Some(
+            "1601-C payment status requires a separately verified confirmation workflow."
+                .to_string(),
+        );
         cx.notify();
     }
 
     fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.draft.status = FilingStatus::Draft;
-        self.save_draft(window, cx);
+        if !matches!(self.draft.status, FilingStatus::Queued)
+            || self.draft.submission_claim_token.is_some()
+        {
+            self.status_message = Some(
+                "This immutable return cannot be reverted after submission has started."
+                    .to_string(),
+            );
+            cx.notify();
+            return;
+        }
+        let queued = self.draft.clone();
+        let canceled = match self.db.lock() {
+            Ok(db) => db.cancel_queued_1601c_submission(&queued).ok(),
+            Err(_) => None,
+        };
+        let Some(canceled) = canceled else {
+            self.draft = match self.db.lock() {
+                Ok(db) => db
+                    .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+                    .ok()
+                    .flatten()
+                    .unwrap_or(queued),
+                Err(_) => queued,
+            };
+            self.status_message = Some(
+                "Submission has already started. The queued return was not canceled.".to_string(),
+            );
+            use gpui_component::WindowExt;
+            window.push_notification(
+                gpui_component::notification::Notification::new()
+                    .message(
+                        "Submission has already started. Keep any BIR confirmation or receipt and do not retry this return."
+                            .to_string(),
+                    )
+                    .with_type(gpui_component::notification::NotificationType::Warning)
+                    .autohide(false),
+                cx,
+            );
+            cx.notify();
+            return;
+        };
+        self.draft = canceled;
+        self.status_message = None;
+        self.is_validated = false;
+        self.validation_errors.clear();
+        cx.emit(Form1601CEvent::Saved);
         cx.notify();
     }
 
@@ -724,6 +834,26 @@ impl Render for Form1601CView {
                                 .unwrap_or_else(|| SCAFFOLD_MESSAGE.to_string()),
                         ),
                 )
+            })
+            .when(queue_supported, |view| {
+                let message = self
+                    .draft
+                    .submission_error
+                    .clone()
+                    .or_else(|| self.status_message.clone());
+                view.when_some(message, |view, message| {
+                    view.child(
+                        div()
+                            .px_8()
+                            .py_3()
+                            .bg(cx.theme().warning.opacity(0.12))
+                            .border_b_1()
+                            .border_color(cx.theme().warning.opacity(0.4))
+                            .text_sm()
+                            .text_color(crate::theme::warning_on_tint(cx.theme()))
+                            .child(message),
+                    )
+                })
             })
             .child(
                 div()
