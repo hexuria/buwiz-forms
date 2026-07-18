@@ -239,6 +239,22 @@ struct Assets {
     base: PathBuf,
 }
 
+fn persistent_log_appender(
+    is_dev_native_evidence_exercise: bool,
+) -> Option<tracing_appender::rolling::RollingFileAppender> {
+    // The external native-output driver already captures stdout and stderr in
+    // its immutable diagnostic directory. Avoid touching the shared app-group
+    // log during that development-only exercise: a stalled or unavailable
+    // container must not prevent the deterministic preview from opening.
+    if is_dev_native_evidence_exercise {
+        return None;
+    }
+
+    let logs_dir = bir_core::platform::data_dir().join("logs");
+    let _ = std::fs::create_dir_all(&logs_dir);
+    Some(tracing_appender::rolling::never(&logs_dir, "ebirforms.log"))
+}
+
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> gpui::Result<Option<std::borrow::Cow<'static, [u8]>>> {
         std::fs::read(self.base.join(path))
@@ -305,13 +321,10 @@ fn main() {
         .to_lowercase()
         == "true";
 
-    // Initialize structured logging for both stdout and file
+    // Initialize structured logging. The native-output diagnostic intentionally
+    // remains stdout-only because its external driver captures that stream and
+    // must not depend on the mutable shared app-group log.
     use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
-
-    let logs_dir = bir_core::platform::data_dir().join("logs");
-    let _ = std::fs::create_dir_all(&logs_dir);
-
-    let file_appender = tracing_appender::rolling::never(&logs_dir, "ebirforms.log");
 
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         // The binary crate is `bir` (bin target name); its modules log under
@@ -333,12 +346,14 @@ fn main() {
         .with_file(developer_mode)
         .with_line_number(developer_mode);
 
-    let file_layer = tracing_subscriber::fmt::layer()
-        .with_writer(file_appender)
-        .with_ansi(false)
-        .with_target(true)
-        .with_file(developer_mode)
-        .with_line_number(developer_mode);
+    let file_layer = persistent_log_appender(is_dev_native_evidence_exercise).map(|appender| {
+        tracing_subscriber::fmt::layer()
+            .with_writer(appender)
+            .with_ansi(false)
+            .with_target(true)
+            .with_file(developer_mode)
+            .with_line_number(developer_mode)
+    });
 
     tracing_subscriber::registry()
         .with(env_filter)
@@ -666,4 +681,14 @@ fn main() {
         })
         .detach();
     });
+}
+
+#[cfg(test)]
+mod startup_tests {
+    use super::*;
+
+    #[::core::prelude::v1::test]
+    fn native_output_exercise_never_opens_the_shared_persistent_log() {
+        assert!(persistent_log_appender(true).is_none());
+    }
 }
