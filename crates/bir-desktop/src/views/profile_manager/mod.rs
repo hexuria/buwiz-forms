@@ -47,6 +47,31 @@ enum CorProfilePreset {
     VatBusiness,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProfileSaveRequest {
+    profile_session_epoch: u64,
+    profile_change_revision: u64,
+    reviewed_plan: Option<TaxProfileVersionConfirmationPlan>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProfileSaveDispatchAction {
+    Dispatch,
+    DuplicateInFlight,
+    QueueBehindInFlight,
+}
+
+fn profile_save_dispatch_action(
+    active: Option<&ProfileSaveRequest>,
+    requested: &ProfileSaveRequest,
+) -> ProfileSaveDispatchAction {
+    match active {
+        None => ProfileSaveDispatchAction::Dispatch,
+        Some(active) if active == requested => ProfileSaveDispatchAction::DuplicateInFlight,
+        Some(_) => ProfileSaveDispatchAction::QueueBehindInFlight,
+    }
+}
+
 use bir_core::profile::EmailAuthMethod;
 
 pub struct ProfileManagerView {
@@ -104,6 +129,15 @@ pub struct ProfileManagerView {
     /// Discard must not delete "unpersisted" evidence files while one is in
     /// flight — the write may be about to persist references to them.
     saves_in_flight: u32,
+    /// The single profile save currently allowed to write the database.
+    /// Later save requests are coalesced instead of being dispatched in
+    /// parallel, because background tasks are not guaranteed to acquire the
+    /// database mutex in dispatch order.
+    active_profile_save: Option<ProfileSaveRequest>,
+    /// Latest distinct request made while a profile save is active. It is
+    /// dispatched after the active write completes, but only if the view is
+    /// still showing the same profile session.
+    queued_profile_save: Option<ProfileSaveRequest>,
     persisted_profile_tin: Option<String>,
     rdo_options: Vec<String>,
     zip_options: Vec<String>,
@@ -846,6 +880,8 @@ impl ProfileManagerView {
             profile_session_epoch: 0,
             last_save_dispatch_revision: 0,
             saves_in_flight: 0,
+            active_profile_save: None,
+            queued_profile_save: None,
             persisted_profile_tin: None,
             stored_per_year_forms: std::collections::BTreeMap::new(),
             forms_editor_year,
@@ -1323,6 +1359,7 @@ impl ProfileManagerView {
         });
         self.profile_change_revision = 0;
         self.profile_session_epoch = self.profile_session_epoch.wrapping_add(1);
+        self.queued_profile_save = None;
         self.capture_clean_baseline(cx);
         cx.notify();
     }
@@ -1600,6 +1637,7 @@ impl ProfileManagerView {
 
         self.profile_change_revision = 0;
         self.profile_session_epoch = self.profile_session_epoch.wrapping_add(1);
+        self.queued_profile_save = None;
         self.capture_clean_baseline(cx);
         cx.notify();
     }
@@ -3894,6 +3932,29 @@ impl ProfileManagerView {
             }
         }
 
+        let save_request = ProfileSaveRequest {
+            profile_session_epoch: self.profile_session_epoch,
+            profile_change_revision: self.profile_change_revision,
+            reviewed_plan: reviewed_plan.clone(),
+        };
+        match profile_save_dispatch_action(self.active_profile_save.as_ref(), &save_request) {
+            ProfileSaveDispatchAction::DuplicateInFlight => {
+                self.save_message = Some("Saving...".to_string());
+                cx.notify();
+                return;
+            }
+            ProfileSaveDispatchAction::QueueBehindInFlight => {
+                self.queued_profile_save = Some(save_request);
+                self.save_message = Some("Saving latest changes next...".to_string());
+                cx.notify();
+                return;
+            }
+            ProfileSaveDispatchAction::Dispatch => {
+                self.active_profile_save = Some(save_request.clone());
+                self.queued_profile_save = None;
+            }
+        }
+
         // We no longer force users to authenticate an email.
         // If they opt out, they won't get automated tracking updates but can still submit.
 
@@ -3908,8 +3969,8 @@ impl ProfileManagerView {
         self.save_message = Some("Saving...".to_string());
         cx.notify();
 
-        let save_revision = self.profile_change_revision;
-        let save_epoch = self.profile_session_epoch;
+        let save_revision = save_request.profile_change_revision;
+        let save_epoch = save_request.profile_session_epoch;
         self.last_save_dispatch_revision = save_revision;
         self.saves_in_flight = self.saves_in_flight.saturating_add(1);
         let db_arc_clone = db_arc.clone();
@@ -3939,6 +4000,10 @@ impl ProfileManagerView {
 
             let _ = this.update(cx, |this, cx| {
                 this.saves_in_flight = this.saves_in_flight.saturating_sub(1);
+                this.active_profile_save = None;
+                let has_queued_save = this.queued_profile_save.as_ref().is_some_and(|request| {
+                    request.profile_session_epoch == this.profile_session_epoch
+                });
                 match save_result {
                     Ok((saved, refresh_status)) => {
                         let Some(saved_id) = saved.id else {
@@ -3986,7 +4051,9 @@ impl ProfileManagerView {
                             // the "Saving..." indicator and announce success;
                             // an older completion must not claim edits that a
                             // still-in-flight save is responsible for.
-                            if this.last_save_dispatch_revision == save_revision {
+                            if this.last_save_dispatch_revision == save_revision
+                                && !has_queued_save
+                            {
                                 this.save_message = None;
                                 this.pending_notification = Some(match refresh_status.warning() {
                                     Some(warning) => (
@@ -4035,14 +4102,29 @@ impl ProfileManagerView {
                         }
                     }
                     Err(err) => {
-                        this.save_message = None;
-                        this.pending_notification = Some((
-                            gpui_component::notification::NotificationType::Error,
-                            format!("Save failed: {err}"),
-                        ));
+                        if has_queued_save {
+                            tracing::warn!(
+                                %err,
+                                "An earlier profile save failed; dispatching the queued latest state"
+                            );
+                            this.save_message = Some("Saving latest changes next...".to_string());
+                        } else {
+                            this.save_message = None;
+                            this.pending_notification = Some((
+                                gpui_component::notification::NotificationType::Error,
+                                format!("Save failed: {err}"),
+                            ));
+                        }
                     }
                 }
-                cx.notify();
+                let queued_save = this.queued_profile_save.take().filter(|request| {
+                    request.profile_session_epoch == this.profile_session_epoch
+                });
+                if let Some(queued_save) = queued_save {
+                    this.save_profile_inner(queued_save.reviewed_plan, cx);
+                } else {
+                    cx.notify();
+                }
             });
         })
         .detach();
@@ -4876,7 +4958,48 @@ fn save_completion_matches_profile_session(save_epoch: u64, current_epoch: u64) 
 
 #[cfg(test)]
 mod save_revision_tests {
-    use super::{save_completion_is_current, save_completion_matches_profile_session};
+    use super::{
+        ProfileSaveDispatchAction, ProfileSaveRequest, profile_save_dispatch_action,
+        save_completion_is_current, save_completion_matches_profile_session,
+    };
+
+    fn request(epoch: u64, revision: u64) -> ProfileSaveRequest {
+        ProfileSaveRequest {
+            profile_session_epoch: epoch,
+            profile_change_revision: revision,
+            reviewed_plan: None,
+        }
+    }
+
+    #[test]
+    fn distinct_save_requests_are_serialized_behind_the_active_write() {
+        let active = request(7, 10);
+        let later = request(7, 11);
+
+        assert_eq!(
+            profile_save_dispatch_action(None, &active),
+            ProfileSaveDispatchAction::Dispatch
+        );
+        assert_eq!(
+            profile_save_dispatch_action(Some(&active), &active),
+            ProfileSaveDispatchAction::DuplicateInFlight
+        );
+        assert_eq!(
+            profile_save_dispatch_action(Some(&active), &later),
+            ProfileSaveDispatchAction::QueueBehindInFlight
+        );
+    }
+
+    #[test]
+    fn a_new_profile_session_cannot_be_mistaken_for_the_active_save() {
+        let profile_a = request(7, 0);
+        let profile_b = request(8, 0);
+
+        assert_eq!(
+            profile_save_dispatch_action(Some(&profile_a), &profile_b),
+            ProfileSaveDispatchAction::QueueBehindInFlight
+        );
+    }
 
     /// Switching profiles resets the change revision, so a save dispatched on
     /// profile A can collide with profile B's counter (both zero after a
