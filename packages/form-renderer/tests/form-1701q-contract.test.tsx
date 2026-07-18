@@ -110,7 +110,7 @@ describe("1701Q:2018 experimental preview contract", () => {
 
   it("keeps official plain fields plain and exact guided-field capacities", () => {
     const markup = renderToStaticMarkup(
-      createElement(FormDocument, { envelope: structuredClone(normalFixture) as RenderEnvelope })
+      createElement(FormDocument, { envelope: structuredClone(minimumFixture) as RenderEnvelope })
     );
 
     for (const fieldName of [
@@ -132,7 +132,6 @@ describe("1701Q:2018 experimental preview contract", () => {
       payment_33_bank: 6,
       payment_33_number: 11,
       payment_33_date: 8,
-      payment_34_bank: 6,
       payment_34_number: 11,
       payment_34_date: 8,
       payment_35_particular: 7,
@@ -150,6 +149,25 @@ describe("1701Q:2018 experimental preview contract", () => {
 
     expect(markup).not.toContain("blank-comb-1701q");
     expect(markup).not.toContain("<i>.</i>");
+    expect(markup).toContain(
+      'data-field-mode="not-applicable" data-field-name="payment_34_bank"'
+    );
+  });
+
+  it("switches guided payment fields to plain mode only when values exceed official capacity", () => {
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: structuredClone(normalFixture) as RenderEnvelope })
+    );
+
+    expect(markup).toContain(
+      'data-field-mode="plain" data-field-name="payment_32_bank" data-cell-capacity="6"'
+    );
+    expect(markup).toContain(
+      'data-field-mode="plain" data-field-name="payment_32_number" data-cell-capacity="11"'
+    );
+    expect(markup).toContain(
+      'data-field-mode="guided" data-field-name="payment_32_date" data-cell-capacity="8"'
+    );
   });
 
   it("preserves the source-proven official instructions instead of abbreviating them", () => {
