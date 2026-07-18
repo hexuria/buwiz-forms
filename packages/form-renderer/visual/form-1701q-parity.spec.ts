@@ -274,6 +274,35 @@ test("1701Q 2018 uses the official 15 percent neutral form fill", async ({ page 
   expect(fills.every((fill) => fill === "rgb(217, 217, 217)")).toBe(true);
 });
 
+test("1701Q 2018 preserves the reviewed readable text hierarchy and fixed choice geometry", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701q-minimum.json"));
+
+  const fontSizes = await page.locator([
+    ".header-options-1701q",
+    ".part-five-1701q .item-36-1701q > span:first-child",
+    ".part-five-1701q .item-44-1701q > span:first-child",
+    ".part-five-1701q .item-52-1701q > span:first-child"
+  ].join(", ")).evaluateAll((elements) =>
+    elements.map((element) => Number.parseFloat(getComputedStyle(element).fontSize))
+  );
+  expect(fontSizes).toHaveLength(4);
+  expect(fontSizes[0]).toBeCloseTo(8.15 * 4 / 3, 2);
+  expect(fontSizes[1]).toBeCloseTo(8.15 * 4 / 3, 2);
+  expect(fontSizes[2]).toBeCloseTo(7 * 4 / 3, 2);
+  expect(fontSizes[3]).toBeCloseTo(7 * 4 / 3, 2);
+
+  const scheduleHeading = page.locator(".part-five-1701q .schedule-36-1701q > h2");
+  expect(await scheduleHeading.evaluate((element) => getComputedStyle(element).fontWeight)).toBe("400");
+  expect(await scheduleHeading.locator("b").evaluate((element) => getComputedStyle(element).fontWeight)).toBe("700");
+
+  const fixedChoiceBox = await page.locator(".tax-election-1701q .check-box").first().evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { flexShrink: style.flexShrink, width: Number.parseFloat(style.width) };
+  });
+  expect(fixedChoiceBox.flexShrink).toBe("0");
+  expect(fixedChoiceBox.width).toBeCloseTo(14 * 4 / 3, 1);
+});
+
 test("1701Q 2018 keeps the official Item 16 and Item 25 choice partitions", async ({ page }) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701q-normal.json"));
   const firstPage = page.locator(".form-page").nth(0);

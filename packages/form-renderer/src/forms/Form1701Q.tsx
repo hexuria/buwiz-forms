@@ -314,7 +314,7 @@ function Tin1701Q({ value }: { value: string }) {
 }
 
 function PairedAmountSection1701Q({ title, note, rows, envelope, graduatedLayout = false }: {
-  title: string;
+  title: ReactNode;
   note?: string;
   rows: readonly AmountRow[];
   envelope: RenderEnvelope;
@@ -434,11 +434,11 @@ function PartFive1701Q({ envelope }: { envelope: RenderEnvelope }) {
       <h2>PART V – COMPUTATION OF TAX DUE <small>(DO NOT enter Centavos; 49 Centavos or Less drop down; 50 or more round up)</small></h2>
       <div className="part-five-column-header-1701q"><span>Declaration this Quarter</span><span>A) Taxpayer/Filer</span><span>B) Spouse</span></div>
       <div className="part-five-instruction-1701q">If graduated rate, fill in items 36 to 46; if 8%, fill in items 47 to 54</div>
-      <PairedAmountSection1701Q title="Schedule I – For Graduated IT Rate" rows={GRADUATED_ROWS} envelope={envelope} graduatedLayout />
-      <PairedAmountSection1701Q title="Schedule II – For 8% IT Rate" rows={EIGHT_PERCENT_ROWS} envelope={envelope} />
-      <PairedAmountSection1701Q title="Schedule III - Tax Credits/Payments" rows={CREDIT_ROWS} envelope={envelope} />
+      <PairedAmountSection1701Q title={<><b>Schedule I</b> – For Graduated IT Rate</>} rows={GRADUATED_ROWS} envelope={envelope} graduatedLayout />
+      <PairedAmountSection1701Q title={<><b>Schedule II</b> – For 8% IT Rate</>} rows={EIGHT_PERCENT_ROWS} envelope={envelope} />
+      <PairedAmountSection1701Q title={<><b>Schedule III</b> - Tax Credits/Payments</>} rows={CREDIT_ROWS} envelope={envelope} />
       <div className="single-total-1701q"><span><b>63</b> Tax Payable/(Overpayment) <small>(Item 46 or 54, Less Item 62) (To Part III, Item 28)</small></span><Amount1701Q envelope={envelope} fieldKey="item_63_taxpayer" /><Amount1701Q envelope={envelope} fieldKey="item_63_spouse" /></div>
-      <PairedAmountSection1701Q title="Schedule IV - Penalties" rows={PENALTY_ROWS} envelope={envelope} />
+      <PairedAmountSection1701Q title={<><b>Schedule IV</b> - Penalties</>} rows={PENALTY_ROWS} envelope={envelope} />
       <div className="single-total-1701q final-total-1701q"><span><b>68</b> Total Amount Payable/(Overpayment) <small>(Sum of Items 63 and 67) (To Part III, Item 30)</small></span><Amount1701Q envelope={envelope} fieldKey="item_68_taxpayer" /><Amount1701Q envelope={envelope} fieldKey="item_68_spouse" /></div>
     </section>
   );

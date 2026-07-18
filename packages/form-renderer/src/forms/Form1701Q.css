@@ -159,6 +159,9 @@
   grid-template-columns: 130pt 190pt 138pt minmax(0, 1fr);
   border: 1pt solid #111;
   border-top: 0;
+  /* The source uses 9.33pt Arial here. The bundled Arimo face calibrates to
+   * the pinned raster at 8.15pt without shrinking the fixed option columns. */
+  font-size: 8.15pt;
 }
 .header-options-1701q > div {
   min-width: 0;
@@ -318,7 +321,12 @@
   border-top: .45pt solid #111;
   content: "";
 }
-.tax-election-1701q .check-box { width: 14pt; height: 12pt; }
+.tax-election-1701q .check-box {
+  width: 14pt;
+  height: 12pt;
+  /* Keep the official Item 16/25 partition width when adjacent labels grow. */
+  flex: 0 0 14pt;
+}
 .tax-rate-label-1701q {
   grid-row: 1 / 3;
   align-self: stretch;
@@ -534,6 +542,9 @@
   justify-content: flex-start;
   padding-left: 2pt;
 }
+/* Only the Schedule I-IV role is bold in the official PDF; the descriptor
+ * following it remains regular. */
+.part-five-1701q .paired-section-1701q > h2 b { font-weight: 700; }
 .part-five-1701q .schedule-55-1701q > h2 { height: 12pt; }
 .part-five-column-header-1701q,
 .part-five-instruction-1701q {
@@ -566,7 +577,17 @@
 .part-five-1701q .item-54-1701q,
 .part-five-1701q .item-55-1701q { height: 17pt; }
 .part-five-1701q .item-59-1701q { height: 15.5pt; }
-.part-five-1701q .paired-row-1701q > span:first-child { font-size: 7pt; }
+.part-five-1701q .paired-row-1701q > span:first-child {
+  /* Source rows are 9.33pt Arial. This calibrated Arimo size restores the
+   * readable hierarchy while retaining the reviewed 16pt row geometry. */
+  font-size: 8.15pt;
+}
+.part-five-1701q :is(.item-44-1701q, .item-52-1701q) > span:first-child {
+  /* These are the two official long descriptions; preserve every character
+   * in their fixed-height rows instead of clipping or truncating them. */
+  font-size: 7pt;
+  line-height: .94;
+}
 .line-description-1701q {
   min-width: 80pt;
   height: 10pt;
