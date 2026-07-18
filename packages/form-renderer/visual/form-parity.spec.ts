@@ -198,15 +198,12 @@ for (const parityCase of cases) {
       { name: "Item 12A label", selector: ".tax-relief-field > .tax-relief-spec", x: 554, y: 568, width: 170, height: 38 },
       { name: "Item 12A value", selector: ".tax-relief-field > .comb-value", x: 724, y: 568, width: 455, height: 38 },
       { name: "Item 13", selector: ".income-rate-field", x: 45, y: 607, width: 1137, height: 87 },
-      // Item 17 owns one additional 18pt input line by product decision. Keep
-      // the geometry assertion explicit instead of hiding that deliberate
-      // divergence from the untouched official raster in a comparison mask.
-      { name: "Items 14-24 totals with approved Item 17 extension", selector: ".tax-payable", x: 45, y: 696, width: 1137, height: 543 },
+      { name: "Items 14-24 totals", selector: ".tax-payable", x: 45, y: 696, width: 1137, height: 507 },
       { name: "Item 14 total", selector: ".official-tax-line[data-item='14']", x: 45, y: 723, width: 1137, height: 36 },
-      { name: "Item 17 dedicated specification line", selector: ".tax-credit-description", x: 131, y: 892, width: 623, height: 35 },
-      { name: "signatures after approved Item 17 extension", selector: ".official-declaration", x: 45, y: 1243, width: 1137, height: 194 },
-      { name: "declaration copy", selector: ".official-declaration > p", x: 47, y: 1244, width: 1133, height: 56 },
-      { name: "signature boxes with reallocated blank space", selector: ".official-signature-grid", x: 47, y: 1300, width: 1133, height: 97 },
+      { name: "Item 17 inline specification field", selector: ".tax-credit-description", x: 444, y: 862, width: 309, height: 24 },
+      { name: "official declaration and signatures", selector: ".official-declaration", x: 45, y: 1207, width: 1137, height: 231 },
+      { name: "declaration copy", selector: ".official-declaration > p", x: 47, y: 1208, width: 1133, height: 56 },
+      { name: "official signature boxes", selector: ".official-signature-grid", x: 47, y: 1264, width: 1133, height: 134 },
       { name: "individual signature caption", selector: ".official-signature-grid > div:first-child .signature-caption", x: 47, y: 1345, width: 567, height: 53 },
       { name: "non-individual signature caption", selector: ".official-signature-grid > div:last-child .signature-caption", x: 615, y: 1345, width: 565, height: 53 },
       { name: "tax-agent strip", selector: ".tax-agent-strip", x: 47, y: 1398, width: 1133, height: 38 },
@@ -1268,7 +1265,10 @@ test("2551Q plain-box overflow uses the largest readable font that fits the real
       .toBeGreaterThan(pageTwoLongNameCandidates.ownerBounds.right + 1);
   }
   await pageTwoName.evaluate((element) => {
-    element.style.width = "400px";
+    const owner = element.parentElement;
+    if (!owner) throw new Error("page-two adaptive value is missing its field owner");
+    owner.dataset.originalInlineWidth = owner.style.width;
+    owner.style.width = `${owner.clientWidth - (element.clientWidth - 400)}px`;
   });
   await expect.poll(async () => Number.parseFloat(
     await pageTwoName.getAttribute("data-adaptive-font-size-px") ?? "NaN"
@@ -1278,7 +1278,10 @@ test("2551Q plain-box overflow uses the largest readable font that fits the real
     await pageTwoName.getAttribute("data-adaptive-font-size-px") ?? "NaN"
   )).toBeGreaterThanOrEqual(10.5);
   await pageTwoName.evaluate((element) => {
-    element.style.width = "";
+    const owner = element.parentElement;
+    if (!owner) throw new Error("page-two adaptive value is missing its field owner");
+    owner.style.width = owner.dataset.originalInlineWidth ?? "";
+    delete owner.dataset.originalInlineWidth;
   });
   await expect.poll(async () => (
     await pageTwoName.getAttribute("data-adaptive-font-size-px")
@@ -1328,10 +1331,13 @@ test("2551Q Item 17 measures its fixed field and blocks unreadable values", asyn
   const normalDescription = page.locator(".tax-credit-description");
   await expect(normalDescription).toHaveText("Validated prior payment");
   await expect(normalDescription).toHaveAttribute("data-adaptive-fit-state", "fit");
-  await expect(normalDescription).toHaveAttribute("data-adaptive-font-size-px", "21.0");
-  await expect(normalDescription).toHaveAttribute("data-adaptive-max-font-px", "21");
+  await expect(normalDescription).toHaveAttribute("data-adaptive-font-size-px", "12.0");
+  await expect(normalDescription).toHaveAttribute("data-adaptive-max-font-px", "12");
   await expect(normalDescription).toHaveAttribute("data-adaptive-min-font-px", "10.5");
   await expect(normalDescription).toHaveAttribute("data-adaptive-step-px", "0.5");
+  await expect(page.locator('.official-tax-line[data-item="17"]')).not.toHaveClass(
+    /specify-line-extended/
+  );
   const officialField = await normalDescription.boundingBox();
   expect(officialField).not.toBeNull();
 
@@ -1346,12 +1352,18 @@ test("2551Q Item 17 measures its fixed field and blocks unreadable values", asyn
   expect(item17Primary).not.toBeNull();
   expect(item17Money).not.toBeNull();
   if (item15 && item17 && item17Label && item17Primary && item17Money && officialField) {
-    expect(item17.height).toBeCloseTo(item15.height * 2, 0);
+    expect(item17.height).toBeCloseTo(item15.height, 0);
     expect(Math.abs(item17Label.height - item17.height)).toBeLessThanOrEqual(1);
     expect(Math.abs(item17Money.height - item17.height)).toBeLessThanOrEqual(1);
-    expect(Math.abs(item17Primary.height - item17.height / 2)).toBeLessThanOrEqual(.5);
-    expect(Math.abs(officialField.height - item17.height / 2)).toBeLessThanOrEqual(.5);
-    expect(Math.abs(officialField.y - item17Primary.y - item17Primary.height)).toBeLessThanOrEqual(.5);
+    expect(item17Primary.height).toBeLessThanOrEqual(item17.height);
+    expect(officialField.height).toBeLessThan(item17.height);
+    expect(officialField.y).toBeGreaterThan(item17.y);
+    expect(officialField.y + officialField.height).toBeLessThan(item17.y + item17.height);
+    expect(officialField.x).toBeGreaterThanOrEqual(item17Primary.x + item17Primary.width);
+    expect(Math.abs(
+      officialField.x + officialField.width -
+      (item17Label.x + item17Label.width)
+    )).toBeLessThanOrEqual(1);
     expect(item17Money.x).toBeCloseTo(item17Label.x + item17Label.width, 1);
   }
 
@@ -1368,6 +1380,9 @@ test("2551Q Item 17 measures its fixed field and blocks unreadable values", asyn
   const reviewedLongFixture = structuredClone(baseFixture);
   reviewedLongFixture.fields.other_tax_credit_description.value = longDescription;
   await renderEnvelope(page, reviewedLongFixture);
+  await expect(page.locator('.official-tax-line[data-item="17"]')).toHaveClass(
+    /specify-line-extended/
+  );
   await page.waitForFunction(
     () => !document.querySelector('[data-adaptive-fit-state="pending"]')
   );
@@ -1402,9 +1417,12 @@ test("2551Q Item 17 measures its fixed field and blocks unreadable values", asyn
   expect(reviewedMeasurement.lineCount).toBe(2);
   const reviewedField = await reviewedLong.boundingBox();
   expect(reviewedField).not.toBeNull();
-  if (officialField && reviewedField) {
-    expect(reviewedField.width).toBeCloseTo(officialField.width, 1);
-    expect(reviewedField.height).toBeCloseTo(officialField.height, 1);
+  const reviewedLine = await page.locator('.official-tax-line[data-item="17"]').boundingBox();
+  const reviewedLabel = await page.locator('.official-tax-line[data-item="17"] .tax-line-label').boundingBox();
+  if (item15 && reviewedField && reviewedLine && reviewedLabel) {
+    expect(reviewedLine.height).toBeCloseTo(item15.height * 2, 0);
+    expect(Math.abs(reviewedField.width - reviewedLabel.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(reviewedField.height - reviewedLine.height / 2)).toBeLessThanOrEqual(.5);
   }
   expect(await pageHasNoOverflow(page.locator(".form-page").first())).toBe(true);
 
@@ -1412,6 +1430,9 @@ test("2551Q Item 17 measures its fixed field and blocks unreadable values", asyn
     const fixture = structuredClone(baseFixture);
     fixture.fields.other_tax_credit_description.value = value;
     await renderEnvelope(page, fixture);
+    await expect(page.locator('.official-tax-line[data-item="17"]')).toHaveClass(
+      /specify-line-extended/
+    );
     await page.waitForFunction(
       () => !document.querySelector('[data-adaptive-fit-state="pending"]')
     );
@@ -1446,9 +1467,11 @@ test("2551Q Item 17 measures its fixed field and blocks unreadable values", asyn
 
     const field = await rendered.boundingBox();
     expect(field).not.toBeNull();
-    if (officialField && field) {
-      expect(field.width).toBeCloseTo(officialField.width, 1);
-      expect(field.height).toBeCloseTo(officialField.height, 1);
+    const unsafeLine = await page.locator('.official-tax-line[data-item="17"]').boundingBox();
+    const unsafeLabel = await page.locator('.official-tax-line[data-item="17"] .tax-line-label').boundingBox();
+    if (field && unsafeLine && unsafeLabel) {
+      expect(Math.abs(field.width - unsafeLabel.width)).toBeLessThanOrEqual(1);
+      expect(Math.abs(field.height - unsafeLine.height / 2)).toBeLessThanOrEqual(.5);
     }
 
     const geometry = await measuredPage(page.locator(".form-page").first());
@@ -1492,8 +1515,7 @@ test("2551Q adaptive fields retain domain-boundary text and report unsafe geomet
     [".address-field > .adaptive-plain-value", address, address],
     [".contact-email-field > .adaptive-plain-value", email, email],
     [".tax-relief-field > .adaptive-plain-value", relief, relief],
-    [".page-two-identity > .adaptive-plain-value", name, name],
-    [".tax-credit-description", item17, `Item 17 specification: ${item17}`]
+    [".page-two-identity > .adaptive-plain-value", name, name]
   ] as const;
 
   for (const [selector, expectedText, expectedLabel] of boundaries) {
@@ -1515,6 +1537,17 @@ test("2551Q adaptive fields retain domain-boundary text and report unsafe geomet
     expect(measurement.fontSize, selector).toBe(measurement.minFontSize);
     expect(measurement.fontSize, selector).toBeLessThanOrEqual(measurement.maxFontSize);
   }
+
+  const item17Value = page.locator(".tax-credit-description");
+  await expect(item17Value).toHaveText(item17);
+  await expect(item17Value).toHaveAttribute(
+    "aria-label",
+    `Item 17 specification: ${item17}`
+  );
+  await expect(item17Value).toHaveAttribute("data-adaptive-fit-state", "fit");
+  await expect(page.locator('.official-tax-line[data-item="17"]')).toHaveClass(
+    /specify-line-extended/
+  );
 
   const geometry = await measuredPage(page.locator(".form-page").first());
   expect(geometry.descendant_overflow_x + geometry.descendant_overflow_y)

@@ -21,6 +21,7 @@ import {
   OFFICIAL_2551Q_PDF417_PAGE_TWO_PATH,
   OFFICIAL_2551Q_SEAL
 } from "./official2551QAssets";
+import { useEffect, useRef, useState } from "react";
 
 type AtcReferenceRow =
   | {
@@ -82,7 +83,10 @@ const REVIEWED_2551Q_OVERFLOW_FONT_PX = {
   // are measured in the final DOM, so longer values descend before using a
   // second line or becoming unresolved at the readable floor.
   item12A: { max: 21.5, min: 10.5 },
-  item17: { max: 21, min: 10.5 },
+  // Begin at the official single-row label scale. OfficialTaxLine expands
+  // once only when the browser proves the saved text cannot fit this field at
+  // the reviewed readable floor.
+  item17: { max: 12, min: 10.5 },
   pageTwoName: { max: 21.5, min: 10.5 }
 } as const;
 
@@ -772,8 +776,41 @@ function OfficialTaxLine({
   className?: string;
   specification?: string;
 }) {
+  const lineRef = useRef<HTMLDivElement>(null);
+  const [specificationExtended, setSpecificationExtended] = useState(false);
+
+  useEffect(() => {
+    setSpecificationExtended(false);
+  }, [specification]);
+
+  useEffect(() => {
+    const line = lineRef.current;
+    if (!line || specification === undefined || specificationExtended) return;
+
+    const renderedValue = line.querySelector<HTMLElement>(".tax-credit-description");
+    if (!renderedValue) return;
+
+    const expandWhenUnresolved = () => {
+      if (renderedValue.dataset.adaptiveFitState === "unresolved") {
+        setSpecificationExtended(true);
+      }
+    };
+    expandWhenUnresolved();
+
+    const observer = new MutationObserver(expandWhenUnresolved);
+    observer.observe(renderedValue, {
+      attributes: true,
+      attributeFilter: ["data-adaptive-fit-state"]
+    });
+    return () => observer.disconnect();
+  }, [specification, specificationExtended]);
+
   return (
-    <div data-item={number} className={`official-tax-line ${strong ? "strong" : ""} ${indent ? "indented" : ""} ${specification !== undefined ? "specify-line" : ""} ${className}`}>
+    <div
+      ref={lineRef}
+      data-item={number}
+      className={`official-tax-line ${strong ? "strong" : ""} ${indent ? "indented" : ""} ${specification !== undefined ? "specify-line" : ""} ${specificationExtended ? "specify-line-extended" : ""} ${className}`}
+    >
       <div className="tax-line-label">
         {specification === undefined ? (
           <>

@@ -638,9 +638,10 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 .income-rate-choice .check-choice { white-space: normal; line-height: 1.03; }
 
 .tax-payable {
-  height: 271.5pt;
+  height: 253.5pt;
   margin-top: 1.5pt;
 }
+.tax-payable:has(.specify-line-extended) { height: 271.5pt; }
 .official-tax-line {
   height: 18.5pt;
   display: grid;
@@ -652,7 +653,8 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 .official-tax-line[data-item="19"],
 .official-tax-line[data-item="20"],
 .official-tax-line[data-item="22"] { height: 18pt; }
-.official-tax-line[data-item="17"] { height: 36pt; }
+.official-tax-line[data-item="17"] { height: 18pt; }
+.official-tax-line[data-item="17"].specify-line-extended { height: 36pt; }
 .tax-line-label {
   display: flex;
   align-items: center;
@@ -682,11 +684,10 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 }
 .official-money-integer > .comb-value { flex: 11 11 0; }
 .specify-line .tax-line-label {
-  display: grid;
-  grid-template-rows: repeat(2, minmax(0, 1fr));
-  align-items: stretch;
-  gap: 0;
-  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 2pt;
+  padding: 1pt 0 1pt 42pt;
   overflow: hidden;
 }
 .specify-line .tax-line-primary {
@@ -694,7 +695,7 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   display: flex;
   align-items: center;
   gap: 3pt;
-  padding: 1pt 3pt 1pt 42pt;
+  padding: 0;
   white-space: nowrap;
   overflow: hidden;
 }
@@ -706,7 +707,9 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 }
 .specify-line .tax-line-primary > b { min-width: 10pt; }
 .specify-line .tax-credit-description {
-  align-self: stretch;
+  flex: 1 1 0;
+  align-self: center;
+  height: 12pt;
   overflow: hidden;
 }
 .specify-line .tax-line-copy {
@@ -715,20 +718,37 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 }
 .tax-credit-description {
   box-sizing: border-box;
-  width: 100%;
-  height: auto;
+  width: auto;
+  height: 12pt;
   min-height: 0;
   align-self: stretch;
   display: flex;
   align-items: center;
   min-width: 0;
   padding: 1pt 3pt;
-  border: 0;
-  border-top: .55pt solid #111;
+  border: .55pt solid #111;
+  border-right: 0;
   background: #fff;
   font-style: normal;
   line-height: 1.02;
   white-space: nowrap;
+}
+.official-tax-line.specify-line-extended .tax-line-label {
+  display: grid;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+}
+.official-tax-line.specify-line-extended .tax-line-primary {
+  padding: 1pt 3pt 1pt 42pt;
+}
+.official-tax-line.specify-line-extended .tax-credit-description {
+  width: 100%;
+  height: auto;
+  align-self: stretch;
+  border: 0;
+  border-top: .55pt solid #111;
 }
 .form-2551q-page-one .tax-credit-description {
   /* Item 17 owns a dedicated second input line. Long reviewed descriptions
@@ -1640,22 +1660,19 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   transform: translateY(-.5pt);
 }
 
-/* Item 17 deliberately owns one additional 18.5pt input line. Reclaim that
- * fixed-page space from the two otherwise blank wet-signature areas, not from
- * Part III's official machine-validation box. This keeps the signature
- * captions, tax-agent strip, payment table, validation box, privacy note, and
- * page boundary on their reviewed official coordinates while preserving the
- * approved double-height Item 17 row. The complete-page comparison still sees
- * the intentional shorter signature spaces; no reference pixels are masked. */
-.form-2551q-page-one .official-declaration {
+/* Preserve the official single-row Item 17 geometry when the value fits. A
+ * genuinely over-capacity specification may add one reviewed continuation
+ * line; only that state reclaims blank wet-signature space so Part III and the
+ * page boundary remain fixed. */
+.form-2551q-page-one:has(.specify-line-extended) .official-declaration {
   height: 97pt;
 }
 
-.form-2551q-page-one .official-signature-grid {
+.form-2551q-page-one:has(.specify-line-extended) .official-signature-grid {
   height: 48.5pt;
 }
 
-.form-2551q-page-one .official-signature-grid > div {
+.form-2551q-page-one:has(.specify-line-extended) .official-signature-grid > div {
   grid-template-rows: 22pt 26.5pt;
 }
 
@@ -1722,6 +1739,7 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   height: 9pt;
   border-right-width: 1pt;
 }
+
 
 .preview-validation {
   position: relative;
