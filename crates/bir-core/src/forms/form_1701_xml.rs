@@ -1,20 +1,20 @@
 //! Checked BIR editable-save mapping for exact form `1701v2018`.
 //!
 //! One reviewed plaintext save proves an 837-key field set. Its encrypted
-//! companion does not prove final-flag or submission semantics, so this module
-//! supports lossless editable-save import/export while electronic queueing
-//! remains disabled in the domain.
+//! companion proves the same set plus `frm1701:txtPg1I9Address2`; both variants
+//! are preserved losslessly. Neither source proves final-flag or submission
+//! semantics, so electronic queueing remains disabled in the domain.
 
 use std::collections::BTreeMap;
 
 use super::FormValidator;
 use super::form_1701::{
-    EXACT_REVIEWED_XML_FIELD_COUNT, EXACT_REVIEWED_XML_VERSION, Form1701AmountPair,
-    Form1701AmountSection, Form1701Atc, Form1701CivilStatus, Form1701DeductionMethod,
-    Form1701Draft, Form1701EmployerRow, Form1701JointFilingStatus, Form1701NolcoRow,
-    Form1701OverpaymentDisposition, Form1701Party, Form1701PaymentDetails, Form1701PaymentRow,
-    Form1701SpecialDeductionRow, Form1701Spouse, Form1701SpouseType, Form1701TaxRate,
-    Form1701TaxpayerType,
+    EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT, EXACT_REVIEWED_XML_FIELD_COUNT,
+    EXACT_REVIEWED_XML_VERSION, Form1701AmountPair, Form1701AmountSection, Form1701Atc,
+    Form1701CivilStatus, Form1701DeductionMethod, Form1701Draft, Form1701EmployerRow,
+    Form1701JointFilingStatus, Form1701NolcoRow, Form1701OverpaymentDisposition, Form1701Party,
+    Form1701PaymentDetails, Form1701PaymentRow, Form1701SpecialDeductionRow, Form1701Spouse,
+    Form1701SpouseType, Form1701TaxRate, Form1701TaxpayerType, REVIEWED_ENCRYPTED_XML_EXTRA_FIELD,
 };
 
 type FieldErrors = Vec<(String, String)>;
@@ -378,7 +378,9 @@ impl Form1701Draft {
             );
         }
 
-        insert(&mut fields, "frm1701:txtCurrentPage", "1");
+        fields
+            .entry("frm1701:txtCurrentPage".to_string())
+            .or_insert_with(|| "1".to_string());
         insert(&mut fields, "frm1701:txtMaxPage", "4");
         insert(
             &mut fields,
@@ -605,11 +607,17 @@ impl Form1701Draft {
 
 fn validate_exact_field_set(fields: &BTreeMap<String, String>) -> FieldErrors {
     let mut errors = Vec::new();
-    if fields.len() != EXACT_REVIEWED_XML_FIELD_COUNT {
+    let is_reviewed_plain = fields.len() == EXACT_REVIEWED_XML_FIELD_COUNT
+        && !fields.contains_key(REVIEWED_ENCRYPTED_XML_EXTRA_FIELD);
+    let is_reviewed_encrypted = fields.len() == EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT
+        && fields.contains_key(REVIEWED_ENCRYPTED_XML_EXTRA_FIELD);
+    if !is_reviewed_plain && !is_reviewed_encrypted {
         errors.push((
             "xml_field_count".to_string(),
             format!(
-                "Expected the reviewed {EXACT_REVIEWED_XML_FIELD_COUNT}-field 1701v2018 save, found {} fields",
+                "Expected the reviewed {EXACT_REVIEWED_XML_FIELD_COUNT}-field plain or \
+                 {EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT}-field encrypted 1701v2018 save, \
+                 found {} fields",
                 fields.len()
             ),
         ));
@@ -1660,6 +1668,8 @@ fn insert_optional_money(fields: &mut BTreeMap<String, String>, key: &str, value
 
 #[cfg(test)]
 mod tests {
+    use sha2::{Digest, Sha256};
+
     use super::*;
 
     #[test]
@@ -1695,22 +1705,80 @@ mod tests {
         assert!(error.iter().any(|(field, _)| field == "xml_snapshot"));
     }
 
-    /// Run locally with `BIR_1701_SOURCE_XML=/absolute/path/to/file.xml`.
     #[test]
-    fn authoritative_source_pack_round_trips_when_supplied() {
-        let Ok(path) = std::env::var("BIR_1701_SOURCE_XML") else {
-            return;
-        };
-        let source = std::fs::read_to_string(path).expect("read authoritative plaintext save");
-        let source_fields = crate::bir_xml::parse_bir_xml_checked(&source).expect("parse source");
-        let draft = Form1701Draft::from_bir_field_map(&source_fields).expect("typed import");
+    #[ignore = "requires EBIRFORMS_1701_SOURCE_DIR pointing to the reviewed external source pack"]
+    fn locked_external_sources_match_hashes_and_semantically_replay() {
+        let source_dir = std::env::var("EBIRFORMS_1701_SOURCE_DIR")
+            .expect("set EBIRFORMS_1701_SOURCE_DIR to the reviewed 1701v2018 folder");
+        let directory = std::path::Path::new(&source_dir);
+
+        let plain = std::fs::read(directory.join("00000000000000-1701v2018-122025.xml"))
+            .expect("plain source is readable");
+        assert_eq!(
+            hex::encode(Sha256::digest(&plain)),
+            super::super::form_1701::REVIEWED_EDITABLE_XML_SHA256
+        );
+        let plain_xml = std::str::from_utf8(&plain).expect("plain source is UTF-8");
+        let plain_fields =
+            crate::bir_xml::parse_bir_xml_checked(plain_xml).expect("plain source parses");
+        assert_exact_semantic_replay(&plain_fields, "plain source");
+
+        let encrypted = std::fs::read(
+            directory.join("00000000000000-1701v2018-122025#codeitlikemiley@gmail.com#.xml"),
+        )
+        .expect("encrypted source is readable");
+        assert_eq!(
+            hex::encode(Sha256::digest(&encrypted)),
+            super::super::form_1701::REVIEWED_ENCRYPTED_XML_SHA256
+        );
+        let decrypted =
+            crate::crypto::decrypt_and_decompress(&encrypted, crate::crypto::BIR_IAF_PASSPHRASE)
+                .expect("encrypted companion decrypts");
+        let decrypted_xml = std::str::from_utf8(&decrypted).expect("decrypted source is UTF-8");
+        let encrypted_fields = crate::bir_xml::parse_bir_xml_checked(decrypted_xml)
+            .expect("decrypted encrypted source parses");
+        assert_exact_semantic_replay(&encrypted_fields, "encrypted companion");
+
+        for (file_name, expected_hash) in [
+            (
+                "1701 Jan 2018 final with rates.pdf",
+                super::super::form_1701::OFFICIAL_FORM_SHA256,
+            ),
+            (
+                "1701 Attachment Jan 2018 ENCSv3.pdf",
+                super::super::form_1701::REVIEWED_ATTACHMENT_PDF_SHA256,
+            ),
+            (
+                "1701 January 2018 Consov4.pdf",
+                super::super::form_1701::REVIEWED_CONSOLIDATED_PDF_SHA256,
+            ),
+        ] {
+            let pdf = std::fs::read(directory.join(file_name)).expect("reviewed PDF is readable");
+            assert_eq!(
+                hex::encode(Sha256::digest(&pdf)),
+                expected_hash,
+                "{file_name}"
+            );
+        }
+    }
+
+    fn assert_exact_semantic_replay(source_fields: &BTreeMap<String, String>, source_name: &str) {
+        assert!(
+            matches!(
+                source_fields.len(),
+                EXACT_REVIEWED_XML_FIELD_COUNT | EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT
+            ),
+            "{source_name}"
+        );
+        let draft = Form1701Draft::from_bir_field_map(source_fields)
+            .unwrap_or_else(|errors| panic!("{source_name} typed import failed: {errors:#?}"));
         let checked_output = draft
             .try_to_bir_xml_payload()
-            .expect("authoritative source should satisfy checked export gates");
+            .unwrap_or_else(|errors| panic!("{source_name} checked export failed: {errors:#?}"));
         let output_fields =
-            crate::bir_xml::parse_bir_xml_checked(&checked_output).expect("parse generated output");
-
-        assert_eq!(source_fields.len(), EXACT_REVIEWED_XML_FIELD_COUNT);
+            crate::bir_xml::parse_bir_xml_checked(&checked_output).unwrap_or_else(|error| {
+                panic!("{source_name} generated output failed to parse: {error}")
+            });
         let differences = source_fields
             .iter()
             .filter_map(|(key, source_value)| {
@@ -1727,7 +1795,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert!(
             differences.is_empty(),
-            "authoritative field-map differences:\n{}",
+            "{source_name} field-map differences:\n{}",
             differences.join("\n")
         );
     }

@@ -63,6 +63,57 @@ const fixtures = [
 ] as const;
 
 describe("1701:2018 semantic HTML preview contract", () => {
+  it("pins the complete reviewed source pack and its mixed page geometries", () => {
+    const source = JSON.parse(fs.readFileSync(
+      path.resolve(HERE, "../references/1701-2018-source.json"),
+      "utf8"
+    )) as {
+      form: {
+        official_source_sha256: string;
+        page_count: number;
+        page_height_pt: number;
+        page_width_pt: number;
+        reviewed_supporting_sources: Array<Record<string, unknown>>;
+      };
+    };
+
+    expect(source.form).toMatchObject({
+      official_source_sha256: "19be91d78258eb7c255f2615610db2739f10c378f8ac97adc0887c1bf40d1b2e",
+      page_count: 4,
+      page_height_pt: 936,
+      page_width_pt: 612
+    });
+    expect(source.form.reviewed_supporting_sources).toEqual([
+      expect.objectContaining({
+        field_count: 837,
+        kind: "editable_xml",
+        semantic_replay: "exact",
+        source_sha256: "b168c7b3273d30a10f28f4653847519b876d5a88e77ed82911718a80f65c7827"
+      }),
+      expect.objectContaining({
+        decrypted_extra_fields: ["frm1701:txtPg1I9Address2"],
+        field_count: 838,
+        kind: "encrypted_editable_xml",
+        semantic_replay: "exact_after_decryption",
+        source_sha256: "3771c99c191ef5e84b1b5e4c51499911bfbec6002febc3c53dca3f08730e92e3"
+      }),
+      expect.objectContaining({
+        kind: "attachment_pdf",
+        page_count: 2,
+        page_height_pt: 792,
+        page_width_pt: 612,
+        source_sha256: "e71799dc613c08d4c383fcd66bed83032b182ab43721c8665d7b608047766cad"
+      }),
+      expect.objectContaining({
+        kind: "consolidated_pdf",
+        page_count: 2,
+        page_height_pt: 612,
+        page_width_pt: 936,
+        source_sha256: "eac0ce426cc57c473e24638accb14a978ddd54f8cf795cc4303f527088416871"
+      })
+    ]);
+  });
+
   it("accepts every Rust fixture and renders exactly four 612x936 pages", () => {
     for (const fixture of fixtures) {
       const value = structuredClone(fixture);
@@ -100,7 +151,7 @@ describe("1701:2018 semantic HTML preview contract", () => {
 
     for (const fragment of [
       'data-field-mode="guided" data-cell-capacity="40"><span><b>8</b> Taxpayer’s Name',
-      'class="labeled-comb-1701 address-1701" data-field-mode="guided" data-cell-capacity="71"',
+      'class="labeled-comb-1701 address-1701" data-item-number="9" data-field-mode="guided" data-cell-capacity="71"',
       'data-field-mode="guided" data-cell-capacity="8"><span><b>10</b> Date of Birth',
       'data-field-mode="guided" data-cell-capacity="32"><span><b>11</b> Email Address',
       'data-field-key="payment_34_bank" data-field-mode="guided" data-cell-capacity="6"',

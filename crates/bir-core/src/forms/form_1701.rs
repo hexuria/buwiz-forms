@@ -1,9 +1,11 @@
 //! BIR Form 1701, January 2018 (ENCS).
 //!
 //! The semantic model is limited to the four-page official return and the
-//! exact 837-field editable save reviewed in `/Users/uriah/Downloads/forms`.
-//! The separate Part X/attachment worksheets are retained losslessly when an
-//! exact save is imported, but are not interpreted as tax evidence here.
+//! exact reviewed editable saves in `/Users/uriah/Downloads/forms`: the plain
+//! save has 837 fields and its encrypted companion has one additional second
+//! address-line field. The separate Part X/attachment worksheets are retained
+//! losslessly when an exact save is imported, but are not interpreted as tax
+//! evidence here.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -18,8 +20,20 @@ pub const FORM_CODE: &str = "1701";
 pub const FORM_REVISION: &str = "2018";
 pub const FORM_TYPE_ID: &str = "1701v2018";
 pub const EXACT_REVIEWED_XML_FIELD_COUNT: usize = 837;
+pub const EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT: usize = 838;
+pub const REVIEWED_ENCRYPTED_XML_EXTRA_FIELD: &str = "frm1701:txtPg1I9Address2";
 pub const EXACT_REVIEWED_XML_VERSION: &str = "051414";
 pub const QUEUE_SUBMISSION_SUPPORTED: bool = false;
+pub const OFFICIAL_FORM_SHA256: &str =
+    "19be91d78258eb7c255f2615610db2739f10c378f8ac97adc0887c1bf40d1b2e";
+pub const REVIEWED_EDITABLE_XML_SHA256: &str =
+    "b168c7b3273d30a10f28f4653847519b876d5a88e77ed82911718a80f65c7827";
+pub const REVIEWED_ENCRYPTED_XML_SHA256: &str =
+    "3771c99c191ef5e84b1b5e4c51499911bfbec6002febc3c53dca3f08730e92e3";
+pub const REVIEWED_ATTACHMENT_PDF_SHA256: &str =
+    "e71799dc613c08d4c383fcd66bed83032b182ab43721c8665d7b608047766cad";
+pub const REVIEWED_CONSOLIDATED_PDF_SHA256: &str =
+    "eac0ce426cc57c473e24638accb14a978ddd54f8cf795cc4303f527088416871";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Form1701Party {

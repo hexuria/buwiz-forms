@@ -248,21 +248,21 @@ function SpouseBackground1701({ envelope }: { envelope: RenderEnvelope }) {
 }
 
 function ChoiceLine1701({ number, label, choices, selected }: { number: string; label: string; choices: ReadonlyArray<readonly [string, string]>; selected: string }) {
-  return <div className="choice-line-1701"><span><b>{number}</b> {label}</span>{choices.map(([value, title]) => <CheckChoice key={value} checked={selected === value} label={title} />)}</div>;
+  return <div className="choice-line-1701" data-item-number={number}><span><b>{number}</b> {label}</span>{choices.map(([value, title]) => <CheckChoice key={value} checked={selected === value} label={title} />)}</div>;
 }
 
 function YesNoLine1701({ number, label, value }: { number: string; label: string; value: boolean | undefined }) {
-  return <div className="choice-line-1701 yes-no-1701"><span><b>{number}</b> {label}</span><CheckChoice checked={value === true} label="Yes" /><CheckChoice checked={value === false} label="No" /></div>;
+  return <div className="choice-line-1701 yes-no-1701" data-item-number={number}><span><b>{number}</b> {label}</span><CheckChoice checked={value === true} label="Yes" /><CheckChoice checked={value === false} label="No" /></div>;
 }
 
 function AtcChoices1701({ number, selected }: { number: string; selected: string }) {
   const values = [["II012", "Business Income-Graduated IT Rates"], ["II014", "Income from Profession-Graduated IT Rates"], ["II013", "Mixed Income-Graduated IT Rates"], ["II011", "Compensation Income"], ["II015", "Business Income - 8% IT Rate"], ["II017", "Income from Profession - 8% IT Rate"], ["II016", "Mixed Income - 8% IT Rate"]] as const;
-  return <div className="atc-choices-1701"><span><b>{number}</b> Alphanumeric Tax Code (ATC)</span>{values.map(([value, label]) => <CheckChoice key={value} checked={selected === value} label={`${value} ${label}`} />)}</div>;
+  return <div className="atc-choices-1701" data-item-number={number}><span><b>{number}</b> Alphanumeric Tax Code (ATC)</span>{values.map(([value, label]) => <CheckChoice key={value} checked={selected === value} label={`${value} ${label}`} />)}</div>;
 }
 
 function TaxElection1701({ number, rate, deduction }: { number: string; rate: string; deduction: string }) {
   if (number === "21") {
-    return <div className="tax-election-1701 taxpayer-election-1701">
+    return <div className="tax-election-1701 taxpayer-election-1701" data-item-number={number}>
       <span className="tax-rate-label-1701"><b>{number}</b><span>Tax<br />Rate*</span><small>(choose one)</small></span>
       <span className="tax-election-choice-1701 graduated-choice-1701">
         <CheckChoice checked={rate === "graduated"} label="Graduated Rates" />
@@ -283,17 +283,17 @@ function TaxElection1701({ number, rate, deduction }: { number: string; rate: st
       </span>
     </div>;
   }
-  return <div className="tax-election-1701"><span><b>{number}</b> Tax Rate*<small>(choose one)</small></span><CheckChoice checked={rate === "graduated"} label="Graduated Rates" /><span className="deduction-label-1701"><b>{number}A</b> Method of Deduction (choose one)</span><CheckChoice checked={deduction === "itemized"} label="Itemized Deduction" /><CheckChoice checked={deduction === "osd"} label="Optional Standard Deduction (OSD)" /><CheckChoice checked={rate === "eight_percent"} label="8% in lieu of Graduated Rates under Sec. 24(A) & Percentage Tax under Sec. 116 of NIRC" /></div>;
+  return <div className="tax-election-1701" data-item-number={number}><span><b>{number}</b> Tax Rate*<small>(choose one)</small></span><CheckChoice checked={rate === "graduated"} label="Graduated Rates" /><span className="deduction-label-1701"><b>{number}A</b> Method of Deduction (choose one)</span><CheckChoice checked={deduction === "itemized"} label="Itemized Deduction" /><CheckChoice checked={deduction === "osd"} label="Optional Standard Deduction (OSD)" /><CheckChoice checked={rate === "eight_percent"} label="8% in lieu of Graduated Rates under Sec. 24(A) & Percentage Tax under Sec. 116 of NIRC" /></div>;
 }
 
 function LabeledComb1701({ number, label, value, cells, firstLineCells, twoRows = false, zip }: { number: string; label: string; value: string; cells: number; firstLineCells?: number; twoRows?: boolean; zip?: string }) {
   if (twoRows) {
     const characters = Array.from(value);
-    if (characters.length > cells) return <div className="labeled-comb-1701 address-1701" data-field-mode="guided" data-cell-capacity={cells}><span><b>{number}</b> {label}</span><AdaptiveCombValue value={value} cells={cells} /><span className="address-zip-1701"><b>9A</b> ZIP Code <CombValue value={zip ?? ""} cells={4} /></span></div>;
+    if (characters.length > cells) return <div className="labeled-comb-1701 address-1701" data-item-number={number} data-field-mode="plain" data-cell-capacity={cells}><span><b>{number}</b> {label}</span><AdaptiveCombValue value={value} cells={cells} /><span className="address-zip-1701"><b>9A</b> ZIP Code <CombValue value={zip ?? ""} cells={4} /></span></div>;
     const firstCapacity = firstLineCells ?? Math.ceil(cells / 2);
-    return <div className="labeled-comb-1701 address-1701" data-field-mode="guided" data-cell-capacity={cells}><span><b>{number}</b> {label}</span><CombValue value={characters.slice(0, firstCapacity).join("")} cells={firstCapacity} /><span className="address-second-1701"><CombValue value={characters.slice(firstCapacity).join("")} cells={cells - firstCapacity} /><span><b>9A</b> ZIP Code <CombValue value={zip ?? ""} cells={4} /></span></span></div>;
+    return <div className="labeled-comb-1701 address-1701" data-item-number={number} data-field-mode="guided" data-cell-capacity={cells}><span><b>{number}</b> {label}</span><CombValue value={characters.slice(0, firstCapacity).join("")} cells={firstCapacity} /><span className="address-second-1701"><CombValue value={characters.slice(firstCapacity).join("")} cells={cells - firstCapacity} /><span><b>9A</b> ZIP Code <CombValue value={zip ?? ""} cells={4} /></span></span></div>;
   }
-  return <div className="labeled-comb-1701" data-field-mode="guided" data-cell-capacity={cells}><span><b>{number}</b> {label}</span><AdaptiveCombValue value={value} cells={cells} /></div>;
+  return <div className="labeled-comb-1701" data-item-number={number} data-field-mode={adaptiveFieldMode(value, cells)} data-cell-capacity={cells}><span><b>{number}</b> {label}</span><AdaptiveCombValue value={value} cells={cells} /></div>;
 }
 
 function Tin1701({ value }: { value: string }) {
@@ -319,13 +319,13 @@ function PairedHead1701() {
 }
 
 function PairedRow1701({ item, label, fieldKey, envelope, description, className = "" }: { item: string; label: ReactNode; fieldKey: string; envelope: RenderEnvelope; description?: string; className?: string }) {
-  return <div className={`paired-row-1701${className ? ` ${className}` : ""}`}><span><b>{item}</b>{description !== undefined ? <span className="row-description-1701" data-field-mode="plain"><AdaptivePlainValue value={description} /></span> : label}</span><Amount1701 envelope={envelope} fieldKey={`${fieldKey}_taxpayer`} /><Amount1701 envelope={envelope} fieldKey={`${fieldKey}_spouse`} /></div>;
+  return <div className={`paired-row-1701${className ? ` ${className}` : ""}`} data-item-number={item} data-field-key={fieldKey}><span><b>{item}</b>{description !== undefined ? <span className="row-description-1701" data-field-mode="plain"><AdaptivePlainValue value={description} /></span> : label}</span><Amount1701 envelope={envelope} fieldKey={`${fieldKey}_taxpayer`} /><Amount1701 envelope={envelope} fieldKey={`${fieldKey}_spouse`} /></div>;
 }
 
 function Amount1701({ envelope, fieldKey }: { envelope: RenderEnvelope; fieldKey: string }) {
   const value = field(envelope, fieldKey);
   const normalized = value?.type === "decimal" ? Math.round(Object.is(value.value, -0) ? 0 : value.value).toString() : "";
-  return <span className="amount-1701" data-field-key={fieldKey} data-field-mode="guided" data-cell-capacity="9"><AdaptiveCombValue value={normalized} cells={9} align="right" /></span>;
+  return <span className="amount-1701" data-field-key={fieldKey} data-field-mode={adaptiveFieldMode(normalized, 9)} data-cell-capacity="9"><AdaptiveCombValue value={normalized} cells={9} align="right" /></span>;
 }
 
 function PlainAmount1701({ envelope, fieldKey }: { envelope: RenderEnvelope; fieldKey: string }) {
@@ -335,7 +335,7 @@ function PlainAmount1701({ envelope, fieldKey }: { envelope: RenderEnvelope; fie
 }
 
 function GuidedField1701({ value, cells, fieldKey, className = "" }: { value: string; cells: number; fieldKey?: string; className?: string }) {
-  return <span className={`guided-field-1701${className ? ` ${className}` : ""}`} data-field-key={fieldKey} data-field-mode="guided" data-cell-capacity={cells}><AdaptiveCombValue value={value} cells={cells} /></span>;
+  return <span className={`guided-field-1701${className ? ` ${className}` : ""}`} data-field-key={fieldKey} data-field-mode={adaptiveFieldMode(value, cells)} data-cell-capacity={cells}><AdaptiveCombValue value={value} cells={cells} /></span>;
 }
 
 function Aggregate1701({ envelope }: { envelope: RenderEnvelope }) {
@@ -355,11 +355,11 @@ function Declaration1701({ envelope }: { envelope: RenderEnvelope }) {
 
 function PaymentDetails1701({ envelope }: { envelope: RenderEnvelope }) {
   const standardRows = [[34, "Cash/Bank Debit Memo", "payment_34"], [35, "Check", "payment_35"]] as const;
-  return <section className="payments-1701"><SectionBand1701>PART III - Details of Payment</SectionBand1701><div className="payment-head-1701"><span>Particulars</span><span>Drawee Bank/Agency</span><span>Number</span><span>Date (MM/DD/YYYY)</span><span>Amount</span></div>{standardRows.map(([item, label, key]) => <div className="payment-row-1701" key={key}><span><b>{item}</b> {label}</span><GuidedField1701 value={text(envelope, `${key}_bank`)} cells={6} fieldKey={`${key}_bank`} /><GuidedField1701 value={text(envelope, `${key}_number`)} cells={10} fieldKey={`${key}_number`} /><GuidedField1701 value={dateDigits1701(text(envelope, `${key}_date`))} cells={8} fieldKey={`${key}_date`} /><Amount1701 envelope={envelope} fieldKey={`${key}_amount`} /></div>)}<div className="payment-row-1701 payment-tax-debit-row-1701"><span><b>36</b> Tax Debit Memo</span><GuidedField1701 value={text(envelope, "payment_36_number")} cells={10} fieldKey="payment_36_number" /><GuidedField1701 value={dateDigits1701(text(envelope, "payment_36_date"))} cells={8} fieldKey="payment_36_date" /><Amount1701 envelope={envelope} fieldKey="payment_36_amount" /></div><div className="payment-other-label-1701"><b>37</b> Others (specify below)</div><div className="payment-row-1701 payment-other-row-1701"><GuidedField1701 value={text(envelope, "payment_37_description")} cells={7} fieldKey="payment_37_description" /><GuidedField1701 value={text(envelope, "payment_37_bank")} cells={6} fieldKey="payment_37_bank" /><GuidedField1701 value={text(envelope, "payment_37_number")} cells={10} fieldKey="payment_37_number" /><GuidedField1701 value={dateDigits1701(text(envelope, "payment_37_date"))} cells={8} fieldKey="payment_37_date" /><Amount1701 envelope={envelope} fieldKey="payment_37_amount" /></div><div className="payment-receipt-1701"><span>Machine Validation/Revenue Official Receipt Details (if not filed with an Authorized Agent Bank)<span>{text(envelope, "machine_validation_or_receipt_details")}</span></span><em>Stamp of Receiving Office/AAB and Date of Receipt<br />(RO’s Signature/Bank Teller’s Initial)</em></div></section>;
+  return <section className="payments-1701"><SectionBand1701>PART III - Details of Payment</SectionBand1701><div className="payment-head-1701"><span>Particulars</span><span>Drawee Bank/Agency</span><span>Number</span><span>Date (MM/DD/YYYY)</span><span>Amount</span></div>{standardRows.map(([item, label, key]) => <div className="payment-row-1701" data-payment-row={key} key={key}><span><b>{item}</b> {label}</span><GuidedField1701 value={text(envelope, `${key}_bank`)} cells={6} fieldKey={`${key}_bank`} /><GuidedField1701 value={text(envelope, `${key}_number`)} cells={10} fieldKey={`${key}_number`} /><GuidedField1701 value={dateDigits1701(text(envelope, `${key}_date`))} cells={8} fieldKey={`${key}_date`} /><Amount1701 envelope={envelope} fieldKey={`${key}_amount`} /></div>)}<div className="payment-row-1701 payment-tax-debit-row-1701" data-payment-row="payment_36"><span><b>36</b> Tax Debit Memo</span><GuidedField1701 value={text(envelope, "payment_36_number")} cells={10} fieldKey="payment_36_number" /><GuidedField1701 value={dateDigits1701(text(envelope, "payment_36_date"))} cells={8} fieldKey="payment_36_date" /><Amount1701 envelope={envelope} fieldKey="payment_36_amount" /></div><div className="payment-other-label-1701" data-payment-row="payment_37_label"><b>37</b> Others (specify below)</div><div className="payment-row-1701 payment-other-row-1701" data-payment-row="payment_37"><GuidedField1701 value={text(envelope, "payment_37_description")} cells={7} fieldKey="payment_37_description" /><GuidedField1701 value={text(envelope, "payment_37_bank")} cells={6} fieldKey="payment_37_bank" /><GuidedField1701 value={text(envelope, "payment_37_number")} cells={10} fieldKey="payment_37_number" /><GuidedField1701 value={dateDigits1701(text(envelope, "payment_37_date"))} cells={8} fieldKey="payment_37_date" /><Amount1701 envelope={envelope} fieldKey="payment_37_amount" /></div><div className="payment-receipt-1701"><span>Machine Validation/Revenue Official Receipt Details (if not filed with an Authorized Agent Bank)<span data-field-mode="plain" data-field-key="machine_validation_or_receipt_details">{text(envelope, "machine_validation_or_receipt_details")}</span></span><em>Stamp of Receiving Office/AAB and Date of Receipt<br />(RO’s Signature/Bank Teller’s Initial)</em></div></section>;
 }
 
 function ContinuationIdentity1701({ envelope }: { envelope: RenderEnvelope }) {
-  return <div className="continuation-identity-1701"><span>TIN</span><Tin1701 value={envelope.taxpayer.tin} /><span><b>Tax Filer’s Last Name</b><AdaptiveCombValue value={envelope.taxpayer.name} cells={26} /></span></div>;
+  return <div className="continuation-identity-1701"><span>TIN</span><Tin1701 value={envelope.taxpayer.tin} /><span data-field-name="taxpayer_continuation_name" data-field-mode={adaptiveFieldMode(envelope.taxpayer.name, 26)} data-cell-capacity="26"><b>Tax Filer’s Last Name</b><AdaptiveCombValue value={envelope.taxpayer.name} cells={26} /></span></div>;
 }
 
 function ScheduleOne1701({ envelope }: { envelope: RenderEnvelope }) {
@@ -451,7 +451,7 @@ function PartEight1701({ envelope }: { envelope: RenderEnvelope }) {
 
 function PartNine1701({ envelope }: { envelope: RenderEnvelope }) {
   const row = (index: number, description = false) => <PairedRow1701 key={index} item={String(index)} label={PART_NINE_LABELS[index - 1]} fieldKey={`part_ix_${index}`} envelope={envelope} description={description ? text(envelope, `part_ix_${index}_description`) : undefined} />;
-  return <section className="paired-section-1701 compact-table-1701 indexed-section-1701 part-nine-1701"><SectionBand1701>PART IX - Reconciliation of Net Income per Books Against Taxable Income</SectionBand1701><PairedHead1701 />{row(1)}<div className="part-nine-subtitle-1701">Add: Non-Deductible Expenses/Taxable Other Income</div>{[2, 3, 4].map((index) => row(index, true))}{row(5)}<div className="part-nine-subtitle-1701">Less: A) Non-Taxable Income and Income Subjected to Final Tax</div>{[6, 7].map((index) => row(index, true))}<div className="part-nine-subtitle-1701">B) Special/Other Allowable Deductions</div>{[8, 9].map((index) => row(index, true))}{row(10)}{row(11)}</section>;
+  return <section className="paired-section-1701 compact-table-1701 indexed-section-1701 part-nine-1701"><SectionBand1701>PART IX - Reconciliation of Net Income per Books Against Taxable Income</SectionBand1701><PairedHead1701 />{row(1)}<div className="part-nine-subtitle-1701" data-part-nine-subtitle="add">Add: Non-Deductible Expenses/Taxable Other Income</div>{[2, 3, 4].map((index) => row(index, true))}{row(5)}<div className="part-nine-subtitle-1701" data-part-nine-subtitle="less-income">Less: A) Non-Taxable Income and Income Subjected to Final Tax</div>{[6, 7].map((index) => row(index, true))}<div className="part-nine-subtitle-1701" data-part-nine-subtitle="less-deductions">B) Special/Other Allowable Deductions</div>{[8, 9].map((index) => row(index, true))}{row(10)}{row(11)}</section>;
 }
 
 function TaxTables1701() {
@@ -462,4 +462,8 @@ function TaxTables1701() {
 
 function TaxTable1701({ title, rows }: { title: string; rows: ReadonlyArray<readonly [string, string]> }) {
   return <div><h3>{title}</h3><div className="tax-table-head-1701"><span>If Taxable Income is:</span><span>Tax Due is:</span></div>{rows.map(([range, due]) => <div className="tax-table-row-1701" key={range}><span>{range}</span><span>{due}</span></div>)}</div>;
+}
+
+function adaptiveFieldMode(value: string, cells: number): "guided" | "plain" {
+  return Array.from(value).length <= cells ? "guided" : "plain";
 }

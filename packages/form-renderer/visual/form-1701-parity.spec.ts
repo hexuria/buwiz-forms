@@ -7,6 +7,15 @@ import { compareCompleteOfficialPage } from "./official-page-diff";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "../../..");
+const staticTextInventory = JSON.parse(fs.readFileSync(path.join(
+  REPO_ROOT,
+  "packages/form-renderer/references/1701-2018-static-text-inventory.json"
+), "utf8")) as {
+  coverage_status: string;
+  known_gaps: string[];
+  official_source_sha256: string;
+  regions: Array<{ selector: string; text: string }>;
+};
 const MAX_CHANGED_PERCENT = 1;
 const DEVICE_SCALE_FACTOR = 1.5;
 const STRUCTURAL_INK_THRESHOLD = 100;
@@ -29,6 +38,130 @@ test("1701 2018 renders every Rust fixture as four stable unclipped 612x936 page
       expect(await pageHasNoOverflow(pages.nth(pageIndex)), `${fixtureName} page ${pageIndex + 1}`).toBe(true);
     }
   }
+});
+
+test("1701 2018 locks every currently represented reviewed static-copy region without hiding known gaps", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701-minimum.json"));
+
+  expect(staticTextInventory.official_source_sha256).toBe(
+    "19be91d78258eb7c255f2615610db2739f10c378f8ac97adc0887c1bf40d1b2e"
+  );
+  expect(staticTextInventory.coverage_status).toBe("partial_reviewed");
+  expect(staticTextInventory.known_gaps).toHaveLength(8);
+  for (const region of staticTextInventory.regions) {
+    const visibleText = await reviewedStaticText(page.locator(region.selector));
+    expect(visibleText, region.selector).toBe(region.text);
+  }
+});
+
+test("1701 2018 uses only the reviewed guided capacities and official plain cells", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701-minimum.json"));
+
+  const firstPage = page.locator(".page-one-1701");
+  for (const [item, capacity] of [
+    ["8", 40], ["9", 71], ["10", 8], ["11", 32],
+    ["12", 16], ["14", 16], ["15", 13]
+  ] as const) {
+    const locator = firstPage.locator(`.labeled-comb-1701[data-item-number="${item}"]`);
+    await expect(locator, `page 1 item ${item}`).toHaveAttribute("data-field-mode", "guided");
+    await expect(locator, `page 1 item ${item}`).toHaveAttribute("data-cell-capacity", String(capacity));
+  }
+  await expect(firstPage.locator('.labeled-comb-1701[data-item-number="8"] > .comb-value > span')).toHaveCount(40);
+  await expect(firstPage.locator('.labeled-comb-1701[data-item-number="9"] > .comb-value > span')).toHaveCount(40);
+  await expect(firstPage.locator('.labeled-comb-1701[data-item-number="9"] .address-second-1701 > .comb-value > span')).toHaveCount(31);
+  await expect(firstPage.locator('.labeled-comb-1701[data-item-number="9"] .address-second-1701 > span .comb-value > span')).toHaveCount(4);
+
+  const secondPage = page.locator(".page-two-1701");
+  for (const [item, capacity] of [
+    ["5", 40], ["6", 11], ["7", 19], ["9", 17]
+  ] as const) {
+    const locator = secondPage.locator(`.labeled-comb-1701[data-item-number="${item}"]`);
+    await expect(locator, `page 2 item ${item}`).toHaveAttribute("data-field-mode", "guided");
+    await expect(locator, `page 2 item ${item}`).toHaveAttribute("data-cell-capacity", String(capacity));
+    await expect(locator.locator(":scope > .comb-value > span"), `page 2 item ${item}`).toHaveCount(capacity);
+  }
+
+  for (const tin of await page.locator(".tin-value-1701").all()) {
+    expect(await tin.locator(":scope > .comb-value").evaluateAll((groups) =>
+      groups.map((group) => group.children.length)
+    )).toEqual([3, 3, 3, 5]);
+  }
+  for (const continuationName of await page.locator('[data-field-name="taxpayer_continuation_name"]').all()) {
+    await expect(continuationName).toHaveAttribute("data-field-mode", "guided");
+    await expect(continuationName).toHaveAttribute("data-cell-capacity", "26");
+    await expect(continuationName.locator(":scope > .comb-value > span")).toHaveCount(26);
+  }
+
+  for (const [fieldKey, capacity] of [
+    ["payment_34_bank", 6], ["payment_34_number", 10], ["payment_34_date", 8],
+    ["payment_35_bank", 6], ["payment_35_number", 10], ["payment_35_date", 8],
+    ["payment_36_number", 10], ["payment_36_date", 8],
+    ["payment_37_description", 7], ["payment_37_bank", 6],
+    ["payment_37_number", 10], ["payment_37_date", 8]
+  ] as const) {
+    const locator = page.locator(`.guided-field-1701[data-field-key="${fieldKey}"]`);
+    await expect(locator, fieldKey).toHaveAttribute("data-field-mode", "guided");
+    await expect(locator, fieldKey).toHaveAttribute("data-cell-capacity", String(capacity));
+    await expect(locator.locator(":scope > .comb-value > span"), fieldKey).toHaveCount(capacity);
+  }
+  await expect(page.locator('[data-field-key="payment_36_bank"]')).toHaveCount(0);
+
+  for (const plainField of await page.locator(".nolco-plain-value-1701, .plain-amount-1701, .row-description-1701, .inline-description-1701").all()) {
+    await expect(plainField).toHaveAttribute("data-field-mode", "plain");
+    await expect(plainField.locator(".comb-value"), "invented comb on reviewed plain field").toHaveCount(0);
+  }
+});
+
+test("1701 2018 switches at capacity plus one without dropping valid characters", async ({ page }) => {
+  const fixture = readFixture("packages/form-contracts/fixtures/1701-minimum.json") as MutableEnvelope;
+
+  fixture.taxpayer.name = "N".repeat(26);
+  fixture.taxpayer.registered_address = "R".repeat(71);
+  fixture.taxpayer.email = "E".repeat(32);
+  fixture.fields.payment_34_bank = { type: "text", value: "A B.C!" };
+  await renderEnvelope(page, fixture);
+  await expect(page.locator('.page-one-1701 [data-item-number="11"]')).toHaveAttribute("data-field-mode", "guided");
+  await expect(page.locator('.page-one-1701 [data-item-number="11"] > .comb-value > span')).toHaveCount(32);
+  await expect(page.locator('.page-one-1701 [data-item-number="9"]')).toHaveAttribute("data-field-mode", "guided");
+  await expect(page.locator('.page-two-1701 [data-field-name="taxpayer_continuation_name"]')).toHaveAttribute("data-field-mode", "guided");
+  await expect(page.locator('.page-two-1701 [data-field-name="taxpayer_continuation_name"] > .comb-value > span')).toHaveCount(26);
+  await expect(page.locator('[data-field-key="payment_34_bank"]')).toHaveAttribute("data-field-mode", "guided");
+  await expect(page.locator('[data-field-key="payment_34_bank"] > .comb-value > span')).toHaveCount(6);
+
+  fixture.taxpayer.name += "N";
+  fixture.taxpayer.registered_address += "R";
+  fixture.taxpayer.email += "E";
+  fixture.fields.payment_34_bank = { type: "text", value: "A B.C!D" };
+  await renderEnvelope(page, fixture);
+  const email = page.locator('.page-one-1701 [data-item-number="11"]');
+  await expect(email).toHaveAttribute("data-field-mode", "plain");
+  await expect(email.locator(":scope > .comb-value")).toHaveCount(0);
+  await expect(email.locator(":scope > .adaptive-plain-value")).toHaveText(fixture.taxpayer.email);
+  const address = page.locator('.page-one-1701 [data-item-number="9"]');
+  await expect(address).toHaveAttribute("data-field-mode", "plain");
+  await expect(address.locator(":scope > .comb-value")).toHaveCount(0);
+  await expect(address.locator(":scope > .adaptive-plain-value")).toHaveText(fixture.taxpayer.registered_address);
+  const continuationName = page.locator('.page-two-1701 [data-field-name="taxpayer_continuation_name"]');
+  await expect(continuationName).toHaveAttribute("data-field-mode", "plain");
+  await expect(continuationName.locator(":scope > .comb-value")).toHaveCount(0);
+  await expect(continuationName.locator(":scope > .adaptive-plain-value")).toHaveText(fixture.taxpayer.name);
+  const paymentBank = page.locator('[data-field-key="payment_34_bank"]');
+  await expect(paymentBank).toHaveAttribute("data-field-mode", "plain");
+  await expect(paymentBank.locator(":scope > .comb-value")).toHaveCount(0);
+  await expect(paymentBank.locator(":scope > .adaptive-plain-value")).toHaveText("A B.C!D");
+
+  fixture.taxpayer.name = "T".repeat(41);
+  await renderEnvelope(page, fixture);
+  const primaryName = page.locator('.page-one-1701 [data-item-number="8"]');
+  await expect(primaryName).toHaveAttribute("data-field-mode", "plain");
+  await expect(primaryName.locator(":scope > .comb-value")).toHaveCount(0);
+  await expect(primaryName.locator(":scope > .adaptive-plain-value")).toHaveText(fixture.taxpayer.name);
+
+  const longFixture = readFixture("packages/form-contracts/fixtures/1701-long-values.json") as MutableEnvelope;
+  await renderEnvelope(page, longFixture);
+  await expect(page.locator('.page-one-1701 [data-item-number="8"] > .adaptive-plain-value')).toHaveText(longFixture.taxpayer.name);
+  await expect(page.locator('.page-one-1701 [data-item-number="9"] > .adaptive-plain-value')).toHaveText(longFixture.taxpayer.registered_address);
+  await expect(page.locator('.page-one-1701 [data-item-number="11"] > .adaptive-plain-value')).toHaveText(longFixture.taxpayer.email);
 });
 
 test("1701 2018 keeps verified page-specific PDF417, caption, and seal geometry", async ({ page }) => {
@@ -248,6 +381,39 @@ async function pageHasNoOverflow(locator: Locator) {
     console.warn(`1701 overflow report: ${JSON.stringify({ report, ...details })}`);
   }
   return valid;
+}
+
+interface MutableEnvelope {
+  taxpayer: {
+    email: string;
+    name: string;
+    registered_address: string;
+  };
+  fields: Record<string, {
+    type: string;
+    value: string | number | boolean;
+  }>;
+}
+
+async function reviewedStaticText(locator: Locator) {
+  await expect(locator).toHaveCount(1);
+  return locator.evaluate((element) => {
+    const dynamicValues = [...element.querySelectorAll<HTMLElement>([
+      ".comb-value",
+      ".adaptive-plain-value",
+      ".check-box",
+      ".amount-1701",
+      ".guided-field-1701",
+      ".row-description-1701",
+      ".inline-description-1701",
+      "[data-field-key=\"machine_validation_or_receipt_details\"]"
+    ].join(", "))];
+    const priorDisplays = dynamicValues.map((dynamicValue) => dynamicValue.style.display);
+    dynamicValues.forEach((dynamicValue) => { dynamicValue.style.display = "none"; });
+    const visibleText = (element as HTMLElement).innerText.replace(/\s+/g, " ").trim();
+    dynamicValues.forEach((dynamicValue, index) => { dynamicValue.style.display = priorDisplays[index] ?? ""; });
+    return visibleText;
+  });
 }
 
 interface CriticalRegion {

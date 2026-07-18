@@ -10,6 +10,41 @@
     "page_count": 4,
     "page_height_pt": 936.0,
     "page_width_pt": 612.0,
+    "reviewed_supporting_sources": [
+      {
+        "field_count": 837,
+        "kind": "editable_xml",
+        "semantic_replay": "exact",
+        "source_file": "external:00000000000000-1701v2018-122025.xml",
+        "source_sha256": "b168c7b3273d30a10f28f4653847519b876d5a88e77ed82911718a80f65c7827"
+      },
+      {
+        "decrypted_extra_fields": [
+          "frm1701:txtPg1I9Address2"
+        ],
+        "field_count": 838,
+        "kind": "encrypted_editable_xml",
+        "semantic_replay": "exact_after_decryption",
+        "source_file": "external:00000000000000-1701v2018-122025#codeitlikemiley@gmail.com#.xml",
+        "source_sha256": "3771c99c191ef5e84b1b5e4c51499911bfbec6002febc3c53dca3f08730e92e3"
+      },
+      {
+        "kind": "attachment_pdf",
+        "page_count": 2,
+        "page_height_pt": 792.0,
+        "page_width_pt": 612.0,
+        "source_file": "external:1701 Attachment Jan 2018 ENCSv3.pdf",
+        "source_sha256": "e71799dc613c08d4c383fcd66bed83032b182ab43721c8665d7b608047766cad"
+      },
+      {
+        "kind": "consolidated_pdf",
+        "page_count": 2,
+        "page_height_pt": 612.0,
+        "page_width_pt": 936.0,
+        "source_file": "external:1701 January 2018 Consov4.pdf",
+        "source_sha256": "eac0ce426cc57c473e24638accb14a978ddd54f8cf795cc4303f527088416871"
+      }
+    ],
     "pages": [
       {
         "page": 1,
