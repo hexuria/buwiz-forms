@@ -104,6 +104,24 @@ class MacosNativeEvidenceDriverTests(unittest.TestCase):
                 with self.assertRaisesRegex(driver.EvidenceError, "never"):
                     driver.verify_transcript(path)
 
+    def test_gpui_toolbar_automation_uses_window_relative_coordinates(self) -> None:
+        # GPUI paints the toolbar but does not expose its controls as AXButton
+        # children. The diagnostic driver must therefore raise the exact
+        # preview window, calculate the reviewed control center from that
+        # window, and require the native save panel to appear.
+        self.assertIn('perform action "AXRaise" of targetWindow', driver.EXPORT_SCRIPT)
+        self.assertIn("set windowPosition to position of targetWindow", driver.EXPORT_SCRIPT)
+        self.assertIn("set windowSize to size of targetWindow", driver.EXPORT_SCRIPT)
+        self.assertIn("- 310", driver.EXPORT_SCRIPT)
+        self.assertIn("panelOpened", driver.EXPORT_SCRIPT)
+        self.assertNotIn("first button of targetWindow", driver.EXPORT_SCRIPT)
+
+    def test_system_print_uses_the_same_window_relative_toolbar_contract(self) -> None:
+        self.assertIn("set windowPosition to position of targetWindow", driver.PRINT_CANCEL_SCRIPT)
+        self.assertIn("set windowSize to size of targetWindow", driver.PRINT_CANCEL_SCRIPT)
+        self.assertIn("- 210", driver.PRINT_CANCEL_SCRIPT)
+        self.assertNotIn("first button of targetWindow", driver.PRINT_CANCEL_SCRIPT)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -180,8 +180,11 @@ and independently:
 - compares the renderer hash with the separately generated build identity;
 - verifies the existing package signature without treating an ad-hoc
   signature as Developer ID or notarization evidence;
-- drives a real Export PDF over a pre-existing destination through macOS
-  Accessibility and cross-checks the app-written observation;
+- raises the fixed, visible diagnostic window through macOS Accessibility and
+  activates the existing GPUI Export PDF control at its reviewed
+  window-relative center (GPUI does not expose custom toolbar controls as
+  semantic `AXButton` children), then drives the native AppKit save panel and
+  cross-checks the app-written observation;
 - retains each actual WKPDF callback payload separately from the validated
   final PDF, with hashes bound back to the callback observation;
 - induces a second real export failure by denying sibling-temp creation and

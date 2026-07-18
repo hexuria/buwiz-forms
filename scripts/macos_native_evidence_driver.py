@@ -236,7 +236,7 @@ def run_osascript(source: str, *arguments: str, timeout: float = 20.0) -> str:
     return result.stdout.strip()
 
 
-WAIT_READY_SCRIPT = r'''
+WAIT_WINDOW_SCRIPT = r'''
 on run argv
     set targetPid to (item 1 of argv) as integer
     tell application "System Events"
@@ -245,14 +245,14 @@ on run argv
             repeat 100 times
                 try
                     set targetWindow to first window whose name contains "2551Q HTML Form Preview"
-                    set exportButton to first button of targetWindow whose title is "Export PDF"
-                    if enabled of exportButton then return "ready"
+                    perform action "AXRaise" of targetWindow
+                    return "window_ready"
                 end try
                 delay 0.1
             end repeat
         end tell
     end tell
-    error "2551Q preview did not become ready"
+    error "2551Q preview window did not become available"
 end run
 '''
 
@@ -265,8 +265,27 @@ on run argv
         tell first process whose unix id is targetPid
             set frontmost to true
             set targetWindow to first window whose name contains "2551Q HTML Form Preview"
-            click first button of targetWindow whose title is "Export PDF"
-            delay 0.5
+            perform action "AXRaise" of targetWindow
+
+            -- GPUI's custom toolbar is not represented as AXButton children.
+            -- Activate the existing Export PDF control at its stable center,
+            -- relative to the diagnostic window that the app opens at a fixed
+            -- reviewed size. The save panel that follows is native AppKit UI.
+            set windowPosition to position of targetWindow
+            set windowSize to size of targetWindow
+            set exportPoint to {(item 1 of windowPosition) + (item 1 of windowSize) - 310, (item 2 of windowPosition) + 58}
+            set baselineWindowCount to count windows
+            set panelOpened to false
+            repeat 100 times
+                click at exportPoint
+                delay 0.1
+                if (count of sheets of targetWindow) > 0 or (count windows) > baselineWindowCount then
+                    set panelOpened to true
+                    exit repeat
+                end if
+            end repeat
+            if panelOpened is false then error "Export PDF did not open the native save panel"
+
             keystroke "g" using {command down, shift down}
             delay 0.3
             keystroke targetPath
@@ -294,7 +313,11 @@ on run argv
         tell first process whose unix id is targetPid
             set frontmost to true
             set targetWindow to first window whose name contains "2551Q HTML Form Preview"
-            click first button of targetWindow whose title is "Print"
+            perform action "AXRaise" of targetWindow
+            set windowPosition to position of targetWindow
+            set windowSize to size of targetWindow
+            set printPoint to {(item 1 of windowPosition) + (item 1 of windowSize) - 210, (item 2 of windowPosition) + 58}
+            click at printPoint
             delay 1.0
             key code 53
         end tell
@@ -535,7 +558,7 @@ def run_driver(arguments: argparse.Namespace) -> int:
             stderr=(output / "app.stderr.log").open("w", encoding="utf-8"),
         )
         app_pid = find_child_pid(binary, process.pid, arguments.timeout)
-        run_osascript(WAIT_READY_SCRIPT, str(app_pid), timeout=arguments.timeout)
+        run_osascript(WAIT_WINDOW_SCRIPT, str(app_pid), timeout=arguments.timeout)
 
         existing_observations = set(observation_dir.glob("*.observation.json"))
         run_osascript(EXPORT_SCRIPT, str(app_pid), str(success_destination))
@@ -550,12 +573,12 @@ def run_driver(arguments: argparse.Namespace) -> int:
             final_pdf=success_destination,
             artifact_dir=observation_dir,
         )
-        run_osascript(WAIT_READY_SCRIPT, str(app_pid), timeout=arguments.timeout)
+        run_osascript(WAIT_WINDOW_SCRIPT, str(app_pid), timeout=arguments.timeout)
 
         failure_observation_count = len(list(observation_dir.glob("*.observation.json")))
         run_osascript(EXPORT_SCRIPT, str(app_pid), str(failure_destination))
         time.sleep(2.0)
-        run_osascript(WAIT_READY_SCRIPT, str(app_pid), timeout=arguments.timeout)
+        run_osascript(WAIT_WINDOW_SCRIPT, str(app_pid), timeout=arguments.timeout)
         if len(list(observation_dir.glob("*.observation.json"))) != failure_observation_count:
             raise EvidenceError("induced failed export unexpectedly emitted a success observation")
 

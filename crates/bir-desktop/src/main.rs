@@ -376,10 +376,14 @@ fn main() {
                 }
             };
             let options = WindowOptions {
-                window_bounds: Some(WindowBounds::centered(
-                    size(px(1200.), px(900.)),
-                    cx,
-                )),
+                // Keep the external diagnostic window on the primary display.
+                // `WindowBounds::centered` has produced a stale, disconnected-
+                // display origin on real macOS runs, leaving only one pixel of
+                // the window reachable by Accessibility automation.
+                window_bounds: Some(WindowBounds::Windowed(Bounds {
+                    origin: point(px(40.), px(40.)),
+                    size: size(px(1200.), px(900.)),
+                })),
                 titlebar: Some(TitlebarOptions {
                     title: Some("2551Q HTML Form Preview - Native Evidence".into()),
                     ..Default::default()
