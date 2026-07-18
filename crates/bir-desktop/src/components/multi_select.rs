@@ -519,6 +519,14 @@ impl Render for MultiSelectState {
                         .child(
                             v_flex()
                                 .occlude()
+                                // Dismiss when the user clicks anywhere outside
+                                // the dropdown (including empty modal space).
+                                .on_mouse_down_out(cx.listener(|this, _, _window, cx| {
+                                    if this.open {
+                                        this.open = false;
+                                        cx.notify();
+                                    }
+                                }))
                                 .mt_1p5()
                                 .w_full()
                                 .border_1()
