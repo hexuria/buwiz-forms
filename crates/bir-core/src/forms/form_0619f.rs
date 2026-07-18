@@ -1,9 +1,11 @@
 //! BIR Form 0619-F, January 2018 (ENCS).
 //!
-//! The model is limited to behavior corroborated by the locked official form
-//! and the reviewed plain/encrypted payload pair. In particular, the observed
-//! due day is not generalized into a filing rule, penalties remain manual, and
-//! submission stays manual/external.
+//! The model is limited to behavior corroborated by the locked official form,
+//! the reviewed plain/encrypted payload pair, and the hash-locked eBIRForms
+//! 7.9.5.0 package sources. Rust semantically replays but does not byte-for-byte
+//! reproduce the reviewed ciphertext, while the package obtains current
+//! transport configuration at runtime and delegates encryption/upload to
+//! omitted executables. Submission stays manual/external.
 
 use std::collections::BTreeMap;
 
@@ -26,6 +28,44 @@ pub const REVIEWED_EDITABLE_XML_SHA256: &str =
     "f7a1f2481104b8c23b22f92aef263ae02f768227ec6961cb10e4daf0817f8a18";
 pub const REVIEWED_ENCRYPTED_XML_SHA256: &str =
     "d561ce34a44a732e52047552c6d4c0b975b3c45042dc0aba4907abfda89b53fb";
+pub const REVIEWED_DECRYPTED_XML_SHA256: &str =
+    "087116111a5222233d65b9f63bda8bcde4203f072bbb0925ae57c1cadc29c067";
+pub const EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT: usize = 59;
+pub const EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT: usize = 60;
+pub const REVIEWED_ENCRYPTED_XML_EXTRA_FIELD: &str = "frm0619F:txtAddress2";
+pub const CURRENT_RUST_REENCRYPTED_XML_SHA256: &str =
+    "d720ec50eea6ebbdf2c211df2b1b8eac0ae0ba275112fc26e6671450b3ac4306";
+
+/// Hash-locked native package evidence used only to decide submission safety.
+pub const OFFICIAL_PACKAGE_SHA256: &str =
+    "3d087545564531de1fbe8fb28f086ce6398e18608c54a0ea33353042665917eb";
+pub const OFFICIAL_PACKAGE_VERSION: &str = "7.9.5.0";
+pub const OFFICIAL_PACKAGE_MANIFEST_RESOURCE_ID: u32 = 129;
+pub const OFFICIAL_PACKAGE_MANIFEST_FILE_OFFSET: usize = 369_216;
+pub const OFFICIAL_PACKAGE_MANIFEST_SIZE: usize = 26_828;
+pub const OFFICIAL_PACKAGE_MANIFEST_SHA256: &str =
+    "c8811837405fd76d8924a1c04a6f283a9ed448e3792753da21aaf6ceea191249";
+pub const OFFICIAL_HTA_MANIFEST_INDEX: u32 = 13;
+pub const OFFICIAL_HTA_RESOURCE_ID: u32 = 142;
+pub const OFFICIAL_HTA_RESOURCE_FILE_OFFSET: usize = 1_253_468;
+pub const OFFICIAL_HTA_RESOURCE_DECODED_SIZE: usize = 204_589;
+pub const OFFICIAL_HTA_RESOURCE_DECODED_SHA256: &str =
+    "f9e23eafae2bf8b04e0996d0b4bdb902ae898e583db934941257088bce9a0f62";
+pub const OFFICIAL_EBIRTOOLS_RESOURCE_ID: u32 = 553;
+pub const OFFICIAL_EBIRTOOLS_RESOURCE_FILE_OFFSET: usize = 54_862_324;
+pub const OFFICIAL_EBIRTOOLS_RESOURCE_DECODED_SIZE: usize = 6_451;
+pub const OFFICIAL_EBIRTOOLS_RESOURCE_DECODED_SHA256: &str =
+    "aaf5dbe9593ca81f808540e537353f297f9bd8638e488ea5161673e3985a91bc";
+pub const OFFICIAL_ENVIRONMENT_RESOURCE_ID: u32 = 554;
+pub const OFFICIAL_ENVIRONMENT_RESOURCE_FILE_OFFSET: usize = 54_868_776;
+pub const OFFICIAL_ENVIRONMENT_RESOURCE_DECODED_SIZE: usize = 11_183;
+pub const OFFICIAL_ENVIRONMENT_RESOURCE_DECODED_SHA256: &str =
+    "01de5f90ad3c5a65af5c1ccdb61a8968d3c61e5d542eb160b6e0eb3432a3be4e";
+pub const OFFICIAL_STRING_UTIL_RESOURCE_ID: u32 = 566;
+pub const OFFICIAL_STRING_UTIL_RESOURCE_FILE_OFFSET: usize = 56_037_252;
+pub const OFFICIAL_STRING_UTIL_RESOURCE_DECODED_SIZE: usize = 55_573;
+pub const OFFICIAL_STRING_UTIL_RESOURCE_DECODED_SHA256: &str =
+    "8d3f3527e044a5325b1f9019d234717d60c5bb1f72692ea302eb4f9e9cb43d6f";
 
 /// Item 11 on the official form. The inverse XML checkbox is derived at the
 /// serialization boundary instead of being stored independently.
@@ -317,6 +357,12 @@ impl Form0619FDraft {
         let mut warnings = vec![
             "The reviewed plain 0619-F save uses txtFinalFlag=1 while its encrypted companion uses txtFinalFlag=0; the observed value is preserved and no submission meaning is inferred."
                 .to_string(),
+            "Rust decrypts and semantically replays the reviewed encrypted companion, but the current Rust compression writer does not reproduce the locked ciphertext byte-for-byte; exact outbound generation is not certified."
+                .to_string(),
+            "Queue submission remains disabled: eBIRForms 7.9.5.0 fetches endpoint, mode, port, username, and password from tinDispatcher.php at runtime, then invokes Encrypt.exe and cFTPSend.exe, which are absent from the reviewed package manifest."
+                .to_string(),
+            "The native helper exit code reports upload completion only and the HTA says submission remains subject to BIR validation; no reviewed 0619-F confirmation response or durable queue-claim persistence contract exists."
+                .to_string(),
         ];
         if self.xml_final_flag.requires_review() {
             warnings.push(format!(
@@ -337,58 +383,43 @@ impl Form0619FDraft {
         warnings
     }
 
-    /// Queueing remains unavailable until a reviewed submission contract exists.
+    /// Queueing is deliberately unavailable until the dynamic endpoint,
+    /// helper binaries, confirmation semantics, and immutable persistence
+    /// contract are all reviewed.
     pub fn transition_to_queued(&mut self) -> Result<(), Vec<(String, String)>> {
         let mut errors = self.validate();
         errors.push((
             "submission".to_string(),
-            "0619Fv2018 submission is manual/external; queue transport is not certified"
+            "0619Fv2018 queueing is disabled: exact ciphertext generation, the dynamic tinDispatcher endpoint/credentials, omitted Encrypt.exe and cFTPSend.exe helpers, BIR validation response, and durable claim persistence are not certified"
                 .to_string(),
         ));
         Err(errors)
     }
 
-    pub fn transition_to_submitted(&mut self, filename: String) -> Result<(), String> {
-        if !matches!(self.status, FilingStatus::Queued) {
-            return Err("0619-F can transition to Submitted only from Queued".to_string());
-        }
-        let now = chrono::Utc::now().to_rfc3339();
-        self.status = FilingStatus::Submitted;
-        self.submitted_at = Some(now.clone());
-        self.submission_filename = Some(filename);
-        self.submission_attempts = 0;
-        self.next_retry_at = None;
-        self.last_error = None;
-        self.updated_at = now;
-        Ok(())
+    pub fn transition_to_submitted(&mut self, _filename: String) -> Result<(), String> {
+        Err(
+            "0619Fv2018 cannot transition to Submitted because queue/submission transport is not certified"
+                .to_string(),
+        )
     }
 
     pub fn transition_to_confirmed(
         &mut self,
-        confirmed_at: String,
-        receipt_id: Option<i64>,
-        filename: Option<String>,
+        _confirmed_at: String,
+        _receipt_id: Option<i64>,
+        _filename: Option<String>,
     ) -> Result<(), String> {
-        if !matches!(self.status, FilingStatus::Submitted) {
-            return Err("0619-F can transition to Confirmed only from Submitted".to_string());
-        }
-        self.status = FilingStatus::Confirmed;
-        self.confirmed_at = Some(confirmed_at);
-        self.receipt_id = receipt_id;
-        if let Some(filename) = filename {
-            self.submission_filename = Some(filename);
-        }
-        self.updated_at = chrono::Utc::now().to_rfc3339();
-        Ok(())
+        Err(
+            "0619Fv2018 cannot transition to Confirmed because its submission-response contract is not certified"
+                .to_string(),
+        )
     }
 
     pub fn transition_to_paid(&mut self) -> Result<(), String> {
-        if !matches!(self.status, FilingStatus::Confirmed) {
-            return Err("0619-F can transition to Paid only from Confirmed".to_string());
-        }
-        self.status = FilingStatus::Paid;
-        self.updated_at = chrono::Utc::now().to_rfc3339();
-        Ok(())
+        Err(
+            "0619Fv2018 cannot transition to Paid through an uncertified submission lifecycle"
+                .to_string(),
+        )
     }
 
     pub fn revert_to_draft(&mut self) -> Result<(), String> {
@@ -407,16 +438,8 @@ impl Form0619FDraft {
         Ok(())
     }
 
-    pub fn record_submission_failure(&mut self, error_msg: String) -> Result<(), String> {
-        if !matches!(self.status, FilingStatus::Queued) {
-            return Err("Only a queued 0619-F can record a submission failure".to_string());
-        }
-        self.submission_attempts = self.submission_attempts.saturating_add(1);
-        self.last_error = Some(error_msg);
-        // Automatic retry behavior is not part of the reviewed contract.
-        self.next_retry_at = None;
-        self.updated_at = chrono::Utc::now().to_rfc3339();
-        Ok(())
+    pub fn record_submission_failure(&mut self, _error_msg: String) -> Result<(), String> {
+        Err("0619Fv2018 has no certified queue attempt or retry persistence contract".to_string())
     }
 }
 
@@ -831,18 +854,25 @@ mod tests {
     #[test]
     fn invalid_lifecycle_transitions_return_errors_instead_of_panicking() {
         let mut draft = valid_draft();
+        draft.status = FilingStatus::Queued;
         assert!(draft.transition_to_submitted("x.xml".to_string()).is_err());
-        assert!(
-            draft
-                .transition_to_confirmed("now".to_string(), None, None)
-                .is_err()
-        );
-        assert!(draft.transition_to_paid().is_err());
+        assert_eq!(draft.status, FilingStatus::Queued);
         assert!(
             draft
                 .record_submission_failure("failure".to_string())
                 .is_err()
         );
+        assert_eq!(draft.submission_attempts, 0);
+        draft.status = FilingStatus::Submitted;
+        assert!(
+            draft
+                .transition_to_confirmed("now".to_string(), None, None)
+                .is_err()
+        );
+        assert_eq!(draft.status, FilingStatus::Submitted);
+        draft.status = FilingStatus::Confirmed;
+        assert!(draft.transition_to_paid().is_err());
+        assert_eq!(draft.status, FilingStatus::Confirmed);
     }
 
     #[test]

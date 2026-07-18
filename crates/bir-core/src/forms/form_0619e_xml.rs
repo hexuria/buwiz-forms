@@ -11,6 +11,14 @@ use super::form_0619e::{
 };
 use std::collections::BTreeMap;
 
+const REVIEWED_NON_FILING_XML_STATE: [(&str, &str); 5] = [
+    ("driveSelectTPExport", ""),
+    ("ebirOnlineConfirmUsername", ""),
+    ("ebirOnlineSecret", ""),
+    ("ebirOnlineUsername", ""),
+    ("txtEnroll", "Y"),
+];
+
 impl Form0619EDraft {
     /// Canonical TIN segments for printable 0619-E output.
     ///
@@ -44,18 +52,11 @@ impl Form0619EDraft {
         let (tin1, tin2, tin3, branch) = split_tin(&self.tin);
         let (due_month, due_year) = self.due_month_and_year();
 
-        // Transport keys observed in both reviewed samples.  They remain blank
-        // defaults for new local saves and are preserved verbatim when imported.
-        for (key, default) in [
-            ("driveSelectTPExport", ""),
-            ("ebirOnlineConfirmUsername", ""),
-            ("ebirOnlineSecret", ""),
-            ("ebirOnlineUsername", ""),
-            ("txtEnroll", "Y"),
-        ] {
-            fields
-                .entry(key.to_string())
-                .or_insert_with(|| default.to_string());
+        // Both locked sources use these exact non-filing values. Rust never
+        // persists or replays eBIRForms login, enrollment, or export-device
+        // state through an editable 0619-E draft.
+        for (key, value) in REVIEWED_NON_FILING_XML_STATE {
+            insert(&mut fields, key, value);
         }
 
         insert(&mut fields, "txtEmail", self.email.clone());
@@ -267,6 +268,7 @@ impl Form0619EDraft {
             TAX_TYPE_CODE,
             &mut errors,
         );
+        validate_reviewed_non_filing_state(fields, &mut errors);
 
         let xml_final_flag = match field(fields, "txtFinalFlag") {
             "0" => Form0619EXmlFinalFlag::Zero,
@@ -427,6 +429,27 @@ fn semantic_text(fields: &BTreeMap<String, String>, key: &str) -> String {
 
 fn field<'a>(fields: &'a BTreeMap<String, String>, key: &str) -> &'a str {
     fields.get(key).map(String::as_str).unwrap_or("")
+}
+
+fn validate_reviewed_non_filing_state(
+    fields: &BTreeMap<String, String>,
+    errors: &mut Vec<(String, String)>,
+) {
+    for (key, expected) in REVIEWED_NON_FILING_XML_STATE {
+        match fields.get(key) {
+            Some(actual) if actual == expected => {}
+            Some(_) => errors.push((
+                key.to_string(),
+                format!(
+                    "0619-E import requires the reviewed non-filing value {key}={expected:?}; credential, enrollment, and export-device state is never persisted"
+                ),
+            )),
+            None => errors.push((
+                key.to_string(),
+                format!("Required reviewed 0619-E non-filing field {key} is missing"),
+            )),
+        }
+    }
 }
 
 fn parse_required<T: std::str::FromStr>(
@@ -622,7 +645,12 @@ fn split_tin(tin: &str) -> (String, String, String, String) {
 fn is_modeled_xml_key(key: &str) -> bool {
     matches!(
         key,
-        "txtEmail"
+        "driveSelectTPExport"
+            | "ebirOnlineConfirmUsername"
+            | "ebirOnlineSecret"
+            | "ebirOnlineUsername"
+            | "txtEnroll"
+            | "txtEmail"
             | "txtFinalFlag"
             | "txtTaxAgentNo"
             | "txtDateIssue"
@@ -716,8 +744,9 @@ fn insert_optional_money(map: &mut BTreeMap<String, String>, key: &str, value: O
 #[cfg(test)]
 mod tests {
     use super::super::form_0619e::{
-        EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT, EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT,
-        OFFICIAL_FORM_SHA256, REVIEWED_EDITABLE_XML_SHA256, REVIEWED_ENCRYPTED_XML_EXTRA_FIELD,
+        CURRENT_RUST_REENCRYPTED_XML_SHA256, EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT,
+        EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT, OFFICIAL_FORM_SHA256, REVIEWED_DECRYPTED_XML_SHA256,
+        REVIEWED_EDITABLE_XML_SHA256, REVIEWED_ENCRYPTED_XML_EXTRA_FIELD,
         REVIEWED_ENCRYPTED_XML_SHA256, REVIEWED_LEXICAL_ENCODING_FIELD,
     };
     use super::*;
@@ -830,6 +859,44 @@ mod tests {
     }
 
     #[test]
+    fn credential_enrollment_and_export_state_fail_closed_and_do_not_persist() {
+        for (key, unsafe_value) in [
+            ("ebirOnlineConfirmUsername", "registered-user"),
+            ("ebirOnlineUsername", "registered-user"),
+            ("ebirOnlineSecret", "must-not-persist"),
+            ("txtEnroll", "N"),
+            ("driveSelectTPExport", "C:"),
+        ] {
+            let mut fields =
+                crate::bir_xml::parse_bir_xml_checked(&reviewed_sample("1", true)).unwrap();
+            fields.insert(key.to_string(), unsafe_value.to_string());
+            let errors = Form0619EDraft::from_bir_field_map(&fields)
+                .expect_err("non-reviewed credential or UI state must fail closed");
+            assert!(errors.iter().any(|(field, _)| field == key));
+        }
+
+        let mut fields =
+            crate::bir_xml::parse_bir_xml_checked(&reviewed_sample("1", true)).unwrap();
+        fields.remove("ebirOnlineSecret");
+        assert!(
+            Form0619EDraft::from_bir_field_map(&fields)
+                .unwrap_err()
+                .iter()
+                .any(|(field, _)| field == "ebirOnlineSecret")
+        );
+
+        let draft = Form0619EDraft::from_bir_xml_payload(&reviewed_sample("0", true)).unwrap();
+        for (key, expected) in REVIEWED_NON_FILING_XML_STATE {
+            assert!(!draft.preserved_unmodeled_xml_fields.contains_key(key));
+            assert_eq!(draft.to_bir_field_map()[key], expected);
+        }
+        let persisted = serde_json::to_string(&draft).unwrap();
+        assert!(!persisted.contains("ebirOnlineSecret"));
+        assert!(!persisted.contains("registered-user"));
+        assert!(!persisted.contains("must-not-persist"));
+    }
+
+    #[test]
     fn unknown_keys_are_preserved_and_reported_without_overriding_modeled_truth() {
         let mut fields = crate::bir_xml::parse_bir_xml_checked(&reviewed_sample("1", true))
             .expect("reviewed sample must parse");
@@ -887,6 +954,174 @@ mod tests {
         draft.month = 1;
         draft.due_day = Some(30);
         assert!(draft.validate().iter().any(|(field, _)| field == "due_day"));
+    }
+
+    #[test]
+    fn checked_in_submission_provenance_matches_the_fail_closed_boundary() {
+        let provenance: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../packages/form-renderer/references/0619e-2018-source.json"
+        ))
+        .unwrap();
+
+        assert_eq!(
+            provenance["official_package_evidence"]["package_sha256"],
+            super::super::form_0619e::OFFICIAL_PACKAGE_SHA256
+        );
+        assert_eq!(
+            provenance["official_package_evidence"]["source_resources"]["hta_decoded_sha256"],
+            super::super::form_0619e::OFFICIAL_HTA_RESOURCE_DECODED_SHA256
+        );
+        assert_eq!(
+            provenance["official_package_evidence"]["reviewed_outbound_candidate"]["decrypted_sha256"],
+            REVIEWED_DECRYPTED_XML_SHA256
+        );
+        assert_eq!(
+            provenance["official_package_evidence"]["reviewed_outbound_candidate"]["decrypted_field_count"],
+            EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT
+        );
+        assert_eq!(
+            provenance["official_package_evidence"]["reviewed_outbound_candidate"]["rust_ciphertext_replay"]
+                ["reencrypted_sha256"],
+            CURRENT_RUST_REENCRYPTED_XML_SHA256
+        );
+        assert_eq!(
+            provenance["official_package_evidence"]["reviewed_outbound_candidate"]["rust_ciphertext_replay"]
+                ["matches_locked_ciphertext"],
+            false
+        );
+        assert_eq!(
+            provenance["official_package_evidence"]["submission_boundary"]["queue_submission_supported"],
+            super::super::form_0619e::QUEUE_SUBMISSION_SUPPORTED
+        );
+        assert_eq!(
+            super::super::form_0619e::OFFICIAL_PACKAGE_MANIFEST_RESOURCE_ID
+                + super::super::form_0619e::OFFICIAL_HTA_MANIFEST_INDEX,
+            super::super::form_0619e::OFFICIAL_HTA_RESOURCE_ID
+        );
+    }
+
+    #[test]
+    #[ignore = "requires EBIRFORMS_PACKAGE_PATH pointing to the reviewed BIRForms.exe"]
+    fn locked_external_package_proves_0619e_payload_flow_but_not_transport_acceptance() {
+        use super::super::form_0619e as evidence;
+
+        let path = std::env::var("EBIRFORMS_PACKAGE_PATH")
+            .expect("set EBIRFORMS_PACKAGE_PATH to reviewed BIRForms.exe");
+        let package = std::fs::read(path).expect("official package must be readable");
+        assert_eq!(
+            hex::encode(Sha256::digest(&package)),
+            evidence::OFFICIAL_PACKAGE_SHA256
+        );
+
+        let manifest = &package[evidence::OFFICIAL_PACKAGE_MANIFEST_FILE_OFFSET
+            ..evidence::OFFICIAL_PACKAGE_MANIFEST_FILE_OFFSET
+                + evidence::OFFICIAL_PACKAGE_MANIFEST_SIZE];
+        assert_eq!(
+            hex::encode(Sha256::digest(manifest)),
+            evidence::OFFICIAL_PACKAGE_MANIFEST_SHA256
+        );
+        let manifest_units = manifest
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect::<Vec<_>>();
+        let manifest_text = String::from_utf16(&manifest_units).unwrap();
+        let entries = manifest_text
+            .trim_start_matches('\u{feff}')
+            .split('|')
+            .collect::<Vec<_>>();
+        assert_eq!(
+            entries[evidence::OFFICIAL_HTA_MANIFEST_INDEX as usize],
+            "forms\\BIR-Form0619E.hta"
+        );
+        assert!(entries.iter().all(|entry| {
+            let entry = entry.to_ascii_lowercase();
+            !entry.ends_with("encrypt.exe") && !entry.ends_with("cftpsend.exe")
+        }));
+
+        let decode = |offset: usize, size: usize| {
+            package[offset..offset + size]
+                .iter()
+                .map(|byte| byte ^ 0xff)
+                .collect::<Vec<_>>()
+        };
+        let hta = decode(
+            evidence::OFFICIAL_HTA_RESOURCE_FILE_OFFSET,
+            evidence::OFFICIAL_HTA_RESOURCE_DECODED_SIZE,
+        );
+        assert_eq!(
+            hex::encode(Sha256::digest(&hta)),
+            evidence::OFFICIAL_HTA_RESOURCE_DECODED_SHA256
+        );
+        let hta = String::from_utf8_lossy(&hta);
+        for anchor in [
+            "function saveEncryptedProfile(isFromSubmit)",
+            "var isSaveSuccessful = saveXML(true)",
+            "var succ = EncryptFile(xmlFileName)",
+            "function sendEmail(sourceElement)",
+            "enviService.getFtpFolder('0619E')",
+            "conService.getConConfig()",
+            "RenameAndSendFile(emailFilePath",
+            "if (returnCode == 0)",
+            "Subject to validation by BIR",
+        ] {
+            assert!(hta.contains(anchor), "missing 0619-E HTA anchor {anchor}");
+        }
+
+        let tools = decode(
+            evidence::OFFICIAL_EBIRTOOLS_RESOURCE_FILE_OFFSET,
+            evidence::OFFICIAL_EBIRTOOLS_RESOURCE_DECODED_SIZE,
+        );
+        assert_eq!(
+            hex::encode(Sha256::digest(&tools)),
+            evidence::OFFICIAL_EBIRTOOLS_RESOURCE_DECODED_SHA256
+        );
+        let tools = String::from_utf8_lossy(&tools);
+        for anchor in ["Encrypt.exe", "cFTPSend.exe", "RenameAndSendFile"] {
+            assert!(tools.contains(anchor), "missing helper anchor {anchor}");
+        }
+
+        let environment = decode(
+            evidence::OFFICIAL_ENVIRONMENT_RESOURCE_FILE_OFFSET,
+            evidence::OFFICIAL_ENVIRONMENT_RESOURCE_DECODED_SIZE,
+        );
+        assert_eq!(
+            hex::encode(Sha256::digest(&environment)),
+            evidence::OFFICIAL_ENVIRONMENT_RESOURCE_DECODED_SHA256
+        );
+        let environment = String::from_utf8_lossy(&environment);
+        for anchor in [
+            "var currEnvi = 'PROD'",
+            "primary: 'http://birgovph.com/'",
+            "backup: 'http://ws2.birgovph.com/'",
+            "'0619E': '0619E'",
+        ] {
+            assert!(
+                environment.contains(anchor),
+                "missing environment anchor {anchor}"
+            );
+        }
+
+        let string_util = decode(
+            evidence::OFFICIAL_STRING_UTIL_RESOURCE_FILE_OFFSET,
+            evidence::OFFICIAL_STRING_UTIL_RESOURCE_DECODED_SIZE,
+        );
+        assert_eq!(
+            hex::encode(Sha256::digest(&string_util)),
+            evidence::OFFICIAL_STRING_UTIL_RESOURCE_DECODED_SHA256
+        );
+        let string_util = String::from_utf8_lossy(&string_util);
+        for anchor in [
+            "tinDispatcher.php?t=",
+            "conConfig['srv'] = det.server",
+            "conConfig['sslport'] = det.SSLPort",
+            "conConfig['usr'] = det.username",
+            "conConfig['pass'] = det.password",
+        ] {
+            assert!(
+                string_util.contains(anchor),
+                "missing dynamic transport anchor {anchor}"
+            );
+        }
     }
 
     #[test]
@@ -948,6 +1183,21 @@ mod tests {
         let decrypted =
             crate::crypto::decrypt_and_decompress(&encrypted, crate::crypto::BIR_IAF_PASSPHRASE)
                 .expect("reviewed encrypted companion must decrypt");
+        assert_eq!(
+            hex::encode(Sha256::digest(&decrypted)),
+            REVIEWED_DECRYPTED_XML_SHA256
+        );
+        let rust_reencrypted =
+            crate::crypto::compress_and_encrypt(&decrypted, crate::crypto::BIR_IAF_PASSPHRASE)
+                .expect("decrypted companion must re-encrypt");
+        assert_eq!(
+            hex::encode(Sha256::digest(&rust_reencrypted)),
+            CURRENT_RUST_REENCRYPTED_XML_SHA256
+        );
+        assert_ne!(
+            rust_reencrypted, encrypted,
+            "queue certification must remain closed while Rust cannot reproduce the locked ciphertext"
+        );
         let decrypted_xml =
             std::str::from_utf8(&decrypted).expect("decrypted companion must be UTF-8");
         let encrypted_fields = crate::bir_xml::parse_bir_xml_checked(decrypted_xml)

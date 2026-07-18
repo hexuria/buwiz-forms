@@ -408,6 +408,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn unsupported_0619f_is_blocked_without_transport() {
+        let xml = one_line_payload(&[
+            ("frm0619F:txtMonth", "04"),
+            ("txtDateIssue", ""),
+            ("txtEmail", "test@example.com"),
+        ]);
+        let (_directory, path) =
+            encrypted_fixture("00000000000000-0619F-042026WB#test@example.com#.xml", &xml);
+        let client = CountingSubmissionClient::default();
+
+        let error = import_and_submit_savefile_with_client(&path, None, &client)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            OfficialImportError::QueueSubmissionUnsupported { ref form_id }
+                if form_id == "0619Fv2018"
+        ));
+        assert_eq!(client.calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
     async fn fallback_email_cannot_rescue_a_nearly_empty_payload() {
         let xml = one_line_payload(&[("frm0619E:txtMonth", "04")]);
         let (_directory, path) = encrypted_fixture("00000000000000-0619E-042026.xml", &xml);

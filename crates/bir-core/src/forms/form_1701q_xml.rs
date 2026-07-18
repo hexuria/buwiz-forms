@@ -1531,6 +1531,10 @@ mod tests {
             super::super::form_1701q::EXACT_EDITABLE_XML_FIELD_COUNT
         );
         assert_eq!(
+            provenance["official_package_evidence"]["editable_saved_xml"]["supported_by_rust"],
+            super::super::form_1701q::XML_ROUND_TRIP_SUPPORTED
+        );
+        assert_eq!(
             provenance["official_package_evidence"]["submission_boundary"]["queue_submission_supported"],
             super::super::form_1701q::QUEUE_SUBMISSION_SUPPORTED
         );
