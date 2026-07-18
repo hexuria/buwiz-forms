@@ -844,7 +844,7 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 .tax-agent-strip {
   height: 19pt;
   display: grid;
-  grid-template-columns: 112pt 118pt 68pt 102pt 77pt minmax(0, 1fr);
+  grid-template-columns: 112pt 118pt 68pt 102pt 60pt minmax(0, 1fr);
   border-top: .7pt solid #111;
   font-size: 6.8pt;
   line-height: 1;
@@ -1328,6 +1328,39 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   box-shadow: inset 0 -1pt #000;
 }
 
+/* Page-two ATC typography is calibrated independently from page one because
+ * the source PDF uses narrower table roles. Keep the measured row geometry
+ * intact and tune only the bundled-font metrics and the two-line note baseline. */
+.form-2551q-page-two .official-atc-table caption {
+  font-size: 8.75pt;
+  letter-spacing: .2pt;
+}
+
+.form-2551q-page-two .official-atc-table thead th {
+  font-size: 8.25pt;
+  letter-spacing: .2pt;
+}
+
+.form-2551q-page-two .official-atc-table .atc-entry > td:first-child {
+  font-size: 8.25pt;
+  letter-spacing: 0;
+}
+
+.form-2551q-page-two .official-atc-table .atc-entry > td:last-child {
+  font-size: 8.5pt;
+  letter-spacing: .25pt;
+}
+
+.form-2551q-page-two .official-atc-table .atc-note > td:nth-child(2) {
+  font-size: 7.95pt;
+  letter-spacing: .225pt;
+}
+
+.form-2551q-page-two .official-atc-table .atc-note > td:nth-child(2) > span {
+  position: relative;
+  top: .25pt;
+}
+
 .official-schedule-continuation .official-schedule-total {
   margin-top: 0;
 }
@@ -1498,7 +1531,9 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 }
 
 .form-2551q-page-one .tax-subheading {
+  font-size: 8.75pt;
   font-weight: 500;
+  letter-spacing: .3pt;
 }
 
 /* Item 24 and the overpayment strip share one fixed official footprint. At
@@ -1675,6 +1710,36 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 
 .form-2551q-page-one .signature-caption > * {
   transform: translateY(-.5pt);
+}
+
+.form-2551q-page-one .signature-caption em {
+  font-size: 7.25pt;
+  letter-spacing: -.1pt;
+}
+
+.form-2551q-page-one .income-rate-choice .check-box {
+  background: #fff;
+}
+
+/* These document-local sizes were selected by an unmasked 144 DPI sweep
+ * against the pinned official PDF. They only tune bundled Arimo glyph metrics;
+ * semantic content, official row heights, and page geometry remain unchanged. */
+.form-2551q-page-one :is(.tax-payable, .official-payment-details) > h2 {
+  font-weight: 500;
+}
+
+.form-2551q-page-one .payment-headings {
+  font-size: 7.2pt;
+  letter-spacing: -.1pt;
+}
+
+.form-2551q-page-one .payment-headings > b {
+  font-weight: 450;
+}
+
+.form-2551q-page-one .privacy-note {
+  font-size: 7pt;
+  letter-spacing: -.05pt;
 }
 
 /* Preserve the official single-row Item 17 geometry when the value fits. A
