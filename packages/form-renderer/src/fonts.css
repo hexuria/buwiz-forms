@@ -77,4 +77,5 @@
  */
 .form-document[data-form-code] .form-page {
   font-family: "eBIRForms Arimo", sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
