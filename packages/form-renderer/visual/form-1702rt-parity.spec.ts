@@ -120,6 +120,24 @@ test("1702RT January 2018C preserves the official Schedule IIIA header and dead-
   ]);
 });
 
+test("1702RT January 2018C preserves the official continuation header and amount-guide partitions", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702rt-normal.json"));
+  const pageFour = page.locator(".form-page").nth(3);
+  const nolcoHeading = pageFour.locator(".nolco-continuation-grid-1702rt.nolco-heading-1702rt > span");
+  const nolcoRow = pageFour.locator(".nolco-continuation-grid-1702rt:not(.nolco-heading-1702rt)").first().locator(":scope > *");
+  const mcitHeading = pageFour.locator(".mcit-continuation-grid-1702rt.mcit-heading-1702rt > span");
+  const mcitRow = pageFour.locator(".mcit-continuation-grid-1702rt:not(.mcit-heading-1702rt)").first().locator(":scope > *");
+
+  await expect(nolcoHeading).toHaveCount(3);
+  await expect(nolcoRow).toHaveCount(4);
+  await expect(mcitHeading).toHaveCount(4);
+  await expect(mcitRow).toHaveCount(5);
+  expect(await cellWidthsInPoints(nolcoHeading)).toEqual([212.5, 181.5, 181.5]);
+  expect(await cellWidthsInPoints(nolcoRow)).toEqual([30, 181.8, 181.8, 181.8]);
+  expect(await cellWidthsInPoints(mcitHeading)).toEqual([152, 136.5, 151.5, 135.5]);
+  expect(await cellWidthsInPoints(mcitRow)).toEqual([15.5, 136.5, 136.5, 151.5, 135.5]);
+});
+
 test("1702RT January 2018C preserves the official Item 10 through 12 label partitions", async ({ page }) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702rt-normal.json"));
   const pageOne = page.locator(".form-page").first();

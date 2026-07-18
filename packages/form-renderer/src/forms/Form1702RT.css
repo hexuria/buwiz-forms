@@ -557,7 +557,10 @@
 .nolco-continuation-grid-1702rt { height: 20pt; display: grid; grid-template-columns: 30pt repeat(3, minmax(0, 1fr)); }
 .nolco-continuation-grid-1702rt > * { min-width: 0; display: flex; align-items: center; justify-content: center; border-right: .55pt solid #111; border-bottom: .55pt solid #111; }
 .nolco-heading-1702rt { background: #d9d9d9; text-align: center; }
-.nolco-continuation-grid-1702rt.nolco-heading-1702rt { height: 20.5pt; }
+.nolco-continuation-grid-1702rt.nolco-heading-1702rt {
+  height: 20.5pt;
+  grid-template-columns: 212.5pt 181.5pt minmax(0, 1fr);
+}
 .continuation-title-1702rt { height: 12pt; }
 .schedule-three-1702rt .continuation-title-1702rt { height: 14pt; }
 .schedule-three-total-1702rt { height: 20pt; display: grid; grid-template-columns: 363pt 183pt 30pt; }
@@ -567,12 +570,19 @@
 .schedule-four-1702rt { height: 211pt; border-top: 2pt solid #fff; outline: 1pt solid #111; }
 .schedule-four-1702rt > h3 { height: 12pt; }
 .mcit-grid-1702rt { height: 19.5pt; display: grid; grid-template-columns: 15pt 61pt 167pt 167pt minmax(0, 1fr); }
-.mcit-continuation-grid-1702rt { height: 19.5pt; display: grid; grid-template-columns: 15pt repeat(4, minmax(0, 1fr)); }
+.mcit-continuation-grid-1702rt {
+  height: 19.5pt;
+  display: grid;
+  grid-template-columns: 15.5pt 136.5pt 136.5pt 151.5pt minmax(0, 1fr);
+}
 .mcit-grid-1702rt > *,
 .mcit-continuation-grid-1702rt > * { min-width: 0; display: flex; align-items: center; justify-content: center; border-right: .55pt solid #111; border-bottom: .55pt solid #111; }
 .mcit-heading-1702rt { background: #d9d9d9; text-align: center; }
 .mcit-grid-1702rt.mcit-heading-1702rt { height: 11pt; }
-.mcit-continuation-grid-1702rt.mcit-heading-1702rt { height: 32pt; }
+.mcit-continuation-grid-1702rt.mcit-heading-1702rt {
+  height: 32pt;
+  grid-template-columns: 152pt 136.5pt 151.5pt minmax(0, 1fr);
+}
 .schedule-four-total-1702rt { height: 20pt; display: grid; grid-template-columns: 456pt 91pt 29pt; }
 .schedule-four-total-1702rt > span:first-child { display: flex; align-items: center; padding: 1pt 5pt; background: #d9d9d9; }
 .schedule-four-total-1702rt > span:last-child { background: #aaa; }
