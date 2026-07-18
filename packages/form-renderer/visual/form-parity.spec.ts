@@ -5,7 +5,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
+import {
+  compareSymmetricGrayscaleEdges,
+  LAYERED_EDGE_EVIDENCE_POLICY
+} from "./grayscale-edge-match";
 import { compareCompleteOfficialPage } from "./official-page-diff";
+import {
+  OFFICIAL_2551Q_STATIC_TEXT,
+  verifyPageIndexedStaticText
+} from "./official-2551q-static-text";
 import { parsePromotionVisualThreshold } from "./release-visual-threshold";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -18,6 +26,10 @@ const DEVICE_SCALE_FACTOR = 1.5;
 const STRUCTURAL_INK_THRESHOLD = 100;
 const STRUCTURAL_LINE_MIN_RUN = 20;
 const STRUCTURAL_TOLERANCE_RADIUS = 4;
+const EDGE_TOLERANCE_RADIUS_PX = 2;
+const MIN_EDGE_PRECISION = 0.95;
+const MIN_EDGE_RECALL = 0.94;
+const MIN_EDGE_F1 = 0.95;
 const VISUAL_EVIDENCE_PRODUCER = "playwright-form-parity-v1";
 const VISUAL_EVIDENCE_PRODUCER_PATH =
   "packages/form-renderer/visual/form-parity.spec.ts";
@@ -70,7 +82,24 @@ interface VisualPageMetric {
   passed: boolean;
 }
 
+interface LayeredFidelityMetric {
+  page: number;
+  comparison: "symmetric-grayscale-sobel-edge-v1";
+  tolerance_radius_px: number;
+  edge_threshold: number;
+  expected_edge_pixels: number;
+  actual_edge_pixels: number;
+  precision: number;
+  recall: number;
+  f1: number;
+  minimum_precision: number;
+  minimum_recall: number;
+  minimum_f1: number;
+  passed: boolean;
+}
+
 const visualPageMetrics: VisualPageMetric[] = [];
+const layeredFidelityMetrics: LayeredFidelityMetric[] = [];
 
 const cases: ParityCase[] = [
   {
@@ -91,6 +120,7 @@ for (const parityCase of cases) {
     page
   }, testInfo) => {
     visualPageMetrics.length = 0;
+    layeredFidelityMetrics.length = 0;
     const fixtureBuffer = fs.readFileSync(
       path.join(REPO_ROOT, parityCase.fixture)
     );
@@ -227,6 +257,13 @@ for (const parityCase of cases) {
       { name: "Schedule 1 ATC table", selector: ".official-atc-table", x: 45, y: 587, width: 1137, height: 677 }
     ]);
     await expectCriticalRegionContent(pages.nth(0), pages.nth(1));
+    const staticTextViolations = verifyPageIndexedStaticText(
+      await collectStaticTextSnapshots(pages)
+    );
+    expect(
+      staticTextViolations,
+      "Every reviewed 2551Q static label must appear on its official page"
+    ).toEqual([]);
 
     // The pinned official PDF is an unfilled form while our authoritative
     // fixture exercises all six Schedule 1 rows.  Compare the owned document
@@ -268,7 +305,24 @@ for (const parityCase of cases) {
       });
     }
 
+    writeLayeredFidelityDiagnostic(staticTextViolations);
     writeVisualEvidence();
+    expect(
+      layeredFidelityMetrics,
+      "The layered diagnostic must measure every official 2551Q page"
+    ).toHaveLength(parityCase.references.length);
+    const failedLayeredEvidence = layeredFidelityMetrics
+      .filter((metric) => !metric.passed)
+      .map(({ page, precision, recall, f1 }) => ({
+        page,
+        precision,
+        recall,
+        f1
+      }));
+    expect(
+      failedLayeredEvidence,
+      "The non-promotional 2px grayscale edge diagnostic must retain reviewed precision, recall, and F1"
+    ).toEqual([]);
     const failedPages = visualPageMetrics
       .filter((metric) => !metric.passed)
       .map((metric) => ({
@@ -284,6 +338,30 @@ for (const parityCase of cases) {
       `Visual parity must be at or below ${MAX_CHANGED_PERCENT}% changed pixels per page`
     ).toEqual([]);
   });
+}
+
+async function collectStaticTextSnapshots(pages: Locator) {
+  const scopedSelectors = [
+    ...new Set(
+      OFFICIAL_2551Q_STATIC_TEXT.flatMap((entry) =>
+        entry.selector ? [entry.selector] : []
+      )
+    )
+  ];
+  const pageCount = await pages.count();
+  return Promise.all(Array.from({ length: pageCount }, async (_, pageIndex) => {
+    const formPage = pages.nth(pageIndex);
+    const selectorText = Object.fromEntries(
+      await Promise.all(scopedSelectors.map(async (selector) => [
+        selector,
+        (await formPage.locator(selector).allInnerTexts()).join(" ")
+      ] as const))
+    );
+    return {
+      fullText: await formPage.innerText(),
+      selectorText
+    };
+  }));
 }
 
 test("2551Q PDF417 artwork keeps the reviewed source geometry", async ({ page }) => {
@@ -1554,6 +1632,42 @@ test("2551Q adaptive fields retain domain-boundary text and report unsafe geomet
     .toBeGreaterThan(0);
 });
 
+function writeLayeredFidelityDiagnostic(
+  staticTextViolations: ReturnType<typeof verifyPageIndexedStaticText>
+) {
+  const reportPath = path.join(
+    REPO_ROOT,
+    "test-results/form-renderer/2551q-layered-fidelity-diagnostic.json"
+  );
+  const report = {
+    schema_version: 1,
+    form_code: "2551Q",
+    revision: "2018",
+    purpose: "non_promotional_cross_rasterizer_diagnostic",
+    promotion_eligible: LAYERED_EDGE_EVIDENCE_POLICY.promotionEligible,
+    authoritative_visual_gate:
+      LAYERED_EDGE_EVIDENCE_POLICY.authoritativeVisualGate,
+    authoritative_max_changed_percent: MAX_CHANGED_PERCENT,
+    replaces_authoritative_gate:
+      LAYERED_EDGE_EVIDENCE_POLICY.replacesAuthoritativeGate,
+    static_text: {
+      comparison: "page-indexed-exact-normalized-static-text-v1",
+      reviewed_entry_count: OFFICIAL_2551Q_STATIC_TEXT.length,
+      manifest_sha256: sha256(Buffer.from(JSON.stringify(OFFICIAL_2551Q_STATIC_TEXT))),
+      violations: staticTextViolations,
+      passed: staticTextViolations.length === 0
+    },
+    edges: layeredFidelityMetrics,
+    passed:
+      staticTextViolations.length === 0 &&
+      layeredFidelityMetrics.length === 2 &&
+      layeredFidelityMetrics.every((metric) => metric.passed)
+  };
+  fs.mkdirSync(path.dirname(reportPath), { recursive: true });
+  fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+  console.log(`2551Q_LAYERED_FIDELITY ${JSON.stringify(report)}`);
+}
+
 function writeVisualEvidence() {
   const expectedPageCount = cases.reduce(
     (count, parityCase) => count + parityCase.references.length,
@@ -2158,6 +2272,28 @@ function assertVisualParity({
     (structural.changedPixels / (expected.width * expected.height)) * 100;
   const completePage = compareCompleteOfficialPage(expected, actual, {
     pixelThreshold: PIXELMATCH_THRESHOLD
+  });
+  const edgeMatch = compareSymmetricGrayscaleEdges(expected, actual, {
+    toleranceRadiusPx: EDGE_TOLERANCE_RADIUS_PX
+  });
+  const layeredPassed =
+    edgeMatch.precision >= MIN_EDGE_PRECISION &&
+    edgeMatch.recall >= MIN_EDGE_RECALL &&
+    edgeMatch.f1 >= MIN_EDGE_F1;
+  layeredFidelityMetrics.push({
+    page: pageNumber,
+    comparison: "symmetric-grayscale-sobel-edge-v1",
+    tolerance_radius_px: edgeMatch.toleranceRadiusPx,
+    edge_threshold: edgeMatch.edgeThreshold,
+    expected_edge_pixels: edgeMatch.expectedEdgePixels,
+    actual_edge_pixels: edgeMatch.actualEdgePixels,
+    precision: edgeMatch.precision,
+    recall: edgeMatch.recall,
+    f1: edgeMatch.f1,
+    minimum_precision: MIN_EDGE_PRECISION,
+    minimum_recall: MIN_EDGE_RECALL,
+    minimum_f1: MIN_EDGE_F1,
+    passed: layeredPassed
   });
   const passed = completePage.fullPageChangedPercent <= MAX_CHANGED_PERCENT;
 
