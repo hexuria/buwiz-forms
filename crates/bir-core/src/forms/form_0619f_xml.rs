@@ -713,6 +713,7 @@ fn insert_optional_money(map: &mut BTreeMap<String, String>, key: &str, value: O
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sha2::{Digest, Sha256};
 
     fn reviewed_sample(final_flag: &str, include_address_2: bool) -> String {
         let mut fields = BTreeMap::from([
@@ -910,5 +911,75 @@ mod tests {
         let second = draft.to_bir_xml_payload();
         assert_eq!(first, second);
         assert_eq!(draft.to_bir_field_map()["txtDateIssue"], "");
+    }
+
+    #[test]
+    #[ignore = "requires EBIRFORMS_0619F_SOURCE_DIR pointing to the reviewed external source pack"]
+    fn locked_external_pdf_plain_and_encrypted_sources_match_and_roundtrip() {
+        let source_dir = std::env::var("EBIRFORMS_0619F_SOURCE_DIR")
+            .expect("set EBIRFORMS_0619F_SOURCE_DIR to the exact reviewed 0619F folder");
+        let directory = std::path::Path::new(&source_dir);
+
+        let pdf = std::fs::read(directory.join("0619-F Jan 2018 rev final.pdf"))
+            .expect("official PDF must be readable");
+        assert_eq!(
+            hex::encode(Sha256::digest(&pdf)),
+            super::super::form_0619f::OFFICIAL_FORM_SHA256
+        );
+
+        let plain = std::fs::read(directory.join("00000000000000-0619F-042026WB.xml"))
+            .expect("reviewed editable XML must be readable");
+        assert_eq!(
+            hex::encode(Sha256::digest(&plain)),
+            super::super::form_0619f::REVIEWED_EDITABLE_XML_SHA256
+        );
+        let plain_xml = std::str::from_utf8(&plain).expect("editable XML must be UTF-8");
+        let plain_fields = crate::bir_xml::parse_bir_xml_checked(plain_xml)
+            .expect("editable XML must pass the checked parser");
+        assert_eq!(plain_fields.len(), 59);
+        let plain_draft = Form0619FDraft::from_bir_field_map(&plain_fields)
+            .expect("editable XML must satisfy the typed contract");
+        assert_eq!(plain_draft.xml_final_flag, Form0619FXmlFinalFlag::One);
+        assert_eq!(plain_draft.line_of_business, "SOFTWARE DEVELOPMENT");
+        let plain_replay = plain_draft.to_bir_field_map();
+        assert_eq!(plain_replay.len(), 60);
+        assert!(
+            plain_fields
+                .keys()
+                .all(|key| plain_replay.contains_key(key))
+        );
+        let plain_reimport = Form0619FDraft::from_bir_field_map(&plain_replay)
+            .expect("normalized editable replay must re-import");
+        assert_eq!(plain_reimport.to_bir_field_map(), plain_replay);
+
+        let encrypted = std::fs::read(
+            directory.join("00000000000000-0619F-042026WB#codeitlikemiley@gmail.com#.xml"),
+        )
+        .expect("reviewed encrypted companion must be readable");
+        assert_eq!(
+            hex::encode(Sha256::digest(&encrypted)),
+            super::super::form_0619f::REVIEWED_ENCRYPTED_XML_SHA256
+        );
+        let decrypted =
+            crate::crypto::decrypt_and_decompress(&encrypted, crate::crypto::BIR_IAF_PASSPHRASE)
+                .expect("encrypted companion must decrypt with the reviewed reader");
+        let decrypted_xml =
+            std::str::from_utf8(&decrypted).expect("decrypted companion must be UTF-8");
+        let encrypted_fields = crate::bir_xml::parse_bir_xml_checked(decrypted_xml)
+            .expect("decrypted companion must pass the checked parser");
+        assert_eq!(encrypted_fields.len(), 60);
+        let encrypted_draft = Form0619FDraft::from_bir_field_map(&encrypted_fields)
+            .expect("decrypted companion must satisfy the typed contract");
+        assert_eq!(encrypted_draft.xml_final_flag, Form0619FXmlFinalFlag::Zero);
+        assert_eq!(encrypted_draft.line_of_business, "SOFTWARE DEVELOPMENT");
+        let encrypted_replay = encrypted_draft.to_bir_field_map();
+        assert_eq!(encrypted_replay.len(), 60);
+        assert_eq!(
+            encrypted_replay.keys().collect::<Vec<_>>(),
+            encrypted_fields.keys().collect::<Vec<_>>()
+        );
+        let encrypted_reimport = Form0619FDraft::from_bir_field_map(&encrypted_replay)
+            .expect("normalized encrypted replay must re-import");
+        assert_eq!(encrypted_reimport.to_bir_field_map(), encrypted_replay);
     }
 }

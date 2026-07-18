@@ -7,6 +7,13 @@ import { compareCompleteOfficialPage } from "./official-page-diff";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "../../..");
+const staticTextInventory = JSON.parse(fs.readFileSync(path.join(
+  REPO_ROOT,
+  "packages/form-renderer/references/0619f-2018-static-text-inventory.json"
+), "utf8")) as {
+  official_source_sha256: string;
+  regions: Array<{ selector: string; text: string }>;
+};
 const DEVICE_SCALE_FACTOR = 1.5;
 const MAX_CHANGED_PERCENT = 1;
 const STRUCTURAL_INK_THRESHOLD = 100;
@@ -147,20 +154,15 @@ test("0619F 2018 preserves the official static wording and reviewed type hierarc
   const fixture = readFixture("packages/form-contracts/fixtures/0619f-minimum.json");
   await renderEnvelope(page, fixture);
 
-  await expect(page.locator(".header-option-0619f").first().locator("div"))
-    .toHaveText("1 For the month of (MM/YYYY)");
-  await expect(page.locator(".address-0619f .label-0619f")).toContainText(
-    "If registered address is different from the current address"
+  expect(staticTextInventory.official_source_sha256).toBe(
+    "edd7357390b1f0d95f2a38c9bb76252341c15b54b82bffd338bd540452ff15e1"
   );
-  await expect(page.locator(".declaration-0619f > p")).toContainText(
-    "Further, I/we give consent to the processing"
-  );
-  await expect(page.locator(".item-18d-0619f em")).toHaveText(
-    "(Sum of Items 18A to 18C)"
-  );
-  await expect(page.locator(".item-19-0619f em")).toHaveText(
-    "(Sum of Item 17 and 18D)"
-  );
+  for (const region of staticTextInventory.regions) {
+    const visibleText = await page.locator(region.selector).evaluate((element) =>
+      (element as HTMLElement).innerText.replace(/\s+/g, " ").trim()
+    );
+    expect(visibleText, region.selector).toBe(region.text);
+  }
 
   expect(await page.locator(".government-wordmark-0619f").evaluate((element) =>
     getComputedStyle(element).fontWeight

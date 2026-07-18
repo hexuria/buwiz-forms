@@ -20,6 +20,12 @@ pub const ITEM_13_ATC_CODE: &str = "WMF10";
 pub const ITEM_14_ATC_CODE: &str = "WMF20";
 pub const TAX_TYPE_CODE: &str = "WB";
 pub const QUEUE_SUBMISSION_SUPPORTED: bool = false;
+pub const OFFICIAL_FORM_SHA256: &str =
+    "edd7357390b1f0d95f2a38c9bb76252341c15b54b82bffd338bd540452ff15e1";
+pub const REVIEWED_EDITABLE_XML_SHA256: &str =
+    "f7a1f2481104b8c23b22f92aef263ae02f768227ec6961cb10e4daf0817f8a18";
+pub const REVIEWED_ENCRYPTED_XML_SHA256: &str =
+    "d561ce34a44a732e52047552c6d4c0b975b3c45042dc0aba4907abfda89b53fb";
 
 /// Item 11 on the official form. The inverse XML checkbox is derived at the
 /// serialization boundary instead of being stored independently.
