@@ -54,6 +54,7 @@ struct FormIdentity {
 enum CertificationPlatform {
     Macos,
     Windows,
+    Linux,
 }
 
 impl CertificationPlatform {
@@ -61,8 +62,9 @@ impl CertificationPlatform {
         match value {
             "macos" => Ok(Self::Macos),
             "windows" => Ok(Self::Windows),
+            "linux" => Ok(Self::Linux),
             _ => Err(format!(
-                "unsupported certification platform {value:?}; expected macos or windows"
+                "unsupported certification platform {value:?}; expected macos, windows, or linux"
             )),
         }
     }
@@ -71,6 +73,7 @@ impl CertificationPlatform {
         match self {
             Self::Macos => "owned_macos_candidate_pdf_validation",
             Self::Windows => "owned_windows_candidate_pdf_validation",
+            Self::Linux => "owned_linux_candidate_pdf_validation",
         }
     }
 }
@@ -178,7 +181,9 @@ fn main() -> ExitCode {
         None => CertificationPlatform::Macos,
     };
     if arguments.next().is_some() {
-        eprintln!("usage: verify_certification_pdf <export.pdf> <envelope-sha256> [macos|windows]");
+        eprintln!(
+            "usage: verify_certification_pdf <export.pdf> <envelope-sha256> [macos|windows|linux]"
+        );
         return ExitCode::from(2);
     }
     let envelope_sha256 = envelope_sha256.to_string_lossy();
@@ -287,6 +292,14 @@ mod tests {
         assert_eq!(
             CertificationPlatform::parse("windows").expect("Windows should parse"),
             CertificationPlatform::Windows
+        );
+        assert_eq!(
+            CertificationPlatform::Linux.scope(),
+            "owned_linux_candidate_pdf_validation"
+        );
+        assert_eq!(
+            CertificationPlatform::parse("linux").expect("Linux should parse"),
+            CertificationPlatform::Linux
         );
         assert!(CertificationPlatform::parse("unknown").is_err());
     }

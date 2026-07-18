@@ -90,6 +90,13 @@ hash, display backend, compositor version, WebKitGTK version, renderer bundle
 hash, envelope hash, output hash, and screenshots/logs. Until both packaged
 drivers produce this evidence, Linux platform release flags must remain false.
 
+The current non-promotional binding and dual-host attestation/verifier
+foundation is documented in
+[Linux candidate certification collector/verifier foundation](linux-candidate-certification.md).
+It can verify the portable workflow candidate without changing a release flag,
+but it deliberately cannot substitute that candidate for final `.deb` and
+release-tarball installation evidence.
+
 macOS cannot compile or certify the GTK/WebKit runtime because the required
 system libraries and display servers are Linux-only. Host builds still compile
 the selector/lifecycle tests and all Linux runtime code remains behind

@@ -67,6 +67,14 @@ artifact yet. The current Windows portable archive is unsigned, so its strict
 verifier correctly cannot pass Authenticode. Windows public EXE/MSI installers
 and Store-only MSIX remain separate artifact tracks.
 
+The Linux portable candidate binder and closed X11/Xvfb plus Wayland/Weston
+attestation contract are documented in
+[Linux candidate certification collector/verifier foundation](linux-candidate-certification.md).
+It hashes the securely extracted portable candidate and requires both
+application-owned hosts, CUPS print completion, direct PDF export, network
+denial, and rollback evidence while explicitly retaining that the final `.deb`
+and release tarball have not been certified.
+
 ## Promotion remains a separate milestone
 
 The next collector milestone must run the unchanged candidate on its native
