@@ -48,7 +48,7 @@ pub use bir_xml::{BirXmlParseError, generate_bir_xml, parse_bir_xml_checked};
 pub use email::{
     ImapAuthenticator, fetch_and_process_emails, get_oauth_email, start_oauth_flow, test_connection,
 };
-pub use export::{export_database_zip, export_profile_data};
+pub use export::{export_database_zip, export_existing_database_zip, export_profile_data};
 pub use forms::{
     ATC_TABLE_2551Q, FilingStatus, Form2551QDraft, FormDraftSummary, FormFilingProgress,
     FormSuggestion, FormSuggestionSource, FormsSetReconcileResult, QuarterState, Schedule1Row,

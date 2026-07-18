@@ -24,7 +24,7 @@ mod providers;
 mod receipts;
 mod submissions;
 
-use rusqlite::{Connection, ErrorCode, params};
+use rusqlite::{Connection, ErrorCode, OpenFlags, params};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::info;
@@ -315,6 +315,42 @@ impl Database {
         Ok(Self { conn })
     }
 
+    /// Opens an existing SQLCipher database without creating, migrating, or recovering it.
+    ///
+    /// This is intentionally narrower than [`Self::open`]. It exists for read-only diagnostics
+    /// and backup export, where a failed audit must never mutate or replace the source database.
+    /// The returned connection cannot write to the main database, although SQLite may still
+    /// attach a separate output database for `sqlcipher_export`.
+    pub fn open_existing_read_only<P: AsRef<Path>>(path: P) -> Result<Self, DbError> {
+        let path = path.as_ref();
+        if !path.is_file() {
+            return Err(DbError::Other(format!(
+                "Database does not exist: {}",
+                path.display()
+            )));
+        }
+
+        let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        let key_hex = Self::get_existing_master_key()?;
+        conn.execute_batch(&format!("PRAGMA key = \"x'{}'\";", key_hex))?;
+        conn.busy_timeout(std::time::Duration::from_secs(5))?;
+
+        let mut check_stmt = conn.prepare("SELECT count(*) FROM sqlite_master")?;
+        let _: i64 = check_stmt
+            .query_row([], |row| row.get(0))
+            .map_err(|error| {
+                if let rusqlite::Error::SqliteFailure(sqlite_error, _) = &error {
+                    if sqlite_error.code == ErrorCode::NotADatabase {
+                        return DbError::Encryption;
+                    }
+                }
+                DbError::Sqlite(error)
+            })?;
+        drop(check_stmt);
+
+        Ok(Self { conn })
+    }
+
     fn should_recreate_after_open_error(err: &DbError) -> bool {
         match err {
             DbError::Encryption => true,
@@ -345,6 +381,77 @@ impl Database {
             #[cfg(not(target_os = "macos"))]
             return Self::get_or_create_master_key_keyring();
         }
+    }
+
+    pub(crate) fn get_existing_master_key() -> Result<String, DbError> {
+        #[cfg(test)]
+        return Ok("0000000000000000000000000000000000000000000000000000000000000000".to_string());
+
+        #[cfg(not(test))]
+        {
+            if std::env::var("EBIR_TEST_ENV").is_ok() {
+                return Ok(
+                    "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                );
+            }
+
+            #[cfg(target_os = "macos")]
+            return Self::get_existing_master_key_macos();
+
+            #[cfg(not(target_os = "macos"))]
+            return Self::get_existing_master_key_keyring();
+        }
+    }
+
+    #[cfg(all(target_os = "macos", not(test)))]
+    fn get_existing_master_key_macos() -> Result<String, DbError> {
+        let output = std::process::Command::new("security")
+            .args([
+                "find-generic-password",
+                "-s",
+                "com.ebir.rust",
+                "-a",
+                "sqlcipher_master_key",
+                "-w",
+            ])
+            .output()
+            .map_err(|error| {
+                DbError::KeychainCli(format!("Failed to run `security` CLI: {error}"))
+            })?;
+
+        let hex_key = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if output.status.success() && hex_key.len() == 64 {
+            return Ok(hex_key);
+        }
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(DbError::KeychainCli(format!(
+            "Existing SQLCipher master key was not available: {}",
+            stderr.trim()
+        )))
+    }
+
+    #[cfg(all(not(target_os = "macos"), not(test)))]
+    fn get_existing_master_key_keyring() -> Result<String, DbError> {
+        let keyring_error = match keyring::Entry::new("com.ebir.rust", "sqlcipher_master_key") {
+            Ok(entry) => match entry.get_password() {
+                Ok(hex_key) if hex_key.len() == 64 => return Ok(hex_key),
+                Ok(_) => "stored key has an invalid length".to_string(),
+                Err(error) => error.to_string(),
+            },
+            Err(error) => error.to_string(),
+        };
+
+        let key_path = crate::platform::data_dir().join("bir_key.txt");
+        if let Ok(hex_key) = std::fs::read_to_string(&key_path) {
+            if hex_key.len() == 64 {
+                return Ok(hex_key);
+            }
+        }
+
+        Err(DbError::Other(format!(
+            "Existing SQLCipher master key was not available: {keyring_error}"
+        )))
     }
 
     /// macOS: Use the `security` CLI instead of the `keyring` crate's Security.framework FFI.
@@ -747,6 +854,43 @@ mod tests {
         assert!(
             db.list_profiles().is_ok(),
             "recreated database should be usable"
+        );
+    }
+
+    #[test]
+    fn open_existing_read_only_never_creates_a_missing_database() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let database_path = directory.path().join("missing.db");
+
+        let error = match Database::open_existing_read_only(&database_path) {
+            Ok(_) => panic!("a missing source database must fail closed"),
+            Err(error) => error,
+        };
+
+        assert!(error.to_string().contains("does not exist"));
+        assert!(!database_path.exists());
+    }
+
+    #[test]
+    fn open_existing_read_only_rejects_source_writes() {
+        let database_file = NamedTempFile::new().expect("temporary database");
+        let database = Database::open(database_file.path()).expect("create encrypted database");
+        database
+            .set_setting("read_only_probe", "preserved")
+            .expect("seed source database");
+        database.close().expect("close source database");
+
+        let read_only = Database::open_existing_read_only(database_file.path())
+            .expect("open existing database read-only");
+        assert_eq!(
+            read_only
+                .get_setting("read_only_probe")
+                .expect("read setting"),
+            Some("preserved".to_string())
+        );
+        assert!(
+            read_only.set_setting("read_only_probe", "changed").is_err(),
+            "the diagnostic connection must not modify the source database"
         );
     }
 }

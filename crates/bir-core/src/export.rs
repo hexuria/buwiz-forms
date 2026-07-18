@@ -1,7 +1,7 @@
 use crate::db::{Database, DbError};
 use std::fs;
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use zip::write::SimpleFileOptions;
 
 pub fn export_profile_data(db: &Database, tin: &str, export_file: &Path) -> Result<(), DbError> {
@@ -122,28 +122,105 @@ fn write_profile_to_zip<W: Write + std::io::Seek>(
 }
 
 pub fn export_database_zip(db: &Database, zip_path: &Path) -> Result<(), DbError> {
-    let temp_dir = std::env::temp_dir();
+    let temp_db_path = temporary_plaintext_database_path("bir_unencrypted");
+
+    let result = (|| {
+        // Export current encrypted DB to a temporary unencrypted DB
+        db.conn.execute(
+            "ATTACH DATABASE ?1 AS plaintext KEY '';",
+            rusqlite::params![path_as_utf8(&temp_db_path)?],
+        )?;
+        let mut stmt = db.conn.prepare("SELECT sqlcipher_export('plaintext');")?;
+        let _ = stmt.query([])?.next()?;
+        drop(stmt);
+        db.conn.execute("DETACH DATABASE plaintext;", [])?;
+
+        zip_plaintext_database(&temp_db_path, zip_path)
+    })();
+
+    let _ = fs::remove_file(&temp_db_path);
+    result
+}
+
+/// Exports an existing SQLCipher database while the source is attached with `mode=ro`.
+///
+/// Unlike [`export_database_zip`], this path does not open the source through the normal
+/// application lifecycle, so it cannot create, migrate, recover, or write the live database.
+pub fn export_existing_database_zip(
+    source_database: &Path,
+    zip_path: &Path,
+) -> Result<(), DbError> {
+    if !source_database.is_file() {
+        return Err(DbError::Other(format!(
+            "Database does not exist: {}",
+            source_database.display()
+        )));
+    }
+
+    let temp_db_path = temporary_plaintext_database_path("bir_read_only_export");
+    let result = (|| {
+        let flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE
+            | rusqlite::OpenFlags::SQLITE_OPEN_CREATE
+            | rusqlite::OpenFlags::SQLITE_OPEN_URI;
+        let connection = rusqlite::Connection::open_with_flags(&temp_db_path, flags)?;
+        let key_hex = Database::get_existing_master_key()?;
+        let source_uri = sqlite_read_only_uri(source_database)?;
+
+        connection.execute(
+            &format!(
+                "ATTACH DATABASE ?1 AS encrypted_source KEY \"x'{}'\";",
+                key_hex
+            ),
+            rusqlite::params![source_uri],
+        )?;
+        let _: i64 = connection.query_row(
+            "SELECT count(*) FROM encrypted_source.sqlite_master",
+            [],
+            |row| row.get(0),
+        )?;
+        let mut statement =
+            connection.prepare("SELECT sqlcipher_export('main', 'encrypted_source');")?;
+        let _ = statement.query([])?.next()?;
+        drop(statement);
+        connection.execute("DETACH DATABASE encrypted_source;", [])?;
+        drop(connection);
+
+        zip_plaintext_database(&temp_db_path, zip_path)
+    })();
+
+    let _ = fs::remove_file(&temp_db_path);
+    result
+}
+
+fn temporary_plaintext_database_path(prefix: &str) -> PathBuf {
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    let temp_db_path = temp_dir.join(format!("bir_unencrypted_{}.db", timestamp));
+    std::env::temp_dir().join(format!("{prefix}_{timestamp}.db"))
+}
 
-    // Export current encrypted DB to a temporary unencrypted DB
-    db.conn.execute(
-        "ATTACH DATABASE ?1 AS plaintext KEY '';",
-        rusqlite::params![
-            temp_db_path
-                .to_str()
-                .ok_or_else(|| DbError::Other("DB path is not valid UTF-8".into()))?
-        ],
-    )?;
-    let mut stmt = db.conn.prepare("SELECT sqlcipher_export('plaintext');")?;
-    let _ = stmt.query([])?.next()?;
-    drop(stmt);
-    db.conn.execute("DETACH DATABASE plaintext;", [])?;
+fn path_as_utf8(path: &Path) -> Result<&str, DbError> {
+    path.to_str()
+        .ok_or_else(|| DbError::Other("Database path is not valid UTF-8".into()))
+}
 
-    // Zip the unencrypted database
+fn sqlite_read_only_uri(path: &Path) -> Result<String, DbError> {
+    let normalized = path_as_utf8(path)?.replace('\\', "/");
+    let mut encoded = String::with_capacity(normalized.len());
+    for byte in normalized.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'-' | b'.' | b'_' | b'~' | b':') {
+            encoded.push(char::from(byte));
+        } else {
+            use std::fmt::Write as _;
+            write!(&mut encoded, "%{byte:02X}")
+                .map_err(|error| DbError::Other(error.to_string()))?;
+        }
+    }
+    Ok(format!("file:{encoded}?mode=ro"))
+}
+
+fn zip_plaintext_database(database_path: &Path, zip_path: &Path) -> Result<(), DbError> {
     let mut file = fs::File::create(zip_path)?;
     let mut zip = zip::ZipWriter::new(&mut file);
     let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
@@ -151,7 +228,7 @@ pub fn export_database_zip(db: &Database, zip_path: &Path) -> Result<(), DbError
     zip.start_file("bir_data.db", options)
         .map_err(|e| DbError::Other(e.to_string()))?;
 
-    let mut db_file = fs::File::open(&temp_db_path)?;
+    let mut db_file = fs::File::open(database_path)?;
     let mut buffer = Vec::new();
     db_file.read_to_end(&mut buffer)?;
 
@@ -159,8 +236,52 @@ pub fn export_database_zip(db: &Database, zip_path: &Path) -> Result<(), DbError
         .map_err(|e| DbError::Other(e.to_string()))?;
     zip.finish().map_err(|e| DbError::Other(e.to_string()))?;
 
-    // Clean up temporary file
-    let _ = fs::remove_file(&temp_db_path);
-
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn read_only_source_can_be_exported_without_mutation() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let source_path = directory.path().join("source.db");
+        let archive_path = directory.path().join("backup.zip");
+        let extracted_path = directory.path().join("extracted.db");
+
+        let source = Database::open(&source_path).expect("create encrypted source");
+        source
+            .set_setting("export_probe", "preserved")
+            .expect("seed source");
+        source.close().expect("close encrypted source");
+
+        export_existing_database_zip(&source_path, &archive_path)
+            .expect("export source through a read-only attachment");
+
+        let read_only =
+            Database::open_existing_read_only(&source_path).expect("reopen source read-only");
+        assert_eq!(
+            read_only
+                .get_setting("export_probe")
+                .expect("read preserved source value"),
+            Some("preserved".to_string())
+        );
+
+        let archive_file = fs::File::open(&archive_path).expect("open exported archive");
+        let mut archive = zip::ZipArchive::new(archive_file).expect("read exported archive");
+        let mut database_entry = archive.by_name("bir_data.db").expect("database entry");
+        let mut extracted_file = fs::File::create(&extracted_path).expect("create extracted file");
+        std::io::copy(&mut database_entry, &mut extracted_file).expect("extract database");
+
+        let extracted = rusqlite::Connection::open(&extracted_path).expect("open plaintext export");
+        let value: String = extracted
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'export_probe'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read exported value");
+        assert_eq!(value, "preserved");
+    }
 }

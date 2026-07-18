@@ -92,6 +92,85 @@ use global_actions::*;
 
 use std::path::PathBuf;
 
+#[cfg(feature = "dev-tools")]
+const DEV_EXPORT_LIVE_DATABASE_FLAG: &str = "--dev-export-live-database";
+
+#[cfg(feature = "dev-tools")]
+fn parse_dev_export_destination<I>(arguments: I) -> Result<Option<PathBuf>, String>
+where
+    I: IntoIterator<Item = std::ffi::OsString>,
+{
+    let mut arguments = arguments.into_iter();
+    let _program = arguments.next();
+    let Some(flag) = arguments.next() else {
+        return Ok(None);
+    };
+    if flag != std::ffi::OsStr::new(DEV_EXPORT_LIVE_DATABASE_FLAG) {
+        return Ok(None);
+    }
+
+    let destination = arguments.next().ok_or_else(|| {
+        format!("{DEV_EXPORT_LIVE_DATABASE_FLAG} requires a destination ZIP path")
+    })?;
+    if arguments.next().is_some() {
+        return Err(format!(
+            "{DEV_EXPORT_LIVE_DATABASE_FLAG} accepts exactly one destination ZIP path"
+        ));
+    }
+
+    Ok(Some(PathBuf::from(destination)))
+}
+
+#[cfg(feature = "dev-tools")]
+fn export_live_database_for_diagnostics(destination: &std::path::Path) -> Result<(), String> {
+    let source = bir_core::db::default_database_path();
+
+    let file_name = destination
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "Destination must have a valid UTF-8 file name".to_string())?;
+    let temporary = destination.with_file_name(format!(
+        ".{file_name}.{}.tmp",
+        uuid::Uuid::new_v4().simple()
+    ));
+
+    if let Err(error) = bir_core::export_existing_database_zip(&source, &temporary) {
+        let _ = std::fs::remove_file(&temporary);
+        return Err(format!("Could not export database: {error}"));
+    }
+
+    if let Err(error) = std::fs::rename(&temporary, destination) {
+        let _ = std::fs::remove_file(&temporary);
+        return Err(format!(
+            "Could not atomically install {}: {error}",
+            destination.display()
+        ));
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "dev-tools")]
+fn run_dev_command_if_requested() -> Option<i32> {
+    match parse_dev_export_destination(std::env::args_os()) {
+        Ok(None) => None,
+        Err(error) => {
+            eprintln!("{error}");
+            Some(2)
+        }
+        Ok(Some(destination)) => match export_live_database_for_diagnostics(&destination) {
+            Ok(()) => {
+                println!("Exported live database to {}", destination.display());
+                Some(0)
+            }
+            Err(error) => {
+                eprintln!("{error}");
+                Some(1)
+            }
+        },
+    }
+}
+
 struct Assets {
     base: PathBuf,
 }
@@ -121,6 +200,11 @@ impl AssetSource for Assets {
 
 fn main() {
     dotenvy::dotenv().ok();
+
+    #[cfg(feature = "dev-tools")]
+    if let Some(exit_code) = run_dev_command_if_requested() {
+        std::process::exit(exit_code);
+    }
 
     // ── Single-Instance Enforcement ──────────────────────────────────────────
     // Order matters: IPC runs first because it sends a SHOW command to bring
