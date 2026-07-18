@@ -250,11 +250,14 @@ test("0619E 2018 keeps the complete reviewed official static copy", async ({ pag
     "Signature over Printed Name of Taxpayer/Authorized Representative/ Tax Agent (Indicate Title/Designation and TIN)",
     "Signature over Printed Name of President/Vice President/ Authorized Officer or Representative/Tax Agent (Indicate Title/Designation and TIN)"
   ]);
-  await expectNormalizedTexts(page.locator(".signature-footer-0619e > span"), [
-    "Tax Agent Accreditation No./ Attorney’s Roll No. (if applicable)",
-    "Date of Issue (MM/DD/YYYY)",
-    "Date of Expiry (MM/DD/YYYY)"
-  ]);
+  await expectNormalizedTexts(
+    page.locator(".signature-footer-0619e > span:not(.adaptive-plain-value)"),
+    [
+      "Tax Agent Accreditation No./ Attorney’s Roll No. (if applicable)",
+      "Date of Issue (MM/DD/YYYY)",
+      "Date of Expiry (MM/DD/YYYY)"
+    ]
+  );
 
   await expect(page.locator(".payment-0619e > h2")).toHaveText("Part III – Details of Payment");
   await expectNormalizedTexts(page.locator(".payment-head-0619e > span"), [
@@ -555,7 +558,7 @@ async function combCapacities(fields: Locator): Promise<number[]> {
 
 async function expectNormalizedTexts(locator: Locator, expected: string[]) {
   expect(await locator.evaluateAll((elements) => elements.map(
-    (element) => element.textContent?.replace(/\s+/g, " ").trim() ?? ""
+    (element) => (element as HTMLElement).innerText.replace(/\s+/g, " ").trim()
   ))).toEqual(expected);
 }
 
