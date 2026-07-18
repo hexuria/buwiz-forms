@@ -72,6 +72,29 @@ fn profile_save_dispatch_action(
     }
 }
 
+fn income_tax_election_from_label(
+    label: &str,
+) -> Result<Option<bir_core::profile::IncomeTaxElection>, String> {
+    match label.trim() {
+        "" => Ok(None),
+        "8% Flat Rate" => Ok(Some(bir_core::profile::IncomeTaxElection::EightPercent)),
+        "Graduated + OSD" => Ok(Some(bir_core::profile::IncomeTaxElection::GraduatedOsd)),
+        "Graduated + Itemized" => Ok(Some(
+            bir_core::profile::IncomeTaxElection::GraduatedItemized,
+        )),
+        _ => Err("Choose an income-tax election from the list.".to_string()),
+    }
+}
+
+fn upsert_income_tax_election(
+    elections: &mut Vec<bir_core::profile::TaxElectionHistory>,
+    election: bir_core::profile::TaxElectionHistory,
+) {
+    elections.retain(|stored| stored.taxable_year != election.taxable_year);
+    elections.push(election);
+    elections.sort_by_key(|stored| std::cmp::Reverse(stored.taxable_year));
+}
+
 use bir_core::profile::EmailAuthMethod;
 
 pub struct ProfileManagerView {
@@ -635,6 +658,12 @@ impl ProfileManagerView {
             cx.subscribe(&tax_classification_select, Self::on_combobox_event),
             cx.subscribe(&eopt_tier_select, Self::on_combobox_event),
             cx.subscribe(&cooperative_treatment_select, Self::on_combobox_event),
+            cx.subscribe(&tax_election_select, Self::on_tax_election_select_event),
+            cx.subscribe_in(
+                &tax_election_year_input,
+                window,
+                Self::on_tax_election_year_event,
+            ),
             cx.subscribe(&excise_select, Self::on_multi_select_event),
             cx.subscribe(&business_start_input, Self::on_date_event),
             cx.subscribe(&birth_date_input, Self::on_date_event),
@@ -962,8 +991,27 @@ impl ProfileManagerView {
                 "_cor_deadline_draft".to_string(),
                 self.cor_deadline_draft_snapshot(cx),
             );
+            // The election row is a pending editor value until Apply or Save
+            // Profile consumes it. Tracking it prevents a selected election
+            // from looking saved while the persisted ledger is still empty.
+            fields.insert(
+                "_tax_election_draft".to_string(),
+                self.tax_election_draft_snapshot(cx),
+            );
         }
         snapshot
+    }
+
+    fn tax_election_draft_snapshot(&self, cx: &Context<Self>) -> serde_json::Value {
+        let election = self.tax_election_select.read(cx).selected_value(cx);
+        if election.trim().is_empty() {
+            return serde_json::Value::Null;
+        }
+
+        serde_json::json!({
+            "taxable_year": self.tax_election_year_input.read(cx).value().to_string(),
+            "election": election,
+        })
     }
 
     fn cor_deadline_draft_snapshot(&self, cx: &Context<Self>) -> serde_json::Value {
@@ -1257,6 +1305,9 @@ impl ProfileManagerView {
         self.stored_profile_pin_hash = None;
         self.stored_atc_codes.clear();
         self.stored_tax_elections = vec![];
+        self.tax_election_select.update(cx, |select, cx| {
+            select.set_selected_value("", window, cx);
+        });
         self.stored_profile_versions = vec![];
         self.pending_cor_evidence_cleanup.clear();
         self.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
@@ -1406,6 +1457,9 @@ impl ProfileManagerView {
         self.is_gpp_partner = profile.is_gpp_partner;
         self.stored_atc_codes = profile.atc_codes.clone();
         self.stored_tax_elections = profile.tax_elections.clone();
+        self.tax_election_select.update(cx, |select, cx| {
+            select.set_selected_value("", window, cx);
+        });
         self.stored_profile_versions = profile.profile_versions.clone();
         self.pending_cor_evidence_cleanup.clear();
         self.compliance_source_mode =
@@ -1943,6 +1997,88 @@ impl ProfileManagerView {
     ) {
         self.mark_profile_changed();
         cx.notify();
+    }
+
+    fn on_tax_election_select_event(
+        &mut self,
+        _state: Entity<ComboboxState>,
+        event: &ComboboxEvent,
+        cx: &mut Context<Self>,
+    ) {
+        if event.selected.is_some() {
+            self.mark_profile_changed();
+            cx.notify();
+        }
+    }
+
+    fn on_tax_election_year_event(
+        &mut self,
+        _state: &Entity<InputState>,
+        event: &InputEvent,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if matches!(event, InputEvent::Change)
+            && !self
+                .tax_election_select
+                .read(cx)
+                .selected_value(cx)
+                .trim()
+                .is_empty()
+        {
+            self.mark_profile_changed();
+            cx.notify();
+        }
+    }
+
+    fn apply_pending_tax_election(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<bool, String> {
+        let election_label = self.tax_election_select.read(cx).selected_value(cx);
+        let Some(election) = income_tax_election_from_label(&election_label)? else {
+            return Ok(false);
+        };
+        let year_text = self
+            .tax_election_year_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+        let year = year_text.parse::<u16>().map_err(|_| {
+            "Enter a valid four-digit taxable year for the income-tax election.".to_string()
+        })?;
+        if !(1900..=2200).contains(&year) {
+            return Err(
+                "Enter a taxable year from 1900 through 2200 for the income-tax election."
+                    .to_string(),
+            );
+        }
+        if !self
+            .current_profile(cx)
+            .eligible_for_income_tax_election_in_year(year)
+        {
+            return Err(format!(
+                "No confirmed Individual segment registered as Self-Employed or Mixed Income covers {year}, so an income-tax election cannot be recorded for it. Review the COR timeline first."
+            ));
+        }
+
+        upsert_income_tax_election(
+            &mut self.stored_tax_elections,
+            bir_core::profile::TaxElectionHistory {
+                taxable_year: year,
+                election,
+                elected_at: chrono::Local::now().naive_local(),
+                source_form: "profile_manager".to_string(),
+            },
+        );
+        self.tax_election_select.update(cx, |select, cx| {
+            select.set_selected_value("", window, cx);
+        });
+        self.mark_profile_changed();
+        cx.notify();
+        Ok(true)
     }
 
     fn derive_compliance_source_mode(
@@ -3830,6 +3966,16 @@ impl ProfileManagerView {
             return;
         }
 
+        if let Err(message) = self.apply_pending_tax_election(window, cx) {
+            self.save_message = Some(message.clone());
+            window.push_notification(
+                Notification::error(message).title("Income-tax election needs review"),
+                cx,
+            );
+            cx.notify();
+            return;
+        }
+
         self.save_profile(cx);
     }
 
@@ -3846,6 +3992,20 @@ impl ProfileManagerView {
         reviewed_plan: Option<TaxProfileVersionConfirmationPlan>,
         cx: &mut Context<Self>,
     ) {
+        if !self
+            .tax_election_select
+            .read(cx)
+            .selected_value(cx)
+            .trim()
+            .is_empty()
+        {
+            self.save_message = Some(
+                "Apply the pending income-tax election or use Save Profile so it is included in the saved ledger."
+                    .to_string(),
+            );
+            cx.notify();
+            return;
+        }
         let profile = self.current_profile(cx);
         self.errors = validate_profile(&profile);
 
@@ -4959,8 +5119,9 @@ fn save_completion_matches_profile_session(save_epoch: u64, current_epoch: u64) 
 #[cfg(test)]
 mod save_revision_tests {
     use super::{
-        ProfileSaveDispatchAction, ProfileSaveRequest, profile_save_dispatch_action,
-        save_completion_is_current, save_completion_matches_profile_session,
+        ProfileSaveDispatchAction, ProfileSaveRequest, income_tax_election_from_label,
+        profile_save_dispatch_action, save_completion_is_current,
+        save_completion_matches_profile_session, upsert_income_tax_election,
     };
 
     fn request(epoch: u64, revision: u64) -> ProfileSaveRequest {
@@ -4998,6 +5159,47 @@ mod save_revision_tests {
         assert_eq!(
             profile_save_dispatch_action(Some(&profile_a), &profile_b),
             ProfileSaveDispatchAction::QueueBehindInFlight
+        );
+    }
+
+    #[test]
+    fn pending_graduated_osd_label_maps_to_the_persisted_election_variant() {
+        let election = income_tax_election_from_label("Graduated + OSD")
+            .unwrap()
+            .expect("a selected label should produce an election");
+
+        assert_eq!(election, bir_core::profile::IncomeTaxElection::GraduatedOsd);
+    }
+
+    #[test]
+    fn upsert_income_tax_election_replaces_the_same_year_without_duplicates() {
+        let elected_at = chrono::NaiveDate::from_ymd_opt(2026, 1, 1)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let mut elections = vec![bir_core::profile::TaxElectionHistory {
+            taxable_year: 2026,
+            election: bir_core::profile::IncomeTaxElection::EightPercent,
+            elected_at,
+            source_form: "existing".to_string(),
+        }];
+
+        upsert_income_tax_election(
+            &mut elections,
+            bir_core::profile::TaxElectionHistory {
+                taxable_year: 2026,
+                election: bir_core::profile::IncomeTaxElection::GraduatedOsd,
+                elected_at,
+                source_form: "profile_manager".to_string(),
+            },
+        );
+
+        assert_eq!(
+            (elections.len(), &elections[0].election),
+            (
+                1,
+                &bir_core::profile::IncomeTaxElection::GraduatedOsd
+            )
         );
     }
 

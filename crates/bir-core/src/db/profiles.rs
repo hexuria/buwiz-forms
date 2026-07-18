@@ -627,6 +627,54 @@ mod tests {
     }
 
     #[test]
+    fn profile_save_round_trip_preserves_a_graduated_osd_election() {
+        let file = NamedTempFile::new().unwrap();
+        let db = Database::open(file.path()).unwrap();
+        let profile: TaxpayerProfile = serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Election Persistence",
+            "tin": {
+                "segment1": "274",
+                "segment2": "476",
+                "segment3": "433",
+                "branch": "00000"
+            },
+            "rdo_code": "018",
+            "line_of_business": "Car Wash Services",
+            "registered_address": "Castillejos",
+            "zip_code": "2208",
+            "phone": "09156837000",
+            "email": "election@example.com",
+            "default_form_type": "2551Qv2018",
+            "taxpayer_type": "Individual",
+            "tax_classification": "SelfEmployed",
+            "is_vat_registered": false,
+            "business_start_date": "2019-03-05",
+            "tax_elections": [{
+                "taxable_year": 2026,
+                "election": "GraduatedOsd",
+                "elected_at": "2026-01-01T00:00:00",
+                "source_form": "profile_manager"
+            }]
+        }))
+        .unwrap();
+
+        let saved = db.save_profile(profile).unwrap();
+        let reopened = db
+            .get_profile(&saved.tin.full())
+            .unwrap()
+            .expect("saved profile should reopen");
+
+        assert_eq!(
+            (
+                reopened.tax_elections.len(),
+                &reopened.tax_elections[0].election
+            ),
+            (1, &crate::profile::IncomeTaxElection::GraduatedOsd)
+        );
+    }
+
+    #[test]
     fn tin_reference_migration_moves_calendar_and_forms_records() {
         let file = NamedTempFile::new().unwrap();
         let db = Database::open(file.path()).unwrap();

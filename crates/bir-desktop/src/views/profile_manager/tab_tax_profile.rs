@@ -3685,7 +3685,7 @@ impl ProfileManagerView {
                 div()
                     .text_xs()
                     .text_color(cx.theme().muted_foreground)
-                    .child("Manage per-taxable-year income tax elections (e.g. 8% flat rate, graduated + OSD)."),
+                    .child("Choose a taxable year and election, then press Apply or Save Profile. Save Profile also applies this pending row before writing the profile."),
             )
             // ── Existing elections table ──
             .when(!elections.is_empty(), |this| {
@@ -3794,63 +3794,17 @@ impl ProfileManagerView {
                                 .child(Combobox::new(&self.tax_election_select)),
                         )
                         .child(
-                            gpui_component::button::Button::new("add_election_btn")
-                                .label("Add")
+                            gpui_component::button::Button::new("apply_election_btn")
+                                .label("Apply")
                                 .small()
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    let year_str = this
-                                        .tax_election_year_input
-                                        .read(cx)
-                                        .value()
-                                        .trim()
-                                        .to_string();
-                                    let election_val = this
-                                        .tax_election_select
-                                        .read(cx)
-                                        .selected_value(cx);
-                                    if let Ok(year) = year_str.parse::<u16>() {
-                                        // Eligibility is checked for the year
-                                        // being recorded, not the year that
-                                        // made the section visible.
-                                        if !this
-                                            .current_profile(cx)
-                                            .eligible_for_income_tax_election_in_year(year)
-                                        {
-                                            this.pending_notification = Some((
-                                                gpui_component::notification::NotificationType::Error,
-                                                format!(
-                                                    "No confirmed Individual segment registered as Self-Employed or Mixed Income covers {year}, so an income-tax election cannot be recorded for it. Review the COR timeline first."
-                                                ),
-                                            ));
-                                            cx.notify();
-                                            return;
-                                        }
-                                        let election = match election_val.as_str() {
-                                            "8% Flat Rate" => {
-                                                bir_core::profile::IncomeTaxElection::EightPercent
-                                            }
-                                            "Graduated + OSD" => {
-                                                bir_core::profile::IncomeTaxElection::GraduatedOsd
-                                            }
-                                            "Graduated + Itemized" => {
-                                                bir_core::profile::IncomeTaxElection::GraduatedItemized
-                                            }
-                                            _ => return,
-                                        };
-                                        // Remove existing election for this year, then add new
-                                        this.stored_tax_elections
-                                            .retain(|e| e.taxable_year != year);
-                                        this.stored_tax_elections
-                                            .push(bir_core::profile::TaxElectionHistory {
-                                                taxable_year: year,
-                                                election,
-                                                elected_at: chrono::Local::now().naive_local(),
-                                                source_form: "profile_manager".to_string(),
-                                            });
-                                        // Sort by year descending for display
-                                        this.stored_tax_elections
-                                            .sort_by_key(|b| std::cmp::Reverse(b.taxable_year));
-                                        this.mark_profile_changed();
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    if let Err(message) =
+                                        this.apply_pending_tax_election(window, cx)
+                                    {
+                                        this.pending_notification = Some((
+                                            gpui_component::notification::NotificationType::Error,
+                                            message,
+                                        ));
                                         cx.notify();
                                     }
                                 })),
