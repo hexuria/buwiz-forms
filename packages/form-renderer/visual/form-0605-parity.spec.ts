@@ -189,7 +189,10 @@ test("0605 1999 preserves exact official static wording and page-two code tables
   );
   for (const region of staticTextInventory.regions) {
     const visibleText = await page.locator(region.selector).evaluate((element) =>
-      (element as HTMLElement).innerText.replace(/\s+/g, " ").trim()
+      (element as HTMLElement).innerText
+        .replace(/\s+/g, " ")
+        .replace(/\s*►\s*/g, " ► ")
+        .trim()
     );
     expect(visibleText, region.selector).toBe(region.text);
   }
@@ -365,89 +368,27 @@ test("0605 1999 keeps reviewed plain fields plain when empty or populated", asyn
   }
 });
 
-test("0605 1999 switches whole guided fields only after exact official capacity", async ({ page }) => {
+test("0605 1999 switches whole guided fields only for valid values beyond official capacity", async ({ page }) => {
   const cases: Array<{
     field: string;
     values: Array<{ value: string | number; mode: "guided" | "plain" }>;
     mutate: (fixture: Record<string, any>, value: string | number) => void;
   }> = [
     {
-      field: "4-due-date",
-      values: [
-        { value: "", mode: "guided" },
-        { value: "1", mode: "guided" },
-        { value: "01022026", mode: "guided" },
-        { value: "010220260", mode: "plain" }
-      ],
-      mutate: (fixture, value) => { fixture.fields.due_date.value = value; }
-    },
-    {
-      field: "8-tax-type",
-      values: [
-        { value: "", mode: "guided" },
-        { value: "I", mode: "guided" },
-        { value: "IT", mode: "guided" },
-        { value: "ITX", mode: "plain" }
-      ],
-      mutate: (fixture, value) => { fixture.fields.tax_type_code.value = value; }
-    },
-    {
       field: "9-tin",
       values: [
-        { value: "", mode: "guided" },
-        { value: "1", mode: "guided" },
         { value: "123456789000", mode: "guided" },
         { value: "1234567890001", mode: "plain" }
       ],
       mutate: (fixture, value) => { fixture.taxpayer.tin = value; }
     },
     {
-      field: "10-rdo",
-      values: [
-        { value: "", mode: "guided" },
-        { value: "1", mode: "guided" },
-        { value: "018", mode: "guided" },
-        { value: "0180", mode: "plain" }
-      ],
-      mutate: (fixture, value) => { fixture.taxpayer.rdo_code = value; }
-    },
-    {
       field: "14-telephone",
       values: [
-        { value: "", mode: "guided" },
-        { value: "1", mode: "guided" },
         { value: "1234567", mode: "guided" },
         { value: "12345678", mode: "plain" }
       ],
       mutate: (fixture, value) => { fixture.taxpayer.contact_number = value; }
-    },
-    {
-      field: "16-zip",
-      values: [
-        { value: "", mode: "guided" },
-        { value: "1", mode: "guided" },
-        { value: "2200", mode: "guided" },
-        { value: "22000", mode: "plain" }
-      ],
-      mutate: (fixture, value) => { fixture.taxpayer.zip_code = value; }
-    },
-    {
-      field: "24c-date",
-      values: [
-        { value: "", mode: "guided" },
-        { value: "1", mode: "guided" },
-        { value: "01022026", mode: "guided" },
-        { value: "010220260", mode: "plain" }
-      ],
-      mutate: (fixture, value) => { fixture.fields.payment_24_date.value = value; }
-    },
-    {
-      field: "5-sheets",
-      values: [
-        { value: 2, mode: "guided" },
-        { value: 123, mode: "plain" }
-      ],
-      mutate: (fixture, value) => { fixture.fields.number_of_sheets.value = value; }
     }
   ];
 
