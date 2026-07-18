@@ -285,9 +285,9 @@ pub enum HtmlPreviewError {
     #[error("HTML preview is disabled for {code}:{revision}")]
     Disabled { code: String, revision: String },
     #[error(
-        "HTML preview for {code}:{revision} is not release-certified; use a developer build for experimental calibration"
+        "HTML preview for {code}:{revision} is not on the html_only route; use a developer build for experimental calibration"
     )]
-    NotReleaseCertified { code: String, revision: String },
+    NotHtmlOnly { code: String, revision: String },
     #[error("HTML renderer bundle was not found at {0}")]
     AssetsNotFound(PathBuf),
     #[error("HTML renderer entry point was not found at {0}")]
@@ -359,7 +359,7 @@ pub(crate) fn prepare_html_form_preview(
         });
     }
     if !html_preview_route_permitted(support, cfg!(feature = "dev-tools")) {
-        return Err(HtmlPreviewError::NotReleaseCertified {
+        return Err(HtmlPreviewError::NotHtmlOnly {
             code: envelope.form.code.clone(),
             revision: envelope.form.version.clone(),
         });
@@ -416,7 +416,11 @@ fn html_preview_route_permitted(support: HtmlRendererSupport, allow_experimental
     if allow_experimental {
         support.permits_preview()
     } else {
-        support.permits_release_routing()
+        // A normal, non-dev candidate must exercise the exact same native host
+        // that will ship. The tagged release workflow separately requires
+        // `release_ready`; keeping that distribution gate out of this runtime
+        // decision avoids an evidence-before-candidate bootstrap cycle.
+        support.permits_certification_candidate()
     }
 }
 
@@ -3389,9 +3393,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn production_preview_rejects_uncertified_routes() {
+    fn production_candidate_rejects_experimental_routes() {
         let experimental = HtmlRendererSupport {
             html_enabled: true,
+            html_only: false,
             release_ready: false,
         };
 
@@ -3402,6 +3407,7 @@ mod tests {
     fn developer_preview_accepts_experimental_routes() {
         let experimental = HtmlRendererSupport {
             html_enabled: true,
+            html_only: false,
             release_ready: false,
         };
 
@@ -3409,13 +3415,27 @@ mod tests {
     }
 
     #[test]
+    fn production_candidate_accepts_html_only_before_release_certification() {
+        let candidate = HtmlRendererSupport {
+            html_enabled: true,
+            html_only: true,
+            release_ready: false,
+        };
+
+        assert!(html_preview_route_permitted(candidate, false));
+        assert!(!candidate.permits_release_routing());
+    }
+
+    #[test]
     fn production_preview_accepts_certified_html_only_routes() {
         let certified = HtmlRendererSupport {
             html_enabled: true,
+            html_only: true,
             release_ready: true,
         };
 
         assert!(html_preview_route_permitted(certified, false));
+        assert!(certified.permits_release_routing());
     }
 
     #[cfg(any(target_os = "macos", target_os = "windows"))]

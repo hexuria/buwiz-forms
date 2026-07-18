@@ -7,6 +7,9 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 CI_WORKFLOW = REPOSITORY_ROOT / ".github/workflows/ci.yml"
 RELEASE_WORKFLOW = REPOSITORY_ROOT / ".github/workflows/release.yml"
+CANDIDATE_WORKFLOW = (
+    REPOSITORY_ROOT / ".github/workflows/html-candidate-certification.yml"
+)
 JUSTFILE = REPOSITORY_ROOT / "justfile"
 PACKAGE_JSON = REPOSITORY_ROOT / "package.json"
 REQUIRED_AUDIT = (
@@ -19,6 +22,7 @@ class HtmlReleaseGatePolicyTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.ci = CI_WORKFLOW.read_text(encoding="utf-8")
         cls.release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        cls.candidate = CANDIDATE_WORKFLOW.read_text(encoding="utf-8")
         cls.justfile = JUSTFILE.read_text(encoding="utf-8")
         cls.package_json = PACKAGE_JSON.read_text(encoding="utf-8")
 
@@ -41,6 +45,45 @@ class HtmlReleaseGatePolicyTests(unittest.TestCase):
         self.assertIn("FORM_VISUAL_MAX_CHANGED_PERCENT: '1'", step)
         self.assertNotIn("FORM_VISUAL_MAX_CHANGED_PERCENT: '100'", self.release)
         self.assertNotIn("continue-on-error: true", step)
+
+    def test_candidate_workflow_builds_without_weakening_tagged_release(self) -> None:
+        self.assertIn("workflow_dispatch:", self.candidate)
+        self.assertIn("contents: read", self.candidate)
+        self.assertNotIn("push:", self.candidate)
+        self.assertNotIn("softprops/action-gh-release", self.candidate)
+        self.assertNotIn("--require-release-ready", self.candidate)
+        self.assertNotIn("--features dev-tools", self.candidate)
+        self.assertNotIn("form-release-evidence.json", self.candidate)
+        self.assertIn(
+            "python3 scripts/audit_html_form_migration.py --require-clean-source",
+            self.candidate,
+        )
+        self.assertGreaterEqual(
+            self.candidate.count("npm run audit:forms:migration"),
+            3,
+        )
+        self.assertEqual(
+            self.candidate.count("cargo build --locked --release"),
+            4,
+        )
+        self.assertEqual(
+            self.candidate.count("uses: actions/upload-artifact@v4"),
+            3,
+        )
+        self.assertIn("runs-on: macos-14", self.candidate)
+        self.assertIn("runs-on: windows-latest", self.candidate)
+        self.assertIn("runs-on: ubuntu-22.04", self.candidate)
+        self.assertIn("cargo fmt --all -- --check", self.candidate)
+        self.assertIn("cargo check --locked --workspace", self.candidate)
+        self.assertIn(
+            "cargo clippy --locked --workspace --all-targets -- -D warnings",
+            self.candidate,
+        )
+        self.assertIn("cargo test --locked --workspace", self.candidate)
+
+        release_audit_count = self.release.count("npm run audit:forms:migration")
+        self.assertGreater(release_audit_count, 0)
+        self.assertEqual(self.release.count(REQUIRED_AUDIT), release_audit_count)
 
     def test_ci_visual_gate_is_strict_and_blocking(self) -> None:
         step = self.workflow_step(

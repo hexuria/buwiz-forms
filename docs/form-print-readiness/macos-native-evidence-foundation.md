@@ -266,9 +266,12 @@ path, but it intentionally cannot produce promotional native evidence yet:
   audit.
 
 Do not weaken the release preflight to work around those missing collectors.
-The next evidence milestone is an external macOS driver that exercises the
-unchanged signed package and emits reviewable artifacts satisfying the trust
-boundary above.
+The manually dispatched, non-publishing candidate construction path is
+documented in `html-candidate-certification.md`. It breaks the build bootstrap
+cycle without changing this diagnostic driver's trust level or the tagged
+release gate. The next evidence milestone remains an external macOS driver that
+exercises the unchanged signed package and emits reviewable artifacts satisfying
+the trust boundary above.
 
 ## Verification
 

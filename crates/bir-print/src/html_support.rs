@@ -1,9 +1,10 @@
 //! Native routing gates for the owned HTML form renderer.
 //!
 //! The schema-v3 `route` permits an explicitly labelled development preview or
-//! production HTML routing. `release_ready` remains a separate, stricter gate.
-//! Keeping both decisions in Rust prevents the desktop host from treating the
-//! presence of a React component as release evidence.
+//! an exact-revision HTML-only candidate runtime. `release_ready` remains a
+//! separate, stricter distribution gate. Keeping both decisions in Rust lets a
+//! non-development candidate exercise the real native host before certification
+//! without treating the presence of a React component as release evidence.
 
 use serde::Deserialize;
 
@@ -23,6 +24,7 @@ const CSS_CLIENT_PIXEL_TOLERANCE: f64 = 2.25;
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct HtmlRendererSupport {
     pub html_enabled: bool,
+    pub html_only: bool,
     pub release_ready: bool,
 }
 
@@ -34,9 +36,19 @@ impl HtmlRendererSupport {
         self.html_enabled
     }
 
-    /// Production routing requires both the enablement and evidence gates.
+    /// A certification candidate may exercise only a manifest-owned
+    /// `html_only` route. Experimental forms remain developer-build-only.
+    /// Public distribution is still blocked independently by the migration
+    /// audit until `release_ready` and every evidence gate pass.
+    pub fn permits_certification_candidate(self) -> bool {
+        self.html_enabled && self.html_only
+    }
+
+    /// Public release certification requires both the HTML-only route and the
+    /// reviewed evidence gate. This is intentionally not the runtime candidate
+    /// switch; tagged packaging workflows enforce it before publication.
     pub fn permits_release_routing(self) -> bool {
-        self.html_enabled && self.release_ready
+        self.permits_certification_candidate() && self.release_ready
     }
 }
 
@@ -283,6 +295,7 @@ fn html_renderer_support_from_manifest(
         .find(|form| form.code == code && form.revision == revision)
         .map(|form| HtmlRendererSupport {
             html_enabled: form.route != MigrationRoute::Disabled,
+            html_only: form.route == MigrationRoute::HtmlOnly,
             release_ready: form.release_ready && form.route == MigrationRoute::HtmlOnly,
         })
 }
@@ -320,6 +333,7 @@ mod tests {
         let support = bundled_html_renderer_support("2551Q", "2018");
 
         assert!(support.permits_preview());
+        assert!(support.permits_certification_candidate());
         assert!(!support.permits_release_routing());
     }
 
@@ -328,6 +342,7 @@ mod tests {
         let support = bundled_html_renderer_support("1601C", "2018");
 
         assert!(support.permits_preview());
+        assert!(!support.permits_certification_candidate());
         assert!(!support.permits_release_routing());
     }
 
@@ -336,6 +351,7 @@ mod tests {
         let support = bundled_html_renderer_support("0619E", "2018");
 
         assert!(support.permits_preview());
+        assert!(!support.permits_certification_candidate());
         assert!(!support.permits_release_routing());
     }
 
@@ -361,6 +377,7 @@ mod tests {
         .expect("matching support entry");
 
         assert!(support.permits_preview());
+        assert!(!support.permits_certification_candidate());
         assert!(!support.permits_release_routing());
     }
 
@@ -373,6 +390,7 @@ mod tests {
         )
         .expect("matching support entry");
 
+        assert!(support.permits_certification_candidate());
         assert!(support.permits_release_routing());
     }
 
