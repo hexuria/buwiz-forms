@@ -981,25 +981,6 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   font-size: 8.5pt;
   line-height: 1;
 }
-.form-2551q-page-one,
-.form-2551q-page-two {
-  /* The pinned 144 DPI reference uses grayscale edge antialiasing. Chromium's
-   * default subpixel smoothing leaves a measurably wider gray footprint even
-   * with the same Arimo geometry; page-local grayscale smoothing preserves
-   * layout while bringing both complete-page rasters closer to that source. */
-  -webkit-font-smoothing: antialiased;
-}
-.form-2551q-page-two :is(
-  .page-two-masthead,
-  .page-two-identity,
-  .official-atc-table
-) {
-  /* These three official outer frames rasterize as two solid black pixels.
-   * Their measured .7pt layout border is intentionally unchanged; a thin
-   * inset closes only Chromium's gray inner edge without moving any box. */
-  box-shadow: inset 0 0 0 .3pt #000;
-}
-
 .form-2551q-page-two .comb-value > span,
 .form-2551q-continuation .comb-value > span {
   font-size: 8.5pt;
