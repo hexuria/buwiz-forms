@@ -6,15 +6,34 @@
   min-height: 0;
   max-height: 936pt;
   overflow: hidden;
-  color: #050505;
+  color: #000;
   font-family: Arial, Helvetica, sans-serif;
   font-size: 8.5pt;
   line-height: 1;
+}
+
+/* The pinned January 2018 PDF paints every document rule and glyph with
+ * device black. Keep that source property explicit: near-black rules rasterize
+ * as gray at 144 DPI and materially diverge from the official form. */
+.form-page.form-1601c-page-one *,
+.form-page.form-1601c-page-two * {
+  border-color: #000;
 }
 .form-page.form-1601c-page-one { padding: 10.5pt 17pt 7pt 17.5pt; }
 .form-page.form-1601c-page-two { padding: 24.5pt 18pt 20pt 17.5pt; }
 .form-1601c-page-one :is(b, strong),
 .form-1601c-page-two :is(b, strong) { font-weight: 400; }
+.form-1601c-page-one :is(
+  .form-number-1601c > strong,
+  .form-number-1601c > b,
+  .form-title-1601c > strong,
+  .form-title-1601c > span,
+  .header-option-1601c > div > b,
+  .tin-rdo-1601c > div > b,
+  .label-1601c > b,
+  .contact-category-1601c > div > b,
+  .tax-relief-1601c > div > b
+) { font-weight: 700; }
 .form-1601c-page-one .comb-value > span,
 .form-1601c-page-two .comb-value > span {
   position: relative;
@@ -32,7 +51,7 @@
   right: 0;
   bottom: 0;
   height: 46%;
-  border-right: .55pt solid #222;
+  border-right: .55pt solid #000;
   content: "";
 }
 .form-1601c-page-one .money-1601c > .comb-value > span:nth-child(3n + 2)::after,
@@ -49,7 +68,8 @@
   align-items: center;
 }
 .bir-only-1601c {
-  align-self: stretch;
+  align-self: end;
+  height: 19pt;
   display: flex;
   align-items: center;
   padding-left: 1pt;
@@ -57,7 +77,14 @@
   font-size: 9pt;
   line-height: 1;
 }
-.bcs-1601c { padding-left: 1pt; font-size: 8.5pt; }
+.bcs-1601c {
+  align-self: end;
+  height: 19pt;
+  display: flex;
+  align-items: center;
+  padding-left: 1pt;
+  font-size: 8.5pt;
+}
 .government-wordmark-1601c {
   position: absolute;
   top: -.66pt;
@@ -89,11 +116,11 @@
 }
 .form-number-1601c { border-right: .7pt solid #111; }
 .form-number-1601c > span { font-size: 9pt; }
-.form-number-1601c > strong { font-size: 21pt; line-height: .96; letter-spacing: -.5pt; }
-.form-number-1601c > small { margin-top: 3pt; font-size: 8.5pt; }
+.form-number-1601c > strong { font-size: 22pt; line-height: 1.05; letter-spacing: 0; }
+.form-number-1601c > small { margin-top: 3pt; font-size: 9pt; }
 .form-number-1601c > b { margin-top: 1pt; font-size: 8pt; }
-.form-title-1601c > strong { font-size: 20pt; line-height: 1; letter-spacing: -.2pt; }
-.form-title-1601c > span { margin-top: 2pt; font-size: 14pt; line-height: 1; }
+.form-title-1601c > strong { font-size: 18pt; line-height: 1; letter-spacing: 0; }
+.form-title-1601c > span { margin-top: 2pt; font-size: 12pt; line-height: 1; }
 .form-title-1601c > em { margin-top: 5pt; font-size: 6.7pt; line-height: 1.05; }
 .barcode-1601c { position: relative; border-left: .7pt solid #111; padding: 0; }
 .official-pdf417-object-1601c,
@@ -205,6 +232,8 @@
   font-size: 9pt;
   line-height: 1;
 }
+.form-1601c-page-one .part-1601c > h2,
+.form-1601c-page-one .payment-1601c > h2 { font-size: 8pt; }
 .background-1601c { height: 149.5pt; margin-top: 4pt; }
 .tin-rdo-1601c {
   height: 17.5pt;
@@ -244,7 +273,7 @@
   gap: 3pt;
   padding: 0 4pt;
   background: #d9d9d9;
-  box-shadow: inset 0 -.55pt #111;
+  box-shadow: inset 0 -.55pt #000;
   white-space: nowrap;
 }
 .label-1601c em { font-size: 6.5pt; }
@@ -517,8 +546,8 @@
 .privacy-note-1601c { margin: 2pt 0 0 3pt; font-size: 7.5pt; }
 
 .form-1601c-page-two .masthead-1601c { height: 57pt; }
-.form-1601c-page-two .form-title-1601c > strong { font-size: 19pt; }
-.form-1601c-page-two .form-title-1601c > span { font-size: 13.5pt; }
+.form-1601c-page-two .form-title-1601c > strong { font-size: 18pt; }
+.form-1601c-page-two .form-title-1601c > span { font-size: 12pt; }
 .identity-1601c-page-two {
   height: 27.5pt;
   display: grid;
@@ -637,7 +666,7 @@
 .guidelines-1601c {
   margin-top: 3pt;
   font-family: "Times New Roman", Times, serif;
-  color: #111;
+  color: #000;
 }
 .guidelines-1601c > h2 {
   margin: 0;
@@ -658,7 +687,10 @@
   height: 488pt;
   display: grid;
   grid-template-columns: 285pt minmax(0, 1fr);
-  gap: 31pt;
+  /* Official page 2 starts the right instruction column at 318pt. With the
+   * reviewed 17.5pt page inset and 285pt left column, the inter-column gap is
+   * 15.5pt (the prior 31pt value displaced the entire right column). */
+  gap: 15.5pt;
   font-size: 6pt;
   line-height: 7.84pt;
   text-align: justify;
