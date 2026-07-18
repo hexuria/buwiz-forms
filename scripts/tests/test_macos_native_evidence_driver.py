@@ -150,11 +150,44 @@ class MacosNativeEvidenceDriverTests(unittest.TestCase):
             environment["EBIR_NATIVE_EVIDENCE_DESTINATION"], str(destination)
         )
 
-    def test_system_print_uses_the_same_window_relative_toolbar_contract(self) -> None:
-        self.assertIn("set windowPosition to position of targetWindow", driver.PRINT_CANCEL_SCRIPT)
-        self.assertIn("set windowSize to size of targetWindow", driver.PRINT_CANCEL_SCRIPT)
-        self.assertIn("- 210", driver.PRINT_CANCEL_SCRIPT)
-        self.assertNotIn("first button of targetWindow", driver.PRINT_CANCEL_SCRIPT)
+    def test_system_print_uses_exact_pid_geometry_and_observes_the_dialog(self) -> None:
+        source = driver.NATIVE_PRINT_CANCEL_SWIFT
+        self.assertIn("kCGWindowOwnerPID", source)
+        self.assertIn('name.contains("2551Q HTML Form Preview")', source)
+        self.assertIn("CGGetActiveDisplayList", source)
+        self.assertIn("visibleArea >= geometry.width * geometry.height * 0.9", source)
+        self.assertIn("active.width - 84.0", source)
+        self.assertIn("waitForNewDialog(pid: pid, baseline: baseline)", source)
+        self.assertIn("try postEscape()", source)
+        self.assertEqual(source.count("try click("), 1)
+        self.assertNotIn("click(CGPoint(x: dialog", source)
+        self.assertNotIn("System Events", source)
+
+    @mock.patch.object(driver.subprocess, "run")
+    def test_native_system_print_passes_pid_out_of_band(self, run: mock.Mock) -> None:
+        run.return_value = mock.Mock(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "initial": {"id": 1, "x": 40, "y": 40, "width": 1200, "height": 932},
+                    "active": {"id": 1, "x": 40, "y": 40, "width": 1200, "height": 932},
+                    "clickX": 1156,
+                    "clickY": 98,
+                    "dialog": {"id": 2, "x": 250, "y": 100, "width": 780, "height": 732},
+                    "dialogObserved": True,
+                    "dialogCancelled": True,
+                }
+            ),
+            stderr="",
+        )
+
+        record = driver.run_native_print_cancel(4321, timeout=15.0)
+
+        self.assertTrue(record["dialogCancelled"])
+        command = run.call_args.args[0]
+        environment = run.call_args.kwargs["env"]
+        self.assertEqual(command[:3], ["/usr/bin/xcrun", "swift", "-e"])
+        self.assertEqual(environment["EBIR_NATIVE_EVIDENCE_PID"], "4321")
 
     def test_failure_observation_binds_and_preserves_the_existing_destination(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

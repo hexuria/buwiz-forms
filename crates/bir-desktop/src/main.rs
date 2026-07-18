@@ -390,20 +390,21 @@ fn main() {
                     return;
                 }
             };
+            // `MacDisplay::primary()` is derived from the first `NSScreen`, which can
+            // temporarily retain a disconnected display. Select an actually active
+            // CoreGraphics display explicitly so the diagnostic window is observable.
+            let active_display_id = cx
+                .displays()
+                .into_iter()
+                .next()
+                .map(|display| display.id());
             let options = WindowOptions {
-                // Keep the external diagnostic window on the primary display.
-                // `WindowBounds::centered` has produced a stale, disconnected-
-                // display origin on real macOS runs, leaving only one pixel of
-                // the window reachable by Accessibility automation.
+                // Keep the external diagnostic window fully on an active display.
                 window_bounds: Some(WindowBounds::Windowed(Bounds {
-                    // GPUI's pinned macOS backend converts this y-coordinate
-                    // into an AppKit content-rect origin without subtracting
-                    // the window height. Supplying the intended top inset plus
-                    // the 900 px height therefore places the visible top edge
-                    // at 40 px instead of clamping the window off-screen.
-                    origin: point(px(40.), px(940.)),
+                    origin: point(px(40.), px(40.)),
                     size: size(px(1200.), px(900.)),
                 })),
+                display_id: active_display_id,
                 titlebar: Some(TitlebarOptions {
                     title: Some("2551Q HTML Form Preview - Native Evidence".into()),
                     ..Default::default()

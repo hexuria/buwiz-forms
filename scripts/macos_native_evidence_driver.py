@@ -220,23 +220,6 @@ def app_binary(app: Path) -> Path:
     return path
 
 
-def run_osascript(source: str, *arguments: str, timeout: float = 20.0) -> str:
-    result = subprocess.run(
-        ["/usr/bin/osascript", "-e", source, *arguments],
-        text=True,
-        capture_output=True,
-        timeout=timeout,
-        check=False,
-    )
-    if result.returncode != 0:
-        detail = (result.stderr or result.stdout).strip()
-        raise EvidenceError(
-            "macOS Accessibility automation failed. Grant Accessibility permission "
-            f"to the invoking terminal/Codex app. Detail: {detail}"
-        )
-    return result.stdout.strip()
-
-
 NATIVE_EXPORT_SWIFT = r'''
 import AppKit
 import CoreGraphics
@@ -461,25 +444,255 @@ def run_native_export(pid: int, destination: Path, *, timeout: float) -> dict[st
     return record
 
 
-PRINT_CANCEL_SCRIPT = r'''
-on run argv
-    set targetPid to (item 1 of argv) as integer
-    tell application "System Events"
-        tell first process whose unix id is targetPid
-            set frontmost to true
-            set targetWindow to first window whose name contains "2551Q HTML Form Preview"
-            perform action "AXRaise" of targetWindow
-            set windowPosition to position of targetWindow
-            set windowSize to size of targetWindow
-            set printPoint to {(item 1 of windowPosition) + (item 1 of windowSize) - 210, (item 2 of windowPosition) + 58}
-            click at printPoint
-            delay 1.0
-            key code 53
-        end tell
-    end tell
-    return "requested_and_cancelled"
-end run
+NATIVE_PRINT_CANCEL_SWIFT = r'''
+import AppKit
+import CoreGraphics
+import Foundation
+
+struct WindowGeometry: Codable {
+    let id: UInt32
+    let x: Double
+    let y: Double
+    let width: Double
+    let height: Double
+}
+
+struct PrintResult: Codable {
+    let initial: WindowGeometry
+    let active: WindowGeometry
+    let clickX: Double
+    let clickY: Double
+    let dialog: WindowGeometry
+    let dialogObserved: Bool
+    let dialogCancelled: Bool
+}
+
+enum DriverError: Error, CustomStringConvertible {
+    case invalidEnvironment(String)
+    case previewWindowUnavailable(Int32)
+    case previewWindowOffscreen(Int32)
+    case printDialogUnavailable(Int32)
+    case printDialogDidNotCancel(UInt32)
+    case eventCreationFailed(String)
+
+    var description: String {
+        switch self {
+        case .invalidEnvironment(let name):
+            return "missing or invalid environment value: \(name)"
+        case .previewWindowUnavailable(let pid):
+            return "2551Q preview window is unavailable for exact owner PID \(pid)"
+        case .previewWindowOffscreen(let pid):
+            return "2551Q preview window is not materially visible on an active display for exact owner PID \(pid)"
+        case .printDialogUnavailable(let pid):
+            return "native print dialog did not appear for exact owner PID \(pid)"
+        case .printDialogDidNotCancel(let id):
+            return "native print dialog window \(id) did not close after Escape"
+        case .eventCreationFailed(let action):
+            return "failed to create CoreGraphics event for \(action)"
+        }
+    }
+}
+
+let environment = ProcessInfo.processInfo.environment
+guard let pidText = environment["EBIR_NATIVE_EVIDENCE_PID"],
+      let pid = Int32(pidText) else {
+    throw DriverError.invalidEnvironment("EBIR_NATIVE_EVIDENCE_PID")
+}
+
+func processWindows(pid: Int32) -> [WindowGeometry] {
+    guard let records = CGWindowListCopyWindowInfo(
+        [.optionOnScreenOnly, .excludeDesktopElements],
+        kCGNullWindowID
+    ) as? [[String: Any]] else {
+        return []
+    }
+    return records.compactMap { record in
+        guard let owner = record[kCGWindowOwnerPID as String] as? NSNumber,
+              owner.int32Value == pid,
+              let number = record[kCGWindowNumber as String] as? NSNumber,
+              let bounds = record[kCGWindowBounds as String] as? [String: Any],
+              let x = bounds["X"] as? NSNumber,
+              let y = bounds["Y"] as? NSNumber,
+              let width = bounds["Width"] as? NSNumber,
+              let height = bounds["Height"] as? NSNumber else {
+            return nil
+        }
+        return WindowGeometry(
+            id: number.uint32Value,
+            x: x.doubleValue,
+            y: y.doubleValue,
+            width: width.doubleValue,
+            height: height.doubleValue
+        )
+    }
+}
+
+func exactPreview(pid: Int32) -> WindowGeometry? {
+    guard let records = CGWindowListCopyWindowInfo(
+        [.optionOnScreenOnly, .excludeDesktopElements],
+        kCGNullWindowID
+    ) as? [[String: Any]] else {
+        return nil
+    }
+    return records.compactMap { record -> WindowGeometry? in
+        guard let owner = record[kCGWindowOwnerPID as String] as? NSNumber,
+              owner.int32Value == pid,
+              let name = record[kCGWindowName as String] as? String,
+              name.contains("2551Q HTML Form Preview"),
+              let number = record[kCGWindowNumber as String] as? NSNumber,
+              let bounds = record[kCGWindowBounds as String] as? [String: Any],
+              let x = bounds["X"] as? NSNumber,
+              let y = bounds["Y"] as? NSNumber,
+              let width = bounds["Width"] as? NSNumber,
+              let height = bounds["Height"] as? NSNumber else {
+            return nil
+        }
+        return WindowGeometry(
+            id: number.uint32Value,
+            x: x.doubleValue,
+            y: y.doubleValue,
+            width: width.doubleValue,
+            height: height.doubleValue
+        )
+    }.max { left, right in
+        left.width * left.height < right.width * right.height
+    }
+}
+
+func waitForPreview(pid: Int32, attempts: Int = 100) throws -> WindowGeometry {
+    for _ in 0..<attempts {
+        if let geometry = exactPreview(pid: pid) {
+            return geometry
+        }
+        Thread.sleep(forTimeInterval: 0.1)
+    }
+    throw DriverError.previewWindowUnavailable(pid)
+}
+
+func activeDisplayBounds() -> [CGRect] {
+    var count: UInt32 = 0
+    guard CGGetActiveDisplayList(0, nil, &count) == .success else { return [] }
+    var displays = Array(repeating: CGDirectDisplayID(), count: Int(count))
+    guard CGGetActiveDisplayList(count, &displays, &count) == .success else { return [] }
+    return displays.prefix(Int(count)).map(CGDisplayBounds)
+}
+
+func materiallyOnscreen(_ geometry: WindowGeometry) -> Bool {
+    let window = CGRect(x: geometry.x, y: geometry.y, width: geometry.width, height: geometry.height)
+    let visibleArea = activeDisplayBounds().reduce(0.0) { total, display in
+        let intersection = window.intersection(display)
+        return total + (intersection.isNull ? 0.0 : intersection.width * intersection.height)
+    }
+    return visibleArea >= geometry.width * geometry.height * 0.9
+}
+
+let eventSource = CGEventSource(stateID: .hidSystemState)
+
+func click(_ point: CGPoint) throws {
+    for type in [CGEventType.mouseMoved, .leftMouseDown, .leftMouseUp] {
+        guard let event = CGEvent(
+            mouseEventSource: eventSource,
+            mouseType: type,
+            mouseCursorPosition: point,
+            mouseButton: .left
+        ) else {
+            throw DriverError.eventCreationFailed("mouse")
+        }
+        event.post(tap: .cghidEventTap)
+    }
+}
+
+func postEscape() throws {
+    guard let down = CGEvent(keyboardEventSource: eventSource, virtualKey: 53, keyDown: true),
+          let up = CGEvent(keyboardEventSource: eventSource, virtualKey: 53, keyDown: false) else {
+        throw DriverError.eventCreationFailed("Escape")
+    }
+    down.post(tap: .cghidEventTap)
+    up.post(tap: .cghidEventTap)
+}
+
+func waitForNewDialog(pid: Int32, baseline: Set<UInt32>) throws -> WindowGeometry {
+    for _ in 0..<100 {
+        if let dialog = processWindows(pid: pid)
+            .filter({ !baseline.contains($0.id) && $0.width >= 300 && $0.height >= 200 })
+            .max(by: { $0.width * $0.height < $1.width * $1.height }) {
+            return dialog
+        }
+        Thread.sleep(forTimeInterval: 0.1)
+    }
+    throw DriverError.printDialogUnavailable(pid)
+}
+
+let initial = try waitForPreview(pid: pid)
+guard materiallyOnscreen(initial) else { throw DriverError.previewWindowOffscreen(pid) }
+let baseline = Set(processWindows(pid: pid).map(\.id))
+
+guard let app = NSRunningApplication(processIdentifier: pid_t(pid)) else {
+    throw DriverError.previewWindowUnavailable(pid)
+}
+app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+Thread.sleep(forTimeInterval: 0.6)
+
+let active = try waitForPreview(pid: pid, attempts: 20)
+guard materiallyOnscreen(active) else { throw DriverError.previewWindowOffscreen(pid) }
+// Reviewed GPUI toolbar order is Export PDF, Print, Refresh. The Print center
+// is stable at 84 points from the right edge and 58 points from the top edge.
+let printPoint = CGPoint(x: active.x + active.width - 84.0, y: active.y + 58.0)
+try click(printPoint)
+
+let dialog = try waitForNewDialog(pid: pid, baseline: baseline)
+// The newly opened native sheet is already the exact process's key dialog.
+// Never click inside it: a coordinate mistake could activate Print. Escape is
+// the only event sent after the dialog is observed.
+try postEscape()
+
+for _ in 0..<50 {
+    if !processWindows(pid: pid).contains(where: { $0.id == dialog.id }) {
+        let result = PrintResult(
+            initial: initial,
+            active: active,
+            clickX: printPoint.x,
+            clickY: printPoint.y,
+            dialog: dialog,
+            dialogObserved: true,
+            dialogCancelled: true
+        )
+        let encoded = try JSONEncoder().encode(result)
+        FileHandle.standardOutput.write(encoded)
+        FileHandle.standardOutput.write(Data("\n".utf8))
+        exit(0)
+    }
+    Thread.sleep(forTimeInterval: 0.1)
+}
+throw DriverError.printDialogDidNotCancel(dialog.id)
 '''
+
+
+def run_native_print_cancel(pid: int, *, timeout: float) -> dict[str, Any]:
+    environment = os.environ.copy()
+    environment["EBIR_NATIVE_EVIDENCE_PID"] = str(pid)
+    result = subprocess.run(
+        ["/usr/bin/xcrun", "swift", "-e", NATIVE_PRINT_CANCEL_SWIFT],
+        text=True,
+        capture_output=True,
+        timeout=timeout,
+        check=False,
+        env=environment,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise EvidenceError(f"exact-PID macOS system-print automation failed: {detail}")
+    try:
+        record = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise EvidenceError("exact-PID system-print automation returned invalid JSON") from error
+    if (
+        not isinstance(record, dict)
+        or record.get("dialogObserved") is not True
+        or record.get("dialogCancelled") is not True
+    ):
+        raise EvidenceError("exact-PID system-print automation omitted dialog evidence")
+    return record
 
 
 def find_child_pid(binary: Path, launcher_pid: int, timeout: float) -> int:
@@ -794,10 +1007,13 @@ def run_driver(arguments: argparse.Namespace) -> int:
             raise EvidenceError("induced failed export unexpectedly emitted a success observation")
 
         if arguments.exercise_system_print:
-            run_osascript(PRINT_CANCEL_SCRIPT, str(app_pid), timeout=arguments.timeout)
+            print_record = run_native_print_cancel(app_pid, timeout=arguments.timeout)
             system_print = {
                 "requested": True,
-                "automation": "existing system-print path requested; native dialog cancelled",
+                "automation": "exact-PID system-print path requested; native dialog observed and cancelled",
+                "dialog_observed": print_record["dialogObserved"],
+                "dialog_cancelled": print_record["dialogCancelled"],
+                "driver_record": print_record,
                 "passed": False,
             }
     finally:
