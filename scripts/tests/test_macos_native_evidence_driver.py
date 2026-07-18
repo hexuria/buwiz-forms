@@ -5,6 +5,7 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -104,17 +105,50 @@ class MacosNativeEvidenceDriverTests(unittest.TestCase):
                 with self.assertRaisesRegex(driver.EvidenceError, "never"):
                     driver.verify_transcript(path)
 
-    def test_gpui_toolbar_automation_uses_window_relative_coordinates(self) -> None:
+    def test_gpui_export_requeries_exact_pid_geometry_after_activation(self) -> None:
         # GPUI paints the toolbar but does not expose its controls as AXButton
-        # children. The diagnostic driver must therefore raise the exact
-        # preview window, calculate the reviewed control center from that
-        # window, and require the native save panel to appear.
-        self.assertIn('perform action "AXRaise" of targetWindow', driver.EXPORT_SCRIPT)
-        self.assertIn("set windowPosition to position of targetWindow", driver.EXPORT_SCRIPT)
-        self.assertIn("set windowSize to size of targetWindow", driver.EXPORT_SCRIPT)
-        self.assertIn("- 310", driver.EXPORT_SCRIPT)
-        self.assertIn("panelOpened", driver.EXPORT_SCRIPT)
-        self.assertNotIn("first button of targetWindow", driver.EXPORT_SCRIPT)
+        # children. Bind both measurements to the exact launched process and
+        # recalculate the second click after the pinned backend reflows.
+        source = driver.NATIVE_EXPORT_SWIFT
+        self.assertIn("kCGWindowOwnerPID", source)
+        self.assertIn('name.contains("2551Q HTML Form Preview")', source)
+        self.assertIn("let initial = try waitForPreview(pid: pid)", source)
+        self.assertIn("let active = try waitForPreview(pid: pid, attempts: 20)", source)
+        self.assertIn("let secondPoint = exportPoint(active)", source)
+        self.assertIn("try click(secondPoint)", source)
+        self.assertIn("geometry.width - 183.0", source)
+        self.assertNotIn("System Events", source)
+
+    @mock.patch.object(driver.subprocess, "run")
+    def test_native_export_passes_pid_and_destination_out_of_band(
+        self, run: mock.Mock
+    ) -> None:
+        run.return_value = mock.Mock(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "initial": {"x": 40, "y": 940, "width": 1200, "height": 932},
+                    "active": {"x": 900, "y": 39, "width": 900, "height": 1129},
+                    "firstClickX": 1057,
+                    "firstClickY": 998,
+                    "secondClickX": 1617,
+                    "secondClickY": 97,
+                }
+            ),
+            stderr="",
+        )
+        destination = Path("/tmp/reviewed export.pdf")
+
+        record = driver.run_native_export(4321, destination, timeout=15.0)
+
+        self.assertEqual(record["active"]["width"], 900)
+        command = run.call_args.args[0]
+        environment = run.call_args.kwargs["env"]
+        self.assertEqual(command[:3], ["/usr/bin/xcrun", "swift", "-e"])
+        self.assertEqual(environment["EBIR_NATIVE_EVIDENCE_PID"], "4321")
+        self.assertEqual(
+            environment["EBIR_NATIVE_EVIDENCE_DESTINATION"], str(destination)
+        )
 
     def test_system_print_uses_the_same_window_relative_toolbar_contract(self) -> None:
         self.assertIn("set windowPosition to position of targetWindow", driver.PRINT_CANCEL_SCRIPT)

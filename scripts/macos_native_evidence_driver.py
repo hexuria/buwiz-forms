@@ -4,7 +4,7 @@
 The driver never builds or modifies the application package. It independently
 hashes a prepared ``.app`` and its bundled renderer twice, launches the
 development-only deterministic 2551Q preview, drives the existing Export PDF
-button through macOS Accessibility, and writes a reviewable transcript outside
+button through exact-process CoreGraphics events, and writes a reviewable transcript outside
 the package. A second invocation with ``verify`` recomputes every available
 artifact hash and rejects promotion/trust claims.
 
@@ -236,74 +236,228 @@ def run_osascript(source: str, *arguments: str, timeout: float = 20.0) -> str:
     return result.stdout.strip()
 
 
-WAIT_WINDOW_SCRIPT = r'''
-on run argv
-    set targetPid to (item 1 of argv) as integer
-    tell application "System Events"
-        tell first process whose unix id is targetPid
-            set frontmost to true
-            repeat 100 times
-                try
-                    set targetWindow to first window whose name contains "2551Q HTML Form Preview"
-                    perform action "AXRaise" of targetWindow
-                    return "window_ready"
-                end try
-                delay 0.1
-            end repeat
-        end tell
-    end tell
-    error "2551Q preview window did not become available"
-end run
+NATIVE_EXPORT_SWIFT = r'''
+import AppKit
+import CoreGraphics
+import Foundation
+
+struct WindowGeometry: Codable {
+    let x: Double
+    let y: Double
+    let width: Double
+    let height: Double
+}
+
+struct ExportResult: Codable {
+    let initial: WindowGeometry
+    let active: WindowGeometry
+    let firstClickX: Double
+    let firstClickY: Double
+    let secondClickX: Double
+    let secondClickY: Double
+}
+
+enum DriverError: Error, CustomStringConvertible {
+    case invalidEnvironment(String)
+    case previewWindowUnavailable(Int32)
+    case eventCreationFailed(String)
+
+    var description: String {
+        switch self {
+        case .invalidEnvironment(let name):
+            return "missing or invalid environment value: \(name)"
+        case .previewWindowUnavailable(let pid):
+            return "2551Q preview window is unavailable for exact owner PID \(pid)"
+        case .eventCreationFailed(let action):
+            return "failed to create CoreGraphics event for \(action)"
+        }
+    }
+}
+
+let environment = ProcessInfo.processInfo.environment
+guard let pidText = environment["EBIR_NATIVE_EVIDENCE_PID"],
+      let pid = Int32(pidText) else {
+    throw DriverError.invalidEnvironment("EBIR_NATIVE_EVIDENCE_PID")
+}
+guard let destination = environment["EBIR_NATIVE_EVIDENCE_DESTINATION"],
+      !destination.isEmpty else {
+    throw DriverError.invalidEnvironment("EBIR_NATIVE_EVIDENCE_DESTINATION")
+}
+
+func exactPreviewGeometry(pid: Int32) -> WindowGeometry? {
+    guard let records = CGWindowListCopyWindowInfo(
+        [.optionOnScreenOnly, .excludeDesktopElements],
+        kCGNullWindowID
+    ) as? [[String: Any]] else {
+        return nil
+    }
+    let candidates = records.compactMap { record -> WindowGeometry? in
+        guard let owner = record[kCGWindowOwnerPID as String] as? NSNumber,
+              owner.int32Value == pid,
+              let name = record[kCGWindowName as String] as? String,
+              name.contains("2551Q HTML Form Preview"),
+              let bounds = record[kCGWindowBounds as String] as? [String: Any],
+              let x = bounds["X"] as? NSNumber,
+              let y = bounds["Y"] as? NSNumber,
+              let width = bounds["Width"] as? NSNumber,
+              let height = bounds["Height"] as? NSNumber else {
+            return nil
+        }
+        return WindowGeometry(
+            x: x.doubleValue,
+            y: y.doubleValue,
+            width: width.doubleValue,
+            height: height.doubleValue
+        )
+    }
+    return candidates.max { left, right in
+        left.width * left.height < right.width * right.height
+    }
+}
+
+func waitForPreview(pid: Int32, attempts: Int = 100) throws -> WindowGeometry {
+    for _ in 0..<attempts {
+        if let geometry = exactPreviewGeometry(pid: pid) {
+            return geometry
+        }
+        Thread.sleep(forTimeInterval: 0.1)
+    }
+    throw DriverError.previewWindowUnavailable(pid)
+}
+
+let eventSource = CGEventSource(stateID: .hidSystemState)
+
+func postMouse(_ type: CGEventType, at point: CGPoint) throws {
+    guard let event = CGEvent(
+        mouseEventSource: eventSource,
+        mouseType: type,
+        mouseCursorPosition: point,
+        mouseButton: .left
+    ) else {
+        throw DriverError.eventCreationFailed("mouse")
+    }
+    event.post(tap: .cghidEventTap)
+}
+
+func click(_ point: CGPoint) throws {
+    try postMouse(.mouseMoved, at: point)
+    try postMouse(.leftMouseDown, at: point)
+    try postMouse(.leftMouseUp, at: point)
+}
+
+func postKey(_ code: CGKeyCode, flags: CGEventFlags = []) throws {
+    guard let down = CGEvent(
+        keyboardEventSource: eventSource,
+        virtualKey: code,
+        keyDown: true
+    ), let up = CGEvent(
+        keyboardEventSource: eventSource,
+        virtualKey: code,
+        keyDown: false
+    ) else {
+        throw DriverError.eventCreationFailed("keyboard")
+    }
+    down.flags = flags
+    up.flags = flags
+    down.post(tap: .cghidEventTap)
+    up.post(tap: .cghidEventTap)
+}
+
+func postText(_ value: String) throws {
+    let characters = Array(value.utf16)
+    guard let down = CGEvent(
+        keyboardEventSource: eventSource,
+        virtualKey: 0,
+        keyDown: true
+    ), let up = CGEvent(
+        keyboardEventSource: eventSource,
+        virtualKey: 0,
+        keyDown: false
+    ) else {
+        throw DriverError.eventCreationFailed("text")
+    }
+    characters.withUnsafeBufferPointer { buffer in
+        down.keyboardSetUnicodeString(
+            stringLength: buffer.count,
+            unicodeString: buffer.baseAddress!
+        )
+        up.keyboardSetUnicodeString(
+            stringLength: buffer.count,
+            unicodeString: buffer.baseAddress!
+        )
+    }
+    down.post(tap: .cghidEventTap)
+    up.post(tap: .cghidEventTap)
+}
+
+func exportPoint(_ geometry: WindowGeometry) -> CGPoint {
+    // The GPUI toolbar is custom-painted. Its reviewed export-button center is
+    // stable relative to the right/top edge at both supported evidence sizes.
+    CGPoint(x: geometry.x + geometry.width - 183.0, y: geometry.y + 58.0)
+}
+
+let initial = try waitForPreview(pid: pid)
+let firstPoint = exportPoint(initial)
+
+// A first click activates the exact process window. The pinned GPUI backend
+// may then reflow it, so this click is deliberately not treated as the action.
+try click(firstPoint)
+Thread.sleep(forTimeInterval: 0.6)
+
+// Re-query by exact owner PID after activation/reflow and click the recalculated
+// Export PDF center. This avoids colliding with another same-name app process.
+let active = try waitForPreview(pid: pid, attempts: 20)
+let secondPoint = exportPoint(active)
+try click(secondPoint)
+Thread.sleep(forTimeInterval: 1.0)
+
+// Drive the native AppKit save panel without querying the GPUI window through
+// the accessibility hierarchy, which destabilizes this pinned backend.
+try postKey(5, flags: [.maskCommand, .maskShift]) // Command-Shift-G
+Thread.sleep(forTimeInterval: 0.4)
+try postText(destination)
+try postKey(36) // Go
+Thread.sleep(forTimeInterval: 0.5)
+try postKey(36) // Save
+Thread.sleep(forTimeInterval: 0.7)
+try postKey(36) // Replace, when the pre-existing destination is confirmed
+
+let result = ExportResult(
+    initial: initial,
+    active: active,
+    firstClickX: firstPoint.x,
+    firstClickY: firstPoint.y,
+    secondClickX: secondPoint.x,
+    secondClickY: secondPoint.y
+)
+let encoded = try JSONEncoder().encode(result)
+FileHandle.standardOutput.write(encoded)
+FileHandle.standardOutput.write(Data("\n".utf8))
 '''
 
 
-EXPORT_SCRIPT = r'''
-on run argv
-    set targetPid to (item 1 of argv) as integer
-    set targetPath to item 2 of argv
-    tell application "System Events"
-        tell first process whose unix id is targetPid
-            set frontmost to true
-            set targetWindow to first window whose name contains "2551Q HTML Form Preview"
-            perform action "AXRaise" of targetWindow
-
-            -- GPUI's custom toolbar is not represented as AXButton children.
-            -- Activate the existing Export PDF control at its stable center,
-            -- relative to the diagnostic window that the app opens at a fixed
-            -- reviewed size. The save panel that follows is native AppKit UI.
-            set windowPosition to position of targetWindow
-            set windowSize to size of targetWindow
-            set exportPoint to {(item 1 of windowPosition) + (item 1 of windowSize) - 310, (item 2 of windowPosition) + 58}
-            set baselineWindowCount to count windows
-            set panelOpened to false
-            repeat 100 times
-                click at exportPoint
-                delay 0.1
-                if (count of sheets of targetWindow) > 0 or (count windows) > baselineWindowCount then
-                    set panelOpened to true
-                    exit repeat
-                end if
-            end repeat
-            if panelOpened is false then error "Export PDF did not open the native save panel"
-
-            keystroke "g" using {command down, shift down}
-            delay 0.3
-            keystroke targetPath
-            key code 36
-            delay 0.5
-            key code 36
-            delay 0.5
-            try
-                click first button whose title is "Replace" of sheet 1 of targetWindow
-            end try
-            try
-                click first button whose title is "Replace" of window 1
-            end try
-        end tell
-    end tell
-    return "requested"
-end run
-'''
+def run_native_export(pid: int, destination: Path, *, timeout: float) -> dict[str, Any]:
+    environment = os.environ.copy()
+    environment["EBIR_NATIVE_EVIDENCE_PID"] = str(pid)
+    environment["EBIR_NATIVE_EVIDENCE_DESTINATION"] = str(destination)
+    result = subprocess.run(
+        ["/usr/bin/xcrun", "swift", "-e", NATIVE_EXPORT_SWIFT],
+        text=True,
+        capture_output=True,
+        timeout=timeout,
+        check=False,
+        env=environment,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise EvidenceError(f"exact-PID macOS export automation failed: {detail}")
+    try:
+        record = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise EvidenceError("exact-PID export automation returned invalid JSON") from error
+    if not isinstance(record, dict) or not isinstance(record.get("active"), dict):
+        raise EvidenceError("exact-PID export automation omitted active window geometry")
+    return record
 
 
 PRINT_CANCEL_SCRIPT = r'''
@@ -558,10 +712,8 @@ def run_driver(arguments: argparse.Namespace) -> int:
             stderr=(output / "app.stderr.log").open("w", encoding="utf-8"),
         )
         app_pid = find_child_pid(binary, process.pid, arguments.timeout)
-        run_osascript(WAIT_WINDOW_SCRIPT, str(app_pid), timeout=arguments.timeout)
-
         existing_observations = set(observation_dir.glob("*.observation.json"))
-        run_osascript(EXPORT_SCRIPT, str(app_pid), str(success_destination))
+        run_native_export(app_pid, success_destination, timeout=arguments.timeout)
         observation_path = wait_for_observation(
             observation_dir, existing_observations, arguments.timeout
         )
@@ -573,12 +725,9 @@ def run_driver(arguments: argparse.Namespace) -> int:
             final_pdf=success_destination,
             artifact_dir=observation_dir,
         )
-        run_osascript(WAIT_WINDOW_SCRIPT, str(app_pid), timeout=arguments.timeout)
-
         failure_observation_count = len(list(observation_dir.glob("*.observation.json")))
-        run_osascript(EXPORT_SCRIPT, str(app_pid), str(failure_destination))
+        run_native_export(app_pid, failure_destination, timeout=arguments.timeout)
         time.sleep(2.0)
-        run_osascript(WAIT_WINDOW_SCRIPT, str(app_pid), timeout=arguments.timeout)
         if len(list(observation_dir.glob("*.observation.json"))) != failure_observation_count:
             raise EvidenceError("induced failed export unexpectedly emitted a success observation")
 
