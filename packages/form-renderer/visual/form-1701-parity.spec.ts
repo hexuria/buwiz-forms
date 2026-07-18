@@ -52,6 +52,15 @@ test("1701 2018 locks every currently represented reviewed static-copy region wi
     const visibleText = await reviewedStaticText(page.locator(region.selector));
     expect(visibleText, region.selector).toBe(region.text);
   }
+  await expect(page.locator(".schedule-three-b-1701 .rounding-instruction-1701")).toHaveText(
+    "(DO NOT enter Centavos; 49 Centavos or Less drop down; 50 or more round up)"
+  );
+  await expect(page.locator(".schedule-four-1701 .sheet-instruction-1701")).toHaveText(
+    "(attach additional sheet/s, if necessary)"
+  );
+  await expect(page.locator(".schedule-five-1701 .sheet-instruction-1701")).toHaveText(
+    "(attach additional sheet/s, if necessary)"
+  );
 });
 
 test("1701 2018 uses only the reviewed guided capacities and official plain cells", async ({ page }) => {
@@ -437,6 +446,8 @@ async function reviewedStaticText(locator: Locator) {
       ".guided-field-1701",
       ".row-description-1701",
       ".inline-description-1701",
+      ".rounding-instruction-1701",
+      ".sheet-instruction-1701",
       "[data-field-key=\"machine_validation_or_receipt_details\"]"
     ].join(", "))];
     const priorDisplays = dynamicValues.map((dynamicValue) => dynamicValue.style.display);
