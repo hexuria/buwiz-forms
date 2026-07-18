@@ -7,6 +7,13 @@ import { compareCompleteOfficialPage } from "./official-page-diff";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "../../..");
+const staticTextInventory = JSON.parse(fs.readFileSync(path.join(
+  REPO_ROOT,
+  "packages/form-renderer/references/1702rt-2018c-static-text-inventory.json"
+), "utf8")) as {
+  official_source_sha256: string;
+  regions: Array<{ selector: string; text: string }>;
+};
 const MAX_FULL_PAGE_CHANGED_PERCENT = 1;
 const STRUCTURAL_INK_THRESHOLD = 100;
 const STRUCTURAL_LINE_MIN_RUN = 20;
@@ -52,6 +59,18 @@ test("1702RT January 2018C renders every Rust fixture as four stable unclipped 6
       expect(box?.height, `${fixtureName} page ${pageIndex + 1} height`).toBeCloseTo(1248, 0);
       expect(await pageHasNoOverflow(pages.nth(pageIndex)), `${fixtureName} page ${pageIndex + 1}`).toBe(true);
     }
+  }
+});
+
+test("1702RT January 2018C preserves every reviewed official static label", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702rt-minimum.json"));
+
+  expect(staticTextInventory.official_source_sha256).toBe(
+    "d9a6a8a13e0114934261151c4eb269a1573042e7ce670eaf12b15f169d308d2d"
+  );
+  for (const region of staticTextInventory.regions) {
+    const visibleText = await reviewedStaticText(page.locator(region.selector));
+    expect(visibleText, region.selector).toBe(region.text);
   }
 });
 
@@ -244,6 +263,32 @@ async function pageHasNoOverflow(locator: Locator) {
     console.warn(`1702RT overflow report: ${JSON.stringify({ report, offenders })}`);
   }
   return valid;
+}
+
+async function reviewedStaticText(locator: Locator) {
+  await expect(locator).toHaveCount(1);
+  return locator.evaluate((element) => {
+    const dynamicValues = [...element.querySelectorAll<HTMLElement>([
+      ".adaptive-plain-value",
+      ".atc-description-1702rt",
+      ".check-box",
+      ".comb-value",
+      ".money-1702rt",
+      ".official-date-1702rt",
+      ".official-pdf417-object-1702rt",
+      ".payment-date-1702rt",
+      ".plain-value-1702rt",
+      ".rate-row-1702rt > span:nth-child(2)",
+      ".signature-details-1702rt b",
+      ".signature-space-1702rt",
+      ".tin-1702rt"
+    ].join(", "))];
+    const priorDisplays = dynamicValues.map((dynamicValue) => dynamicValue.style.display);
+    dynamicValues.forEach((dynamicValue) => { dynamicValue.style.display = "none"; });
+    const visibleText = (element as HTMLElement).innerText.replace(/\s+/g, " ").trim();
+    dynamicValues.forEach((dynamicValue, index) => { dynamicValue.style.display = priorDisplays[index] ?? ""; });
+    return visibleText;
+  });
 }
 
 async function measureArtworkInPoints(locator: Locator) {

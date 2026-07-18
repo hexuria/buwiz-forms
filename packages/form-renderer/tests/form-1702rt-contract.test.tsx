@@ -29,6 +29,39 @@ const fixtures = [
 ] as const;
 
 describe("1702RT:2018C experimental preview contract", () => {
+  it("pins the exact four-page official PDF and editable XML source pair", () => {
+    const source = JSON.parse(readFileSync(fileURLToPath(
+      new URL("../references/1702rt-2018c-source.json", import.meta.url)
+    ), "utf8")) as {
+      form: {
+        editable_contract: {
+          encrypted_xml_sha256: string;
+          field_count: number;
+          plain_xml_sha256: string;
+          queue_submission_supported: boolean;
+        };
+        official_source_sha256: string;
+        page_count: number;
+        page_height_pt: number;
+        page_width_pt: number;
+      };
+    };
+
+    expect(source.form.official_source_sha256).toBe(
+      "d9a6a8a13e0114934261151c4eb269a1573042e7ce670eaf12b15f169d308d2d"
+    );
+    expect(source.form.page_count).toBe(4);
+    expect([source.form.page_width_pt, source.form.page_height_pt]).toEqual([612, 936]);
+    expect(source.form.editable_contract).toEqual({
+      encrypted_xml_file: "external:00000000000000-1702RTv2018C-122025#CODEITLIKEMILEY@GMAIL.COM#.xml",
+      encrypted_xml_sha256: "e45db05bb89c2513054e7f075e41a09e9ec35c9590982619dcfb1dfb57602501",
+      field_count: 258,
+      plain_xml_file: "external:00000000000000-1702RTv2018C-122025.xml",
+      plain_xml_sha256: "a5316d974ffca1db2359d92208fd4f6b15533e5330fcfc73922becd6b2c29299",
+      queue_submission_supported: false
+    });
+  });
+
   it("accepts every Rust fixture and renders exactly four 612x936 pages", () => {
     for (const fixture of fixtures) {
       const value = structuredClone(fixture);

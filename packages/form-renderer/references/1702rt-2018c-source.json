@@ -7,6 +7,14 @@
     "official_source": "https://bir-cdn.bir.gov.ph/local/pdf/1702-RT%20Jan%202018%20ENCS%20Final%20v3.pdf",
     "official_source_file": "external:1702-RT Jan 2018 ENCS Final v3.pdf",
     "official_source_sha256": "d9a6a8a13e0114934261151c4eb269a1573042e7ce670eaf12b15f169d308d2d",
+    "editable_contract": {
+      "encrypted_xml_file": "external:00000000000000-1702RTv2018C-122025#CODEITLIKEMILEY@GMAIL.COM#.xml",
+      "encrypted_xml_sha256": "e45db05bb89c2513054e7f075e41a09e9ec35c9590982619dcfb1dfb57602501",
+      "field_count": 258,
+      "plain_xml_file": "external:00000000000000-1702RTv2018C-122025.xml",
+      "plain_xml_sha256": "a5316d974ffca1db2359d92208fd4f6b15533e5330fcfc73922becd6b2c29299",
+      "queue_submission_supported": false
+    },
     "page_count": 4,
     "page_height_pt": 936.0,
     "page_width_pt": 612.0,

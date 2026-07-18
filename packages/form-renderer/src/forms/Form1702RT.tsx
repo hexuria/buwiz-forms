@@ -3,6 +3,7 @@ import { getFormSpec } from "@ebirforms/form-specs";
 import { Fragment, type ReactNode } from "react";
 import {
   AdaptiveCombValue,
+  AdaptivePlainValue,
   CheckChoice,
   CombValue,
   FolioPage,
@@ -229,7 +230,7 @@ function PartOne1702RT({ envelope }: { envelope: RenderEnvelope }) {
         <div className="address-last-1702rt"><AdaptiveCombValue value={text(envelope, "registered_address_line_3")} cells={30} /><span><b>9A</b> ZIP Code</span><CombValue value={envelope.taxpayer.zip_code} cells={4} align="right" /></div>
       </div>
       <div className="split-identity-1702rt">
-        <div className="labeled-comb-1702rt"><span><b>10</b>Date of Incorporation/Organization</span><OfficialDate1702RT value={text(envelope, "incorporation_date")} /></div>
+        <div className="labeled-comb-1702rt"><span><b>10</b><span>Date of Incorporation/Organization<em>(MM/DD/YYYY)</em></span></span><OfficialDate1702RT value={text(envelope, "incorporation_date")} /></div>
         <LabeledComb1702RT number="11" label="Contact Number" value={envelope.taxpayer.contact_number} cells={12} />
       </div>
       <LabeledComb1702RT number="12" label="Email Address" value={envelope.taxpayer.email} cells={32} />
@@ -241,7 +242,7 @@ function PartOne1702RT({ envelope }: { envelope: RenderEnvelope }) {
 function PartTwo1702RT({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <section className="part-1702rt part-two-1702rt">
-      <h2>Part II – Total Tax Payable <small>(Do NOT enter Centavos; 49 Centavos or Less drop down; 50 or more round up)</small></h2>
+      <h2>Part II – Total Tax Payable <small>(DO NOT enter Centavos; 49 Centavos or Less drop down; 50 or more round up)</small></h2>
       {PART_TWO_ROWS.map((row) => <Fragment key={row.item}>
         {row.item === 17 && <div className="subband-1702rt">Add: Penalties</div>}
         <AmountRow1702RT envelope={envelope} row={row} />
@@ -277,7 +278,7 @@ function PartThree1702RT({ envelope }: { envelope: RenderEnvelope }) {
       <div className="payment-grid-1702rt payment-header-1702rt"><span>Particulars</span><span>Drawee Bank/Agency</span><span>Number</span><span>Date (MM/DD/YYYY)</span><span>Amount</span></div>
       {rows.map(([item, label]) => <div key={item} className="payment-grid-1702rt payment-row-1702rt" data-payment-item={item} data-payment-fields="bank,number,date,amount"><span><b>{item}</b>{label}</span><PaymentTextCell1702RT value={text(envelope, `payment_${item}_bank`)} cells={5} /><PaymentTextCell1702RT value={text(envelope, `payment_${item}_number`)} cells={7} /><PaymentDate1702RT value={text(envelope, `payment_${item}_date`)} /><Money1702RT envelope={envelope} fieldKey={`payment_${item}_amount`} /></div>)}
       <div className="payment-grid-1702rt payment-row-1702rt payment-row-tax-debit-1702rt" data-payment-item="25" data-payment-fields="number,date,amount"><span><b>25</b>Tax Debit Memo</span><PaymentTextCell1702RT value={text(envelope, "payment_25_number")} cells={7} /><PaymentDate1702RT value={text(envelope, "payment_25_date")} /><Money1702RT envelope={envelope} fieldKey="payment_25_amount" /></div>
-      <div className="payment-other-label-1702rt" data-payment-item-label="26"><b>26</b>Others <em>(Specify below)</em></div>
+      <div className="payment-other-label-1702rt" data-payment-item-label="26"><b>26</b>Others <em>(specify below)</em></div>
       <div className="payment-grid-1702rt payment-other-1702rt" data-payment-item="26" data-payment-fields="specification,bank,number,date,amount"><PaymentPlainTextCell1702RT value={text(envelope, "payment_26_specification")} /><PaymentPlainTextCell1702RT value={text(envelope, "payment_26_bank")} /><PaymentTextCell1702RT value={text(envelope, "payment_26_number")} cells={7} /><PaymentDate1702RT value={text(envelope, "payment_26_date")} /><Money1702RT envelope={envelope} fieldKey="payment_26_amount" /></div>
       <div className="payment-validation-1702rt"><span>Machine Validation/Revenue Official Receipt Details [if not filed with an Authorized Agent Bank (AAB)]</span><span>Stamp of Receiving Office/AAB and Date of Receipt <em>(RO’s Signature/Bank Teller’s Initial)</em></span></div>
     </section>
@@ -291,7 +292,7 @@ function PageIdentity1702RT({ envelope }: { envelope: RenderEnvelope }) {
 function PartFour1702RT({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <section className="part-1702rt part-four-1702rt">
-      <h2>Part IV – Computation of Tax <small>(Do NOT enter Centavos; 49 Centavos or Less drop down; 50 or more round up)</small></h2>
+      <h2>Part IV – Computation of Tax <small>(DO NOT enter Centavos; 49 Centavos or Less drop down; 50 or more round up)</small></h2>
       {PART_FOUR_ROWS.map((row) => <Fragment key={row.item}>
         {row.item === 34 && <div className="subband-1702rt">Less: Deductions Allowable under Existing Law</div>}
         {row.item === 38 && <div className="subband-1702rt centered-subband-1702rt">OR [in case taxable under Sec 27(A) &amp; 28(A)(1)]</div>}
@@ -309,7 +310,7 @@ function PartFive1702RT({ envelope }: { envelope: RenderEnvelope }) {
 }
 
 function PartSixHeading1702RT() {
-  return <h2 className="part-six-heading-1702rt">Part VI – Schedules <small>(Do NOT enter Centavos; 49 Centavos or Less drop down; 50 or more round up)</small></h2>;
+  return <h2 className="part-six-heading-1702rt">Part VI – Schedules <small>(DO NOT enter Centavos; 49 Centavos or Less drop down; 50 or more round up)</small></h2>;
 }
 
 function ScheduleOne1702RT({ envelope }: { envelope: RenderEnvelope }) {
@@ -336,7 +337,7 @@ function ScheduleThree1702RT({ envelope }: { envelope: RenderEnvelope }) {
     <ScheduleAmountRow1702RT envelope={envelope} item="1" label="Gross Income (From Part IV Item 33)" field="schedule_3_item_1" />
     <ScheduleAmountRow1702RT envelope={envelope} item="2" label="Less: Ordinary Allowable Itemized Deductions (From Part VI Schedule I Item 18)" field="schedule_3_item_2" />
     <ScheduleAmountRow1702RT envelope={envelope} item="3" label="Net Operating Loss (Item 1 Less Item 2) (To Schedule IIIA, Item 7A)" field="schedule_3_item_3" />
-    <h3>Schedule IIIA – Computation of Available Net Operating Loss Carry Over (NOLCO)</h3>
+    <h3>Schedule IIIA - Computation of Available Net Operating Loss Carry Over (NOLCO)</h3>
     <div className="nolco-primary-heading-1702rt">
       <span className="nolco-primary-title-1702rt">Net Operating Loss</span>
       <span className="nolco-primary-year-heading-1702rt">Year Incurred</span>
@@ -387,13 +388,13 @@ function ScheduleFive1702RT({ envelope }: { envelope: RenderEnvelope }) {
 
 function AmountRow1702RT({ envelope, row }: { envelope: RenderEnvelope; row: AmountRow1702RT }) {
   if (row.descriptionField) {
-    return <div className="amount-row-1702rt amount-description-row-1702rt" data-description-capacity="23"><span><b>{row.item}</b></span><AdaptiveCombValue value={text(envelope, row.descriptionField)} cells={23} /><span className="amount-description-dead-cell-1702rt" aria-hidden="true" /><Money1702RT envelope={envelope} fieldKey={row.field} /></div>;
+    return <div className="amount-row-1702rt amount-description-row-1702rt" data-item-number={row.item} data-description-capacity="23"><span><b>{row.item}</b></span><AdaptiveCombValue value={text(envelope, row.descriptionField)} cells={23} /><span className="amount-description-dead-cell-1702rt" aria-hidden="true" /><Money1702RT envelope={envelope} fieldKey={row.field} /></div>;
   }
-  return <div className={`amount-row-1702rt${row.emphasis ? " emphasis-1702rt" : ""}`}><span><b>{row.item}</b>{row.descriptionField ? <AdaptiveCombValue value={text(envelope, row.descriptionField)} cells={28} /> : row.label}</span><Money1702RT envelope={envelope} fieldKey={row.field} /></div>;
+  return <div className={`amount-row-1702rt${row.emphasis ? " emphasis-1702rt" : ""}`} data-item-number={row.item}><span><b>{row.item}</b>{row.descriptionField ? <AdaptiveCombValue value={text(envelope, row.descriptionField)} cells={28} /> : row.label}</span><Money1702RT envelope={envelope} fieldKey={row.field} /></div>;
 }
 
 function ScheduleAmountRow1702RT({ envelope, item, label, field, emphasis = false }: { envelope: RenderEnvelope; item: string; label: ReactNode; field: string; emphasis?: boolean }) {
-  return <div className={`schedule-amount-row-1702rt${emphasis ? " emphasis-1702rt" : ""}`}><span>{item}</span><span>{label}</span><Money1702RT envelope={envelope} fieldKey={field} /></div>;
+  return <div className={`schedule-amount-row-1702rt${emphasis ? " emphasis-1702rt" : ""}`} data-schedule-item={item}><span>{item}</span><span>{label}</span><Money1702RT envelope={envelope} fieldKey={field} /></div>;
 }
 
 function Money1702RT({ envelope, fieldKey, cells = 12 }: { envelope: RenderEnvelope; fieldKey: string; cells?: number }) {
@@ -437,12 +438,12 @@ function PaymentTextCell1702RT({ value, cells }: { value: string; cells: number 
 }
 
 function PaymentPlainTextCell1702RT({ value }: { value: string }) {
-  return <span className="payment-value-1702rt" data-official-field-mode="plain" aria-label={value}><span className="plain-value-1702rt">{value}</span></span>;
+  return <span className="payment-value-1702rt" data-official-field-mode="plain" aria-label={value}><AdaptivePlainValue value={value} className="plain-value-1702rt payment-plain-value-1702rt" /></span>;
 }
 
 function Tin1702RT({ value }: { value: string }) {
   const digits = value.replace(/\D/g, "").slice(0, 14).padEnd(14, " ");
-  return <span className="tin-1702rt"><CombValue value={digits.slice(0, 3)} cells={3} /><b>–</b><CombValue value={digits.slice(3, 6)} cells={3} /><b>–</b><CombValue value={digits.slice(6, 9)} cells={3} /><b>–</b><CombValue value={digits.slice(9, 14)} cells={5} /></span>;
+  return <span className="tin-1702rt"><CombValue value={digits.slice(0, 3)} cells={3} /><b>-</b><CombValue value={digits.slice(3, 6)} cells={3} /><b>-</b><CombValue value={digits.slice(6, 9)} cells={3} /><b>-</b><CombValue value={digits.slice(9, 14)} cells={5} /></span>;
 }
 
 function StackedIdentityField1702RT({ number, label, values, cells }: { number: string; label: ReactNode; values: string[]; cells: number }) {

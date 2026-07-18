@@ -308,6 +308,17 @@
 .labeled-comb-1702rt > span:first-child { display: flex; align-items: center; padding: 1pt 4pt; background: #d9d9d9; }
 .labeled-comb-1702rt > :last-child { background: #fff; }
 .split-identity-1702rt > .labeled-comb-1702rt:first-child { grid-template-columns: 166.5pt minmax(0, 1fr); }
+.split-identity-1702rt > .labeled-comb-1702rt:first-child > span:first-child > span {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  line-height: .95;
+}
+.split-identity-1702rt > .labeled-comb-1702rt:first-child > span:first-child em {
+  font-size: 5pt;
+}
 .split-identity-1702rt > .labeled-comb-1702rt:last-child,
 .part-one-1702rt > .labeled-comb-1702rt { grid-template-columns: 90.5pt minmax(0, 1fr); }
 .official-date-1702rt {
@@ -378,6 +389,10 @@
   box-sizing: border-box;
   background: #fff;
 }
+.money-1702rt > .comb-value {
+  display: flex;
+  vertical-align: top;
+}
 .money-1702rt > .comb-value > span:nth-child(3n):not(:last-child)::after {
   width: 1.2pt;
   height: 68%;
@@ -422,6 +437,12 @@
 .payment-value-1702rt { min-width: 0; height: 100%; display: flex; overflow: hidden; background: #fff; }
 .payment-value-1702rt > :is(.comb-value, .adaptive-plain-value) { height: 100%; box-sizing: border-box; flex: 1 1 auto; }
 .plain-value-1702rt { min-width: 0; padding: 2pt 3pt; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.payment-plain-value-1702rt {
+  padding: 1pt 3pt;
+  overflow-wrap: anywhere;
+  line-height: .95;
+  white-space: normal;
+}
 .payment-date-1702rt {
   min-width: 0;
   height: 100%;
