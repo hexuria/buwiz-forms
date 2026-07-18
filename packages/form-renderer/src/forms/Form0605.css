@@ -697,8 +697,31 @@
   background: #bfbfbf;
   font-size: 4.6pt;
 }
+.atc-table-0605 th {
+  padding-left: 1.5pt;
+  text-align: left;
+  font-size: 6.667pt;
+  letter-spacing: .25pt;
+}
+.atc-table-0605 td {
+  font-size: 6.125pt;
+  letter-spacing: .25pt;
+}
 .atc-table-0605 .atc-category-0605 {
   background: #bfbfbf;
+}
+.atc-table-0605 .atc-narrow-0605 {
+  position: relative;
+}
+.atc-table-0605 .atc-narrow-0605 > span {
+  position: absolute;
+  top: 50%;
+  left: 1.5pt;
+  display: block;
+  width: max-content;
+  transform: translateY(-50%) scaleX(var(--atc-narrow-scale));
+  transform-origin: left center;
+  white-space: nowrap;
 }
 .atc-table-0605 .atc-merged-start-0605 {
   border-bottom-color: transparent;

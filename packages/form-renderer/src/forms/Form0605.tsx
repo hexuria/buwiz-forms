@@ -1,6 +1,6 @@
 import type { RenderEnvelope } from "@ebirforms/form-contracts";
 import { getFormSpec } from "@ebirforms/form-specs";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import {
   AdaptivePlainValue,
   CheckChoice,
@@ -62,6 +62,18 @@ const TAX_TYPE_ROWS = [
   [["IT", "INCOME TAX"], ["DS", "DOCUMENTARY STAMP TAX"], ["WR", "WITHHOLDING TAX - FRINGE BENEFITS"]],
   [["CG", "CAPITAL GAINS TAX - Real Property"], ["WB", "WITHHOLDING TAX-BANKS AND OTHER FINANCIAL INSTITUTIONS"], ["WW", "WITHHOLDING TAX - PERCENTAGE TAX ON WINNING AND PRIZES"]]
 ] as const;
+
+// Poppler identifies exactly these four official page-two entries as the
+// embedded Arial Narrow subset (font id 3); the remaining ATC rows use Arial.
+// The renderer keeps its bundled deterministic Arimo face and reproduces the
+// reviewed narrow widths with per-entry horizontal scales instead of relying
+// on a platform-installed Arial Narrow font.
+const ATC_NARROW_SCALE_BY_DESCRIPTION: Readonly<Record<string, number>> = {
+  "Powdered Drinks not Classified as Milk, Juice, Tea and Coffee": 0.716,
+  "Other Non-Alcoholic Beverages that Contain Added Sugar": 0.772,
+  "Using Purely Coconut Sap Sugar & Purely Steviol Glycosides": 0.712,
+  "Performance of Services on Invasive Cosmetic Procedures": 0.772
+};
 
 export function Form0605({ envelope }: { envelope: RenderEnvelope }) {
   getFormSpec("0605", "1999");
@@ -445,6 +457,7 @@ function AtcCellPair0605({ rowIndex, groupIndex }: { rowIndex: number; groupInde
     description = "Greases";
   }
   const isCategory = code.length === 0 && description.length > 0;
+  const narrowScale = ATC_NARROW_SCALE_BY_DESCRIPTION[description];
   const mergedClass = mergedStart
     ? "atc-merged-start-0605"
     : mergedEnd
@@ -457,10 +470,15 @@ function AtcCellPair0605({ rowIndex, groupIndex }: { rowIndex: number; groupInde
       <td
         className={[
           mergedClass,
-          isCategory ? "atc-category-0605" : ""
+          isCategory ? "atc-category-0605" : "",
+          narrowScale ? "atc-narrow-0605" : ""
         ].filter(Boolean).join(" ") || undefined}
+        data-official-font-role={narrowScale ? "Arial Narrow" : undefined}
+        style={narrowScale
+          ? ({ "--atc-narrow-scale": String(narrowScale) } as CSSProperties)
+          : undefined}
       >
-        {description}
+        {narrowScale ? <span>{description}</span> : description}
       </td>
     </>
   );

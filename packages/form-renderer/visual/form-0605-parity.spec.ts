@@ -179,6 +179,26 @@ test("0605 1999 preserves the official page-two ATC category bands and merged pe
   expect(await categoryCells.evaluateAll((cells) =>
     cells.map((cell) => getComputedStyle(cell).backgroundColor)
   )).toEqual(Array(9).fill("rgb(191, 191, 191)"));
+
+  const officialNarrowCells = table.locator('[data-official-font-role="Arial Narrow"]');
+  await expect(officialNarrowCells).toHaveCount(4);
+  expect(await officialNarrowCells.allTextContents()).toEqual([
+    "Powdered Drinks not Classified as Milk, Juice, Tea and Coffee",
+    "Other Non-Alcoholic Beverages that Contain Added Sugar",
+    "Using Purely Coconut Sap Sugar & Purely Steviol Glycosides",
+    "Performance of Services on Invasive Cosmetic Procedures"
+  ]);
+  expect(await officialNarrowCells.locator(":scope > span").evaluateAll((spans) =>
+    spans.map((span) => ({
+      fontFamily: getComputedStyle(span).fontFamily,
+      scaleX: new DOMMatrixReadOnly(getComputedStyle(span).transform).a
+    }))
+  )).toEqual([
+    { fontFamily: '"eBIRForms Arimo", sans-serif', scaleX: 0.716 },
+    { fontFamily: '"eBIRForms Arimo", sans-serif', scaleX: 0.772 },
+    { fontFamily: '"eBIRForms Arimo", sans-serif', scaleX: 0.712 },
+    { fontFamily: '"eBIRForms Arimo", sans-serif', scaleX: 0.772 }
+  ]);
 });
 
 test("0605 1999 preserves exact official static wording and page-two code tables", async ({ page }) => {
