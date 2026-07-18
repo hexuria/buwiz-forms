@@ -95,6 +95,10 @@
 .form-number-1701q { border-right: .6pt solid #111; }
 .form-number-1701q > span { font-size: 8pt; }
 .form-number-1701q > strong { display: block; font-size: 22.5pt; line-height: 1; }
+/* The official Arial Bold sizes are 20pt on page 1 and 17.33pt on page 2.
+ * Bundled-font raster calibration uses these pinned Chromium equivalents. */
+.form-1701q-page-one .form-number-1701q > strong { font-size: 19.5pt; line-height: 1.08; }
+.form-1701q-page-two .form-number-1701q > strong { font-size: 16.5pt; line-height: 1.08; }
 .form-number-1701q > small { margin-top: 1pt; font-size: 7pt; }
 .form-number-1701q > b { margin-top: 1pt; font-size: 7pt; }
 .form-title-1701q > strong { font-size: 15.2pt; line-height: 1; }
