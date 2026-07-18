@@ -291,6 +291,13 @@ test("1701 2018 keeps the official Item 21 and 21A choice hierarchy", async ({ p
   await expect(firstPage.locator(".taxpayer-election-1701 .itemized-choice-1701 > small")).toHaveText("[Sec. 34(A-J), NIRC]");
   await expect(firstPage.locator(".taxpayer-election-1701 .osd-choice-1701 > small")).toHaveText("[40% of Gross Sales/Receipts/Revenues/Fees [Sec. 34(L), NIRC]]");
   await expect(firstPage.locator(".taxpayer-election-1701 .eight-percent-choice-1701 > small")).toHaveText("(available if gross sales/receipts and other non-operating income do not exceed Three million pesos (P3M))");
+
+  const spouseElection = page.locator(".spouse-election-1701");
+  await expect(spouseElection.locator(".deduction-label-1701")).toHaveText("12A Method of Deduction (choose one)");
+  await expect(spouseElection.locator(".graduated-choice-1701 > small")).toHaveText("(Choose Method of Deduction in Item 12A)");
+  await expect(spouseElection.locator(".itemized-choice-1701 > small")).toHaveText("[Sec. 34(A-J), NIRC]");
+  await expect(spouseElection.locator(".osd-choice-1701 > small")).toHaveText("[40% of Gross Sales/Receipts/Revenues/Fees [Sec. 34(L), NIRC]]");
+  await expect(spouseElection.locator(".eight-percent-choice-1701 > small")).toHaveText("(available if gross sales/receipts and other non-operating income do not exceed Three million pesos (P3M))");
 });
 
 test("1701 2018 keeps the official Schedule 3.A row-group bands", async ({ page }) => {
@@ -303,6 +310,22 @@ test("1701 2018 keeps the official Schedule 3.A row-group bands", async ({ page 
     { name: "Schedule 3.A other-income band", selector: ".other-income-subtitle-1701", x: 28, y: 1596, width: 1165, height: 19 }
   ]);
   await expect(secondPage.locator(".schedule-three-a-1701 > .paired-head-1701")).toHaveCount(0);
+});
+
+test("1701 2018 keeps the official page-two spouse row partitions", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701-normal.json"));
+  const secondPage = page.locator(".form-page").nth(1);
+
+  await expectCriticalRegionGeometry(secondPage, [
+    { name: "spouse TIN and RDO row", selector: ".spouse-background-1701 .tin-rdo-1701", x: 29.5, y: 213.5, width: 1165, height: 36 },
+    { name: "spouse type row", selector: '.spouse-background-1701 > [data-item-number="3"]', x: 29.5, y: 249.5, width: 1165, height: 29 },
+    { name: "spouse ATC row", selector: ".spouse-background-1701 .atc-choices-1701", x: 29.5, y: 278.5, width: 1165, height: 61 },
+    { name: "spouse name row", selector: '.spouse-background-1701 > [data-item-number="5"]', x: 29.5, y: 339.5, width: 1165, height: 51 },
+    { name: "spouse contact and citizenship row", selector: ".spouse-contact-1701", x: 29.5, y: 390.5, width: 1165, height: 29 },
+    { name: "spouse foreign-credit row", selector: ".spouse-credit-1701", x: 29.5, y: 419.5, width: 1165, height: 37 },
+    { name: "spouse exempt and special-rate row", selector: ".spouse-background-1701 > .two-choice-row-1701", x: 29.5, y: 456.5, width: 1165, height: 37 },
+    { name: "spouse tax-election row", selector: '.spouse-background-1701 > [data-item-number="12"]', x: 29.5, y: 493.5, width: 1165, height: 109 }
+  ]);
 });
 
 test("1701 2018 matches the complete official pages", async ({ page }, testInfo) => {

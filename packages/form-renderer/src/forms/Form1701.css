@@ -79,6 +79,7 @@
   height: 48pt;
   grid-template-columns: 94pt minmax(0, 1fr) 176pt;
 }
+.page-two-1701 > .masthead-1701.compact-1701 { height: 49.5pt; }
 .form-number-1701,
 .form-title-1701,
 .barcode-1701 {
@@ -305,16 +306,16 @@
 
 /* The official Item 21/21A row is a two-level hierarchy: the 21A heading sits
  * above the deduction choices instead of consuming a choice column. */
-.taxpayer-election-1701 {
+.detailed-election-1701 {
   position: relative;
   display: block;
   height: 54.5pt;
   padding: 0;
 }
-.taxpayer-election-1701 > :is(.tax-rate-label-1701, .deduction-label-1701, .tax-election-choice-1701) {
+.detailed-election-1701 > :is(.tax-rate-label-1701, .deduction-label-1701, .tax-election-choice-1701) {
   position: absolute;
 }
-.taxpayer-election-1701 > .tax-rate-label-1701 {
+.detailed-election-1701 > .tax-rate-label-1701 {
   left: 4pt;
   top: 4pt;
   width: 39pt;
@@ -322,44 +323,44 @@
   grid-template-columns: 11pt 1fr;
   line-height: .92;
 }
-.taxpayer-election-1701 > .tax-rate-label-1701 > b { grid-row: 1 / 3; }
-.taxpayer-election-1701 > .tax-rate-label-1701 > small { grid-column: 1 / 3; }
-.taxpayer-election-1701 > .deduction-label-1701 {
+.detailed-election-1701 > .tax-rate-label-1701 > b { grid-row: 1 / 3; }
+.detailed-election-1701 > .tax-rate-label-1701 > small { grid-column: 1 / 3; }
+.detailed-election-1701 > .deduction-label-1701 {
   left: 204pt;
   top: 2pt;
   padding: 0;
   white-space: nowrap;
 }
-.taxpayer-election-1701 .tax-election-choice-1701 {
+.detailed-election-1701 .tax-election-choice-1701 {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 0;
   line-height: .94;
 }
-.taxpayer-election-1701 .tax-election-choice-1701 > small {
+.detailed-election-1701 .tax-election-choice-1701 > small {
   margin-left: 16pt;
   font-size: 5.15pt;
   line-height: .94;
   white-space: nowrap;
 }
-.taxpayer-election-1701 .check-box {
+.detailed-election-1701 .check-box {
   width: 14pt;
   height: 12.5pt;
 }
-.taxpayer-election-1701 > .graduated-choice-1701 {
+.detailed-election-1701 > .graduated-choice-1701 {
   left: 47.5pt;
   top: 9pt;
 }
-.taxpayer-election-1701 > .itemized-choice-1701 {
+.detailed-election-1701 > .itemized-choice-1701 {
   left: 213.5pt;
   top: 9.5pt;
 }
-.taxpayer-election-1701 > .osd-choice-1701 {
+.detailed-election-1701 > .osd-choice-1701 {
   left: 345pt;
   top: 9.5pt;
 }
-.taxpayer-election-1701 > .eight-percent-choice-1701 {
+.detailed-election-1701 > .eight-percent-choice-1701 {
   left: 47.5pt;
   top: 31pt;
 }
@@ -454,26 +455,58 @@
 .page-four-1701 > .continuation-identity-1701 > .tin-value-1701 { height: 14pt; }
 .page-four-1701 > .continuation-identity-1701 > span:last-child { grid-template-rows: 10pt 14pt; }
 
-.spouse-background-1701 .tin-rdo-1701 { height: 18pt; }
-.spouse-background-1701 .atc-choices-1701 { min-height: 29pt; }
-.spouse-background-1701 .choice-line-1701 { min-height: 17pt; }
-.spouse-contact-1701 { grid-template-columns: 243pt 1fr; }
-.spouse-credit-1701 { grid-template-columns: 230pt 1fr; }
-.spouse-credit-1701 > .choice-line-1701 { min-height: 27pt; }
-.spouse-background-1701 .tax-election-1701 {
-  height: 22.5pt;
-  min-height: 0;
-  grid-template-columns: 42pt 139pt 91pt 119pt minmax(0, 1fr);
-  grid-template-rows: 11pt 10.5pt;
-  padding: 0 3pt;
-  font-size: 5.4pt;
-  line-height: .92;
+.page-two-1701 > .continuation-identity-1701 { height: 27pt; }
+.page-two-1701 > .spouse-background-1701 { margin-top: 1pt; }
+.page-two-1701 > .spouse-background-1701 > .section-band-1701 { height: 10.5pt; }
+.spouse-background-1701 .tin-rdo-1701 {
+  height: 18pt;
+  grid-template-columns: 185.5pt 250.5pt 104.5pt minmax(0, 1fr);
 }
-.spouse-background-1701 .tax-election-1701 .check-box { width: 9pt; height: 9pt; }
-.spouse-background-1701 .tax-election-1701 small { font-size: 4.7pt; }
+.spouse-background-1701 > .choice-line-1701 {
+  height: 14.5pt;
+  min-height: 0;
+  padding-block: 0;
+}
+.spouse-background-1701 .atc-choices-1701 {
+  height: 30.5pt;
+  min-height: 0;
+  padding-block: 1pt;
+}
+.spouse-background-1701 > .labeled-comb-1701 > span:first-child { height: 10.5pt; }
+.spouse-background-1701 > .labeled-comb-1701 > :is(.comb-value, .adaptive-plain-value) { height: 15pt; }
+.spouse-contact-1701 { grid-template-columns: 243pt 1fr; }
+.spouse-contact-1701 > .labeled-comb-1701,
+.spouse-credit-1701 > .labeled-comb-1701 {
+  height: 14.5pt;
+  display: grid;
+  grid-template-columns: 85pt minmax(0, 1fr);
+}
+.spouse-contact-1701 > .labeled-comb-1701:nth-child(2) { grid-template-columns: 70pt minmax(0, 1fr); }
+.spouse-credit-1701 > .labeled-comb-1701 { height: 18.5pt; grid-template-columns: 83pt minmax(0, 1fr); }
+.spouse-contact-1701 > .labeled-comb-1701 > span:first-child,
+.spouse-credit-1701 > .labeled-comb-1701 > span:first-child,
+.spouse-contact-1701 > .labeled-comb-1701 > :is(.comb-value, .adaptive-plain-value),
+.spouse-credit-1701 > .labeled-comb-1701 > :is(.comb-value, .adaptive-plain-value) {
+  height: auto;
+  min-height: 0;
+  border-top: .6pt solid #111;
+}
+.spouse-contact-1701 > .labeled-comb-1701 > :is(.comb-value, .adaptive-plain-value),
+.spouse-credit-1701 > .labeled-comb-1701 > :is(.comb-value, .adaptive-plain-value) { border-left: .6pt solid #111; }
+.spouse-credit-1701 { grid-template-columns: 230pt 1fr; }
+.spouse-credit-1701 > .choice-line-1701 {
+  height: 18.5pt;
+  min-height: 0;
+  padding-block: 0;
+}
+.spouse-background-1701 > .two-choice-row-1701 > .choice-line-1701 {
+  height: 18.5pt;
+  min-height: 0;
+  padding-block: 0;
+}
 
 .schedule-one-1701 { border: 1pt solid #111; border-top: 0; }
-.schedule-one-1701 > h3 { height: 12pt; }
+.schedule-one-1701 > h3 { height: 10.5pt; }
 .schedule-one-1701 > p { position: relative; height: 19pt; margin: 0; padding: 2pt 5pt; border-bottom: .6pt solid #111; font-size: 6pt; line-height: .95; }
 .schedule-one-1701 > p > strong {
   position: absolute;
@@ -488,10 +521,10 @@
 }
 .employer-head-1701,
 .employer-row-1701 { display: grid; grid-template-columns: 74pt minmax(0, 1fr); }
-.employer-head-1701 { height: 11pt; text-align: center; background: #d1d1d1; }
+.employer-head-1701 { height: 10pt; text-align: center; background: #d1d1d1; }
 .employer-head-1701 > span { display: grid; place-items: center; border-bottom: .6pt solid #111; }
 .employer-head-1701 > span + span { border-left: .6pt solid #111; }
-.employer-row-1701 { min-height: 32pt; }
+.employer-row-1701 { height: 31pt; min-height: 0; }
 .employer-row-1701 > * { min-width: 0; border-bottom: .6pt solid #111; }
 .employer-row-1701 > * + * { border-left: .6pt solid #111; }
 .employer-row-1701 > span:first-child { display: grid; grid-template-columns: 13pt 1fr; align-items: center; padding: 1pt; background: #d1d1d1; }
@@ -499,7 +532,7 @@
 .employer-identity-1701 {
   display: grid;
   grid-template-columns: 224pt 74pt minmax(0, 1fr);
-  grid-template-rows: 16pt 16pt;
+  grid-template-rows: 15.5pt 15.5pt;
 }
 .employer-identity-1701 > :first-child { grid-column: 1 / 4; border-bottom: .6pt solid #111; }
 .employer-identity-1701 > :is(.comb-value, .adaptive-plain-value) { background: #fff; }
@@ -523,6 +556,7 @@
 .employer-amount-row-1701 > * + * { border-left: .6pt solid #111; }
 .employer-amount-row-1701 > span:first-child { display: flex; align-items: center; padding-left: 5pt; background: #d1d1d1; }
 .employer-total-1701 { height: 17.5pt; }
+.employer-total-1701 > * { border-bottom: .6pt solid #111; }
 .employer-total-1701 > span:first-child { display: grid; grid-template-columns: 28pt minmax(0, 1fr); align-items: center; padding: 1pt 3pt; background: #d1d1d1; }
 .employer-total-1701 > span:first-child > b { align-self: start; }
 .employer-total-1701 > span:first-child > span { display: flex; flex-wrap: wrap; align-items: center; column-gap: 2pt; line-height: .9; }
