@@ -5,7 +5,12 @@ use tracing::info;
 
 use crate::db::DbError;
 
-const CURRENT_MIGRATION_VERSION: i32 = 13;
+const CURRENT_MIGRATION_VERSION: i32 = 14;
+
+const NO_CONFIRMED_PROFILE_EVIDENCE_REASON: &str =
+    "No confirmed effective profile evidence for this taxable year; review required";
+const NO_LONGER_VALID_MIGRATION_SUGGESTION_REASON: &str =
+    "No longer suggested by the confirmed effective profile; review required";
 
 pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
     let mut version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
@@ -258,6 +263,10 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         // v13: Correct early v12 undated migration backfills that were
         // serialized as Confirmed even though they required date review.
         "SELECT 1; -- v13 marker: explicit NeedsReview profile-version status (Rust-side)",
+        // v14: Fail closed stale generated Forms Set rows left by the broad
+        // v8/v9 migration inference. Rows are retained for audit and existing
+        // draft/snapshot access; only their active filing authority changes.
+        "SELECT 1; -- v14 marker: deactivate stale migration Forms Set rows (Rust-side)",
     ];
 
     while version < CURRENT_MIGRATION_VERSION {
@@ -295,6 +304,10 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
             if version == 13 {
                 migrate_v13_profile_version_review_status(conn)?;
             }
+
+            if version == 14 {
+                migrate_v14_stale_migration_backfills(conn)?;
+            }
         } else {
             break;
         }
@@ -305,6 +318,164 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
     // adding only a subset of these columns.
     migrate_v11_forms_set_provenance(conn)?;
 
+    // Retry/heal v14 even when an early build advanced `user_version` before
+    // completing its Rust-side data migration. The update is idempotent and
+    // only examines still-active generated migration rows.
+    migrate_v14_stale_migration_backfills(conn)?;
+
+    Ok(())
+}
+
+/// Deactivate stale active Forms Set rows created by the v8/v9 broad migration
+/// backfill without deleting filing history.
+///
+/// Only standard, active rows whose persisted source is exactly
+/// `migration_backfill` participate. Manual rows, manual suppressions, and
+/// custom rows are never rewritten. A generated row remains active only when
+/// the profile has an unambiguous confirmed segment for that taxable year and
+/// current suggestion reconciliation resolves that form to an active filing
+/// obligation. This includes effective manual overrides stored on the
+/// confirmed profile version.
+fn migrate_v14_stale_migration_backfills(conn: &Connection) -> Result<(), DbError> {
+    use crate::forms::forms_set::reconcile_forms_set_for_year;
+    use crate::forms::registry::canonical_form_code;
+    use crate::profile::TaxpayerProfile;
+    use std::collections::{BTreeSet, HashMap};
+
+    let table_exists = |table: &str| {
+        conn.query_row(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1",
+            [table],
+            |_| Ok(true),
+        )
+        .unwrap_or(false)
+    };
+    if !table_exists("profiles") || !table_exists("per_year_forms") {
+        return Ok(());
+    }
+
+    // Some development snapshots marked themselves current with only a
+    // partial test schema. Never make a best-effort mutation against those.
+    let per_year_columns = {
+        let mut stmt = conn.prepare("PRAGMA table_info(per_year_forms)")?;
+        stmt.query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<BTreeSet<_>, _>>()?
+    };
+    let required_columns = [
+        "tin",
+        "taxable_year",
+        "form_code",
+        "active",
+        "source",
+        "custom",
+        "reason",
+        "updated_at",
+    ];
+    if required_columns
+        .iter()
+        .any(|column| !per_year_columns.contains(*column))
+    {
+        tracing::warn!(
+            "v14 migration: skipped stale Forms Set healing because per_year_forms is incomplete"
+        );
+        return Ok(());
+    }
+
+    let profiles = {
+        let mut stmt = conn.prepare("SELECT tin, data_json FROM profiles")?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        let mut profiles = HashMap::new();
+        for row in rows {
+            let (stored_tin, data_json) = row?;
+            match serde_json::from_str::<TaxpayerProfile>(&data_json) {
+                Ok(profile) => {
+                    profiles.insert(profile.tin.full(), profile.clone());
+                    profiles.insert(stored_tin, profile);
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        tin = %stored_tin,
+                        %error,
+                        "v14 migration: profile JSON could not be resolved; generated rows fail closed"
+                    );
+                }
+            }
+        }
+        profiles
+    };
+
+    let candidates = {
+        let mut stmt = conn.prepare(
+            "SELECT id, tin, taxable_year, form_code
+             FROM per_year_forms
+             WHERE active = 1 AND source = 'migration_backfill' AND custom = 0",
+        )?;
+        stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, u16>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?
+    };
+
+    let mut resolved_years = HashMap::<(String, u16), (bool, BTreeSet<String>)>::new();
+    let mut deactivated = 0usize;
+    for (id, tin, taxable_year, form_code) in candidates {
+        let cache_key = (tin.clone(), taxable_year);
+        let (has_confirmed_evidence, active_codes) =
+            resolved_years.entry(cache_key).or_insert_with(|| {
+                let Some(profile) = profiles.get(&tin) else {
+                    return (false, BTreeSet::new());
+                };
+                let resolved = profile.resolve_tax_profile_for_year(taxable_year);
+                if resolved.has_blocking_issues() || resolved.effective_segments.is_empty() {
+                    return (false, BTreeSet::new());
+                }
+
+                let suggestions = crate::integration::validation::form_suggestions_for_profile_year(
+                    profile,
+                    taxable_year,
+                );
+                let reconciled = reconcile_forms_set_for_year(taxable_year, None, &suggestions);
+                let active_codes = reconciled
+                    .forms_set
+                    .entries
+                    .into_iter()
+                    .filter(|entry| entry.is_filing_active())
+                    .map(|entry| canonical_form_code(&entry.form_code))
+                    .collect();
+                (true, active_codes)
+            });
+
+        if active_codes.contains(&canonical_form_code(&form_code)) {
+            continue;
+        }
+
+        let reason = if *has_confirmed_evidence {
+            NO_LONGER_VALID_MIGRATION_SUGGESTION_REASON
+        } else {
+            NO_CONFIRMED_PROFILE_EVIDENCE_REASON
+        };
+        conn.execute(
+            "UPDATE per_year_forms
+             SET active = 0, reason = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND active = 1 AND source = 'migration_backfill' AND custom = 0",
+            rusqlite::params![reason, id],
+        )?;
+        deactivated += 1;
+    }
+
+    if deactivated > 0 {
+        info!(
+            "v14 migration: deactivated {} stale generated Forms Set rows without deleting history",
+            deactivated
+        );
+    }
     Ok(())
 }
 
@@ -1446,6 +1617,297 @@ mod tests {
                 "Manual include survives review migration".to_string(),
             )
         );
+    }
+
+    #[test]
+    fn test_v14_deactivates_only_stale_generated_rows_and_preserves_filing_history() {
+        let conn = test_conn();
+        conn.execute_batch(
+            "CREATE TABLE profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tin TEXT UNIQUE NOT NULL,
+                data_json TEXT NOT NULL
+            );
+            CREATE TABLE per_year_forms (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tin TEXT NOT NULL,
+                taxable_year INTEGER NOT NULL,
+                form_code TEXT NOT NULL,
+                frequency TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1,
+                source TEXT NOT NULL,
+                custom INTEGER NOT NULL DEFAULT 0,
+                reason TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                source_reference TEXT,
+                effective_from TEXT,
+                effective_until TEXT,
+                review_status TEXT NOT NULL DEFAULT 'resolved',
+                conflict_json TEXT,
+                UNIQUE(tin, taxable_year, form_code)
+            );
+            CREATE TABLE form_drafts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tin TEXT NOT NULL,
+                form_code TEXT NOT NULL,
+                taxable_year INTEGER NOT NULL,
+                quarter INTEGER,
+                status TEXT NOT NULL,
+                data_json TEXT NOT NULL
+            );
+            PRAGMA user_version = 13;",
+        )
+        .unwrap();
+
+        let profile_json = serde_json::json!({
+            "id": 1,
+            "full_name": "Migration Healing Taxpayer",
+            "tin": {
+                "segment1": "123",
+                "segment2": "456",
+                "segment3": "789",
+                "branch": "000"
+            },
+            "rdo_code": "039",
+            "line_of_business": "Consulting",
+            "registered_address": "Quezon City",
+            "zip_code": "1100",
+            "phone": "09156837000",
+            "email": "profile@example.com",
+            "default_form_type": "2551Q",
+            "taxpayer_type": "Individual",
+            "tax_classification": "SelfEmployed",
+            "eopt_tier": "Micro",
+            "is_vat_registered": false,
+            "business_start_date": "2019-01-27",
+            "compliance_source_mode": "CorVersioned",
+            "profile_versions": [
+                {
+                    "id": "confirmed-2026",
+                    "label": "Confirmed 2026",
+                    "status": "Confirmed",
+                    "source": "ManualCor",
+                    "effective_from": "2026-01-01",
+                    "effective_until": null,
+                    "cor": {},
+                    "registered_tax_types": ["IncomeTax", "PercentageTax"],
+                    "taxpayer_type": "Individual",
+                    "tax_classification": "SelfEmployed",
+                    "eopt_tier": "Micro",
+                    "is_vat_registered": false,
+                    "obligation_overrides": [
+                        {
+                            "form_code": "1800",
+                            "action": "Include",
+                            "reason": "Reviewed manual include"
+                        }
+                    ]
+                }
+            ]
+        })
+        .to_string();
+        conn.execute(
+            "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
+            rusqlite::params!["123456789000", profile_json],
+        )
+        .unwrap();
+
+        for (year, code, active, source, custom, reason) in [
+            (
+                2025,
+                "2551Q",
+                1,
+                "migration_backfill",
+                0,
+                Some("Legacy guessed historical obligation"),
+            ),
+            (
+                2026,
+                "2551Q",
+                1,
+                "migration_backfill",
+                0,
+                Some("Valid generated obligation"),
+            ),
+            (
+                2026,
+                "1706",
+                1,
+                "migration_backfill",
+                0,
+                Some("Over-broad v8 suggestion"),
+            ),
+            (
+                2026,
+                "1701",
+                1,
+                "migration_backfill",
+                0,
+                Some("Redundant annual ITR"),
+            ),
+            (
+                2026,
+                "1701A",
+                1,
+                "migration_backfill",
+                0,
+                Some("Redundant annual ITR"),
+            ),
+            (
+                2026,
+                "1701MS",
+                1,
+                "migration_backfill",
+                0,
+                Some("Resolver-selected annual ITR"),
+            ),
+            (
+                2026,
+                "1800",
+                1,
+                "migration_backfill",
+                0,
+                Some("Legacy row backed by a manual override"),
+            ),
+            (2026, "1707A", 1, "manual", 0, Some("User-owned include")),
+            (
+                2026,
+                "ACCOUNTANT-ATTACHMENT",
+                1,
+                "migration_backfill",
+                1,
+                Some("Custom row must survive"),
+            ),
+            (
+                2026,
+                "2550Q",
+                0,
+                "migration_backfill",
+                0,
+                Some("User excluded VAT form"),
+            ),
+        ] {
+            conn.execute(
+                "INSERT INTO per_year_forms
+                 (tin, taxable_year, form_code, frequency, active, source, custom, reason)
+                 VALUES ('123456789000', ?1, ?2, 'open_ended', ?3, ?4, ?5, ?6)",
+                rusqlite::params![year, code, active, source, custom, reason],
+            )
+            .unwrap();
+        }
+        conn.execute(
+            "INSERT INTO form_drafts
+             (tin, form_code, taxable_year, quarter, status, data_json)
+             VALUES ('123456789000', '2551Q', 2025, 4, 'Submitted', '{\"snapshot\":true}')",
+            [],
+        )
+        .unwrap();
+
+        migrate_database(&conn).unwrap();
+
+        let stored_rows = {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT taxable_year, form_code, active, source, custom, reason
+                     FROM per_year_forms
+                     WHERE tin = '123456789000'
+                     ORDER BY taxable_year, form_code",
+                )
+                .unwrap();
+            stmt.query_map([], |row| {
+                Ok((
+                    row.get::<_, u16>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, bool>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, bool>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                ))
+            })
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+        };
+        assert_eq!(stored_rows.len(), 10, "v14 must not delete Forms Set rows");
+
+        let find = |year, code: &str| {
+            stored_rows
+                .iter()
+                .find(|row| row.0 == year && row.1 == code)
+                .unwrap()
+        };
+        assert_eq!(
+            (find(2025, "2551Q").2, find(2025, "2551Q").5.as_deref()),
+            (false, Some(NO_CONFIRMED_PROFILE_EVIDENCE_REASON))
+        );
+        assert!(find(2026, "2551Q").2, "valid generated row stays active");
+        assert_eq!(
+            (find(2026, "1706").2, find(2026, "1706").5.as_deref()),
+            (false, Some(NO_LONGER_VALID_MIGRATION_SUGGESTION_REASON))
+        );
+        for redundant in ["1701", "1701A"] {
+            assert_eq!(
+                (find(2026, redundant).2, find(2026, redundant).5.as_deref()),
+                (false, Some(NO_LONGER_VALID_MIGRATION_SUGGESTION_REASON)),
+                "only one annual ITR may remain active"
+            );
+        }
+        assert!(
+            find(2026, "1701MS").2,
+            "the confirmed Micro profile's primary annual ITR stays active"
+        );
+        assert!(
+            find(2026, "1800").2,
+            "an effective manual profile override preserves the old migration row"
+        );
+        assert_eq!(find(2026, "1707A").3, "manual");
+        assert!(find(2026, "1707A").2, "manual row remains active");
+        assert!(find(2026, "ACCOUNTANT-ATTACHMENT").2);
+        assert!(find(2026, "ACCOUNTANT-ATTACHMENT").4);
+        assert_eq!(
+            find(2026, "ACCOUNTANT-ATTACHMENT").5.as_deref(),
+            Some("Custom row must survive")
+        );
+        assert!(!find(2026, "2550Q").2);
+        assert_eq!(
+            find(2026, "2550Q").5.as_deref(),
+            Some("User excluded VAT form")
+        );
+
+        let draft: (String, String) = conn
+            .query_row(
+                "SELECT status, data_json FROM form_drafts
+                 WHERE tin = '123456789000' AND form_code = '2551Q' AND taxable_year = 2025",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(draft, ("Submitted".into(), "{\"snapshot\":true}".into()));
+
+        // The post-version healer is deliberately safe to repeat.
+        migrate_database(&conn).unwrap();
+        let rows_after_second_run: Vec<(u16, String, bool, Option<String>)> = {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT taxable_year, form_code, active, reason
+                     FROM per_year_forms
+                     WHERE tin = '123456789000'
+                     ORDER BY taxable_year, form_code",
+                )
+                .unwrap();
+            stmt.query_map([], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+            })
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+        };
+        let rows_after_first_run = stored_rows
+            .into_iter()
+            .map(|row| (row.0, row.1, row.2, row.5))
+            .collect::<Vec<_>>();
+        assert_eq!(rows_after_first_run, rows_after_second_run);
     }
 
     #[test]
