@@ -716,6 +716,10 @@ fn insert_optional_money(map: &mut BTreeMap<String, String>, key: &str, value: O
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sha2::{Digest, Sha256};
+
+    const EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT: usize = 58;
+    const EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT: usize = 59;
 
     fn reviewed_sample(final_flag: &str, include_address_2: bool) -> String {
         let mut fields = BTreeMap::from([
@@ -881,5 +885,96 @@ mod tests {
         draft.month = 1;
         draft.due_day = Some(30);
         assert!(draft.validate().iter().any(|(field, _)| field == "due_day"));
+    }
+
+    #[test]
+    #[ignore = "requires EBIRFORMS_0619E_SOURCE_DIR pointing to the reviewed external source pack"]
+    fn locked_external_0619e_source_pack_matches_hashes_and_semantically_replays() {
+        let source_dir = std::env::var("EBIRFORMS_0619E_SOURCE_DIR")
+            .expect("set EBIRFORMS_0619E_SOURCE_DIR to the exact reviewed 0619E folder");
+        let directory = std::path::Path::new(&source_dir);
+
+        let plain = std::fs::read(directory.join("00000000000000-0619E-042026.xml"))
+            .expect("reviewed plaintext source must be readable");
+        assert_eq!(
+            hex::encode(Sha256::digest(&plain)),
+            "a6f21e372a1ce6d707ede13f2447290683ab302d859c3b684a06c55788cbfade"
+        );
+        let plain_xml =
+            std::str::from_utf8(&plain).expect("reviewed plaintext source must be UTF-8");
+        let plain_fields = crate::bir_xml::parse_bir_xml_checked(plain_xml)
+            .expect("reviewed plaintext source must pass the checked parser");
+        assert_eq!(plain_fields.len(), EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT);
+        let plain_draft = Form0619EDraft::from_bir_field_map(&plain_fields)
+            .expect("reviewed plaintext source must satisfy the typed semantic contract");
+        assert_eq!(plain_draft.xml_final_flag, Form0619EXmlFinalFlag::One);
+        assert_eq!(plain_draft.item_18_total_amount_of_remittance, 1_230.0);
+
+        // The source uses double-encoded semantic text and comma-formatted
+        // money. The typed boundary intentionally canonicalizes those lexical
+        // representations, so certify deterministic semantic replay instead
+        // of claiming byte-for-byte source reproduction.
+        let canonical_plain_fields = plain_draft.to_bir_field_map();
+        assert_eq!(
+            canonical_plain_fields.len(),
+            EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT
+        );
+        let replayed_plain =
+            Form0619EDraft::from_bir_xml_payload(&plain_draft.to_bir_xml_payload())
+                .expect("canonical plaintext replay must satisfy the typed contract");
+        assert_eq!(replayed_plain.to_bir_field_map(), canonical_plain_fields);
+
+        let encrypted = std::fs::read(
+            directory.join("00000000000000-0619E-042026#codeitlikemiley@gmail.com#.xml"),
+        )
+        .expect("reviewed encrypted companion must be readable");
+        assert_eq!(
+            hex::encode(Sha256::digest(&encrypted)),
+            "1c49950df1197906bb73ddbb5d0f5f5e1c3f488f376e05b6d53febc1b32016ab"
+        );
+        assert!(
+            std::str::from_utf8(&encrypted)
+                .ok()
+                .and_then(|text| crate::bir_xml::parse_bir_xml_checked(text).ok())
+                .is_none(),
+            "encrypted companion must never be accepted as plaintext editable XML"
+        );
+        let decrypted =
+            crate::crypto::decrypt_and_decompress(&encrypted, crate::crypto::BIR_IAF_PASSPHRASE)
+                .expect("reviewed encrypted companion must decrypt");
+        let decrypted_xml =
+            std::str::from_utf8(&decrypted).expect("decrypted companion must be UTF-8");
+        let encrypted_fields = crate::bir_xml::parse_bir_xml_checked(decrypted_xml)
+            .expect("decrypted companion must pass the checked parser");
+        assert_eq!(
+            encrypted_fields.len(),
+            EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT
+        );
+        let encrypted_draft = Form0619EDraft::from_bir_field_map(&encrypted_fields)
+            .expect("decrypted companion must satisfy the typed semantic contract");
+        assert_eq!(encrypted_draft.xml_final_flag, Form0619EXmlFinalFlag::Zero);
+        assert_eq!(
+            encrypted_draft.line_of_business,
+            plain_draft.line_of_business
+        );
+        assert_eq!(encrypted_draft.taxpayer_name, plain_draft.taxpayer_name);
+        assert_eq!(
+            encrypted_draft.item_18_total_amount_of_remittance,
+            plain_draft.item_18_total_amount_of_remittance
+        );
+        let replayed_encrypted =
+            Form0619EDraft::from_bir_xml_payload(&encrypted_draft.to_bir_xml_payload())
+                .expect("canonical encrypted-companion replay must satisfy the typed contract");
+        assert_eq!(
+            replayed_encrypted.to_bir_field_map(),
+            encrypted_draft.to_bir_field_map()
+        );
+
+        let official_pdf = std::fs::read(directory.join("0619-E Jan 2018 rev final.pdf"))
+            .expect("official PDF must be readable");
+        assert_eq!(
+            hex::encode(Sha256::digest(&official_pdf)),
+            "0418160d63d4e6f68c34f2bad553273a5d148c3686d8562d338d35fcdd0c5215"
+        );
     }
 }

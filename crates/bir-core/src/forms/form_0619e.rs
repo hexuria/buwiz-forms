@@ -595,6 +595,19 @@ impl FormValidator for Form0619EDraft {
             &self.payment_details.others_description,
             &mut errors,
         );
+        if !self
+            .payment_details
+            .tax_debit_memo
+            .drawee_bank_or_agency
+            .trim()
+            .is_empty()
+        {
+            errors.push((
+                "payment_21_tax_debit_memo.drawee_bank_or_agency".to_string(),
+                "Item 21 Drawee Bank/Agency is non-applicable on the official January 2018 form"
+                    .to_string(),
+            ));
+        }
         validate_payment_row(
             "payment_22_others",
             &self.payment_details.others,
@@ -818,6 +831,18 @@ mod tests {
         assert_eq!(draft.payment_details.check.number, "CHECK-2");
         assert_eq!(draft.payment_details.tax_debit_memo.number, "TDM-3");
         assert_eq!(draft.payment_details.others.number, "OTHER-4");
+    }
+
+    #[test]
+    fn item_21_rejects_the_officially_non_applicable_drawee_bank_field() {
+        let mut draft = valid_draft();
+        draft.payment_details.tax_debit_memo.drawee_bank_or_agency = "MUST NOT PRINT".to_string();
+
+        assert!(draft.validate().iter().any(|(field, message)| {
+            field == "payment_21_tax_debit_memo.drawee_bank_or_agency"
+                && message.contains("non-applicable")
+        }));
+        assert!(draft.try_to_bir_xml_payload().is_err());
     }
 
     #[test]

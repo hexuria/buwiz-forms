@@ -181,6 +181,104 @@ test("0619E 2018 preserves the exact official label hierarchy and plain-field mo
   }
 });
 
+test("0619E 2018 keeps the complete reviewed official static copy", async ({ page }) => {
+  const fixture = readFixture("packages/form-contracts/fixtures/0619e-minimum.json");
+  await renderEnvelope(page, fixture);
+
+  await expectNormalizedTexts(page.locator(".government-header-0619e > span"), [
+    "For BIR Use Only",
+    "BCS/ Item:",
+    "Republic of the Philippines Department of Finance Bureau of Internal Revenue"
+  ]);
+  await expectNormalizedTexts(page.locator(".form-number-0619e > *"), [
+    "BIR Form No.",
+    "0619-E",
+    "January 2018",
+    "Page 1"
+  ]);
+  await expectNormalizedTexts(page.locator(".form-title-0619e > *"), [
+    "Monthly Remittance Form",
+    "of Creditable Income Taxes Withheld (Expanded)",
+    "Enter all required information in CAPITAL LETTERS using BLACK ink. Mark all applicable boxes with an “X”. Two copies MUST be filed with the BIR and one held by the Taxpayer."
+  ]);
+  await expectNormalizedTexts(page.locator(".header-option-0619e > div"), [
+    "1 For the Month of (MM/YYYY)",
+    "2 Due Date (MM/DD/YYYY)",
+    "3 Amended Form?",
+    "4 Any Taxes Withheld?",
+    "5 ATC",
+    "6 Tax Type Code"
+  ]);
+
+  await expectNormalizedTexts(page.locator(".part-0619e > h2"), [
+    "Part I – Background Information",
+    "Part II – Tax Remittance"
+  ]);
+  await expectNormalizedTexts(page.locator(".tin-rdo-0619e > div"), [
+    "7 Taxpayer Identification Number (TIN)",
+    "8 RDO Code"
+  ]);
+  await expectNormalizedTexts(page.locator(".background-0619e .label-0619e"), [
+    "9 Withholding Agent’s Name (Last Name, First Name, Middle Name for Individual OR Registered Name for Non-Individual)",
+    "10 Registered Address (Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)",
+    "13 Email Address"
+  ]);
+  await expectNormalizedTexts(page.locator(".contact-category-0619e > div"), [
+    "11 Contact Number",
+    "12 Category of Withholding Agent"
+  ]);
+  await expectNormalizedTexts(page.locator(".remittance-row-0619e > :first-child"), [
+    "14 Amount of Remittance",
+    "15 Less: Amount Remitted from Previously Filed Form, if this is an amended form",
+    "16 Net Amount of Remittance (Item 14 Less Item 15)",
+    "17A Surcharge",
+    "17B Interest",
+    "17C Compromise",
+    "17D Total Penalties (Sum of Items 17A to 17C)",
+    "18 Total Amount of Remittance (Sum of Items 16 and 17D)"
+  ]);
+  await expect(page.locator(".penalties-heading-0619e")).toHaveText("17 Add: Penalties");
+
+  await expect(page.locator(".declaration-0619e > p")).toHaveText(
+    "I/We declare under the penalties of perjury that this remittance form has been made in good faith, verified by me/us, and to the best of my/our knowledge and belief, is true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof. Further, I/we give my/our consent to the processing of my/our information as contemplated under the *Data Privacy Act of 2012 (R.A. No. 10173) for legitimate and lawful purposes. (If Authorized Representative, attach authorization letter)"
+  );
+  await expectNormalizedTexts(page.locator(".signature-body-0619e span"), [
+    "For Individual:",
+    "For Non-Individual:"
+  ]);
+  await expectNormalizedTexts(page.locator(".signature-labels-0619e > div"), [
+    "Signature over Printed Name of Taxpayer/Authorized Representative/ Tax Agent (Indicate Title/Designation and TIN)",
+    "Signature over Printed Name of President/Vice President/ Authorized Officer or Representative/Tax Agent (Indicate Title/Designation and TIN)"
+  ]);
+  await expectNormalizedTexts(page.locator(".signature-footer-0619e > span"), [
+    "Tax Agent Accreditation No./ Attorney’s Roll No. (if applicable)",
+    "Date of Issue (MM/DD/YYYY)",
+    "Date of Expiry (MM/DD/YYYY)"
+  ]);
+
+  await expect(page.locator(".payment-0619e > h2")).toHaveText("Part III – Details of Payment");
+  await expectNormalizedTexts(page.locator(".payment-head-0619e > span"), [
+    "Particulars",
+    "Drawee Bank/Agency",
+    "Number",
+    "Date (MM/DD/YYYY)",
+    "Amount"
+  ]);
+  await expectNormalizedTexts(page.locator(".payment-label-0619e"), [
+    "19 Cash/Bank Debit Memo",
+    "20 Check",
+    "21 Tax Debit Memo"
+  ]);
+  await expect(page.locator(".payment-other-label-0619e")).toHaveText("22 Others (specify below)");
+  await expectNormalizedTexts(page.locator(".machine-validation-0619e > span"), [
+    "Machine Validation/Revenue Official Receipt Details (if not filed with an Authorized Agent Bank)",
+    "Stamp of Receiving Office/AAB and Date of Receipt (RO’s Signature/Bank Teller’s Initial)"
+  ]);
+  await expect(page.locator(".privacy-note-0619e")).toHaveText(
+    "*NOTE: Please read the BIR Data Privacy Policy found in the BIR website (www.bir.gov.ph)"
+  );
+});
+
 test("0619E 2018 preserves official payment row partitions", async ({ page }) => {
   const fixture = readFixture("packages/form-contracts/fixtures/0619e-normal.json");
   await renderEnvelope(page, fixture);
@@ -257,6 +355,22 @@ test("0619E 2018 uses only the exact reviewed field guides", async ({ page }) =>
     "background-color",
     "rgb(217, 217, 217)"
   );
+
+  await expect(page.locator(".month-value-0619e > .comb-value > span")).toHaveCount(6);
+  await expect(page.locator(".due-date-value-0619e > .comb-value > span")).toHaveCount(8);
+  expect(await combCapacities(page.locator(".tin-value-0619e > .comb-value")))
+    .toEqual([3, 3, 3, 5]);
+  await expect(page.locator(".name-0619e > .comb-value > span")).toHaveCount(40);
+  await expect(page.locator(".address-0619e > .comb-value > span")).toHaveCount(40);
+  expect(await combCapacities(page.locator(".address-second-0619e > .comb-value")))
+    .toEqual([31, 4]);
+  await expect(page.locator(".contact-category-0619e > .comb-value > span")).toHaveCount(12);
+  await expect(page.locator(".email-0619e > .comb-value > span")).toHaveCount(40);
+  for (const number of ["14", "15", "16", "17A", "17B", "17C", "17D", "18"]) {
+    expect(await combCapacities(
+      page.locator(`[data-item='${number}'] > .money-0619e > .comb-value`)
+    ), number).toEqual([11, 2]);
+  }
 });
 
 test("0619E 2018 measures overflow text at the reviewed readable floor", async ({ page }) => {
@@ -433,6 +547,16 @@ async function directCombCapacities(row: Locator): Promise<number[]> {
   return row.locator(":scope > .comb-value").evaluateAll(
     (elements) => elements.map((element) => element.children.length)
   );
+}
+
+async function combCapacities(fields: Locator): Promise<number[]> {
+  return fields.evaluateAll((elements) => elements.map((element) => element.children.length));
+}
+
+async function expectNormalizedTexts(locator: Locator, expected: string[]) {
+  expect(await locator.evaluateAll((elements) => elements.map(
+    (element) => element.textContent?.replace(/\s+/g, " ").trim() ?? ""
+  ))).toEqual(expected);
 }
 
 function readFixture(relativePath: string): unknown {
