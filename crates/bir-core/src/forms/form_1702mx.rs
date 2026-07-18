@@ -1129,8 +1129,10 @@ mod tests {
             field == "mandatory_attachment"
                 && message.contains("attachment transport is not implemented")
         }));
-        assert!(!QUEUE_SUBMISSION_SUPPORTED);
-        assert!(!MANDATORY_ATTACHMENT_TRANSPORT_SUPPORTED);
+        const {
+            assert!(!QUEUE_SUBMISSION_SUPPORTED);
+            assert!(!MANDATORY_ATTACHMENT_TRANSPORT_SUPPORTED);
+        }
         assert!(draft.transition_to_queued().is_err());
         assert_eq!(draft.status, FilingStatus::Draft);
     }

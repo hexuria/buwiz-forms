@@ -1190,6 +1190,18 @@ fn migrate_v9_per_year_forms_heal(conn: &Connection) -> Result<(), DbError> {
 mod tests {
     use super::*;
 
+    type FormsSetMigrationRow = (
+        String,
+        i64,
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        String,
+        Option<String>,
+    );
+
     /// Helper: opens an unencrypted in-memory SQLite connection for testing.
     fn test_conn() -> Connection {
         Connection::open_in_memory().unwrap()
@@ -1315,17 +1327,7 @@ mod tests {
         migrate_database(&conn).unwrap();
         migrate_database(&conn).unwrap();
 
-        let row: (
-            String,
-            i64,
-            String,
-            String,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            String,
-            Option<String>,
-        ) = conn
+        let row: FormsSetMigrationRow = conn
             .query_row(
                 "SELECT tin, taxable_year, form_code, reason, source_reference,
                         effective_from, effective_until, review_status, conflict_json
