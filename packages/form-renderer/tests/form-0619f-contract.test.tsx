@@ -22,6 +22,18 @@ import {
 } from "../src/forms/official0619FAssets";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const sourceMetadata = JSON.parse(fs.readFileSync(path.resolve(
+  HERE,
+  "../references/0619f-2018-source.json"
+), "utf8")) as {
+  form: {
+    official_source_sha256: string;
+    page_count: number;
+    page_height_pt: number;
+    page_width_pt: number;
+    reviewed_supporting_sources: Array<Record<string, unknown>>;
+  };
+};
 
 function pdf417ModuleDigest(pathData: string): {
   digest: string;
@@ -67,6 +79,36 @@ const fixtures = [
 ] as const;
 
 describe("0619F:2018 runtime render contract", () => {
+  it("pins the exact official PDF and both reviewed editable-source variants", () => {
+    expect(sourceMetadata.form).toMatchObject({
+      official_source_sha256: "edd7357390b1f0d95f2a38c9bb76252341c15b54b82bffd338bd540452ff15e1",
+      page_count: 1,
+      page_height_pt: 792,
+      page_width_pt: 612,
+      reviewed_supporting_sources: [
+        {
+          field_count: 59,
+          kind: "editable_xml",
+          semantic_replay: "exact_after_typed_lexical_canonicalization",
+          source_file: "external:00000000000000-0619F-042026WB.xml",
+          source_sha256: "f7a1f2481104b8c23b22f92aef263ae02f768227ec6961cb10e4daf0817f8a18"
+        },
+        {
+          decrypted_extra_fields: ["frm0619F:txtAddress2"],
+          field_count: 60,
+          kind: "encrypted_editable_xml",
+          semantic_differences: [
+            "txtFinalFlag is 0 instead of 1 and is preserved without inferred lifecycle meaning",
+            "frm0619F:txtLineBus uses one fewer URL-encoding layer but resolves to the same typed text"
+          ],
+          semantic_replay: "exact_after_decryption_and_typed_lexical_canonicalization",
+          source_file: "external:00000000000000-0619F-042026WB#codeitlikemiley@gmail.com#.xml",
+          source_sha256: "d561ce34a44a732e52047552c6d4c0b975b3c45042dc0aba4907abfda89b53fb"
+        }
+      ]
+    });
+  });
+
   it("accepts every Rust fixture and renders exactly one Letter page", () => {
     for (const fixture of fixtures) {
       const value = structuredClone(fixture);
