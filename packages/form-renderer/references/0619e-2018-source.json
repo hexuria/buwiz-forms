@@ -10,6 +10,29 @@
     "page_count": 1,
     "page_height_pt": 792.0,
     "page_width_pt": 612.0,
+    "reviewed_supporting_sources": [
+      {
+        "field_count": 58,
+        "kind": "editable_xml",
+        "semantic_replay": "exact_after_typed_lexical_canonicalization",
+        "source_file": "external:00000000000000-0619E-042026.xml",
+        "source_sha256": "a6f21e372a1ce6d707ede13f2447290683ab302d859c3b684a06c55788cbfade"
+      },
+      {
+        "decrypted_extra_fields": [
+          "frm0619E:txtAddress2"
+        ],
+        "field_count": 59,
+        "kind": "encrypted_editable_xml",
+        "semantic_differences": [
+          "txtFinalFlag is 0 instead of 1 and is preserved without inferred lifecycle meaning",
+          "frm0619E:txtLineBus uses one fewer URL-encoding layer but resolves to the same typed text"
+        ],
+        "semantic_replay": "exact_after_decryption_and_typed_lexical_canonicalization",
+        "source_file": "external:00000000000000-0619E-042026#codeitlikemiley@gmail.com#.xml",
+        "source_sha256": "1c49950df1197906bb73ddbb5d0f5f5e1c3f488f376e05b6d53febc1b32016ab"
+      }
+    ],
     "pages": [
       {
         "page": 1,

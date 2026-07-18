@@ -18,6 +18,18 @@ pub const ATC_CODE: &str = "WME10";
 pub const TAX_TYPE_CODE: &str = "WE";
 pub const QUEUE_SUBMISSION_SUPPORTED: bool = false;
 
+/// Hash-locked source evidence for the exact January 2018 revision.
+pub const OFFICIAL_FORM_SHA256: &str =
+    "0418160d63d4e6f68c34f2bad553273a5d148c3686d8562d338d35fcdd0c5215";
+pub const REVIEWED_EDITABLE_XML_SHA256: &str =
+    "a6f21e372a1ce6d707ede13f2447290683ab302d859c3b684a06c55788cbfade";
+pub const REVIEWED_ENCRYPTED_XML_SHA256: &str =
+    "1c49950df1197906bb73ddbb5d0f5f5e1c3f488f376e05b6d53febc1b32016ab";
+pub const EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT: usize = 58;
+pub const EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT: usize = 59;
+pub const REVIEWED_ENCRYPTED_XML_EXTRA_FIELD: &str = "frm0619E:txtAddress2";
+pub const REVIEWED_LEXICAL_ENCODING_FIELD: &str = "frm0619E:txtLineBus";
+
 /// Item 12 on the official form.  One value is authoritative; the inverse XML
 /// checkbox is derived at the serialization boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]

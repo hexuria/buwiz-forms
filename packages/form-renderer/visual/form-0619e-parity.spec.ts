@@ -7,6 +7,15 @@ import { compareCompleteOfficialPage } from "./official-page-diff";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "../../..");
+const staticTextInventory = JSON.parse(fs.readFileSync(path.join(
+  REPO_ROOT,
+  "packages/form-renderer/references/0619e-2018-static-text-inventory.json"
+), "utf8")) as {
+  coverage_status: string;
+  known_gaps: string[];
+  official_source_sha256: string;
+  regions: Array<{ selector: string; text: string }>;
+};
 const DEVICE_SCALE_FACTOR = 1.5;
 const MAX_CHANGED_PERCENT = 1;
 const STRUCTURAL_INK_THRESHOLD = 100;
@@ -27,6 +36,23 @@ test("0619E 2018 renders every Rust fixture as one stable unclipped Letter page"
     await expect(pages, fixtureName).toHaveCount(1);
     await expect(pages.nth(0)).toHaveAttribute("data-paper", "letter");
     expect(await pageHasNoOverflow(pages.nth(0)), fixtureName).toBe(true);
+  }
+});
+
+test("0619E 2018 locks every reviewed official static-copy region", async ({ page }) => {
+  await renderEnvelope(
+    page,
+    readFixture("packages/form-contracts/fixtures/0619e-minimum.json")
+  );
+
+  expect(staticTextInventory.official_source_sha256).toBe(
+    "0418160d63d4e6f68c34f2bad553273a5d148c3686d8562d338d35fcdd0c5215"
+  );
+  expect(staticTextInventory.coverage_status).toBe("full_reviewed");
+  expect(staticTextInventory.known_gaps).toEqual([]);
+  for (const region of staticTextInventory.regions) {
+    const visibleText = await reviewedStaticText(page.locator(region.selector));
+    expect(visibleText, region.selector).toBe(region.text);
   }
 });
 
@@ -376,6 +402,118 @@ test("0619E 2018 uses only the exact reviewed field guides", async ({ page }) =>
   }
 });
 
+test("0619E 2018 switches every reviewed adaptive field pattern only after its official capacity", async ({ page }) => {
+  const minimum = readFixture(
+    "packages/form-contracts/fixtures/0619e-minimum.json"
+  ) as Mutable0619EEnvelope;
+  const cases: AdaptiveBoundaryCase[] = [
+    taxpayerBoundary("name", 40, "N", ".name-0619e > :nth-child(2)"),
+    taxpayerBoundary(
+      "registered_address",
+      40,
+      "A",
+      ".address-0619e > :nth-child(2)"
+    ),
+    fieldBoundary(
+      "registered_address_2",
+      31,
+      "B",
+      ".address-second-0619e > :nth-child(1)"
+    ),
+    taxpayerBoundary(
+      "contact_number",
+      12,
+      "1",
+      ".contact-category-0619e > :nth-child(2)"
+    ),
+    taxpayerBoundary("email", 40, "E", ".email-0619e > :nth-child(2)"),
+    fieldBoundary(
+      "payment_19_drawee_bank_or_agency",
+      5,
+      "A",
+      "[data-payment-row='payment_19'] > :nth-child(2)"
+    ),
+    fieldBoundary(
+      "payment_19_number",
+      6,
+      "1",
+      "[data-payment-row='payment_19'] > :nth-child(3)"
+    ),
+    fieldBoundary(
+      "payment_20_drawee_bank_or_agency",
+      5,
+      "B",
+      "[data-payment-row='payment_20'] > :nth-child(2)"
+    ),
+    fieldBoundary(
+      "payment_20_number",
+      6,
+      "2",
+      "[data-payment-row='payment_20'] > :nth-child(3)"
+    ),
+    fieldBoundary(
+      "payment_21_number",
+      6,
+      "3",
+      "[data-payment-row='payment_21'] > :nth-child(3)"
+    ),
+    fieldBoundary(
+      "payment_22_particular",
+      7,
+      "P",
+      "[data-payment-row='payment_22'] > :nth-child(1)"
+    ),
+    fieldBoundary(
+      "payment_22_drawee_bank_or_agency",
+      5,
+      "C",
+      "[data-payment-row='payment_22'] > :nth-child(2)"
+    ),
+    fieldBoundary(
+      "payment_22_number",
+      6,
+      "4",
+      "[data-payment-row='payment_22'] > :nth-child(3)"
+    )
+  ];
+
+  for (const boundary of cases) {
+    await expectAdaptiveCapacityBoundary(page, minimum, boundary);
+  }
+
+  for (const item of ["19", "20", "21", "22"]) {
+    for (const date of ["", "05/10/2026"]) {
+      const dateFixture = structuredClone(minimum);
+      dateFixture.fields[`payment_${item}_date`].value = date;
+      await renderEnvelope(page, dateFixture);
+      const dateField = page.locator(
+        `[data-payment-row='payment_${item}'] > :nth-child(4)`
+      );
+      await expect(dateField, `Item ${item} date ${date || "blank"}`).toHaveClass(
+        /comb-value/
+      );
+      await expect(dateField.locator(":scope > span")).toHaveCount(8);
+    }
+  }
+
+  const exactMoney = structuredClone(minimum);
+  exactMoney.fields.item_14_amount_of_remittance.value = 99_999_999_999.99;
+  await renderEnvelope(page, exactMoney);
+  const exactMoneyField = page.locator("[data-item='14'] > :nth-child(2)");
+  await expect(exactMoneyField).toHaveClass(/money-0619e/);
+  expect(await combCapacities(exactMoneyField.locator(":scope > .comb-value")))
+    .toEqual([11, 2]);
+
+  const overflowMoney = structuredClone(minimum);
+  overflowMoney.fields.item_14_amount_of_remittance.value = 999_999_999_999.99;
+  await renderEnvelope(page, overflowMoney);
+  const overflowMoneyField = page.locator("[data-item='14'] > :nth-child(2)");
+  await expect(overflowMoneyField).toHaveClass(/adaptive-plain-value/);
+  await expect(overflowMoneyField).toHaveAttribute("data-cell-capacity", "14");
+  await expect(overflowMoneyField).toHaveAttribute("data-overflow-mode", "plain");
+  await expect(overflowMoneyField).toHaveAttribute("aria-label", "999999999999.99");
+});
+
 test("0619E 2018 measures overflow text at the reviewed readable floor", async ({ page }) => {
   const fixture = readFixture("packages/form-contracts/fixtures/0619e-long-values.json");
   await renderEnvelope(page, fixture);
@@ -463,6 +601,122 @@ test("0619E 2018 matches the complete pinned official page", async ({ page }, te
     "complete page pixels, including all static labels, instructions, fields, signatures, and artwork"
   ).toBeLessThanOrEqual(MAX_CHANGED_PERCENT);
 });
+
+interface Mutable0619EEnvelope {
+  taxpayer: {
+    contact_number: string;
+    email: string;
+    name: string;
+    registered_address: string;
+  };
+  fields: Record<string, {
+    type: string;
+    value: string | number | boolean;
+  }>;
+}
+
+interface AdaptiveBoundaryCase {
+  capacity: number;
+  fill: string;
+  mutate: (fixture: Mutable0619EEnvelope, value: string) => void;
+  selector: string;
+}
+
+function taxpayerBoundary(
+  key: keyof Mutable0619EEnvelope["taxpayer"],
+  capacity: number,
+  fill: string,
+  selector: string
+): AdaptiveBoundaryCase {
+  return {
+    capacity,
+    fill,
+    selector,
+    mutate: (fixture, value) => {
+      fixture.taxpayer[key] = value;
+    }
+  };
+}
+
+function fieldBoundary(
+  key: string,
+  capacity: number,
+  fill: string,
+  selector: string
+): AdaptiveBoundaryCase {
+  return {
+    capacity,
+    fill,
+    selector,
+    mutate: (fixture, value) => {
+      fixture.fields[key].value = value;
+    }
+  };
+}
+
+async function expectAdaptiveCapacityBoundary(
+  page: Page,
+  source: Mutable0619EEnvelope,
+  boundary: AdaptiveBoundaryCase
+) {
+  for (const [label, value] of [
+    ["empty", ""],
+    ["short", boundary.fill.repeat(Math.min(3, boundary.capacity))],
+    ["exact", boundary.fill.repeat(boundary.capacity)]
+  ] as const) {
+    const guidedFixture = structuredClone(source);
+    boundary.mutate(guidedFixture, value);
+    await renderEnvelope(page, guidedFixture);
+    const guided = page.locator(boundary.selector);
+    await expect(guided, `${boundary.selector} ${label}`).toHaveClass(/comb-value/);
+    await expect(
+      guided.locator(":scope > span"),
+      `${boundary.selector} ${label} comb cells`
+    ).toHaveCount(boundary.capacity);
+  }
+
+  const overflowValue = boundary.fill.repeat(boundary.capacity + 1);
+  const overflowFixture = structuredClone(source);
+  boundary.mutate(overflowFixture, overflowValue);
+  await renderEnvelope(page, overflowFixture);
+  const plain = page.locator(boundary.selector);
+  await expect(plain, `${boundary.selector} above capacity`).toHaveClass(
+    /adaptive-plain-value/
+  );
+  await expect(plain).toHaveAttribute(
+    "data-cell-capacity",
+    String(boundary.capacity)
+  );
+  await expect(plain).toHaveAttribute("data-overflow-mode", "plain");
+  await expect(plain).toHaveAttribute("aria-label", overflowValue);
+  await expect(plain).toHaveAttribute("data-adaptive-fit-state", "fit");
+}
+
+async function reviewedStaticText(locator: Locator) {
+  await expect(locator).toHaveCount(1);
+  return locator.evaluate((element) => {
+    const dynamicValues = [...element.querySelectorAll<HTMLElement>([
+      ".adaptive-plain-value",
+      ".check-box",
+      ".code-value-0619e",
+      ".comb-value",
+      ".money-0619e"
+    ].join(", "))];
+    const priorDisplays = dynamicValues.map((dynamicValue) =>
+      dynamicValue.style.display
+    );
+    dynamicValues.forEach((dynamicValue) => {
+      dynamicValue.style.display = "none";
+    });
+    const visibleText = (element as HTMLElement).innerText
+      .replace(/\s+/g, " ")
+      .trim();
+    dynamicValues.forEach((dynamicValue, index) => {
+      dynamicValue.style.display = priorDisplays[index] ?? "";
+    });
+    return visibleText;
+  });
+}
 
 interface CriticalRegion {
   name: string;

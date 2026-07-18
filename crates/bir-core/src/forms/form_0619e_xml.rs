@@ -715,11 +715,13 @@ fn insert_optional_money(map: &mut BTreeMap<String, String>, key: &str, value: O
 
 #[cfg(test)]
 mod tests {
+    use super::super::form_0619e::{
+        EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT, EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT,
+        OFFICIAL_FORM_SHA256, REVIEWED_EDITABLE_XML_SHA256, REVIEWED_ENCRYPTED_XML_EXTRA_FIELD,
+        REVIEWED_ENCRYPTED_XML_SHA256, REVIEWED_LEXICAL_ENCODING_FIELD,
+    };
     use super::*;
     use sha2::{Digest, Sha256};
-
-    const EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT: usize = 58;
-    const EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT: usize = 59;
 
     fn reviewed_sample(final_flag: &str, include_address_2: bool) -> String {
         let mut fields = BTreeMap::from([
@@ -898,13 +900,17 @@ mod tests {
             .expect("reviewed plaintext source must be readable");
         assert_eq!(
             hex::encode(Sha256::digest(&plain)),
-            "a6f21e372a1ce6d707ede13f2447290683ab302d859c3b684a06c55788cbfade"
+            REVIEWED_EDITABLE_XML_SHA256
         );
         let plain_xml =
             std::str::from_utf8(&plain).expect("reviewed plaintext source must be UTF-8");
         let plain_fields = crate::bir_xml::parse_bir_xml_checked(plain_xml)
             .expect("reviewed plaintext source must pass the checked parser");
         assert_eq!(plain_fields.len(), EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT);
+        assert_eq!(
+            plain_fields[REVIEWED_LEXICAL_ENCODING_FIELD],
+            "SOFTWARE%20DEVELOPMENT"
+        );
         let plain_draft = Form0619EDraft::from_bir_field_map(&plain_fields)
             .expect("reviewed plaintext source must satisfy the typed semantic contract");
         assert_eq!(plain_draft.xml_final_flag, Form0619EXmlFinalFlag::One);
@@ -930,7 +936,7 @@ mod tests {
         .expect("reviewed encrypted companion must be readable");
         assert_eq!(
             hex::encode(Sha256::digest(&encrypted)),
-            "1c49950df1197906bb73ddbb5d0f5f5e1c3f488f376e05b6d53febc1b32016ab"
+            REVIEWED_ENCRYPTED_XML_SHA256
         );
         assert!(
             std::str::from_utf8(&encrypted)
@@ -949,6 +955,11 @@ mod tests {
         assert_eq!(
             encrypted_fields.len(),
             EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT
+        );
+        assert_eq!(encrypted_fields[REVIEWED_ENCRYPTED_XML_EXTRA_FIELD], "");
+        assert_eq!(
+            encrypted_fields[REVIEWED_LEXICAL_ENCODING_FIELD],
+            "SOFTWARE DEVELOPMENT"
         );
         let encrypted_draft = Form0619EDraft::from_bir_field_map(&encrypted_fields)
             .expect("decrypted companion must satisfy the typed semantic contract");
@@ -970,11 +981,26 @@ mod tests {
             encrypted_draft.to_bir_field_map()
         );
 
+        let mut canonical_plain_without_final_flag = canonical_plain_fields.clone();
+        let mut canonical_encrypted_without_final_flag = encrypted_draft.to_bir_field_map();
+        assert_eq!(
+            canonical_plain_without_final_flag.remove("txtFinalFlag"),
+            Some("1".to_string())
+        );
+        assert_eq!(
+            canonical_encrypted_without_final_flag.remove("txtFinalFlag"),
+            Some("0".to_string())
+        );
+        assert_eq!(
+            canonical_encrypted_without_final_flag, canonical_plain_without_final_flag,
+            "after typed lexical canonicalization, the reviewed sources may differ only by the preserved final flag"
+        );
+
         let official_pdf = std::fs::read(directory.join("0619-E Jan 2018 rev final.pdf"))
             .expect("official PDF must be readable");
         assert_eq!(
             hex::encode(Sha256::digest(&official_pdf)),
-            "0418160d63d4e6f68c34f2bad553273a5d148c3686d8562d338d35fcdd0c5215"
+            OFFICIAL_FORM_SHA256
         );
     }
 }

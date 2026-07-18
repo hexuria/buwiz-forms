@@ -21,6 +21,18 @@ import {
 } from "../src/forms/official0619EAssets";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const sourceMetadata = JSON.parse(fs.readFileSync(path.resolve(
+  HERE,
+  "../references/0619e-2018-source.json"
+), "utf8")) as {
+  form: {
+    official_source_sha256: string;
+    page_count: number;
+    page_height_pt: number;
+    page_width_pt: number;
+    reviewed_supporting_sources: Array<Record<string, unknown>>;
+  };
+};
 
 function pdf417ModuleDigest(pathData: string): {
   digest: string;
@@ -66,6 +78,36 @@ const fixtures = [
 ] as const;
 
 describe("0619E:2018 runtime render contract", () => {
+  it("pins the exact official PDF and both reviewed editable-source variants", () => {
+    expect(sourceMetadata.form).toMatchObject({
+      official_source_sha256: "0418160d63d4e6f68c34f2bad553273a5d148c3686d8562d338d35fcdd0c5215",
+      page_count: 1,
+      page_height_pt: 792,
+      page_width_pt: 612,
+      reviewed_supporting_sources: [
+        {
+          field_count: 58,
+          kind: "editable_xml",
+          semantic_replay: "exact_after_typed_lexical_canonicalization",
+          source_file: "external:00000000000000-0619E-042026.xml",
+          source_sha256: "a6f21e372a1ce6d707ede13f2447290683ab302d859c3b684a06c55788cbfade"
+        },
+        {
+          decrypted_extra_fields: ["frm0619E:txtAddress2"],
+          field_count: 59,
+          kind: "encrypted_editable_xml",
+          semantic_differences: [
+            "txtFinalFlag is 0 instead of 1 and is preserved without inferred lifecycle meaning",
+            "frm0619E:txtLineBus uses one fewer URL-encoding layer but resolves to the same typed text"
+          ],
+          semantic_replay: "exact_after_decryption_and_typed_lexical_canonicalization",
+          source_file: "external:00000000000000-0619E-042026#codeitlikemiley@gmail.com#.xml",
+          source_sha256: "1c49950df1197906bb73ddbb5d0f5f5e1c3f488f376e05b6d53febc1b32016ab"
+        }
+      ]
+    });
+  });
+
   it("accepts every Rust fixture and renders exactly one Letter page", () => {
     for (const fixture of fixtures) {
       const value = structuredClone(fixture);
@@ -240,6 +282,12 @@ describe("0619E:2018 runtime render contract", () => {
     malformedTin.fields.printable_tin_branch.value = "123";
     expect(() => assertRenderEnvelope(malformedTin)).toThrow(
       "printable_tin_branch"
+    );
+
+    const malformedPaymentDate = structuredClone(normalFixture) as Record<string, any>;
+    malformedPaymentDate.fields.payment_19_date.value = "05102026X";
+    expect(() => assertRenderEnvelope(malformedPaymentDate)).toThrow(
+      "payment_19_date"
     );
   });
 });
