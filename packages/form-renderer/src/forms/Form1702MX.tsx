@@ -319,11 +319,36 @@ function PartOne1702MX({ envelope }: { envelope: RenderEnvelope }) {
 }
 
 function Address1702MX({ envelope }: { envelope: RenderEnvelope }) {
+  const characters = Array.from(envelope.taxpayer.registered_address.toUpperCase());
+  const lineCapacities = [38, 38, 30] as const;
+  const capacity = lineCapacities.reduce((total, lineCapacity) => total + lineCapacity, 0);
+  const usesPlainBox = characters.length > capacity;
+  let characterOffset = 0;
   return (
-    <div className="address-field-1702mx">
+    <div
+      className="address-field-1702mx"
+      data-field-mode={usesPlainBox ? "plain" : "guided"}
+      data-cell-capacity={capacity}
+      data-line-cell-capacity={lineCapacities.join(",")}
+    >
       <span><b>9</b> Registered Address <em>(Indicate complete address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)</em></span>
       <div className="address-comb-1702mx">
-        <AdaptiveCombValue value={envelope.taxpayer.registered_address.toUpperCase()} cells={104} />
+        {usesPlainBox ? (
+          <AdaptivePlainValue
+            value={characters.join("")}
+            cellCapacity={capacity}
+            className="address-plain-value-1702mx"
+            maxFontSizePx={9.333}
+            minFontSizePx={5.333}
+            fontStepPx={.5}
+          />
+        ) : lineCapacities.map((lineCapacity, index) => {
+          const lineValue = characters
+            .slice(characterOffset, characterOffset + lineCapacity)
+            .join("");
+          characterOffset += lineCapacity;
+          return <CombValue key={index} value={lineValue} cells={lineCapacity} />;
+        })}
         <span className="zip-field-1702mx"><span className="zip-label-1702mx"><b>9A</b> ZIP Code</span><CombValue value={envelope.taxpayer.zip_code} cells={4} /></span>
       </div>
     </div>
@@ -364,16 +389,41 @@ function Declaration1702MX({ envelope }: { envelope: RenderEnvelope }) {
     <section className="declaration-1702mx">
       <p>We declare under the penalties of perjury that this return, and all its attachments, have been made in good faith, verified by us, and to the best of our knowledge and belief, are true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof. (If signed by an Authorized Representative, indicate TIN and attach authorization letter)</p>
       <div className="signature-area-1702mx">
-        <div><PlainValue1702MX value={text(envelope, "authorized_representative")} /><span>Signature over Printed Name of President/Principal Officer/Authorized Representative</span><small>Title of Signatory <PlainValue1702MX value={text(envelope, "president_title")} /> TIN <PlainValue1702MX value={text(envelope, "president_tin")} /></small></div>
-        <div><PlainValue1702MX value={text(envelope, "treasurer")} /><span>Signature over Printed Name of Treasurer/Assistant Treasurer</span><small>Title of Signatory <PlainValue1702MX value={text(envelope, "treasurer_title")} /> TIN <PlainValue1702MX value={text(envelope, "treasurer_tin")} /></small></div>
-        <div><b>22</b> Number of Attachments<CombValue value={text(envelope, "number_of_attachments")} cells={2} align="right" /></div>
+        <Signatory1702MX
+          name={text(envelope, "authorized_representative")}
+          label="Signature over Printed Name of President/Principal Officer/Authorized Representative"
+          title={text(envelope, "president_title")}
+          tin={text(envelope, "president_tin")}
+        />
+        <Signatory1702MX
+          name={text(envelope, "treasurer")}
+          label="Signature over Printed Name of Treasurer/Assistant Treasurer"
+          title={text(envelope, "treasurer_title")}
+          tin={text(envelope, "treasurer_tin")}
+        />
+        <div className="attachments-cell-1702mx"><span><b>22</b> Number of<br />Attachments</span><CombValue value={text(envelope, "number_of_attachments")} cells={2} align="right" /></div>
       </div>
     </section>
   );
 }
 
+function Signatory1702MX({ name, label, title, tin }: { name: string; label: string; title: string; tin: string }) {
+  return (
+    <div className="signatory-1702mx">
+      <span className="signature-space-1702mx"><PlainValue1702MX value={name} /></span>
+      <span className="signature-label-1702mx">{label}</span>
+      <span className="signature-footer-1702mx">
+        <span>Title of Signatory</span>
+        <PlainValue1702MX value={title} />
+        <span>TIN</span>
+        <PlainValue1702MX value={tin} />
+      </span>
+    </div>
+  );
+}
+
 function PartThree1702MX({ envelope }: { envelope: RenderEnvelope }) {
-  const labels = ["23 Cash/Bank Debit Memo", "24 Check", "25 Tax Debit Memo", "26 Others (specify below)"];
+  const labels = ["23 Cash/Bank Debit Memo", "24 Check", "25 Tax Debit Memo"];
   return (
     <section className="part-three-1702mx ruled-section-1702mx">
       <SectionHeading1702MX>Part III – Details of Payment</SectionHeading1702MX>
@@ -381,10 +431,29 @@ function PartThree1702MX({ envelope }: { envelope: RenderEnvelope }) {
       {labels.map((label, index) => {
         const prefix = `payment_${index + 23}`;
         const combined = text(envelope, `${prefix}_date_or_amount`);
-        return <div key={label} className="payment-grid-1702mx"><span>{label}</span><PlainValue1702MX value={text(envelope, `${prefix}_drawee`)} /><PlainValue1702MX value={text(envelope, `${prefix}_number`)} /><PlainValue1702MX value={combined} /><span /></div>;
+        return <PaymentEntry1702MX key={label} label={label} drawee={text(envelope, `${prefix}_drawee`)} number={text(envelope, `${prefix}_number`)} date={combined} />;
       })}
+      <div className="payment-others-heading-1702mx">26 Others <em>(specify below)</em></div>
+      <PaymentEntry1702MX
+        label=""
+        drawee={text(envelope, "payment_26_drawee")}
+        number={text(envelope, "payment_26_number")}
+        date={text(envelope, "payment_26_date_or_amount")}
+      />
       <div className="validation-receipt-1702mx"><span>Machine Validation/Revenue Official Receipt Details [if not filed with an Authorized Agent Bank (AAB)]</span><span>Stamp of Receiving Office/AAB and Date of Receipt (RO’s Signature/Bank Teller’s Initial)</span></div>
     </section>
+  );
+}
+
+function PaymentEntry1702MX({ label, drawee, number, date }: { label: string; drawee: string; number: string; date: string }) {
+  return (
+    <div className="payment-grid-1702mx payment-entry-1702mx">
+      <span>{label}</span>
+      <PlainValue1702MX value={drawee} className="payment-value-1702mx" />
+      <PlainValue1702MX value={number} className="payment-value-1702mx" />
+      <PlainValue1702MX value={date} className="payment-value-1702mx" />
+      <span className="payment-amount-1702mx" />
+    </div>
   );
 }
 

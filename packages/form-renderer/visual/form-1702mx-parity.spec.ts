@@ -255,6 +255,43 @@ test("1702MX January 2018C preserves the official Part II penalty heading", asyn
   expect(await pageHasNoOverflow(pageOne)).toBe(true);
 });
 
+test("1702MX January 2018C preserves the official Page 1 address, signatory, and payment hierarchy", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-normal.json"));
+  const pageOne = page.locator(".form-page").nth(0);
+  const address = pageOne.locator(".address-field-1702mx");
+
+  await expect(address).toHaveAttribute("data-field-mode", "guided");
+  await expect(address).toHaveAttribute("data-cell-capacity", "106");
+  await expect(address).toHaveAttribute("data-line-cell-capacity", "38,38,30");
+  expect(await address.locator(".address-comb-1702mx > .comb-value").evaluateAll(
+    (rows) => rows.map((row) => row.children.length)
+  )).toEqual([38, 38, 30]);
+
+  const signatories = pageOne.locator(".signature-area-1702mx > .signatory-1702mx");
+  await expect(signatories).toHaveCount(2);
+  await expect(signatories.locator(":scope > .signature-space-1702mx")).toHaveCount(2);
+  await expect(signatories.locator(":scope > .signature-label-1702mx")).toHaveCount(2);
+  await expect(signatories.locator(":scope > .signature-footer-1702mx")).toHaveCount(2);
+  await expect(pageOne.locator(".attachments-cell-1702mx .comb-value > span")).toHaveCount(2);
+
+  await expect(pageOne.locator(".part-three-1702mx > .payment-entry-1702mx")).toHaveCount(4);
+  await expect(pageOne.locator(".part-three-1702mx > .payment-others-heading-1702mx")).toHaveText(
+    "26 Others (specify below)"
+  );
+  expect(await pageOne.locator(".payment-entry-1702mx .payment-value-1702mx").first().evaluate(
+    (field) => getComputedStyle(field, "::after").backgroundImage
+  )).toContain("repeating-linear-gradient");
+  expect(await pageHasNoOverflow(pageOne)).toBe(true);
+
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-long-values.json"));
+  const longPageOne = page.locator(".form-page").nth(0);
+  const longAddress = longPageOne.locator(".address-field-1702mx");
+  await expect(longAddress).toHaveAttribute("data-field-mode", "plain");
+  await expect(longAddress.locator(".address-comb-1702mx > .comb-value")).toHaveCount(0);
+  await expect(longAddress.locator(".address-plain-value-1702mx")).toHaveCount(1);
+  expect(await pageHasNoOverflow(longPageOne)).toBe(true);
+});
+
 test("1702MX January 2018C preserves the official Schedule 5 Item 17 band and subrows", async ({ page }) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-normal.json"));
   const pageThree = page.locator(".form-page").nth(2);
