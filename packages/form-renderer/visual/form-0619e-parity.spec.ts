@@ -130,7 +130,11 @@ test("0619E 2018 preserves official period, declaration, and signature bands", a
     { name: "Item 1 value band", selector: ".month-value-0619e", x: 36, y: 260, width: 254, height: 39 },
     { name: "Item 2 value band", selector: ".due-date-value-0619e", x: 292, y: 260, width: 228, height: 39 },
     { name: "signature writing area", selector: ".signature-body-0619e", x: 36, y: 1002, width: 1151, height: 87 },
+    { name: "individual signature writing area", selector: ".signature-body-0619e > div:first-child", x: 36, y: 1002, width: 602, height: 87 },
+    { name: "non-individual signature writing area", selector: ".signature-body-0619e > div:last-child", x: 638, y: 1002, width: 549, height: 87 },
     { name: "signature labels", selector: ".signature-labels-0619e", x: 36, y: 1089, width: 1151, height: 53 },
+    { name: "individual signature label", selector: ".signature-labels-0619e > div:first-child", x: 36, y: 1089, width: 602, height: 53 },
+    { name: "non-individual signature label", selector: ".signature-labels-0619e > div:last-child", x: 638, y: 1089, width: 549, height: 53 },
     { name: "tax agent footer", selector: ".signature-footer-0619e", x: 36, y: 1142, width: 1151, height: 45 }
   ]);
 

@@ -397,7 +397,7 @@
 .signature-body-0619e {
   height: 43.5pt;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 301pt minmax(0, 1fr);
   border-bottom: .6pt solid #000;
 }
 .signature-body-0619e > div {
@@ -409,7 +409,7 @@
 .signature-labels-0619e {
   height: 26.5pt;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 301pt minmax(0, 1fr);
   border-bottom: .6pt solid #000;
   background: #d9d9d9;
 }

@@ -145,6 +145,9 @@ test("0619F 2018 preserves the official declaration bands and grayscale fills", 
   expect(await page.locator(".signature-footer-0619f > span").first().evaluate((element) =>
     getComputedStyle(element).backgroundColor
   )).toBe("rgb(217, 217, 217)");
+  expect(await page.locator(".category-choices-0619f").evaluate((element) =>
+    getComputedStyle(element).backgroundColor
+  )).toBe("rgb(217, 217, 217)");
   expect(await page.locator(".decimal-separator-0619f").first().evaluate((element) =>
     getComputedStyle(element).backgroundColor
   )).toBe("rgb(166, 166, 166)");
