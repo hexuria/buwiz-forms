@@ -196,6 +196,7 @@ pub struct ProfileManagerView {
     pub forms_editor_active_note_input: Entity<InputState>,
     calendar_name_input: Entity<InputState>,
     calendar_action_message: Option<(bool, String)>,
+    calendar_form_selection: bir_core::google_calendar::CalendarFormSelection,
 
     _subscriptions: Vec<Subscription>,
 }
@@ -452,14 +453,11 @@ impl ProfileManagerView {
             )
         });
         let cor_extracted_forms_select = cx.new(|cx| {
-            let mut options: Vec<_> = bir_core::forms::registry::FORM_REGISTRY
-                .iter()
-                .map(|f| MultiSelectOption::new(f.code, format!("{} - {}", f.code, f.title)))
-                .collect();
-            options.sort_by(|a, b| a.id.cmp(&b.id));
-            MultiSelectState::new(options, window, cx)
-                .placeholder("Add form code...")
-                .hide_trigger_chips(true)
+            crate::components::form_multi_select::registry_form_multi_select(
+                "Add form code...",
+                window,
+                cx,
+            )
         });
         let cor_deadline_title_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Title"));
@@ -861,6 +859,7 @@ impl ProfileManagerView {
             forms_editor_active_note_input,
             calendar_name_input,
             calendar_action_message: None,
+            calendar_form_selection: Default::default(),
             _subscriptions: subscriptions,
         };
         view.capture_clean_baseline(cx);
@@ -1268,6 +1267,7 @@ impl ProfileManagerView {
         self.calendar_name_input
             .update(cx, |input, cx| input.set_value("", window, cx));
         self.calendar_action_message = None;
+        self.calendar_form_selection = Default::default();
         self.setup_totp_state
             .update(cx, |input, cx| input.set_value("", window, cx));
 
@@ -1580,6 +1580,13 @@ impl ProfileManagerView {
         self.calendar_name_input
             .update(cx, |input, cx| input.set_value(calendar_name, window, cx));
         self.calendar_action_message = None;
+        self.calendar_form_selection = self
+            .db
+            .lock()
+            .map(|db| {
+                bir_core::google_calendar::calendar_form_selection(&db, &profile.tin.full())
+            })
+            .unwrap_or_default();
         let select_val = self.forms_editor_year_select.read(cx).selected_value(cx);
         if let Ok(y) = select_val.parse::<u16>() {
             self.forms_editor_year = y;
@@ -2932,6 +2939,23 @@ impl ProfileManagerView {
             );
         };
 
+        // Confirming reconciles reviewed evidence codes into the yearly Forms
+        // Set; two members of the same annual-ITR group would activate a
+        // conflict, so require the version to be corrected first.
+        let evidence_codes: Vec<String> = version
+            .evidence
+            .iter()
+            .flat_map(|document| document.extracted_form_codes.iter().cloned())
+            .collect();
+        if let Some(group) =
+            bir_core::integration::conflicting_annual_itr_code_groups(&evidence_codes).first()
+        {
+            return Err(format!(
+                "This COR version's reviewed form codes include more than one annual income tax return ({}). Edit the version and keep only one before confirming.",
+                group.join(", ")
+            ));
+        }
+
         let mut profile = self.current_profile(cx);
         profile.profile_versions = self.stored_profile_versions.clone();
         profile.compliance_source_mode = ComplianceSourceMode::CorVersioned;
@@ -3336,6 +3360,20 @@ impl ProfileManagerView {
             .has_invalid_value(cx)
         {
             return Err("Registration date must use MM/DD/YYYY.".to_string());
+        }
+
+        // A COR registers exactly one annual income tax return; two members
+        // of the same annual-ITR group would later reconcile into a
+        // conflicting Forms Set, so refuse the selection here.
+        if let Some(group) = bir_core::integration::conflicting_annual_itr_code_groups(
+            &self.cor_extracted_forms,
+        )
+        .first()
+        {
+            return Err(format!(
+                "The exact COR form codes list more than one annual income tax return ({}). A taxpayer files only one annual ITR per year — keep only the code this COR actually registers.",
+                group.join(", ")
+            ));
         }
 
         let effective_from = self.cor_effective_from_input.read(cx).date;
@@ -4066,13 +4104,13 @@ impl ProfileManagerView {
                         div()
                             .text_sm()
                             .font_weight(FontWeight::BOLD)
-                            .text_color(cx.theme().warning_foreground)
+                            .text_color(crate::theme::warning_on_tint(cx.theme()))
                             .child(dirty_state.title()),
                     )
                     .child(
                         div()
                             .text_xs()
-                            .text_color(cx.theme().warning_foreground)
+                            .text_color(crate::theme::warning_on_tint(cx.theme()))
                             .child(dirty_state.navigation_message()),
                     ),
             )
@@ -4110,7 +4148,7 @@ impl ProfileManagerView {
         div()
             .min_h_5()
             .text_xs()
-            .text_color(gpui::rgba(0xff6b6bff))
+            .text_color(crate::theme::danger_on_tint(_cx.theme()))
             .child(text)
     }
 
@@ -4508,6 +4546,7 @@ impl Render for ProfileManagerView {
                     div()
                         .absolute()
                         .inset_0()
+                        .occlude()
                         .bg(gpui::rgba(0x000000b2))
                         .flex()
                         .items_center()
@@ -4709,6 +4748,7 @@ impl Render for ProfileManagerView {
                         div()
                             .absolute()
                             .inset_0()
+                            .occlude()
                             .bg(gpui::rgba(0x000000b2))
                             .flex()
                             .items_center()

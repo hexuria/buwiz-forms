@@ -138,6 +138,9 @@ impl ProfileManagerView {
                         .child(Input::new(&self.calendar_name_input)),
                 )
             })
+            .when(!forms_years.is_empty(), |this| {
+                this.child(self.render_calendar_form_selection(cx))
+            })
             .when_some(self.calendar_action_message.clone(), |this, message| {
                 this.child(
                     div()
@@ -284,6 +287,231 @@ impl ProfileManagerView {
                         )
                     }),
             )
+            .into_any_element()
+    }
+
+    fn persist_calendar_form_selection(&mut self, cx: &mut Context<Self>) {
+        // The selection was loaded under the persisted TIN; save it back
+        // under the same key even if the TIN inputs were edited since.
+        let tin = self
+            .persisted_profile_tin
+            .clone()
+            .unwrap_or_else(|| self.tin_input.read(cx).value(cx).to_string());
+        let save_result = match self.db.lock() {
+            Ok(db) => bir_core::google_calendar::save_calendar_form_selection(
+                &db,
+                &tin,
+                &self.calendar_form_selection,
+            ),
+            Err(_) => Err(anyhow::anyhow!("Database lock poisoned")),
+        };
+        if let Err(error) = save_result {
+            self.calendar_action_message =
+                Some((false, format!("Could not save the form selection: {error}")));
+            return;
+        }
+        let linked = self
+            .db
+            .lock()
+            .ok()
+            .and_then(|db| db.get_profile_calendar_link(&tin).ok().flatten())
+            .is_some();
+        self.calendar_action_message = Some((
+            true,
+            if linked {
+                "Form selection saved. Press Sync Now to apply it to Google Calendar.".to_string()
+            } else {
+                "Form selection saved. It will apply when the calendar is created.".to_string()
+            },
+        ));
+    }
+
+    fn render_calendar_form_selection(&self, cx: &Context<Self>) -> gpui::AnyElement {
+        use bir_core::google_calendar::CalendarFormPreset;
+
+        // Union of active form codes across every configured Forms Set year.
+        let mut codes: Vec<String> = self
+            .stored_per_year_forms
+            .values()
+            .flat_map(|set| set.entries.iter())
+            .filter(|entry| entry.is_filing_active())
+            .map(|entry| entry.form_code.clone())
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        codes.sort();
+
+        let selection = &self.calendar_form_selection;
+        let preset = selection.preset;
+        let any_overrides =
+            !selection.manual_include.is_empty() || !selection.manual_exclude.is_empty();
+
+        let preset_button = |id: &'static str,
+                             label: &'static str,
+                             value: CalendarFormPreset,
+                             cx: &Context<Self>| {
+            let active = preset == value;
+            div()
+                .id(id)
+                .px_3()
+                .py_1()
+                .rounded_md()
+                .text_xs()
+                .cursor_pointer()
+                .when(active, |s| {
+                    s.bg(cx.theme().primary)
+                        .text_color(cx.theme().primary_foreground)
+                        .font_weight(FontWeight::SEMIBOLD)
+                })
+                .when(!active, |s| {
+                    s.bg(cx.theme().secondary)
+                        .text_color(cx.theme().foreground)
+                        .hover(|s| s.bg(cx.theme().muted))
+                })
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.calendar_form_selection.set_preset(value);
+                    this.persist_calendar_form_selection(cx);
+                    cx.notify();
+                }))
+                .child(label)
+        };
+
+        let mut rows = div().flex().flex_col().gap_1();
+        for code in &codes {
+            let allowed = selection.allows(code);
+            let overridden = selection.is_overridden(code);
+            let definition = bir_core::forms::registry::find_form(code);
+            let title = definition.map(|form| form.title).unwrap_or("Custom form");
+            let frequency = definition
+                .map(|form| match form.frequency {
+                    bir_core::forms::FilingFrequency::Monthly => "Monthly",
+                    bir_core::forms::FilingFrequency::Quarterly => "Quarterly",
+                    bir_core::forms::FilingFrequency::Annual => "Annual",
+                    bir_core::forms::FilingFrequency::OpenEnded => "Event-based",
+                })
+                .unwrap_or("Unknown frequency");
+            let code_for_toggle = code.clone();
+            rows = rows.child(
+                div()
+                    .id(SharedString::from(format!("calendar-form-{code}")))
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .px_2()
+                    .py_1()
+                    .rounded_md()
+                    .cursor_pointer()
+                    .hover(|s| s.bg(cx.theme().muted))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.calendar_form_selection.toggle(&code_for_toggle);
+                        this.persist_calendar_form_selection(cx);
+                        cx.notify();
+                    }))
+                    .child(
+                        div()
+                            .w_4()
+                            .h_4()
+                            .rounded_sm()
+                            .border_1()
+                            .border_color(cx.theme().border)
+                            .bg(if allowed {
+                                cx.theme().primary
+                            } else {
+                                cx.theme().background
+                            }),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(cx.theme().foreground)
+                            .child(code.clone()),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .flex_1()
+                            .min_w_0()
+                            .child(format!("{title} · {frequency}")),
+                    )
+                    .when(overridden, |this| {
+                        this.child(
+                            div()
+                                .text_xs()
+                                .px_1p5()
+                                .py_0p5()
+                                .rounded_sm()
+                                .bg(cx.theme().secondary)
+                                .text_color(cx.theme().muted_foreground)
+                                .child("override"),
+                        )
+                    }),
+            );
+        }
+
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .p_3()
+            .rounded_lg()
+            .border_1()
+            .border_color(cx.theme().border)
+            .bg(cx.theme().secondary.opacity(0.4))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_3()
+                    .child(
+                        div()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(cx.theme().foreground)
+                            .child("Notified Forms"),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(preset_button(
+                                "calendar_preset_all",
+                                "All forms",
+                                CalendarFormPreset::AllForms,
+                                cx,
+                            ))
+                            .child(preset_button(
+                                "calendar_preset_recurring",
+                                "Recurring only",
+                                CalendarFormPreset::RecurringOnly,
+                                cx,
+                            )),
+                    ),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(
+                        "Checked forms create deadline events and reminders on the Google calendar. The preset sets the default; clicking a form records a manual override. Changes apply on the next sync.",
+                    ),
+            )
+            .child(rows)
+            .when(any_overrides, |this| {
+                this.child(
+                    gpui_component::button::Button::new("clear_calendar_form_overrides")
+                        .label("Clear overrides")
+                        .ghost()
+                        .small()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.calendar_form_selection.clear_overrides();
+                            this.persist_calendar_form_selection(cx);
+                            cx.notify();
+                        })),
+                )
+            })
             .into_any_element()
     }
 

@@ -603,19 +603,21 @@ impl ProfileManagerView {
                 let (status_label, bg_color, text_color) = match version.status {
                     bir_core::profile::TaxProfileVersionStatus::Draft => (
                         "Review Needed",
-                        gpui::rgba(0xfce8e8ff),
-                        gpui::rgba(0xcb2424ff),
+                        cx.theme().danger.opacity(0.12),
+                        crate::theme::danger_on_tint(cx.theme()),
                     ),
                     bir_core::profile::TaxProfileVersionStatus::NeedsReview => (
                         "Effective Date Review Needed",
-                        gpui::rgba(0xfff3cdff),
-                        gpui::rgba(0x7a4f01ff),
+                        cx.theme().warning.opacity(0.15),
+                        crate::theme::warning_on_tint(cx.theme()),
                     ),
-                    bir_core::profile::TaxProfileVersionStatus::Confirmed => {
-                        ("Completed", gpui::rgba(0xe8fce8ff), gpui::rgba(0x24cb24ff))
-                    }
+                    bir_core::profile::TaxProfileVersionStatus::Confirmed => (
+                        "Completed",
+                        cx.theme().success.opacity(0.15),
+                        crate::theme::success_on_tint(cx.theme()),
+                    ),
                     bir_core::profile::TaxProfileVersionStatus::Archived => {
-                        ("Archived", gpui::rgba(0xe0e0e0ff), gpui::rgba(0x606060ff))
+                        ("Archived", cx.theme().secondary, cx.theme().muted_foreground)
                     }
                 };
 
@@ -733,7 +735,7 @@ impl ProfileManagerView {
                                     .border_color(cx.theme().warning)
                                     .bg(cx.theme().warning.opacity(0.12))
                                     .text_xs()
-                                    .text_color(cx.theme().warning_foreground)
+                                    .text_color(crate::theme::warning_on_tint(cx.theme()))
                                     .child(
                                         "Needs review: Registration Fee by itself is incomplete for an active business profile. Create a correction draft and review the COR tax types and exact form codes.",
                                     ),
@@ -900,19 +902,21 @@ impl ProfileManagerView {
         let (status_label, bg_color, text_color) = match version.status {
             bir_core::profile::TaxProfileVersionStatus::Draft => (
                 "Extraction Completed",
-                gpui::rgba(0xe8fce8ff),
-                gpui::rgba(0x24cb24ff),
+                cx.theme().success.opacity(0.15),
+                crate::theme::success_on_tint(cx.theme()),
             ),
             bir_core::profile::TaxProfileVersionStatus::NeedsReview => (
                 "Effective Date Review Required",
-                gpui::rgba(0xfff3cdff),
-                gpui::rgba(0x7a4f01ff),
+                cx.theme().warning.opacity(0.15),
+                crate::theme::warning_on_tint(cx.theme()),
             ),
-            bir_core::profile::TaxProfileVersionStatus::Confirmed => {
-                ("Committed", gpui::rgba(0xe8fce8ff), gpui::rgba(0x24cb24ff))
-            }
+            bir_core::profile::TaxProfileVersionStatus::Confirmed => (
+                "Committed",
+                cx.theme().success.opacity(0.15),
+                crate::theme::success_on_tint(cx.theme()),
+            ),
             bir_core::profile::TaxProfileVersionStatus::Archived => {
-                ("Archived", gpui::rgba(0xe0e0e0ff), gpui::rgba(0x606060ff))
+                ("Archived", cx.theme().secondary, cx.theme().muted_foreground)
             }
         };
 
@@ -4021,6 +4025,31 @@ impl ProfileManagerView {
         )
     }
 
+    /// A taxpayer files exactly one annual ITR per year. Refuse to activate a
+    /// second member of the same annual-ITR group instead of warning after
+    /// the conflict exists.
+    fn block_conflicting_itr_activation(
+        &mut self,
+        set: &bir_core::forms::PerYearFormsSet,
+        code: &str,
+        year: u16,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let conflicts = bir_core::integration::conflicting_active_annual_itrs(&set.entries, code);
+        if conflicts.is_empty() {
+            return false;
+        }
+        self.pending_notification = Some((
+            gpui_component::notification::NotificationType::Error,
+            format!(
+                "{code} was not activated: {} is already active for {year}. A taxpayer files only one annual ITR per year — exclude the other form first.",
+                conflicts.join(", ")
+            ),
+        ));
+        cx.notify();
+        true
+    }
+
     fn toggle_form_obligation(&mut self, code: String, cx: &mut Context<Self>) {
         let year = self.forms_editor_year;
         let mut set = self
@@ -4030,6 +4059,9 @@ impl ProfileManagerView {
             .unwrap_or_else(|| self.seed_default_forms(year, cx));
 
         let Some(entry) = set.entries.iter().find(|entry| entry.form_code == code) else {
+            if self.block_conflicting_itr_activation(&set, &code, year, cx) {
+                return;
+            }
             Self::apply_manual_form_decision(&mut set, code, true, year);
             self.stored_per_year_forms.insert(year, set);
             self.mark_profile_changed();
@@ -4041,6 +4073,9 @@ impl ProfileManagerView {
         }
 
         let next_active = !entry.is_filing_active();
+        if next_active && self.block_conflicting_itr_activation(&set, &code, year, cx) {
+            return;
+        }
         Self::apply_manual_form_decision(&mut set, code, next_active, year);
         self.stored_per_year_forms.insert(year, set);
         self.mark_profile_changed();
@@ -4163,6 +4198,10 @@ impl ProfileManagerView {
             .get(&year)
             .cloned()
             .unwrap_or_else(|| self.seed_default_forms(year, cx));
+
+        if self.block_conflicting_itr_activation(&set, &code, year, cx) {
+            return;
+        }
 
         if let Some(entry) = set.entries.iter_mut().find(|entry| entry.form_code == code) {
             let next_reason = reason_opt.or_else(|| Some(format!("Manually included for {year}")));
@@ -4331,7 +4370,7 @@ impl ProfileManagerView {
                                 .child(
                                     div()
                                         .text_xs()
-                                        .text_color(cx.theme().warning_foreground)
+                                        .text_color(crate::theme::warning_on_tint(cx.theme()))
                                         .child(conflict_msg),
                                 ),
                         )
@@ -4435,18 +4474,40 @@ impl ProfileManagerView {
                                             bir_core::forms::PerYearFormsSet::new(selected_year)
                                         });
                                     let mut added = false;
+                                    let mut skipped_itrs: Vec<String> = Vec::new();
                                     for entry in to_copy {
                                         let already_present = dest
                                             .entries
                                             .iter()
                                             .any(|e| e.form_code == entry.form_code);
-                                        if !already_present {
-                                            dest.entries.push(entry);
-                                            added = true;
+                                        if already_present {
+                                            continue;
                                         }
+                                        // Copying must not create an annual
+                                        // ITR conflict in the target year.
+                                        if !bir_core::integration::conflicting_active_annual_itrs(
+                                            &dest.entries,
+                                            &entry.form_code,
+                                        )
+                                        .is_empty()
+                                        {
+                                            skipped_itrs.push(entry.form_code.clone());
+                                            continue;
+                                        }
+                                        dest.entries.push(entry);
+                                        added = true;
                                     }
                                     if added {
                                         this.mark_profile_changed();
+                                    }
+                                    if !skipped_itrs.is_empty() {
+                                        this.pending_notification = Some((
+                                            gpui_component::notification::NotificationType::Warning,
+                                            format!(
+                                                "Skipped {}: only one annual ITR can be active per year.",
+                                                skipped_itrs.join(", ")
+                                            ),
+                                        ));
                                     }
                                     cx.notify();
                                 })),
@@ -4954,19 +5015,19 @@ impl ProfileManagerView {
                         .py_2()
                         .rounded_md()
                         .border_1()
-                        .border_color(gpui::rgba(0xd97706a0))
-                        .bg(gpui::rgba(0xfef3c720))
+                        .border_color(cx.theme().warning.opacity(0.45))
+                        .bg(cx.theme().warning.opacity(0.12))
                         .child(
                             div()
                                 .text_xs()
                                 .font_weight(FontWeight::BOLD)
-                                .text_color(gpui::rgb(0x92400e))
+                                .text_color(crate::theme::warning_on_tint(cx.theme()))
                                 .child("Needs review before filing"),
                         )
                         .child(
                             div()
                                 .text_xs()
-                                .text_color(gpui::rgb(0x92400e))
+                                .text_color(crate::theme::warning_on_tint(cx.theme()))
                                 .child(message),
                         ),
                 )
