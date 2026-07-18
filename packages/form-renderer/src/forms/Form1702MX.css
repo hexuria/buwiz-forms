@@ -185,6 +185,7 @@
 .address-field-1702mx > span:first-child { display: flex; align-items: center; gap: 2pt; padding: 1pt 4pt; background: #d9d9d9; }
 .comb-lines-1702mx { min-height: 0; display: grid; }
 .comb-lines-1702mx > :is(.comb-value, .adaptive-plain-value) { min-height: 0; border-bottom: .4pt solid #111; }
+.comb-lines-1702mx > .plain-lines-value-1702mx { height: 100%; grid-row: 1 / -1; }
 .comb-lines-1702mx .comb-value > span,
 .address-comb-1702mx .comb-value > span,
 .page-identity-1702mx .comb-value > span { position: relative; border-right: 0; }
@@ -206,6 +207,7 @@
 .compact-field-1702mx > span:first-child { border-right: .55pt solid #111; }
 .deduction-method-1702mx { height: 17.5pt; display: grid; grid-template-columns: 102pt 210pt minmax(0, 1fr); align-items: center; background: #d9d9d9; }
 .deduction-method-1702mx > span { padding: 1pt 4pt; }
+.deduction-method-1702mx .check-choice { min-width: 0; white-space: normal; font-size: 5.4pt; line-height: .9; }
 
 .part-two-1702mx { height: 206pt; }
 .part-two-1702mx > .section-heading-1702mx { height: 13pt; }

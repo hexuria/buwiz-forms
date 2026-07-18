@@ -10,6 +10,33 @@
     "page_count": 4,
     "page_height_pt": 936.0,
     "page_width_pt": 612.0,
+    "reviewed_supporting_sources": [
+      {
+        "field_count": 210,
+        "kind": "editable_xml",
+        "semantic_replay": "exact",
+        "source_file": "external:00000000000000-1702MXv2018C-1225.xml",
+        "source_sha256": "ed96c5b56eecee68f1f73eef50dda00f69a42bd0dc5d0849e2cbe22c6b70b239"
+      },
+      {
+        "kind": "encrypted_editable_xml",
+        "semantic_replay": "hash_lock_only",
+        "source_file": "external:00000000000000-1702MXv2018C-1225#CODEITLIKEMILEY@GMAIL.COM#.xml",
+        "source_sha256": "ab4896a21603c7853985b6589a918c3d0189872b1817a4a55453ebea063a47b4",
+        "submission_contract_reviewed": false
+      },
+      {
+        "kind": "mandatory_attachment_pdf",
+        "page_count": 2,
+        "page_height_pt": 936.0,
+        "page_width_pt": 612.0,
+        "rendering_supported": false,
+        "role": "separate_conditional_part_v_per_activity",
+        "source_file": "external:1702-MX Attachment Jan 2018 ENCS Final4.pdf",
+        "source_sha256": "36c02d4c84919d2e5b94cd31b339490019be80afa622f5681ce252c8ec3dec26",
+        "transport_supported": false
+      }
+    ],
     "pages": [
       {
         "page": 1,

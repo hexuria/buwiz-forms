@@ -15,6 +15,8 @@ use crate::profile::TaxpayerProfile;
 
 pub const FORM_CODE: &str = "1702MX";
 pub const FORM_TYPE_ID: &str = "1702MXv2018C";
+pub const OFFICIAL_BASE_PAGE_COUNT: usize = 4;
+pub const OFFICIAL_ATTACHMENT_PAGE_COUNT: usize = 2;
 pub const QUEUE_SUBMISSION_SUPPORTED: bool = false;
 pub const MANDATORY_ATTACHMENT_TRANSPORT_SUPPORTED: bool = false;
 pub const OFFICIAL_FORM_SHA256: &str =
@@ -1033,7 +1035,108 @@ mod tests {
 
     #[test]
     fn schedule_capacities_match_the_four_page_form() {
-        let draft = Form1702MXDraft {
+        let draft = test_draft();
+        assert_eq!(OFFICIAL_BASE_PAGE_COUNT, 4);
+        assert_eq!(OFFICIAL_ATTACHMENT_PAGE_COUNT, 2);
+        assert_eq!(
+            (
+                draft.schedule_2.items.len(),
+                draft.schedule_3.items_20_to_33.len(),
+                draft.schedule_6.rows.len(),
+                draft.schedule_7_1.rows.len(),
+                draft.schedule_8_1.rows.len(),
+                draft.schedule_9.rows.len(),
+            ),
+            (19, 14, 4, 4, 4, 3)
+        );
+    }
+
+    #[test]
+    fn recompute_follows_reviewed_schedule_and_part_two_cross_references() {
+        let mut draft = test_draft();
+        draft.deduction_method = Form1702MXDeductionMethod::OptionalStandard;
+        draft.schedule_2.items[0].regular.set(WholePeso(1_000_000));
+        draft.schedule_2.items[1].regular.set(WholePeso(100_000));
+        draft.schedule_2.items[3].regular.set(WholePeso(300_000));
+        draft.schedule_2.items[5].regular.set(WholePeso(100_000));
+        draft.schedule_2.items[14].regular.set(WholePeso(100_000));
+        draft.schedule_2.items[15].regular.set(WholePeso(10_000));
+        draft.schedule_3.items_20_to_33[0]
+            .regular
+            .set(WholePeso(20_000));
+        draft.part_ii.item_17_surcharge.set(WholePeso(1_000));
+        draft.part_ii.item_18_interest.set(WholePeso(500));
+        draft.part_ii.item_19_compromise.set(WholePeso(250));
+
+        draft.recompute();
+
+        assert_eq!(
+            draft.schedule_2.items[2].regular.value_or_zero(),
+            WholePeso(900_000)
+        );
+        assert_eq!(
+            draft.schedule_2.items[6].regular.value_or_zero(),
+            WholePeso(700_000)
+        );
+        assert_eq!(
+            draft.schedule_2.items[11].regular.value_or_zero(),
+            WholePeso(280_000)
+        );
+        assert_eq!(
+            draft.schedule_2.items[12].regular.value_or_zero(),
+            WholePeso(420_000)
+        );
+        assert_eq!(
+            draft.schedule_2.items[17].regular.value_or_zero(),
+            WholePeso(14_000)
+        );
+        assert_eq!(
+            draft.schedule_2.items[18].total.value_or_zero(),
+            WholePeso(100_000)
+        );
+        assert_eq!(
+            draft.schedule_3.items_20_to_33[12].total.value_or_zero(),
+            WholePeso(20_000)
+        );
+        assert_eq!(
+            draft.schedule_3.items_20_to_33[13].total.value_or_zero(),
+            WholePeso(80_000)
+        );
+        assert_eq!(
+            draft.part_ii.item_14_total_tax_due_or_overpayment,
+            WholePeso(100_000)
+        );
+        assert_eq!(draft.part_ii.item_15_total_tax_credits, WholePeso(20_000));
+        assert_eq!(
+            draft.part_ii.item_16_net_tax_payable_or_overpayment,
+            WholePeso(80_000)
+        );
+        assert_eq!(
+            draft
+                .part_ii
+                .item_21_total_amount_payable_or_overpayment
+                .value_or_zero(),
+            WholePeso(81_750)
+        );
+        assert!(draft.calculation_issues.is_empty());
+    }
+
+    #[test]
+    fn submission_and_multiple_activity_attachment_fail_closed() {
+        let mut draft = test_draft();
+        draft.relief_basis.instruction_multiple_activities = true;
+        assert!(draft.validate().iter().any(|(field, message)| {
+            field == "mandatory_attachment"
+                && message.contains("attachment transport is not implemented")
+        }));
+        assert!(!QUEUE_SUBMISSION_SUPPORTED);
+        assert!(!MANDATORY_ATTACHMENT_TRANSPORT_SUPPORTED);
+        assert!(draft.transition_to_queued().is_err());
+        assert_eq!(draft.status, FilingStatus::Draft);
+    }
+
+    fn test_draft() -> Form1702MXDraft {
+        Form1702MXDraft {
             id: None,
             tin: "00000000000000".to_string(),
             taxable_year: 2025,
@@ -1087,17 +1190,6 @@ mod tests {
             submission_attempts: 0,
             next_retry_at: None,
             last_error: None,
-        };
-        assert_eq!(
-            (
-                draft.schedule_2.items.len(),
-                draft.schedule_3.items_20_to_33.len(),
-                draft.schedule_6.rows.len(),
-                draft.schedule_7_1.rows.len(),
-                draft.schedule_8_1.rows.len(),
-                draft.schedule_9.rows.len(),
-            ),
-            (19, 14, 4, 4, 4, 3)
-        );
+        }
     }
 }

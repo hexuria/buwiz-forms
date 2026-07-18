@@ -69,6 +69,52 @@ const fixtures = [
 ] as const;
 
 describe("1702MX:2018C semantic HTML contract", () => {
+  it("pins the four-page base return and separate two-page mandatory attachment source pack", () => {
+    const source = JSON.parse(fs.readFileSync(
+      path.resolve(HERE, "../references/1702mx-2018c-source.json"),
+      "utf8"
+    )) as {
+      form: {
+        official_source_sha256: string;
+        page_count: number;
+        page_height_pt: number;
+        page_width_pt: number;
+        reviewed_supporting_sources: Array<Record<string, unknown>>;
+      };
+    };
+
+    expect(source.form).toMatchObject({
+      official_source_sha256: "81c05fffadde6c0b4098aeba8547a9820a0806c6be9b0c6ceac5597cab4263d2",
+      page_count: 4,
+      page_height_pt: 936,
+      page_width_pt: 612
+    });
+    expect(source.form.reviewed_supporting_sources).toEqual([
+      expect.objectContaining({
+        field_count: 210,
+        kind: "editable_xml",
+        semantic_replay: "exact",
+        source_sha256: "ed96c5b56eecee68f1f73eef50dda00f69a42bd0dc5d0849e2cbe22c6b70b239"
+      }),
+      expect.objectContaining({
+        kind: "encrypted_editable_xml",
+        semantic_replay: "hash_lock_only",
+        source_sha256: "ab4896a21603c7853985b6589a918c3d0189872b1817a4a55453ebea063a47b4",
+        submission_contract_reviewed: false
+      }),
+      expect.objectContaining({
+        kind: "mandatory_attachment_pdf",
+        page_count: 2,
+        page_height_pt: 936,
+        page_width_pt: 612,
+        rendering_supported: false,
+        role: "separate_conditional_part_v_per_activity",
+        source_sha256: "36c02d4c84919d2e5b94cd31b339490019be80afa622f5681ce252c8ec3dec26",
+        transport_supported: false
+      })
+    ]);
+  });
+
   it("accepts every Rust fixture and renders exactly four 612x936 base-return pages", () => {
     for (const fixture of fixtures) {
       const value = structuredClone(fixture);
@@ -116,6 +162,35 @@ describe("1702MX:2018C semantic HTML contract", () => {
       expect(markup).toContain(value.toUpperCase());
     }
     expect(markup).toContain("data-overflow-mode=\"plain\"");
+    expect(markup).toContain("data-adaptive-fit-state=\"pending\"");
+  });
+
+  it("splits the official Item 8 capacity into three 38-cell guide rows", () => {
+    const fixture = structuredClone(normalFixture) as RenderEnvelope;
+    const markup = renderToStaticMarkup(
+      createElement(Form1702MX, { envelope: fixture })
+    );
+    expect(markup).toContain(
+      "data-item-number=\"8\" data-field-mode=\"guided\" data-cell-capacity=\"114\" data-line-count=\"3\" data-line-cell-capacity=\"38,38,38\""
+    );
+    expect(markup).not.toContain("font-size:4pt");
+  });
+
+  it("keeps the reviewed page-one instructions and legal qualifiers verbatim", () => {
+    const markup = renderToStaticMarkup(
+      createElement(Form1702MX, { envelope: structuredClone(normalFixture) as RenderEnvelope })
+    );
+    for (const copy of [
+      "Two copies MUST be filed with the BIR and one held by the taxpayer.",
+      "[Section 34(L) NIRC, as amended]",
+      "If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905",
+      "(From Part IV Item 33D)",
+      "49 Centavos or Less drop down; 50 or more round up",
+      "pursuant to the provisions of the National Internal Revenue Code, as amended",
+      "Receipt (RO’s Signature/Bank Teller’s Initial)"
+    ]) {
+      expect(markup).toContain(copy);
+    }
   });
 
   it("prints all fixed official capacities without TypeScript calculation", () => {

@@ -3,7 +3,8 @@ use bir_core::{
         form_1702mx::{
             Form1702MXDeductionMethod, Form1702MXDraft, Form1702MXFilingBasis,
             Form1702MXOverpaymentDisposition, Form1702MXRegimeAmounts, PercentInput, WholePeso,
-            WholePesoInput,
+            WholePesoInput, OFFICIAL_ATTACHMENT_PAGE_COUNT, OFFICIAL_ATTACHMENT_SHA256,
+            OFFICIAL_BASE_PAGE_COUNT, OFFICIAL_FORM_SHA256,
         },
         FilingStatus, FormValidator,
     },
@@ -58,12 +59,12 @@ pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     title: "Annual Income Tax Return for Mixed-Income Corporations",
     page_width_pt: RenderPageGeometry::LEGAL.width_points,
     page_height_pt: RenderPageGeometry::LEGAL.height_points,
-    expected_base_page_count: 4,
+    expected_base_page_count: OFFICIAL_BASE_PAGE_COUNT,
     schedules: &[],
     visual_fixture_file_name: "1702mx-normal.json",
     visual_fixture_sha256: "d2f70e503945974783358b321a772e0ca4025736c93e961e29e9191779ab4ec2",
     official_source: "https://bir-cdn.bir.gov.ph/local/pdf/1702-MX%20Jan%202018%20ENCS%20Final%20with%20OSDv2.pdf",
-    official_source_sha256: "81c05fffadde6c0b4098aeba8547a9820a0806c6be9b0c6ceac5597cab4263d2",
+    official_source_sha256: OFFICIAL_FORM_SHA256,
     reference_dpi: 144,
     reference_width_px: 1_224,
     reference_height_px: 1_872,
@@ -561,9 +562,13 @@ fn map_attachment_boundary(envelope: &mut RenderEnvelopeV1, draft: &Form1702MXDr
     insert_text(
         envelope,
         "mandatory_attachment_source_sha256",
-        "36c02d4c84919d2e5b94cd31b339490019be80afa622f5681ce252c8ec3dec26",
+        OFFICIAL_ATTACHMENT_SHA256,
     );
-    insert_integer(envelope, "mandatory_attachment_page_count", 2);
+    insert_integer(
+        envelope,
+        "mandatory_attachment_page_count",
+        OFFICIAL_ATTACHMENT_PAGE_COUNT as i64,
+    );
     insert_bool(envelope, "mandatory_attachment_transport_supported", false);
     insert_bool(envelope, "mandatory_attachment_has_values", has_values);
 }
@@ -868,7 +873,10 @@ mod tests {
         let envelope = RenderEnvelopeV1::from(&draft);
 
         assert_eq!(PROVIDER.page_geometry().unwrap(), RenderPageGeometry::LEGAL);
-        assert_eq!(PROVIDER.expected_page_count(&envelope).unwrap(), 4);
+        assert_eq!(
+            PROVIDER.expected_page_count(&envelope).unwrap(),
+            OFFICIAL_BASE_PAGE_COUNT
+        );
         assert_eq!(envelope.form.code, "1702MX");
         assert_eq!(envelope.form.version, "2018C");
         assert_eq!(
@@ -877,7 +885,7 @@ mod tests {
         );
         assert_eq!(
             envelope.fields["mandatory_attachment_page_count"],
-            RenderValue::Integer(2)
+            RenderValue::Integer(OFFICIAL_ATTACHMENT_PAGE_COUNT as i64)
         );
         assert_eq!(
             envelope.fields["mandatory_attachment_transport_supported"],

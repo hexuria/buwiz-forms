@@ -3,6 +3,7 @@ import { getFormSpec } from "@ebirforms/form-specs";
 import { Fragment, type ReactNode } from "react";
 import {
   AdaptiveCombValue,
+  AdaptivePlainValue,
   CheckChoice,
   CombValue,
   FolioPage,
@@ -229,7 +230,12 @@ function Masthead1702MX({ page, compact = false }: { page: 1 | 2 | 3 | 4; compac
       <div className="form-title-1702mx">
         <strong>Annual Income Tax Return</strong>
         <span>Corporation, Partnership and Other Non-Individual<br />with MIXED Income Subject to Multiple Income Tax Rates or<br />with Income Subject to SPECIAL/PREFERENTIAL RATE</span>
-        {!compact && <em>Enter all required information in CAPITAL LETTERS using BLACK ink. Mark applicable boxes with an “X”.</em>}
+        {!compact && (
+          <em>
+            Enter all required information in CAPITAL LETTERS using BLACK ink. Mark applicable
+            boxes with an “X”. Two copies MUST be filed with the BIR and one held by the taxpayer.
+          </em>
+        )}
       </div>
       <div className="barcode-1702mx" aria-label={payload} data-barcode-page={page}>
         <span className="official-pdf417-object-1702mx" aria-hidden="true">
@@ -298,7 +304,7 @@ function PartOne1702MX({ envelope }: { envelope: RenderEnvelope }) {
       <div className="deduction-method-1702mx">
         <span><b>13</b> Method of Deduction</span>
         <CheckChoice checked={deduction === "itemized"} label="Itemized Deduction [Section 34 (A-J), NIRC]" />
-        <CheckChoice checked={deduction === "osd"} label="Optional Standard Deduction (OSD)–40% of Gross Income" />
+        <CheckChoice checked={deduction === "osd"} label="Optional Standard Deduction (OSD)–40% of Gross Income [Section 34(L) NIRC, as amended]" />
       </div>
     </section>
   );
@@ -307,7 +313,7 @@ function PartOne1702MX({ envelope }: { envelope: RenderEnvelope }) {
 function Address1702MX({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <div className="address-field-1702mx">
-      <span><b>9</b> Registered Address <em>(Indicate complete address. If different from current address, update with BIR Form No. 1905)</em></span>
+      <span><b>9</b> Registered Address <em>(Indicate complete address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)</em></span>
       <div className="address-comb-1702mx">
         <AdaptiveCombValue value={envelope.taxpayer.registered_address.toUpperCase()} cells={104} />
         <span className="zip-field-1702mx"><span className="zip-label-1702mx"><b>9A</b> ZIP Code</span><CombValue value={envelope.taxpayer.zip_code} cells={4} /></span>
@@ -320,7 +326,7 @@ function PartTwo1702MX({ envelope }: { envelope: RenderEnvelope }) {
   const rows = [
     [14, "Total Tax Due/(Overpayment) (From Part IV-Schedule 2 Item 19D)", "item_14"],
     [15, "Less: Total Tax Credits/Payments (From Part IV-Schedule 3 Item 32D)", "item_15"],
-    [16, "Net Tax Payable / (Overpayment) (Item 14 Less Item 15)", "item_16"],
+    [16, "Net Tax Payable / (Overpayment) (Item 14 Less Item 15) (From Part IV Item 33D)", "item_16"],
     [17, "Surcharge", "item_17"],
     [18, "Interest", "item_18"],
     [19, "Compromise", "item_19"],
@@ -330,7 +336,7 @@ function PartTwo1702MX({ envelope }: { envelope: RenderEnvelope }) {
   const disposition = text(envelope, "overpayment_disposition");
   return (
     <section className="part-two-1702mx ruled-section-1702mx">
-      <SectionHeading1702MX>Part II – Total Tax Payable <small>(Do NOT enter Centavos)</small></SectionHeading1702MX>
+      <SectionHeading1702MX>Part II – Total Tax Payable <small>(DO NOT enter Centavos; 49 Centavos or Less drop down; 50 or more round up)</small></SectionHeading1702MX>
       {rows.map(([number, label, key], index) => (
         <Fragment key={number}>
           {number === 17 && <div className="penalty-heading-1702mx">Add: Penalties</div>}
@@ -338,7 +344,7 @@ function PartTwo1702MX({ envelope }: { envelope: RenderEnvelope }) {
         </Fragment>
       ))}
       <div className="overpayment-row-1702mx">
-        <span>If overpayment, mark one (1) box only. Once made, the choice is irrevocable.</span>
+        <span>If overpayment, mark one (1) box only. (Once the choice is made, the same is irrevocable)</span>
         <span><CheckChoice checked={disposition === "refund"} label="To be refunded" /><CheckChoice checked={disposition === "tcc"} label="To be issued a Tax Credit Certificate (TCC)" /><CheckChoice checked={disposition === "carry_over"} label="To be carried over as tax credit for next year/quarter" /></span>
       </div>
     </section>
@@ -348,7 +354,7 @@ function PartTwo1702MX({ envelope }: { envelope: RenderEnvelope }) {
 function Declaration1702MX({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <section className="declaration-1702mx">
-      <p>We declare under the penalties of perjury that this return, and all its attachments, have been made in good faith, verified by us, and to the best of our knowledge and belief, are true and correct.</p>
+      <p>We declare under the penalties of perjury that this return, and all its attachments, have been made in good faith, verified by us, and to the best of our knowledge and belief, are true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof. (If signed by an Authorized Representative, indicate TIN and attach authorization letter)</p>
       <div className="signature-area-1702mx">
         <div><PlainValue1702MX value={text(envelope, "authorized_representative")} /><span>Signature over Printed Name of President/Principal Officer/Authorized Representative</span><small>Title of Signatory <PlainValue1702MX value={text(envelope, "president_title")} /> TIN <PlainValue1702MX value={text(envelope, "president_tin")} /></small></div>
         <div><PlainValue1702MX value={text(envelope, "treasurer")} /><span>Signature over Printed Name of Treasurer/Assistant Treasurer</span><small>Title of Signatory <PlainValue1702MX value={text(envelope, "treasurer_title")} /> TIN <PlainValue1702MX value={text(envelope, "treasurer_tin")} /></small></div>
@@ -369,7 +375,7 @@ function PartThree1702MX({ envelope }: { envelope: RenderEnvelope }) {
         const combined = text(envelope, `${prefix}_date_or_amount`);
         return <div key={label} className="payment-grid-1702mx"><span>{label}</span><PlainValue1702MX value={text(envelope, `${prefix}_drawee`)} /><PlainValue1702MX value={text(envelope, `${prefix}_number`)} /><PlainValue1702MX value={combined} /><span /></div>;
       })}
-      <div className="validation-receipt-1702mx"><span>Machine Validation/Revenue Official Receipt Details [if not filed with an Authorized Agent Bank (AAB)]</span><span>Stamp of Receiving Office/AAB and Date of Receipt</span></div>
+      <div className="validation-receipt-1702mx"><span>Machine Validation/Revenue Official Receipt Details [if not filed with an Authorized Agent Bank (AAB)]</span><span>Stamp of Receiving Office/AAB and Date of Receipt (RO’s Signature/Bank Teller’s Initial)</span></div>
     </section>
   );
 }
@@ -643,12 +649,42 @@ function Tin1702MX({ value }: { value: string }) {
 }
 
 function LabeledCombLines1702MX({ number, label, value, cells, lines, compact = false }: { number: string; label: ReactNode; value: string; cells: number; lines: number; compact?: boolean }) {
+  const characters = Array.from(value);
+  const baseLineCapacity = Math.floor(cells / lines);
+  const remainder = cells % lines;
+  const lineCapacities = Array.from(
+    { length: lines },
+    (_, index) => baseLineCapacity + (index < remainder ? 1 : 0)
+  );
+  let characterOffset = 0;
+  const usesPlainBox = characters.length > cells;
   return (
-    <div className={`labeled-comb-1702mx${compact ? " compact-field-1702mx" : ""}`}>
+    <div
+      className={`labeled-comb-1702mx${compact ? " compact-field-1702mx" : ""}`}
+      data-item-number={number}
+      data-field-mode={usesPlainBox ? "plain" : "guided"}
+      data-cell-capacity={cells}
+      data-line-count={lines}
+      data-line-cell-capacity={lineCapacities.join(",")}
+    >
       <span><b>{number}</b> {label}</span>
       <span className="comb-lines-1702mx" style={{ gridTemplateRows: `repeat(${lines}, 1fr)` }}>
-        <AdaptiveCombValue value={value} cells={cells} />
-        {Array.from({ length: lines - 1 }, (_, index) => <CombValue key={index} value="" cells={Math.floor(cells / lines)} />)}
+        {usesPlainBox ? (
+          <AdaptivePlainValue
+            value={value}
+            cellCapacity={cells}
+            className="plain-lines-value-1702mx"
+            maxFontSizePx={9.333}
+            minFontSizePx={5.333}
+            fontStepPx={.5}
+          />
+        ) : lineCapacities.map((lineCapacity, index) => {
+          const lineValue = characters
+            .slice(characterOffset, characterOffset + lineCapacity)
+            .join("");
+          characterOffset += lineCapacity;
+          return <CombValue key={index} value={lineValue} cells={lineCapacity} />;
+        })}
       </span>
     </div>
   );
@@ -663,8 +699,18 @@ function AmountCell1702MX({ value }: { value: number | null }) {
 }
 
 function PlainValue1702MX({ value, fixedFontSizePt, className = "" }: { value: string; fixedFontSizePt?: number; className?: string }) {
-  const fontSize = fixedFontSizePt ?? Math.max(4, Math.min(7, 210 / Math.max(value.length, 30)));
-  return <span className={`plain-value-1702mx${className ? ` ${className}` : ""}`} aria-label={value} style={{ fontSize: `${fontSize}pt` }}>{value}</span>;
+  const fixedFontSizePx = fixedFontSizePt === undefined
+    ? undefined
+    : fixedFontSizePt * 4 / 3;
+  return (
+    <AdaptivePlainValue
+      value={value}
+      className={`plain-value-1702mx${className ? ` ${className}` : ""}`}
+      maxFontSizePx={fixedFontSizePx ?? 9.333}
+      minFontSizePx={fixedFontSizePx ?? 5.333}
+      fontStepPx={.5}
+    />
+  );
 }
 
 function scheduleThreeLabel(envelope: RenderEnvelope, index: number, label: ReactNode): ReactNode {
