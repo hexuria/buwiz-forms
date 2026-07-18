@@ -131,6 +131,36 @@ These files contain document-envelope data and must remain local development
 artifacts. They must not be committed, copied into the signed package, or added
 to `form-release-evidence.json`.
 
+### One-command packaged development exercise
+
+From a clean macOS checkout, the repository now exposes one explicit operator
+path:
+
+```sh
+just native-evidence-macos
+```
+
+The recipe fails unless the curated renderer source is clean, runs the strict
+native-evidence and macOS failure-preservation tests, builds the renderer with a
+clean source identity, creates an ad-hoc-signed universal `.app` containing the
+development-only observer, and launches that app with a fresh observation
+directory. Open 2551Q, export a PDF over an existing destination, and close the
+app. The recipe then validates every emitted observation using the Rust-owned
+schema and prints every remaining strict-verifier gap.
+
+An observation can also be validated directly:
+
+```sh
+npm run verify:native-output:observation -- \
+  target/native-output-observations/*.observation.json
+```
+
+This command rejects malformed observations, promotion claims, clipping,
+unstable geometry, broken nonce/completion binding, invalid PDF validation,
+and inconsistent destination outcomes. Its success is still development-only.
+The ad-hoc package, app-written observation, and schema validator are not an
+independent platform attestation.
+
 ## Attested runtime collector still required
 
 A later, narrow macOS collector must gather real runtime facts without changing
@@ -162,6 +192,23 @@ Only after the collector itself is attested and its transcript is independently
 reviewed should a separate promotion design be considered. System-print proof,
 network-denied packaged operation, signed-package identity, platform coverage,
 and rollback evidence remain separate, incomplete gates.
+
+The signed release workflow already requires a Developer ID identity, verifies
+the signature, notarizes and staples the DMG, mounts the final artifact, and
+reruns the no-legacy package audit. That is the correct package-construction
+path, but it intentionally cannot produce promotional native evidence yet:
+
+- the signed build does not compile the development observer;
+- no external attested driver binds user-visible system print and PDF export to
+  the signed/notarized package and immutable envelope;
+- no network-denied packaged-runtime driver exists;
+- no trusted platform or rollback producer is registered in the migration
+  audit.
+
+Do not weaken the release preflight to work around those missing collectors.
+The next evidence milestone is an external macOS driver that exercises the
+unchanged signed package and emits reviewable artifacts satisfying the trust
+boundary above.
 
 ## Verification
 

@@ -580,6 +580,21 @@ pub fn encode_development_native_output_observation(
     Ok(encoded)
 }
 
+/// Decode and validate an app-written native-output observation without
+/// treating it as a release transcript or promotion evidence.
+///
+/// Keeping this decoder beside the encoder gives operator tooling the exact
+/// same fail-closed validation used by the native host. A valid observation
+/// remains development-only and must retain at least one explicit strict
+/// verifier gap.
+pub fn decode_development_native_output_observation(
+    bytes: &[u8],
+) -> Result<DevelopmentNativeOutputObservationV1, DevelopmentNativeOutputEvidenceError> {
+    let observation: DevelopmentNativeOutputObservationV1 = serde_json::from_slice(bytes)?;
+    observation.validate_non_promotional()?;
+    Ok(observation)
+}
+
 /// Decode and validate the build-time identity without treating it as a
 /// package signature or release transcript.
 pub fn decode_offline_renderer_build_identity(
@@ -2134,8 +2149,8 @@ mod tests {
         let encoded = encode_development_native_output_observation(&observation)
             .expect("non-promotional observation");
         assert_eq!(encoded.last(), Some(&b'\n'));
-        let decoded: DevelopmentNativeOutputObservationV1 =
-            serde_json::from_slice(&encoded).expect("observation JSON");
+        let decoded = decode_development_native_output_observation(&encoded)
+            .expect("validated observation JSON");
         assert_eq!(decoded, observation);
         assert!(!decoded.promotion_eligible);
         assert!(matches!(
@@ -2146,6 +2161,23 @@ mod tests {
             serde_json::from_slice::<DevelopmentNativeOutputTranscriptV1>(&encoded).is_err(),
             "an incomplete runtime observation must not parse as the strict transcript"
         );
+    }
+
+    #[test]
+    fn runtime_observation_decoder_rejects_promotion_claims() {
+        let fixture = make_fixture();
+        let observation = development_observation(&fixture);
+        let mut encoded = serde_json::to_value(observation).expect("observation JSON value");
+        encoded["promotion_eligible"] = serde_json::Value::Bool(true);
+
+        let error = decode_development_native_output_observation(
+            &serde_json::to_vec(&encoded).expect("mutated observation JSON"),
+        )
+        .expect_err("development observation must never claim promotion eligibility");
+
+        assert!(error
+            .to_string()
+            .contains("runtime observations must never be promotion eligible"));
     }
 
     #[test]

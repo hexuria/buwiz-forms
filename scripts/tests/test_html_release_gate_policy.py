@@ -7,6 +7,8 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 CI_WORKFLOW = REPOSITORY_ROOT / ".github/workflows/ci.yml"
 RELEASE_WORKFLOW = REPOSITORY_ROOT / ".github/workflows/release.yml"
+JUSTFILE = REPOSITORY_ROOT / "justfile"
+PACKAGE_JSON = REPOSITORY_ROOT / "package.json"
 REQUIRED_AUDIT = (
     "npm run audit:forms:migration -- --require-release-ready 2551Q:2018"
 )
@@ -17,6 +19,8 @@ class HtmlReleaseGatePolicyTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.ci = CI_WORKFLOW.read_text(encoding="utf-8")
         cls.release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        cls.justfile = JUSTFILE.read_text(encoding="utf-8")
+        cls.package_json = PACKAGE_JSON.read_text(encoding="utf-8")
 
     def workflow_step(self, workflow: str, name: str) -> str:
         remainder = workflow.split(f"- name: {name}", maxsplit=1)[1]
@@ -48,6 +52,25 @@ class HtmlReleaseGatePolicyTests(unittest.TestCase):
         self.assertIn("FORM_VISUAL_MAX_CHANGED_PERCENT: '1'", step)
         self.assertNotIn("FORM_VISUAL_MAX_CHANGED_PERCENT: '100'", self.ci)
         self.assertNotIn("continue-on-error: true", step)
+
+    def test_macos_development_observation_path_remains_non_promotional(self) -> None:
+        recipe = self.justfile.split("native-evidence-macos:", maxsplit=1)[1]
+        recipe = recipe.split("# Install a built package", maxsplit=1)[0]
+
+        self.assertIn("--require-clean-source", recipe)
+        self.assertIn("just _package-mac --native-evidence", recipe)
+        self.assertIn("verify:native-output:observation", recipe)
+        self.assertIn("non-promotional", recipe)
+        self.assertNotIn("release_ready", recipe)
+        self.assertNotIn("audit:forms:migration -- --require-release-ready", recipe)
+        self.assertIn('"verify:native-output:observation"', self.package_json)
+
+        package_recipe = self.justfile.split('_package-mac args="":', maxsplit=1)[1]
+        package_recipe = package_recipe.split("_package-mac-appstore", maxsplit=1)[0]
+        self.assertIn(
+            '--native-evidence) FEATURES="${FEATURES:+$FEATURES,}dev-tools"',
+            package_recipe,
+        )
 
 
 if __name__ == "__main__":

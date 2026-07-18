@@ -4111,6 +4111,40 @@ mod tests {
         std::fs::remove_dir_all(directory).expect("remove macOS capture fixture directory");
     }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_capture_pipeline_preserves_destination_on_wkpdf_callback_error() {
+        let directory = std::env::temp_dir().join(format!(
+            "ebirforms-macos-callback-failure-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&directory).expect("create macOS callback fixture directory");
+        let destination = directory.join("selected.pdf");
+        let original = b"pre-existing destination before callback failure";
+        std::fs::write(&destination, original).expect("write existing destination");
+        let temp_path = create_pdf_export_temp(&destination).expect("create sibling temp");
+
+        let error = finalize_macos_pdf_capture(
+            vec![
+                Ok(captured_pdf_page("q 1 0 0 1 1 1 cm Q")),
+                Err("WKWebView page 2 capture failed: forced callback error".to_string()),
+            ],
+            &temp_path,
+            &destination,
+            &pdf_expectation_with_geometry(612.0, 936.0),
+        )
+        .expect_err("WKPDF callback failure must fail closed");
+
+        assert!(error.contains("WKWebView page 2 capture failed"));
+        assert_eq!(
+            std::fs::read(&destination).expect("read preserved destination"),
+            original
+        );
+        assert!(!temp_path.exists());
+
+        std::fs::remove_dir_all(directory).expect("remove macOS callback fixture directory");
+    }
+
     #[cfg(all(feature = "dev-tools", target_os = "macos"))]
     #[test]
     fn macos_observation_binds_callback_payloads_to_the_renderer_document() {

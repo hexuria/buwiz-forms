@@ -17,6 +17,7 @@
     "test:forms": "npm run test --workspace @ebirforms/form-renderer",
     "test:forms:visual": "playwright test --config packages/form-renderer/playwright.config.ts",
     "typecheck:forms": "npm run typecheck --workspaces --if-present",
+    "verify:native-output:observation": "cargo run -q --locked -p bir-print --features native-output-evidence --bin verify_native_output_observation --",
     "verify:forms:offline": "node scripts/run_python.mjs scripts/verify_offline_form_renderer.py assets/form-renderer --build-identity-out assets/form-renderer-build-identity.json --source-root .",
     "verify:forms:offline:package": "npm run verify:forms:offline -- --require-source-revision"
   },

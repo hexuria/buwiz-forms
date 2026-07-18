@@ -141,6 +141,35 @@ build-form-renderer:
 build-packaged-form-renderer: build-form-renderer
     npm run verify:forms:offline:package
 
+# Build an ad-hoc-signed macOS app with the development-only native-output
+# observer, exercise a real PDF export interactively, and validate every
+# emitted observation through the Rust-owned schema. This remains diagnostic:
+# it does not create trusted release evidence or change readiness flags.
+[macos]
+native-evidence-macos:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    python3 scripts/audit_html_form_migration.py --require-clean-source
+    mkdir -p target/tmp
+    TMPDIR="$PWD/target/tmp" cargo test --locked -p bir-print --features native-output-evidence html_output_evidence
+    TMPDIR="$PWD/target/tmp" cargo test --locked -p bir-desktop --features dev-tools macos_capture_pipeline
+    just _package-mac --native-evidence
+    OBSERVATION_DIR="$PWD/target/native-output-observations"
+    rm -rf "$OBSERVATION_DIR"
+    mkdir -p "$OBSERVATION_DIR"
+    echo "Open 2551Q, export a PDF over an existing destination, then close the app."
+    echo "Observations will remain local in $OBSERVATION_DIR."
+    EBIR_NATIVE_OUTPUT_EVIDENCE_DIR="$OBSERVATION_DIR" \
+        "{{MAC_APP}}/Contents/MacOS/bir"
+    shopt -s nullglob
+    observations=("$OBSERVATION_DIR"/*.observation.json)
+    if [ "${#observations[@]}" -eq 0 ]; then
+        echo "No native-output observation was produced; complete a successful direct PDF export before closing the app." >&2
+        exit 1
+    fi
+    npm run verify:native-output:observation -- "${observations[@]}"
+    echo "Development observations validated. They are non-promotional and must not be added to form-release-evidence.json."
+
 # Install a built package (auto-detects available artifacts)
 # Usage: just install [format]
 # Formats: exe, msix (Windows) | app, pkg, dmg (macOS) | deb, tar (Linux)
@@ -521,6 +550,7 @@ _package-mac args="": build-packaged-form-renderer
     for arg in {{args}}; do
         case "$arg" in
             --inspector)     FEATURES="${FEATURES:+$FEATURES,}inspector" ;;
+            --native-evidence) FEATURES="${FEATURES:+$FEATURES,}dev-tools" ;;
         esac
     done
     FEATURES_FLAG=""
