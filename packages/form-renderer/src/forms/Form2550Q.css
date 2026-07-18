@@ -15,17 +15,28 @@
   position: relative;
   height: 32pt;
   display: grid;
-  grid-template-columns: 52pt 43pt 1fr;
+  grid-template-columns: 40pt 43pt 1fr;
   align-items: center;
 }
 .government-header-2550q > span:first-child {
-  align-self: stretch;
+  align-self: start;
+  width: 40pt;
+  height: 18.5pt;
+  margin-top: 11.5pt;
+  margin-left: 1pt;
   display: flex;
   align-items: center;
-  padding-left: 5pt;
+  padding-left: 1pt;
   background: #d9d9d9;
 }
-.government-header-2550q > span:nth-child(2) { padding-left: 5pt; }
+.government-header-2550q > span:nth-child(2) {
+  align-self: start;
+  height: 18.5pt;
+  margin-top: 11.5pt;
+  display: flex;
+  align-items: center;
+  padding-left: 2.5pt;
+}
 .government-wordmark-2550q {
   position: absolute;
   left: 209.3pt;

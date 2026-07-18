@@ -114,6 +114,14 @@ test("2550Q April 2024 keeps verified page-specific PDF417, caption, and seal ge
 
   await expectCriticalRegionGeometry(pages.nth(0), [
     {
+      name: "For BIR use only panel",
+      selector: ".government-header-2550q > span:first-child",
+      x: 45,
+      y: 58,
+      width: 80,
+      height: 37
+    },
+    {
       name: "official seal XObject",
       selector: ".government-wordmark-2550q img",
       x: 461.6,
