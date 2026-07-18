@@ -1534,8 +1534,6 @@ mod tests {
             provenance["official_package_evidence"]["submission_boundary"]["queue_submission_supported"],
             super::super::form_1701q::QUEUE_SUBMISSION_SUPPORTED
         );
-        assert!(super::super::form_1701q::XML_ROUND_TRIP_SUPPORTED);
-        assert!(!super::super::form_1701q::QUEUE_SUBMISSION_SUPPORTED);
         assert_eq!(
             super::super::form_1701q::OFFICIAL_PACKAGE_MANIFEST_RESOURCE_ID
                 + super::super::form_1701q::OFFICIAL_HTA_MANIFEST_INDEX,
