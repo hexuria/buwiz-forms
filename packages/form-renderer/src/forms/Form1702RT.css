@@ -7,7 +7,7 @@
   max-height: 936pt;
   overflow: hidden;
   padding: 31pt 18pt 16pt;
-  color: #050505;
+  color: #000;
   font-family: Arial, Helvetica, sans-serif;
   font-size: 7.8pt;
   line-height: 1.02;
@@ -69,10 +69,11 @@
 }
 .government-wordmark-1702rt > span {
   position: absolute;
-  left: 59.589844pt;
-  top: 2.765625pt;
-  width: 97.792969pt;
-  height: 24.46875pt;
+  left: 40.95pt;
+  top: -.7162pt;
+  width: 106.3pt;
+  height: 27.325pt;
+  font-weight: 400;
 }
 
 .masthead-1702rt {
@@ -299,6 +300,17 @@
 .stacked-field-1702rt > .adaptive-plain-value { border-bottom: .45pt solid #111; }
 .address-block-1702rt { height: 69pt; display: grid; grid-template-rows: 11pt 19pt 19pt 20pt; border-bottom: .55pt solid #111; }
 .address-block-1702rt > span:first-child em { margin-left: 3pt; font-size: 4.7pt; }
+.address-block-1702rt > span:first-child em,
+.part-1702rt > h2 small,
+.declaration-1702rt > p,
+.payment-header-1702rt > span:nth-child(2),
+.signature-panel-1702rt:first-child > span:nth-child(2) {
+  font-family: "eBIRForms Roboto Condensed", sans-serif;
+}
+.part-1702rt > h2 small,
+.payment-header-1702rt > span:nth-child(2) {
+  font-weight: 700;
+}
 .address-last-1702rt { display: grid; grid-template-columns: minmax(0, 1fr) 62pt 58pt; }
 .address-last-1702rt > span:nth-child(2) { display: flex; align-items: center; padding: 1pt 4pt; background: #d9d9d9; border-left: .55pt solid #111; }
 .address-last-1702rt .comb-value:last-child { background: #fff; }
@@ -496,9 +508,13 @@
 }
 .schedule-1702rt > h3 { justify-content: flex-start; }
 .schedule-1702rt > h3 small { margin-left: 3pt; font-size: 6pt; font-weight: 400; }
-.schedule-amount-row-1702rt { height: 19pt; display: grid; grid-template-columns: 30pt minmax(0, 1fr) 183pt; border-bottom: .55pt solid #111; }
-.schedule-amount-row-1702rt > span:first-child { display: grid; place-items: center; background: #d9d9d9; }
-.schedule-amount-row-1702rt > span:nth-child(2) { min-width: 0; display: flex; align-items: center; padding: 1pt 5pt; background: #d9d9d9; border-left: .55pt solid #111; }
+.schedule-amount-row-1702rt { height: 19pt; display: grid; grid-template-columns: 15pt minmax(0, 1fr) 183pt; border-bottom: .55pt solid #111; }
+.schedule-amount-row-1702rt > span:first-child {
+  display: grid;
+  place-items: center;
+  background: #d9d9d9;
+}
+.schedule-amount-row-1702rt > span:nth-child(2) { min-width: 0; display: flex; align-items: center; padding: 1pt 0; background: #d9d9d9; }
 .schedule-amount-row-1702rt > span:nth-child(2) > .adaptive-plain-value { height: 16pt; background: #fff; }
 .schedule-amount-row-1702rt.emphasis-1702rt > span:nth-child(2) { font-weight: 700; }
 .schedule-one-1702rt { height: 529pt; }
