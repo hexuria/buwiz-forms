@@ -14,9 +14,11 @@ The pre-retirement Git tree contained:
   platform package.
 
 The prior assembled payload was approximately 106 MB uncompressed. The current
-compiled offline HTML renderer directory is 256 KiB in this worktree. Final net
-package reduction must be recorded from the signed macOS, Windows, and Linux
-artifacts because executable formats, signing, and archive compression differ.
+compiled offline HTML renderer directory is 1,074,094 bytes (about 1.02 MiB) in
+this worktree after adding the ten renderer components. This generated bundle
+size is diagnostic rather than release evidence: final net package reduction
+must be recorded from the signed macOS, Windows, and Linux artifacts because
+executable formats, signing, and archive compression differ.
 
 ## Enforced absence
 
