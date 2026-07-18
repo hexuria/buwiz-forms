@@ -266,10 +266,16 @@ for (const parityCase of cases) {
     ).toEqual([]);
 
     // The pinned official PDF is an unfilled form while our authoritative
-    // fixture exercises all six Schedule 1 rows.  Compare the owned document
-    // geometry with only fixture-provided glyphs suppressed: borders, comb
-    // cells, check boxes, labels, artwork, fills, and pagination remain in the
-    // captured image and therefore remain inside the strict pixel gate.
+    // fixture exercises all six Schedule 1 rows. Item 17 is allowed to claim a
+    // reviewed second line only when its specification does not fit the
+    // official inline box. That adaptive state is covered by the dedicated
+    // long-value tests below, but it is not the geometry of the blank official
+    // reference. Re-render the same immutable fixture with only that adaptive
+    // value blank before suppressing fixture glyphs. Borders, comb cells,
+    // check boxes, labels, artwork, fills, and pagination remain inside the
+    // strict complete-page pixel gate; no threshold or comparison mask changes.
+    await renderEnvelope(page, officialBlankComparisonEnvelope(envelope));
+    await expect(pages).toHaveCount(parityCase.references.length);
     await prepareOfficialBlankComparison(page);
 
     for (const [pageIndex, referencePath] of parityCase.references.entries()) {
@@ -1928,6 +1934,16 @@ async function prepareOfficialBlankComparison(page: Page) {
       formPage.setAttribute("data-visual-blank-values", "true");
     }
   });
+}
+
+function officialBlankComparisonEnvelope(envelope: unknown): unknown {
+  const blankEnvelope = JSON.parse(JSON.stringify(envelope)) as {
+    fields?: Record<string, { value?: unknown }>;
+  };
+  const item17Description =
+    blankEnvelope.fields?.other_tax_credit_description;
+  if (item17Description) item17Description.value = "";
+  return blankEnvelope;
 }
 
 interface CriticalRegion {
