@@ -12,7 +12,9 @@ const REQUIRED_FACE_REQUESTS = [
   ["italic 400 16px \"eBIRForms Arimo\"", "BIR Forms 2551Q"],
   ["italic 400 16px \"eBIRForms Arimo\"", "\u0100"],
   ["italic 700 16px \"eBIRForms Arimo\"", "BIR Forms 2551Q"],
-  ["italic 700 16px \"eBIRForms Arimo\"", "\u0100"]
+  ["italic 700 16px \"eBIRForms Arimo\"", "\u0100"],
+  ["normal 400 16px \"eBIRForms Roboto Condensed\"", "BIR Forms 2551Q"],
+  ["italic 400 16px \"eBIRForms Roboto Condensed\"", "BIR Forms 2551Q"]
 ] as const;
 
 function loadedFontSet(
@@ -22,10 +24,12 @@ function loadedFontSet(
     ready: Promise.resolve(),
     load: vi.fn(async (descriptor: string) => [
       {
-        family: "eBIRForms Arimo",
+        family: descriptor.includes("Roboto Condensed")
+          ? "eBIRForms Roboto Condensed"
+          : "eBIRForms Arimo",
         status: "loaded",
         style: descriptor.startsWith("italic") ? "italic" : "normal",
-        weight: "400 700"
+        weight: descriptor.includes("Roboto Condensed") ? "100 900" : "400 700"
       }
     ]),
     check: vi.fn(() => true),
@@ -34,7 +38,7 @@ function loadedFontSet(
 }
 
 describe("bundled printable font readiness", () => {
-  it("loads and checks every required Arimo style and subset", async () => {
+  it("loads and checks every required bundled printable style and subset", async () => {
     const fontFaceSet = loadedFontSet();
 
     await expect(

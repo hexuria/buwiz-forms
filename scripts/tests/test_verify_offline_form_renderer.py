@@ -287,18 +287,24 @@ class VerifyOfflineFormRendererTests(unittest.TestCase):
             self.assertEqual(verifier.main(), 1)
         self.assertFalse(identity_path.exists(), "strict failure must remove stale identity")
 
-    def test_allows_reachable_arimo_license_and_provenance_documents(self) -> None:
+    def test_allows_reachable_reviewed_font_license_and_provenance_documents(self) -> None:
         self.write_valid_bundle()
-        notices = self.root / "third-party" / "arimo"
-        notices.mkdir(parents=True)
-        (notices / "LICENSE.txt").write_text("Apache-2.0 license\n", encoding="utf-8")
-        (notices / "PROVENANCE.json").write_text("{}\n", encoding="utf-8")
+        arimo_notices = self.root / "third-party" / "arimo"
+        arimo_notices.mkdir(parents=True)
+        (arimo_notices / "LICENSE.txt").write_text("Apache-2.0 license\n", encoding="utf-8")
+        (arimo_notices / "PROVENANCE.json").write_text("{}\n", encoding="utf-8")
+        condensed_notices = self.root / "third-party" / "roboto-condensed"
+        condensed_notices.mkdir(parents=True)
+        (condensed_notices / "LICENSE.txt").write_text("OFL-1.1 license\n", encoding="utf-8")
+        (condensed_notices / "PROVENANCE.json").write_text("{}\n", encoding="utf-8")
         index = self.root / "index.html"
         index.write_text(
             index.read_text(encoding="utf-8").replace(
                 "</head>",
                 '<link rel="license" href="./third-party/arimo/LICENSE.txt">\n'
                 '<link rel="alternate" href="./third-party/arimo/PROVENANCE.json">\n'
+                '<link rel="license" href="./third-party/roboto-condensed/LICENSE.txt">\n'
+                '<link rel="alternate" href="./third-party/roboto-condensed/PROVENANCE.json">\n'
                 "</head>",
             ),
             encoding="utf-8",

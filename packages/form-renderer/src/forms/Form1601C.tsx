@@ -20,28 +20,28 @@ import "./Form1601C.css";
 
 const TAX_LINES = [
   ["14", "Total Amount of Compensation", "tax_14_total_compensation"],
-  ["15", "Statutory Minimum Wage for Minimum Wage Earners (MWEs)", "tax_15_statutory_minimum_wage"],
-  ["16", "Holiday Pay, Overtime Pay, Night Shift Differential Pay, Hazard Pay (for MWEs only)", "tax_16_holiday_pay"],
-  ["17", "13th Month Pay and Other Benefits", "tax_17_13th_month_pay"],
+  ["15", <>Statutory Minimum Wage for Minimum Wage Earners <em>(MWEs)</em></>, "tax_15_statutory_minimum_wage"],
+  ["16", <>Holiday Pay, Overtime Pay, Night Shift Differential Pay, Hazard Pay <em>(for MWEs only)</em></>, "tax_16_holiday_pay"],
+  ["17", <>13<sup>th</sup> Month Pay and Other Benefits</>, "tax_17_13th_month_pay"],
   ["18", "De Minimis Benefits", "tax_18_de_minimis"],
-  ["19", "SSS, GSIS, PHIC, HDMF Mandatory Contributions & Union Dues (employee’s share only)", "tax_19_sss_gsis"],
-  ["20", "Other Non-Taxable Compensation (specify)", "tax_20_other_amount"],
-  ["21", "Total Non-Taxable Compensation (Sum of Items 15 to 20)", "tax_21_total_non_taxable"],
-  ["22", "Total Taxable Compensation (Item 14 Less Item 21)", "tax_22_total_taxable"],
-  ["23", "Less: Taxable compensation not subject to withholding tax (for employees, other than MWEs, receiving P250,000 & below for the year)", "tax_23_not_subject"],
-  ["24", "Net Taxable Compensation (Item 22 Less Item 23)", "tax_24_net_taxable"],
+  ["19", <>SSS, GSIS, PHIC, HDMF Mandatory Contributions &amp; Union Dues <em>(employee’s share only)</em></>, "tax_19_sss_gsis"],
+  ["20", <>Other Non-Taxable Compensation <em>(specify)</em></>, "tax_20_other_amount"],
+  ["21", <>Total Non-Taxable Compensation <em>(Sum of Items 15 to 20)</em></>, "tax_21_total_non_taxable"],
+  ["22", <>Total Taxable Compensation <em>(Item 14 Less Item 21)</em></>, "tax_22_total_taxable"],
+  ["23", <>Less: Taxable compensation not subject to withholding tax <em>(for employees, other than MWEs, receiving P250,000 &amp; below for the year)</em></>, "tax_23_not_subject"],
+  ["24", <>Net Taxable Compensation <em>(Item 22 Less Item 23)</em></>, "tax_24_net_taxable"],
   ["25", "Total Taxes Withheld", "tax_25_total_taxes_withheld"],
-  ["26", "Add/(Less): Adjustment of Taxes Withheld from Previous Month/s (From Part IV-Schedule 1, Item 4)", "tax_26_adjustment"],
-  ["27", "Taxes Withheld for Remittance (Sum of Items 25 and 26)", "tax_27_taxes_withheld_for_remittance"],
+  ["26", <>Add/(Less): Adjustment of Taxes Withheld from Previous Month/s <em>(From Part IV-Schedule 1, Item 4)</em></>, "tax_26_adjustment"],
+  ["27", <>Taxes Withheld for Remittance <em>(Sum of Items 25 and 26)</em></>, "tax_27_taxes_withheld_for_remittance"],
   ["28", "Less: Tax Remitted in Return Previously Filed, if this is an amended return", "tax_28_tax_remitted_previously"],
-  ["29", "Other Remittances Made (specify)", "tax_29_other_remittances_amount"],
-  ["30", "Total Tax Remittances Made (Sum of Items 28 and 29)", "tax_30_total_tax_remittances"],
-  ["31", "Tax Still Due/(Over-remittance) (Item 27 Less Item 30)", "tax_31_tax_still_due"],
+  ["29", <>Other Remittances Made <em>(specify)</em></>, "tax_29_other_remittances_amount"],
+  ["30", <>Total Tax Remittances Made <em>(Sum of Items 28 and 29)</em></>, "tax_30_total_tax_remittances"],
+  ["31", <><strong>Tax Still Due</strong>/(Over-remittance) <em>(Item 27 Less Item 30)</em></>, "tax_31_tax_still_due"],
   ["32", "Surcharge", "tax_32_surcharge"],
   ["33", "Interest", "tax_33_interest"],
   ["34", "Compromise", "tax_34_compromise"],
-  ["35", "Total Penalties (Sum of Items 32 to 34)", "tax_35_total_penalties"],
-  ["36", "TOTAL AMOUNT STILL DUE/(Over-remittance) (Sum of Items 31 and 35)", "tax_36_total_amount_payable"]
+  ["35", <>Total Penalties <em>(Sum of Items 32 to 34)</em></>, "tax_35_total_penalties"],
+  ["36", <><strong>TOTAL AMOUNT STILL DUE</strong>/(Over-remittance) <em>(Sum of Items 31 and 35)</em></>, "tax_36_total_amount_payable"]
 ] as const;
 
 export function Form1601C({ envelope }: { envelope: RenderEnvelope }) {
@@ -294,7 +294,7 @@ function TaxLine1601C({
   description
 }: {
   number: string;
-  label: string;
+  label: ReactNode;
   value: number;
   description?: string;
 }) {

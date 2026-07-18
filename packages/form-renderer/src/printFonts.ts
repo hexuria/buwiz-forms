@@ -1,4 +1,5 @@
-const PRINT_FONT_FAMILY = "eBIRForms Arimo";
+const ARIMO_FONT_FAMILY = "eBIRForms Arimo";
+const CONDENSED_FONT_FAMILY = "eBIRForms Roboto Condensed";
 
 const LATIN_PROBE = "BIR Forms 2551Q";
 const LATIN_EXTENDED_PROBE = "\u0100";
@@ -20,6 +21,7 @@ export interface PrintableFontFaceSetLike {
 }
 
 interface RequiredPrintableFontFace {
+  readonly family: string;
   readonly expectedStyle: "italic" | "normal";
   readonly expectedWeight: 400 | 700;
   readonly label: string;
@@ -28,6 +30,7 @@ interface RequiredPrintableFontFace {
 }
 
 function requiredFace(
+  family: string,
   label: string,
   expectedStyle: "italic" | "normal",
   expectedWeight: 400 | 700,
@@ -35,39 +38,43 @@ function requiredFace(
   probe: string
 ): RequiredPrintableFontFace {
   return {
+    family,
     expectedStyle,
     expectedWeight,
     label: `${label} ${subset}`,
-    descriptor: `${expectedStyle} ${expectedWeight} 16px "${PRINT_FONT_FAMILY}"`,
+    descriptor: `${expectedStyle} ${expectedWeight} 16px "${family}"`,
     probe
   };
 }
 
 /**
- * Every style/weight used by the form renderer is checked against both WOFF2
- * subsets bundled by the production build. Bold italic is explicit because
- * the official form copy contains combined emphasis and must not be browser
- * synthesized after the other faces pass readiness.
+ * Every style/weight used by the form renderer is checked against its reviewed
+ * WOFF2 subset. Arimo includes Latin and Latin Extended; the form-scoped
+ * condensed face only needs Latin. Bold italic is explicit because official
+ * form copy contains combined emphasis and must not be browser synthesized.
  */
 const REQUIRED_PRINTABLE_FONT_FACES: readonly RequiredPrintableFontFace[] = [
-  requiredFace("normal (400)", "normal", 400, "Latin", LATIN_PROBE),
+  requiredFace(ARIMO_FONT_FAMILY, "normal (400)", "normal", 400, "Latin", LATIN_PROBE),
   requiredFace(
+    ARIMO_FONT_FAMILY,
     "normal (400)",
     "normal",
     400,
     "Latin Extended",
     LATIN_EXTENDED_PROBE
   ),
-  requiredFace("bold (700)", "normal", 700, "Latin", LATIN_PROBE),
+  requiredFace(ARIMO_FONT_FAMILY, "bold (700)", "normal", 700, "Latin", LATIN_PROBE),
   requiredFace(
+    ARIMO_FONT_FAMILY,
     "bold (700)",
     "normal",
     700,
     "Latin Extended",
     LATIN_EXTENDED_PROBE
   ),
-  requiredFace("italic (400)", "italic", 400, "Latin", LATIN_PROBE),
+  requiredFace(ARIMO_FONT_FAMILY, "italic (400)", "italic", 400, "Latin", LATIN_PROBE),
   requiredFace(
+    ARIMO_FONT_FAMILY,
     "italic (400)",
     "italic",
     400,
@@ -75,6 +82,7 @@ const REQUIRED_PRINTABLE_FONT_FACES: readonly RequiredPrintableFontFace[] = [
     LATIN_EXTENDED_PROBE
   ),
   requiredFace(
+    ARIMO_FONT_FAMILY,
     "bold italic (700)",
     "italic",
     700,
@@ -82,17 +90,34 @@ const REQUIRED_PRINTABLE_FONT_FACES: readonly RequiredPrintableFontFace[] = [
     LATIN_PROBE
   ),
   requiredFace(
+    ARIMO_FONT_FAMILY,
     "bold italic (700)",
     "italic",
     700,
     "Latin Extended",
     LATIN_EXTENDED_PROBE
+  ),
+  requiredFace(
+    CONDENSED_FONT_FAMILY,
+    "normal (400)",
+    "normal",
+    400,
+    "Latin",
+    LATIN_PROBE
+  ),
+  requiredFace(
+    CONDENSED_FONT_FAMILY,
+    "italic (400)",
+    "italic",
+    400,
+    "Latin",
+    LATIN_PROBE
   )
 ];
 
 function unavailableFaceError(face: RequiredPrintableFontFace): Error {
   return new Error(
-    `Required bundled printable font face is unavailable: ${PRINT_FONT_FAMILY} ${face.label}`
+    `Required bundled printable font face is unavailable: ${face.family} ${face.label}`
   );
 }
 
@@ -130,7 +155,7 @@ function isExactRequiredFace(
 ): boolean {
   return (
     loadedFace.status === "loaded" &&
-    normalizedFamily(loadedFace.family) === PRINT_FONT_FAMILY &&
+    normalizedFamily(loadedFace.family) === requiredFace.family &&
     loadedFace.style.trim().toLowerCase() === requiredFace.expectedStyle &&
     supportsWeight(loadedFace.weight, requiredFace.expectedWeight)
   );

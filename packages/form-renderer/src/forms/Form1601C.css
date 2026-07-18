@@ -35,6 +35,11 @@
   border-right: .55pt solid #222;
   content: "";
 }
+.form-1601c-page-one .money-1601c > .comb-value > span:nth-child(3n + 2)::after,
+.form-1601c-page-two .money-1601c > .comb-value > span:nth-child(3n + 2)::after {
+  border-right-width: 1.1pt;
+  border-right-color: #000;
+}
 
 .government-header-1601c {
   position: relative;
@@ -347,14 +352,24 @@
   background: #d9d9d9;
   white-space: nowrap;
 }
-.tax-line-1601c > div:first-child > b { flex: 0 0 11pt; }
+.tax-line-1601c > div:first-child > b { flex: 0 0 11pt; font-weight: 700; }
 .tax-line-1601c > div:first-child > span { min-width: 0; }
-.tax-line-1601c.tax-line-16 > div:first-child,
-.tax-line-1601c.tax-line-23 > div:first-child,
-.tax-line-1601c.tax-line-26 > div:first-child,
-.tax-line-1601c.tax-line-28 > div:first-child { font-size: 7.4pt; }
+.tax-line-1601c > div:first-child > span > em {
+  font-size: 7.3pt;
+  font-style: italic;
+}
+.tax-line-1601c > div:first-child > span > sup {
+  position: relative;
+  top: -.16em;
+  font-size: 57%;
+  line-height: 0;
+}
+.tax-line-1601c > div:first-child > span > strong { font-weight: 700; }
 .tax-line-1601c.tax-line-23 > div:first-child { font-size: 5.9pt; }
-.tax-line-1601c.computed > div:first-child { font-weight: 600; }
+.tax-line-1601c:is(.tax-line-26, .tax-line-27, .tax-line-29, .tax-line-30, .tax-line-31, .tax-line-35, .tax-line-36) > div:first-child > span > em {
+  font-size: 6.7pt;
+}
+.tax-line-1601c.tax-line-23 > div:first-child > span > em { font-size: 5pt; }
 .tax-line-1601c.tax-line-36 > div:first-child { font-size: 8.8pt; }
 .tax-subheading-1601c {
   height: 10.5pt;
@@ -418,8 +433,9 @@
   background: #d9d9d9;
   border-bottom: .7pt solid #111;
   text-align: center;
-  font-size: 5.8pt;
-  line-height: 1.06;
+  font-family: "eBIRForms Roboto Condensed", sans-serif;
+  font-size: 5.5pt;
+  line-height: 6.5pt;
 }
 .signature-body-1601c { height: 43.5pt; display: grid; grid-template-columns: 1fr 1fr; }
 .signature-body-1601c > div {

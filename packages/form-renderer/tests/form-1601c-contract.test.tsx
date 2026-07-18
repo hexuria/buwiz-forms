@@ -160,7 +160,6 @@ describe("1601C:2018 runtime render contract", () => {
       "Are there payees availing of tax relief under",
       "Total Amount of Compensation",
       "Taxable compensation not subject to withholding tax",
-      "TOTAL AMOUNT STILL DUE/(Over-remittance)",
       "Cash/Bank Debit Memo",
       "Machine Validation/Revenue Official Receipt Details",
       "Schedule I – Adjustment of Taxes Withheld on Compensation from Previous Months",
@@ -170,6 +169,9 @@ describe("1601C:2018 runtime render contract", () => {
     ]) {
       expect(markup).toContain(label);
     }
+    expect(markup).toContain("13<sup>th</sup> Month Pay and Other Benefits");
+    expect(markup).toContain("<strong>Tax Still Due</strong>/(Over-remittance)");
+    expect(markup).toContain("<strong>TOTAL AMOUNT STILL DUE</strong>/(Over-remittance)");
   });
 
   it("uses the reviewed plain Item 5 field and measured overflow contract", () => {

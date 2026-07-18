@@ -64,6 +64,8 @@ ALLOWED_RUNTIME_SUFFIXES = {
 ALLOWED_BUNDLE_DOCUMENTS = {
     PurePosixPath("third-party/arimo/LICENSE.txt"),
     PurePosixPath("third-party/arimo/PROVENANCE.json"),
+    PurePosixPath("third-party/roboto-condensed/LICENSE.txt"),
+    PurePosixPath("third-party/roboto-condensed/PROVENANCE.json"),
 }
 BUILD_IDENTITY_SCHEMA_VERSION = 1
 BUILD_IDENTITY_SCOPE = "build_time_non_promotional_identity"

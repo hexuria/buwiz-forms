@@ -45,6 +45,23 @@ const ARIMO_SOURCE_FILES = [
     sha256: "ef2f35215bd2dd8c84046cd85894c5efb869dcae21fc23791793e0c1611d00a1"
   }
 ] as const;
+const ROBOTO_CONDENSED_PACKAGE_NAME = "@fontsource-variable/roboto-condensed";
+const ROBOTO_CONDENSED_PACKAGE_VERSION = "5.2.8";
+const ROBOTO_CONDENSED_PACKAGE_INTEGRITY = "sha512-aIZ2kYSoJHkTI4z8x/PRgKX6Zb9TTtSE/u+fUYeiwL+5trP9rhYYEEeNjRttaMqRgoDHcSueArdRZ43wf/i2Kw==";
+const ROBOTO_CONDENSED_LICENSE_SHA256 = "82baba1bc6be17e47b138e90ab99ad134168f931282b68bc560102ab1db743c1";
+const ROBOTO_CONDENSED_METADATA_SHA256 = "c132bde38ccb5f7653a9a5ff2389eb79a886b91c9eda17a77e926bb29a6adec6";
+const ROBOTO_CONDENSED_SOURCE_FILES = [
+  {
+    path: "files/roboto-condensed-latin-wght-normal.woff2",
+    bytes: 51_412,
+    sha256: "8d230115e58faa2ed303bee567b91d1a792e0c958a0118998b53648b2ab7c057"
+  },
+  {
+    path: "files/roboto-condensed-latin-wght-italic.woff2",
+    bytes: 56_956,
+    sha256: "c2867c1f84c8f2985f1fe41463b353d38aaf9528f55d475a6adca30ebd3c797f"
+  }
+] as const;
 
 function sha256(filePath: string) {
   return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
@@ -144,6 +161,34 @@ function installArimoNotices() {
     }
   }
 
+  const condensedPackageJsonPath = REQUIRE.resolve(`${ROBOTO_CONDENSED_PACKAGE_NAME}/package.json`);
+  const condensedPackageRoot = path.dirname(condensedPackageJsonPath);
+  const condensedPackageMetadata = JSON.parse(fs.readFileSync(condensedPackageJsonPath, "utf8")) as {
+    license?: string;
+    version?: string;
+  };
+  if (
+    condensedPackageMetadata.version !== ROBOTO_CONDENSED_PACKAGE_VERSION
+    || condensedPackageMetadata.license !== "OFL-1.1"
+  ) {
+    throw new Error("The pinned Roboto Condensed package version or license changed");
+  }
+
+  const condensedLicensePath = path.join(condensedPackageRoot, "LICENSE");
+  const condensedMetadataPath = path.join(condensedPackageRoot, "metadata.json");
+  if (sha256(condensedLicensePath) !== ROBOTO_CONDENSED_LICENSE_SHA256) {
+    throw new Error("The pinned Roboto Condensed license text changed");
+  }
+  if (sha256(condensedMetadataPath) !== ROBOTO_CONDENSED_METADATA_SHA256) {
+    throw new Error("The pinned Roboto Condensed metadata changed");
+  }
+  for (const font of ROBOTO_CONDENSED_SOURCE_FILES) {
+    const fontPath = path.join(condensedPackageRoot, font.path);
+    if (fs.statSync(fontPath).size !== font.bytes || sha256(fontPath) !== font.sha256) {
+      throw new Error(`The pinned Roboto Condensed font asset changed: ${font.path}`);
+    }
+  }
+
   const builtFonts = allFiles(OUTPUT_DIR).filter((filePath) =>
     /\.(?:woff2?|ttf|otf)$/iu.test(filePath)
   );
@@ -151,9 +196,10 @@ function installArimoNotices() {
   if (unsupportedFont) {
     throw new Error(`Production renderer contains a non-WOFF2 font: ${unsupportedFont}`);
   }
-  if (builtFonts.length !== ARIMO_SOURCE_FILES.length) {
+  const expectedFontCount = ARIMO_SOURCE_FILES.length + ROBOTO_CONDENSED_SOURCE_FILES.length;
+  if (builtFonts.length !== expectedFontCount) {
     throw new Error(
-      `Production renderer must contain exactly ${ARIMO_SOURCE_FILES.length} Arimo WOFF2 assets; found ${builtFonts.length}`
+      `Production renderer must contain exactly ${expectedFontCount} reviewed WOFF2 assets; found ${builtFonts.length}`
     );
   }
 
@@ -161,6 +207,16 @@ function installArimoNotices() {
     const shippedPath = builtFonts.find((filePath) => sha256(filePath) === font.sha256);
     if (!shippedPath) {
       throw new Error(`Production renderer is missing pinned Arimo asset: ${font.path}`);
+    }
+    return {
+      ...font,
+      shipped_path: path.relative(OUTPUT_DIR, shippedPath).split(path.sep).join("/")
+    };
+  });
+  const shippedCondensedFonts = ROBOTO_CONDENSED_SOURCE_FILES.map((font) => {
+    const shippedPath = builtFonts.find((filePath) => sha256(filePath) === font.sha256);
+    if (!shippedPath) {
+      throw new Error(`Production renderer is missing pinned Roboto Condensed asset: ${font.path}`);
     }
     return {
       ...font,
@@ -189,6 +245,30 @@ function installArimoNotices() {
       styles: ["normal", "italic"],
       weight_range: [400, 700],
       files: shippedFonts
+    }, null, 2)}\n`
+  );
+
+  const condensedNoticeDirectory = path.join(OUTPUT_DIR, "third-party/roboto-condensed");
+  fs.mkdirSync(condensedNoticeDirectory, { recursive: true });
+  fs.copyFileSync(condensedLicensePath, path.join(condensedNoticeDirectory, "LICENSE.txt"));
+  fs.writeFileSync(
+    path.join(condensedNoticeDirectory, "PROVENANCE.json"),
+    `${JSON.stringify({
+      schema_version: 1,
+      family: "Roboto Condensed",
+      font_version: "v31",
+      package: `${ROBOTO_CONDENSED_PACKAGE_NAME}@${ROBOTO_CONDENSED_PACKAGE_VERSION}`,
+      package_integrity: ROBOTO_CONDENSED_PACKAGE_INTEGRITY,
+      package_repository: "https://github.com/fontsource/font-files/tree/main/fonts/variable/roboto-condensed",
+      upstream_repository: "https://github.com/googlefonts/roboto-3-classic",
+      source_catalog: "https://github.com/google/fonts/tree/main/ofl/robotocondensed",
+      license: "OFL-1.1",
+      license_sha256: ROBOTO_CONDENSED_LICENSE_SHA256,
+      attribution: "Copyright 2011 Google Inc. All Rights Reserved.",
+      subsets: ["latin"],
+      styles: ["normal", "italic"],
+      weight_range: [100, 900],
+      files: shippedCondensedFonts
     }, null, 2)}\n`
   );
 }

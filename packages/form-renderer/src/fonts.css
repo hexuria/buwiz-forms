@@ -19,6 +19,25 @@
     U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
+/* Arial Narrow substitute used only where the pinned official source embeds
+ * Arial Narrow. Roboto Condensed is bundled so these regions stay offline and
+ * deterministic across platforms. */
+@font-face {
+  font-family: "eBIRForms Roboto Condensed";
+  font-style: normal;
+  font-display: block;
+  font-weight: 100 900;
+  src: url("@fontsource-variable/roboto-condensed/files/roboto-condensed-latin-wght-normal.woff2") format("woff2-variations");
+}
+
+@font-face {
+  font-family: "eBIRForms Roboto Condensed";
+  font-style: italic;
+  font-display: block;
+  font-weight: 100 900;
+  src: url("@fontsource-variable/roboto-condensed/files/roboto-condensed-latin-wght-italic.woff2") format("woff2-variations");
+}
+
 @font-face {
   font-family: "eBIRForms Arimo";
   font-style: normal;
