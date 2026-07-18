@@ -193,6 +193,14 @@ test("1701 2018 keeps verified page-specific PDF417, caption, and seal geometry"
       y: 180.8476,
       width: 148.86044,
       height: 17.9292
+    },
+    {
+      name: "page 1 Item 1 taxable-year guide",
+      selector: ".header-options-1701 > div:first-child .comb-value",
+      x: 256,
+      y: 201,
+      width: 110,
+      height: 37
     }
   ]);
 

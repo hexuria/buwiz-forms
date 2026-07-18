@@ -187,8 +187,10 @@
   font-size: 8pt;
   line-height: .95;
 }
+.header-options-1701 > div:first-child { padding-right: 0; }
 .header-options-1701 > div:last-child { border-right: 0; }
 .header-options-1701 .comb-value { align-self: stretch; margin-left: auto; background: #fff; }
+.header-options-1701 > div:first-child .comb-value { flex: 0 0 55pt; width: 55pt; }
 .header-options-1701 .check-box { width: 11pt; height: 11pt; }
 
 .section-band-1701 {
