@@ -6,6 +6,7 @@
 //! renderer owns page layout. Platform WebViews create print/PDF output, which
 //! is validated and written atomically through [`html_output`].
 
+pub mod certification_observation;
 pub mod html;
 pub mod html_forms;
 pub mod html_output;

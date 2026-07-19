@@ -1,5 +1,12 @@
 //! Native preview, system-print, and direct-PDF host for owned HTML forms.
 
+#[cfg(target_os = "macos")]
+use bir_print::certification_observation::{
+    CertificationGeometryReportV1, CertificationPagePayloadV1, CertificationPdfValidationV1,
+    CertificationVerifierGapV1, MACOS_CANDIDATE_RUNTIME_OBSERVATION_SCHEMA_VERSION,
+    MACOS_CANDIDATE_RUNTIME_OBSERVATION_SCOPE, MacosCandidateOutputObservationV1,
+    MacosCandidateRuntimeObservationV1,
+};
 use bir_print::html::RenderEnvelopeV1;
 use bir_print::html_forms::RenderLayoutPlan;
 #[cfg(any(target_os = "macos", all(feature = "dev-tools", target_os = "windows")))]
@@ -1185,10 +1192,11 @@ struct PendingNativeOutput {
     started_at: Instant,
     backend_started: bool,
     binding: Option<NativeOutputRendererBinding>,
+    preflight_consumptions: Vec<u64>,
+    #[cfg(target_os = "macos")]
+    certification: Option<crate::certification_evidence::CertificationOutputContext>,
     #[cfg(feature = "dev-tools")]
     destination_before: DevelopmentDestinationSnapshotV1,
-    #[cfg(feature = "dev-tools")]
-    preflight_consumptions: Vec<u64>,
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -1204,6 +1212,19 @@ struct NativeOutputRendererBinding {
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 impl PendingNativeOutput {
     fn validating(kind: HtmlOutputKind, nonce: u64, destination: Option<PathBuf>) -> Self {
+        #[cfg(target_os = "macos")]
+        let certification =
+            match crate::certification_evidence::begin_certification_output(destination.as_deref())
+            {
+                Ok(context) => context,
+                Err(error) => {
+                    tracing::warn!(
+                        error = %error,
+                        "macOS certification runtime observation remains unavailable"
+                    );
+                    None
+                }
+            };
         #[cfg(feature = "dev-tools")]
         let destination_before = destination
             .as_deref()
@@ -1219,10 +1240,11 @@ impl PendingNativeOutput {
             started_at: Instant::now(),
             backend_started: false,
             binding: None,
+            preflight_consumptions: Vec::new(),
+            #[cfg(target_os = "macos")]
+            certification,
             #[cfg(feature = "dev-tools")]
             destination_before,
-            #[cfg(feature = "dev-tools")]
-            preflight_consumptions: Vec::new(),
         }
     }
 }
@@ -1460,6 +1482,31 @@ fn development_backend() -> DevelopmentNativeOutputBackendV1 {
 #[cfg(all(feature = "dev-tools", target_os = "windows"))]
 fn development_backend() -> DevelopmentNativeOutputBackendV1 {
     DevelopmentNativeOutputBackendV1::WebView2PrintToPdf
+}
+
+#[cfg(target_os = "macos")]
+fn certification_wkpdf_page_payloads(
+    completion: &NativeBackendCompletion,
+) -> Result<Vec<CertificationPagePayloadV1>, String> {
+    match completion {
+        NativeBackendCompletion::CapturedPages { pages, .. } => pages
+            .iter()
+            .enumerate()
+            .map(|(index, page)| {
+                let bytes = page.as_ref().map_err(|_| {
+                    format!("WKPDF page {} did not complete successfully", index + 1)
+                })?;
+                Ok(CertificationPagePayloadV1 {
+                    page: index + 1,
+                    byte_count: bytes.len().try_into().unwrap_or(u64::MAX),
+                    sha256: crate::certification_evidence::sha256_hex(bytes),
+                })
+            })
+            .collect(),
+        NativeBackendCompletion::SystemPrint { .. } => {
+            Err("system print has no WKPDF callback payloads".to_string())
+        }
+    }
 }
 
 #[cfg(all(feature = "dev-tools", any(target_os = "macos", target_os = "windows")))]
@@ -2568,16 +2615,13 @@ impl HtmlFormPreviewView {
         let document_identity = binding.document_identity.clone();
         let render_epoch = binding.render_epoch;
         if let Some(pending) = self.pending_output.as_mut() {
-            #[cfg(feature = "dev-tools")]
-            {
-                if !pending.preflight_consumptions.is_empty() {
-                    return Err(
-                        "native output preflight nonce was already consumed for this operation"
-                            .to_string(),
-                    );
-                }
-                pending.preflight_consumptions.push(nonce);
+            if !pending.preflight_consumptions.is_empty() {
+                return Err(
+                    "native output preflight nonce was already consumed for this operation"
+                        .to_string(),
+                );
             }
+            pending.preflight_consumptions.push(nonce);
             pending.binding = Some(binding.clone());
         }
 
@@ -2734,6 +2778,16 @@ impl HtmlFormPreviewView {
             NativeBackendCompletion::SystemPrint { result, .. } => {
                 match result {
                     Ok(()) => {
+                        #[cfg(target_os = "macos")]
+                        if let Some(pending) = self.pending_output.as_ref() {
+                            self.write_macos_certification_observation(
+                                pending,
+                                completion_nonce,
+                                MacosCandidateOutputObservationV1::SystemPrintCompleted {
+                                    appkit_completion_succeeded: true,
+                                },
+                            );
+                        }
                         self.finish_native_output_state(completion_nonce);
                         self.pending_output = None;
                         self.output_state = HtmlOutputState::Idle;
@@ -2784,6 +2838,12 @@ impl HtmlFormPreviewView {
         let development_backend = development_backend_observation(&completion);
         #[cfg(feature = "dev-tools")]
         let development_wkpdf_pages = development_wkpdf_page_artifacts(&completion);
+        #[cfg(target_os = "macos")]
+        let certification_wkpdf_pages = self
+            .pending_output
+            .as_ref()
+            .and_then(|pending| pending.certification.as_ref())
+            .map(|_| certification_wkpdf_page_payloads(&completion));
 
         #[cfg(target_os = "macos")]
         let backend_result = match completion {
@@ -2812,6 +2872,54 @@ impl HtmlFormPreviewView {
         self.leave_native_output_mode(cx);
         match export_result {
             Ok(validation) => {
+                #[cfg(target_os = "macos")]
+                if let Some(pending) = self.pending_output.as_ref() {
+                    let certification_output = (|| {
+                        let wkpdf_pages = certification_wkpdf_pages.ok_or_else(|| {
+                            "certification context has no WKPDF payload binding".to_string()
+                        })??;
+                        let destination_after =
+                            crate::certification_evidence::destination_snapshot(&destination);
+                        let output_pdf_sha256 = match &destination_after {
+                            bir_print::certification_observation::CertificationDestinationSnapshotV1::File { sha256 } => sha256.clone(),
+                            _ => return Err(
+                                "final PDF destination is unavailable for certification"
+                                    .to_string(),
+                            ),
+                        };
+                        let output_pdf_byte_count = std::fs::metadata(&destination)
+                            .map_err(|_| {
+                                "final PDF metadata is unavailable for certification".to_string()
+                            })?
+                            .len();
+                        Ok(MacosCandidateOutputObservationV1::PdfExportSucceeded {
+                            wkpdf_pages,
+                            output_pdf_sha256,
+                            output_pdf_byte_count,
+                            pdf_validation: CertificationPdfValidationV1::from(&validation),
+                            destination_before: pending
+                                .certification
+                                .as_ref()
+                                .map(|context| context.destination_before.clone())
+                                .unwrap_or(
+                                    bir_print::certification_observation::CertificationDestinationSnapshotV1::Absent,
+                                ),
+                            destination_after,
+                            temporary_file_remaining: temp_path.exists(),
+                        })
+                    })();
+                    match certification_output {
+                        Ok(output) => self.write_macos_certification_observation(
+                            pending,
+                            completion_nonce,
+                            output,
+                        ),
+                        Err(error) => tracing::warn!(
+                            error = %error,
+                            "macOS certification runtime observation could not bind PDF output"
+                        ),
+                    }
+                }
                 #[cfg(feature = "dev-tools")]
                 if let Some(backend) = development_backend.as_ref() {
                     let evidence_result = self
@@ -2849,6 +2957,63 @@ impl HtmlFormPreviewView {
             Err(error) => {
                 self.fail_pending_output(format!("HTML renderer PDF export failed: {error}"), cx)
             }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    fn write_macos_certification_observation(
+        &self,
+        pending: &PendingNativeOutput,
+        completion_nonce: u64,
+        output: MacosCandidateOutputObservationV1,
+    ) {
+        let Some(context) = pending.certification.as_ref() else {
+            return;
+        };
+        let Some(binding) = pending.binding.as_ref() else {
+            tracing::warn!("macOS certification runtime observation lost its renderer binding");
+            return;
+        };
+        let observation = MacosCandidateRuntimeObservationV1 {
+            schema_version: MACOS_CANDIDATE_RUNTIME_OBSERVATION_SCHEMA_VERSION,
+            scope: MACOS_CANDIDATE_RUNTIME_OBSERVATION_SCOPE.to_string(),
+            promotion_eligible: false,
+            trusted_producer: false,
+            collector_challenge_sha256: context.challenge_sha256.clone(),
+            form_code: self.pdf_expectation.form_code.clone(),
+            form_revision: self.pdf_expectation.revision.clone(),
+            document_run_id_sha256: crate::certification_evidence::sha256_hex(
+                binding.document_identity.document_run_id.as_bytes(),
+            ),
+            envelope_sha256: binding.document_identity.envelope_hash.clone(),
+            render_epoch: binding.render_epoch,
+            readiness_revision: binding.readiness_revision,
+            issued_nonce: pending.nonce,
+            preflight_consumptions: pending.preflight_consumptions.clone(),
+            backend_completion_nonce: completion_nonce,
+            started_at_unix_ms: context.started_at_unix_ms,
+            completed_at_unix_ms: crate::certification_evidence::unix_ms_now(),
+            geometry_reports: [
+                CertificationGeometryReportV1::from(&binding.geometry_reports[0]),
+                CertificationGeometryReportV1::from(&binding.geometry_reports[1]),
+            ],
+            output,
+            strict_verifier_gaps: [
+                CertificationVerifierGapV1::RuntimeSelfAuthored,
+                CertificationVerifierGapV1::ExternalUiAndPrintRequired,
+                CertificationVerifierGapV1::ExternalCandidateBindingRequired,
+            ],
+        };
+        match crate::certification_evidence::write_certification_observation(&observation) {
+            Ok(Some(artifact)) => tracing::info!(
+                artifact = %artifact,
+                "wrote path-free non-promotional macOS runtime observation"
+            ),
+            Ok(None) => {}
+            Err(error) => tracing::warn!(
+                error = %error,
+                "macOS certification runtime observation could not be written"
+            ),
         }
     }
 

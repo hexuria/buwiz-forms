@@ -14,6 +14,8 @@ use gpui_component::*;
 mod actions;
 mod app;
 mod auth_overlays;
+#[cfg(target_os = "macos")]
+mod certification_evidence;
 mod components;
 mod cor_evidence;
 mod cor_ocr;
