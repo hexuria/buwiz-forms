@@ -78,7 +78,7 @@
     },
     {
       "selector": ".schedule-three-1702rt",
-      "text": "Schedule III – Computation of Net Operating Loss Carry Over (NOLCO) 1 Gross Income (From Part IV Item 33) 2 Less: Ordinary Allowable Itemized Deductions (From Part VI Schedule I Item 18) 3 Net Operating Loss (Item 1 Less Item 2) (To Schedule IIIA, Item 7A) Schedule IIIA - Computation of Available Net Operating Loss Carry Over (NOLCO) Net Operating Loss Year Incurred A) Amount B) NOLCO Applied Previous Year/s 4 5 6 7 Continuation of Schedule IIIA (Item numbers continue from table above) C) NOLCO Expired D) NOLCO Applied Current Year E) Net Operating Loss (Unapplied) [ E = A Less (B + C + D) ] 4 5 6 7 8 Total NOLCO (Sum of Items 4D to 7D) (To Part IV, Item 36)"
+      "text": "Schedule III – Computation of Net Operating Loss Carry Over (NOLCO) 1 Gross Income (From Part IV Item 33) 2 Less: Ordinary Allowable Itemized Deductions (From Part VI Schedule I Item 18) 3 Net Operating Loss (Item 1 Less Item 2) (To Schedule IIIA, Item 7A) Schedule IIIA - Computation of Available Net Operating Loss Carry Over (NOLCO) (DO NOT enter Centavos; 49 Centavos or Less drop down; 50 or more round up) Net Operating Loss Year Incurred A) Amount B) NOLCO Applied Previous Year/s 4 5 6 7 Continuation of Schedule IIIA (Item numbers continue from table above) C) NOLCO Expired D) NOLCO Applied Current Year E) Net Operating Loss (Unapplied) [ E = A Less (B + C + D) ] 4 5 6 7 8 Total NOLCO (Sum of Items 4D to 7D) (To Part IV, Item 36)"
     },
     {
       "selector": ".schedule-four-1702rt",

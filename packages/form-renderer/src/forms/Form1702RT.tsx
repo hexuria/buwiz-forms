@@ -337,7 +337,10 @@ function ScheduleThree1702RT({ envelope }: { envelope: RenderEnvelope }) {
     <ScheduleAmountRow1702RT envelope={envelope} item="1" label="Gross Income (From Part IV Item 33)" field="schedule_3_item_1" />
     <ScheduleAmountRow1702RT envelope={envelope} item="2" label="Less: Ordinary Allowable Itemized Deductions (From Part VI Schedule I Item 18)" field="schedule_3_item_2" />
     <ScheduleAmountRow1702RT envelope={envelope} item="3" label="Net Operating Loss (Item 1 Less Item 2) (To Schedule IIIA, Item 7A)" field="schedule_3_item_3" />
-    <h3>Schedule IIIA - Computation of Available Net Operating Loss Carry Over (NOLCO)</h3>
+    <h3 className="schedule-three-a-title-1702rt">
+      <span>Schedule IIIA - Computation of Available Net Operating Loss Carry Over (NOLCO)</span>
+      <small>(DO NOT enter Centavos; 49 Centavos or Less drop down; 50 or more round up)</small>
+    </h3>
     <div className="nolco-primary-heading-1702rt">
       <span className="nolco-primary-title-1702rt">Net Operating Loss</span>
       <span className="nolco-primary-year-heading-1702rt">Year Incurred</span>

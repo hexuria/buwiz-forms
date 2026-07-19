@@ -13,7 +13,7 @@
   line-height: 1.02;
 }
 
-.form-page.form-1702rt-page-two { padding: 82pt 17.5pt 16pt; }
+.form-page.form-1702rt-page-two { padding: 82pt 17.5pt 16pt; font-size: 9pt; }
 .form-page.form-1702rt-page-three,
 .form-page.form-1702rt-page-four { padding: 33pt 17.5pt 16pt; }
 .form-1702rt-page :is(h2, h3, p) { margin: 0; }
@@ -543,6 +543,25 @@
 
 .schedule-three-1702rt { height: 323pt; }
 .schedule-three-1702rt > h3 { height: 12pt; }
+.schedule-three-1702rt > .schedule-three-a-title-1702rt {
+  justify-content: space-between;
+  padding-right: 3pt;
+  font-size: 9pt;
+  font-weight: 700;
+}
+.schedule-three-1702rt > .schedule-three-a-title-1702rt > span {
+  transform: translateY(1pt);
+}
+.schedule-three-1702rt > .schedule-three-a-title-1702rt small {
+  margin-left: 6pt;
+  font-family: "eBIRForms Roboto Condensed", sans-serif;
+  font-size: 5.85pt;
+  font-style: italic;
+  font-weight: 700;
+  transform: translateY(2.5pt) scaleX(1.014);
+  transform-origin: left center;
+  white-space: nowrap;
+}
 .schedule-three-1702rt > .schedule-amount-row-1702rt { height: 19.5pt; }
 .nolco-primary-heading-1702rt {
   height: 23pt;
