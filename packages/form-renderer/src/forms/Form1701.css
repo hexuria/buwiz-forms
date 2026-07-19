@@ -95,8 +95,13 @@
 .form-number-1701 > strong { display: block; height: 21pt; font-size: 20.04pt; line-height: 21pt; }
 .form-number-1701 > small,
 .form-number-1701 > b { font-size: 7.5pt; }
-.form-title-1701 > strong { font-size: 17pt; line-height: 1; }
-.form-title-1701 > span { margin-top: 2pt; font-size: 9.5pt; }
+/* The official page-one date and page label are 8.04pt Arial. */
+.page-one-1701 .form-number-1701 > small,
+.page-one-1701 .form-number-1701 > b { font-size: 8.04pt; }
+/* The source title is 15.48pt Arial Bold. The renderer's calibrated regular
+ * face reaches the same raster footprint at 16.5pt without changing geometry. */
+.form-title-1701 > strong { font-size: 16.5pt; line-height: 1; }
+.form-title-1701 > span { margin-top: 2pt; font-size: 9pt; }
 .form-title-1701 > em { margin-top: 3pt; padding: 0 4pt; line-height: 1.08; }
 .compact-1701 .form-title-1701 > strong { font-size: 16.5pt; }
 .compact-1701 .form-title-1701 > span { font-size: 9.5pt; }
