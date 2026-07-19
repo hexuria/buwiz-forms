@@ -31,6 +31,24 @@ test("1702MX January 2018C renders every Rust fixture as four stable unclipped 6
   }
 });
 
+test("1702MX January 2018C keeps Item 5 ATCs in the official plain boxes", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-normal.json"));
+  const pageOne = page.locator(".form-page").nth(0);
+  const itemFiveRows = pageOne.locator(".atc-options-1702mx > span:not(:first-child)");
+
+  await expect(itemFiveRows).toHaveCount(2);
+  await expect(itemFiveRows.locator(".comb-value")).toHaveCount(0);
+  await expect(itemFiveRows.locator(".atc-code-box-1702mx")).toHaveCount(2);
+  await expect(itemFiveRows.nth(0).locator(".atc-code-box-1702mx")).toHaveText("IC 055");
+  await expect(itemFiveRows.nth(0).locator(".atc-description-box-1702mx")).toHaveText(
+    "Minimum Corporate Income Tax (MCIT)"
+  );
+  expect(await itemFiveRows.locator(".atc-code-box-1702mx").evaluateAll((boxes) =>
+    boxes.map((box) => getComputedStyle(box).backgroundColor)
+  )).toEqual(["rgb(255, 255, 255)", "rgb(255, 255, 255)"]);
+  expect(await pageHasNoOverflow(pageOne)).toBe(true);
+});
+
 test("1702MX January 2018C keeps verified page-specific PDF417, caption, and seal geometry", async ({ page }) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-normal.json"));
   const pages = page.locator(".form-page");

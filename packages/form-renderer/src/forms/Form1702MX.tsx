@@ -303,8 +303,8 @@ function HeaderOptions1702MX({ envelope }: { envelope: RenderEnvelope }) {
       <BinaryHeader1702MX number="4" label="Short Period Return?" checked={bool(envelope, "is_short_period")} />
       <div className="atc-options-1702mx">
         <span><b>5</b> Alphanumeric Tax Code (ATC)</span>
-        <span><AdaptiveCombValue value="IC 055" cells={6} /><span>Minimum Corporate Income Tax (MCIT)</span><CheckChoice checked={bool(envelope, "atc_mcit_selected")} label="" /></span>
-        <span><AdaptiveCombValue value={text(envelope, "atc_other_code")} cells={6} /><span /><CheckChoice checked={bool(envelope, "atc_other_selected")} label="" /></span>
+        <span><span className="atc-code-box-1702mx">IC 055</span><span className="atc-description-box-1702mx">Minimum Corporate Income Tax (MCIT)</span><CheckChoice checked={bool(envelope, "atc_mcit_selected")} label="" /></span>
+        <span><PlainValue1702MX value={text(envelope, "atc_other_code")} className="atc-code-box-1702mx" /><span className="atc-description-box-1702mx" /><CheckChoice checked={bool(envelope, "atc_other_selected")} label="" /></span>
       </div>
     </section>
   );
