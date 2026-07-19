@@ -321,6 +321,19 @@ test("1701 2018 keeps the official Schedule 3.A row-group bands", async ({ page 
   await expect(secondPage.locator(".schedule-three-a-1701 > .paired-head-1701")).toHaveCount(0);
 });
 
+test("1701 2018 preserves the official gray declaration copy band", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701-normal.json"));
+
+  await expect(page.locator(".declaration-1701 > p")).toHaveCSS(
+    "background-color",
+    "rgb(217, 217, 217)"
+  );
+  await expect(page.locator(".signature-1701 > span:first-child")).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)"
+  );
+});
+
 test("1701 2018 keeps the official page-two spouse row partitions", async ({ page }) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701-normal.json"));
   const secondPage = page.locator(".form-page").nth(1);

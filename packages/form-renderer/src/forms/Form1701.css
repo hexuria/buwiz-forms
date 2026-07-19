@@ -412,7 +412,7 @@
 .overpayment-1701 > span:first-child { grid-column: 1 / 4; height: 10.5pt; display: grid; place-items: center; border-bottom: .6pt solid #111; }
 .overpayment-1701 > .check-choice { justify-self: center; }
 .declaration-1701 { height: 74pt; border: 1pt solid #111; border-top: 0; }
-.declaration-1701 > p { height: 28pt; margin: 0; padding: 2pt 4pt; border-bottom: .6pt solid #111; font-size: 5.2pt; text-align: center; font-style: italic; }
+.declaration-1701 > p { height: 28pt; margin: 0; padding: 2pt 4pt; border-bottom: .6pt solid #111; background: #d9d9d9; font-size: 5.2pt; text-align: center; font-style: italic; }
 .signature-1701 { height: 46pt; display: grid; grid-template-columns: minmax(0, 1fr) 135pt; }
 .signature-1701 > span { display: flex; align-items: flex-end; justify-content: center; padding: 2pt; text-align: center; }
 .signature-1701 > span + span { align-items: flex-end; gap: 3pt; border-left: .6pt solid #111; background: #d1d1d1; }

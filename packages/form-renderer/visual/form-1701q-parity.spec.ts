@@ -318,6 +318,19 @@ test("1701Q 2018 keeps the official Item 16 and Item 25 choice partitions", asyn
   ]);
 });
 
+test("1701Q 2018 preserves the official gray declaration copy band", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701q-normal.json"));
+
+  await expect(page.locator(".declaration-1701q > p")).toHaveCSS(
+    "background-color",
+    "rgb(217, 217, 217)"
+  );
+  await expect(page.locator(".declaration-1701q > div")).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)"
+  );
+});
+
 test("1701Q 2018 matches the complete official pages", async ({ page }, testInfo) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1701q-normal.json"));
   const pages = page.locator(".form-page");

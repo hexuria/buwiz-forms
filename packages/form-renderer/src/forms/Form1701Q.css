@@ -474,7 +474,7 @@
 .aggregate-1701q > .amount-1701q { border-left: .6pt solid #111; }
 
 .declaration-1701q { height: 67pt; border: 1pt solid #111; margin-top: 0; }
-.declaration-1701q p { height: 25pt; margin: 0; padding: 2pt 4pt; border-bottom: .6pt solid #111; font-size: 5.5pt; text-align: center; }
+.declaration-1701q p { height: 25pt; margin: 0; padding: 2pt 4pt; border-bottom: .6pt solid #111; background: #d9d9d9; font-size: 5.5pt; text-align: center; }
 .declaration-1701q > div { height: 41pt; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2pt; text-align: center; }
 
 .payment-details-1701q {
