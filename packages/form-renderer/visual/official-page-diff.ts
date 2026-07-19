@@ -34,14 +34,12 @@ export function compareCompleteOfficialPage(
   const pixelThreshold = options.pixelThreshold ?? 0.1;
   const inkThreshold = options.inkThreshold ?? 160;
   const inkToleranceRadius = options.inkToleranceRadius ?? 2;
-  const diff = new PNG({ width: expected.width, height: expected.height });
-  const fullPageChangedPixels = pixelmatch(
-    expected.data,
-    actual.data,
-    diff.data,
-    expected.width,
-    expected.height,
-    { threshold: pixelThreshold, includeAA: false }
+  // diffMask keeps the artifact a pure red-on-transparent changed-pixel mask,
+  // byte-identical to the mask the migration audit independently recomputes.
+  const { changedPixels: fullPageChangedPixels, diff } = comparePixelMask(
+    expected,
+    actual,
+    pixelThreshold
   );
   const pixelCount = expected.width * expected.height;
 
@@ -83,12 +81,39 @@ export function compareCompleteOfficialPage(
   };
 }
 
+/**
+ * Raw pixelmatch of one full page into a pure changed-pixel mask (red on
+ * transparent, anti-aliased pixels excluded and undrawn), matching the exact
+ * mask semantics the migration audit recomputes byte-for-byte.
+ */
+export function comparePixelMask(
+  expected: PNG,
+  actual: PNG,
+  threshold: number
+): { changedPixels: number; diff: PNG } {
+  if (expected.width !== actual.width || expected.height !== actual.height) {
+    throw new Error(
+      `official-page dimensions differ: expected ${expected.width}x${expected.height}, actual ${actual.width}x${actual.height}`
+    );
+  }
+  const diff = new PNG({ width: expected.width, height: expected.height });
+  const changedPixels = pixelmatch(
+    expected.data,
+    actual.data,
+    diff.data,
+    expected.width,
+    expected.height,
+    { threshold, includeAA: false, diffMask: true }
+  );
+  return { changedPixels, diff };
+}
+
 function percentage(numerator: number, denominator: number) {
   if (denominator === 0) return numerator === 0 ? 0 : 100;
   return numerator * 100 / denominator;
 }
 
-function darkInkMask(image: PNG, threshold: number) {
+export function darkInkMask(image: PNG, threshold: number) {
   const mask = new Uint8Array(image.width * image.height);
   for (let index = 0; index < mask.length; index += 1) {
     const offset = index * 4;
@@ -103,7 +128,7 @@ function darkInkMask(image: PNG, threshold: number) {
   return mask;
 }
 
-function dilateMask(
+export function dilateMask(
   mask: Uint8Array,
   width: number,
   height: number,

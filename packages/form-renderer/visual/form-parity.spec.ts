@@ -9,11 +9,21 @@ import {
   compareSymmetricGrayscaleEdges,
   LAYERED_EDGE_EVIDENCE_POLICY
 } from "./grayscale-edge-match";
-import { compareCompleteOfficialPage } from "./official-page-diff";
+import {
+  compareCompleteOfficialPage,
+  comparePixelMask
+} from "./official-page-diff";
 import {
   OFFICIAL_2551Q_STATIC_TEXT,
   verifyPageIndexedStaticText
 } from "./official-2551q-static-text";
+import { writeRegionReport } from "./region-report";
+import {
+  criticalRegionsFor,
+  PAGE_ONE_CRITICAL_REGIONS,
+  PAGE_TWO_CRITICAL_REGIONS,
+  type CriticalRegion
+} from "./regions/2551q";
 import { parsePromotionVisualThreshold } from "./release-visual-threshold";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -45,7 +55,7 @@ interface ParityCase {
   name: string;
   revision: string;
   fixture: string;
-  references: string[];
+  references: Array<{ page: number; poppler: string; chromium: string }>;
   expectedRealRowKeys: number;
 }
 
@@ -56,6 +66,7 @@ interface VisualPageMetric {
   fixture_sha256: string;
   reference: string;
   reference_sha256: string;
+  reference_kind: "official_chromium_raster";
   actual: string;
   actual_sha256: string;
   diff: string | null;
@@ -69,9 +80,19 @@ interface VisualPageMetric {
   changed_percent: number | null;
   max_changed_percent: number;
   pixelmatch_threshold: number;
-  comparison: "official-complete-page-v1";
+  comparison: "official-complete-page-v2";
   expected_ink_missing_percent: number | null;
   unexpected_actual_ink_percent: number | null;
+  poppler_reference: string;
+  poppler_reference_sha256: string;
+  poppler_diff: string | null;
+  poppler_diff_sha256: string | null;
+  poppler_raster_changed_pixels: number | null;
+  poppler_raster_changed_percent: number | null;
+  reference_noise_floor_changed_pixels: number;
+  reference_noise_floor_changed_percent: number;
+  region_report: string | null;
+  region_report_sha256: string | null;
   structural_changed_pixels: number | null;
   structural_changed_percent: number | null;
   structural_diff: string | null;
@@ -108,12 +129,67 @@ const cases: ParityCase[] = [
     revision: "2018",
     fixture: "packages/form-contracts/fixtures/2551q-6-rows.json",
     references: [
-      "packages/form-renderer/references/2551q-2018-page-1.png",
-      "packages/form-renderer/references/2551q-2018-page-2.png"
+      {
+        page: 1,
+        poppler: "packages/form-renderer/references/2551q-2018-page-1.png",
+        chromium: "packages/form-renderer/references/2551q-2018-page-1-chromium.png"
+      },
+      {
+        page: 2,
+        poppler: "packages/form-renderer/references/2551q-2018-page-2.png",
+        chromium: "packages/form-renderer/references/2551q-2018-page-2-chromium.png"
+      }
     ],
     expectedRealRowKeys: 6
   }
 ];
+
+interface ChromiumManifestRaster {
+  reference_png: string;
+  reference_png_sha256: string;
+  noise_floor_changed_pixels: number;
+  noise_floor_changed_percent: number;
+}
+
+let cachedReferenceManifest: {
+  forms: Array<{
+    code: string;
+    revision: string;
+    pages: Array<{ page: number; chromium_raster?: ChromiumManifestRaster }>;
+  }>;
+} | null = null;
+
+/**
+ * The pinned same-rasterizer reference record for one official page. The gate
+ * compares against this chromium raster; its pinned Poppler-vs-Chromium noise
+ * floor is copied into the evidence so every report carries the floor next to
+ * the gate number. Fails hard when a parity case lacks a pinned chromium
+ * raster: this spec never silently falls back to a cross-rasterizer gate.
+ */
+function chromiumRasterFor(
+  code: string,
+  revision: string,
+  pageNumber: number
+): ChromiumManifestRaster {
+  cachedReferenceManifest ??= JSON.parse(
+    fs.readFileSync(
+      path.join(REPO_ROOT, "packages/form-renderer/references/manifest.json"),
+      "utf8"
+    )
+  ) as NonNullable<typeof cachedReferenceManifest>;
+  const form = cachedReferenceManifest.forms.find(
+    (candidate) => candidate.code === code && candidate.revision === revision
+  );
+  const raster = form?.pages.find(
+    (candidate) => candidate.page === pageNumber
+  )?.chromium_raster;
+  if (!raster) {
+    throw new Error(
+      `${code}:${revision} page ${pageNumber} has no pinned chromium raster in the reference manifest`
+    );
+  }
+  return raster;
+}
 
 for (const parityCase of cases) {
   test(`${parityCase.name} matches the official first two pages`, async ({
@@ -170,92 +246,10 @@ for (const parityCase of cases) {
     );
     expect(await pageHasNoOverflow(officialSchedulePage)).toBe(true);
 
-    await expectCriticalRegionGeometry(pages.nth(0), [
-      { name: "Items 1-5", selector: ".official-header-options", x: 45, y: 223, width: 1137, height: 67 },
-      { name: "Items 1-2 filing basis", selector: ".filing-basis", x: 45, y: 223, width: 398, height: 67 },
-      { name: "Item 1 label", selector: ".filing-basis > .option-label:first-child", x: 45, y: 223, width: 114, height: 31 },
-      { name: "Item 1 choices", selector: ".filing-basis > .option-choices", x: 159, y: 223, width: 284, height: 31 },
-      { name: "Item 2 label", selector: ".filing-basis > .year-label", x: 45, y: 253, width: 226, height: 37 },
-      { name: "Item 2 value", selector: ".filing-basis > .comb-value", x: 271, y: 253, width: 172, height: 37 },
-      { name: "Item 3 quarter", selector: ".quarter-options", x: 443, y: 223, width: 369, height: 67 },
-      { name: "Item 3 label", selector: ".quarter-options > .option-label", x: 443, y: 223, width: 369, height: 30 },
-      { name: "Item 3 choices", selector: ".quarter-options > .option-choices", x: 443, y: 253, width: 369, height: 37 },
-      { name: "Item 4 amended", selector: ".amended-options", x: 812, y: 223, width: 199, height: 67 },
-      { name: "Item 4 label", selector: ".amended-options > .option-label", x: 812, y: 223, width: 199, height: 30 },
-      { name: "Item 4 choices", selector: ".amended-options > .option-choices", x: 812, y: 253, width: 199, height: 37 },
-      { name: "Item 5 sheets", selector: ".sheets-options", x: 1011, y: 223, width: 168, height: 67 },
-      { name: "Item 5 label", selector: ".sheets-options > .option-label", x: 1011, y: 223, width: 168, height: 30 },
-      { name: "Item 5 value", selector: ".sheets-options > .sheets-value", x: 1011, y: 253, width: 168, height: 37 },
-      { name: "Calendar checkbox", selector: ".filing-basis .check-choice:nth-child(1) .check-box", x: 169, y: 225, width: 28, height: 26 },
-      { name: "Fiscal checkbox", selector: ".filing-basis .check-choice:nth-child(2) .check-box", x: 314, y: 226, width: 28, height: 26 },
-      { name: "First-quarter checkbox", selector: ".quarter-options .check-choice:nth-child(1) .check-box", x: 488, y: 252, width: 28, height: 26 },
-      { name: "Second-quarter checkbox", selector: ".quarter-options .check-choice:nth-child(2) .check-box", x: 573, y: 252, width: 28, height: 26 },
-      { name: "Third-quarter checkbox", selector: ".quarter-options .check-choice:nth-child(3) .check-box", x: 658, y: 252, width: 28, height: 26 },
-      { name: "Fourth-quarter checkbox", selector: ".quarter-options .check-choice:nth-child(4) .check-box", x: 742, y: 252, width: 28, height: 26 },
-      { name: "Amended yes checkbox", selector: ".amended-options .check-choice:nth-child(1) .check-box", x: 851, y: 254, width: 28, height: 26 },
-      { name: "Amended no checkbox", selector: ".amended-options .check-choice:nth-child(2) .check-box", x: 934, y: 255, width: 28, height: 26 },
-      { name: "Items 6-13", selector: ".background-information", x: 45, y: 295, width: 1137, height: 399 },
-      { name: "Items 6-7", selector: ".tin-rdo-row", x: 45, y: 320, width: 1137, height: 36 },
-      { name: "Item 6 label", selector: ".tin-rdo-row > .field-label", x: 47, y: 320, width: 394, height: 35 },
-      { name: "TIN first group", selector: ".tin-rdo-row > .comb-value:nth-child(2)", x: 441, y: 320, width: 85, height: 35 },
-      { name: "TIN first separator", selector: ".tin-rdo-row > .tin-separator:nth-child(3)", x: 526, y: 320, width: 29, height: 35 },
-      { name: "TIN second group", selector: ".tin-rdo-row > .comb-value:nth-child(4)", x: 555, y: 320, width: 85, height: 35 },
-      { name: "TIN second separator", selector: ".tin-rdo-row > .tin-separator:nth-child(5)", x: 640, y: 320, width: 28, height: 35 },
-      { name: "TIN third group", selector: ".tin-rdo-row > .comb-value:nth-child(6)", x: 668, y: 320, width: 86, height: 35 },
-      { name: "TIN third separator", selector: ".tin-rdo-row > .tin-separator:nth-child(7)", x: 754, y: 320, width: 28, height: 35 },
-      { name: "TIN branch group", selector: ".tin-rdo-row > .comb-value:nth-child(8)", x: 782, y: 320, width: 142, height: 35 },
-      { name: "Item 7 label", selector: ".tin-rdo-row > .rdo-label", x: 924, y: 320, width: 170, height: 35 },
-      { name: "Item 7 value", selector: ".tin-rdo-row > .comb-value:last-child", x: 1094, y: 320, width: 86, height: 35 },
-      { name: "Item 8", selector: ".name-field", x: 45, y: 356, width: 1137, height: 58 },
-      { name: "Item 8 label", selector: ".name-field > .field-label", x: 47, y: 357, width: 1133, height: 23 },
-      { name: "Item 8 value", selector: ".name-field > .comb-value", x: 47, y: 380, width: 1133, height: 35 },
-      { name: "Items 9-9A", selector: ".address-field", x: 45, y: 414, width: 1137, height: 96 },
-      { name: "Item 9 label", selector: ".address-field > .field-label", x: 47, y: 415, width: 1133, height: 23 },
-      { name: "Item 9 first value row", selector: ".address-field > .comb-value", x: 47, y: 438, width: 1133, height: 35 },
-      { name: "Item 9 continuation", selector: ".address-continuation > .comb-value:first-child", x: 47, y: 473, width: 881, height: 38 },
-      { name: "Item 9A label", selector: ".address-continuation > .zip-label", x: 928, y: 473, width: 141, height: 38 },
-      { name: "Item 9A value", selector: ".address-continuation > .comb-value:last-child", x: 1069, y: 473, width: 111, height: 38 },
-      { name: "Items 10-11", selector: ".contact-email-field", x: 45, y: 510, width: 1137, height: 59 },
-      { name: "Item 10 label", selector: ".contact-email-field > .field-label:first-child", x: 47, y: 510, width: 337, height: 23 },
-      { name: "Item 11 label", selector: ".contact-email-field > .field-label:nth-child(2)", x: 383, y: 510, width: 796, height: 23 },
-      { name: "Item 10 value", selector: ".contact-email-field > .comb-value:nth-child(3)", x: 47, y: 533, width: 337, height: 35 },
-      { name: "Item 11 value", selector: ".contact-email-field > .comb-value:nth-child(4)", x: 383, y: 533, width: 796, height: 35 },
-      { name: "Items 12-12A", selector: ".tax-relief-field", x: 45, y: 569, width: 1137, height: 40 },
-      { name: "Item 12 label", selector: ".tax-relief-field > .field-label", x: 47, y: 568, width: 337, height: 38 },
-      { name: "Item 12 choices", selector: ".tax-relief-field > .relief-choices", x: 383, y: 568, width: 171, height: 38 },
-      { name: "Item 12 Yes box", selector: ".relief-choices .check-choice:first-child .check-box", x: 383, y: 574, width: 28, height: 28 },
-      { name: "Item 12 No box", selector: ".relief-choices .check-choice:last-child .check-box", x: 469, y: 574, width: 28, height: 28 },
-      { name: "Item 12A label", selector: ".tax-relief-field > .tax-relief-spec", x: 554, y: 568, width: 170, height: 38 },
-      { name: "Item 12A value", selector: ".tax-relief-field > .comb-value", x: 724, y: 568, width: 455, height: 38 },
-      { name: "Item 13", selector: ".income-rate-field", x: 45, y: 607, width: 1137, height: 87 },
-      { name: "Items 14-24 totals", selector: ".tax-payable", x: 45, y: 696, width: 1137, height: 507 },
-      { name: "Item 14 total", selector: ".official-tax-line[data-item='14']", x: 45, y: 723, width: 1137, height: 36 },
-      { name: "Item 17 inline specification field", selector: ".tax-credit-description", x: 444, y: 862, width: 309, height: 24 },
-      { name: "official declaration and signatures", selector: ".official-declaration", x: 45, y: 1207, width: 1137, height: 231 },
-      { name: "declaration copy", selector: ".official-declaration > p", x: 47, y: 1208, width: 1133, height: 56 },
-      { name: "official signature boxes", selector: ".official-signature-grid", x: 47, y: 1264, width: 1133, height: 134 },
-      { name: "individual signature caption", selector: ".official-signature-grid > div:first-child .signature-caption", x: 47, y: 1345, width: 567, height: 53 },
-      { name: "non-individual signature caption", selector: ".official-signature-grid > div:last-child .signature-caption", x: 615, y: 1345, width: 565, height: 53 },
-      { name: "tax-agent strip", selector: ".tax-agent-strip", x: 47, y: 1398, width: 1133, height: 38 },
-      { name: "Part III item 25 decimal cell", selector: ".payment-row-25 .decimal-separator", x: 1097, y: 1502, width: 30, height: 35 },
-      { name: "Part III item 25 cents cells", selector: ".payment-row-25 .blank-money-value > .comb-value:last-child", x: 1127, y: 1502, width: 53, height: 35 },
-      { name: "Part III item 26 decimal cell", selector: ".payment-row-26 .decimal-separator", x: 1097, y: 1538, width: 30, height: 35 },
-      { name: "Part III item 26 cents cells", selector: ".payment-row-26 .blank-money-value > .comb-value:last-child", x: 1127, y: 1538, width: 53, height: 35 },
-      { name: "Part III item 27 decimal cell", selector: ".payment-row-27 .decimal-separator", x: 1097, y: 1575, width: 30, height: 35 },
-      { name: "Part III item 27 cents cells", selector: ".payment-row-27 .blank-money-value > .comb-value:last-child", x: 1127, y: 1575, width: 53, height: 35 },
-      { name: "Part III item 28 continuation decimal cell", selector: ".payment-other-row .decimal-separator", x: 1097, y: 1636, width: 30, height: 35 },
-      { name: "Part III item 28 continuation cents cells", selector: ".payment-other-row .blank-money-value > .comb-value:last-child", x: 1127, y: 1636, width: 53, height: 35 },
-      { name: "Part III machine validation", selector: ".machine-validation", x: 45, y: 1672, width: 1137, height: 133 },
-      { name: "privacy note", selector: ".privacy-note", x: 45, y: 1811, width: 1137, height: 16 }
-    ]);
+    await expectCriticalRegionGeometry(pages.nth(0), PAGE_ONE_CRITICAL_REGIONS);
     await expectHeaderOptionsTopAlignment(pages.nth(0));
     await expectBackgroundInformationParity(pages.nth(0));
-    await expectCriticalRegionGeometry(pages.nth(1), [
-      { name: "Schedule 1 masthead", selector: ".page-two-masthead", x: 45, y: 78, width: 1137, height: 117 },
-      { name: "Schedule 1 identity", selector: ".page-two-identity", x: 45, y: 193, width: 1137, height: 60 },
-      { name: "Schedule 1", selector: ".official-schedule", x: 45, y: 256, width: 1137, height: 327 },
-      { name: "Schedule 1 ATC table", selector: ".official-atc-table", x: 45, y: 587, width: 1137, height: 677 }
-    ]);
+    await expectCriticalRegionGeometry(pages.nth(1), PAGE_TWO_CRITICAL_REGIONS);
     await expectCriticalRegionContent(pages.nth(0), pages.nth(1));
     const staticTextViolations = verifyPageIndexedStaticText(
       await collectStaticTextSnapshots(pages)
@@ -278,10 +272,13 @@ for (const parityCase of cases) {
     await expect(pages).toHaveCount(parityCase.references.length);
     await prepareOfficialBlankComparison(page);
 
-    for (const [pageIndex, referencePath] of parityCase.references.entries()) {
+    for (const [pageIndex, reference] of parityCase.references.entries()) {
       const renderedPage = pages.nth(pageIndex);
       const expectedBuffer = fs.readFileSync(
-        path.join(REPO_ROOT, referencePath)
+        path.join(REPO_ROOT, reference.chromium)
+      );
+      const popplerBuffer = fs.readFileSync(
+        path.join(REPO_ROOT, reference.poppler)
       );
       const expectedImage = PNG.sync.read(expectedBuffer);
       const box = await renderedPage.boundingBox();
@@ -301,12 +298,14 @@ for (const parityCase of cases) {
       });
       assertVisualParity({
         parityCase,
-        pageNumber: pageIndex + 1,
+        pageNumber: reference.page,
         fixtureSha256,
-        referencePath,
+        referencePath: reference.chromium,
+        popplerReferencePath: reference.poppler,
         actualBuffer,
         expectedBuffer,
-        artifactStem: `${slug(parityCase.name)}-page-${pageIndex + 1}`,
+        popplerBuffer,
+        artifactStem: `${slug(parityCase.name)}-page-${reference.page}`,
         outputDir: testInfo.outputDir
       });
     }
@@ -334,6 +333,10 @@ for (const parityCase of cases) {
       .map((metric) => ({
         page: metric.page,
         changed_percent: metric.changed_percent,
+        poppler_raster_changed_percent: metric.poppler_raster_changed_percent,
+        reference_noise_floor_changed_percent:
+          metric.reference_noise_floor_changed_percent,
+        region_report: metric.region_report,
         expected_width: metric.expected_width,
         expected_height: metric.expected_height,
         actual_width: metric.actual_width,
@@ -1972,15 +1975,6 @@ function officialBlankComparisonEnvelope(envelope: unknown): unknown {
   return blankEnvelope;
 }
 
-interface CriticalRegion {
-  name: string;
-  selector: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
 async function expectCriticalRegionGeometry(
   formPage: Locator,
   regions: readonly CriticalRegion[]
@@ -2248,8 +2242,10 @@ function assertVisualParity({
   pageNumber,
   fixtureSha256,
   referencePath,
+  popplerReferencePath,
   actualBuffer,
   expectedBuffer,
+  popplerBuffer,
   artifactStem,
   outputDir
 }: {
@@ -2257,13 +2253,20 @@ function assertVisualParity({
   pageNumber: number;
   fixtureSha256: string;
   referencePath: string;
+  popplerReferencePath: string;
   actualBuffer: Buffer;
   expectedBuffer: Buffer;
+  popplerBuffer: Buffer;
   artifactStem: string;
   outputDir: string;
 }) {
   const actual = PNG.sync.read(actualBuffer);
   const expected = PNG.sync.read(expectedBuffer);
+  const chromiumRaster = chromiumRasterFor(
+    parityCase.code,
+    parityCase.revision,
+    pageNumber
+  );
   const dimensionsMatch =
     actual.width === expected.width && actual.height === expected.height;
 
@@ -2281,6 +2284,7 @@ function assertVisualParity({
       fixture_sha256: fixtureSha256,
       reference: referencePath,
       reference_sha256: sha256(expectedBuffer),
+      reference_kind: "official_chromium_raster",
       actual: artifacts.actual.path,
       actual_sha256: artifacts.actual.sha256,
       diff: null,
@@ -2294,9 +2298,21 @@ function assertVisualParity({
       changed_percent: null,
       max_changed_percent: MAX_CHANGED_PERCENT,
       pixelmatch_threshold: PIXELMATCH_THRESHOLD,
-      comparison: "official-complete-page-v1",
+      comparison: "official-complete-page-v2",
       expected_ink_missing_percent: null,
       unexpected_actual_ink_percent: null,
+      poppler_reference: popplerReferencePath,
+      poppler_reference_sha256: sha256(popplerBuffer),
+      poppler_diff: null,
+      poppler_diff_sha256: null,
+      poppler_raster_changed_pixels: null,
+      poppler_raster_changed_percent: null,
+      reference_noise_floor_changed_pixels:
+        chromiumRaster.noise_floor_changed_pixels,
+      reference_noise_floor_changed_percent:
+        chromiumRaster.noise_floor_changed_percent,
+      region_report: null,
+      region_report_sha256: null,
       structural_changed_pixels: null,
       structural_changed_percent: null,
       structural_diff: null,
@@ -2339,6 +2355,33 @@ function assertVisualParity({
   });
   const passed = completePage.fullPageChangedPercent <= MAX_CHANGED_PERCENT;
 
+  // Non-gating raw Poppler diagnostic: the same comparison against the
+  // Poppler raster of the same official page. Reported next to the gate so
+  // the cross-rasterizer difference stays visible, never hidden.
+  const poppler = PNG.sync.read(popplerBuffer);
+  const popplerComparison = comparePixelMask(poppler, actual, PIXELMATCH_THRESHOLD);
+  const popplerDiffBuffer = PNG.sync.write(popplerComparison.diff);
+  const popplerDiffPath = path.join(
+    outputDir,
+    `${artifactStem}-poppler-diff.png`
+  );
+  fs.mkdirSync(outputDir, { recursive: true });
+  fs.writeFileSync(popplerDiffPath, popplerDiffBuffer);
+
+  // Region-ranked localization diagnostic (always written, pass or fail).
+  const regionReport = writeRegionReport({
+    outputDir,
+    artifactStem,
+    formCode: parityCase.code,
+    formRevision: parityCase.revision,
+    pageNumber,
+    comparison: "official-complete-page-v2",
+    expected,
+    actual,
+    diff: completePage.diff,
+    regions: criticalRegionsFor(parityCase.code, parityCase.revision, pageNumber)
+  });
+
   const diffBuffer = PNG.sync.write(completePage.diff);
   const artifacts = writeVisualArtifacts({
     actualBuffer,
@@ -2361,6 +2404,7 @@ function assertVisualParity({
     fixture_sha256: fixtureSha256,
     reference: referencePath,
     reference_sha256: sha256(expectedBuffer),
+    reference_kind: "official_chromium_raster",
     actual: artifacts.actual.path,
     actual_sha256: artifacts.actual.sha256,
     diff: artifacts.diff?.path ?? null,
@@ -2374,9 +2418,22 @@ function assertVisualParity({
     changed_percent: completePage.fullPageChangedPercent,
     max_changed_percent: MAX_CHANGED_PERCENT,
     pixelmatch_threshold: PIXELMATCH_THRESHOLD,
-    comparison: "official-complete-page-v1",
+    comparison: "official-complete-page-v2",
     expected_ink_missing_percent: completePage.expectedInkMissingPercent,
     unexpected_actual_ink_percent: completePage.unexpectedActualInkPercent,
+    poppler_reference: popplerReferencePath,
+    poppler_reference_sha256: sha256(popplerBuffer),
+    poppler_diff: repositoryRelativePath(popplerDiffPath),
+    poppler_diff_sha256: sha256(popplerDiffBuffer),
+    poppler_raster_changed_pixels: popplerComparison.changedPixels,
+    poppler_raster_changed_percent:
+      (popplerComparison.changedPixels / (expected.width * expected.height)) * 100,
+    reference_noise_floor_changed_pixels:
+      chromiumRaster.noise_floor_changed_pixels,
+    reference_noise_floor_changed_percent:
+      chromiumRaster.noise_floor_changed_percent,
+    region_report: repositoryRelativePath(regionReport.jsonPath),
+    region_report_sha256: regionReport.jsonSha256,
     structural_changed_pixels: structural.changedPixels,
     structural_changed_percent: structuralChangedPercent,
     structural_diff: repositoryRelativePath(structuralDiffPath),

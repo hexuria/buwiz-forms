@@ -2,6 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./visual",
+  testIgnore: "tools/**",
   outputDir: "../../test-results/form-renderer",
   fullyParallel: false,
   retries: 0,
