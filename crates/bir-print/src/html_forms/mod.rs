@@ -175,6 +175,38 @@ pub struct VisualReferencePage {
     pub sha256: &'static str,
 }
 
+/// One calibration-only official page rasterized through the same
+/// Chromium/Playwright environment that captures the parity screenshots.
+///
+/// The pinned noise floor is the pixelmatch difference between the Poppler
+/// raster and this Chromium raster of the same official page. It quantifies
+/// pure cross-rasterizer noise; it is diagnostic provenance, never a gate
+/// relaxation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChromiumVisualReference {
+    pub page: usize,
+    pub file_name: &'static str,
+    pub sha256: &'static str,
+    pub vector_svg_sha256: &'static str,
+    pub noise_floor_changed_pixels: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChromiumReferenceGenerator {
+    pub pdftocairo_version: &'static str,
+    pub playwright_version: &'static str,
+    pub chromium_version: &'static str,
+}
+
+/// Chromium-raster references for every official page of one exact revision.
+/// A form pins either all of its pages or none; partial sets fail manifest
+/// generation so the visual gate can never silently mix reference kinds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChromiumReferenceSet {
+    pub generator: ChromiumReferenceGenerator,
+    pub pages: &'static [ChromiumVisualReference],
+}
+
 /// Reviewed machine-readable artwork evidence for one exact form revision.
 ///
 /// `Present` is intentionally explicit even though the provider also exposes
@@ -210,6 +242,7 @@ pub struct RenderFormProvider {
     pub reference_width_px: u32,
     pub reference_height_px: u32,
     pub visual_reference_pages: &'static [VisualReferencePage],
+    pub chromium_references: Option<&'static ChromiumReferenceSet>,
     pub machine_readable_artwork: MachineReadableArtworkEvidence,
     pub runtime_discrete_assets: fn() -> Vec<serde_json::Value>,
     pub fixtures: fn() -> Result<Vec<RenderContractFixture>, RenderProviderError>,

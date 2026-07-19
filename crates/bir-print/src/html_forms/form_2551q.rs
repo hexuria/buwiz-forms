@@ -47,6 +47,33 @@ const VISUAL_REFERENCE_PAGES: &[VisualReferencePage] = &[
     },
 ];
 
+// Pinned by scripts/prepare_chromium_reference.mjs from the same official
+// PDF bytes; see references/2551q-2018-chromium-source.json for the full
+// pdf -> svg -> png provenance chain.
+const CHROMIUM_REFERENCES: super::ChromiumReferenceSet = super::ChromiumReferenceSet {
+    generator: super::ChromiumReferenceGenerator {
+        pdftocairo_version: "26.07.0",
+        playwright_version: "1.58.2",
+        chromium_version: "145.0.7632.6",
+    },
+    pages: &[
+        super::ChromiumVisualReference {
+            page: 1,
+            file_name: "2551q-2018-page-1-chromium.png",
+            sha256: "aa9c7c0a0a1de802bff03fca8a9c7b02f01aa64f00a090d58cd9b46a8e161f8c",
+            vector_svg_sha256: "b6a83a36d88338b02aee285004992f95ddc78586d396d2ccc5096981902703f6",
+            noise_floor_changed_pixels: 82_725,
+        },
+        super::ChromiumVisualReference {
+            page: 2,
+            file_name: "2551q-2018-page-2-chromium.png",
+            sha256: "667b8c2176534ea735b6d67bdb5ebd9882fad6af33d2cb0a189a88c8c827b371",
+            vector_svg_sha256: "cf5c0322e3d6b274a51190f267306e0ca7a7fddc4e8a257e774d42d350db9ae8",
+            noise_floor_changed_pixels: 70_321,
+        },
+    ],
+};
+
 pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     code: "2551Q",
     revision: "2018",
@@ -65,6 +92,7 @@ pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     reference_width_px: 1_224,
     reference_height_px: 1_872,
     visual_reference_pages: VISUAL_REFERENCE_PAGES,
+    chromium_references: Some(&CHROMIUM_REFERENCES),
     machine_readable_artwork: super::MachineReadableArtworkEvidence::Present,
     runtime_discrete_assets,
     fixtures,

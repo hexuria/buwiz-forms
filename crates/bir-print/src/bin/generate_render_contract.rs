@@ -432,24 +432,95 @@ fn build_visual_reference_manifest(
             .join(provider.visual_fixture_file_name);
         validate_fixture(&fixture_path, provider)?;
 
+        if let Some(chromium_set) = provider.chromium_references {
+            if chromium_set.pages.len() != provider.visual_reference_pages.len() {
+                return Err(format!(
+                    "{} pins {} chromium raster pages; expected {} (chromium references are all-or-none)",
+                    provider.key(),
+                    chromium_set.pages.len(),
+                    provider.visual_reference_pages.len()
+                )
+                .into());
+            }
+            for field in [
+                chromium_set.generator.pdftocairo_version,
+                chromium_set.generator.playwright_version,
+                chromium_set.generator.chromium_version,
+            ] {
+                if field.trim().is_empty() {
+                    return Err(format!(
+                        "{} chromium reference generator versions must be non-empty",
+                        provider.key()
+                    )
+                    .into());
+                }
+            }
+        }
+
         let mut pages = Vec::with_capacity(provider.visual_reference_pages.len());
         for page in provider.visual_reference_pages {
             let reference_path = references_dir.join(page.file_name);
             validate_reference_png(&reference_path, provider, page.page, page.sha256)?;
-            pages.push(json!({
+            let mut page_value = json!({
                 "page": page.page,
                 "reference_png": format!("packages/form-renderer/references/{}", page.file_name),
                 "reference_png_sha256": sha256_file(&reference_path)?,
                 "reference_width_px": provider.reference_width_px,
                 "reference_height_px": provider.reference_height_px
-            }));
+            });
+            if let Some(chromium_set) = provider.chromium_references {
+                let chromium = chromium_set
+                    .pages
+                    .iter()
+                    .find(|candidate| candidate.page == page.page)
+                    .ok_or_else(|| {
+                        format!(
+                            "{} page {} has no pinned chromium raster (chromium references are all-or-none)",
+                            provider.key(),
+                            page.page
+                        )
+                    })?;
+                let chromium_path = references_dir.join(chromium.file_name);
+                validate_reference_png(&chromium_path, provider, chromium.page, chromium.sha256)?;
+                if !is_sha256_hex(chromium.vector_svg_sha256) {
+                    return Err(format!(
+                        "{} page {} vector SVG digest is not lowercase SHA-256 hex",
+                        provider.key(),
+                        page.page
+                    )
+                    .into());
+                }
+                let total_pixels = u64::from(provider.reference_width_px)
+                    * u64::from(provider.reference_height_px);
+                if chromium.noise_floor_changed_pixels > total_pixels {
+                    return Err(format!(
+                        "{} page {} noise floor exceeds the page pixel count",
+                        provider.key(),
+                        page.page
+                    )
+                    .into());
+                }
+                #[allow(clippy::cast_precision_loss)]
+                let noise_floor_changed_percent =
+                    chromium.noise_floor_changed_pixels as f64 * 100.0 / total_pixels as f64;
+                page_value["chromium_raster"] = json!({
+                    "reference_png": format!("packages/form-renderer/references/{}", chromium.file_name),
+                    "reference_png_sha256": sha256_file(&chromium_path)?,
+                    "reference_width_px": provider.reference_width_px,
+                    "reference_height_px": provider.reference_height_px,
+                    "vector_svg_sha256": chromium.vector_svg_sha256,
+                    "noise_floor_changed_pixels": chromium.noise_floor_changed_pixels,
+                    "noise_floor_changed_percent": noise_floor_changed_percent
+                });
+            }
+            pages.push(page_value);
         }
 
         let runtime_discrete_assets = (provider.runtime_discrete_assets)();
         let machine_readable_artwork =
             build_machine_readable_artwork_evidence(root, provider, &runtime_discrete_assets)?;
 
-        forms.push(json!({
+        let mut form_value = json!({
             "code": provider.code,
             "revision": provider.revision,
             "form_id": provider.form_id,
@@ -469,7 +540,21 @@ fn build_visual_reference_manifest(
             "machine_readable_artwork": machine_readable_artwork,
             "runtime_discrete_assets": runtime_discrete_assets,
             "pages": pages
-        }));
+        });
+        if let Some(chromium_set) = provider.chromium_references {
+            form_value["chromium_reference_provenance"] = json!({
+                "kind": "official_chromium_raster",
+                "runtime_eligible": false,
+                "replacement_required": false,
+                "generator": {
+                    "pdftocairo_version": chromium_set.generator.pdftocairo_version,
+                    "playwright_version": chromium_set.generator.playwright_version,
+                    "chromium_version": chromium_set.generator.chromium_version
+                },
+                "note": "pdftocairo -svg from the pinned official PDF, rasterized by the same Chromium/Playwright environment as the parity screenshots; calibration-only and never runtime-loaded. The Poppler raster and the pinned per-page noise floor remain reported."
+            });
+        }
+        forms.push(form_value);
     }
 
     Ok(json!({
@@ -605,6 +690,13 @@ fn validate_pinned_hash(
         .into());
     }
     Ok(())
+}
+
+fn is_sha256_hex(candidate: &str) -> bool {
+    candidate.len() == 64
+        && candidate
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn sha256_file(path: &Path) -> Result<String, std::io::Error> {

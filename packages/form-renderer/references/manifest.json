@@ -3074,6 +3074,17 @@
       ]
     },
     {
+      "chromium_reference_provenance": {
+        "generator": {
+          "chromium_version": "145.0.7632.6",
+          "pdftocairo_version": "26.07.0",
+          "playwright_version": "1.58.2"
+        },
+        "kind": "official_chromium_raster",
+        "note": "pdftocairo -svg from the pinned official PDF, rasterized by the same Chromium/Playwright environment as the parity screenshots; calibration-only and never runtime-loaded. The Poppler raster and the pinned per-page noise floor remain reported.",
+        "replacement_required": false,
+        "runtime_eligible": false
+      },
       "code": "2551Q",
       "fixture": "packages/form-contracts/fixtures/2551q-6-rows.json",
       "fixture_sha256": "f7ccf4db8b7f57ed9897351887bd34987dbfa8f088767eb120391694d53c0777",
@@ -3143,6 +3154,15 @@
       "page_width_pt": 612.0,
       "pages": [
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 3.6103517261605496,
+            "noise_floor_changed_pixels": 82725,
+            "reference_height_px": 1872,
+            "reference_png": "packages/form-renderer/references/2551q-2018-page-1-chromium.png",
+            "reference_png_sha256": "aa9c7c0a0a1de802bff03fca8a9c7b02f01aa64f00a090d58cd9b46a8e161f8c",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "b6a83a36d88338b02aee285004992f95ddc78586d396d2ccc5096981902703f6"
+          },
           "page": 1,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/2551q-2018-page-1.png",
@@ -3150,6 +3170,15 @@
           "reference_width_px": 1224
         },
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 3.0690062705994077,
+            "noise_floor_changed_pixels": 70321,
+            "reference_height_px": 1872,
+            "reference_png": "packages/form-renderer/references/2551q-2018-page-2-chromium.png",
+            "reference_png_sha256": "667b8c2176534ea735b6d67bdb5ebd9882fad6af33d2cb0a189a88c8c827b371",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "cf5c0322e3d6b274a51190f267306e0ca7a7fddc4e8a257e774d42d350db9ae8"
+          },
           "page": 2,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/2551q-2018-page-2.png",

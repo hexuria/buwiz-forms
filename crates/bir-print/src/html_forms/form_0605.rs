@@ -51,6 +51,7 @@ pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     reference_width_px: 1_224,
     reference_height_px: 1_872,
     visual_reference_pages: VISUAL_REFERENCE_PAGES,
+    chromium_references: None,
     machine_readable_artwork: super::MachineReadableArtworkEvidence::Absent {
         audited_pages: &[1, 2],
         inventory_method: "pinned PDF image-XObject, decoded page-content stream, and reviewed 144 DPI page inventory",
