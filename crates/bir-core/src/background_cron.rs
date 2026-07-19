@@ -438,7 +438,7 @@ async fn process_queued_1601c(
         }
     };
 
-    let Some(form_type) = crate::forms::fileable_form_type_id("1601C") else {
+    let Some(form_type) = crate::forms::queue_authorized_form_type_id("1601C") else {
         warn!(
             "Cron: Refusing to submit {} because 1601C is not authorized for queue submission",
             draft.period_code()
@@ -686,7 +686,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                 // Resolve the exact transport identifier from the audited
                 // capability registry at the irreversible boundary. Never
                 // revive an uncertified submitter with a hard-coded fallback.
-                let Some(form_type) = crate::forms::fileable_form_type_id("2551Q") else {
+                let Some(form_type) = crate::forms::queue_authorized_form_type_id("2551Q") else {
                     warn!(
                         "Cron: Refusing to submit {} because 2551Q is not authorized for queue submission",
                         draft.period_code()

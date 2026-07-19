@@ -356,7 +356,9 @@ pub fn can_open_certification_draft(form_code: &str) -> bool {
     find_form_capability(form_code).is_some_and(|record| record.can_open_certification_draft())
 }
 
-pub fn fileable_form_type_id(form_code: &str) -> Option<&'static str> {
+/// Resolve the exact transport identifier only when the semantic submission
+/// queue gate is satisfied. This does not claim HTML release readiness.
+pub fn queue_authorized_form_type_id(form_code: &str) -> Option<&'static str> {
     find_form_capability(form_code)
         .filter(|record| record.can_queue())
         .map(|record| record.form_id)
@@ -447,15 +449,15 @@ mod tests {
     #[test]
     fn queue_gate_is_semantic_and_registry_owned() {
         assert!(can_queue_for_submission("2551Q"));
-        assert_eq!(fileable_form_type_id("2551Q"), Some("2551Qv2018"));
+        assert_eq!(queue_authorized_form_type_id("2551Q"), Some("2551Qv2018"));
         assert!(can_queue_for_submission("1601C"));
-        assert_eq!(fileable_form_type_id("1601C"), Some("1601Cv2018"));
+        assert_eq!(queue_authorized_form_type_id("1601C"), Some("1601Cv2018"));
 
         for code in [
             "0619E", "0619F", "0605", "1701Q", "2550Q", "1701", "1702RT", "1702MX", "1700", "9999",
         ] {
             assert!(!can_queue_for_submission(code), "{code} must fail closed");
-            assert_eq!(fileable_form_type_id(code), None);
+            assert_eq!(queue_authorized_form_type_id(code), None);
         }
     }
 

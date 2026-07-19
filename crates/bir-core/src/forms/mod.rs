@@ -33,8 +33,8 @@ pub use registry::{
 };
 pub use support_level::{
     FORM_CAPABILITY_REGISTRY, FormCapabilities, FormCapabilityRecord, FormSupportLevel,
-    can_open_certification_draft, can_queue_for_submission, fileable_form_type_id,
-    find_form_capability, find_form_capability_by_id, form_support_level,
+    can_open_certification_draft, can_queue_for_submission, find_form_capability,
+    find_form_capability_by_id, form_support_level, queue_authorized_form_type_id,
 };
 
 pub mod form_0605_xml;
