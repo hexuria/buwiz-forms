@@ -5,6 +5,8 @@ use crate::forms::{FilingStatus, FormDraftSummary};
 use crate::profile::TaxpayerProfile;
 use chrono::{Datelike, Local, TimeZone, Utc};
 use std::collections::HashSet;
+use std::future::Future;
+use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::sync::mpsc;
@@ -338,10 +340,42 @@ fn validation_reason(errors: &[(String, String)]) -> String {
         .join("; ")
 }
 
+trait SubmissionTransport {
+    fn submit<'a>(
+        &'a self,
+        form_type: &'a str,
+        filename: &'a str,
+        payload: &'a [u8],
+    ) -> Pin<Box<dyn Future<Output = Result<(), crate::transport::TransportError>> + Send + 'a>>;
+}
+
+struct NetworkSubmissionTransport;
+
+impl SubmissionTransport for NetworkSubmissionTransport {
+    fn submit<'a>(
+        &'a self,
+        form_type: &'a str,
+        filename: &'a str,
+        payload: &'a [u8],
+    ) -> Pin<Box<dyn Future<Output = Result<(), crate::transport::TransportError>> + Send + 'a>>
+    {
+        Box::pin(crate::transport::submit_iaf(form_type, filename, payload))
+    }
+}
+
 async fn process_queued_1601c(
     summary: &FormDraftSummary,
     profile: &TaxpayerProfile,
     db: Arc<Mutex<Database>>,
+) {
+    process_queued_1601c_with_transport(summary, profile, db, &NetworkSubmissionTransport).await;
+}
+
+async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
+    summary: &FormDraftSummary,
+    profile: &TaxpayerProfile,
+    db: Arc<Mutex<Database>>,
+    transport: &T,
 ) {
     let Some(month) = summary.month else {
         warn!("Cron: Refusing 1601C queue row without a monthly period");
@@ -495,7 +529,7 @@ async fn process_queued_1601c(
         }
     };
 
-    match crate::transport::submit_iaf(form_type, &filename, &encrypted).await {
+    match transport.submit(form_type, &filename, &encrypted).await {
         Ok(()) => {
             info!("Cron: Successfully submitted queued 1601C {}", filename);
             crate::notification::send_notification(
@@ -1196,6 +1230,105 @@ mod tests {
         draft
     }
 
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct RecordedSubmission {
+        form_type: String,
+        filename: String,
+        payload: Vec<u8>,
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    enum TestTransportOutcome {
+        Success,
+        UnknownIo,
+    }
+
+    struct RecordingSubmissionTransport {
+        calls: Mutex<Vec<RecordedSubmission>>,
+        outcome: TestTransportOutcome,
+    }
+
+    impl RecordingSubmissionTransport {
+        fn new(outcome: TestTransportOutcome) -> Self {
+            Self {
+                calls: Mutex::new(Vec::new()),
+                outcome,
+            }
+        }
+
+        fn calls(&self) -> Vec<RecordedSubmission> {
+            self.calls
+                .lock()
+                .expect("recorded transport calls should not be poisoned")
+                .clone()
+        }
+    }
+
+    impl SubmissionTransport for RecordingSubmissionTransport {
+        fn submit<'a>(
+            &'a self,
+            form_type: &'a str,
+            filename: &'a str,
+            payload: &'a [u8],
+        ) -> Pin<Box<dyn Future<Output = Result<(), crate::transport::TransportError>> + Send + 'a>>
+        {
+            self.calls
+                .lock()
+                .expect("recorded transport calls should not be poisoned")
+                .push(RecordedSubmission {
+                    form_type: form_type.to_string(),
+                    filename: filename.to_string(),
+                    payload: payload.to_vec(),
+                });
+            let outcome = self.outcome;
+            Box::pin(async move {
+                match outcome {
+                    TestTransportOutcome::Success => Ok(()),
+                    TestTransportOutcome::UnknownIo => {
+                        Err(crate::transport::TransportError::Io(std::io::Error::new(
+                            std::io::ErrorKind::ConnectionReset,
+                            "simulated unknown network outcome",
+                        )))
+                    }
+                }
+            })
+        }
+    }
+
+    fn queued_1601c_summary(id: i64, draft: &Form1601CDraft) -> FormDraftSummary {
+        FormDraftSummary {
+            id,
+            tin: draft.tin.clone(),
+            form_code: "1601C".to_string(),
+            taxable_year: draft.taxable_year,
+            quarter: None,
+            month: Some(draft.month),
+            status: FilingStatus::Queued,
+            updated_at: draft.updated_at.clone(),
+        }
+    }
+
+    fn assert_exact_1601c_transport_call(call: &RecordedSubmission, queued: &Form1601CDraft) {
+        assert_eq!(call.form_type, "1601Cv2018");
+        assert_eq!(call.filename, queued.default_submission_filename());
+        let expected_xml = queued
+            .try_to_bir_xml_payload()
+            .expect("the reviewed queued draft should produce exact XML");
+        assert_ne!(call.payload, expected_xml.as_bytes());
+        let decrypted =
+            crate::crypto::decrypt_and_decompress(&call.payload, crate::crypto::BIR_IAF_PASSPHRASE)
+                .expect(
+                    "the captured transport payload should use the BIR IAF encryption boundary",
+                );
+        let decrypted_xml = String::from_utf8(decrypted)
+            .expect("the decrypted transport payload should contain UTF-8 XML");
+        assert_eq!(
+            crate::bir_xml::parse_bir_xml_checked(&decrypted_xml)
+                .expect("the decrypted transport payload should contain checked BIR XML"),
+            queued.to_bir_field_map()
+        );
+    }
+
     #[tokio::test]
     async fn test_run_queue_tick_does_not_panic() {
         let db_file = NamedTempFile::new().unwrap();
@@ -1339,6 +1472,123 @@ mod tests {
             prepare_queued_1601c(draft, None),
             Queued1601CPreparation::Superseded
         ));
+    }
+
+    #[tokio::test]
+    async fn process_queued_1601c_success_finalizes_exact_payload_and_schedules_email_poll() {
+        let mut profile = test_profile();
+        profile.email_tracking_enabled = true;
+        profile.imap_email = Some("receipts@example.com".to_string());
+        let queued = queued_1601c_draft(&profile);
+        let db = Arc::new(Mutex::new(
+            Database::open_in_memory_for_tests()
+                .expect("the in-memory cron database should initialize"),
+        ));
+        let id = db
+            .lock()
+            .expect("the cron database should not be poisoned")
+            .save_queued_1601c_draft(&queued)
+            .expect("the reviewed 1601C queue snapshot should persist");
+        let summary = queued_1601c_summary(id, &queued);
+        let transport = RecordingSubmissionTransport::new(TestTransportOutcome::Success);
+
+        process_queued_1601c_with_transport(&summary, &profile, db.clone(), &transport).await;
+
+        let calls = transport.calls();
+        assert_eq!(calls.len(), 1);
+        assert_exact_1601c_transport_call(&calls[0], &queued);
+        let db_guard = db.lock().expect("the cron database should not be poisoned");
+        let submitted = db_guard
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .expect("the submitted 1601C lookup should succeed")
+            .expect("the submitted 1601C snapshot should remain persisted");
+        assert_eq!(submitted.status, FilingStatus::Submitted);
+        assert_eq!(submitted.to_bir_field_map(), queued.to_bir_field_map());
+        assert_eq!(
+            submitted.submission_filename.as_deref(),
+            Some(queued.default_submission_filename().as_str())
+        );
+        assert!(submitted.submitted_at.is_some());
+        assert!(submitted.submission_claim_token.is_none());
+        assert!(submitted.submission_claimed_at.is_none());
+        let jobs = db_guard
+            .list_jobs()
+            .expect("the email-poll job lookup should succeed");
+        let email_job = jobs
+            .iter()
+            .find(|job| job.name == "Waiting for 1601C confirmation email for receipts@example.com")
+            .expect("successful submission should schedule its confirmation email poll");
+        assert_eq!(email_job.status, "Queued");
+        assert_eq!(
+            email_job.command.as_deref(),
+            Some("bir_poll_email receipts@example.com")
+        );
+    }
+
+    #[tokio::test]
+    async fn process_queued_1601c_unknown_outcome_remains_claimed_and_is_not_retried() {
+        let profile = test_profile();
+        let queued = queued_1601c_draft(&profile);
+        let expected_fingerprint = queued.queued_submission_fingerprint.clone();
+        let expected_retry_at = queued.next_retry_at.clone();
+        let db = Arc::new(Mutex::new(
+            Database::open_in_memory_for_tests()
+                .expect("the in-memory cron database should initialize"),
+        ));
+        let id = db
+            .lock()
+            .expect("the cron database should not be poisoned")
+            .save_queued_1601c_draft(&queued)
+            .expect("the reviewed 1601C queue snapshot should persist");
+        let summary = queued_1601c_summary(id, &queued);
+        let failing_transport = RecordingSubmissionTransport::new(TestTransportOutcome::UnknownIo);
+
+        process_queued_1601c_with_transport(&summary, &profile, db.clone(), &failing_transport)
+            .await;
+
+        let calls = failing_transport.calls();
+        assert_eq!(calls.len(), 1);
+        assert_exact_1601c_transport_call(&calls[0], &queued);
+        let claimed = db
+            .lock()
+            .expect("the cron database should not be poisoned")
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .expect("the claimed 1601C lookup should succeed")
+            .expect("the claimed 1601C snapshot should remain persisted");
+        assert_eq!(claimed.status, FilingStatus::Queued);
+        assert_eq!(claimed.queued_submission_fingerprint, expected_fingerprint);
+        assert_eq!(claimed.next_retry_at, expected_retry_at);
+        assert_eq!(claimed.submission_attempts, 0);
+        assert!(claimed.submission_claim_token.is_some());
+        assert!(claimed.submission_claimed_at.is_some());
+        assert!(
+            claimed
+                .submission_error
+                .as_deref()
+                .is_some_and(|message| message.contains("outcome pending"))
+        );
+        assert!(queued_1601c_revision(&claimed).is_none());
+
+        let retry_transport = RecordingSubmissionTransport::new(TestTransportOutcome::Success);
+        process_queued_1601c_with_transport(&summary, &profile, db.clone(), &retry_transport).await;
+        assert!(retry_transport.calls().is_empty());
+        let still_claimed = db
+            .lock()
+            .expect("the cron database should not be poisoned")
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .expect("the unresolved 1601C lookup should succeed")
+            .expect("the unresolved 1601C snapshot should remain persisted");
+        assert_eq!(
+            still_claimed.submission_claim_token,
+            claimed.submission_claim_token
+        );
+        assert!(
+            db.lock()
+                .expect("the cron database should not be poisoned")
+                .list_jobs()
+                .expect("the email-poll job lookup should succeed")
+                .is_empty()
+        );
     }
 
     #[test]
