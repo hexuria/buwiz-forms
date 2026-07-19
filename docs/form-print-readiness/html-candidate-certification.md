@@ -88,8 +88,11 @@ documented in:
 - [Windows candidate certification collector/verifier foundation](windows-candidate-certification.md)
 
 The macOS workflow can now provide the exact Developer-ID-signed, notarized,
-and stapled archive required by its strict verifier. It still cannot create UI,
-printer, rollback, or trusted-producer evidence. The current Windows portable
+and stapled archive required by its strict verifier. The separate operator-only
+collector can exercise the real preview, save chooser, PDF export, and a
+deliberately approved printer job, but no such run is produced by CI and it
+requires separately retained rollback artifacts. Neither component creates
+trusted-producer evidence. The current Windows portable
 archive is unsigned, so its strict verifier correctly cannot pass
 Authenticode. Windows public EXE/MSI installers and Store-only MSIX remain
 separate artifact tracks.
@@ -104,7 +107,7 @@ and release tarball have not been certified.
 
 ## Promotion remains a separate milestone
 
-The next collector milestone must run the unchanged candidate on its native
+The next operator milestone must run the unchanged candidate on its native
 platform and produce independently reviewable evidence for preview readiness,
 actual toolbar and native chooser operation, system-print completion, PDF
 validation, network-denied operation, package identity, and rollback behavior.
