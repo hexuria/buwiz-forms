@@ -139,7 +139,8 @@
 .header-row-2550q { display: grid; width: 100%; }
 .header-row-one-2550q { height: 17.5pt; grid-template-columns: 168.5pt 199.5pt minmax(0, 1fr); }
 .header-row-two-2550q { height: 29pt; grid-template-columns: 297pt 127.5pt minmax(0, 1fr); }
-.header-cell-2550q { min-width: 0; display: flex; align-items: center; gap: 4pt; padding: 1pt 4pt; border-right: .55pt solid #111; border-bottom: .55pt solid #111; }
+.header-cell-2550q { min-width: 0; display: flex; align-items: center; gap: 4pt; padding: 1pt 4pt; background: #d9d9d9; border-right: .55pt solid #111; border-bottom: .55pt solid #111; }
+.header-options-2550q :is(.comb-value, .check-box) { background: #fff; }
 .header-row-2550q > :last-child { border-right: 0; }
 .header-cell-2550q > span { display: flex; align-items: center; gap: 4pt; }
 .filing-basis-2550q { justify-content: space-between; }
@@ -198,7 +199,8 @@
 .split-row-2550q .full-field-2550q { height: 28.5pt; }
 .split-row-2550q .full-field-2550q + .full-field-2550q { border-left: .55pt solid #111; }
 .classification-2550q { height: 19.5pt; display: grid; grid-template-columns: 135pt 70.5pt 70.5pt 87.5pt minmax(0, 1fr); align-items: center; padding: 1pt 4pt; border-bottom: .55pt solid #111; background: #d9d9d9; }
-.tax-relief-2550q { height: 20pt; display: grid; grid-template-columns: 169pt 43pt 42pt minmax(0, 1fr); align-items: center; }
+.tax-relief-2550q { height: 20pt; display: grid; grid-template-columns: 169pt 43pt 42pt minmax(0, 1fr); align-items: center; background: #d9d9d9; }
+.tax-relief-2550q .check-box { background: #fff; }
 .tax-relief-2550q > * { padding: 1pt 4pt; }
 .tax-relief-detail-2550q { height: 100%; display: grid; grid-template-columns: 85pt minmax(0, 1fr); align-items: center; padding: 0; border-left: .55pt solid #111; }
 .tax-relief-detail-2550q > span:first-child { display: flex; align-items: center; padding: 1pt 4pt; white-space: nowrap; }

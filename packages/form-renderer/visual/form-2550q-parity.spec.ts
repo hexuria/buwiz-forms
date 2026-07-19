@@ -228,6 +228,24 @@ test("2550Q April 2024 preserves official disabled panels and page-one payment c
   await expect(pages.nth(0).locator(".privacy-note-2550q"))
     .toHaveText("*NOTE: The BIR Data Privacy Policy is in the BIR website (www.bir.gov.ph)");
 
+  const headerCells = pages.nth(0).locator(".header-cell-2550q");
+  await expect(headerCells).toHaveCount(6);
+  for (let index = 0; index < 6; index += 1) {
+    await expect(headerCells.nth(index)).toHaveCSS("background-color", "rgb(217, 217, 217)");
+  }
+  await expect(pages.nth(0).locator(".year-ended-2550q .comb-value"))
+    .toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(pages.nth(0).locator(".header-options-2550q .check-box").first())
+    .toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(pages.nth(0).locator(".tax-relief-2550q"))
+    .toHaveCSS("background-color", "rgb(217, 217, 217)");
+  await expect(pages.nth(0).locator(".tax-relief-2550q .check-box").first())
+    .toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(pages.nth(0).locator(
+    ".tax-relief-detail-2550q > :is(.comb-value, .adaptive-plain-value)"
+  ))
+    .toHaveCSS("background-color", "rgb(255, 255, 255)");
+
   const blankPayment = pages.nth(0).locator(".payment-row-2550q").first();
   await expect(blankPayment.locator(".comb-value")).toHaveCount(5);
   await expect(blankPayment.locator(".decimal-cell-2550q")).toHaveCount(1);
