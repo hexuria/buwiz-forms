@@ -887,13 +887,28 @@ def _audit_visual_report(
             errors.append(f"{prefix}: fixture path is inconsistent")
         if page.get("fixture_sha256") != reference.get("fixture_sha256"):
             errors.append(f"{prefix}: fixture_sha256 is inconsistent")
-        if page.get("reference") != expected.get("reference_png"):
+        expected_chromium = expected.get("chromium_raster")
+        if expected_chromium is not None and not isinstance(expected_chromium, dict):
+            errors.append(f"{prefix}: manifest chromium_raster must be an object")
+            expected_chromium = None
+        if expected_chromium is not None:
+            # A chromium-equipped page gates against the same-rasterizer
+            # chromium reference; the Poppler raster stays as an audited,
+            # non-gating diagnostic that the report must still carry.
+            gate_reference_png = expected_chromium.get("reference_png")
+            gate_reference_sha256 = expected_chromium.get("reference_png_sha256")
+            required_comparison = "official-complete-page-v2"
+        else:
+            gate_reference_png = expected.get("reference_png")
+            gate_reference_sha256 = expected.get("reference_png_sha256")
+            required_comparison = "official-complete-page-v1"
+        if page.get("reference") != gate_reference_png:
             errors.append(f"{prefix}: reference path is inconsistent")
-        if page.get("reference_sha256") != expected.get("reference_png_sha256"):
+        if page.get("reference_sha256") != gate_reference_sha256:
             errors.append(f"{prefix}: reference_sha256 is inconsistent")
-        if page.get("comparison") != "official-complete-page-v1":
+        if page.get("comparison") != required_comparison:
             errors.append(
-                f"{prefix}: comparison must be official-complete-page-v1"
+                f"{prefix}: comparison must be {required_comparison}"
             )
         expected_ink_missing = _as_number(
             page.get("expected_ink_missing_percent")
@@ -931,11 +946,27 @@ def _audit_visual_report(
             f"{prefix} reference PNG",
             errors,
         )
-        artifact_paths = {
-            page.get("actual"), page.get("diff"), page.get("reference")
-        }
-        if len(artifact_paths) != 3:
-            errors.append(f"{prefix}: actual, diff, and reference paths must be distinct")
+        if expected_chromium is None:
+            artifact_paths = {
+                page.get("actual"), page.get("diff"), page.get("reference")
+            }
+            if len(artifact_paths) != 3:
+                errors.append(
+                    f"{prefix}: actual, diff, and reference paths must be distinct"
+                )
+        else:
+            artifact_paths = {
+                page.get("actual"),
+                page.get("diff"),
+                page.get("reference"),
+                page.get("poppler_reference"),
+                page.get("poppler_diff"),
+            }
+            if len(artifact_paths) != 5:
+                errors.append(
+                    f"{prefix}: actual, diff, reference, poppler_reference, and "
+                    "poppler_diff paths must be distinct"
+                )
         if (
             isinstance(page.get("actual_sha256"), str)
             and page.get("actual_sha256") == page.get("reference_sha256")
@@ -943,6 +974,15 @@ def _audit_visual_report(
             errors.append(
                 f"{prefix}: rendered screenshot must be derived independently "
                 "from the reference PNG"
+            )
+        if (
+            expected_chromium is not None
+            and isinstance(page.get("actual_sha256"), str)
+            and page.get("actual_sha256") == page.get("poppler_reference_sha256")
+        ):
+            errors.append(
+                f"{prefix}: rendered screenshot must be derived independently "
+                "from the poppler reference PNG"
             )
 
         expected_width = expected.get("reference_width_px")
@@ -1061,8 +1101,172 @@ def _audit_visual_report(
             errors.append(f"{prefix}: passed does not match recomputed visual result")
         if page.get("passed") is not True:
             errors.append(f"{prefix}: passed must be true")
+        if expected_chromium is not None:
+            _audit_visual_report_v2_page(
+                root,
+                page,
+                expected,
+                expected_chromium,
+                expected_width,
+                expected_height,
+                pixel_count,
+                actual_asset,
+                reference_asset,
+                prefix,
+                errors,
+            )
     if seen != set(range(1, page_count + 1)):
         errors.append(f"{label}: page evidence is incomplete")
+
+
+def _audit_visual_report_v2_page(
+    root: Path,
+    page: dict[str, Any],
+    expected: dict[str, Any],
+    expected_chromium: dict[str, Any],
+    expected_width: object,
+    expected_height: object,
+    pixel_count: int | None,
+    actual_asset: tuple[Path, str] | None,
+    reference_asset: tuple[Path, str] | None,
+    prefix: str,
+    errors: list[str],
+) -> None:
+    """Verify the v2 same-rasterizer additions for one evidence page.
+
+    The gate itself is validated by the shared v1/v2 path against the
+    chromium reference. This pass verifies that the non-gating Poppler
+    diagnostic and the pinned rasterizer noise floor are present, honest,
+    and independently recomputable, so a report can neither hide the raw
+    Poppler difference nor misstate the floor it is measured against.
+    """
+
+    if page.get("reference_kind") != "official_chromium_raster":
+        errors.append(f"{prefix}: reference_kind must be official_chromium_raster")
+    if page.get("poppler_reference") != expected.get("reference_png"):
+        errors.append(f"{prefix}: poppler_reference path is inconsistent")
+    if page.get("poppler_reference_sha256") != expected.get("reference_png_sha256"):
+        errors.append(f"{prefix}: poppler_reference_sha256 is inconsistent")
+    poppler_reference_asset = _audit_hashed_file(
+        root,
+        page.get("poppler_reference"),
+        page.get("poppler_reference_sha256"),
+        f"{prefix} poppler reference PNG",
+        errors,
+    )
+    poppler_diff_asset = _audit_hashed_file(
+        root,
+        page.get("poppler_diff"),
+        page.get("poppler_diff_sha256"),
+        f"{prefix} poppler diff mask",
+        errors,
+    )
+
+    poppler_changed = page.get("poppler_raster_changed_pixels")
+    poppler_percent = _as_number(page.get("poppler_raster_changed_percent"))
+    valid_poppler_changed = (
+        isinstance(poppler_changed, int)
+        and not isinstance(poppler_changed, bool)
+        and poppler_changed >= 0
+        and pixel_count is not None
+        and pixel_count > 0
+        and poppler_changed <= pixel_count
+    )
+    if not valid_poppler_changed:
+        errors.append(f"{prefix}: poppler_raster_changed_pixels is invalid")
+    if (
+        poppler_percent is None
+        or not valid_poppler_changed
+        or not math.isclose(
+            poppler_percent,
+            poppler_changed / pixel_count * 100,
+            rel_tol=1e-12,
+            abs_tol=1e-9,
+        )
+    ):
+        errors.append(
+            f"{prefix}: poppler_raster_changed_percent does not match "
+            "poppler_raster_changed_pixels"
+        )
+
+    manifest_floor = expected_chromium.get("noise_floor_changed_pixels")
+    manifest_floor_percent = _as_number(
+        expected_chromium.get("noise_floor_changed_percent")
+    )
+    if page.get("reference_noise_floor_changed_pixels") != manifest_floor:
+        errors.append(
+            f"{prefix}: reference_noise_floor_changed_pixels does not match "
+            "the pinned manifest floor"
+        )
+    floor_percent = _as_number(page.get("reference_noise_floor_changed_percent"))
+    if (
+        floor_percent is None
+        or manifest_floor_percent is None
+        or not math.isclose(
+            floor_percent,
+            manifest_floor_percent,
+            rel_tol=1e-12,
+            abs_tol=1e-9,
+        )
+    ):
+        errors.append(
+            f"{prefix}: reference_noise_floor_changed_percent does not match "
+            "the pinned manifest floor"
+        )
+
+    if (
+        actual_asset is None
+        or reference_asset is None
+        or poppler_reference_asset is None
+        or poppler_diff_asset is None
+        or not isinstance(expected_width, int)
+        or not isinstance(expected_height, int)
+    ):
+        return
+    try:
+        if png_dimensions(poppler_reference_asset[0]) != (expected_width, expected_height):
+            raise ValueError("poppler reference dimensions are invalid")
+        if png_dimensions(poppler_diff_asset[0]) != (expected_width, expected_height):
+            raise ValueError("poppler diff mask dimensions are invalid")
+        actual_image = read_png_rgba(actual_asset[0])
+        chromium_image = read_png_rgba(reference_asset[0])
+        poppler_image = read_png_rgba(poppler_reference_asset[0])
+        poppler_diff_image = read_png_rgba(poppler_diff_asset[0])
+        poppler_recomputed, poppler_mask = pixelmatch_mask(
+            poppler_image,
+            actual_image,
+            0.1,
+        )
+        floor_recomputed, _floor_mask = pixelmatch_mask(
+            poppler_image,
+            chromium_image,
+            0.1,
+        )
+    except (OSError, ValueError) as error:
+        errors.append(
+            f"{prefix}: cannot independently verify poppler diagnostic artifacts: {error}"
+        )
+        return
+    if (
+        poppler_diff_image.width,
+        poppler_diff_image.height,
+        poppler_diff_image.pixels,
+    ) != (expected_width, expected_height, poppler_mask):
+        errors.append(
+            f"{prefix}: poppler diff mask does not match independently "
+            "recomputed pixelmatch output"
+        )
+    if poppler_changed != poppler_recomputed:
+        errors.append(
+            f"{prefix}: poppler_raster_changed_pixels does not match rendered "
+            f"screenshot ({poppler_recomputed} independently recomputed)"
+        )
+    if floor_recomputed != manifest_floor:
+        errors.append(
+            f"{prefix}: pinned noise floor does not match independently "
+            f"recomputed poppler-vs-chromium difference ({floor_recomputed} "
+            "recomputed)"
+        )
 
 
 def _audit_platform_report(
@@ -1350,6 +1554,41 @@ def _audit_reference(
         ):
             errors.append(f"{label}: legacy raster must remain replacement_required")
 
+    chromium_provenance = reference.get("chromium_reference_provenance")
+    chromium_expected = chromium_provenance is not None
+    if chromium_expected:
+        if not isinstance(chromium_provenance, dict):
+            errors.append(f"{label}: chromium_reference_provenance must be an object")
+        else:
+            if chromium_provenance.get("kind") != "official_chromium_raster":
+                errors.append(
+                    f"{label}: chromium reference provenance kind must be "
+                    "official_chromium_raster"
+                )
+            if chromium_provenance.get("runtime_eligible") is not False:
+                errors.append(
+                    f"{label}: chromium calibration reference cannot be runtime eligible"
+                )
+            if chromium_provenance.get("replacement_required") is not False:
+                errors.append(
+                    f"{label}: chromium reference cannot be replacement_required"
+                )
+            generator = chromium_provenance.get("generator")
+            generator_fields = (
+                "pdftocairo_version",
+                "playwright_version",
+                "chromium_version",
+            )
+            if not isinstance(generator, dict) or any(
+                not isinstance(generator.get(field), str)
+                or not str(generator.get(field)).strip()
+                for field in generator_fields
+            ):
+                errors.append(
+                    f"{label}: chromium reference generator versions must be "
+                    "non-empty strings"
+                )
+
     fixture = _audit_hashed_file(
         root,
         reference.get("fixture"),
@@ -1410,6 +1649,92 @@ def _audit_reference(
                         f"{actual_pixels[0]}x{actual_pixels[1]}, expected "
                         f"{expected_pixels[0]}x{expected_pixels[1]}"
                     )
+
+        chromium_raster = page.get("chromium_raster")
+        if chromium_expected != (chromium_raster is not None):
+            errors.append(
+                f"{label}: page {expected_number} chromium raster must be present "
+                "exactly when chromium provenance is declared (all-or-none)"
+            )
+        if chromium_raster is None:
+            continue
+        if not isinstance(chromium_raster, dict):
+            errors.append(
+                f"{label}: page {expected_number} chromium_raster must be an object"
+            )
+            continue
+        chromium_prefix = f"{label} page {expected_number} chromium raster"
+        chromium_png = _audit_hashed_file(
+            root,
+            chromium_raster.get("reference_png"),
+            chromium_raster.get("reference_png_sha256"),
+            chromium_prefix,
+            errors,
+        )
+        if chromium_raster.get("reference_png") == page.get("reference_png"):
+            errors.append(
+                f"{chromium_prefix}: cannot alias the Poppler reference PNG"
+            )
+        if chromium_raster.get("reference_png_sha256") == page.get(
+            "reference_png_sha256"
+        ):
+            errors.append(
+                f"{chromium_prefix}: cannot re-encode the Poppler reference bytes"
+            )
+        if (
+            chromium_raster.get("reference_width_px"),
+            chromium_raster.get("reference_height_px"),
+        ) != expected_pixels:
+            errors.append(f"{chromium_prefix}: declared PNG dimensions are invalid")
+        if chromium_png:
+            try:
+                chromium_pixels = png_dimensions(chromium_png[0])
+            except ValueError as error:
+                errors.append(f"{chromium_prefix}: {error}")
+            else:
+                if chromium_pixels != expected_pixels:
+                    errors.append(
+                        f"{chromium_prefix}: PNG is "
+                        f"{chromium_pixels[0]}x{chromium_pixels[1]}, expected "
+                        f"{expected_pixels[0]}x{expected_pixels[1]}"
+                    )
+        vector_svg_sha256 = chromium_raster.get("vector_svg_sha256")
+        if not isinstance(vector_svg_sha256, str) or not SHA256.fullmatch(
+            vector_svg_sha256
+        ):
+            errors.append(f"{chromium_prefix}: vector_svg_sha256 is invalid")
+        floor_pixels = chromium_raster.get("noise_floor_changed_pixels")
+        floor_percent = _as_number(chromium_raster.get("noise_floor_changed_percent"))
+        page_pixel_count = (
+            expected_pixels[0] * expected_pixels[1]
+            if isinstance(expected_pixels[0], int)
+            and isinstance(expected_pixels[1], int)
+            else None
+        )
+        valid_floor_pixels = (
+            isinstance(floor_pixels, int)
+            and not isinstance(floor_pixels, bool)
+            and floor_pixels >= 0
+            and page_pixel_count is not None
+            and page_pixel_count > 0
+            and floor_pixels <= page_pixel_count
+        )
+        if not valid_floor_pixels:
+            errors.append(f"{chromium_prefix}: noise_floor_changed_pixels is invalid")
+        if (
+            floor_percent is None
+            or not valid_floor_pixels
+            or not math.isclose(
+                floor_percent,
+                floor_pixels / page_pixel_count * 100,
+                rel_tol=1e-12,
+                abs_tol=1e-9,
+            )
+        ):
+            errors.append(
+                f"{chromium_prefix}: noise_floor_changed_percent does not match "
+                "noise_floor_changed_pixels"
+            )
 
 
 def _release_entry_has_evidence_claim(entry: object) -> bool:

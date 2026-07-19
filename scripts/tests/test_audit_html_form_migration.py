@@ -86,6 +86,9 @@ class AuditHtmlFormMigrationTests(unittest.TestCase):
             self._copy(form["fixture"])
             for page in form["pages"]:
                 self._copy(page["reference_png"])
+                chromium = page.get("chromium_raster")
+                if chromium is not None:
+                    self._copy(chromium["reference_png"])
 
     def read_json(self, relative: str) -> dict:
         return json.loads((self.root / relative).read_text(encoding="utf-8"))
@@ -136,61 +139,123 @@ class AuditHtmlFormMigrationTests(unittest.TestCase):
             required_release_ready=required_release_ready,
         )
 
+    _poppler_diagnostic_cache: dict[tuple[str, str], tuple[int, bytes]] = {}
+
     def valid_visual_report(self) -> dict:
         reference_manifest, reference = self.references()
         manifest_path = self.root / "packages/form-renderer/references/manifest.json"
         page_reports = []
         for page in reference["pages"]:
-            reference_path = self.root / page["reference_png"]
+            chromium = page.get("chromium_raster")
+            poppler_path = self.root / page["reference_png"]
+            gate_relative = (
+                chromium["reference_png"] if chromium else page["reference_png"]
+            )
+            gate_sha256 = (
+                chromium["reference_png_sha256"]
+                if chromium
+                else page["reference_png_sha256"]
+            )
+            gate_path = self.root / gate_relative
             actual_relative = f"evidence/visual/page-{page['page']}-actual.png"
             diff_relative = f"evidence/visual/page-{page['page']}-diff.png"
             actual_path = self.root / actual_relative
             actual_path.parent.mkdir(parents=True, exist_ok=True)
             width = page["reference_width_px"]
             height = page["reference_height_px"]
-            reference_image = audit.read_png_rgba(reference_path)
+            gate_image = audit.read_png_rgba(gate_path)
             write_rgba_png(
                 actual_path,
                 width,
                 height,
-                reference_image.pixels,
+                gate_image.pixels,
             )
-            self.assertNotEqual(actual_path.read_bytes(), reference_path.read_bytes())
+            self.assertNotEqual(actual_path.read_bytes(), gate_path.read_bytes())
             write_rgba_png(
                 self.root / diff_relative,
                 width,
                 height,
                 bytes(width * height * 4),
             )
-            page_reports.append(
-                {
-                    "form_code": reference["code"],
-                    "form_revision": reference["revision"],
-                    "fixture": reference["fixture"],
-                    "fixture_sha256": reference["fixture_sha256"],
-                    "reference": page["reference_png"],
-                    "reference_sha256": page["reference_png_sha256"],
-                    "actual": actual_relative,
-                    "actual_sha256": hashlib.sha256(actual_path.read_bytes()).hexdigest(),
-                    "diff": diff_relative,
-                    "diff_sha256": hashlib.sha256(
-                        (self.root / diff_relative).read_bytes()
-                    ).hexdigest(),
-                    "page": page["page"],
-                    "expected_width": width,
-                    "expected_height": height,
-                    "actual_width": width,
-                    "actual_height": height,
-                    "changed_pixels": 0,
-                    "changed_percent": 0.0,
-                    "max_changed_percent": 1.0,
-                    "pixelmatch_threshold": 0.1,
-                    "comparison": "official-complete-page-v1",
-                    "expected_ink_missing_percent": 0.0,
-                    "unexpected_actual_ink_percent": 0.0,
-                    "passed": True,
-                }
-            )
+            page_report = {
+                "form_code": reference["code"],
+                "form_revision": reference["revision"],
+                "fixture": reference["fixture"],
+                "fixture_sha256": reference["fixture_sha256"],
+                "reference": gate_relative,
+                "reference_sha256": gate_sha256,
+                "actual": actual_relative,
+                "actual_sha256": hashlib.sha256(actual_path.read_bytes()).hexdigest(),
+                "diff": diff_relative,
+                "diff_sha256": hashlib.sha256(
+                    (self.root / diff_relative).read_bytes()
+                ).hexdigest(),
+                "page": page["page"],
+                "expected_width": width,
+                "expected_height": height,
+                "actual_width": width,
+                "actual_height": height,
+                "changed_pixels": 0,
+                "changed_percent": 0.0,
+                "max_changed_percent": 1.0,
+                "pixelmatch_threshold": 0.1,
+                "comparison": (
+                    "official-complete-page-v2"
+                    if chromium
+                    else "official-complete-page-v1"
+                ),
+                "expected_ink_missing_percent": 0.0,
+                "unexpected_actual_ink_percent": 0.0,
+                "passed": True,
+            }
+            if chromium:
+                # The synthetic "actual" pixels equal the chromium raster, so
+                # the honest Poppler diagnostic equals the pinned noise floor.
+                cache_key = (
+                    page["reference_png_sha256"],
+                    chromium["reference_png_sha256"],
+                )
+                if cache_key not in self._poppler_diagnostic_cache:
+                    poppler_image = audit.read_png_rgba(poppler_path)
+                    self._poppler_diagnostic_cache[cache_key] = audit.pixelmatch_mask(
+                        poppler_image,
+                        gate_image,
+                        0.1,
+                    )
+                poppler_changed, poppler_mask = self._poppler_diagnostic_cache[
+                    cache_key
+                ]
+                poppler_diff_relative = (
+                    f"evidence/visual/page-{page['page']}-poppler-diff.png"
+                )
+                write_rgba_png(
+                    self.root / poppler_diff_relative,
+                    width,
+                    height,
+                    poppler_mask,
+                )
+                page_report.update(
+                    {
+                        "reference_kind": "official_chromium_raster",
+                        "poppler_reference": page["reference_png"],
+                        "poppler_reference_sha256": page["reference_png_sha256"],
+                        "poppler_diff": poppler_diff_relative,
+                        "poppler_diff_sha256": hashlib.sha256(
+                            (self.root / poppler_diff_relative).read_bytes()
+                        ).hexdigest(),
+                        "poppler_raster_changed_pixels": poppler_changed,
+                        "poppler_raster_changed_percent": poppler_changed
+                        / (width * height)
+                        * 100,
+                        "reference_noise_floor_changed_pixels": chromium[
+                            "noise_floor_changed_pixels"
+                        ],
+                        "reference_noise_floor_changed_percent": chromium[
+                            "noise_floor_changed_percent"
+                        ],
+                    }
+                )
+            page_reports.append(page_report)
         return {
             "schema_version": 1,
             "gate": "visual_parity",
@@ -700,7 +765,179 @@ class AuditHtmlFormMigrationTests(unittest.TestCase):
 
         self.assertTrue(
             any(
-                "comparison must be official-complete-page-v1" in error
+                "comparison must be official-complete-page-v2" in error
+                for error in result.errors
+            ),
+            result.errors,
+        )
+
+    def test_chromium_reference_rejects_v1_shaped_visual_evidence(self) -> None:
+        _, reference = self.references()
+        report = self.valid_visual_report()
+        for page_report, page in zip(report["pages"], reference["pages"]):
+            page_report["comparison"] = "official-complete-page-v1"
+            page_report["reference"] = page["reference_png"]
+            page_report["reference_sha256"] = page["reference_png_sha256"]
+            for key in (
+                "reference_kind",
+                "poppler_reference",
+                "poppler_reference_sha256",
+                "poppler_diff",
+                "poppler_diff_sha256",
+                "poppler_raster_changed_pixels",
+                "poppler_raster_changed_percent",
+                "reference_noise_floor_changed_pixels",
+                "reference_noise_floor_changed_percent",
+            ):
+                page_report.pop(key, None)
+        pointer = self.install_evidence("evidence/v1-under-chromium.json", report)
+        evidence = self.read_json("packages/form-specs/form-release-evidence.json")
+        evidence["forms"]["2551Q:2018"]["visual_parity"] = pointer
+        self.write_json("packages/form-specs/form-release-evidence.json", evidence)
+
+        result = self.run_audit()
+
+        self.assertTrue(
+            any(
+                "comparison must be official-complete-page-v2" in error
+                for error in result.errors
+            ),
+            result.errors,
+        )
+        self.assertTrue(
+            any("reference path is inconsistent" in error for error in result.errors),
+            result.errors,
+        )
+        self.assertTrue(
+            any(
+                "reference_kind must be official_chromium_raster" in error
+                for error in result.errors
+            ),
+            result.errors,
+        )
+
+    def test_visual_evidence_rejects_forged_noise_floor(self) -> None:
+        report = self.valid_visual_report()
+        page = report["pages"][0]
+        page["reference_noise_floor_changed_pixels"] += 1
+        page["reference_noise_floor_changed_percent"] = (
+            page["reference_noise_floor_changed_pixels"]
+            / (page["expected_width"] * page["expected_height"])
+            * 100
+        )
+        pointer = self.install_evidence("evidence/forged-floor.json", report)
+        evidence = self.read_json("packages/form-specs/form-release-evidence.json")
+        evidence["forms"]["2551Q:2018"]["visual_parity"] = pointer
+        self.write_json("packages/form-specs/form-release-evidence.json", evidence)
+
+        result = self.run_audit()
+
+        self.assertTrue(
+            any(
+                "reference_noise_floor_changed_pixels does not match the pinned "
+                "manifest floor" in error
+                for error in result.errors
+            ),
+            result.errors,
+        )
+
+    def test_visual_evidence_requires_poppler_diagnostic(self) -> None:
+        report = self.valid_visual_report()
+        page = report["pages"][0]
+        page.pop("poppler_raster_changed_pixels")
+        page.pop("poppler_diff")
+        page.pop("poppler_diff_sha256")
+        pointer = self.install_evidence("evidence/missing-poppler.json", report)
+        evidence = self.read_json("packages/form-specs/form-release-evidence.json")
+        evidence["forms"]["2551Q:2018"]["visual_parity"] = pointer
+        self.write_json("packages/form-specs/form-release-evidence.json", evidence)
+
+        result = self.run_audit()
+
+        self.assertTrue(
+            any(
+                "poppler_raster_changed_pixels is invalid" in error
+                for error in result.errors
+            ),
+            result.errors,
+        )
+        self.assertTrue(
+            any(
+                "poppler diff mask" in error and "missing" in error
+                for error in result.errors
+            ),
+            result.errors,
+        )
+
+    def test_visual_evidence_recomputes_poppler_diagnostic(self) -> None:
+        report = self.valid_visual_report()
+        page = report["pages"][0]
+        forged = page["poppler_raster_changed_pixels"] - 1
+        page["poppler_raster_changed_pixels"] = forged
+        page["poppler_raster_changed_percent"] = (
+            forged / (page["expected_width"] * page["expected_height"]) * 100
+        )
+        pointer = self.install_evidence("evidence/forged-poppler.json", report)
+        evidence = self.read_json("packages/form-specs/form-release-evidence.json")
+        evidence["forms"]["2551Q:2018"]["visual_parity"] = pointer
+        self.write_json("packages/form-specs/form-release-evidence.json", evidence)
+
+        result = self.run_audit()
+
+        self.assertTrue(
+            any(
+                "poppler_raster_changed_pixels does not match rendered screenshot"
+                in error
+                for error in result.errors
+            ),
+            result.errors,
+        )
+
+    def test_manifest_noise_floor_is_recomputed_from_pinned_rasters(self) -> None:
+        manifest, reference = self.references()
+        chromium = reference["pages"][0]["chromium_raster"]
+        width = reference["pages"][0]["reference_width_px"]
+        height = reference["pages"][0]["reference_height_px"]
+        chromium["noise_floor_changed_pixels"] += 7
+        chromium["noise_floor_changed_percent"] = (
+            chromium["noise_floor_changed_pixels"] / (width * height) * 100
+        )
+        self.write_json("packages/form-renderer/references/manifest.json", manifest)
+        report = self.valid_visual_report()
+        pointer = self.install_evidence("evidence/forged-manifest-floor.json", report)
+        evidence = self.read_json("packages/form-specs/form-release-evidence.json")
+        evidence["forms"]["2551Q:2018"]["visual_parity"] = pointer
+        self.write_json("packages/form-specs/form-release-evidence.json", evidence)
+
+        result = self.run_audit()
+
+        self.assertTrue(
+            any(
+                "pinned noise floor does not match independently recomputed" in error
+                for error in result.errors
+            ),
+            result.errors,
+        )
+
+    def test_chromium_reference_cannot_alias_poppler_raster(self) -> None:
+        manifest, reference = self.references()
+        page = reference["pages"][0]
+        page["chromium_raster"]["reference_png"] = page["reference_png"]
+        page["chromium_raster"]["reference_png_sha256"] = page["reference_png_sha256"]
+        self.write_json("packages/form-renderer/references/manifest.json", manifest)
+
+        result = self.run_audit()
+
+        self.assertTrue(
+            any(
+                "cannot alias the Poppler reference PNG" in error
+                for error in result.errors
+            ),
+            result.errors,
+        )
+        self.assertTrue(
+            any(
+                "cannot re-encode the Poppler reference bytes" in error
                 for error in result.errors
             ),
             result.errors,
