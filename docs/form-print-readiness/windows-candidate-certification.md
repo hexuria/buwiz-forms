@@ -56,6 +56,132 @@ python scripts/windows_candidate_certification.py probe `
 Startup under an outbound block is not proof of preview, print, PDF export, or
 rollback behavior. The probe report retains those gaps.
 
+## Collect one real 2551Q Windows candidate exercise
+
+`scripts/windows_candidate_collector.py` is the operator-only collector for the
+closed attestation below. It is intentionally **not** a CI simulator: it must run
+in an elevated, interactive x86-64 Windows session against the exact portable
+candidate. The output directory must be new or empty; the collector replaces
+its ACL with one current-user Full Control rule before retaining taxpayer-facing
+screenshots or logs.
+
+Before running it, prepare all of these independently reviewable inputs:
+
+- an exact manifest/archive/renderer-identity triplet whose manifest-bound
+  `bir.exe` already has a valid SHA-256 Authenticode signature and signed
+  timestamp;
+- the Rust-owned `verify_certification_pdf.exe` built from that same source
+  revision;
+- the Windows SDK x86-64 `signtool.exe`;
+- the exact x86-64 `msedgewebview2.exe` used by the candidate;
+- a reviewed external runtime witness executable capable of consuming the
+  collector's fresh request and writing the closed observation described below;
+- a separate exact-candidate rollback bundle containing every required case;
+  and
+- an online named printer selected as the Windows default, with PrintService
+  Operational logging enabled and permission to complete a real two-page job.
+
+Then run:
+
+```powershell
+python scripts/windows_candidate_collector.py `
+  --candidate-manifest C:\candidate\candidate-manifest.json `
+  --candidate-archive C:\candidate\eBIRForms-Windows-x64-SHA.zip `
+  --renderer-identity C:\candidate\form-renderer-build-identity.json `
+  --pdf-verifier C:\candidate-tools\verify_certification_pdf.exe `
+  --signtool "C:\Program Files (x86)\Windows Kits\10\bin\VERSION\x64\signtool.exe" `
+  --webview2-executable "C:\Program Files (x86)\Microsoft\EdgeWebView\Application\VERSION\msedgewebview2.exe" `
+  --runtime-witness C:\candidate-tools\reviewed-runtime-witness.exe `
+  --rollback-bundle C:\rollback\windows-rollback-bundle.json `
+  --output-dir C:\evidence\windows-2551q-candidate `
+  --printer "eBIRForms Certification Printer" `
+  --automation-identity "DOMAIN\operator" `
+  --allow-live-print
+```
+
+`--allow-live-print` only acknowledges that a physical/named-printer job may be
+completed. Immediately before invoking **Print**, the collector asks the
+operator to type the exact printer name again. A cancel, spool-only observation,
+wrong/default-printer substitution, event without exactly two pages, or missing
+Event 307 fails closed. If the certification printer produces a retained file,
+pass it with `--printer-output`; otherwise the attestation retains a null output
+hash while still requiring the real completed job.
+
+The collector launches the manifest-bound `bir.exe` itself, removes development
+and native-evidence environment variables, binds two exact-program outbound
+Firewall rules, and verifies their cleanup. Windows UI Automation is restricted
+to the launched PID. It must find the real `2551Q HTML Form Preview`, invoke the
+exact **Export PDF** control, observe the new same-process native Save chooser,
+replace a pre-existing challenged destination through the native confirmation,
+and then invoke the exact **Print** control. Screenshots are local sensitive
+evidence; do not upload them to a public artifact or issue.
+
+### Fresh runtime-witness contract
+
+After launch, the collector writes `runtime-observation-request.json` and pauses
+so the reviewed witness can attach. The request contains a fresh raw challenge,
+its SHA-256 hash, exact candidate hashes, PID, output path and destination-before
+hash, printer, WebView2 executable hash, witness executable hash, and the only
+permitted output path. The witness must write
+`external-runtime-observation.json` during that same run with the closed scope:
+
+```json
+{
+  "schema_version": 1,
+  "scope": "external_windows_candidate_runtime_observation",
+  "promotion_eligible": false,
+  "trusted_producer": false,
+  "collector_challenge_sha256": "<sha256 from request>",
+  "witness_name": "<reviewed name>",
+  "witness_version": "<reviewed version>",
+  "witness_executable_sha256": "<exact supplied witness hash>",
+  "candidate": "<exact candidate object from request>",
+  "pid": 1234,
+  "form": {"code": "2551Q", "revision": "2018"},
+  "non_dev_build": true,
+  "dev_tools_enabled": false,
+  "started_at_utc": "<RFC3339 UTC>",
+  "completed_at_utc": "<later RFC3339 UTC>",
+  "document_run_id": "<immutable preview run>",
+  "envelope_sha256": "<render envelope hash>",
+  "preview_nonce": 17,
+  "print_nonce": 18,
+  "geometry_measurements": "<two identical complete 2-page measurements>",
+  "export": "<same preview nonce, S_OK, success=true, challenged output hash/size>",
+  "print": "<print nonce, S_OK, Succeeded, exact printer>",
+  "webview2": "<exact executable/version/channel/scope and _7/_16 interfaces>",
+  "dependencies": {"msvc_runtime_loaded": true, "webview2_loader_bound": true},
+  "strict_verifier_gaps": [
+    "runtime witness producer is not registered as trusted",
+    "external UI Automation and printer evidence are required",
+    "external exact-candidate binding is required"
+  ]
+}
+```
+
+The string placeholders above are explanatory only; the actual observation
+uses the exact object/array schemas enforced by the collector. Missing fields,
+extra fields, non-finite geometry, duplicate nonces, another PID/candidate,
+another witness/runtime, or output bytes that changed after observation all fail
+closed. The external witness remains untrusted and non-promotional.
+
+### Separate rollback input
+
+The rollback bundle scope is
+`external_windows_candidate_rollback_bundle`. It must bind the exact six-field
+candidate object, retain distinct equal-hash before/after snapshots for the
+destination and draft, retain a `{"remaining": []}` temporary-file manifest,
+and contain every one of the 24 cases enumerated by the attestation schema,
+exactly once, with `passed: true` and a verified artifact record. It must exist
+before collection; the collector never invents rollback results from the happy
+path. Its `promotion_eligible` and `trusted_producer` values must both be false.
+
+On success the collector writes the closed attestation, invokes
+`validate_attestation`, and immediately invokes the strict verifier against the
+original manifest/archive/identity, owned PDF verifier, and `signtool`. The
+report still records `promotion_satisfied: false`; this command never updates
+release evidence or readiness.
+
 ## Closed external attestation
 
 The operator/collector formats are closed by:
@@ -152,6 +278,16 @@ non-publishing workflow must sign the exact portable `bir.exe` before hashing
 and uploading it. Public installer evidence still needs a distinct final
 installer-bound collector because installer creation and signing produce
 different artifacts.
+
+The operator collector is implemented, but no live Windows run is committed or
+claimed. It cannot run successfully against today's unsigned workflow archive,
+and it cannot substitute a mocked runtime observation, spool-only print record,
+or afterward-signed extracted executable. The remaining Windows work is
+external: construct the exact signed/timestamped portable candidate, provide the
+reviewed runtime witness and separate rollback bundle, execute the collector on
+real x86-64 Windows with WebView2 and the named printer, and review its strict
+non-promotional report. Public EXE/MSI and installed-tree certification remain
+separate.
 
 Even a complete foundation report remains `promotion_eligible: false`,
 `trusted_producer: false`, and `promotion_satisfied: false`. Never copy it into

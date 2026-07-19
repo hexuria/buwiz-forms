@@ -92,10 +92,16 @@ and stapled archive required by its strict verifier. The separate operator-only
 collector can exercise the real preview, save chooser, PDF export, and a
 deliberately approved printer job, but no such run is produced by CI and it
 requires separately retained rollback artifacts. Neither component creates
-trusted-producer evidence. The current Windows portable
-archive is unsigned, so its strict verifier correctly cannot pass
-Authenticode. Windows public EXE/MSI installers and Store-only MSIX remain
-separate artifact tracks.
+trusted-producer evidence. The Windows operator collector now closes
+candidate/UIA/runtime/PDF/print, timestamped Authenticode, WebView2, rollback,
+and package-integrity inputs and immediately runs the strict verifier. It does
+not synthesize the external runtime witness or rollback results and it requires
+explicit consent plus a genuinely completed named-printer job. The current
+Windows portable archive is unsigned, so that collector correctly stops at
+Authenticode before it can certify a live run. A future run requires the exact
+already-signed/timestamped portable candidate, reviewed witness, separate
+rollback bundle, x86-64 WebView2, and the real printer. Windows public EXE/MSI
+installers and Store-only MSIX remain separate artifact tracks.
 
 The Linux portable candidate binder and closed X11/Xvfb plus Wayland/Weston
 attestation contract are documented in
@@ -112,8 +118,9 @@ platform and produce independently reviewable evidence for preview readiness,
 actual toolbar and native chooser operation, system-print completion, PDF
 validation, network-denied operation, package identity, and rollback behavior.
 macOS needs an operator with Accessibility and printer access to exercise the
-new signed candidate; Windows needs the signed installer path; Linux needs both
-X11/Xvfb and Wayland/Weston.
+new signed candidate; Windows first needs an exact signed portable candidate
+for its operator collector and later separate public installer evidence; Linux
+needs both X11/Xvfb and Wayland/Weston.
 
 Only after a collector and verifier are reviewed may its producer be added to a
 trusted producer registry. Curated reports and readiness flags then land in a

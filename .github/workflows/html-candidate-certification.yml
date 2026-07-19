@@ -61,7 +61,7 @@ jobs:
           npm run test:forms
           npm run audit:forms:migration
           npm run audit:no-legacy
-          python3 -m unittest scripts.tests.test_html_release_gate_policy scripts.tests.test_write_html_candidate_manifest scripts.tests.test_macos_candidate_collector -v
+          python3 -m unittest scripts.tests.test_html_release_gate_policy scripts.tests.test_write_html_candidate_manifest scripts.tests.test_macos_candidate_collector scripts.tests.test_windows_candidate_collector scripts.tests.test_linux_candidate_collector -v
 
       - name: Verify full Rust workspace before candidate construction
         run: |
