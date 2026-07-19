@@ -62,6 +62,9 @@ Use [architecture.md](references/architecture.md) when changing cross-form inter
 ## Helper commands
 
 ```sh
+rtk python3 .codex/skills/ebirforms-convert-form-to-html/scripts/quick_validate.py \
+  .codex/skills/ebirforms-convert-form-to-html
+
 rtk python3 .codex/skills/ebirforms-convert-form-to-html/scripts/inventory_form.py \
   --repo . --form-code 1601C --revision 2018 --output -
 
@@ -72,6 +75,8 @@ rtk python3 .codex/skills/ebirforms-convert-form-to-html/scripts/prepare_officia
 
 rtk python3 .codex/skills/ebirforms-convert-form-to-html/scripts/verify_form_conversion.py \
   --repo . --form-code 1601C --revision 2018 --stage preview
+
+rtk python3 -m unittest discover -s .codex/skills/tests -p 'test_*.py'
 ```
 
 Run repository gates after targeted tests:
