@@ -652,12 +652,20 @@ test("2551Q Schedule 1 keeps black rules and bottom-anchored comb guides", async
     const normalAtcCell = element.querySelector(
       '.atc-entry[data-atc-code="PT010"] > td:nth-child(2)'
     );
+    const categoryAtcCell = element.querySelector(
+      ".official-atc-table .atc-category > th"
+    );
+    const noteAtcCell = element.querySelector(
+      ".official-atc-table .atc-note > td:nth-child(2)"
+    );
     if (
       !normalCell ||
       !majorCell ||
       !masthead ||
       !atcCell ||
       !normalAtcCell ||
+      !categoryAtcCell ||
+      !noteAtcCell ||
       tinGroupCells.some((cell) => !cell) ||
       indentedAtcCells.some((cell) => !cell)
     ) {
@@ -676,7 +684,20 @@ test("2551Q Schedule 1 keeps black rules and bottom-anchored comb guides", async
       normalGuideBorderWidth: Number.parseFloat(normalGuide.borderRightWidth),
       normalGuideHeight: Number.parseFloat(normalGuide.height),
       normalGuidePosition: normalGuide.position,
-      normalAtcPaddingLeft: Number.parseFloat(getComputedStyle(normalAtcCell).paddingLeft),
+      normalAtcFontSize: Number.parseFloat(getComputedStyle(normalAtcCell).fontSize),
+      normalAtcLetterSpacing: Number.parseFloat(
+        getComputedStyle(normalAtcCell).letterSpacing
+      ),
+      normalAtcPaddingLeft: Number.parseFloat(
+        getComputedStyle(normalAtcCell).paddingLeft
+      ),
+      categoryAtcPaddingLeft: Number.parseFloat(
+        getComputedStyle(categoryAtcCell).paddingLeft
+      ),
+      noteAtcFontSize: Number.parseFloat(getComputedStyle(noteAtcCell).fontSize),
+      noteAtcLetterSpacing: Number.parseFloat(
+        getComputedStyle(noteAtcCell).letterSpacing
+      ),
       indentedAtcPaddingLeft: indentedAtcCells.map((cell) =>
         Number.parseFloat(getComputedStyle(cell as Element).paddingLeft)
       ),
@@ -698,7 +719,12 @@ test("2551Q Schedule 1 keeps black rules and bottom-anchored comb guides", async
   expect(styles.normalGuideHeight).toBeCloseTo(9.33, 1);
   expect(styles.majorGuideColor).toBe("rgb(0, 0, 0)");
   expect(styles.majorGuideHeight).toBeGreaterThan(styles.normalGuideHeight);
-  expect(styles.normalAtcPaddingLeft).toBeCloseTo(4.5, 1);
+  expect(styles.normalAtcFontSize).toBeCloseTo(11, 1);
+  expect(styles.normalAtcLetterSpacing).toBeCloseTo(.133, 2);
+  expect(styles.normalAtcPaddingLeft).toBeCloseTo(4, 1);
+  expect(styles.categoryAtcPaddingLeft).toBeCloseTo(6.933, 2);
+  expect(styles.noteAtcFontSize).toBeCloseTo(10.533, 2);
+  expect(styles.noteAtcLetterSpacing).toBeCloseTo(.333, 2);
   expect(styles.indentedAtcPaddingLeft).toHaveLength(4);
   for (const padding of styles.indentedAtcPaddingLeft) {
     expect(padding).toBeCloseTo(22, 1);
