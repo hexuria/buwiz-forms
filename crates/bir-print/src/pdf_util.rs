@@ -8,8 +8,6 @@ use lopdf::{dictionary, Document, Object, Stream};
 
 const A4_WIDTH_POINTS: u32 = 595;
 const A4_HEIGHT_POINTS: u32 = 842;
-const DEFAULT_FORM_WIDTH_POINTS: u32 = 612;
-const DEFAULT_FORM_HEIGHT_POINTS: u32 = 936;
 
 #[derive(Debug, thiserror::Error)]
 pub enum PdfUtilityError {
@@ -38,7 +36,7 @@ pub fn append_text_pages_to_pdf(
         return save_document(&mut document);
     }
 
-    let (width, height) = first_page_size(&document);
+    let (width, height) = first_page_size(&document)?;
     let catalog = document
         .catalog()
         .map_err(|error| PdfUtilityError::InvalidPdf(format!("missing catalog: {error}")))?;
@@ -60,7 +58,7 @@ pub fn append_text_pages_to_pdf(
 
     for (index, chunk) in chunks.iter().enumerate() {
         let mut content = String::from("BT\n/F1 10 Tf\n12 TL\n");
-        content.push_str(&format!("40 {} Td\n", height.saturating_sub(50)));
+        content.push_str(&format!("40 {} Td\n", (height - 50.0).max(0.0)));
         for (line_index, line) in chunk.iter().enumerate() {
             if line_index > 0 {
                 content.push_str("T*\n");
@@ -81,8 +79,14 @@ pub fn append_text_pages_to_pdf(
             "MediaBox" => vec![
                 Object::Integer(0),
                 Object::Integer(0),
-                Object::Integer(i64::from(width)),
-                Object::Integer(i64::from(height)),
+                pdf_number(width),
+                pdf_number(height),
+            ],
+            "CropBox" => vec![
+                Object::Integer(0),
+                Object::Integer(0),
+                pdf_number(width),
+                pdf_number(height),
             ],
             "Resources" => dictionary! {
                 "Font" => dictionary! { "F1" => Object::Reference(font_id) },
@@ -119,35 +123,92 @@ pub fn append_text_pages_to_pdf(
     save_document(&mut document)
 }
 
-fn first_page_size(document: &Document) -> (u32, u32) {
-    let Some((_, page_id)) = document
+fn first_page_size(document: &Document) -> Result<(f64, f64), PdfUtilityError> {
+    let (_, page_id) = document
         .get_pages()
         .into_iter()
         .min_by_key(|(number, _)| *number)
-    else {
-        return (DEFAULT_FORM_WIDTH_POINTS, DEFAULT_FORM_HEIGHT_POINTS);
-    };
-    let Ok(page) = document.get_object(page_id).and_then(Object::as_dict) else {
-        return (DEFAULT_FORM_WIDTH_POINTS, DEFAULT_FORM_HEIGHT_POINTS);
-    };
-    let Ok(media_box) = page.get(b"MediaBox").and_then(Object::as_array) else {
-        return (DEFAULT_FORM_WIDTH_POINTS, DEFAULT_FORM_HEIGHT_POINTS);
-    };
+        .ok_or_else(|| PdfUtilityError::InvalidPdf("source PDF has no pages".to_string()))?;
+    let media_box = inherited_page_value(document, page_id, b"MediaBox").ok_or_else(|| {
+        PdfUtilityError::InvalidPdf("first page has no inherited MediaBox".to_string())
+    })?;
+    let media_box = resolved_object(document, media_box)
+        .and_then(|object| object.as_array().ok())
+        .ok_or_else(|| {
+            PdfUtilityError::InvalidPdf("first page MediaBox is not an array".to_string())
+        })?;
     if media_box.len() != 4 {
-        return (DEFAULT_FORM_WIDTH_POINTS, DEFAULT_FORM_HEIGHT_POINTS);
+        return Err(PdfUtilityError::InvalidPdf(format!(
+            "first page MediaBox must have four coordinates, found {}",
+            media_box.len()
+        )));
     }
-    let width = object_to_positive_u32(&media_box[2]).unwrap_or(DEFAULT_FORM_WIDTH_POINTS);
-    let height = object_to_positive_u32(&media_box[3]).unwrap_or(DEFAULT_FORM_HEIGHT_POINTS);
-    (width, height)
+    let mut coordinates = [0.0; 4];
+    for (index, coordinate) in media_box.iter().enumerate() {
+        coordinates[index] = object_number(document, coordinate).ok_or_else(|| {
+            PdfUtilityError::InvalidPdf(format!(
+                "first page MediaBox coordinate {index} is not a finite number"
+            ))
+        })?;
+    }
+    let width = coordinates[2] - coordinates[0];
+    let height = coordinates[3] - coordinates[1];
+    if !width.is_finite()
+        || !height.is_finite()
+        || width <= 0.0
+        || height <= 0.0
+        || width > f64::from(f32::MAX)
+        || height > f64::from(f32::MAX)
+    {
+        return Err(PdfUtilityError::InvalidPdf(
+            "first page MediaBox must have finite positive dimensions representable in PDF"
+                .to_string(),
+        ));
+    }
+    Ok((width, height))
 }
 
-fn object_to_positive_u32(object: &Object) -> Option<u32> {
-    let value = match object {
+fn inherited_page_value<'a>(
+    document: &'a Document,
+    mut object_id: lopdf::ObjectId,
+    key: &[u8],
+) -> Option<&'a Object> {
+    for _ in 0..64 {
+        let dictionary = document.get_dictionary(object_id).ok()?;
+        if let Ok(value) = dictionary.get(key) {
+            return Some(value);
+        }
+        object_id = dictionary.get(b"Parent").ok()?.as_reference().ok()?;
+    }
+    None
+}
+
+fn resolved_object<'a>(document: &'a Document, mut value: &'a Object) -> Option<&'a Object> {
+    for _ in 0..64 {
+        match value {
+            Object::Reference(object_id) => value = document.get_object(*object_id).ok()?,
+            _ => return Some(value),
+        }
+    }
+    None
+}
+
+fn object_number(document: &Document, value: &Object) -> Option<f64> {
+    let value = resolved_object(document, value)?;
+    let number = match value {
         Object::Integer(value) => *value as f64,
         Object::Real(value) => f64::from(*value),
         _ => return None,
     };
-    (value.is_finite() && value > 0.0 && value <= f64::from(u32::MAX)).then(|| value.round() as u32)
+    number.is_finite().then_some(number)
+}
+
+fn pdf_number(value: f64) -> Object {
+    if value.fract().abs() <= f64::EPSILON && value <= i64::MAX as f64 {
+        Object::Integer(value as i64)
+    } else {
+        Object::Real(value as f32)
+    }
 }
 
 fn save_document(document: &mut Document) -> Result<Vec<u8>, PdfUtilityError> {
@@ -285,6 +346,66 @@ fn wrap_lines(lines: &[String], max_characters: usize) -> Vec<String> {
 mod tests {
     use super::*;
 
+    fn first_page_id(document: &Document) -> lopdf::ObjectId {
+        *document
+            .get_pages()
+            .values()
+            .next()
+            .expect("test PDF should have a page")
+    }
+
+    fn replace_first_page_media_box(document: &mut Document, media_box: impl Into<Object>) {
+        let page_id = first_page_id(document);
+        document
+            .get_dictionary_mut(page_id)
+            .expect("test page should be a dictionary")
+            .set("MediaBox", media_box);
+    }
+
+    fn inherit_first_page_media_box(document: &mut Document) {
+        let page_id = first_page_id(document);
+        let parent_id = document
+            .get_dictionary(page_id)
+            .expect("test page should be a dictionary")
+            .get(b"Parent")
+            .expect("test page should have a parent")
+            .as_reference()
+            .expect("test page parent should be indirect");
+        let media_box = document
+            .get_dictionary_mut(page_id)
+            .expect("test page should be a dictionary")
+            .remove(b"MediaBox")
+            .expect("test page should have a MediaBox");
+        document
+            .get_dictionary_mut(parent_id)
+            .expect("test page parent should be a dictionary")
+            .set("MediaBox", media_box);
+    }
+
+    fn save_test_document(document: &mut Document) -> Vec<u8> {
+        save_document(document).expect("test PDF should save")
+    }
+
+    fn appended_page_box(pdf_bytes: &[u8], key: &[u8]) -> [f64; 4] {
+        let document = Document::load_mem(pdf_bytes).expect("combined PDF should load");
+        let page_id = *document
+            .get_pages()
+            .get(&2)
+            .expect("combined PDF should have an appended page");
+        let page = document
+            .get_dictionary(page_id)
+            .expect("appended page should be a dictionary");
+        let values = page
+            .get(key)
+            .expect("appended page should have requested page box")
+            .as_array()
+            .expect("appended page box should be an array");
+        std::array::from_fn(|index| {
+            object_number(&document, &values[index])
+                .expect("appended page box coordinate should be numeric")
+        })
+    }
+
     #[test]
     fn confirmation_pdf_is_valid_and_nonempty() {
         let bytes = build_simple_confirmation_pdf(&["BIR confirmation".to_string()]);
@@ -301,14 +422,117 @@ mod tests {
         let source = build_simple_pdf(612, 936, &["Form page".to_string()]);
         let combined = append_text_pages_to_pdf(&source, &["Confirmation".to_string()])
             .expect("append should succeed");
-        let document = Document::load_mem(&combined).expect("combined PDF should load");
-        assert_eq!(document.get_pages().len(), 2);
-        for page_id in document.get_pages().values() {
-            let page = document.get_object(*page_id).unwrap().as_dict().unwrap();
-            let media_box = page.get(b"MediaBox").unwrap().as_array().unwrap();
-            assert_eq!(media_box[2].as_i64().unwrap(), 612);
-            assert_eq!(media_box[3].as_i64().unwrap(), 936);
-        }
+        assert_eq!(
+            appended_page_box(&combined, b"MediaBox"),
+            [0.0, 0.0, 612.0, 936.0]
+        );
+    }
+
+    #[test]
+    fn appended_pages_set_crop_box_to_form_geometry() {
+        let source = build_simple_pdf(612, 936, &["Form page".to_string()]);
+        let combined = append_text_pages_to_pdf(&source, &["Confirmation".to_string()])
+            .expect("append should succeed");
+        assert_eq!(
+            appended_page_box(&combined, b"CropBox"),
+            [0.0, 0.0, 612.0, 936.0]
+        );
+    }
+
+    #[test]
+    fn appended_pages_preserve_inherited_letter_geometry() {
+        let source = build_simple_pdf(612, 792, &["Form page".to_string()]);
+        let mut document = Document::load_mem(&source).expect("source PDF should load");
+        inherit_first_page_media_box(&mut document);
+        let source = save_test_document(&mut document);
+
+        let combined = append_text_pages_to_pdf(&source, &["Confirmation".to_string()])
+            .expect("inherited MediaBox should be resolved");
+        assert_eq!(
+            appended_page_box(&combined, b"MediaBox"),
+            [0.0, 0.0, 612.0, 792.0]
+        );
+    }
+
+    #[test]
+    fn appended_pages_resolve_indirect_media_box() {
+        let source = build_simple_pdf(612, 936, &["Form page".to_string()]);
+        let mut document = Document::load_mem(&source).expect("source PDF should load");
+        let media_box_id = document.add_object(vec![
+            Object::Integer(0),
+            Object::Integer(0),
+            Object::Integer(612),
+            Object::Integer(792),
+        ]);
+        replace_first_page_media_box(&mut document, Object::Reference(media_box_id));
+        let source = save_test_document(&mut document);
+
+        let combined = append_text_pages_to_pdf(&source, &["Confirmation".to_string()])
+            .expect("indirect MediaBox should be resolved");
+        assert_eq!(
+            appended_page_box(&combined, b"MediaBox"),
+            [0.0, 0.0, 612.0, 792.0]
+        );
+    }
+
+    #[test]
+    fn appended_pages_preserve_legal_geometry() {
+        let source = build_simple_pdf(612, 1008, &["Form page".to_string()]);
+        let combined = append_text_pages_to_pdf(&source, &["Confirmation".to_string()])
+            .expect("append should succeed");
+        assert_eq!(
+            appended_page_box(&combined, b"MediaBox"),
+            [0.0, 0.0, 612.0, 1008.0]
+        );
+    }
+
+    #[test]
+    fn appended_pages_use_dimensions_from_nonzero_media_box_origin() {
+        let source = build_simple_pdf(612, 936, &["Form page".to_string()]);
+        let mut document = Document::load_mem(&source).expect("source PDF should load");
+        replace_first_page_media_box(
+            &mut document,
+            vec![10.into(), 20.into(), 622.into(), 956.into()],
+        );
+        let source = save_test_document(&mut document);
+
+        let combined = append_text_pages_to_pdf(&source, &["Confirmation".to_string()])
+            .expect("valid nonzero MediaBox origin should be supported");
+        assert_eq!(
+            appended_page_box(&combined, b"MediaBox"),
+            [0.0, 0.0, 612.0, 936.0]
+        );
+    }
+
+    #[test]
+    fn missing_media_box_is_rejected() {
+        let source = build_simple_pdf(612, 936, &["Form page".to_string()]);
+        let mut document = Document::load_mem(&source).expect("source PDF should load");
+        let page_id = first_page_id(&document);
+        document
+            .get_dictionary_mut(page_id)
+            .expect("test page should be a dictionary")
+            .remove(b"MediaBox");
+        let source = save_test_document(&mut document);
+
+        let error = append_text_pages_to_pdf(&source, &["Confirmation".to_string()])
+            .expect_err("missing MediaBox must fail closed");
+        assert!(matches!(error, PdfUtilityError::InvalidPdf(_)));
+    }
+
+    #[test]
+    fn invalid_media_box_is_rejected() {
+        let source = build_simple_pdf(612, 936, &["Form page".to_string()]);
+        let mut document = Document::load_mem(&source).expect("source PDF should load");
+        replace_first_page_media_box(
+            &mut document,
+            vec![0.into(), 0.into(), 0.into(), 936.into()],
+        );
+        let source = save_test_document(&mut document);
+
+        let error = append_text_pages_to_pdf(&source, &["Confirmation".to_string()])
+            .expect_err("non-positive MediaBox width must fail closed");
+        assert!(matches!(error, PdfUtilityError::InvalidPdf(_)));
     }
 
     #[test]
