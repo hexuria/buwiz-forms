@@ -127,6 +127,8 @@ test("1702RT January 2018C preserves the official continuation header and amount
   const nolcoRow = pageFour.locator(".nolco-continuation-grid-1702rt:not(.nolco-heading-1702rt)").first().locator(":scope > *");
   const mcitHeading = pageFour.locator(".mcit-continuation-grid-1702rt.mcit-heading-1702rt > span");
   const mcitRow = pageFour.locator(".mcit-continuation-grid-1702rt:not(.mcit-heading-1702rt)").first().locator(":scope > *");
+  const nolcoTotal = pageFour.locator(".schedule-three-total-1702rt > span");
+  const mcitTotal = pageFour.locator(".schedule-four-total-1702rt > span");
 
   await expect(nolcoHeading).toHaveCount(3);
   await expect(nolcoRow).toHaveCount(4);
@@ -136,6 +138,49 @@ test("1702RT January 2018C preserves the official continuation header and amount
   expect(await cellWidthsInPoints(nolcoRow)).toEqual([30, 181.8, 181.8, 181.8]);
   expect(await cellWidthsInPoints(mcitHeading)).toEqual([152, 136.5, 151.5, 135.5]);
   expect(await cellWidthsInPoints(mcitRow)).toEqual([15.5, 136.5, 136.5, 151.5, 135.5]);
+  expect(await cellWidthsInPoints(nolcoTotal)).toEqual([212.5, 181.5, 181.5]);
+  expect(await cellWidthsInPoints(mcitTotal)).toEqual([288, 152, 135.5]);
+  expect(await nolcoTotal.evaluateAll((cells) => cells.map((cell) => getComputedStyle(cell).backgroundColor))).toEqual([
+    "rgb(217, 217, 217)",
+    "rgb(255, 255, 255)",
+    "rgb(217, 217, 217)"
+  ]);
+  expect(await mcitTotal.evaluateAll((cells) => cells.map((cell) => getComputedStyle(cell).backgroundColor))).toEqual([
+    "rgb(217, 217, 217)",
+    "rgb(255, 255, 255)",
+    "rgb(166, 166, 166)"
+  ]);
+});
+
+test("1702RT January 2018C keeps reviewed schedule description-entry cells unshaded", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702rt-normal.json"));
+  const pageThree = page.locator(".form-page").nth(2);
+  const pageFour = page.locator(".form-page").nth(3);
+  const scheduleOneDescriptions = pageThree.locator([
+    '.schedule-one-1702rt [data-schedule-item="d"] > span:nth-child(2)',
+    '.schedule-one-1702rt [data-schedule-item="e"] > span:nth-child(2)',
+    '.schedule-one-1702rt [data-schedule-item="f"] > span:nth-child(2)',
+    '.schedule-one-1702rt [data-schedule-item="g"] > span:nth-child(2)',
+    '.schedule-one-1702rt [data-schedule-item="h"] > span:nth-child(2)',
+    '.schedule-one-1702rt [data-schedule-item="i"] > span:nth-child(2)'
+  ].join(", "));
+  const scheduleFiveDescriptions = pageFour.locator([
+    '.schedule-five-1702rt [data-schedule-item="2"] > span:nth-child(2)',
+    '.schedule-five-1702rt [data-schedule-item="3"] > span:nth-child(2)',
+    '.schedule-five-1702rt [data-schedule-item="5"] > span:nth-child(2)',
+    '.schedule-five-1702rt [data-schedule-item="6"] > span:nth-child(2)',
+    '.schedule-five-1702rt [data-schedule-item="7"] > span:nth-child(2)',
+    '.schedule-five-1702rt [data-schedule-item="8"] > span:nth-child(2)'
+  ].join(", "));
+
+  await expect(scheduleOneDescriptions).toHaveCount(6);
+  await expect(scheduleFiveDescriptions).toHaveCount(6);
+  expect(await scheduleOneDescriptions.evaluateAll((cells) => cells.map((cell) => getComputedStyle(cell).backgroundColor))).toEqual(
+    Array(6).fill("rgb(255, 255, 255)")
+  );
+  expect(await scheduleFiveDescriptions.evaluateAll((cells) => cells.map((cell) => getComputedStyle(cell).backgroundColor))).toEqual(
+    Array(6).fill("rgb(255, 255, 255)")
+  );
 });
 
 test("1702RT January 2018C preserves the official Item 10 through 12 label partitions", async ({ page }) => {
