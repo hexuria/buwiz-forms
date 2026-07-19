@@ -504,13 +504,13 @@ test("2551Q page-one typography keeps the reviewed bundled-font calibration", as
     },
     taxLine: {
       fontFamily: bundledFont,
-      fontSize: "12px",
+      fontSize: "12.4px",
       fontWeight: "400",
       transform: "none"
     },
     taxLineNumber: {
       fontFamily: bundledFont,
-      fontSize: "12px",
+      fontSize: "12.4px",
       fontWeight: "500",
       transform: "none"
     },
@@ -570,7 +570,7 @@ test("2551Q page-one typography keeps the reviewed bundled-font calibration", as
       { length: 4 },
       () => "matrix(1, 0, 0, 1, 0, -0.666667)"
     ),
-    taxLineLetterSpacing: "0.32px"
+    taxLineLetterSpacing: "0.133333px"
   });
 
   expect(

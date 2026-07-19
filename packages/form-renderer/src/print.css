@@ -1538,7 +1538,17 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 }
 
 .form-2551q-page-one .tax-line-label {
+  font-size: 9.3pt;
+  letter-spacing: .1pt;
+}
+
+.form-2551q-page-one .official-tax-line[data-item="17"] .tax-line-label {
+  font-size: 9pt;
   letter-spacing: .24pt;
+}
+
+.form-2551q-page-one .official-tax-line:not(.specify-line-extended) .tax-line-label {
+  padding-top: 1.5pt;
 }
 
 .form-2551q-page-one .tax-line-label b {
@@ -1555,7 +1565,22 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
  * 144 DPI, the original split rounded Item 24 one raster line too early.
  * Transfer .25pt to Item 24 without moving the declaration or pagination. */
 .form-2551q-page-one .official-tax-line[data-item="24"] { height: 18.75pt; }
-.form-2551q-page-one .overpayment-options { height: 15.75pt; }
+.form-2551q-page-one .overpayment-options {
+  height: 15.75pt;
+  grid-template-columns: 155pt 99pt 1fr;
+  padding-left: 19pt;
+  font-size: 7.75pt;
+}
+
+.form-2551q-page-one .overpayment-options .check-box {
+  width: 13.25pt;
+  height: 13.25pt;
+  transform: translateY(-.5pt);
+}
+
+.form-2551q-page-one .official-money-leading-cell {
+  flex: 0 0 14pt;
+}
 
 .form-2551q-page-one .tax-agent-strip {
   font-size: 6.5pt;
