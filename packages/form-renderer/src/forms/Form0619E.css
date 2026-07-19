@@ -568,3 +568,103 @@
   padding-top: 2pt;
   font-size: 8pt;
 }
+
+/*
+ * January 2018 PDF text-object typography mapped to the bundled, offline
+ * Arial-compatible faces. The small offsets below compensate for the source
+ * PDF's Arial metrics while leaving every ruled band unchanged.
+ */
+.bir-only-0619e {
+  padding-top: 5pt;
+  padding-left: 0;
+}
+.bcs-0619e {
+  padding-left: 0;
+  transform: translateY(1.8pt);
+}
+.government-wordmark-0619e > span {
+  letter-spacing: .2pt;
+  transform: translateY(1.3pt);
+}
+
+.form-title-0619e > strong {
+  font-size: 18.8pt;
+  font-weight: 400;
+  letter-spacing: .3pt;
+  transform: translateY(-.8pt);
+}
+.form-title-0619e > span {
+  font-size: 13.6pt;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.form-title-0619e > em {
+  margin-top: 8pt;
+  font-size: 6.4pt;
+}
+
+.header-option-0619e > div { font-size: 9pt; }
+.header-option-0619e > div em { font-size: 7.56pt; }
+.header-option-0619e > span { font-size: 9pt; }
+.header-option-0619e .code-value-0619e { font-size: 11.04pt; }
+.header-option-0619e:last-child .code-value-0619e { font-size: 12pt; }
+
+.part-0619e > h2,
+.payment-0619e > h2 {
+  font-size: 9pt;
+  font-weight: 700;
+}
+.tin-rdo-0619e > div,
+.label-0619e,
+.address-second-0619e > span:not(.comb-value):not(.adaptive-plain-value),
+.contact-category-0619e > div,
+.category-choices-0619e {
+  font-size: 9pt;
+}
+.name-0619e .label-0619e em { font-size: 7.56pt; }
+.address-0619e .label-0619e em {
+  font-size: 6.1pt;
+  letter-spacing: 0;
+}
+
+.remittance-row-0619e > div:first-child,
+.penalties-heading-0619e {
+  font-size: 8.6pt;
+}
+.decimal-separator-0619e { font-size: 5.04pt; }
+
+.declaration-0619e > p {
+  font-size: 6.2pt;
+  line-height: 1.1;
+}
+.signature-body-0619e > div,
+.signature-labels-0619e > div {
+  font-size: 8.04pt;
+}
+.signature-labels-0619e > div {
+  line-height: 1;
+}
+.signature-labels-0619e b {
+  font-weight: 400;
+}
+.signature-labels-0619e em { font-size: 6.96pt; }
+.signature-footer-0619e > span:not(.comb-value):not(.adaptive-plain-value) {
+  font-size: 8.04pt;
+}
+.signature-footer-0619e > span:first-child:not(.comb-value):not(.adaptive-plain-value) {
+  padding-right: 1pt;
+  padding-left: 1.5pt;
+}
+.signature-footer-0619e > span:nth-child(3),
+.signature-footer-0619e > span:nth-child(5) {
+  font-size: 9pt;
+}
+.signature-footer-0619e em { font-size: 6.96pt; }
+
+.payment-row-0619e > .payment-label-0619e {
+  padding-top: 3pt;
+  padding-left: 5pt;
+}
+.machine-validation-0619e > span:first-child { letter-spacing: .16pt; }
+.machine-validation-0619e > span:last-child { padding-right: 8pt; }
+.privacy-note-0619e { padding-left: 2pt; }
