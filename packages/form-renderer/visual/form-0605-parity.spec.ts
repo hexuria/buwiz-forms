@@ -549,6 +549,8 @@ test("0605 1999 matches the complete pinned official pages", async ({ page }, te
     content: `
       .form-page[data-visual-blank-values="true"] .comb-value > span,
       .form-page[data-visual-blank-values="true"] .adaptive-plain-value,
+      .form-page[data-visual-blank-values="true"] .money-whole-0605,
+      .form-page[data-visual-blank-values="true"] .money-fraction-0605,
       .form-page[data-visual-blank-values="true"] .check-box {
         color: transparent !important;
         text-shadow: none !important;
