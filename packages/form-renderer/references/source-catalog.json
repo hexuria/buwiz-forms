@@ -155,7 +155,10 @@
       "official_source_url": "https://bir-cdn.bir.gov.ph/local/pdf/1702-MX%20Jan%202018%20ENCS%20Final%20with%20OSDv2.pdf",
       "source_review": "verified_official_bytes",
       "implementation_blockers": [
-        "model_missing_attachment_schedule_fields"
+        "companion_attachment_editor_incomplete",
+        "companion_attachment_full_semantic_html_pages_incomplete",
+        "companion_attachment_print_and_attach_route_incomplete",
+        "companion_attachment_transport_incomplete"
       ],
       "conditional_companions": [
         {

@@ -1,8 +1,9 @@
 //! Evidence-safe editor for exact form `1701Qv2018`.
 //!
 //! The editor persists semantic local drafts and previews the owned HTML form.
-//! Queueing, submission, and XML export stay disabled because the reviewed
-//! source pack has no exact-revision saved XML.
+//! The exact-revision editable XML contract round-trips locally. Queueing and
+//! submission stay disabled until the reviewed encrypt/transport helpers,
+//! credential handling, and endpoint acceptance semantics are certified.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};

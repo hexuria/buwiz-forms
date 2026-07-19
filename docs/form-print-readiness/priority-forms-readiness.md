@@ -35,21 +35,23 @@ Those independent gates must not be collapsed into one filing-readiness claim.
 
 The current complete-page comparisons are all above the strict 1% release
 threshold. Structural line-only diagnostics are not a substitute for that
-gate. The current honest raw 2551Q results are approximately 6.76% and 4.83%;
-its page-indexed static-copy checks pass and its non-promoting two-pixel edge
-F1 scores are approximately 0.964 and 0.991. `0605:1999` remains blocked at
-approximately 7.44% on page 1 and 10.23% on page 2 even though its
-structure-only diagnostics are approximately 0.26% and 0.20%.
+gate. The current honest raw 2551Q results are 6.6529977376% and
+4.6500544662%, with structural diagnostics of 0.07122507123% and
+0.00929591922%. Its page-indexed static-copy checks pass and its non-promoting
+two-pixel edge F1 scores are approximately 0.964 and 0.991. `0605:1999`
+remains blocked at approximately 7.44% on page 1 and 10.23% on page 2 even
+though its structure-only diagnostics are approximately 0.26% and 0.20%.
 
 The latest exact complete-page and structural diagnostics for the recently
 calibrated forms are:
 
 | Exact target | Complete-page difference by page | Structural difference by page |
 | --- | --- | --- |
+| `2551Q:2018` | 6.6529977376%, 4.6500544662% | 0.07122507123%, 0.00929591922% |
 | `0605:1999` | 7.439441%, 10.226733% | 0.257798%, 0.200626% |
-| `0619E:2018` | 8.671426% | 0.175107% |
+| `0619E:2018` | 8.591945% | 0.175107% |
 | `0619F:2018` | 8.377329% | 0.331749% |
-| `1601C:2018` | 11.866917%, 12.121224% | 0.389076%, 0.199142% |
+| `1601C:2018` | 11.866917%, 12.098137% | 0.389076%, 0.202808% |
 | `1701Q:2018` | 13.479781%, 9.589548% | 0.328150%, 0.095185% |
 | `1701:2018` | 12.599593%, 15.788224%, 12.253942%, 15.302349% | 0.416833%, 0.446597%, 0.243440%, 0.551471% |
 | `1702RT:2018C` | 12.146711%, 8.016661%, 7.996585%, 11.390949% | 0.520877%, 0.148516%, 0.169116%, 0.875999% |
