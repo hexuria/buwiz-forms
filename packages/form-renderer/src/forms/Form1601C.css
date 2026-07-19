@@ -679,7 +679,7 @@
 
 .guidelines-1601c {
   margin-top: 3pt;
-  font-family: "Times New Roman", Times, serif;
+  font-family: Times, "Times New Roman", serif;
   color: #000;
 }
 .guidelines-1601c > h2 {
@@ -691,11 +691,11 @@
 }
 .guidelines-1601c > h2 small { font-size: 11pt; }
 .guidelines-1601c > h3 {
-  margin: 3pt 0 4pt;
+  margin: 3pt 0 3.485pt;
   text-align: center;
   font-size: 13.5pt;
   font-weight: 400;
-  line-height: 1;
+  line-height: 14.015pt;
 }
 .guideline-columns-1601c {
   height: 488pt;
