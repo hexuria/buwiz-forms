@@ -82,6 +82,15 @@ class HtmlReleaseGatePolicyTests(unittest.TestCase):
         )
         self.assertIn("cargo test --locked --workspace", self.candidate)
 
+        self.assertEqual(
+            self.candidate.count(
+                "scripts/audit_html_form_migration.py --print-source-revision --require-clean-source"
+            ),
+            3,
+        )
+        self.assertNotIn('--source-revision "$GITHUB_SHA"', self.candidate)
+        self.assertNotIn("--source-revision $env:GITHUB_SHA", self.candidate)
+
         release_audit_count = self.release.count("npm run audit:forms:migration")
         self.assertGreater(release_audit_count, 0)
         self.assertEqual(self.release.count(REQUIRED_AUDIT), release_audit_count)

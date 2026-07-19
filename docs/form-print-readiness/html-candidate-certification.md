@@ -52,6 +52,12 @@ The selected revision remains subject to the workflow's clean-source and
 non-promotional gates. Merging this bootstrap does not make any form
 release-ready.
 
+Archive names retain the exact workflow checkout SHA. The manifest and renderer
+identity use the migration audit's curated source revision, so a later
+documentation-only commit cannot make an otherwise identical renderer bundle
+fail its own identity check. Any change under the curated renderer, Rust,
+packaging, workflow, or verification paths advances that source revision.
+
 It uploads three short-lived candidate bundles:
 
 - a Developer-ID-signed, notarized, and stapled universal macOS `.app` archive;

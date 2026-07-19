@@ -141,6 +141,7 @@ jobs:
           ROOT="$PWD/target/certification/macos"
           APP="$ROOT/eBIRForms.app"
           ARCHIVE="$ROOT/eBIRForms-macOS-universal-$GITHUB_SHA.zip"
+          SOURCE_REVISION="$(python3 scripts/audit_html_form_migration.py --print-source-revision --require-clean-source)"
           NOTARY_ARCHIVE="$RUNNER_TEMP/eBIRForms-macOS-notary-$GITHUB_SHA.zip"
           NOTARY_RESULT="$RUNNER_TEMP/eBIRForms-macOS-notary-$GITHUB_SHA.json"
           KEYCHAIN_PATH="$RUNNER_TEMP/candidate-signing.keychain-db"
@@ -228,7 +229,7 @@ jobs:
           python3 scripts/write_html_candidate_manifest.py \
             --platform macos \
             --architecture universal \
-            --source-revision "$GITHUB_SHA" \
+            --source-revision "$SOURCE_REVISION" \
             --artifact "$ARCHIVE" \
             --renderer-identity assets/form-renderer-build-identity.json \
             --output "$ROOT/candidate-manifest.json"
@@ -316,6 +317,7 @@ jobs:
           $root = "target/certification/windows"
           $stage = "$root/eBIRForms-Windows-x64"
           $archive = "$root/eBIRForms-Windows-x64-$env:GITHUB_SHA.zip"
+          $sourceRevision = (python scripts/audit_html_form_migration.py --print-source-revision --require-clean-source).Trim()
           New-Item -ItemType Directory -Force -Path "$stage/assets" | Out-Null
           Copy-Item "target/x86_64-pc-windows-msvc/release/bir.exe" "$stage/bir.exe"
           Copy-Item "assets/*" "$stage/assets" -Recurse -Force
@@ -324,7 +326,7 @@ jobs:
           python scripts/write_html_candidate_manifest.py `
             --platform windows `
             --architecture x86_64 `
-            --source-revision $env:GITHUB_SHA `
+            --source-revision $sourceRevision `
             --artifact "$archive" `
             --renderer-identity assets/form-renderer-build-identity.json `
             --output "$root/candidate-manifest.json"
@@ -399,6 +401,7 @@ jobs:
           ROOT="$PWD/target/certification/linux"
           STAGE="$ROOT/eBIRForms-Linux-x64"
           ARCHIVE="$ROOT/eBIRForms-Linux-x64-$GITHUB_SHA.tar.gz"
+          SOURCE_REVISION="$(python3 scripts/audit_html_form_migration.py --print-source-revision --require-clean-source)"
           mkdir -p "$STAGE"
           cp target/x86_64-unknown-linux-gnu/release/bir "$STAGE/"
           cp -R assets "$STAGE/"
@@ -407,7 +410,7 @@ jobs:
           python3 scripts/write_html_candidate_manifest.py \
             --platform linux \
             --architecture x86_64 \
-            --source-revision "$GITHUB_SHA" \
+            --source-revision "$SOURCE_REVISION" \
             --artifact "$ARCHIVE" \
             --renderer-identity assets/form-renderer-build-identity.json \
             --output "$ROOT/candidate-manifest.json"
