@@ -389,6 +389,7 @@
 .final-tax-row-0619f > span:first-child b,
 .final-tax-row-0619f > span:first-child strong {
   font-weight: 600;
+  transform: translateY(1.5pt);
 }
 .final-tax-row-0619f > span:first-child strong {
   font-size: 10.5pt;
@@ -401,6 +402,9 @@
   background: #d9d9d9;
   font-size: 7.4pt;
   line-height: 1.05;
+}
+.remittance-description-copy-0619f {
+  transform: translateY(1.5pt);
 }
 .remittance-row-0619f {
   height: 18pt;
@@ -427,6 +431,9 @@
   font-size: 7pt;
   font-style: italic;
 }
+.remittance-row-0619f > div:first-child > :is(b, span) {
+  transform: translateY(1.5pt);
+}
 .remittance-row-0619f.item-18a-0619f > div:first-child,
 .remittance-row-0619f.item-18b-0619f > div:first-child,
 .remittance-row-0619f.item-18c-0619f > div:first-child,
@@ -440,6 +447,9 @@
   padding-left: 5pt;
   border-bottom: .5pt solid #000;
   background: #d9d9d9;
+}
+.penalties-heading-0619f > :is(b, span) {
+  transform: translateY(1.5pt);
 }
 .money-0619f {
   width: 100%;
@@ -477,11 +487,11 @@
 .declaration-0619f > p {
   height: 22.5pt;
   margin: 0;
-  padding: 1pt 4pt;
+  padding: 0 4pt;
   border-bottom: .5pt solid #000;
   background: #d9d9d9;
-  font-size: 5.7pt;
-  line-height: 1.08;
+  font-size: 6pt;
+  line-height: 1.15;
   text-align: left;
   text-indent: 11pt;
 }
@@ -664,5 +674,5 @@
   height: 11pt;
   margin: 0;
   padding-top: 2pt;
-  font-size: 7.6pt;
+  font-size: 8pt;
 }

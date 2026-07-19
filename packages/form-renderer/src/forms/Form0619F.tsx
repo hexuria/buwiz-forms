@@ -400,13 +400,13 @@ function TaxRemittance0619F({ envelope }: { envelope: RenderEnvelope }) {
               {text(envelope, atcKey)}
             </strong>
           </span>
-          <span>{label}</span>
+          <span><span className="remittance-description-copy-0619f">{label}</span></span>
           <MoneyComb0619F field={`${number.toLowerCase()}-amount`} value={decimal(envelope, key)} />
         </div>
       ))}
       {REMITTANCE_LINES.map(([number, label, key], index) => (
         <div key={number}>
-          {index === 3 && <div className="penalties-heading-0619f"><b>18</b> Add: Penalties</div>}
+          {index === 3 && <div className="penalties-heading-0619f"><b>18</b><span>Add: Penalties</span></div>}
           <div
             className={`remittance-row-0619f item-${number.toLowerCase()}-0619f ${["15", "17", "18D", "19"].includes(number) ? "computed" : ""}`}
             data-item={number}
