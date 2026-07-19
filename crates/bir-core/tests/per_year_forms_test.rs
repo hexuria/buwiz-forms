@@ -85,6 +85,10 @@ fn persisted_forms_sets(db: &Database, tin: &str) -> Vec<(u16, PerYearFormsSet)>
         .collect()
 }
 
+fn current_local_reconciliation_year() -> u16 {
+    chrono::Local::now().year() as u16
+}
+
 #[test]
 fn closest_prior_forms_year_returns_latest_active_unconfigured_year() {
     let mut profile = create_test_profile("010558054000");
@@ -148,7 +152,7 @@ fn profile_save_reconciles_generated_forms_and_preserves_manual_entry() {
             RegisteredTaxType::PercentageTax,
         ];
         let saved = save_initial_confirmed_profile(&db, profile);
-        let year = chrono::Utc::now().year() as u16;
+        let year = current_local_reconciliation_year();
 
         let mut set = saved
             .per_year_forms
@@ -206,7 +210,7 @@ fn confirmed_profile_change_reconciles_current_and_stored_intersecting_years() {
     temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
         let temp_file = NamedTempFile::new().unwrap();
         let db = Database::open(temp_file.path()).expect("Failed to open DB");
-        let current_year = chrono::Utc::now().year() as u16;
+        let current_year = current_local_reconciliation_year();
         let mid_year = current_year - 1;
         let historical_year = current_year - 2;
 
@@ -333,7 +337,7 @@ fn forms_set_reconcile_failure_rolls_back_profile_timeline_and_forms_sets() {
     temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
         let temp_file = NamedTempFile::new().unwrap();
         let db = Database::open(temp_file.path()).expect("Failed to open DB");
-        let current_year = chrono::Utc::now().year() as u16;
+        let current_year = current_local_reconciliation_year();
 
         let mut profile = create_test_profile("010558054000");
         profile.profile_versions[0].id = "percentage-tax-cor".into();
@@ -437,7 +441,7 @@ fn undated_migration_backfill_preserves_existing_forms_set() {
         profile.profile_versions.clear();
         profile.ensure_profile_version_ledger();
         let saved = db.save_profile(profile).expect("undated profile save");
-        let year = chrono::Utc::now().year() as u16;
+        let year = current_local_reconciliation_year();
         let manual = PerYearFormsSet::from_codes(year, ["1701"], FormSetSource::Manual);
         db.save_per_year_forms(&saved.tin.full(), year, &manual)
             .expect("manual Forms Set save");

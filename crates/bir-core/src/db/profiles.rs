@@ -8,6 +8,12 @@ use crate::profile::{
     TaxProfileVersionStatus, TaxpayerProfile,
 };
 
+fn reconciliation_calendar_year(local_date: chrono::NaiveDate) -> u16 {
+    use chrono::Datelike as _;
+
+    local_date.year() as u16
+}
+
 fn same_persisted_version_except_label(
     stored: &TaxProfileVersion,
     submitted: &TaxProfileVersion,
@@ -435,12 +441,11 @@ impl Database {
         // transaction as the profile update. Ambiguous or undated timelines
         // preserve existing Forms Sets instead of guessing.
         let mut years_to_update = std::collections::BTreeSet::new();
-        use chrono::Datelike as _;
         // Filing obligations follow the desktop user's local calendar year.
         // Using UTC here can reconcile the previous year during the first
         // local hours of January 1 in time zones east of UTC, while the UI and
         // emitted compliance event already identify the new local year.
-        let current_year = chrono::Local::now().year() as u16;
+        let current_year = reconciliation_calendar_year(chrono::Local::now().date_naive());
         years_to_update.insert(current_year);
         years_to_update.extend(profile.per_year_forms.keys().copied());
         if let Some(stored) = &existing_profile {
@@ -578,7 +583,23 @@ impl Database {
 mod tests {
     use super::*;
     use crate::db::ProfileCalendarLink;
+    use chrono::{FixedOffset, TimeZone, Utc};
     use tempfile::NamedTempFile;
+
+    #[test]
+    fn reconciliation_calendar_year_uses_local_date_at_utc_positive_year_boundary() {
+        let utc = Utc
+            .with_ymd_and_hms(2026, 12, 31, 10, 30, 0)
+            .single()
+            .expect("valid UTC instant");
+        let utc_plus_14 = FixedOffset::east_opt(14 * 60 * 60).expect("valid UTC+14 offset");
+        let local_date = utc.with_timezone(&utc_plus_14).date_naive();
+
+        assert_eq!(
+            (utc.date_naive(), reconciliation_calendar_year(local_date)),
+            (chrono::NaiveDate::from_ymd_opt(2026, 12, 31).unwrap(), 2027)
+        );
+    }
 
     #[test]
     fn profile_reads_do_not_synthesize_a_missing_version_ledger() {
