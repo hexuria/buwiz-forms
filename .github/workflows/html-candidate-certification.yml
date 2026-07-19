@@ -79,6 +79,22 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Require macOS candidate signing and notarization inputs
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          for name in APPLE_CERTIFICATE_P12 APPLE_CERTIFICATE_PASSWORD APPLE_TEAM_ID APPLE_ID APPLE_APP_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "Missing required macOS candidate secret: $name" >&2
+              exit 1
+            fi
+          done
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
@@ -112,13 +128,30 @@ jobs:
           cargo build --locked --release --target aarch64-apple-darwin
           cargo build --locked --release --target x86_64-apple-darwin
 
-      - name: Assemble ad-hoc signed candidate application
+      - name: Assemble, sign, notarize, and bind candidate application
         shell: bash
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
           set -euo pipefail
           ROOT="$PWD/target/certification/macos"
           APP="$ROOT/eBIRForms.app"
           ARCHIVE="$ROOT/eBIRForms-macOS-universal-$GITHUB_SHA.zip"
+          NOTARY_ARCHIVE="$RUNNER_TEMP/eBIRForms-macOS-notary-$GITHUB_SHA.zip"
+          NOTARY_RESULT="$RUNNER_TEMP/eBIRForms-macOS-notary-$GITHUB_SHA.json"
+          KEYCHAIN_PATH="$RUNNER_TEMP/candidate-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+
+          cleanup_signing() {
+            security delete-keychain "$KEYCHAIN_PATH" >/dev/null 2>&1 || true
+            rm -f "$RUNNER_TEMP/candidate-certificate.p12" "$NOTARY_ARCHIVE" "$NOTARY_RESULT"
+          }
+          trap cleanup_signing EXIT
+
           mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
           lipo -create \
             target/aarch64-apple-darwin/release/bir \
@@ -134,8 +167,63 @@ jobs:
           sed -i '' "s/BUNDLE_ID_PLACEHOLDER/dev.goldcoders.bir/g" "$APP/Contents/Info.plist"
           sed -i '' "s/APP_NAME_PLACEHOLDER/eBIRForms/g" "$APP/Contents/Info.plist"
           python3 scripts/audit_no_legacy.py --package-root "$APP"
-          codesign --force --options runtime --entitlements entitlements.dev.plist --sign - "$APP"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          printf '%s' "$APPLE_CERTIFICATE_P12" | base64 --decode \
+            > "$RUNNER_TEMP/candidate-certificate.p12"
+          security import "$RUNNER_TEMP/candidate-certificate.p12" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+
+          IDENTITIES="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH")"
+          IDENTITY_COUNT="$(printf '%s\n' "$IDENTITIES" | awk '/"Developer ID Application:/ { count++ } END { print count + 0 }')"
+          if [ "$IDENTITY_COUNT" -ne 1 ]; then
+            echo "Expected exactly one imported Developer ID Application identity" >&2
+            printf '%s\n' "$IDENTITIES" >&2
+            exit 1
+          fi
+          IDENTITY_LINE="$(printf '%s\n' "$IDENTITIES" | awk '/"Developer ID Application:/ { print; exit }')"
+          case "$IDENTITY_LINE" in
+            *"($APPLE_TEAM_ID)"*) ;;
+            *)
+              echo "Imported Developer ID identity does not belong to team $APPLE_TEAM_ID" >&2
+              printf '%s\n' "$IDENTITY_LINE" >&2
+              exit 1
+              ;;
+          esac
+          SIGNING_IDENTITY="$(printf '%s\n' "$IDENTITY_LINE" | awk '{ print $2 }')"
+
+          codesign --force --options runtime \
+            --keychain "$KEYCHAIN_PATH" \
+            --sign "$SIGNING_IDENTITY" \
+            --entitlements assets/macos/entitlements.mac.plist \
+            "$APP"
           codesign --verify --strict --verbose=2 "$APP"
+
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$NOTARY_ARCHIVE"
+          xcrun notarytool submit "$NOTARY_ARCHIVE" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait \
+            --output-format json > "$NOTARY_RESULT"
+          python3 -c \
+            'import json,sys; result=json.load(open(sys.argv[1], encoding="utf-8")); ok=result.get("status") == "Accepted" and bool(result.get("id")); sys.exit(0 if ok else f"notarytool did not accept submission: {result!r}")' \
+            "$NOTARY_RESULT"
+          xcrun stapler staple "$APP"
+          xcrun stapler validate "$APP"
+          spctl --assess --type execute --verbose=2 "$APP"
+          codesign --verify --strict --verbose=2 "$APP"
+          python3 scripts/audit_no_legacy.py --package-root "$APP"
+
           ditto -c -k --sequesterRsrc --keepParent "$APP" "$ARCHIVE"
           python3 scripts/write_html_candidate_manifest.py \
             --platform macos \
@@ -145,6 +233,11 @@ jobs:
             --renderer-identity assets/form-renderer-build-identity.json \
             --output "$ROOT/candidate-manifest.json"
           cp assets/form-renderer-build-identity.json "$ROOT/"
+          python3 scripts/macos_candidate_certification.py inspect \
+            --candidate-manifest "$ROOT/candidate-manifest.json" \
+            --candidate-archive "$ARCHIVE" \
+            --renderer-identity "$ROOT/form-renderer-build-identity.json" \
+            --output-dir "$ROOT/inspection"
 
       - name: Upload macOS certification inputs
         uses: actions/upload-artifact@v4

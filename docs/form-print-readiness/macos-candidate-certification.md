@@ -16,6 +16,13 @@ not match those immutable manifest hashes. ZIP extraction rejects traversal,
 symlinks, duplicate or case-colliding paths, oversized archives, and more than
 one application bundle.
 
+The workflow requires the same five Apple signing/notarization secrets as the
+public release workflow. It imports exactly one Developer ID Application
+identity for the configured team, signs with hardened runtime and production
+entitlements, submits a temporary archive for notarization, staples and
+validates the application, and only then creates the manifest-bound archive.
+The job fails closed if any credential or verification step is unavailable.
+
 ## Inspect the exact candidate
 
 Use a new output directory:
@@ -117,18 +124,16 @@ failure or unavailable prerequisite.
 
 ## Current operator-only blockers
 
-The current workflow candidate is ad-hoc signed. Therefore the strict command
-must fail the Developer ID, notarization, and stapling gates for that exact
-archive. Signing or modifying the extracted application afterward would change
-its manifest-bound tree and is not accepted. A later candidate-construction
-slice must produce and upload the exact Developer-ID-signed, notarized, and
-stapled artifact if this full verifier is to pass.
+The workflow can now produce the exact Developer-ID-signed, notarized, and
+stapled archive that the strict verifier expects. That repository-side change
+does not prove that such an artifact has been dispatched, downloaded, or
+exercised; those are still external evidence steps.
 
-The repository also does not yet contain a reviewed external UI collector that
-can authoritatively exercise the toolbar and save chooser, complete a printer
-job, or capture every rollback artifact. Accessibility permission and an
-available printer remain operator prerequisites. Windows and Linux
-certification remain separate incomplete milestones.
+The repository does not yet contain a reviewed external UI collector that can
+authoritatively exercise the toolbar and save chooser, complete a printer job,
+or capture every rollback artifact. Accessibility permission and an available
+printer remain operator prerequisites. Windows and Linux certification remain
+separate incomplete milestones.
 
 Even when all foundation checks pass, the report remains
 `promotion_eligible: false`, `trusted_producer: false`, and

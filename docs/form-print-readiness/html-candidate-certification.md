@@ -35,9 +35,26 @@ curated source revision, runs the full Rust format, check, clippy, and workspace
 test gates, and builds normal release binaries without `dev-tools` and without
 `--require-release-ready`.
 
+GitHub exposes a manually dispatched workflow only after that workflow file
+exists on the repository's default branch. Land the non-promotional workflow,
+its manifest/binder scripts, schemas, and policy tests on `main` as a dedicated
+infrastructure commit before trying to certify the still-unmerged renderer
+branch. Once that bootstrap is present, push a clean source commit and dispatch
+the exact branch revision:
+
+```sh
+gh workflow run html-candidate-certification.yml \
+  --repo codeitlikemiley/ebirforms \
+  --ref codex/print-preview-parity
+```
+
+The selected revision remains subject to the workflow's clean-source and
+non-promotional gates. Merging this bootstrap does not make any form
+release-ready.
+
 It uploads three short-lived candidate bundles:
 
-- an ad-hoc-signed universal macOS `.app` archive;
+- a Developer-ID-signed, notarized, and stapled universal macOS `.app` archive;
 - a portable Windows x86-64 archive;
 - a portable Linux x86-64 archive.
 
@@ -52,8 +69,11 @@ to the clean source revision and renderer bundle while permanently recording:
 }
 ```
 
-These bundles are inputs for the platform collectors. They are not the signed,
-notarized, or installer-level package evidence required for promotion.
+These bundles are inputs for the platform collectors. Candidate signing alone
+is not platform evidence, and none of these archives is installer-level package
+evidence required for promotion. The macOS job fails closed unless all five
+existing signing/notarization secrets are available; it creates the final
+manifest only after stapling and re-verifying the exact archived application.
 
 The operator-only platform binders and strict attestation contracts are
 documented in:
@@ -61,11 +81,12 @@ documented in:
 - [macOS candidate certification collector/verifier foundation](macos-candidate-certification.md)
 - [Windows candidate certification collector/verifier foundation](windows-candidate-certification.md)
 
-The current macOS archive is ad-hoc signed, so that strict verifier correctly
-cannot pass Developer ID, notarization, or stapling for the exact workflow
-artifact yet. The current Windows portable archive is unsigned, so its strict
-verifier correctly cannot pass Authenticode. Windows public EXE/MSI installers
-and Store-only MSIX remain separate artifact tracks.
+The macOS workflow can now provide the exact Developer-ID-signed, notarized,
+and stapled archive required by its strict verifier. It still cannot create UI,
+printer, rollback, or trusted-producer evidence. The current Windows portable
+archive is unsigned, so its strict verifier correctly cannot pass
+Authenticode. Windows public EXE/MSI installers and Store-only MSIX remain
+separate artifact tracks.
 
 The Linux portable candidate binder and closed X11/Xvfb plus Wayland/Weston
 attestation contract are documented in
@@ -81,8 +102,9 @@ The next collector milestone must run the unchanged candidate on its native
 platform and produce independently reviewable evidence for preview readiness,
 actual toolbar and native chooser operation, system-print completion, PDF
 validation, network-denied operation, package identity, and rollback behavior.
-macOS additionally needs Developer ID signing and notarization; Windows needs
-the signed installer path; Linux needs both X11/Xvfb and Wayland/Weston.
+macOS needs an operator with Accessibility and printer access to exercise the
+new signed candidate; Windows needs the signed installer path; Linux needs both
+X11/Xvfb and Wayland/Weston.
 
 Only after a collector and verifier are reviewed may its producer be added to a
 trusted producer registry. Curated reports and readiness flags then land in a

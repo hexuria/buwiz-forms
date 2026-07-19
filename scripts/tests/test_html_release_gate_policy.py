@@ -86,6 +86,36 @@ class HtmlReleaseGatePolicyTests(unittest.TestCase):
         self.assertGreater(release_audit_count, 0)
         self.assertEqual(self.release.count(REQUIRED_AUDIT), release_audit_count)
 
+    def test_macos_candidate_is_signed_notarized_and_bound_after_stapling(self) -> None:
+        macos = self.candidate.split("  macos-candidate:", maxsplit=1)[1]
+        macos = macos.split("  windows-candidate:", maxsplit=1)[0]
+
+        for secret in (
+            "APPLE_CERTIFICATE_P12",
+            "APPLE_CERTIFICATE_PASSWORD",
+            "APPLE_TEAM_ID",
+            "APPLE_ID",
+            "APPLE_APP_PASSWORD",
+        ):
+            self.assertIn(f"secrets.{secret}", macos)
+        self.assertIn("security set-key-partition-list", macos)
+        self.assertIn("security find-identity -v -p codesigning", macos)
+        self.assertIn("Developer ID Application:", macos)
+        self.assertIn("codesign --force --options runtime", macos)
+        self.assertIn("--entitlements assets/macos/entitlements.mac.plist", macos)
+        self.assertIn("xcrun notarytool submit", macos)
+        self.assertIn("--output-format json", macos)
+        self.assertIn('result.get("status") == "Accepted"', macos)
+        self.assertIn('xcrun stapler staple "$APP"', macos)
+        self.assertIn('xcrun stapler validate "$APP"', macos)
+        self.assertIn('spctl --assess --type execute --verbose=2 "$APP"', macos)
+        self.assertNotIn("--sign -", macos)
+        self.assertIn("scripts/macos_candidate_certification.py inspect", macos)
+        self.assertLess(
+            macos.index('xcrun stapler validate "$APP"'),
+            macos.index("scripts/write_html_candidate_manifest.py"),
+        )
+
     def test_ci_visual_gate_is_strict_and_blocking(self) -> None:
         step = self.workflow_step(
             self.ci,

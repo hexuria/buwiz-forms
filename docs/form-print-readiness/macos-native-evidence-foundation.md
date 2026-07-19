@@ -276,8 +276,9 @@ documented in
 re-runs the owned Rust PDF validator and fails closed on unavailable
 Accessibility, printer, Developer ID, notarization, stapling, or rollback
 proof. It remains untrusted and non-promotional. The workflow candidate is
-currently ad-hoc signed, and no reviewed external UI/print collector exists, so
-the platform gate remains incomplete.
+now constructed as a Developer-ID-signed, notarized, and stapled archive, but
+no reviewed external UI/print collector exists and no signed candidate run has
+been curated as trusted evidence, so the platform gate remains incomplete.
 
 ## Verification
 
