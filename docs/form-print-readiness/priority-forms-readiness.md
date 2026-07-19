@@ -64,16 +64,64 @@ corrected an earlier incorrect attribution to glyph shape and anti-aliasing:
 - Glyph outlines are not the blocker either. Rendering with the real platform
   Arial (the face the official PDF specifies) scores 7.3631%, marginally worse
   than bundled Arimo; Helvetica and Liberation Sans land within 0.11 points.
-- The residual ~6.6 points (page 1) and ~4.9 points (page 2) is genuine
-  **per-run geometry error**. Against PDF ground truth (PyMuPDF span metrics,
-  169 matched runs), the median text-run width ratio is 0.9437 with 62% of
-  runs narrower than 0.97, and per-run vertical scatter has a standard
-  deviation of 1.6 px while full-width rules align to within 0.05 px. Box
-  geometry is correct; the error lives inside the text runs.
-- The axes are coupled, so every single-axis global correction sits at a local
-  optimum: correcting size alone, weight alone, or baseline alone each leaves
-  the gate unchanged or worse. Restoring true bold (which the official PDF does
-  use) costs +0.24 points on page 1.
+- Part of the residual is genuine **per-run geometry error**, and the axes are
+  coupled, so every single-axis global correction sits at a local optimum:
+  correcting size alone, weight alone, or baseline alone each leaves the gate
+  unchanged or worse.
+- An earlier headline figure of "median text-run width ratio 0.9437, 62% of
+  runs narrower than 0.97" was later shown to be a **measurement artifact**:
+  PyMuPDF span bounding boxes include leading and trailing space advances that
+  a DOM `Range` rectangle excludes. Measured consistently, the median ratio for
+  the ATC table is **0.99872** with only 11 of 93 runs below 0.97. Advance
+  width is not a broad defect.
+
+### The decisive result: the 1% gate is not reachable for 2551Q
+
+A follow-up prototype drove the Schedule 1 ATC table — 75.1% of page 2's diff
+and uniquely safe to test because it renders from a static constant — to its
+geometric limit, and then a controlled A/B tested the last remaining
+rendering-side hypothesis. Both were adversarially reproduced.
+
+- **Joint per-run reconciliation works, and is insufficient.** Correcting size,
+  advance width, x-position and baseline *together* is genuinely superadditive
+  and converges toward the official document (the Poppler diagnostic, ink
+  recall and edge F1 all improve together). Best verified, semantics intact:
+  page 2 5.4557% → **4.7276%**. Even pinning all 1,921 ATC glyphs to their
+  exact PDF pen origins only reaches 4.1787%, and that variant **breaks the
+  page-indexed static-text assertion** (28 violations) because per-glyph spans
+  destroy inter-word spacing.
+- **A perfect ATC table still fails page 2.** The non-ATC remainder alone is
+  31,188 px = **1.3611%**, already over the gate before the ATC table
+  contributes a single pixel. At the region's rasterization floor page 2 is
+  1.8375%.
+- **Rasterization method is not a lever.** Rendering our own output through the
+  reference's exact pipeline (`page.pdf()` → `pdftocairo -svg` → same Chromium
+  raster, verified to emit zero `<text>` and zero `font-family`) made parity
+  marginally *worse*: page 1 7.3355% → 7.4828%, page 2 5.4557% → 5.5495%.
+  Skia hinting and grid-fitting therefore account for **none** of the residual.
+  The control reproduced the round-trip floor exactly, and re-deriving the
+  reference reproduced it at **zero changed pixels**.
+- **What is left is glyph outline shape.** For the ATC region the decomposition
+  is 10,916 px (11.6%) rasterizer round-trip floor, ~29,260 px (31%) placement,
+  and ~53,644 px (**57%**) outline shape, which no rendering-side change fixes.
+
+The root cause is structural and is a property of the source document, not of
+this renderer. `pdffonts` reports the primary faces — Arial, Arial,Bold,
+Arial,Italic and Times New Roman — as **`emb=no`**: the official PDF does not
+embed them. Poppler substitutes faces when rasterizing, so the pinned reference
+encodes **Poppler's substituted outlines**, not the Arial the form was authored
+in. Matching the reference pixel-for-pixel would therefore require adopting
+Poppler's substitution, which is fidelity to a rendering artifact rather than to
+the official document. Consistent with this, rendering with the real platform
+Arial scores marginally *worse* than bundled Arimo.
+
+**Conclusion of record:** the ≤1% complete-page gate is not achievable for
+`2551Q:2018` by any rendering-side change, and closing the remaining difference
+would mean overfitting to the reference pipeline's font substitution. The gate
+has NOT been weakened in response to this finding, and must not be. How to
+resolve the conflict — a different fidelity criterion, an embedded-font source,
+or accepting that these forms do not reach `release_ready` under the current
+criterion — is an open decision requiring explicit sign-off.
 
 The reference itself was independently audited and is sound: bit-exact
 reproduction of all pinned hashes, no `<text>` elements or `font-family`
