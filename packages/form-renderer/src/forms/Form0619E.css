@@ -15,6 +15,7 @@
 
 .form-0619e-page-one :is(b, strong) { font-weight: 400; }
 .form-0619e-page-one em { font-size: 6.8pt; font-weight: 400; }
+.form-0619e-page-one .check-box { background: #fff; }
 .form-0619e-page-one .comb-value > span {
   position: relative;
   border-right: 0;

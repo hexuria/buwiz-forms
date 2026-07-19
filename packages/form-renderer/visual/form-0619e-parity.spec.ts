@@ -172,6 +172,14 @@ test("0619E 2018 preserves the exact official label hierarchy and plain-field mo
   const fixture = readFixture("packages/form-contracts/fixtures/0619e-normal.json");
   await renderEnvelope(page, fixture);
 
+  const checkboxBackgrounds = await page.locator(
+    ".form-0619e-page-one .check-box"
+  ).evaluateAll((elements) => elements.map(
+    (element) => getComputedStyle(element).backgroundColor
+  ));
+  expect(checkboxBackgrounds).toHaveLength(6);
+  expect(new Set(checkboxBackgrounds)).toEqual(new Set(["rgb(255, 255, 255)"]));
+
   await expect(page.locator('[data-item="15"]')).toContainText(
     "Less: Amount Remitted from Previously Filed Form, if this is an amended form"
   );
