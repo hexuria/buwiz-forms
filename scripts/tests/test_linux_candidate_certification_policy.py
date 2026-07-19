@@ -14,6 +14,13 @@ class LinuxCandidateCertificationPolicyTests(unittest.TestCase):
         cls.verifier = (
             REPOSITORY_ROOT / "scripts/linux_candidate_certification.py"
         ).read_text(encoding="utf-8")
+        cls.collector = (
+            REPOSITORY_ROOT / "scripts/linux_candidate_collector.py"
+        ).read_text(encoding="utf-8")
+        cls.documentation = (
+            REPOSITORY_ROOT
+            / "docs/form-print-readiness/linux-candidate-certification.md"
+        ).read_text(encoding="utf-8")
         cls.workflow = (
             REPOSITORY_ROOT / ".github/workflows/html-candidate-certification.yml"
         ).read_text(encoding="utf-8")
@@ -32,6 +39,30 @@ class LinuxCandidateCertificationPolicyTests(unittest.TestCase):
         self.assertNotIn("form-release-evidence.json", self.verifier)
         self.assertNotIn("TRUSTED_PLATFORM_EVIDENCE_PRODUCERS", self.verifier)
         self.assertNotIn("TRUSTED_ROLLBACK_EVIDENCE_PRODUCERS", self.verifier)
+
+    def test_external_collector_is_operator_only_and_cannot_submit_print(self) -> None:
+        self.assertIn('"promotion_eligible": False', self.collector)
+        self.assertIn('"trusted_producer": False', self.collector)
+        self.assertIn('"operator_only": True', self.collector)
+        self.assertIn("--allow-live-print-evidence", self.collector)
+        self.assertIn('["lpstat", "-W", "completed", "-o", printer]', self.collector)
+        self.assertNotIn('["lp",', self.collector)
+        self.assertNotIn("xdotool", self.collector)
+        self.assertNotIn("ydotool", self.collector)
+        self.assertNotIn("form-release-evidence.json", self.collector)
+        self.assertNotIn("release_ready", self.collector)
+
+    def test_external_collector_requires_dual_hosts_distinct_nonces_and_strict_replay(
+        self,
+    ) -> None:
+        self.assertIn('"GpuiWryChild"', self.verifier)
+        self.assertIn('"GtkTopLevel"', self.verifier)
+        self.assertIn("distinct one-use nonces", self.collector)
+        self.assertIn("one immutable document", self.collector)
+        self.assertIn("load_rollback_bundle", self.collector)
+        self.assertIn("load_offline_bundle", self.collector)
+        self.assertIn("verify_attestation_command", self.collector)
+        self.assertIn("scripts/linux_candidate_collector.py", self.documentation)
 
     def test_closed_schemas_lock_non_promotional_package_boundary(self) -> None:
         schema_root = REPOSITORY_ROOT / "packages/form-specs/schema"

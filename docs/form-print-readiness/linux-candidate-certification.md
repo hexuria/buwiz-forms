@@ -120,6 +120,95 @@ python3 scripts/linux_candidate_certification.py verify-attestation \
 The PDF verifier is invoked with the explicit `linux` platform scope and
 re-runs `bir-print::html_output::validate_pdf_file` for both exports.
 
+## External operator collector
+
+`scripts/linux_candidate_collector.py` is the closed, non-promotional producer
+for the attestation above. It assembles evidence; it does **not** drive either
+WebView, click Export or Print, type into a native chooser, or submit a CUPS
+job. A reviewed external runtime driver and the operator must first retain four
+candidate-bound inputs:
+
+1. an X11/Xvfb run bundle for the `GpuiWryChild` host;
+2. a Wayland/Weston run bundle for the `GtkTopLevel` host;
+3. one pre-existing rollback bundle containing all eleven cases and immutable
+   destination/draft/temp-file evidence for both backends; and
+4. one packaged-offline bundle retaining `verify:forms:offline`, no-legacy,
+   Node/Typst/formtypes absence, zero external requests, and both
+   `bubblewrap --unshare-net` observations.
+
+Each run bundle is permanently `promotion_eligible: false`,
+`trusted_producer: false`, and `operator_only: true`. Its candidate object binds
+the manifest, archive, source revision, installed root and binary, assets,
+renderer bundle, renderer identity, and secure-extraction method. It also
+retains this additional operation binding:
+
+```json
+{
+  "operations": {
+    "preview": {
+      "document_run_id": "same-document",
+      "envelope_sha256": "<same-sha256>",
+      "nonce": 101,
+      "preflight_consumptions": [101],
+      "completion_nonce": 101
+    },
+    "pdf_export": {
+      "document_run_id": "same-document",
+      "envelope_sha256": "<same-sha256>",
+      "nonce": 102,
+      "preflight_consumptions": [102],
+      "completion_nonce": 102
+    },
+    "system_print": {
+      "document_run_id": "same-document",
+      "envelope_sha256": "<same-sha256>",
+      "nonce": 103,
+      "preflight_consumptions": [103],
+      "completion_nonce": 103
+    }
+  }
+}
+```
+
+All three nonces must be positive and distinct, each preflight list must contain
+its nonce exactly once, and each backend completion must return that same
+nonce. The document identifier and envelope hash must be identical. The current
+attestation v1 maps the PDF nonce to its `preview.nonce` and
+`toolbar_export.nonce` compatibility fields; the retained run bundle preserves
+and the collector validates the separate preview readiness and system-print
+nonces.
+
+Keep the Xvfb and Weston endpoints alive and retain the completed physical
+print jobs in CUPS while running:
+
+```sh
+python3 scripts/linux_candidate_collector.py \
+  --candidate-manifest candidate-manifest.json \
+  --candidate-archive eBIRForms-Linux-x64-COMMIT.tar.gz \
+  --renderer-identity form-renderer-build-identity.json \
+  --pdf-verifier target/release/verify_certification_pdf \
+  --x11-run-bundle x11-run-bundle.json \
+  --wayland-run-bundle wayland-run-bundle.json \
+  --rollback-bundle linux-rollback-bundle.json \
+  --offline-bundle linux-packaged-offline-bundle.json \
+  --operator-identity 'reviewed external Linux operator' \
+  --allow-live-print-evidence \
+  --output-dir target/linux-candidate-collection
+```
+
+`--allow-live-print-evidence` is an explicit acknowledgement that the supplied
+bundles retain real completed print jobs. It never authorizes the collector to
+submit one. The collector only calls `lpstat` to confirm each exact completed
+job, validates all immutable input records, assembles the attestation, and
+invokes `linux_candidate_certification.py verify-attestation`. Missing input,
+candidate drift, reused nonces, a different document, a non-app-owned host,
+network-denial drift, package-runtime residue, or a missing CUPS job fails
+closed before a report can be accepted.
+
+The run/rollback/offline bundles are external untrusted inputs. The collector
+records that limitation in `strict_verifier_gaps`; a successful replay is not a
+trusted release attestation.
+
 ## Why a successful report still cannot promote Linux
 
 Every report still has:

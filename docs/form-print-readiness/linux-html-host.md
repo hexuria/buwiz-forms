@@ -108,9 +108,13 @@ drivers produce this evidence, Linux platform release flags must remain false.
 The current non-promotional binding and dual-host attestation/verifier
 foundation is documented in
 [Linux candidate certification collector/verifier foundation](linux-candidate-certification.md).
-It can verify the portable workflow candidate without changing a release flag,
-but it deliberately cannot substitute that candidate for final `.deb` and
-release-tarball installation evidence.
+Its external operator collector validates separately retained X11 and Wayland
+runs, three distinct output/readiness nonces on one immutable document,
+pre-existing rollback evidence, packaged-offline evidence, and completed CUPS
+jobs without driving the UI or submitting a print. It can verify the portable
+workflow candidate without changing a release flag, but it deliberately cannot
+substitute that candidate for final `.deb` and release-tarball installation
+evidence.
 
 macOS cannot compile or certify the GTK/WebKit runtime because the required
 system libraries and display servers are Linux-only. Host builds still compile
