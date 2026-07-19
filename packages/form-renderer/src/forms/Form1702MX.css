@@ -339,6 +339,15 @@
 .regime-grid-1702mx { grid-template-columns: 212pt repeat(4, minmax(0, 1fr)); }
 .regime-row-1702mx > span:first-child { background: #d9d9d9; font-size: 6.7pt; line-height: .95; }
 .regime-row-1702mx > .amount-cell-1702mx { border-left: 0; }
+.regime-row-1702mx > .regime-unavailable-cell-1702mx {
+  background: #d9d9d9;
+}
+.regime-row-1702mx > .regime-unavailable-cell-1702mx::after {
+  display: none;
+}
+.regime-row-1702mx > .regime-unavailable-cell-1702mx[data-unavailable-block-continues="true"] {
+  border-bottom-color: transparent;
+}
 .regime-row-1702mx small { display: block; font-size: 5.5pt; font-style: italic; }
 .regime-group-row-1702mx {
   flex: 0 0 6.5pt;

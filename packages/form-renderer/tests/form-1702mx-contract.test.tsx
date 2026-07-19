@@ -210,6 +210,29 @@ describe("1702MX:2018C semantic HTML contract", () => {
     expect(markup).toContain('data-applicable-cells="8"');
   });
 
+  it("preserves the official page 2 regime unavailable-cell matrix", () => {
+    const markup = renderToStaticMarkup(
+      createElement(Form1702MX, { envelope: structuredClone(normalFixture) as RenderEnvelope })
+    );
+
+    const unavailableCells = Array.from(markup.matchAll(
+      /class="amount-cell-1702mx regime-unavailable-cell-1702mx" data-regime-column="([^"]+)"(?: data-unavailable-block-continues="true")? data-unavailable-cell="true"/g
+    )).map((match) => match[1]);
+    expect(unavailableCells).toEqual([
+      "exempt",
+      "exempt", "special",
+      "total",
+      "exempt",
+      "exempt",
+      "exempt", "special",
+      "exempt",
+      "exempt", "special",
+      "exempt", "special"
+    ]);
+    expect(markup.match(/data-unavailable-cell="true"/g)).toHaveLength(13);
+    expect(markup.match(/data-unavailable-block-continues="true"/g)).toHaveLength(3);
+  });
+
   it("prints all fixed official capacities without TypeScript calculation", () => {
     const fixture = structuredClone(capacityFixture) as RenderEnvelope;
     const markup = renderToStaticMarkup(

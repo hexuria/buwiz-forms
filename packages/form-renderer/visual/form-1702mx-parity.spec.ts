@@ -176,6 +176,60 @@ test("1702MX January 2018C preserves the official Schedule 2 group rows", async 
   expect(await pageHasNoOverflow(pageTwo)).toBe(true);
 });
 
+test("1702MX January 2018C preserves the official page 2 unavailable-cell matrix", async ({ page }) => {
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-normal.json"));
+  const pageTwo = page.locator(".form-page").nth(1);
+  const scheduleTwo = pageTwo.locator(".schedule-two-1702mx");
+  const scheduleThree = pageTwo.locator(".schedule-three-1702mx");
+
+  const expectedScheduleTwo = [
+    [10, ["exempt"]],
+    [12, ["exempt", "special"]],
+    [14, ["total"]],
+    [16, ["exempt"]],
+    [17, ["exempt"]],
+    [18, ["exempt", "special"]],
+    [19, ["exempt"]]
+  ] as const;
+  for (const [item, columns] of expectedScheduleTwo) {
+    expect(await scheduleTwo
+      .locator(`:scope > .item-${item}-1702mx > .regime-unavailable-cell-1702mx`)
+      .evaluateAll((cells) => cells.map((cell) => cell.getAttribute("data-regime-column"))))
+      .toEqual(columns);
+  }
+  const expectedScheduleThree = [
+    [21, ["exempt", "special"]],
+    [23, ["exempt", "special"]]
+  ] as const;
+  for (const [item, columns] of expectedScheduleThree) {
+    expect(await scheduleThree
+      .locator(`:scope > .item-${item}-1702mx > .regime-unavailable-cell-1702mx`)
+      .evaluateAll((cells) => cells.map((cell) => cell.getAttribute("data-regime-column"))))
+      .toEqual(columns);
+  }
+
+  const unavailableCells = pageTwo.locator(".regime-unavailable-cell-1702mx");
+  await expect(unavailableCells).toHaveCount(13);
+  expect(await unavailableCells.evaluateAll((cells) => cells.map((cell) => ({
+    backgroundColor: getComputedStyle(cell).backgroundColor,
+    guideDisplay: getComputedStyle(cell, "::after").display,
+    text: cell.textContent
+  })))).toEqual(Array.from({ length: 13 }, () => ({
+    backgroundColor: "rgb(217, 217, 217)",
+    guideDisplay: "none",
+    text: ""
+  })));
+
+  const continuingCells = scheduleTwo.locator(
+    ':scope > :is(.item-16-1702mx, .item-17-1702mx, .item-18-1702mx) > [data-regime-column="exempt"]'
+  );
+  await expect(continuingCells).toHaveCount(3);
+  expect(await continuingCells.evaluateAll((cells) => cells.map(
+    (cell) => getComputedStyle(cell).borderBottomColor
+  ))).toEqual(Array.from({ length: 3 }, () => "rgba(0, 0, 0, 0)"));
+  expect(await pageHasNoOverflow(pageTwo)).toBe(true);
+});
+
 test("1702MX January 2018C preserves the official Schedule 1 guides and unavailable cells", async ({ page }) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-normal.json"));
   const pageTwo = page.locator(".form-page").nth(1);

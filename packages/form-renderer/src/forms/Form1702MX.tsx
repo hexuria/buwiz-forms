@@ -56,6 +56,32 @@ const SCHEDULE_THREE_LABELS: readonly ReactNode[] = [
   "Net Tax Payable / (Overpayment) (Item 19 Less Item 32)"
 ];
 
+type RegimeColumn1702MX = "exempt" | "special" | "regular" | "total";
+
+const REGIME_COLUMNS_1702MX: readonly (readonly [RegimeColumn1702MX, string])[] = [
+  ["exempt", "exempt"],
+  ["special", "special"],
+  ["regular", "regular"],
+  ["total", "total"]
+];
+
+// Exact full-cell applicability map from the pinned official page 2 PDF
+// (SHA-256 81c05fffadde6c0b4098aeba8547a9820a0806c6be9b0c6ceac5597cab4263d2).
+const SCHEDULE_TWO_UNAVAILABLE_COLUMNS_1702MX: Readonly<Record<number, readonly RegimeColumn1702MX[]>> = {
+  10: ["exempt"],
+  12: ["exempt", "special"],
+  14: ["total"],
+  16: ["exempt"],
+  17: ["exempt"],
+  18: ["exempt", "special"],
+  19: ["exempt"]
+};
+
+const SCHEDULE_THREE_UNAVAILABLE_COLUMNS_1702MX: Readonly<Record<number, readonly RegimeColumn1702MX[]>> = {
+  21: ["exempt", "special"],
+  23: ["exempt", "special"]
+};
+
 const SCHEDULE_FOUR_LABELS: readonly ReactNode[] = [
   "Regular Income Tax Otherwise Due",
   "Tax Relief on Special Allowable Itemized Deductions",
@@ -131,6 +157,7 @@ export function Form1702MX({ envelope }: { envelope: RenderEnvelope }) {
             7: "Less: Deductions Allowable under Existing Law",
             11: "OR [in case taxable under Sec 27(A) & 28(A)(1)]"
           }}
+          unavailableColumnsByNumber={SCHEDULE_TWO_UNAVAILABLE_COLUMNS_1702MX}
         />
         <RegimeTable1702MX
           className="schedule-three-1702mx"
@@ -140,6 +167,7 @@ export function Form1702MX({ envelope }: { envelope: RenderEnvelope }) {
           fieldPrefix="schedule_3"
           envelope={envelope}
           labelOverride={(index, label) => scheduleThreeLabel(envelope, index, label)}
+          unavailableColumnsByNumber={SCHEDULE_THREE_UNAVAILABLE_COLUMNS_1702MX}
         />
       </FolioPage>
 
@@ -618,7 +646,8 @@ function RegimeTable1702MX({
   envelope,
   labelOverride,
   numberOverride,
-  groupsBefore = {}
+  groupsBefore = {},
+  unavailableColumnsByNumber = {}
 }: {
   className: string;
   title: string;
@@ -629,6 +658,7 @@ function RegimeTable1702MX({
   labelOverride?: (index: number, label: ReactNode) => ReactNode;
   numberOverride?: (index: number, fallback: number) => string | number;
   groupsBefore?: Readonly<Record<number, string>>;
+  unavailableColumnsByNumber?: Readonly<Record<number, readonly RegimeColumn1702MX[]>>;
 }) {
   return (
     <section className={`${className} schedule-block-1702mx regime-table-1702mx`}>
@@ -638,6 +668,7 @@ function RegimeTable1702MX({
         const fallbackNumber = startNumber + index;
         const itemNumber = numberOverride?.(index, fallbackNumber) ?? fallbackNumber;
         const prefix = `${fieldPrefix}_item_${index + 1}`;
+        const unavailableColumns = new Set(unavailableColumnsByNumber[fallbackNumber] ?? []);
         return [
           groupsBefore[index] ? (
             <div key={`group-${index}`} className={`regime-group-row-1702mx group-before-${fallbackNumber}-1702mx`}>
@@ -647,15 +678,46 @@ function RegimeTable1702MX({
           (
             <div key={String(itemNumber)} className={`regime-grid-1702mx regime-row-1702mx item-${fallbackNumber}-1702mx`}>
               <span>{itemNumber} {labelOverride ? labelOverride(index, label) : label}</span>
-              <AmountCell1702MX value={amount(envelope, `${prefix}_exempt`)} />
-              <AmountCell1702MX value={amount(envelope, `${prefix}_special`)} />
-              <AmountCell1702MX value={amount(envelope, `${prefix}_regular`)} />
-              <AmountCell1702MX value={amount(envelope, `${prefix}_total`)} />
+              {REGIME_COLUMNS_1702MX.map(([column, fieldSuffix]) => (
+                <RegimeAmountCell1702MX
+                  key={column}
+                  column={column}
+                  unavailable={unavailableColumns.has(column)}
+                  unavailableBlockContinues={
+                    unavailableColumns.has(column)
+                    && (unavailableColumnsByNumber[fallbackNumber + 1] ?? []).includes(column)
+                  }
+                  value={amount(envelope, `${prefix}_${fieldSuffix}`)}
+                />
+              ))}
             </div>
           )
         ];
       })}
     </section>
+  );
+}
+
+function RegimeAmountCell1702MX({
+  column,
+  unavailable,
+  unavailableBlockContinues,
+  value
+}: {
+  column: RegimeColumn1702MX;
+  unavailable: boolean;
+  unavailableBlockContinues: boolean;
+  value: number | null;
+}) {
+  if (!unavailable) return <AmountCell1702MX value={value} />;
+  return (
+    <span
+      aria-hidden="true"
+      className="amount-cell-1702mx regime-unavailable-cell-1702mx"
+      data-regime-column={column}
+      data-unavailable-block-continues={unavailableBlockContinues ? "true" : undefined}
+      data-unavailable-cell="true"
+    />
   );
 }
 
