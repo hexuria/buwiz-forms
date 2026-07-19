@@ -60,6 +60,7 @@ class SkillRoutingTests(unittest.TestCase):
         maintenance = description(MAINTENANCE).lower()
         self.assertIn("missing html renderer", conversion)
         self.assertIn("already html-enabled", conversion)
+        self.assertIn("fileable form from xml/savefile samples", conversion)
         self.assertIn("existing ebirforms semantic html print preview", maintenance)
         self.assertIn("renderer is missing", maintenance)
 

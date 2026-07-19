@@ -35,6 +35,15 @@ def write_skill(root: Path, name: str, frontmatter: str | None = None) -> Path:
     references = skill / "references"
     references.mkdir()
     (references / "policy.md").write_text("# Policy\n", encoding="utf-8")
+    agents = skill / "agents"
+    agents.mkdir()
+    (agents / "openai.yaml").write_text(
+        "interface:\n"
+        f'  display_name: "{name} display"\n'
+        '  short_description: "Deterministic skill validation"\n'
+        f'  default_prompt: "Use ${name} for this test."\n',
+        encoding="utf-8",
+    )
     return skill
 
 
@@ -100,6 +109,59 @@ class QuickValidateTests(unittest.TestCase):
             valid, message = quick_validate.validate_skill(skill)
             self.assertFalse(valid)
             self.assertIn("invalid Python helper bad.py", message)
+
+    def test_agent_metadata_is_required_and_bound_to_skill_name(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            skill = write_skill(Path(directory), "agent-metadata")
+            (skill / "agents/openai.yaml").unlink()
+            valid, message = quick_validate.validate_skill(skill)
+            self.assertFalse(valid)
+            self.assertIn("agents/openai.yaml not found", message)
+
+        with tempfile.TemporaryDirectory() as directory:
+            skill = write_skill(Path(directory), "agent-metadata")
+            metadata = skill / "agents/openai.yaml"
+            metadata.write_text(
+                "interface:\n"
+                '  display_name: "Agent metadata"\n'
+                '  short_description: "Deterministic skill validation"\n'
+                '  default_prompt: "Use $different-skill for this test."\n',
+                encoding="utf-8",
+            )
+            valid, message = quick_validate.validate_skill(skill)
+            self.assertFalse(valid)
+            self.assertIn("must mention $agent-metadata", message)
+
+    def test_agent_metadata_strings_must_be_quoted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            skill = write_skill(Path(directory), "unquoted-agent")
+            metadata = skill / "agents/openai.yaml"
+            metadata.write_text(
+                "interface:\n"
+                "  display_name: Unquoted Agent\n"
+                '  short_description: "Deterministic skill validation"\n'
+                '  default_prompt: "Use $unquoted-agent for this test."\n',
+                encoding="utf-8",
+            )
+            valid, message = quick_validate.validate_skill(skill)
+            self.assertFalse(valid)
+            self.assertIn("interface.display_name must be a quoted string", message)
+
+    def test_agent_metadata_allows_documented_top_level_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            skill = write_skill(Path(directory), "metadata-policy")
+            metadata = skill / "agents/openai.yaml"
+            metadata.write_text(
+                "interface:\n"
+                '  display_name: "Metadata policy"\n'
+                '  short_description: "Deterministic skill validation"\n'
+                '  default_prompt: "Use $metadata-policy for this test."\n'
+                "policy:\n"
+                "  allow_implicit_invocation: true\n",
+                encoding="utf-8",
+            )
+            valid, message = quick_validate.validate_skill(skill)
+            self.assertTrue(valid, message)
 
     def test_cli_usage_is_an_error(self) -> None:
         stderr = io.StringIO()

@@ -51,7 +51,8 @@ Read [renderer-workflow.md](references/renderer-workflow.md) before changing sha
 ## Current repository truth
 
 - Determine supported targets from `packages/form-specs/form-migration-status.json`; never rely on a hardcoded skill list.
-- At this skill's creation, only `2551Q:2018` is HTML-enabled, and it is not release-ready.
+- Re-read the manifest and registry for every task. Do not preserve a historical
+  form count or assume that a committed component is `html_only` or release-ready.
 - Treat `packages/form-renderer/src/forms/registry.ts` as the exact-revision dispatch source.
 - Treat official page images as calibration-only and never as runtime backgrounds.
 - Route a missing component or new revision to `$ebirforms-convert-form-to-html`.

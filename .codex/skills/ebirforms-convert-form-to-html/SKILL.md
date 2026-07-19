@@ -1,6 +1,6 @@
 ---
 name: ebirforms-convert-form-to-html
-description: Convert an exact BIR/eBIRForms form revision into this repository's semantic React HTML print renderer with Rust-owned tax data, generated render contracts, pinned official references, deterministic pagination, native print/PDF evidence, and migration gates. Use when adding a missing HTML renderer, migrating a form away from Typst/formtypes/SVG backgrounds, onboarding a new BIR form revision, or auditing whether a form conversion is safe to promote. Do not use for a layout-only fix to an already HTML-enabled form; use ebirforms-print-preview instead.
+description: Convert an exact BIR/eBIRForms form revision into this repository's semantic React HTML print renderer with Rust-owned tax data, generated render contracts, pinned official references, deterministic pagination, native print/PDF evidence, and migration gates. Use when adding a missing HTML renderer, migrating a form away from Typst/formtypes/SVG backgrounds, onboarding a new BIR form revision, auditing whether a form conversion is safe to promote, or evaluating a request to generate a fileable form from XML/savefile samples so insufficient evidence fails closed. Do not use for a layout-only fix to an already HTML-enabled form; use ebirforms-print-preview instead.
 ---
 
 # Convert an eBIRForms Form to HTML

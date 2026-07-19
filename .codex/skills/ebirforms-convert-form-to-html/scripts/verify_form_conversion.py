@@ -64,6 +64,9 @@ FORBIDDEN_ARTWORK_FIELDS = frozenset(
     }
 )
 MACHINE_CODE_TOKENS = ("barcode", "pdf417", "qr")
+PLATFORMS = ("macos", "windows", "linux")
+REFERENCE_MANIFEST_PATH = "packages/form-renderer/references/manifest.json"
+RELEASE_EVIDENCE_PATH = Path("packages/form-specs/form-release-evidence.json")
 
 
 def identity(form_code: str, revision: str) -> tuple[str, str, str, str]:
@@ -85,6 +88,152 @@ def load_json(path: Path, errors: list[str]) -> Any:
     except json.JSONDecodeError as error:
         errors.append(f"invalid JSON in {path.as_posix()}: {error}")
         return None
+
+
+def _repository_evidence_file(
+    root: Path, raw_path: Any, label: str, errors: list[str]
+) -> Path | None:
+    if not isinstance(raw_path, str) or not raw_path:
+        errors.append(f"{label}: evidence path must be a non-empty relative path")
+        return None
+    relative_path = Path(raw_path)
+    if relative_path.is_absolute():
+        errors.append(f"{label}: evidence path must be repository-relative")
+        return None
+    repository_root = root.resolve()
+    candidate = (repository_root / relative_path).resolve()
+    try:
+        candidate.relative_to(repository_root)
+    except ValueError:
+        errors.append(f"{label}: evidence path escapes the repository")
+        return None
+    if not candidate.is_file():
+        errors.append(f"{label}: missing evidence file {raw_path}")
+        return None
+    return candidate
+
+
+def _require_release_evidence_pointer(
+    root: Path,
+    pointer: Any,
+    *,
+    label: str,
+    expected_gate: str,
+    code: str,
+    revision: str,
+    platform: str | None,
+    errors: list[str],
+    artifacts: list[str],
+) -> None:
+    if not isinstance(pointer, dict):
+        errors.append(f"{label}: required passed, hashed evidence is missing")
+        return
+    if pointer.get("passed") is not True:
+        errors.append(f"{label}: evidence pointer must have passed=true")
+    expected_hash = pointer.get("sha256")
+    if not isinstance(expected_hash, str) or not SHA256_RE.fullmatch(expected_hash):
+        errors.append(f"{label}: evidence pointer requires a lowercase SHA-256")
+        expected_hash = None
+    evidence_file = _repository_evidence_file(
+        root, pointer.get("path"), label, errors
+    )
+    if evidence_file is None:
+        return
+    artifacts.append(relative(evidence_file, root.resolve()))
+    if expected_hash is not None and sha256_file(evidence_file) != expected_hash:
+        errors.append(f"{label}: evidence SHA-256 mismatch")
+    report = load_json(evidence_file, errors)
+    if not isinstance(report, dict):
+        errors.append(f"{label}: referenced evidence report must be an object")
+        return
+    if report.get("schema_version") != 1:
+        errors.append(f"{label}: evidence schema_version must be 1")
+    if report.get("passed") is not True:
+        errors.append(f"{label}: referenced evidence report must have passed=true")
+    if report.get("gate") != expected_gate:
+        errors.append(f"{label}: evidence gate must be {expected_gate}")
+    if platform is not None and report.get("platform") != platform:
+        errors.append(f"{label}: evidence platform must be {platform}")
+    report_code = report.get("form_code")
+    report_revision = report.get("form_revision")
+    if report_code is not None and str(report_code).upper() != code:
+        errors.append(f"{label}: evidence form_code must be {code}")
+    if report_revision is not None and str(report_revision) != revision:
+        errors.append(f"{label}: evidence form_revision must be {revision}")
+
+
+def audit_release_evidence(
+    root: Path,
+    evidence: Any,
+    code: str,
+    revision: str,
+    errors: list[str],
+    artifacts: list[str],
+) -> None:
+    """Require exact, passed, hashed evidence instead of trusting booleans."""
+
+    if not isinstance(evidence, dict):
+        errors.append("release evidence manifest must be an object")
+        return
+    if evidence.get("schema_version") != 1:
+        errors.append("release evidence schema_version must be 1")
+    forms = evidence.get("forms")
+    if not isinstance(forms, dict):
+        errors.append("release evidence forms must be an object")
+        return
+    key = f"{code}:{revision}"
+    form_evidence = forms.get(key)
+    if not isinstance(form_evidence, dict):
+        errors.append(f"release evidence lacks exact entry {key}")
+        return
+    if form_evidence.get("references_manifest") != REFERENCE_MANIFEST_PATH:
+        errors.append(
+            f"{key}: release evidence references_manifest must be "
+            f"{REFERENCE_MANIFEST_PATH}"
+        )
+
+    _require_release_evidence_pointer(
+        root,
+        form_evidence.get("visual_parity"),
+        label=f"{key} visual_parity",
+        expected_gate="visual_parity",
+        code=code,
+        revision=revision,
+        platform=None,
+        errors=errors,
+        artifacts=artifacts,
+    )
+    for evidence_key in ("native_print_export", "packaged_offline"):
+        platform_evidence = form_evidence.get(evidence_key)
+        if not isinstance(platform_evidence, dict):
+            errors.append(
+                f"{key}: {evidence_key} evidence must contain "
+                "macos, windows, and linux"
+            )
+            platform_evidence = {}
+        for platform in PLATFORMS:
+            _require_release_evidence_pointer(
+                root,
+                platform_evidence.get(platform),
+                label=f"{key} {evidence_key} {platform}",
+                expected_gate=evidence_key,
+                code=code,
+                revision=revision,
+                platform=platform,
+                errors=errors,
+                artifacts=artifacts,
+            )
+    _require_release_evidence_pointer(
+        root,
+        form_evidence.get("rollback_drill"),
+        label=f"{key} rollback_drill",
+        expected_gate="rollback_drill",
+        code=code,
+        revision=revision,
+        platform=None,
+        errors=errors,
+        artifacts=artifacts,
+    )
 
 
 def sha256_file(path: Path) -> str:
@@ -792,6 +941,20 @@ def audit(root: Path, form_code: str, revision: str, stage: str) -> dict[str, An
                 errors.append("runtime form-page backgrounds must be forbidden")
 
     if stage == "release":
+        release_evidence_path = root / RELEASE_EVIDENCE_PATH
+        release_evidence = load_json(release_evidence_path, errors)
+        if release_evidence_path.is_file():
+            artifacts.append(relative(release_evidence_path, root))
+        if release_evidence is not None:
+            audit_release_evidence(
+                root,
+                release_evidence,
+                code,
+                rev,
+                errors,
+                artifacts,
+            )
+
         capabilities = entry.get("capabilities")
         if not isinstance(capabilities, dict):
             errors.append("release requires a capabilities object")

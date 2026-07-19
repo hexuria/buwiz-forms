@@ -17,6 +17,9 @@ NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 KEY_RE = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*):(?:[ \t]*(.*))?$")
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 ALLOWED_FRONTMATTER_KEYS = frozenset({"name", "description"})
+REQUIRED_INTERFACE_FIELDS = frozenset(
+    {"display_name", "short_description", "default_prompt"}
+)
 
 
 def _scalar(value: str, key: str) -> str:
@@ -110,6 +113,84 @@ def _python_errors(skill_path: Path) -> list[str]:
     return errors
 
 
+def _agent_metadata_errors(skill_path: Path, skill_name: str) -> list[str]:
+    metadata = skill_path / "agents/openai.yaml"
+    if not metadata.is_file():
+        return ["agents/openai.yaml not found"]
+    try:
+        lines = metadata.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as error:
+        return [f"cannot read agents/openai.yaml: {error}"]
+
+    errors: list[str] = []
+    interface_lines = [
+        index
+        for index, line in enumerate(lines)
+        if line == "interface:"
+    ]
+    if not interface_lines:
+        return ["agents/openai.yaml requires a top-level interface mapping"]
+    if len(interface_lines) > 1:
+        errors.append("agents/openai.yaml has duplicate interface mappings")
+    interface_index = interface_lines[0]
+
+    values: dict[str, str] = {}
+    for line_number, line in enumerate(
+        lines[interface_index + 1 :], start=interface_index + 2
+    ):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if not line.startswith((" ", "\t")):
+            break
+        if not line.startswith("  ") or line.startswith(("   ", "\t")):
+            errors.append(
+                "agents/openai.yaml contains unsupported interface structure at "
+                f"line {line_number}"
+            )
+            continue
+        match = KEY_RE.fullmatch(line[2:])
+        if match is None:
+            errors.append(
+                f"invalid agents/openai.yaml interface field at line {line_number}"
+            )
+            continue
+        key, raw_value = match.groups()
+        if key in values:
+            errors.append(f"duplicate agents/openai.yaml interface field: {key}")
+            continue
+        raw = (raw_value or "").strip()
+        if not raw.startswith(('"', "'")):
+            errors.append(
+                f"agents/openai.yaml interface.{key} must be a quoted string"
+            )
+            continue
+        try:
+            values[key] = _scalar(raw, f"interface.{key}")
+        except ValueError as error:
+            errors.append(f"agents/openai.yaml {error}")
+
+    missing = sorted(REQUIRED_INTERFACE_FIELDS - set(values))
+    if missing:
+        errors.append(
+            "agents/openai.yaml missing interface field(s): " + ", ".join(missing)
+        )
+    display_name = values.get("display_name", "")
+    if "display_name" in values and not display_name:
+        errors.append("agents/openai.yaml interface.display_name must not be empty")
+    short_description = values.get("short_description", "")
+    if "short_description" in values and not 25 <= len(short_description) <= 64:
+        errors.append(
+            "agents/openai.yaml interface.short_description must be 25-64 characters"
+        )
+    default_prompt = values.get("default_prompt", "")
+    if "default_prompt" in values and f"${skill_name}" not in default_prompt:
+        errors.append(
+            "agents/openai.yaml interface.default_prompt must mention "
+            f"${skill_name}"
+        )
+    return errors
+
+
 def validate_skill(skill_directory: str | Path) -> tuple[bool, str]:
     skill_path = Path(skill_directory)
     if not skill_path.is_dir():
@@ -154,6 +235,7 @@ def validate_skill(skill_directory: str | Path) -> tuple[bool, str]:
         errors.append(f"SKILL.md exceeds {MAX_SKILL_LINES} lines")
     errors.extend(_local_link_errors(skill_path, body))
     errors.extend(_python_errors(skill_path))
+    errors.extend(_agent_metadata_errors(skill_path, name))
 
     if errors:
         return False, "Skill validation failed:\n- " + "\n- ".join(sorted(errors))

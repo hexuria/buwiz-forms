@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import tempfile
 import unittest
@@ -121,6 +122,133 @@ class VerifyFormConversionTests(unittest.TestCase):
             self.assertIn(
                 "release requires capabilities.visual_parity=true", report["errors"]
             )
+            self.assertTrue(
+                any(
+                    "form-release-evidence.json" in error
+                    for error in report["errors"]
+                )
+            )
+
+    def test_release_evidence_requires_exact_hashed_passing_reports(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+
+            def install_report(
+                name: str, gate: str, platform: str | None = None
+            ) -> dict[str, object]:
+                relative = Path("evidence") / f"{name}.json"
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                report: dict[str, object] = {
+                    "schema_version": 1,
+                    "passed": True,
+                    "gate": gate,
+                    "form_code": "1601C",
+                    "form_revision": "2018",
+                }
+                if platform is not None:
+                    report["platform"] = platform
+                payload = json.dumps(report, sort_keys=True).encode("utf-8")
+                path.write_bytes(payload)
+                return {
+                    "path": relative.as_posix(),
+                    "sha256": hashlib.sha256(payload).hexdigest(),
+                    "passed": True,
+                }
+
+            evidence = {
+                "schema_version": 1,
+                "forms": {
+                    "1601C:2018": {
+                        "references_manifest": verify_form.REFERENCE_MANIFEST_PATH,
+                        "visual_parity": install_report(
+                            "visual", "visual_parity"
+                        ),
+                        "native_print_export": {
+                            platform: install_report(
+                                f"native-{platform}",
+                                "native_print_export",
+                                platform,
+                            )
+                            for platform in verify_form.PLATFORMS
+                        },
+                        "packaged_offline": {
+                            platform: install_report(
+                                f"offline-{platform}",
+                                "packaged_offline",
+                                platform,
+                            )
+                            for platform in verify_form.PLATFORMS
+                        },
+                        "rollback_drill": install_report(
+                            "rollback", "rollback_drill"
+                        ),
+                    }
+                },
+            }
+            errors: list[str] = []
+            artifacts: list[str] = []
+
+            verify_form.audit_release_evidence(
+                root, evidence, "1601C", "2018", errors, artifacts
+            )
+
+            self.assertEqual(errors, [])
+            self.assertEqual(len(artifacts), 8)
+
+            evidence["forms"]["1601C:2018"]["visual_parity"] = None
+            errors = []
+            verify_form.audit_release_evidence(
+                root, evidence, "1601C", "2018", errors, []
+            )
+            self.assertIn(
+                "1601C:2018 visual_parity: required passed, hashed evidence is missing",
+                errors,
+            )
+
+    def test_release_evidence_rejects_hash_drift_and_escaping_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = root / "visual.json"
+            report.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "passed": True,
+                        "gate": "visual_parity",
+                        "form_code": "1601C",
+                        "form_revision": "2018",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            errors: list[str] = []
+            verify_form._require_release_evidence_pointer(
+                root,
+                {"path": "visual.json", "sha256": "0" * 64, "passed": True},
+                label="visual",
+                expected_gate="visual_parity",
+                code="1601C",
+                revision="2018",
+                platform=None,
+                errors=errors,
+                artifacts=[],
+            )
+            self.assertIn("visual: evidence SHA-256 mismatch", errors)
+
+            errors = []
+            verify_form._require_release_evidence_pointer(
+                root,
+                {"path": "../visual.json", "sha256": "0" * 64, "passed": True},
+                label="visual",
+                expected_gate="visual_parity",
+                code="1601C",
+                revision="2018",
+                platform=None,
+                errors=errors,
+                artifacts=[],
+            )
+            self.assertIn("visual: evidence path escapes the repository", errors)
 
     def test_fixture_matrix_checks_identity_and_all_required_kinds(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
