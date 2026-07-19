@@ -13,12 +13,18 @@ The pre-retirement Git tree contained:
 - a separately downloaded document-compiler executable in every assembled
   platform package.
 
-The prior assembled payload was approximately 106 MB uncompressed. The current
-compiled offline HTML renderer directory is 1,074,094 bytes (about 1.02 MiB) in
-this worktree after adding the ten renderer components. This generated bundle
-size is diagnostic rather than release evidence: final net package reduction
-must be recorded from the signed macOS, Windows, and Linux artifacts because
-executable formats, signing, and archive compression differ.
+The prior assembled payload was approximately 106 MB uncompressed. A fresh
+2026-07-19 ad-hoc universal macOS diagnostic package built from source revision
+`10d739ea27f5b39a11967becffb60d330534de2d` contains 38,151,966 bytes (36.38
+MiB) of regular files, about 64% less than that prior assembled payload. Its
+DMG is 22,349,838 bytes, and the compiled offline HTML renderer directory is
+1,217,872 bytes (1.16 MiB) after adding the ten renderer components. The
+renderer tree hash is
+`4a6bd595670be82efd9b0fe2680091edc21b82866327f789fe022daac7e2b471`.
+
+These measurements remain diagnostic rather than release evidence: final net
+package reduction must be recorded from the signed macOS, Windows, and Linux
+artifacts because executable formats, signing, and archive compression differ.
 
 ## Enforced absence
 
