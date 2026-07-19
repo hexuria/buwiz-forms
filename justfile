@@ -386,6 +386,32 @@ exe *args="": build-packaged-form-renderer
     if (Test-Path $ISCC) {
         Write-Host "Building installer with Inno Setup..."
         & $ISCC /DMyAppVersion=$VERSION installer.iss
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "❌ Inno Setup failed (exit code $LASTEXITCODE)."
+            exit $LASTEXITCODE
+        }
+
+        # Audit the bytes that the final installer actually contains. Auditing
+        # only the pre-installer staging tree would allow installer-specific
+        # additions to bypass the HTML-only/no-legacy package gate.
+        $installer = Resolve-Path "target/release-artifacts/{{APP_NAME}}-Windows-x64-$VERSION-Setup.exe"
+        $sevenZip = (Get-Command 7z.exe -ErrorAction Stop).Source
+        $auditRoot = Join-Path ([System.IO.Path]::GetTempPath()) "ebirforms-final-exe-$([guid]::NewGuid())"
+        try {
+            New-Item -ItemType Directory -Force -Path $auditRoot | Out-Null
+            & $sevenZip x -y "-o$auditRoot" $installer.Path | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                Write-Error "❌ Could not extract the final Setup EXE for audit."
+                exit $LASTEXITCODE
+            }
+            python scripts/audit_no_legacy.py --package-root $auditRoot
+            if ($LASTEXITCODE -ne 0) {
+                Write-Error "❌ Final Setup EXE failed the HTML-only/no-legacy audit."
+                exit $LASTEXITCODE
+            }
+        } finally {
+            Remove-Item $auditRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
         Write-Host "✅ Setup EXE created: target/release-artifacts/{{APP_NAME}}-Windows-x64-$VERSION-Setup.exe"
     } else {
         Write-Warning "⚠️ ISCC.exe not found at $ISCC. Please install Inno Setup 6 (https://jrsoftware.org/isinfo.php)."

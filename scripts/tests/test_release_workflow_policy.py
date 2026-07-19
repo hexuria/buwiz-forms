@@ -121,6 +121,21 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         public_release = self.job("release")
         self.assertNotIn("artifacts/**/*.msix", public_release)
 
+    def test_local_setup_recipe_audits_the_extracted_final_installer(self) -> None:
+        exe_recipe = self.justfile.split(
+            "# Build the Inno Setup executable installer (Windows only)", maxsplit=1
+        )[1].split("# Build a Store-only MSIX candidate", maxsplit=1)[0]
+        self.assertIn("Get-Command 7z.exe -ErrorAction Stop", exe_recipe)
+        self.assertIn('& $sevenZip x -y "-o$auditRoot" $installer.Path', exe_recipe)
+        self.assertIn(
+            "python scripts/audit_no_legacy.py --package-root $auditRoot",
+            exe_recipe,
+        )
+        self.assertIn(
+            "Remove-Item $auditRoot -Recurse -Force -ErrorAction SilentlyContinue",
+            exe_recipe,
+        )
+
     def test_package_builds_are_deterministic_and_scope_consistent(self) -> None:
         windows = self.job("build-windows")
         self.assertIn("choco install wixtoolset --version=3.11.2 -y", windows)
