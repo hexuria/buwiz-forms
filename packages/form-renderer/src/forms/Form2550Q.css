@@ -5,6 +5,11 @@
   line-height: 1.02;
 }
 
+/* The official page-one labels are predominantly 9pt Arial. Bundled Arimo
+ * calibrates closest at 8.8pt in the pinned Chromium raster. */
+.form-page.form-2550q-page-one { font-size: 8.8pt; }
+.form-page.form-2550q-page-one .part-one-2550q { font-size: 8.25pt; }
+
 .form-page.form-2550q-page-one { padding: 17.2pt 19pt 14pt 21.5pt; }
 .form-page.form-2550q-page-two { padding: 21.6pt 22pt 14pt 21.5pt; }
 .form-2550q-page :is(h2, h3, p) { margin: 0; }
