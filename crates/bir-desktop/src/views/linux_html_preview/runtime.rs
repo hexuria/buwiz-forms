@@ -653,8 +653,8 @@ fn evaluate_script(webview: &webkit2gtk::WebView, script: &str) {
 
 fn custom_paper(contract: LinuxNativePrintContract) -> gtk::PaperSize {
     gtk::PaperSize::new_custom(
-        "ebirforms-folio",
-        "eBIRForms 8.5 x 13 in",
+        "ebirforms-provider-paper",
+        "eBIRForms provider paper",
         contract.width_points,
         contract.height_points,
         gtk::Unit::Points,
@@ -697,9 +697,10 @@ fn page_setup(contract: LinuxNativePrintContract) -> Result<gtk::PageSetup, Stri
             contract.margin_left_points,
         )
     {
-        return Err(
-            "GTK did not retain the required 612 x 936 point paper and zero margins".to_string(),
-        );
+        return Err(format!(
+            "GTK did not retain the required {} x {} point provider paper and zero margins",
+            contract.width_points, contract.height_points
+        ));
     }
     Ok(setup)
 }
@@ -2003,58 +2004,69 @@ mod tests {
 
     #[test]
     #[ignore = "requires a GTK display; run under Xvfb in headless Linux CI"]
-    fn gtk_native_print_configuration_retains_exact_folio_contract() {
+    fn gtk_native_print_configuration_retains_each_provider_contract() {
         gtk::init().expect("GTK display initializes");
-        let (setup, settings) = native_print_configuration(&test_pdf_expectation(612.0, 936.0))
-            .expect("GTK retains the native BIR print contract");
+        for height_points in [792.0, 936.0, 1_008.0] {
+            let (setup, settings) =
+                native_print_configuration(&test_pdf_expectation(612.0, height_points))
+                    .expect("GTK retains the provider-specific print contract");
 
-        assert_eq!(setup.orientation(), gtk::PageOrientation::Portrait);
-        assert!(point_value_matches(
-            setup.paper_width(gtk::Unit::Points),
-            612.0
-        ));
-        assert!(point_value_matches(
-            setup.paper_height(gtk::Unit::Points),
-            936.0
-        ));
-        assert!(point_value_matches(
-            setup.top_margin(gtk::Unit::Points),
-            0.0
-        ));
-        assert!(point_value_matches(
-            setup.right_margin(gtk::Unit::Points),
-            0.0
-        ));
-        assert!(point_value_matches(
-            setup.bottom_margin(gtk::Unit::Points),
-            0.0
-        ));
-        assert!(point_value_matches(
-            setup.left_margin(gtk::Unit::Points),
-            0.0
-        ));
-        assert_eq!(settings.orientation(), gtk::PageOrientation::Portrait);
-        assert!(point_value_matches(
-            settings.paper_width(gtk::Unit::Points),
-            612.0
-        ));
-        assert!(point_value_matches(
-            settings.paper_height(gtk::Unit::Points),
-            936.0
-        ));
-        assert_eq!(settings.page_set(), gtk::PageSet::All);
-        assert_eq!(settings.print_pages(), gtk::PrintPages::All);
-        assert_eq!(settings.n_copies(), 1);
-        assert_eq!(settings.number_up(), 1);
-        assert!(point_value_matches(settings.scale(), 100.0));
-        assert!(settings.uses_color());
+            assert_eq!(setup.orientation(), gtk::PageOrientation::Portrait);
+            assert!(point_value_matches(
+                setup.paper_width(gtk::Unit::Points),
+                612.0
+            ));
+            assert!(point_value_matches(
+                setup.paper_height(gtk::Unit::Points),
+                height_points
+            ));
+            assert!(point_value_matches(
+                setup.top_margin(gtk::Unit::Points),
+                0.0
+            ));
+            assert!(point_value_matches(
+                setup.right_margin(gtk::Unit::Points),
+                0.0
+            ));
+            assert!(point_value_matches(
+                setup.bottom_margin(gtk::Unit::Points),
+                0.0
+            ));
+            assert!(point_value_matches(
+                setup.left_margin(gtk::Unit::Points),
+                0.0
+            ));
+            assert_eq!(settings.orientation(), gtk::PageOrientation::Portrait);
+            assert!(point_value_matches(
+                settings.paper_width(gtk::Unit::Points),
+                612.0
+            ));
+            assert!(point_value_matches(
+                settings.paper_height(gtk::Unit::Points),
+                height_points
+            ));
+            assert_eq!(settings.page_set(), gtk::PageSet::All);
+            assert_eq!(settings.print_pages(), gtk::PrintPages::All);
+            assert_eq!(settings.n_copies(), 1);
+            assert_eq!(settings.number_up(), 1);
+            assert!(point_value_matches(settings.scale(), 100.0));
+            assert!(settings.uses_color());
+        }
     }
 
     #[test]
-    fn gtk_native_print_configuration_rejects_non_folio_geometry() {
-        let error = native_print_configuration(&test_pdf_expectation(612.0, 792.0))
-            .expect_err("letter paper must fail closed");
-        assert!(error.contains("exactly 612 x 936 point"));
+    fn gtk_native_print_configuration_accepts_letter_provider_geometry() {
+        gtk::init().expect("GTK display initializes");
+        let (setup, settings) = native_print_configuration(&test_pdf_expectation(612.0, 792.0))
+            .expect("letter paper from the provider must be retained");
+        assert!(point_value_matches(
+            setup.paper_height(gtk::Unit::Points),
+            792.0
+        ));
+        assert!(point_value_matches(
+            settings.paper_height(gtk::Unit::Points),
+            792.0
+        ));
     }
 
     fn ready_renderer(bridge: &Arc<Mutex<LinuxHostBridge>>, plan: &RenderLayoutPlan, epoch: u64) {

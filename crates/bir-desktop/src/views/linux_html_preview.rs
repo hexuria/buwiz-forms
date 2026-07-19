@@ -24,12 +24,10 @@ pub enum LinuxHtmlHostStrategy {
     GtkTopLevel,
 }
 
-const REQUIRED_FORM_WIDTH_POINTS: f64 = 612.0;
-const REQUIRED_FORM_HEIGHT_POINTS: f64 = 936.0;
-
-/// Immutable GTK/WebKit print contract for the 8.5 x 13 inch BIR paper used by
-/// the HTML renderer. Keeping this part independent of GTK makes the required
-/// geometry testable on every development host, including macOS CI.
+/// Immutable GTK/WebKit print contract for the exact paper geometry supplied
+/// by the selected HTML form provider. Keeping this part independent of GTK
+/// makes provider-specific geometry testable on every development host,
+/// including macOS CI.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct LinuxNativePrintContract {
     pub width_points: f64,
@@ -57,13 +55,6 @@ pub(super) enum LinuxNativePrintContractError {
         width_points: f64,
         height_points: f64,
     },
-    #[error(
-        "Linux HTML output requires exactly 612 x 936 point (8.5 x 13 inch) paper; got {width_points} x {height_points} points"
-    )]
-    UnsupportedPaper {
-        width_points: f64,
-        height_points: f64,
-    },
 }
 
 pub(super) fn linux_native_print_contract(
@@ -80,13 +71,6 @@ pub(super) fn linux_native_print_contract(
             height_points,
         });
     }
-    if width_points != REQUIRED_FORM_WIDTH_POINTS || height_points != REQUIRED_FORM_HEIGHT_POINTS {
-        return Err(LinuxNativePrintContractError::UnsupportedPaper {
-            width_points,
-            height_points,
-        });
-    }
-
     Ok(LinuxNativePrintContract {
         width_points,
         height_points,
@@ -392,12 +376,12 @@ mod tests {
     }
 
     #[test]
-    fn native_print_contract_is_exact_folio_with_zero_margins() {
-        let contract = linux_native_print_contract(8.5 * 72.0, 13.0 * 72.0)
-            .expect("the required BIR paper is accepted");
+    fn native_print_contract_preserves_provider_geometry_with_zero_margins() {
+        let contract = linux_native_print_contract(8.5 * 72.0, 14.0 * 72.0)
+            .expect("the provider paper geometry is accepted");
 
         assert_eq!(contract.width_points, 612.0);
-        assert_eq!(contract.height_points, 936.0);
+        assert_eq!(contract.height_points, 1_008.0);
         assert_eq!(contract.margin_top_points, 0.0);
         assert_eq!(contract.margin_right_points, 0.0);
         assert_eq!(contract.margin_bottom_points, 0.0);
@@ -408,11 +392,11 @@ mod tests {
     }
 
     #[test]
-    fn native_print_contract_rejects_other_or_non_finite_paper() {
-        assert!(matches!(
-            linux_native_print_contract(612.0, 792.0),
-            Err(LinuxNativePrintContractError::UnsupportedPaper { .. })
-        ));
+    fn native_print_contract_accepts_other_provider_paper_and_rejects_non_finite_geometry() {
+        let letter = linux_native_print_contract(612.0, 792.0)
+            .expect("letter-sized providers are supported");
+        assert_eq!(letter.width_points, 612.0);
+        assert_eq!(letter.height_points, 792.0);
         assert!(matches!(
             linux_native_print_contract(f64::NAN, 936.0),
             Err(LinuxNativePrintContractError::InvalidGeometry { .. })
