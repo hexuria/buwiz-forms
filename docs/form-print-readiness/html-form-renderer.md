@@ -1,6 +1,6 @@
 # Semantic HTML Form Renderer
 
-Last verified: **July 16, 2026**.
+Last verified: **July 19, 2026**.
 
 The application has one printable-document architecture:
 
@@ -34,7 +34,9 @@ Current summary:
 | Exact revisions | Route | Support level | Release status |
 | --- | --- | --- | --- |
 | `2551Q:2018` | `html_only` | `ScaffoldOnly` | Not release-ready; full-page visual and signed platform/package evidence are incomplete |
-| `1601C:2018`, `0605:1999`, `0619E:2018`, `0619F:2018`, `1701Q:2018`, `2550Q:2024`, `1701:2018`, `1702RT:2018C`, `1702MX:2018C` | `experimental` | `ScaffoldOnly` | Calibration only; queue and/or release evidence is incomplete |
+| `1601C:2018` | `experimental` | `ScaffoldOnly` | Queue and exact XML round-trip capabilities are proven; visual, native output, and packaged-offline evidence remain incomplete |
+| `1701Q:2018` | `experimental` | `ScaffoldOnly` | Exact XML round trip is proven; queue/submission, visual, native output, and packaged-offline evidence remain incomplete |
+| `0605:1999`, `0619E:2018`, `0619F:2018`, `2550Q:2024`, `1701:2018`, `1702RT:2018C`, `1702MX:2018C` | `experimental` | `ScaffoldOnly` | Calibration only; queue and release evidence are incomplete |
 
 All listed revisions have providers, fixtures, components, specifications, and
 pagination. None currently has `visual_parity: true` or `release_ready: true`.

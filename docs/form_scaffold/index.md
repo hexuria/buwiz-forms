@@ -20,16 +20,16 @@ in `packages/form-renderer/references/source-catalog.json`.
 
 | Order | Exact target | Evidence state |
 |---:|---|---|
-| 1 | `2551Qv2018` | HTML certification in progress |
-| 2 | `1601Cv2018` | HTML conversion in progress |
-| 3 | `0619Ev2018` | Domain/XML conversion in progress |
-| 4 | `0619Fv2018` | PDF and XML source locked |
-| 5 | `0605v1999` | PDF and XML source locked |
-| 6 | `1701Qv2018` | Locked 2018 PDF plus the hash-locked eBIRForms 7.9.5.0 HTA prove the 172-field editable-save XML contract. Queue/filing remains blocked because the outbound path delegates encryption and FTP to unreviewed companion binaries and includes credential/enrollment fields. |
-| 7 | `2550Qv2024` | PDF and XML source locked |
-| 8 | `1701v2018` | PDF, companion forms, and XML source locked |
-| 9 | `1702RTv2018C` | PDF and XML source locked |
-| 10 | `1702MXv2018C` | Blocked: typed model lacks attachment schedules |
+| 1 | `2551Qv2018` | Queue/submission, exact XML round trip, semantic HTML, and pagination are implemented. The route is `html_only`, but the form remains `ScaffoldOnly` pending full-page visual parity and signed native/package evidence. |
+| 2 | `1601Cv2018` | Exact XML round trip and queue/submission are implemented alongside the semantic HTML component and pagination. It remains `ScaffoldOnly` pending visual, native-output, and packaged-offline evidence. |
+| 3 | `0619Ev2018` | Typed model, exact XML round trip, formulas, persistence, editor, semantic HTML, and pagination are implemented. Queue/submission, visual parity, native output, and packaged-offline evidence remain blocked. |
+| 4 | `0619Fv2018` | Typed model, exact XML round trip, formulas, persistence, editor, semantic HTML, and pagination are implemented. Queue/submission, visual parity, native output, and packaged-offline evidence remain blocked. |
+| 5 | `0605v1999` | Typed model, exact editable-save XML round trip, formulas, persistence, editor, semantic HTML, and pagination are implemented. Submission semantics, visual parity, native output, and packaged-offline evidence remain blocked. |
+| 6 | `1701Qv2018` | Locked 2018 PDF plus the hash-locked eBIRForms 7.9.5.0 HTA prove the exact 172-field editable-save XML round trip. Queue/submission remains blocked because the outbound path delegates encryption and FTP to unreviewed companion binaries and includes credential/enrollment fields. |
+| 7 | `2550Qv2024` | Typed model, exact XML round trip, formulas, persistence, editor, semantic HTML, and pagination are implemented. Queue/submission, visual parity, native output, and packaged-offline evidence remain blocked. |
+| 8 | `1701v2018` | Typed model, exact XML round trip, formulas, persistence, editor, semantic HTML, and conditional pagination are implemented. Queue/submission, complete conditional-page parity, native output, and packaged-offline evidence remain blocked. |
+| 9 | `1702RTv2018C` | Typed model, exact XML round trip, formulas, persistence, editor, four-page semantic HTML, and pagination are implemented. Queue/submission, visual parity, native output, and packaged-offline evidence remain blocked. |
+| 10 | `1702MXv2018C` | Typed model, exact XML round trip, formulas, persistence, editor, semantic HTML, and attachment pagination are implemented. Queue/submission, complete attachment parity, native output, and packaged-offline evidence remain blocked. |
 
 No row above is fileable merely because source files exist. Each exact revision
 must independently pass typed-model, formula, XML round-trip, persistence,

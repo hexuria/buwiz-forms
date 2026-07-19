@@ -2,8 +2,9 @@
 //!
 //! The reviewed plaintext save is a 100-field editable snapshot. Its binary
 //! encrypted companion decrypts to the same semantic values plus one explicit
-//! empty second-address field. Neither source proves submission semantics, so
-//! queueing remains disabled independently in the form capability registry.
+//! empty second-address field. Those files prove XML mapping, not submission
+//! on their own; queue authority is gated separately by the capability
+//! registry and the dedicated immutable 1601C queue path.
 
 use super::FormValidator;
 use super::form_1601c::{Form1601CDraft, Form1601CSchedule1Row, MAX_SCHEDULE_1_ROWS};

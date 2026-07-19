@@ -11,7 +11,7 @@ The project is under active development. Form filing support and HTML preview re
 
 ## Current Development Status
 
-Last verified: **July 16, 2026**. The authoritative sources are
+Last verified: **July 19, 2026**. The authoritative sources are
 [`support_level.rs`](crates/bir-core/src/forms/support_level.rs),
 [`form-migration-status.json`](packages/form-specs/form-migration-status.json),
 and [`form-release-evidence.json`](packages/form-specs/form-release-evidence.json).
@@ -20,8 +20,9 @@ If this summary conflicts with those files, the machine-readable status wins.
 | Forms | Queue authority | Current implementation | HTML renderer status |
 | --- | --- | --- | --- |
 | `2551Q:2018` | Proven | Typed model, XML, formulas, persistence, queue adapter, editor, contract, HTML, and pagination exist | `html_only`, but still `ScaffoldOnly`; visual and signed cross-platform package evidence are incomplete |
-| `1601C:2018`, `0605:1999`, `0619E:2018`, `0619F:2018`, `2550Q:2024` | Blocked | Typed model, XML, formulas, persistence, editor, contract, HTML, and pagination exist | Experimental calibration only; all remain `ScaffoldOnly` and fail the current visual release gate |
-| `1701Q:2018` | Blocked | Typed model, formulas, persistence, editor, contract, HTML, and pagination exist | Experimental calibration only; XML proof and release evidence remain incomplete |
+| `1601C:2018` | Proven | Typed model, exact XML round trip, formulas, persistence, queue adapter, editor, contract, HTML, and pagination exist | Experimental calibration only; it remains `ScaffoldOnly` while visual, native output, and packaged-offline evidence are incomplete |
+| `0605:1999`, `0619E:2018`, `0619F:2018`, `2550Q:2024` | Blocked | Typed model, XML, formulas, persistence, editor, contract, HTML, and pagination exist | Experimental calibration only; all remain `ScaffoldOnly` and fail the current visual release gate |
+| `1701Q:2018` | Blocked | Typed model, exact XML round trip, formulas, persistence, editor, contract, HTML, and pagination exist | Experimental calibration only; queue/submission and release evidence remain incomplete |
 | `1701:2018`, `1702RT:2018C`, `1702MX:2018C` | Blocked | Typed model, XML, formulas, persistence, editor, contract, HTML, and pagination exist | Experimental calibration only; queue, visual, native, and packaged-offline evidence remain incomplete |
 
 No form is currently marked `release_ready`. There is no retained fallback
