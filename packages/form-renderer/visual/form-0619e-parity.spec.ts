@@ -64,6 +64,14 @@ test("0619E 2018 keeps verified PDF417, caption, and seal geometry", async ({ pa
 
   await expectCriticalRegionGeometry(formPage, [
     {
+      name: "official For BIR use-only band",
+      selector: ".bir-only-0619e",
+      x: 33,
+      y: 67,
+      width: 80,
+      height: 37
+    },
+    {
       name: "official seal XObject",
       selector: ".government-wordmark-0619e img",
       x: 464,

@@ -576,7 +576,13 @@
  * PDF's Arial metrics while leaving every ruled band unchanged.
  */
 .bir-only-0619e {
-  padding-top: 5pt;
+  align-self: start;
+  position: relative;
+  left: -1pt;
+  top: 6.5pt;
+  width: 40pt;
+  height: 18.5pt;
+  padding-top: 0;
   padding-left: 0;
 }
 .bcs-0619e {
