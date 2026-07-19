@@ -1,12 +1,20 @@
 // Font-attribution sweep (non-promotional diagnostic).
 //
-// The complete-page diff for text-dense forms is dominated by glyph-shape
-// differences between the bundled font rendering and the official page's
-// embedded glyph outlines. This sweep re-renders the form's pinned fixture
-// under candidate font stacks and micro-typography variants, diffs every
-// candidate against BOTH pinned rasters (the chromium gate reference and the
-// Poppler diagnostic raster), and writes a ranked summary plus per-candidate
-// region reports so calibration knows which stack moves which regions.
+// Sweeps candidate font stacks and micro-typography variants, diffing each
+// against BOTH pinned rasters (the chromium gate reference and the Poppler
+// diagnostic raster), and writes a ranked summary plus per-candidate region
+// reports so calibration knows which stack moves which regions.
+//
+// NOTE ON WHAT THIS TOOL CAN AND CANNOT FIND. A 2026-07-20 investigation
+// measured the typeface axis to be near-irrelevant for 2551Q: swapping in the
+// real platform Arial (the face the official PDF specifies) scored 7.3631%
+// against bundled Arimo's 7.3355% — marginally WORSE — and Helvetica and
+// Liberation Sans landed within 0.11pp. The measured rasterization/anti-alias
+// floor is only 0.6875% (page 1) / 0.5540% (page 2). The dominant term is
+// therefore per-run GEOMETRY (size, advance width, and baseline position), not
+// glyph outlines and not anti-aliasing. Use this sweep to rule the typeface
+// axis in or out; use the region report and per-run measurement for the
+// geometry error that actually drives the gate.
 //
 // Form-generic: FONT_SWEEP_FORM / FONT_SWEEP_REVISION select the target
 // (default 2551Q:2018); fixtures and references resolve from the pinned

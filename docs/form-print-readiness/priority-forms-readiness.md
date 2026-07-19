@@ -54,11 +54,38 @@ noise floor are mandatory non-gating diagnostics reported next to the gate:
 
 The gate being higher than the Poppler diagnostic is an honest finding, not a
 regression: historical calibration drifted toward Poppler's rasterization
-idiosyncrasies, and the region-ranked diff reports plus the font sweep show
-the remaining difference concentrated in text-dense regions with no
-font-family candidate moving it by more than ~0.2 points — a systemic
-text-rendering (glyph shape/anti-aliasing) mismatch, which is the current
-calibration target.
+idiosyncrasies.
+
+A 2026-07-20 five-probe investigation established what the residual is, and
+corrected an earlier incorrect attribution to glyph shape and anti-aliasing:
+
+- The measured rasterization/anti-alias floor is **0.6875% (page 1) and
+  0.5540% (page 2)** — below the 1% gate, so anti-aliasing is not the blocker.
+- Glyph outlines are not the blocker either. Rendering with the real platform
+  Arial (the face the official PDF specifies) scores 7.3631%, marginally worse
+  than bundled Arimo; Helvetica and Liberation Sans land within 0.11 points.
+- The residual ~6.6 points (page 1) and ~4.9 points (page 2) is genuine
+  **per-run geometry error**. Against PDF ground truth (PyMuPDF span metrics,
+  169 matched runs), the median text-run width ratio is 0.9437 with 62% of
+  runs narrower than 0.97, and per-run vertical scatter has a standard
+  deviation of 1.6 px while full-width rules align to within 0.05 px. Box
+  geometry is correct; the error lives inside the text runs.
+- The axes are coupled, so every single-axis global correction sits at a local
+  optimum: correcting size alone, weight alone, or baseline alone each leaves
+  the gate unchanged or worse. Restoring true bold (which the official PDF does
+  use) costs +0.24 points on page 1.
+
+The reference itself was independently audited and is sound: bit-exact
+reproduction of all pinned hashes, no `<text>` elements or `font-family`
+attributes in the SVGs (so no local-font dependency), zero displacement, and
+2.8–3.6× closer to a 576 DPI supersampled arbiter than the Poppler raster.
+
+One structural caveat must be recorded: the chromium reference's own deviation
+from that supersampled arbiter is **1.1149% on page 1**, which exceeds the 1%
+gate. On page 1 a perfect render is therefore not distinguishable from roughly
+1%, leaving an effective geometry budget of about 0.31 points. The 1% gate is
+not weakened by this observation; whether page 1's reference basis should be
+re-derived at higher precision is an open, explicitly flagged decision.
 
 The latest exact complete-page and structural diagnostics for the recently
 calibrated forms are:
