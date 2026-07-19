@@ -3,7 +3,7 @@ use crate::forms::form_1601c::Form1601CDraft;
 use crate::forms::form_2551q::Form2551QDraft;
 use crate::forms::{FilingStatus, FormDraftSummary};
 use crate::profile::TaxpayerProfile;
-use chrono::{Datelike, Utc};
+use chrono::{Datelike, Local, TimeZone, Utc};
 use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -533,8 +533,12 @@ async fn process_queued_1601c(
     }
 }
 
+fn submission_queue_year_at<Tz: TimeZone>(now: &chrono::DateTime<Tz>) -> u16 {
+    now.year() as u16
+}
+
 async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Database>>) {
-    let current_year = Utc::now().naive_utc().date().year() as u16;
+    let current_year = submission_queue_year_at(&Local::now());
 
     // We only retry current year forms to avoid excessive queries,
     // but we can query `list_draft_summaries` for the profile.
@@ -1335,5 +1339,20 @@ mod tests {
             prepare_queued_1601c(draft, None),
             Queued1601CPreparation::Superseded
         ));
+    }
+
+    #[test]
+    fn submission_queue_uses_the_local_year_at_the_manila_boundary() {
+        let utc = Utc
+            .with_ymd_and_hms(2099, 12, 31, 16, 30, 0)
+            .single()
+            .expect("the UTC test instant must be valid");
+        let manila =
+            chrono::FixedOffset::east_opt(8 * 60 * 60).expect("the Manila offset must be valid");
+        let local = utc.with_timezone(&manila);
+
+        assert_eq!(utc.year(), 2099);
+        assert_eq!(local.year(), 2100);
+        assert_eq!(submission_queue_year_at(&local), 2100);
     }
 }

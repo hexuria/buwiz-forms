@@ -517,8 +517,12 @@ impl FormValidator for Form1601CDraft {
             ));
         }
 
-        if self.tin.trim().is_empty() {
-            errors.push(("tin".to_string(), "TIN is required".to_string()));
+        if !valid_submission_tin(&self.tin) {
+            errors.push((
+                "tin".to_string(),
+                "TIN must use 12 to 14 digits in either compact form or the reviewed 3-3-3-branch format"
+                    .to_string(),
+            ));
         }
 
         if self.email_address.trim().is_empty() {
@@ -849,6 +853,29 @@ fn valid_calendar_date(value: &str) -> bool {
         && chrono::NaiveDate::parse_from_str(value, "%m/%d/%Y").is_ok()
 }
 
+fn valid_submission_tin(value: &str) -> bool {
+    let value = value.trim();
+    if value.chars().all(|ch| ch.is_ascii_digit()) {
+        return (12..=14).contains(&value.len());
+    }
+
+    let mut segments = value.split('-');
+    let first = segments.next();
+    let second = segments.next();
+    let third = segments.next();
+    let branch = segments.next();
+    if segments.next().is_some() {
+        return false;
+    }
+
+    matches!((first, second, third, branch), (Some(first), Some(second), Some(third), Some(branch))
+        if [first, second, third]
+            .into_iter()
+            .all(|segment| segment.len() == 3 && segment.chars().all(|ch| ch.is_ascii_digit()))
+            && (3..=5).contains(&branch.len())
+            && branch.chars().all(|ch| ch.is_ascii_digit()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -972,6 +999,34 @@ mod tests {
                 .iter()
                 .any(|(field, _)| field == "contact_number")
         );
+    }
+
+    #[test]
+    fn queue_validation_rejects_malformed_tin_before_fingerprinting() {
+        let mut draft = Form1601CDraft::new_from_profile(&test_profile(), 2026, 6);
+        draft.any_taxes_withheld = false;
+        draft.tin = "123-456-789-00X00".to_string();
+
+        let errors = draft
+            .transition_to_queued()
+            .expect_err("a malformed TIN must not enter the submission queue");
+
+        assert!(errors.iter().any(|(field, _)| field == "tin"));
+        assert_eq!(draft.status, FilingStatus::Draft);
+        assert!(draft.queued_submission_fingerprint.is_none());
+    }
+
+    #[test]
+    fn queue_validation_accepts_reviewed_compact_and_segmented_tins() {
+        for tin in ["123456789000", "12345678900000", "123-456-789-00000"] {
+            let mut draft = Form1601CDraft::new_from_profile(&test_profile(), 2026, 6);
+            draft.any_taxes_withheld = false;
+            draft.tin = tin.to_string();
+
+            draft
+                .transition_to_queued()
+                .unwrap_or_else(|errors| panic!("{tin} should be accepted: {errors:?}"));
+        }
     }
 
     #[test]
