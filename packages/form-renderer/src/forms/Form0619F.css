@@ -358,7 +358,7 @@
   grid-template-columns: 57.5pt 317pt minmax(0, 1fr);
 }
 .remittance-head-0619f {
-  height: 10pt;
+  height: 11.5pt;
   border-bottom: .5pt solid #000;
   background: #d9d9d9;
   text-align: center;
@@ -373,7 +373,7 @@
   height: 18pt;
   border-bottom: .5pt solid #000;
 }
-.final-tax-row-0619f.item-13-0619f { height: 19pt; }
+.final-tax-row-0619f.item-13-0619f { height: 18.5pt; }
 .final-tax-row-0619f > * {
   min-width: 0;
   border-right: .5pt solid #000;
@@ -417,6 +417,9 @@
 .remittance-row-0619f.item-18a-0619f,
 .remittance-row-0619f.item-18c-0619f,
 .remittance-row-0619f.item-19-0619f { height: 18.5pt; }
+.remittance-row-0619f.item-15-0619f,
+.remittance-row-0619f.item-18c-0619f { height: 19pt; }
+.remittance-row-0619f.item-18a-0619f { height: 18pt; }
 .remittance-row-0619f > div:first-child {
   display: flex;
   align-items: center;
