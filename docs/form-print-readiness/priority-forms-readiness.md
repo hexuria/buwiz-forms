@@ -37,15 +37,29 @@ The current complete-page comparisons are all above the strict 1% release
 threshold. Structural line-only diagnostics are not a substitute for that
 gate. The current honest raw 2551Q results are approximately 6.76% and 4.83%;
 its page-indexed static-copy checks pass and its non-promoting two-pixel edge
-F1 scores are approximately 0.964 and 0.991. `0619E:2018` and `0619F:2018`
-remain blocked at approximately 8.77% and 8.38%, respectively. These values
-must not be replaced by the much smaller structure-only percentages.
-`0605:1999` remains blocked at approximately 7.44% on page 1 and 10.23% on
-page 2 even though its structure-only diagnostics are approximately 0.26% and
-0.20%. `1701Q:2018` remains blocked at approximately 14.13% on page 1 and
-9.71% on page 2; its structure-only diagnostics are approximately 0.34% and
-0.10%. The latter two forms pass their page geometry, overflow, capacity, and
-reviewed-copy checks, but those narrower checks do not establish visual parity.
+F1 scores are approximately 0.964 and 0.991. `0605:1999` remains blocked at
+approximately 7.44% on page 1 and 10.23% on page 2 even though its
+structure-only diagnostics are approximately 0.26% and 0.20%.
+
+The latest exact complete-page and structural diagnostics for the recently
+calibrated forms are:
+
+| Exact target | Complete-page difference by page | Structural difference by page |
+| --- | --- | --- |
+| `0605:1999` | 7.439441%, 10.226733% | 0.257798%, 0.200626% |
+| `0619E:2018` | 8.671426% | 0.175107% |
+| `0619F:2018` | 8.377329% | 0.331749% |
+| `1701Q:2018` | 13.479781%, 9.589548% | 0.328150%, 0.095185% |
+| `1701:2018` | 12.599593%, 15.788224%, 12.253942%, 15.302349% | 0.416833%, 0.446597%, 0.243440%, 0.551471% |
+| `1702RT:2018C` | 12.146711%, 8.016661%, 7.996585%, 11.390949% | 0.520877%, 0.148516%, 0.169116%, 0.875999% |
+| `1702MX:2018C` | 13.217793%, 19.179227%, 11.552995%, 9.224345% | 0.385322%, 0.819307%, 0.131147%, 0.259195% |
+
+These results retain the reviewed source corrections for 0619E checkbox
+interiors, 0619F Part II row heights, 1701Q and 1701 typography, the 1702RT
+Schedule IIIA rounding note, and the 1702MX Item 5 official plain
+code/description boxes. Geometry, overflow, capacity, reviewed-copy, and
+critical-region checks may pass while these raw comparisons remain blocked;
+those narrower checks do not establish visual parity.
 
 A July 18 cross-rasterizer diagnostic also rendered the first official 2551Q
 page itself through Poppler and through Chromium from Poppler's vector SVG;

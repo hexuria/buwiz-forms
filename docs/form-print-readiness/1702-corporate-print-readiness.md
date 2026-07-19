@@ -1,6 +1,6 @@
 # 1702 Corporate Form Readiness
 
-Last verified: **July 16, 2026**.
+Last verified: **July 19, 2026**.
 
 This document covers `1702RT:2018C` and `1702MX:2018C`. The authoritative
 capabilities and routes are in
@@ -36,22 +36,27 @@ the renderer page count.
 ## Current visual truth
 
 Neither form passes the strict complete-page visual gate. The latest local
-`1702RT:2018C` diagnostic differs from the official raster by approximately:
+diagnostics are:
 
-| Page | Full-page difference |
-| ---: | ---: |
-| 1 | 13.30% |
-| 2 | 10.68% |
-| 3 | 14.01% |
-| 4 | 21.94% |
+| Exact revision | Page | Complete-page difference | Structural difference |
+| --- | ---: | ---: | ---: |
+| `1702RT:2018C` | 1 | 12.146711% | 0.520877% |
+| `1702RT:2018C` | 2 | 8.016661% | 0.148516% |
+| `1702RT:2018C` | 3 | 7.996585% | 0.169116% |
+| `1702RT:2018C` | 4 | 11.390949% | 0.875999% |
+| `1702MX:2018C` | 1 | 13.217793% | 0.385322% |
+| `1702MX:2018C` | 2 | 19.179227% | 0.819307% |
+| `1702MX:2018C` | 3 | 11.552995% | 0.131147% |
+| `1702MX:2018C` | 4 | 9.224345% | 0.259195% |
 
 These values are far above the 1% release threshold. Sparse ruled-line or
-masked-region scores must not be reported as whole-page parity. The current
-1702RT document is an HTML scaffold that needs semantic layout calibration; it
-is not an identical reconstruction of the official form.
-
-The 1702MX complete-page comparisons also remain above 1%, so its
-`visual_parity` capability stays false.
+masked-region scores must not be reported as whole-page parity. The retained
+source-backed corrections include the official 1702RT Schedule IIIA rounding
+note and page-two typography, plus the 1702MX Item 5 plain code and description
+boxes used by the official source instead of assumed comb cells. Both documents
+remain HTML scaffolds that need further calibration; neither is an identical
+reconstruction of the official form, and both `visual_parity` capabilities
+remain false.
 
 ## Calibration requirements
 
