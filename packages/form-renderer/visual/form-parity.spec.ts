@@ -19,6 +19,11 @@ import {
 } from "./official-2551q-static-text";
 import { writeRegionReport } from "./region-report";
 import {
+  blankComparisonEnvelope,
+  prepareOfficialBlankComparison,
+  renderEnvelope
+} from "./support/render-utils";
+import {
   criticalRegionsFor,
   PAGE_ONE_CRITICAL_REGIONS,
   PAGE_TWO_CRITICAL_REGIONS,
@@ -268,7 +273,7 @@ for (const parityCase of cases) {
     // value blank before suppressing fixture glyphs. Borders, comb cells,
     // check boxes, labels, artwork, fills, and pagination remain inside the
     // strict complete-page pixel gate; no threshold or comparison mask changes.
-    await renderEnvelope(page, officialBlankComparisonEnvelope(envelope));
+    await renderEnvelope(page, blankComparisonEnvelope(envelope, parityCase.code));
     await expect(pages).toHaveCount(parityCase.references.length);
     await prepareOfficialBlankComparison(page);
 
@@ -1916,63 +1921,6 @@ function readFixture(relativePath: string): unknown {
   return JSON.parse(
     fs.readFileSync(path.join(REPO_ROOT, relativePath), "utf8")
   ) as unknown;
-}
-
-async function renderEnvelope(page: Page, envelope: unknown) {
-  await page.goto("/");
-  await page.waitForFunction(
-    () =>
-      typeof (
-        window as Window & {
-          renderEbirForm?: (value: unknown) => void;
-        }
-      ).renderEbirForm === "function"
-  );
-  await page.evaluate((value) => {
-    const render = (
-      window as Window & {
-        renderEbirForm?: (input: unknown) => void;
-      }
-    ).renderEbirForm;
-    if (!render) throw new Error("renderEbirForm is not installed");
-    render(value);
-  }, envelope);
-  await page.locator(".form-document").waitFor();
-  await page.evaluate(() =>
-    new Promise<void>((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-    })
-  );
-  await page.evaluate(() => document.fonts.ready);
-}
-
-async function prepareOfficialBlankComparison(page: Page) {
-  await page.addStyleTag({
-    content: `
-      .form-page[data-visual-blank-values="true"] .comb-value > span,
-      .form-page[data-visual-blank-values="true"] .adaptive-plain-value,
-      .form-page[data-visual-blank-values="true"] .check-box,
-      .form-page[data-visual-blank-values="true"] .tax-credit-description {
-        color: transparent !important;
-        text-shadow: none !important;
-      }
-    `
-  });
-  await page.locator(".form-page").evaluateAll((pages) => {
-    for (const formPage of pages) {
-      formPage.setAttribute("data-visual-blank-values", "true");
-    }
-  });
-}
-
-function officialBlankComparisonEnvelope(envelope: unknown): unknown {
-  const blankEnvelope = JSON.parse(JSON.stringify(envelope)) as {
-    fields?: Record<string, { value?: unknown }>;
-  };
-  const item17Description =
-    blankEnvelope.fields?.other_tax_credit_description;
-  if (item17Description) item17Description.value = "";
-  return blankEnvelope;
 }
 
 async function expectCriticalRegionGeometry(

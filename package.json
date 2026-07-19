@@ -14,6 +14,7 @@
     "contracts:generate": "npm run capabilities:rust && npm run contracts:rust && npm run contracts:types",
     "contracts:check": "npm run contracts:generate && node scripts/check-generated-contracts.mjs",
     "references:generate": "cargo run -q --locked -p bir-print --bin generate_render_contract -- --visual-references",
+    "diagnose:fonts": "playwright test --config packages/form-renderer/playwright.font-sweep.config.ts",
     "report:visual:regions": "playwright test --config packages/form-renderer/playwright.region-report.config.ts",
     "test:forms": "npm run test --workspace @ebirforms/form-renderer",
     "test:forms:visual": "playwright test --config packages/form-renderer/playwright.config.ts",
