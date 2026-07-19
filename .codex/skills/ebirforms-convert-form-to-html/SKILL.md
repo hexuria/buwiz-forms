@@ -7,6 +7,14 @@ description: Convert an exact BIR/eBIRForms form revision into this repository's
 
 Convert one exact form revision at a time. Treat conversion as a tax-data and release-readiness task, not as PDF tracing.
 
+**The visual release gate is a complete-page pixel difference of at most 1%**
+per official page at 144 DPI (pixelmatch threshold 0.1), compared against the
+pinned gate reference (the same-rasterizer chromium raster where one exists,
+otherwise the Poppler raster). Structure-only or masked percentages are
+geometry diagnostics and never satisfy or substitute for this gate. Report the
+raw gate number, the Poppler-raster diagnostic, and the pinned noise floor
+separately and honestly.
+
 ## Non-negotiable boundaries
 
 - Keep Rust authoritative for models, formulas, validation, XML, persistence, carry-over, and every value in `RenderEnvelopeV1`.
@@ -53,7 +61,7 @@ Convert one exact form revision at a time. Treat conversion as a tax-data and re
    PDF contains no machine-readable symbol, record an audited explicit absence and
    render none; never fabricate one from the form identity. Read
    [discrete-artwork.md](references/discrete-artwork.md).
-6. **Calibrate visually.** Use `scripts/prepare_official_reference.py` to render the pinned official PDF. Read [visual-calibration.md](references/visual-calibration.md). Inspect both full pages and critical regions.
+6. **Calibrate visually.** Use `scripts/prepare_official_reference.py` to render the pinned official PDF into the Poppler raster, then repo-root `scripts/prepare_chromium_reference.mjs` to add the same-rasterizer chromium gate reference with its pinned noise floor, and pin both in the Rust provider (`npm run references:generate`). Read [visual-calibration.md](references/visual-calibration.md). Inspect both full pages and critical regions.
 7. **Prove output behavior.** Verify preview, system print, direct PDF export, page count, 612 x 936 point geometry where applicable, clipping detection, offline packaging, and platform evidence. Read [native-print-export.md](references/native-print-export.md).
 8. **Audit and promote.** Run `scripts/verify_form_conversion.py` at `preview`, then `release` stage. Update migration/release evidence only after every named gate passes.
 

@@ -7,6 +7,21 @@ description: Diagnose, fix, calibrate, or review an existing eBIRForms semantic 
 
 Fix an already-migrated form through the owning layer. Do not create a second rendering path.
 
+**The visual release gate is a complete-page pixel difference of at most 1%**
+per official page at 144 DPI (pixelmatch threshold 0.1), compared against the
+pinned gate reference (the same-rasterizer chromium raster where one exists,
+otherwise the Poppler raster). Structure-only or masked percentages are
+geometry diagnostics and never satisfy or substitute for this gate. Report the
+raw gate number, the Poppler-raster diagnostic, and the pinned noise floor
+separately and honestly.
+
+Calibration loop: `rtk npm run test:forms:visual` writes a region-ranked diff
+report (worst regions first, with cropped expected|actual|diff strips) next to
+its artifacts; `rtk npm run report:visual:regions` re-ranks the last captured
+run in seconds without a browser; `rtk npm run diagnose:fonts` attributes the
+residual to candidate font stacks against both rasters. Fix the top-ranked
+regions; do not tweak blindly against a whole-page percentage.
+
 ## Triage by ownership
 
 - Fix wrong values, formulas, validation, XML, or applicability in Rust.

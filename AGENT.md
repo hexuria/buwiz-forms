@@ -1,5 +1,10 @@
 # Agent Instructions for `bir` (eBIR Forms Desktop App)
 
+> **Scope warning:** this file covers only the legacy GPUI native-UI layer
+> (`bir-desktop` view code). For the HTML-only form migration — renderers,
+> visual parity gates, references, evidence, and audits — read `CLAUDE.md`
+> at the repository root and the skills under `.codex/skills/` instead.
+
 This document contains critical system context, architecture rules, and hard-earned lessons for any AI agent interacting with this repository. Read this completely before attempting any code modifications.
 
 ## 1. Project Architecture
