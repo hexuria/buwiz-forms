@@ -287,7 +287,7 @@ test("1701Q 2018 preserves the reviewed readable text hierarchy and fixed choice
   );
   expect(fontSizes).toHaveLength(4);
   expect(fontSizes[0]).toBeCloseTo(8.15 * 4 / 3, 2);
-  expect(fontSizes[1]).toBeCloseTo(8.15 * 4 / 3, 2);
+  expect(fontSizes[1]).toBeCloseTo(9 * 4 / 3, 2);
   expect(fontSizes[2]).toBeCloseTo(7 * 4 / 3, 2);
   expect(fontSizes[3]).toBeCloseTo(7 * 4 / 3, 2);
 

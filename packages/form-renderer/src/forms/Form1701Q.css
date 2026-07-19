@@ -40,7 +40,7 @@
 
 .government-header-1701q {
   position: relative;
-  height: 21pt;
+  height: 22pt;
   display: grid;
   grid-template-columns: 38pt 42pt 1fr;
   align-items: center;
@@ -158,7 +158,7 @@
 }
 
 .header-options-1701q {
-  height: 20pt;
+  height: 19pt;
   display: grid;
   grid-template-columns: 130pt 190pt 138pt minmax(0, 1fr);
   border: 1pt solid #111;
@@ -240,7 +240,7 @@
 .tin-1701q > i { display: grid; place-items: center; background: #d9d9d9; font-style: normal; }
 
 .choice-row-1701q {
-  min-height: 17.5pt;
+  min-height: 17pt;
   display: flex;
   align-items: center;
   gap: 13pt;
@@ -250,7 +250,7 @@
 }
 .choice-row-1701q > span:first-child { white-space: nowrap; }
 .compact-choices-1701q {
-  min-height: 31.5pt;
+  min-height: 31pt;
   display: grid;
   grid-template-columns: 128pt repeat(3, 1fr);
   grid-auto-rows: 12.75pt;
@@ -274,7 +274,7 @@
 .label-comb-1701q > .comb-value,
 .label-comb-1701q > .adaptive-plain-value { height: 16.5pt; border-bottom: .6pt solid #111; }
 .address-1701q > div:first-child {
-  height: 11pt;
+  height: 11.5pt;
   display: flex;
   align-items: center;
   gap: 2pt;
@@ -286,7 +286,7 @@
 .address-1701q > .comb-value,
 .address-1701q > .adaptive-plain-value { height: 16.5pt; border-bottom: .6pt solid #111; }
 .address-second-1701q {
-  height: 17.5pt;
+  height: 17pt;
   display: grid;
   grid-template-columns: 457pt 76pt minmax(0, 1fr);
   border-bottom: .6pt solid #111;
@@ -317,6 +317,15 @@
   align-items: center;
   background: #d9d9d9;
 }
+.taxpayer-background-1701q .tax-election-1701q {
+  height: 55.5pt;
+  grid-template-rows: 31pt 24.5pt;
+}
+.taxpayer-background-1701q .tax-election-1701q::after { top: 31.5pt; }
+.taxpayer-background-1701q .graduated-choice-1701q { padding-top: 12pt; }
+.taxpayer-background-1701q .deduction-heading-1701q { top: 3pt; }
+.taxpayer-background-1701q .deduction-choices-1701q > span > .check-choice { top: 7pt; }
+.taxpayer-background-1701q .eight-percent-choice-1701q { padding-top: 2.5pt; }
 .tax-election-1701q::after {
   position: absolute;
   left: 198pt;
@@ -582,9 +591,8 @@
 .part-five-1701q .item-55-1701q { height: 17pt; }
 .part-five-1701q .item-59-1701q { height: 15.5pt; }
 .part-five-1701q .paired-row-1701q > span:first-child {
-  /* Source rows are 9.33pt Arial. This calibrated Arimo size restores the
-   * readable hierarchy while retaining the reviewed 16pt row geometry. */
-  font-size: 8.15pt;
+  /* The pinned source uses 9pt Arial for the ordinary computation rows. */
+  font-size: 9pt;
 }
 .part-five-1701q :is(.item-44-1701q, .item-52-1701q) > span:first-child {
   /* These are the two official long descriptions; preserve every character
