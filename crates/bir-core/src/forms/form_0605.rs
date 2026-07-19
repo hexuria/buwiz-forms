@@ -607,47 +607,30 @@ impl Form0605Draft {
         Err(errors)
     }
 
-    pub fn transition_to_submitted(&mut self, filename: String) -> Result<(), String> {
-        if !matches!(self.status, FilingStatus::Queued) {
-            return Err("0605 can transition to Submitted only from Queued".to_string());
-        }
-        let now = chrono::Utc::now().to_rfc3339();
-        self.status = FilingStatus::Submitted;
-        self.submitted_at = Some(now.clone());
-        self.submission_filename = Some(filename);
-        self.submission_attempts = 0;
-        self.next_retry_at = None;
-        self.last_error = None;
-        self.updated_at = now;
-        Ok(())
+    pub fn transition_to_submitted(&mut self, _filename: String) -> Result<(), String> {
+        Err(
+            "0605v1999 cannot transition to Submitted because queue/submission transport is not certified"
+                .to_string(),
+        )
     }
 
     pub fn transition_to_confirmed(
         &mut self,
-        confirmed_at: String,
-        receipt_id: Option<i64>,
-        filename: Option<String>,
+        _confirmed_at: String,
+        _receipt_id: Option<i64>,
+        _filename: Option<String>,
     ) -> Result<(), String> {
-        if !matches!(self.status, FilingStatus::Submitted) {
-            return Err("0605 can transition to Confirmed only from Submitted".to_string());
-        }
-        self.status = FilingStatus::Confirmed;
-        self.confirmed_at = Some(confirmed_at);
-        self.receipt_id = receipt_id;
-        if let Some(filename) = filename {
-            self.submission_filename = Some(filename);
-        }
-        self.updated_at = chrono::Utc::now().to_rfc3339();
-        Ok(())
+        Err(
+            "0605v1999 cannot transition to Confirmed because its submission-response contract is not certified"
+                .to_string(),
+        )
     }
 
     pub fn transition_to_paid(&mut self) -> Result<(), String> {
-        if !matches!(self.status, FilingStatus::Confirmed) {
-            return Err("0605 can transition to Paid only from Confirmed".to_string());
-        }
-        self.status = FilingStatus::Paid;
-        self.updated_at = chrono::Utc::now().to_rfc3339();
-        Ok(())
+        Err(
+            "0605v1999 cannot transition to Paid through an uncertified submission lifecycle"
+                .to_string(),
+        )
     }
 
     pub fn revert_to_draft(&mut self) -> Result<(), String> {
@@ -666,15 +649,8 @@ impl Form0605Draft {
         Ok(())
     }
 
-    pub fn record_submission_failure(&mut self, error_message: String) -> Result<(), String> {
-        if !matches!(self.status, FilingStatus::Queued) {
-            return Err("Only a queued 0605 can record a submission failure".to_string());
-        }
-        self.submission_attempts = self.submission_attempts.saturating_add(1);
-        self.last_error = Some(error_message);
-        self.next_retry_at = None;
-        self.updated_at = chrono::Utc::now().to_rfc3339();
-        Ok(())
+    pub fn record_submission_failure(&mut self, _error_message: String) -> Result<(), String> {
+        Err("0605v1999 has no certified queue attempt or retry persistence contract".to_string())
     }
 }
 
@@ -1153,19 +1129,46 @@ mod tests {
     }
 
     #[test]
-    fn invalid_lifecycle_transitions_return_errors() {
+    fn injected_queued_status_cannot_transition_to_submitted() {
         let mut draft = valid_draft();
-        assert!(draft.transition_to_submitted("x.xml".to_string()).is_err());
+        draft.status = FilingStatus::Queued;
+        let result = draft.transition_to_submitted("x.xml".to_string());
+        assert!(result.is_err() && matches!(draft.status, FilingStatus::Queued));
+    }
+
+    #[test]
+    fn injected_submitted_status_cannot_transition_to_confirmed() {
+        let mut draft = valid_draft();
+        draft.status = FilingStatus::Submitted;
+        let result = draft.transition_to_confirmed("now".to_string(), None, None);
         assert!(
-            draft
-                .transition_to_confirmed("now".to_string(), None, None)
-                .is_err()
+            result.is_err() && matches!(draft.status, FilingStatus::Submitted),
+            "uncertified confirmation transition mutated the draft"
         );
-        assert!(draft.transition_to_paid().is_err());
+    }
+
+    #[test]
+    fn injected_confirmed_status_cannot_transition_to_paid() {
+        let mut draft = valid_draft();
+        draft.status = FilingStatus::Confirmed;
+        let result = draft.transition_to_paid();
         assert!(
-            draft
-                .record_submission_failure("failure".to_string())
-                .is_err()
+            result.is_err() && matches!(draft.status, FilingStatus::Confirmed),
+            "uncertified payment transition mutated the draft"
+        );
+    }
+
+    #[test]
+    fn injected_queued_status_cannot_record_submission_failure() {
+        let mut draft = valid_draft();
+        draft.status = FilingStatus::Queued;
+        let result = draft.record_submission_failure("failure".to_string());
+        assert!(
+            result.is_err()
+                && matches!(draft.status, FilingStatus::Queued)
+                && draft.submission_attempts == 0
+                && draft.last_error.is_none(),
+            "uncertified retry transition mutated the draft"
         );
     }
 
