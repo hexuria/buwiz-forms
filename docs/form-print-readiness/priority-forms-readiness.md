@@ -35,12 +35,30 @@ Those independent gates must not be collapsed into one filing-readiness claim.
 
 The current complete-page comparisons are all above the strict 1% release
 threshold. Structural line-only diagnostics are not a substitute for that
-gate. The current honest raw 2551Q results are 6.6529977376% and
-4.6500544662%, with structural diagnostics of 0.07122507123% and
-0.00929591922%. Its page-indexed static-copy checks pass and its non-promoting
+gate. Its page-indexed static-copy checks pass and its non-promoting
 two-pixel edge F1 scores are approximately 0.964 and 0.991. `0605:1999`
 remains blocked at approximately 7.44% on page 1 and 10.23% on page 2 even
 though its structure-only diagnostics are approximately 0.26% and 0.20%.
+
+`2551Q:2018` now gates against a pinned same-rasterizer chromium reference
+(comparison `official-complete-page-v2`): the pinned official PDF is
+converted to vector SVG with pdftocairo and rasterized by the same
+Chromium/Playwright environment that captures the parity screenshots. The
+raw Poppler-raster difference and the pinned per-page Poppler-vs-Chromium
+noise floor are mandatory non-gating diagnostics reported next to the gate:
+
+| 2551Q:2018 page | Gate vs chromium raster | Poppler-raster diagnostic | Pinned noise floor |
+| --- | --- | --- | --- |
+| Page 1 | 7.3355% | 6.6530% | 3.6104% |
+| Page 2 | 5.4557% | 4.6501% | 3.0690% |
+
+The gate being higher than the Poppler diagnostic is an honest finding, not a
+regression: historical calibration drifted toward Poppler's rasterization
+idiosyncrasies, and the region-ranked diff reports plus the font sweep show
+the remaining difference concentrated in text-dense regions with no
+font-family candidate moving it by more than ~0.2 points — a systemic
+text-rendering (glyph shape/anti-aliasing) mismatch, which is the current
+calibration target.
 
 The latest exact complete-page and structural diagnostics for the recently
 calibrated forms are:
@@ -65,13 +83,16 @@ code/description boxes. Geometry, overflow, capacity, reviewed-copy, and
 critical-region checks may pass while these raw comparisons remain blocked;
 those narrower checks do not establish visual parity.
 
-A July 18 cross-rasterizer diagnostic also rendered the first official 2551Q
-page itself through Poppler and through Chromium from Poppler's vector SVG;
-those two official-source rasters differed by approximately 3.61% under the
-same pixel comparison. That diagnostic is not promotion evidence and does not
-relax the 1% gate. It records why font/rasterizer work must be evaluated with
-the raw result, exact static copy, critical geometry, and edge evidence shown
-separately rather than reporting one masked percentage as overall parity.
+A July 18 cross-rasterizer diagnostic first measured this: rendering the
+official 2551Q page itself through Poppler and through Chromium from
+Poppler's vector SVG differed by approximately 3.61% under the same pixel
+comparison. That floor is now measured per page by
+`scripts/prepare_chromium_reference.mjs`, pinned in the reference manifest
+(`chromium_raster.noise_floor_changed_pixels`), and independently recomputed
+by the migration audit whenever visual evidence is presented. The floor does
+not relax the 1% gate; it is provenance that keeps the cross-rasterizer noise
+visible instead of buried inside a single number, and the gate itself now
+excludes that noise by comparing within one rasterizer.
 
 ## Status meanings
 

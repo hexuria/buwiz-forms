@@ -159,6 +159,26 @@ python3 .codex/skills/ebirforms-convert-form-to-html/scripts/prepare_official_re
   --expected-sha256 <sha256> --source-url <official-url>
 ```
 
+Then add the same-rasterizer chromium gate reference (pdftocairo vector SVG
+rasterized by the same Chromium/Playwright environment as the parity
+screenshots, with the per-page Poppler-vs-Chromium noise floor recorded):
+
+```sh
+node scripts/prepare_chromium_reference.mjs \
+  --repo . --form-code 1601C --revision 2018 \
+  --pdf /absolute/path/1601Cv2018.pdf \
+  --expected-sha256 <sha256>
+```
+
+Pin the printed chromium PNG/SVG hashes and floor pixel counts in the form's
+Rust provider (`chromium_references` in `crates/bir-print/src/html_forms/`),
+then regenerate and verify the manifest:
+
+```sh
+npm run references:generate
+cargo test -p bir-print
+```
+
 Commit the reference manifest entry and reviewed page PNGs. Record source and
 PNG hashes, page count, DPI, and point geometry. Runtime assets may include only
 exact embedded objects with native/hash/geometry provenance, exact vector module
