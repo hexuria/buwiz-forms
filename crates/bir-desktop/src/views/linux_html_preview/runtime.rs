@@ -13,6 +13,7 @@ use bir_print::html_forms::RenderLayoutPlan;
 use bir_print::html_output::{
     HtmlOutputKind, HtmlOutputTimeoutStage, PdfExpectation, create_pdf_export_temp,
     discard_pdf_export_temp, finalize_pdf_export, html_output_timeout_stage,
+    issue_html_output_nonce,
 };
 use bir_print::html_support::{
     RendererGeometryReport, RendererPageRect, RendererReadinessDecision,
@@ -1174,8 +1175,9 @@ fn request_output_preflight(
         ) {
             return Err("HTML renderer is not ready for print or export".to_string());
         }
-        bridge.next_output_nonce = bridge.next_output_nonce.saturating_add(1).max(1);
-        let nonce = bridge.next_output_nonce;
+        let nonce = issue_html_output_nonce(bridge.next_output_nonce)
+            .map_err(|error| format!("cannot start native HTML output: {error}"))?;
+        bridge.next_output_nonce = nonce;
         bridge.renderer.print_ready_nonce = None;
         bridge.pending_output = Some(PendingLinuxOutput {
             kind,

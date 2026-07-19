@@ -34,6 +34,23 @@ pub enum HtmlOutputTimeoutStage {
     PdfExportBackend,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum HtmlOutputNonceError {
+    #[error("native HTML output nonce space is exhausted")]
+    Exhausted,
+}
+
+/// Issue the next one-use native-output nonce without ever wrapping or reusing a value.
+///
+/// A nonce binds one immutable renderer preflight to one platform backend invocation. Once the
+/// counter reaches `u64::MAX`, output must fail closed instead of wrapping to `1`, because a reused
+/// nonce could be mistaken for a stale completion from an earlier operation.
+pub fn issue_html_output_nonce(current: u64) -> Result<u64, HtmlOutputNonceError> {
+    current
+        .checked_add(1)
+        .ok_or(HtmlOutputNonceError::Exhausted)
+}
+
 /// Classifies elapsed native-output work without timing out an active system print dialog.
 ///
 /// System print is completion-callback-bound after its platform backend starts because the user
@@ -1160,6 +1177,21 @@ mod tests {
 
     const TEST_READINESS_TIMEOUT: Duration = Duration::from_secs(5);
     const TEST_PDF_EXPORT_TIMEOUT: Duration = Duration::from_secs(30);
+
+    #[test]
+    fn output_nonces_start_at_one_and_advance_monotonically() {
+        assert_eq!(issue_html_output_nonce(0), Ok(1));
+        assert_eq!(issue_html_output_nonce(1), Ok(2));
+        assert_eq!(issue_html_output_nonce(u64::MAX - 1), Ok(u64::MAX));
+    }
+
+    #[test]
+    fn output_nonce_exhaustion_fails_closed_instead_of_reusing_one() {
+        assert_eq!(
+            issue_html_output_nonce(u64::MAX),
+            Err(HtmlOutputNonceError::Exhausted)
+        );
+    }
 
     #[test]
     fn active_system_print_has_no_backend_deadline() {

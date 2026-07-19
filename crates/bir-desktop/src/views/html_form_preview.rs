@@ -14,7 +14,7 @@ use bir_print::html_output::PdfValidationReport;
 use bir_print::html_output::{
     HtmlOutputKind, HtmlOutputState, HtmlOutputTimeoutStage, PdfExpectation,
     create_pdf_export_temp, discard_pdf_export_temp, finalize_pdf_export,
-    html_output_timeout_stage,
+    html_output_timeout_stage, issue_html_output_nonce,
 };
 #[cfg(target_os = "macos")]
 use bir_print::html_output::{merge_single_page_pdfs, normalize_wkpdf_page_from_css_pixels};
@@ -2530,8 +2530,9 @@ impl HtmlFormPreviewView {
             return Err("HTML renderer WebView disappeared before native output".to_string());
         };
 
-        self.next_output_nonce = self.next_output_nonce.checked_add(1).unwrap_or(1);
-        let nonce = self.next_output_nonce;
+        let nonce = issue_html_output_nonce(self.next_output_nonce)
+            .map_err(|error| format!("cannot start native HTML output: {error}"))?;
+        self.next_output_nonce = nonce;
         self.renderer_state.print_ready_nonce = None;
         if let Ok(mut state) = self.bridge_state.lock() {
             state.print_ready_nonce = None;
