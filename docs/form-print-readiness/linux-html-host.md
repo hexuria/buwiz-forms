@@ -50,6 +50,21 @@ after page count, MediaBox/CropBox, rotation, content, and envelope evidence
 pass. Failure removes the temporary file and preserves an existing
 destination.
 
+## Development observation schema
+
+`DevelopmentNativeOutputObservationV1` has a Linux platform variant paired
+only with the source-backed `WebKitGtkPrintOperationPdf` backend. WebKitGTK's
+`PrintOperation` exposes the completed PDF file rather than one callback
+payload per page, so a Linux diagnostic observation must record native page
+payloads as explicitly unavailable with a concrete reason. The validator
+rejects Linux observations paired with the macOS WKPDF or Windows WebView2
+backend.
+
+This shape remains a development diagnostic: it requires
+`promotion_eligible: false` and at least one strict-verifier gap. Schema
+validation does not register a collector, does not attest either the X11 or
+Wayland host, and cannot satisfy the packaged Linux release evidence below.
+
 ## Build dependencies
 
 Ubuntu/Debian builders require:

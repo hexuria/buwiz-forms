@@ -323,6 +323,7 @@ pub struct DevelopmentNativeOutputObservationV1 {
 pub enum DevelopmentNativeOutputPlatformV1 {
     Macos,
     Windows,
+    Linux,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -330,6 +331,7 @@ pub enum DevelopmentNativeOutputPlatformV1 {
 pub enum DevelopmentNativeOutputBackendV1 {
     WkWebViewCreatePdf,
     WebView2PrintToPdf,
+    WebKitGtkPrintOperationPdf,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -511,6 +513,9 @@ impl DevelopmentNativeOutputObservationV1 {
             ) | (
                 DevelopmentNativeOutputPlatformV1::Windows,
                 DevelopmentNativeOutputBackendV1::WebView2PrintToPdf
+            ) | (
+                DevelopmentNativeOutputPlatformV1::Linux,
+                DevelopmentNativeOutputBackendV1::WebKitGtkPrintOperationPdf
             )
         ) {
             return invalid("runtime observation platform and backend do not match");
@@ -2178,6 +2183,55 @@ mod tests {
         assert!(error
             .to_string()
             .contains("runtime observations must never be promotion eligible"));
+    }
+
+    #[test]
+    fn linux_webkitgtk_runtime_observation_remains_explicitly_nonpromotional() {
+        let fixture = make_fixture();
+        let mut observation = development_observation(&fixture);
+        observation.platform = DevelopmentNativeOutputPlatformV1::Linux;
+        observation.backend = DevelopmentNativeOutputBackendV1::WebKitGtkPrintOperationPdf;
+        observation.native_page_payloads = DevelopmentEvidenceAvailability::unavailable(
+            "WebKitGTK PrintOperation exposes the completed PDF file, not one callback payload per page",
+        );
+        observation.strict_verifier_gaps.push(
+            "Linux X11 and Wayland packaged runtime attestation is outside this observation"
+                .to_string(),
+        );
+
+        let encoded = encode_development_native_output_observation(&observation)
+            .expect("Linux WebKitGTK diagnostic observation");
+        let decoded = decode_development_native_output_observation(&encoded)
+            .expect("validated Linux diagnostic observation");
+        assert_eq!(decoded.platform, DevelopmentNativeOutputPlatformV1::Linux);
+        assert_eq!(
+            decoded.backend,
+            DevelopmentNativeOutputBackendV1::WebKitGtkPrintOperationPdf
+        );
+        assert!(!decoded.promotion_eligible);
+        assert!(matches!(
+            decoded.native_page_payloads,
+            DevelopmentEvidenceAvailability::Unavailable { .. }
+        ));
+
+        let json: serde_json::Value =
+            serde_json::from_slice(&encoded).expect("Linux observation JSON");
+        assert_eq!(json["platform"], "linux");
+        assert_eq!(json["backend"], "web_kit_gtk_print_operation_pdf");
+        assert_eq!(json["promotion_eligible"], false);
+    }
+
+    #[test]
+    fn runtime_observation_rejects_cross_platform_native_backends() {
+        let fixture = make_fixture();
+        let mut observation = development_observation(&fixture);
+        observation.platform = DevelopmentNativeOutputPlatformV1::Linux;
+        observation.backend = DevelopmentNativeOutputBackendV1::WebView2PrintToPdf;
+        assert!(observation.validate_non_promotional().is_err());
+
+        observation.platform = DevelopmentNativeOutputPlatformV1::Windows;
+        observation.backend = DevelopmentNativeOutputBackendV1::WebKitGtkPrintOperationPdf;
+        assert!(observation.validate_non_promotional().is_err());
     }
 
     #[test]
