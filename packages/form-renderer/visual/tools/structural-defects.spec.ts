@@ -240,15 +240,29 @@ test(`localize ${FORM_CODE}:${FORM_REVISION} structural defects`, async ({ page 
       const expectedThickness = horizontal || vertical
         ? strokeThickness(expectedStructural, width, height, cluster, horizontal)
         : 0;
+      // Probe OUR stroke at the offset where it was actually found, not at the
+      // official position. Sampling in place returns 0 for any wholly displaced
+      // rule, which made every displaced defect look like missing structure and
+      // reported zero weight defects across nine forms - a tool artifact, not a
+      // finding. Shifting the probe separates "thin" from "moved".
+      const shifted: Cluster = {
+        pixels: cluster.pixels,
+        x0: cluster.x0 + offset.dx,
+        x1: cluster.x1 + offset.dx,
+        y0: cluster.y0 + offset.dy,
+        y1: cluster.y1 + offset.dy
+      };
       const actualThickness = horizontal || vertical
-        ? strokeThickness(actualStructural, width, height, cluster, horizontal)
+        ? strokeThickness(actualStructural, width, height, shifted, horizontal)
         : 0;
       const weightDeficit =
         (horizontal || vertical) &&
         actualThickness > 0 &&
         expectedThickness > actualThickness;
+      const displaced = (offset.dx !== 0 || offset.dy !== 0) && recovered >= 0.9;
       const diagnosis = weightDeficit
-        ? `WEIGHT: official ${expectedThickness}px vs ours ${actualThickness}px`
+        ? `WEIGHT${displaced ? "+MOVED" : ""}: official ${expectedThickness}px vs ours ` +
+          `${actualThickness}px${displaced ? ` at dx=${offset.dx} dy=${offset.dy}` : ""}`
         : recovered >= 0.9
           ? `DISPLACED: dx=${offset.dx} dy=${offset.dy}`
           : `PARTIAL (${(recovered * 100).toFixed(0)}%): likely missing or extra structure`;
@@ -270,7 +284,7 @@ test(`localize ${FORM_CODE}:${FORM_REVISION} structural defects`, async ({ page 
         expected_thickness_px: expectedThickness,
         actual_thickness_px: actualThickness,
         diagnosis: weightDeficit
-          ? "weight-deficit"
+          ? (displaced ? "weight-and-displacement" : "weight-deficit")
           : recovered >= 0.9
             ? "displaced"
             : "partial-missing-or-extra"
