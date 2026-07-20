@@ -585,6 +585,16 @@
   padding-bottom: 2pt;
   white-space: nowrap;
 }
+/* The centavos sat hard against the money box's inner border edge (measured
+ * 1px of clearance, which is only the 0.8pt border itself). The padding must
+ * NOT come from the grid template: columns 1 and 2 fix the separator at
+ * box_width - 20pt, i.e. ~88% across the 178.2pt Part III boxes, and that
+ * position was calibrated against the official form. Padding inside the
+ * fixed 16pt fraction track leaves every track width — and therefore the
+ * separator — exactly where it was, and only insets the digits. Two digits
+ * need 11.9px of the track's 21.3px, so 5px of inset still leaves 4.4px of
+ * slack and nothing can clip. */
+.money-fraction-0605 { padding-right: 3.75pt; }
 .money-0605 > i { display: grid; place-items: end center; padding-bottom: 2pt; font-style: normal; }
 .money-overflow-0605 { grid-column: 1 / -1; }
 /* No official rule exists here: the contract has nothing full-width in
@@ -683,7 +693,26 @@
 .payment-date-0605 { padding-left: 25.5pt; }
 .payment-amount-0605 { padding-left: 17.5pt; }
 .payment-field-0605 > small,
-.payment-amount-0605 > small { position: absolute; left: -12pt; top: 7pt; font-size: 6.4pt; white-space: nowrap; }
+.payment-amount-0605 > small { position: absolute; top: 7pt; font-size: 6.4pt; white-space: nowrap; }
+/* Item tags belong in the GAP between two field boxes, never on a box edge.
+ * A single -12pt offset put every tag 16px left of its own container, which is
+ * 4pt INSIDE the preceding box (each field's box starts at container+padding
+ * and ends at container-3pt), so 24B/24C/24D, 25A/25B/25C and 26B/26C/26D all
+ * straddled the box border to their left; the arrow glyph that used to sit
+ * between tag and border was what hid it. Contract page 1 puts the official
+ * tags clear of the preceding box: 24B at x=152.30 against a bank box ending
+ * at x=151.56, and 24C at x=243.41 against a number box ending at x=241.20 —
+ * i.e. the tag starts 0.74-2.21pt AFTER the box it follows. -1.5pt reproduces
+ * that as a uniform clearance past our own boxes (bank 152.5, number 242.0,
+ * date 378.0), landing 24C at 243.5pt, within 0.1pt of official. Official 24D
+ * (375.79-397.32) is instead right-aligned to the amount box and overlaps the
+ * date box by 0.89pt because the official 8.06pt tag is 21.5pt wide and the
+ * gap only 21.24pt; our 6.4pt tag is 11.7pt wide, so it clears both sides.
+ * 24A/26A are untouched: they already sit 5pt left of the bank box. */
+.payment-bank-0605 > small { left: -12pt; }
+.payment-number-0605 > small,
+.payment-date-0605 > small,
+.payment-amount-0605 > small { left: -1.5pt; }
 .payment-field-0605 > .plain-field-shell-0605,
 .payment-field-0605 > .guided-field-0605,
 .payment-amount-0605 > .money-0605,
