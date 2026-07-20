@@ -48,7 +48,15 @@
   height: 69pt;
   display: grid;
   grid-template-columns: 89pt minmax(0, 1fr) 167pt;
-  border: 1.2pt solid #111;
+  /*
+   * Frame is heavy, the masthead/header-options divider is not. Contract page1
+   * x=18.00 and x=594.24 run 1.44pt (device_px 3, gray 0.0) from y=62.28 to
+   * y=171.98 and the top rule y=61.44 is 1.44pt, but the divider the bottom
+   * border draws, y=128.06, is 0.480pt (device_px 1, gray 0.0). So only three
+   * sides cross into the 2-CSS-px bucket; the bottom stays in the 1-px bucket.
+   */
+  border: 1.5pt solid #111;
+  border-bottom-width: 1.2pt;
 }
 .masthead-1702mx.compact-1702mx { height: 57.5pt; }
 .form-1702mx-page-two .masthead-1702mx.compact-1702mx { height: 54.5pt; }
@@ -82,26 +90,26 @@
 .official-pdf417-symbol-1702mx { inset: 0; width: 100%; height: 100%; overflow: visible; }
 .official-pdf417-symbol-1702mx path { fill: #000; }
 .barcode-1702mx[data-barcode-page="1"] .official-pdf417-object-1702mx {
-  left: 5.356pt;
-  top: 6.575pt;
+  left: 6.106pt;
+  top: 5.825pt;
   width: 158.04pt;
   height: 45.36pt;
 }
 .barcode-1702mx[data-barcode-page="2"] .official-pdf417-object-1702mx {
-  left: 4.396pt;
-  top: 2.955pt;
+  left: 5.146pt;
+  top: 2.205pt;
   width: 160.8pt;
   height: 39.6pt;
 }
 .barcode-1702mx[data-barcode-page="3"] .official-pdf417-object-1702mx {
-  left: 3.556pt;
-  top: 3.975pt;
+  left: 4.306pt;
+  top: 3.225pt;
   width: 161.04pt;
   height: 42.72pt;
 }
 .barcode-1702mx[data-barcode-page="4"] .official-pdf417-object-1702mx {
-  left: 4.396pt;
-  top: 3.875pt;
+  left: 5.146pt;
+  top: 3.125pt;
   width: 160.2pt;
   height: 41.64pt;
 }
@@ -116,16 +124,21 @@
   text-align: right;
   white-space: nowrap;
 }
-.barcode-1702mx[data-barcode-page="1"] > small { top: 51.5188pt; right: 2.1338pt; }
-.barcode-1702mx[data-barcode-page="2"] > small { top: 44.3988pt; right: 2.2538pt; }
-.barcode-1702mx[data-barcode-page="3"] > small { top: 46.2788pt; right: 1.4138pt; }
-.barcode-1702mx[data-barcode-page="4"] > small { top: 45.6788pt; right: 2.1338pt; }
+.barcode-1702mx[data-barcode-page="1"] > small { top: 50.7688pt; right: 1.3838pt; }
+.barcode-1702mx[data-barcode-page="2"] > small { top: 43.6488pt; right: 1.5038pt; }
+.barcode-1702mx[data-barcode-page="3"] > small { top: 45.5288pt; right: 0.6638pt; }
+.barcode-1702mx[data-barcode-page="4"] > small { top: 44.9288pt; right: 1.3838pt; }
 
 .header-options-1702mx {
   height: 44pt;
   display: grid;
   grid-template-columns: 131pt 94pt 98pt minmax(0, 1fr);
-  border: 1.2pt solid #111;
+  /*
+   * Same frame as the masthead above it (contract page1 x=18.00/x=594.24,
+   * 1.44pt gray 0.0, unbroken to y=171.98) and its bottom rule y=172.70 is
+   * 1.44pt gray 0.0 too, so all three drawn sides move to the 2-CSS-px bucket.
+   */
+  border: 1.5pt solid #111;
   border-top: 0;
   background: #d9d9d9;
 }
@@ -144,7 +157,13 @@
 .period-options-1702mx .year-row-1702mx .comb-value { width: 22pt; height: 15pt; background: #fff; }
 .binary-header-1702mx { display: grid; grid-template-rows: 1fr 1fr; padding: 0 4pt; }
 .binary-header-1702mx > span:last-child { display: flex; align-items: center; justify-content: center; gap: 8pt; }
-.atc-options-1702mx { display: grid; grid-template-rows: 14pt 15pt 15pt; overflow: hidden; }
+/*
+ * The heavier header-options bottom rule takes 2 CSS px out of this column's
+ * content box, and 14+15+15pt no longer fits. The last track absorbs it (the
+ * first two carry the pinned ATC boxes), which raises that row's centre by
+ * .625pt, so its existing -4.5pt nudge is unwound by the same amount.
+ */
+.atc-options-1702mx { display: grid; grid-template-rows: 14pt 15pt minmax(0, 1fr); overflow: hidden; }
 .atc-options-1702mx > span { min-width: 0; display: grid; grid-template-columns: 40pt 1fr 17pt; align-items: center; gap: 3pt; padding: 0 4pt; }
 .atc-options-1702mx > span:first-child { display: flex; }
 .atc-options-1702mx > span:not(:first-child) {
@@ -156,7 +175,7 @@
 .atc-options-1702mx > span:not(:first-child) > :nth-child(2) { grid-column: 3; }
 .atc-options-1702mx > span:not(:first-child) > :nth-child(3) { grid-column: 5; }
 .atc-options-1702mx > span:nth-child(2) { position: relative; top: -2.5pt; }
-.atc-options-1702mx > span:nth-child(3) { position: relative; top: -4.5pt; }
+.atc-options-1702mx > span:nth-child(3) { position: relative; top: -3.875pt; }
 .atc-options-1702mx .atc-code-box-1702mx,
 .atc-options-1702mx .atc-description-box-1702mx {
   height: 10.5pt;
@@ -179,9 +198,26 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1pt 4pt;
+  padding: 1.425pt 4pt .575pt;
   background: #d9d9d9;
-  border-bottom: .65pt solid #111;
+  /*
+   * Heavy band rule, not a hairline. Every section-heading / schedule-title
+   * bottom rule in the contract is thickness_pt 1.44 (device_px 3, gray 0.0):
+   * page1 y=187.22/417.29/726.58, page2 y=125.90/167.42/299.33, page3
+   * y=147.74/310.61/699.58/800.98, page4 y=131.66/262.46/334.49/456.55/
+   * 541.15/667.30. At device scale
+   * 1.5 Chromium floors border-width to whole CSS px, so .65pt and 1.2pt both
+   * render 1 CSS px = 1.5 device px; 1.5pt is the first value that reaches
+   * 2 CSS px = 3 device px and so is the only bucket-crossing fix.
+   * box-sizing is border-box and every one of these bands is fixed-height, so
+   * the extra .85pt is taken out of the bottom of the content box: the rule
+   * grows upward and align-items/justify-content:center would drag every
+   * caption up by .425pt with it. The padding is therefore made asymmetric by
+   * exactly .85pt (1.425/.575, sum unchanged at 2pt) which restores the old
+   * centre line (p_t - p_b = 1.5 - .65) for every title band on the form at
+   * once, so no caption moves.
+   */
+  border-bottom: 1.5pt solid #111;
   font-size: 8.5pt;
   line-height: 1;
 }
