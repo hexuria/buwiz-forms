@@ -112,7 +112,7 @@ function PageOnePreamble0605() {
   return (
     <div className="preamble-0605">
       <span>(To be filled up the BIR)</span>
-      <div><b>►&nbsp; DLN:</b><b>►&nbsp; PSIC:</b><b>►&nbsp; PSOC:</b></div>
+      <div><b>DLN:</b><b>PSIC:</b><b>PSOC:</b></div>
     </div>
   );
 }
@@ -169,7 +169,7 @@ function HeaderFields0605({ envelope }: { envelope: RenderEnvelope }) {
 }
 
 function Label({ number, children }: { number: string; children: ReactNode }) {
-  return <span className="item-label-0605"><b>{number}</b><i>►</i>{children}</span>;
+  return <span className="item-label-0605"><b>{number}</b><i>{"\u00a0"}</i>{children}</span>;
 }
 
 function HeaderValue0605({ number, label, children }: { number: string; label: ReactNode; children: ReactNode }) {
@@ -279,7 +279,7 @@ function BackgroundInformation0605({ envelope }: { envelope: RenderEnvelope }) {
         <div><Label number="15">Registered Address</Label><PlainValue0605 field="15-registered-address" value={envelope.taxpayer.registered_address.toUpperCase()} /></div>
         <HeaderValue0605 number="16" label="Zip Code"><GuidedValue0605 field="16-zip" value={envelope.taxpayer.zip_code} segments={[4]} /></HeaderValue0605>
       </div>
-      <div className="payment-choice-head-0605"><span>►&nbsp;&nbsp;17&nbsp; Manner of Payment</span><span>►&nbsp;&nbsp;18&nbsp; Type of Payment</span></div>
+      <div className="payment-choice-head-0605"><span>17&nbsp; Manner of Payment</span><span>18&nbsp; Type of Payment</span></div>
       <div className="payment-choices-0605">
         <div className="manner-0605">
           <h3>Voluntary Payment</h3><h3>Per Audit/Delinquent Account</h3>
@@ -330,7 +330,7 @@ function Tin0605({ value }: { value: string }) {
 function Computation0605({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <section className="part-two-0605">
-      <h2><span>Part II</span><b>►&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Computation of Tax</b></h2>
+      <h2><span>Part II</span><b>Computation of Tax</b></h2>
       <div className="item-19-row-0605"><span><b>19</b> Basic Tax / Deposit / Advance Payment</span><Money0605 field="19-basic-tax" value={decimal(envelope, "item_19_basic_tax_or_payment")} /></div>
       <div className="penalties-row-0605"><span><b>20</b> Add: Penalties</span><label><span>Surcharge</span><small>20A</small><Money0605 field="20a-surcharge" value={decimal(envelope, "item_20a_surcharge")} /></label><label><span>Interest</span><small>20B</small><Money0605 field="20b-interest" value={decimal(envelope, "item_20b_interest")} /></label><label><span>Compromise</span><small>20C</small><Money0605 field="20c-compromise" value={decimal(envelope, "item_20c_compromise")} /></label><label className="total-penalty-0605"><small>20D</small><Money0605 field="20d-total-penalties" value={decimal(envelope, "item_20d_total_penalties")} /></label></div>
       <div className="item-21-row-0605"><span><b>21</b> Total Amount Payable&nbsp; (Sum of Items 19 &amp; 20D)</span><Money0605 field="21-total-payable" value={decimal(envelope, "item_21_total_amount_payable")} /></div>
@@ -392,7 +392,7 @@ function PaymentRow0605({ envelope, number, label, prefix, bankItem, numberItem,
       {!hideBank && <FieldWithItem0605 field={`${number.toLowerCase()}a-bank`} item={bankItem} value={text(envelope, `${prefix}_drawee_bank_or_agency`)} className="payment-bank-0605" />}
       <FieldWithItem0605 field={`${number.toLowerCase()}${hideBank ? "a" : "b"}-number`} item={numberItem} value={text(envelope, `${prefix}_number`)} className="payment-number-0605" />
       <FieldWithItem0605 field={`${number.toLowerCase()}${hideBank ? "b" : "c"}-date`} item={dateItem} value={date} segments={[2, 2, 4]} className="payment-date-0605" />
-      <div className="payment-amount-0605"><small>{amountItem} ►</small><Money0605 field={`${number.toLowerCase()}${hideBank ? "c" : "d"}-amount`} value={decimal(envelope, `${prefix}_amount`)} present={bool(envelope, `${prefix}_amount_present`)} /></div>
+      <div className="payment-amount-0605"><small>{amountItem}</small><Money0605 field={`${number.toLowerCase()}${hideBank ? "c" : "d"}-amount`} value={decimal(envelope, `${prefix}_amount`)} present={bool(envelope, `${prefix}_amount_present`)} /></div>
     </div>
   );
 }
@@ -400,7 +400,7 @@ function PaymentRow0605({ envelope, number, label, prefix, bankItem, numberItem,
 function FieldWithItem0605({ field, item, value, segments, className = "" }: { field: string; item?: string; value: string; segments?: readonly number[]; className?: string }) {
   return (
     <div className={`payment-field-0605 ${className}`}>
-      <small>{item} ►</small>
+      <small>{item}</small>
       {segments
         ? <GuidedValue0605 field={field} value={value} segments={segments} />
         : <PlainValue0605 field={field} value={value} />}
