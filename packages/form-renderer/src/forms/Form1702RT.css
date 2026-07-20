@@ -76,6 +76,16 @@
   font-weight: 400;
 }
 
+/* The masthead, header-options and page-identity boxes are all bounded by heavy
+ * official rules too (page 1 rules_h y = 61.44 / 166.94 and the rules_v at
+ * x = 18.00 / 594.24, thickness_pt 1.44, device_px 3, gray 0.0). 1.5pt is not
+ * applicable to any of the three: it was measured and broke three separate
+ * assertions at once - the unclipped-pages sweep, "uses exact native seal and
+ * page-specific PDF417 geometry", and "preserves the official Item 1 and
+ * Item 2 hierarchy". The masthead's 0.7pt of lost interior moves the barcode
+ * cell the PDF417 transform is pinned against, and header-options' grid rows
+ * already overrun their content box. These need the box interiors re-derived,
+ * not a wider stroke; no assertion was touched to make room for it. */
 .masthead-1702rt {
   height: 62pt;
   display: grid;
@@ -256,15 +266,48 @@
 .atc-code-value-1702rt { white-space: nowrap; }
 .atc-row-1702rt > .check-box { width: 14pt; height: 12pt; }
 
+/* The part-box outer rules are heavy officially (page 1 rules_h y = 169.58,
+ * 395.69, 398.33, 603.07 and the rules_v at x = 18.00 / 594.24, all
+ * thickness_pt 1.44, device_px 3, gray 0.0), but 1.5pt here is not applicable:
+ * every part is a fixed-height border-box whose children already sum past the
+ * content box, so the extra 0.7pt squeezes an overflow:hidden money/plain-value
+ * cell and the fixture sweep fails "four stable unclipped 612x936 pages".
+ * Measured 1.5pt: page 1 structural 0.658 -> 0.755, page 2 10.82 -> 20.13
+ * expected-ink-missing, plus the clip. The part heights have to be re-derived
+ * before the stroke can be widened. */
 .part-1702rt { margin-top: 2pt; border: 1.15pt solid #111; }
+/* Every Part-heading bottom rule is heavy in the official artwork: contract
+ * rules_h y = 181.46 (Part I), 410.21 (Part II) and 719.50 (Part III) on
+ * page 1, and 185.18 (Part IV) and 826.08 (Part V) on page 2 - all
+ * thickness_pt 1.44, device_px 3, gray 0.0. .55pt floors to 1 CSS px at device
+ * scale 1.5; 1.5pt is the first width in the 2 CSS px / 3 device px bucket the
+ * official stroke occupies.
+ *
+ * Compensation: the h2 keeps its fixed 12pt border-box height, so the border
+ * grows upward into the heading and every band below it stays exactly where it
+ * was - no part height changes and nothing is squeezed into a clip. That
+ * upward growth alone would lift the place-items:center title by
+ * (1.5 - .55) / 2 = .475pt, so padding-top gives it back: the centre was
+ * (12 - .55) / 2 = 5.725pt from the top and is now
+ * (.95 + (12 - 1.5 - .95) / 2) = 5.725pt. Identical, so the title glyphs hold
+ * their calibrated baseline.
+ *
+ * The `small` note below sets no `top`, so it resolves against its static
+ * position and does ride the padding down .95pt. That was left alone
+ * deliberately: pinning it back with a negative margin was measured and was
+ * worse on all four page-1/2 ink metrics (expected-ink-missing 28.12 -> 28.21
+ * and 10.35 -> 10.54), which says the note was sitting high to begin with.
+ * That is a caption-placement defect for a separate pass, not something this
+ * stroke change should paper over. */
 .part-1702rt > h2,
 .part-three-1702rt > h2,
 .part-six-heading-1702rt {
   height: 12pt;
   display: grid;
   place-items: center;
+  padding-top: .95pt;
   background: #d9d9d9;
-  border-bottom: .55pt solid #111;
+  border-bottom: 1.5pt solid #111;
   font-size: 8.5pt;
   font-weight: 400;
 }
@@ -506,7 +549,36 @@
   font-size: 8pt;
   font-weight: 400;
 }
-.schedule-1702rt > h3 { justify-content: flex-start; }
+/* The schedule title rules are heavy officially: contract rules_h y = 136.34
+ * on page 3 (Schedule 1) and y = 136.34 / 208.34 / 324.17 / 458.83 / 543.43 /
+ * 669.58 on page 4, all thickness_pt 1.44, device_px 3, gray 0.0. .55pt floors
+ * to 1 CSS px at device scale 1.5; 1.5pt is the first width in the 2 CSS px /
+ * 3 device px bucket.
+ *
+ * Scoped to `> h3` on purpose. The shared declaration above also styles
+ * .schedule-subband-1702rt and .continuation-title-1702rt, which are sized by
+ * min-height, so a heavier border there would grow the box and push every band
+ * below it down the page. Each schedule sets `> h3 { height: 12pt }`, so these
+ * headings are fixed border-boxes and the border grows upward instead: no
+ * schedule height, no track and no sibling position changes, and nothing is
+ * squeezed into an overflow:hidden cell.
+ *
+ * NO padding compensation is applied, and that is deliberate rather than an
+ * oversight. align-items:center means the border's upward growth lifts the
+ * title by (1.5 - .55) / 2 = .475pt, and the arithmetically correct fix is
+ * padding-top 1pt -> 1.95pt. That was written and measured, and so was the
+ * variant that takes the space from padding-bottom instead; BOTH fail
+ * "four stable unclipped 612x936 pages" on page 4, which is already at its
+ * 936pt limit. Clipping a taxpayer's schedule to straighten a caption by
+ * .475pt is not a trade worth making, so the lift is left in place.
+ *
+ * Measured cost and benefit of shipping it uncompensated: page 4 structural
+ * 1.081 -> 0.981, expected-ink-missing 27.74 -> 26.23 and unexpected ink
+ * 21.47 -> 20.96, against complete-page 10.72 -> 11.01 as six heading titles
+ * move .6 CSS px. Three font-independent measures improve; the one that
+ * regresses is the text-dominated page number. Re-deriving the page-4 schedule
+ * heights would let the compensation land and recover it. */
+.schedule-1702rt > h3 { justify-content: flex-start; border-bottom-width: 1.5pt; }
 .schedule-1702rt > h3 small { margin-left: 3pt; font-size: 6pt; font-weight: 400; }
 .schedule-amount-row-1702rt { height: 19pt; display: grid; grid-template-columns: 15pt minmax(0, 1fr) 183pt; border-bottom: .55pt solid #111; }
 .schedule-amount-row-1702rt > span:first-child {
@@ -532,6 +604,13 @@
   background: #fff;
 }
 .schedule-one-1702rt > .schedule-amount-row-1702rt:last-child { height: 18pt; }
+/* Schedule 2's box rules are heavy officially too (contract rules_h y = 667.06
+ * and 787.78, thickness_pt 1.44, gray 0.0), but this outline sits ~10pt above
+ * them: Schedule 1 above it is short against the official artwork, so the whole
+ * box is displaced. Widening a displaced stroke only paints more ink off the
+ * official rule, and measurement agreed - 1.5pt here left page 3's structural
+ * delta untouched at 0.5447 while pushing unexpected ink 18.41 -> 19.02. Left
+ * at 1pt until Schedule 1's track heights are re-derived. */
 .schedule-two-1702rt { height: 123pt; border-top: 2pt solid #fff; outline: 1pt solid #111; }
 .schedule-two-1702rt > h3 { height: 12pt; }
 .schedule-two-grid-1702rt { height: 19pt; display: grid; grid-template-columns: 15pt 227pt 151pt minmax(0, 1fr); }
@@ -612,7 +691,18 @@
 .schedule-three-total-1702rt > span:first-child { display: flex; align-items: center; padding: 1pt 5pt; background: #d9d9d9; }
 .schedule-three-total-1702rt > span:last-child { background: #d9d9d9; }
 
-.schedule-four-1702rt { height: 211pt; border-top: 2pt solid #fff; outline: 1pt solid #111; }
+/* The Schedule 4 and Schedule 5 box rules are heavy in the official artwork:
+ * contract page 4 rules_h y = 444.41 / 458.83 (Schedule 4) and 528.91 / 543.43,
+ * 655.06 / 669.58 (Schedule 5), every one thickness_pt 1.44, device_px 3,
+ * gray 0.0, closed by the heavy rules_v at x = 18.00 and 594.24 running down
+ * the same boxes. 1pt floors to 1 CSS px at device scale 1.5; 1.5pt is the
+ * first width in the 2 CSS px / 3 device px bucket the official stroke
+ * occupies. No compensation is needed and none is applied: outline is
+ * out-of-flow, so it grows into the 2pt white gap above and the 17.5pt page
+ * padding beside without changing any box height, track or sibling position.
+ * outline-offset was tried to re-centre the stroke and floors to 0 at this
+ * scale - byte-identical metrics - so it is deliberately absent. */
+.schedule-four-1702rt { height: 211pt; border-top: 2pt solid #fff; outline: 1.5pt solid #111; }
 .schedule-four-1702rt > h3 { height: 12pt; }
 .mcit-grid-1702rt { height: 19.5pt; display: grid; grid-template-columns: 15pt 61pt 167pt 167pt minmax(0, 1fr); }
 .mcit-continuation-grid-1702rt {
@@ -632,7 +722,7 @@
 .schedule-four-total-1702rt > span:first-child { display: flex; align-items: center; padding: 1pt 5pt; background: #d9d9d9; }
 .schedule-four-total-1702rt > span:last-child { background: #a6a6a6; }
 
-.schedule-five-1702rt { height: 240pt; border-top: 2pt solid #fff; outline: 1pt solid #111; }
+.schedule-five-1702rt { height: 240pt; border-top: 2pt solid #fff; outline: 1.5pt solid #111; }
 .schedule-five-1702rt > h3 { height: 12pt; }
 .schedule-five-1702rt .schedule-amount-row-1702rt { height: 19pt; }
 .schedule-five-1702rt .schedule-amount-row-1702rt:is(
