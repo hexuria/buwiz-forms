@@ -164,8 +164,16 @@
       "text": "19 Basic Tax / Deposit / Advance Payment"
     },
     {
+      "selector": ".item-19-row-0605 > .item-caption-0605",
+      "text": "19"
+    },
+    {
       "selector": ".item-21-row-0605 > span:first-child",
       "text": "21 Total Amount Payable (Sum of Items 19 & 20D)"
+    },
+    {
+      "selector": ".item-21-row-0605 > .item-caption-0605",
+      "text": "21"
     },
     {
       "selector": ".voluntary-signature-0605 > h3",

@@ -331,9 +331,9 @@ function Computation0605({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <section className="part-two-0605">
       <h2><span>Part II</span><b>Computation of Tax</b></h2>
-      <div className="item-19-row-0605"><span><b>19</b> Basic Tax / Deposit / Advance Payment</span><Money0605 field="19-basic-tax" value={decimal(envelope, "item_19_basic_tax_or_payment")} /></div>
+      <div className="item-19-row-0605"><span><b>19</b> Basic Tax / Deposit / Advance Payment</span><small className="item-caption-0605">19</small><Money0605 field="19-basic-tax" value={decimal(envelope, "item_19_basic_tax_or_payment")} /></div>
       <div className="penalties-row-0605"><span><b>20</b> Add: Penalties</span><label><span>Surcharge</span><small>20A</small><Money0605 field="20a-surcharge" value={decimal(envelope, "item_20a_surcharge")} /></label><label><span>Interest</span><small>20B</small><Money0605 field="20b-interest" value={decimal(envelope, "item_20b_interest")} /></label><label><span>Compromise</span><small>20C</small><Money0605 field="20c-compromise" value={decimal(envelope, "item_20c_compromise")} /></label><label className="total-penalty-0605"><small>20D</small><Money0605 field="20d-total-penalties" value={decimal(envelope, "item_20d_total_penalties")} /></label></div>
-      <div className="item-21-row-0605"><span><b>21</b> Total Amount Payable&nbsp; (Sum of Items 19 &amp; 20D)</span><Money0605 field="21-total-payable" value={decimal(envelope, "item_21_total_amount_payable")} /></div>
+      <div className="item-21-row-0605"><span><b>21</b> Total Amount Payable&nbsp; (Sum of Items 19 &amp; 20D)</span><small className="item-caption-0605">21</small><Money0605 field="21-total-payable" value={decimal(envelope, "item_21_total_amount_payable")} /></div>
     </section>
   );
 }

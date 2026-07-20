@@ -522,7 +522,14 @@
   align-items: center;
 }
 .item-19-row-0605 { align-items: start; }
-.item-19-row-0605 > span:first-child { align-self: center; }
+/* Both amount rows start-align their box at the row top; the row-number label
+ * must be vertically centred against the box (and its value baseline) instead
+ * of riding the row top. The contract puts item-19's "Basic Tax" run at
+ * y465.69-474.68 and item-21's "Total Amount Payable" run at y515.85-524.84 —
+ * both centred in their boxes, sharing the value baseline. Without this,
+ * item-21's label rode ~7pt high (y508.95-517.27), above its value. */
+.item-19-row-0605 > span:first-child,
+.item-21-row-0605 > span:first-child { align-self: center; }
 /* :first-child matters. Money0605 renders a <span>, so a bare `> span` rule
  * also matched the money box and beat `.money-0605 { display: grid }` on
  * specificity. The box silently laid out as flex, its grid columns were inert,
@@ -535,6 +542,21 @@
 .item-21-row-0605 > .money-0605,
 .item-19-row-0605 > .adaptive-plain-value,
 .item-21-row-0605 > .adaptive-plain-value { height: 21.5pt; margin: 0 3pt 0 0; border: .8pt solid #111; background: #fff; }
+/* Box-left item numbers. The official form prints a second "19" and "21"
+ * immediately left of each amount box (contract runs x391.87-400.79 at
+ * y459.81-468.80 and y515.97-524.96), in the same column and small-caption
+ * style as the "20D" penalty-total caption. Positioned absolutely at the right
+ * end of the 389.5pt label column so they never disturb the box grid. */
+.item-19-row-0605,
+.item-21-row-0605 { position: relative; }
+.item-caption-0605 {
+  position: absolute;
+  left: 377.9pt;
+  font-size: 6.5pt;
+  line-height: 1;
+}
+.item-19-row-0605 > .item-caption-0605 { top: 7.5pt; }
+.item-21-row-0605 > .item-caption-0605 { top: 9pt; }
 .penalties-row-0605 {
   position: relative;
   height: 23.5pt;
@@ -595,6 +617,13 @@
  * need 11.9px of the track's 21.3px, so 5px of inset still leaves 4.4px of
  * slack and nothing can clip. */
 .money-fraction-0605 { padding-right: 3.75pt; }
+/* 20A (Surcharge) is the narrowest penalty box, so a large surcharge's
+ * right-aligned whole number reaches closest to the left rule. A small
+ * left inset on its whole-number track keeps the value off that rule,
+ * symmetric to the centavos' right clearance above. The inset lives inside
+ * the 1fr whole track, so the separator (fixed at box_width-24pt) and every
+ * shorter value stay exactly where the official-calibrated grid placed them. */
+.penalties-row-0605 label:first-of-type .money-whole-0605 { padding-left: 1.5pt; }
 .money-0605 > i { display: grid; place-items: end center; padding-bottom: 2pt; font-style: normal; }
 .money-overflow-0605 { grid-column: 1 / -1; }
 /* No official rule exists here: the contract has nothing full-width in
