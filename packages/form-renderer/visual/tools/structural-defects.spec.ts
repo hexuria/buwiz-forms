@@ -33,11 +33,19 @@ import {
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "../../../..");
 
-const FIXTURE = "packages/form-contracts/fixtures/2551q-6-rows.json";
-const REFERENCES = [
-  { page: 1, chromium: "packages/form-renderer/references/2551q-2018-page-1-chromium.png" },
-  { page: 2, chromium: "packages/form-renderer/references/2551q-2018-page-2-chromium.png" }
-];
+// Form selection. Defaults to 2551Q; every converted form now has chromium
+// references, so this runs against any of them.
+const FORM_CODE = process.env.STRUCT_FORM ?? "2551Q";
+const FORM_REVISION = process.env.STRUCT_REVISION ?? "2018";
+const FIXTURE =
+  process.env.STRUCT_FIXTURE ?? "packages/form-contracts/fixtures/2551q-6-rows.json";
+const REFERENCES = (
+  process.env.STRUCT_REFERENCES ??
+  "packages/form-renderer/references/2551q-2018-page-1-chromium.png," +
+    "packages/form-renderer/references/2551q-2018-page-2-chromium.png"
+)
+  .split(",")
+  .map((chromium, index) => ({ page: index + 1, chromium }));
 
 /** Offsets searched when asking "where would this have matched?". */
 const SEARCH_RADIUS = 6;
@@ -154,11 +162,11 @@ function bestOffset(
   return best;
 }
 
-test("localize 2551Q structural defects", async ({ page }, testInfo) => {
+test(`localize ${FORM_CODE}:${FORM_REVISION} structural defects`, async ({ page }, testInfo) => {
   const fixture = JSON.parse(
     fs.readFileSync(path.join(REPO_ROOT, FIXTURE), "utf8")
   ) as unknown;
-  const blanked = blankComparisonEnvelope(fixture, "2551Q");
+  const blanked = blankComparisonEnvelope(fixture, FORM_CODE);
 
   await renderEnvelope(page, blanked);
   // Only the gate's own fixture blanking is applied. Neutralizing ALL text on

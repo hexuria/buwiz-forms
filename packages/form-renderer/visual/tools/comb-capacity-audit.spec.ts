@@ -165,12 +165,28 @@ test(`audit ${FORM_CODE}:${FORM_REVISION} comb capacities against the official f
       const measured = countOfficialDividers(image, observation);
       const officialCells = measured.dividers + 1;
       const matches = officialCells === observation.spanCount;
+      const delta = officialCells - observation.spanCount;
+      // Classify, because an undifferentiated list wastes review time. A
+      // measured pitch far below a character cell means the scan locked onto
+      // glyph strokes or borders rather than guides, so the count is not
+      // evidence of anything. An off-by-one at a plausible pitch is usually
+      // ambiguity about whether the field's own border was inside the
+      // rectangle - real, but a question rather than a defect. Only a larger
+      // difference at a plausible pitch resembles the one confirmed capacity
+      // defect found so far (2551Q Item 12A: 26 declared against 16 official).
+      const severity =
+        measured.pitch === 0 || (measured.pitch > 0 && measured.pitch < 20)
+          ? "low-confidence"
+          : Math.abs(delta) === 1
+            ? "boundary"
+            : "capacity";
       if (!matches) mismatches += 1;
       const tone = measured.tones.length
         ? Math.round(measured.tones.reduce((a, b) => a + b, 0) / measured.tones.length)
         : null;
       console.log(
-        `  ${matches ? "ok  " : "MISM"} declared=${String(observation.spanCount).padStart(3)} ` +
+        `  ${matches ? "ok  " : severity === "capacity" ? "CAP " : severity === "boundary" ? "b1  " : "lowc"} ` +
+          `declared=${String(observation.spanCount).padStart(3)} ` +
           `official=${String(officialCells).padStart(3)} ` +
           `pitch=${String(measured.pitch).padStart(3)}px tone=${String(tone ?? "-").padStart(3)} ` +
           `${observation.selector}`
@@ -183,6 +199,8 @@ test(`audit ${FORM_CODE}:${FORM_REVISION} comb capacities against the official f
         official_dividers: measured.dividers,
         official_pitch_px: measured.pitch,
         official_mean_tone: tone,
+        delta_official_minus_declared: delta,
+        severity: matches ? "ok" : severity,
         rect: {
           x: Math.round(observation.x),
           y: Math.round(observation.y),
@@ -194,8 +212,12 @@ test(`audit ${FORM_CODE}:${FORM_REVISION} comb capacities against the official f
     }
   }
 
+  const bySeverity = (name: string) =>
+    rows.filter((row) => row.severity === name).length;
   console.log(
-    `\n${rows.length} comb fields measured, ${mismatches} disagree with the official form`
+    `\n${rows.length} comb fields measured, ${mismatches} disagree: ` +
+      `${bySeverity("capacity")} capacity, ${bySeverity("boundary")} off-by-one, ` +
+      `${bySeverity("low-confidence")} low-confidence`
   );
   const reportPath = path.join(testInfo.outputDir, "comb-capacity-audit.json");
   fs.mkdirSync(testInfo.outputDir, { recursive: true });
