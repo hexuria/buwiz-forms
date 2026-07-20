@@ -296,7 +296,21 @@
 }
 .item-4-0605 { grid-column: 3; grid-row: 1; border-right: 1pt solid #111; }
 .item-5-0605 { grid-column: 4; grid-row: 1; border-right: 1pt solid #111; }
-.item-5-0605 > .item-label-0605 { height: 24pt; line-height: 1.6; }
+/* Reviewer finding: "Attached" (line two of the item-5 label) overlapped the
+ * sheets-count charbox to its right. The contract puts the label text at
+ * x0=429.46pt (both "No. of Sheets" and "Attached") and the value box left edge
+ * at x0=464.28pt, so "Attached" (x1=461.29) clears the box by ~3pt. Our label
+ * inherits the header spacer chain b(min 8pt) + gap 4 + i(5) + gap 4, which
+ * pushed the text to ~438.47pt (measured) — 9pt too far right — so "Attached"
+ * ran to ~470pt, into the box at 463.49pt. Collapsing the label gap to 0 and
+ * trimming the nbsp spacer <i> to 4pt lands the text at b_end(425.47)+4 =
+ * 429.47pt, on the official x0, and drops "Attached"'s right edge to ~461.3pt,
+ * clearing the box. The <i> stays in the DOM (display kept) so its nbsp remains
+ * in innerText and "5 No. of Sheets Attached" still satisfies the exhaustive
+ * static-text assertion; only its width changes. The "5" digit is untouched at
+ * x=417.48pt (official 417.55). */
+.item-5-0605 > .item-label-0605 { height: 24pt; line-height: 1.6; gap: 0; }
+.item-5-0605 > .item-label-0605 > i { width: 4pt; }
 .item-5-0605 > div { height: 19pt; margin: -8pt 2pt 2pt 48pt; }
 .item-6-0605 { grid-column: 5; grid-row: 1; }
 /* Official y=171.86pt separator is a 1.92pt black fill (contract gray 0.0),
@@ -670,12 +684,27 @@
   text-align: center;
   font-size: 7pt;
 }
+/* Reviewer finding: the "20 Add: Penalties" label ran into the "Surcharge"
+ * column heading. The contract puts "Add: Penalties" (x29.28), "Surcharge"
+ * (x99.36), "Interest" and "Compromise" all on ONE baseline at y0=475.05pt,
+ * every run at size_pt 8.06. Ours rendered the "Add: Penalties" label at the
+ * right line (measured y0=474.46 via .penalties-row-0605 > span top:-10pt) but
+ * dropped the three headings ~2.7pt lower (measured y0=477.19) via bottom:100%
+ * AND shrank them to 7pt, so they read as cramped and colliding rather than as
+ * clean column headings sharing the item-20 row. Since every heading label
+ * fills the 23.5pt row, its top edge coincides with the row top exactly like
+ * the direct > span label; giving the heading span the SAME top:-10pt as that
+ * label lands all four on one line (y0=474.45, within 0.6pt of the official
+ * 475.05), and 8pt restores the official heading size. The money boxes are
+ * positioned independently (top:0), so the pinned 20A-20D box geometry is
+ * untouched. */
 .penalties-row-0605 label > span {
   position: absolute;
   right: 0;
-  bottom: 100%;
+  top: -10pt;
   left: 0;
   text-align: center;
+  font-size: 8pt;
 }
 .penalties-row-0605 label:first-of-type { grid-column: 2; }
 .penalties-row-0605 label:nth-of-type(2) { grid-column: 4; }
