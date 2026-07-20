@@ -176,6 +176,74 @@ test("1702MX January 2018C keeps verified page-specific PDF417, caption, and sea
   )).toEqual({ naturalHeight: 102, naturalWidth: 119 });
 });
 
+test("1702MX January 2018C static text matches the official, minus the pinned known defects", async ({ page }) => {
+  // Token-level coverage of the PDF-derived manifest, as a RATCHET. 1702MX was
+  // the only converted form with no static-text coverage, and measurement
+  // found 70 official words missing - 57 after the Part IV instruction fix.
+  // The remaining 57 are pinned as documented defects, and this asserts the
+  // measured missing set EQUALS that pin: a new paraphrase fails the build,
+  // and fixing a defect requires shrinking the pin in the same change. It can
+  // never be quietly widened without the diff showing exactly which official
+  // words were given up.
+  //
+  // Token level, not whole runs: the PDF's reading order joins text across
+  // columns, so run containment reports linearization as missing content.
+  // Tokens under four characters are excluded as vacuous.
+  const manifest = JSON.parse(
+    fs.readFileSync(
+      path.join(REPO_ROOT, "packages/form-renderer/references/1702mx-2018c-official-static-text.json"),
+      "utf8"
+    )
+  ) as {
+    official_source: { sha256: string };
+    pages: Array<{ page: number; lines: Array<{ runs: Array<{ text: string }> }> }>;
+  };
+  const known = JSON.parse(
+    fs.readFileSync(
+      path.join(REPO_ROOT, "packages/form-renderer/references/1702mx-2018c-static-text-known-missing.json"),
+      "utf8"
+    )
+  ) as { official_source_sha256: string; missing: Array<{ page: number; token: string }> };
+  expect(manifest.official_source.sha256).toBe(
+    "81c05fffadde6c0b4098aeba8547a9820a0806c6be9b0c6ceac5597cab4263d2"
+  );
+  expect(known.official_source_sha256).toBe(manifest.official_source.sha256);
+
+  await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-normal.json"));
+  const pages = page.locator(".form-page");
+  await expect(pages).toHaveCount(4);
+  const normalize = (value: string) =>
+    value.normalize("NFC").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+  const rendered = await Promise.all(
+    Array.from({ length: 4 }, async (_, index) => normalize(await pages.nth(index).innerText()))
+  );
+
+  const missing: Array<{ page: number; token: string }> = [];
+  const seen = new Set<string>();
+  for (const manifestPage of manifest.pages) {
+    for (const line of manifestPage.lines) {
+      for (const run of line.runs) {
+        for (const token of normalize(run.text).split(" ")) {
+          if (token.length < 4) continue;
+          const key = `${manifestPage.page}:${token}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          if (rendered[manifestPage.page - 1]?.includes(token)) continue;
+          missing.push({ page: manifestPage.page, token });
+        }
+      }
+    }
+  }
+  missing.sort((a, b) => a.page - b.page || a.token.localeCompare(b.token));
+  const pinned = [...known.missing].sort(
+    (a, b) => a.page - b.page || a.token.localeCompare(b.token)
+  );
+  expect(
+    missing,
+    "The measured missing-token set must exactly equal the pinned known-defect list; new paraphrases fail, fixes must shrink the pin"
+  ).toEqual(pinned);
+});
+
 test("1702MX January 2018C preserves the official Schedule 2 group rows", async ({ page }) => {
   await renderEnvelope(page, readFixture("packages/form-contracts/fixtures/1702mx-normal.json"));
   const pageTwo = page.locator(".form-page").nth(1);

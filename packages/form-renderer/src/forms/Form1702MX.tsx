@@ -498,7 +498,27 @@ function PartFourHeading1702MX({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <section className="part-four-heading-1702mx">
       <SectionHeading1702MX>Part IV – Schedules</SectionHeading1702MX>
-      <div className="instructions-1702mx"><b>Instructions:</b><CheckChoice checked={bool(envelope, "relief_single_activity")} label="A. Only one activity/project under EXEMPT and/or SPECIAL Tax Regimes" /><CheckChoice checked={bool(envelope, "relief_multiple_activities")} label="B. Two or more activities/projects; accomplish the separate Mandatory Attachment per activity" /></div>
+      {/*
+        * Instruction copy reproduced verbatim from the pinned official PDF, not
+        * paraphrased. The renderer previously shortened both clauses and
+        * dropped "(mark appropriate box)" entirely, so the printed form said
+        * something the official document does not. Verified against
+        * references/1702mx-2018c-official-static-text.json (PDF text layer).
+        */}
+      <div className="instructions-1702mx">
+        <span className="instructions-lead-1702mx">
+          <b>Instructions:</b>{" "}
+          <CheckChoice
+            checked={bool(envelope, "relief_single_activity")}
+            label="A. Only one activity/project under EXEMPT and/or SPECIAL Tax Regimes, fill-out the applicable columns below."
+          />
+        </span>
+        <span className="instructions-mark-1702mx">(mark appropriate box)</span>
+        <CheckChoice
+          checked={bool(envelope, "relief_multiple_activities")}
+          label="B. Two or more activities/projects under EXEMPT and/or SPECIAL Tax Regimes, accomplish Part V-Mandatory Attachments per activity and reflect consolidated amounts from Part V on the corresponding columns below."
+        />
+      </div>
     </section>
   );
 }

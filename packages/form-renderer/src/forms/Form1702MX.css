@@ -313,8 +313,29 @@
 
 .part-four-heading-1702mx { height: 42pt; margin-top: 2pt; border: 1.2pt solid #111; }
 .part-four-heading-1702mx > .section-heading-1702mx { height: 12pt; }
-.instructions-1702mx { height: 29pt; display: grid; grid-template-columns: 65pt 1fr; grid-template-rows: 14.5pt 14.5pt; align-items: center; padding: 0 4pt; background: #d9d9d9; }
-.instructions-1702mx > b { grid-row: 1 / 3; font-size: 9pt; }
+/*
+ * The official prints the full instruction copy in this same 29pt band as
+ * three lines: clause A at 9pt bold on line one, clause B at 8.04pt wrapping
+ * across lines two and three, and "(mark appropriate box)" at 6.96pt italic in
+ * the left margin of line two (official run geometry: y=126.76/137.5/146.09,
+ * from the PDF-derived static-text manifest). The previous two-row 14.5pt grid
+ * could only hold a paraphrase; substituting the official text into it
+ * overflowed page 2 and broke four geometry assertions, which is why the copy
+ * and this layout land together.
+ */
+.instructions-1702mx {
+  height: 29pt;
+  display: grid;
+  grid-template-columns: 78pt 1fr;
+  grid-template-rows: 11.5pt 1fr;
+  align-items: start;
+  padding: 0 4pt;
+  background: #d9d9d9;
+  line-height: 1.12;
+}
+.instructions-1702mx > .instructions-lead-1702mx { grid-column: 1 / 3; font-size: 9pt; }
+.instructions-1702mx > .instructions-lead-1702mx .check-choice { font-weight: 700; }
+.instructions-1702mx > .instructions-mark-1702mx { font-size: 6.96pt; font-style: italic; }
 .instructions-1702mx .check-choice { white-space: normal; }
 
 .schedule-block-1702mx { margin-top: 2pt; border: 1.2pt solid #111; display: flex; flex-direction: column; }
