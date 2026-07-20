@@ -28,6 +28,19 @@ import {
 } from "./official-2551q-static-text";
 import { writeRegionReport } from "./region-report";
 import {
+  computeCellEdgeF1,
+  computePageInkBudget,
+  computeStructuralInk,
+  EDGE_THRESHOLD,
+  TOLERANCE_RADIUS_PX,
+  type PageInkBudgetResult,
+  type StructuralInkResult
+} from "./official-fidelity";
+import {
+  MIN_CELL_EDGE_PIXELS,
+  MIN_EDGE_COVERAGE
+} from "./fidelity-cells";
+import {
   blankComparisonEnvelope,
   FIXTURE_OWNED_SELECTORS,
   prepareOfficialBlankComparison,
@@ -115,7 +128,40 @@ interface VisualPageMetric {
   structural_ink_threshold: number;
   structural_line_min_run: number;
   structural_tolerance_radius: number;
+  /**
+   * The legacy line-only structural probe above and
+   * `structural-ink-coverage-v1` below are DIFFERENT POPULATIONS (ink 100 /
+   * run 20 / radius 4 versus ink 160 / run 24 / radius 1). They are kept side
+   * by side for continuity and must never be averaged, substituted, or
+   * presented as one another.
+   */
+  legacy_structural_superseded_by: "structural-ink-coverage-v1";
+  /** official-fidelity-v1 pixel components, reporting mode until baselines pin. */
+  cell_edge_f1: CellEdgeF1Summary | null;
+  structural_ink_coverage: StructuralInkResult | null;
+  page_ink_budget: PageInkBudgetResult | null;
   passed: boolean;
+}
+
+/**
+ * Per-cell scores are recorded in full in the region report rather than inline
+ * here: 1227 cells per page would bury the page-level numbers a reviewer reads
+ * first, and the audit reconstructs the table itself from the pinned regions
+ * and grid constants anyway.
+ */
+interface CellEdgeF1Summary {
+  comparison: "cell-edge-f1-v1";
+  tolerance_radius_px: number;
+  edge_threshold: number;
+  min_cell_edge_pixels: number;
+  cell_table_sha256: string;
+  cell_count: number;
+  scored_cell_count: number;
+  worst_scored_f1: number;
+  edge_coverage: number;
+  min_edge_coverage: number;
+  cells: string | null;
+  cells_sha256: string | null;
 }
 
 interface LayeredFidelityMetric {
@@ -1883,8 +1929,23 @@ function writeVisualEvidence() {
     "packages/form-renderer/references/manifest.json"
   );
   const report = {
-    schema_version: 1,
-    gate: "visual_parity",
+    schema_version: 2,
+    gate: "official-fidelity-v1",
+    // THE TWO FLAGS THAT MAKE A PARITY CLAIM STRUCTURALLY IMPOSSIBLE.
+    // official-fidelity-v1 certifies "no worse than a reviewed baseline". It
+    // cannot certify "matches the official form" - the source PDFs do not
+    // embed their fonts, so the reference encodes Poppler's substituted glyph
+    // outlines and text pixels are unwinnable by proof. The audit rejects any
+    // report whose flags disagree with these values.
+    proves_parity: false,
+    is_non_regression_gate: true,
+    // Baselines are not pinned yet, so no component gates. The criterion may
+    // run in reporting mode now and may not gate a promotion until the
+    // structural defects it localizes are fixed and reviewed baselines exist.
+    baselines_pinned: false,
+    components_reporting_only: true,
+    superseded_gate: "official_complete_page_v2_retained_as_diagnostic",
+    legacy_gate: "visual_parity",
     producer: VISUAL_EVIDENCE_PRODUCER,
     producer_path: VISUAL_EVIDENCE_PRODUCER_PATH,
     producer_sha256: sha256(
@@ -1906,6 +1967,9 @@ function writeVisualEvidence() {
     references_manifest_sha256: sha256(
       fs.readFileSync(referenceManifest)
     ),
+    // `passed` stays bound to the unchanged 1% complete-page gate. Until
+    // baselines are pinned, the new components cannot make a run pass that the
+    // old gate failed - reporting mode must never be a promotion shortcut.
     passed:
       !NON_PROMOTING_ALLOW_DIRTY_SOURCE &&
       visualPageMetrics.length === expectedPageCount &&
@@ -2427,6 +2491,10 @@ function assertVisualParity({
       structural_ink_threshold: STRUCTURAL_INK_THRESHOLD,
       structural_line_min_run: STRUCTURAL_LINE_MIN_RUN,
       structural_tolerance_radius: STRUCTURAL_TOLERANCE_RADIUS,
+      legacy_structural_superseded_by: "structural-ink-coverage-v1",
+      cell_edge_f1: null,
+      structural_ink_coverage: null,
+      page_ink_budget: null,
       passed: false
     });
     return;
@@ -2438,6 +2506,25 @@ function assertVisualParity({
   const completePage = compareCompleteOfficialPage(expected, actual, {
     pixelThreshold: PIXELMATCH_THRESHOLD
   });
+
+  // official-fidelity-v1 pixel components. REPORTING MODE: these are computed
+  // and recorded, but nothing here gates yet. The criterion is a
+  // non-regression gate against reviewed baselines, and no baseline may be
+  // pinned until the structural defects it localizes are fixed - pinning now
+  // would bake a 1130px rule misplacement into the accepted floor.
+  const cellEdgeF1 = computeCellEdgeF1(
+    expected,
+    actual,
+    parityCase.code,
+    parityCase.revision,
+    pageNumber
+  );
+  const structuralInk = computeStructuralInk(expected, actual);
+  const pageInkBudget = computePageInkBudget(expected, actual);
+  const cellsPath = path.join(outputDir, `${artifactStem}-fidelity-cells.json`);
+  const cellsPayload = `${JSON.stringify(cellEdgeF1.cells, null, 2)}\n`;
+  fs.mkdirSync(outputDir, { recursive: true });
+  fs.writeFileSync(cellsPath, cellsPayload);
   const edgeMatch = compareSymmetricGrayscaleEdges(expected, actual, {
     toleranceRadiusPx: EDGE_TOLERANCE_RADIUS_PX
   });
@@ -2548,6 +2635,23 @@ function assertVisualParity({
     structural_ink_threshold: STRUCTURAL_INK_THRESHOLD,
     structural_line_min_run: STRUCTURAL_LINE_MIN_RUN,
     structural_tolerance_radius: STRUCTURAL_TOLERANCE_RADIUS,
+    legacy_structural_superseded_by: "structural-ink-coverage-v1",
+    cell_edge_f1: {
+      comparison: "cell-edge-f1-v1",
+      tolerance_radius_px: TOLERANCE_RADIUS_PX,
+      edge_threshold: EDGE_THRESHOLD,
+      min_cell_edge_pixels: MIN_CELL_EDGE_PIXELS,
+      cell_table_sha256: cellEdgeF1.cellTableSha256,
+      cell_count: cellEdgeF1.cells.length,
+      scored_cell_count: cellEdgeF1.scoredCellCount,
+      worst_scored_f1: cellEdgeF1.worstScoredF1,
+      edge_coverage: cellEdgeF1.edgeCoverage,
+      min_edge_coverage: MIN_EDGE_COVERAGE,
+      cells: repositoryRelativePath(cellsPath),
+      cells_sha256: sha256(Buffer.from(cellsPayload, "utf8"))
+    },
+    structural_ink_coverage: structuralInk,
+    page_ink_budget: pageInkBudget,
     passed
   });
 }

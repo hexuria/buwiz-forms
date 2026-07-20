@@ -1330,6 +1330,142 @@ class AuditHtmlFormMigrationTests(unittest.TestCase):
         self.assertEqual(audit.png_dimensions(path), (1224, 1872))
 
 
+class OfficialFidelityReportContractTests(unittest.TestCase):
+    """The report-level contract that makes a parity claim impossible.
+
+    These guard the two failure modes this project keeps repeating: claiming a
+    stronger result than the evidence supports, and promoting on a partial
+    criterion whose missing component is the one that would have failed.
+    """
+
+    def base_report(self) -> dict:
+        return {
+            "gate": "official-fidelity-v1",
+            "proves_parity": False,
+            "is_non_regression_gate": True,
+            "baselines_pinned": False,
+            "promotion_eligible": False,
+        }
+
+    def test_accepts_a_consistent_reporting_mode_report(self) -> None:
+        errors: list[str] = []
+        self.assertTrue(
+            audit._audit_official_fidelity_report(self.base_report(), "visual", errors)
+        )
+        self.assertEqual(errors, [])
+
+    def test_rejects_a_report_claiming_parity(self) -> None:
+        report = self.base_report()
+        report["proves_parity"] = True
+        errors: list[str] = []
+        audit._audit_official_fidelity_report(report, "visual", errors)
+        self.assertTrue(
+            any("cannot certify parity" in error for error in errors), errors
+        )
+
+    def test_rejects_a_report_denying_it_is_a_non_regression_gate(self) -> None:
+        report = self.base_report()
+        report["is_non_regression_gate"] = False
+        errors: list[str] = []
+        audit._audit_official_fidelity_report(report, "visual", errors)
+        self.assertTrue(
+            any("is_non_regression_gate=true" in error for error in errors), errors
+        )
+
+    def test_rejects_promotion_while_baselines_are_unpinned(self) -> None:
+        # Reporting mode must never be a promotion shortcut: with no pinned
+        # baseline there is nothing to be "no worse than".
+        report = self.base_report()
+        report["promotion_eligible"] = True
+        errors: list[str] = []
+        audit._audit_official_fidelity_report(report, "visual", errors)
+        self.assertTrue(
+            any("reporting mode" in error for error in errors), errors
+        )
+
+    def test_a_legacy_gate_is_not_treated_as_the_composite(self) -> None:
+        errors: list[str] = []
+        self.assertFalse(
+            audit._audit_official_fidelity_report(
+                {"gate": "visual_parity"}, "visual", errors
+            )
+        )
+        self.assertEqual(errors, [])
+
+
+class OfficialFidelityComponentPresenceTests(unittest.TestCase):
+    def complete_page(self) -> dict:
+        return {
+            "changed_percent": 0.5,
+            "cell_edge_f1": {
+                "comparison": "cell-edge-f1-v1",
+                "tolerance_radius_px": audit.FIDELITY_TOLERANCE_RADIUS_PX,
+                "edge_threshold": audit.FIDELITY_EDGE_THRESHOLD,
+                "cell_table_sha256": "a" * 64,
+                "edge_coverage": 1.0,
+                "min_edge_coverage": 0.98,
+            },
+            "structural_ink_coverage": {"comparison": "structural-ink-coverage-v1"},
+            "page_ink_budget": {
+                "comparison": "page-ink-budget-v1",
+                "paper_pixels": 1169021,
+            },
+        }
+
+    def test_accepts_a_complete_page(self) -> None:
+        errors: list[str] = []
+        audit._audit_fidelity_components(self.complete_page(), "page 1", errors)
+        self.assertEqual(errors, [])
+
+    def test_each_missing_component_is_an_error(self) -> None:
+        for key, fragment in (
+            ("cell_edge_f1", "cell-edge-f1-v1 component is missing"),
+            ("structural_ink_coverage", "structural-ink-coverage-v1 component is missing"),
+            ("page_ink_budget", "page-ink-budget-v1 component is missing"),
+        ):
+            with self.subTest(component=key):
+                page = self.complete_page()
+                page.pop(key)
+                errors: list[str] = []
+                audit._audit_fidelity_components(page, "page 1", errors)
+                self.assertTrue(any(fragment in error for error in errors), errors)
+
+    def test_the_complete_page_number_stays_mandatory(self) -> None:
+        page = self.complete_page()
+        page["changed_percent"] = None
+        errors: list[str] = []
+        audit._audit_fidelity_components(page, "page 1", errors)
+        self.assertTrue(
+            any("mandatory and must never be omitted" in error for error in errors),
+            errors,
+        )
+
+    def test_rejects_the_blind_tolerance_radius(self) -> None:
+        # Radius 2 scores a whole-page 1px misregistration as exactly 1.0.
+        page = self.complete_page()
+        page["cell_edge_f1"]["tolerance_radius_px"] = 2
+        errors: list[str] = []
+        audit._audit_fidelity_components(page, "page 1", errors)
+        self.assertTrue(any("tolerance radius must be 1" in error for error in errors), errors)
+
+    def test_rejects_uncovered_edges(self) -> None:
+        page = self.complete_page()
+        page["cell_edge_f1"]["edge_coverage"] = 0.5
+        errors: list[str] = []
+        audit._audit_fidelity_components(page, "page 1", errors)
+        self.assertTrue(
+            any("uncovered edges are unmeasured" in error for error in errors), errors
+        )
+
+    def test_rejects_a_missing_paper_pixel_count(self) -> None:
+        # The only quantity that detects a tinted page.
+        page = self.complete_page()
+        page["page_ink_budget"].pop("paper_pixels")
+        errors: list[str] = []
+        audit._audit_fidelity_components(page, "page 1", errors)
+        self.assertTrue(any("paper_pixels is required" in error for error in errors), errors)
+
+
 class OfficialFidelityPrimitiveTests(unittest.TestCase):
     """Pin the official-fidelity-v1 primitives against the TypeScript contract.
 

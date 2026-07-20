@@ -1274,11 +1274,113 @@ def _audit_evidence_pointer(
     report = _read_json(asset[0], f"{label} evidence", errors)
     if report is None:
         return None
-    if report.get("schema_version") != 1:
-        errors.append(f"{label}: evidence schema_version must be 1")
+    if report.get("schema_version") not in (1, 2):
+        errors.append(f"{label}: evidence schema_version must be 1 or 2")
     if report.get("passed") is not True:
         errors.append(f"{label}: referenced evidence report must have passed=true")
     return report
+
+
+def _audit_official_fidelity_report(
+    report: dict[str, Any],
+    label: str,
+    errors: list[str],
+) -> bool:
+    """Validate the official-fidelity-v1 report-level contract.
+
+    Returns True when the report claims the composite criterion, so the caller
+    knows to demand every component. Two consistency flags are mandatory and
+    must hold the exact values below: this criterion certifies "no worse than a
+    reviewed baseline" and can never certify "matches the official form",
+    because the source PDFs do not embed their fonts. A report that claims
+    otherwise is rejected outright rather than read further.
+    """
+
+    if report.get("gate") != "official-fidelity-v1":
+        return False
+
+    if report.get("proves_parity") is not False:
+        errors.append(
+            f"{label}: official-fidelity-v1 must record proves_parity=false; it is a "
+            "non-regression criterion and cannot certify parity with the official form"
+        )
+    if report.get("is_non_regression_gate") is not True:
+        errors.append(f"{label}: official-fidelity-v1 must record is_non_regression_gate=true")
+
+    # Reporting mode is explicitly not promotable. Until reviewed baselines are
+    # pinned there is nothing to be "no worse than", so a report that both
+    # admits unpinned baselines and claims promotion is self-contradictory.
+    baselines_pinned = report.get("baselines_pinned")
+    if baselines_pinned is not True:
+        if report.get("promotion_eligible") is True:
+            errors.append(
+                f"{label}: components are in reporting mode (baselines_pinned is not true) "
+                "so the report cannot be promotion_eligible"
+            )
+    return True
+
+
+def _audit_fidelity_components(
+    page: dict[str, Any],
+    prefix: str,
+    errors: list[str],
+) -> None:
+    """Require every pixel component and the mandatory complete-page number.
+
+    Absence is an error, never a pass: a report missing a component would
+    otherwise promote on the strength of the components it did include, which
+    is precisely how a partial criterion launders a defective render.
+    """
+
+    if page.get("changed_percent") is None:
+        errors.append(
+            f"{prefix}: the complete-page percentage is mandatory and must never be "
+            "omitted, even though it no longer gates"
+        )
+
+    cell = page.get("cell_edge_f1")
+    if not isinstance(cell, dict):
+        errors.append(f"{prefix}: cell-edge-f1-v1 component is missing")
+    else:
+        if cell.get("comparison") != "cell-edge-f1-v1":
+            errors.append(f"{prefix}: cell component comparison id is wrong")
+        if cell.get("tolerance_radius_px") != FIDELITY_TOLERANCE_RADIUS_PX:
+            errors.append(
+                f"{prefix}: tolerance radius must be {FIDELITY_TOLERANCE_RADIUS_PX}; "
+                "radius 2 scores a whole-page 1px misregistration as exactly 1.0"
+            )
+        if cell.get("edge_threshold") != FIDELITY_EDGE_THRESHOLD:
+            errors.append(f"{prefix}: cell component edge threshold is inconsistent")
+        if not isinstance(cell.get("cell_table_sha256"), str) or not SHA256.fullmatch(
+            str(cell.get("cell_table_sha256", ""))
+        ):
+            errors.append(f"{prefix}: cell_table_sha256 is invalid")
+        coverage = _as_number(cell.get("edge_coverage"))
+        minimum_coverage = _as_number(cell.get("min_edge_coverage"))
+        if coverage is None or minimum_coverage is None or coverage < minimum_coverage:
+            errors.append(
+                f"{prefix}: edge coverage {coverage} is below the required "
+                f"{minimum_coverage}; uncovered edges are unmeasured, not passing"
+            )
+
+    structural = page.get("structural_ink_coverage")
+    if not isinstance(structural, dict):
+        errors.append(f"{prefix}: structural-ink-coverage-v1 component is missing")
+    elif structural.get("comparison") != "structural-ink-coverage-v1":
+        errors.append(f"{prefix}: structural component comparison id is wrong")
+
+    ink = page.get("page_ink_budget")
+    if not isinstance(ink, dict):
+        errors.append(f"{prefix}: page-ink-budget-v1 component is missing")
+    else:
+        if ink.get("comparison") != "page-ink-budget-v1":
+            errors.append(f"{prefix}: ink component comparison id is wrong")
+        paper = ink.get("paper_pixels")
+        if not isinstance(paper, int) or isinstance(paper, bool) or paper < 0:
+            errors.append(
+                f"{prefix}: paper_pixels is required; it is the only quantity that "
+                "detects a tinted page, which the percentage gates handle badly"
+            )
 
 
 def _audit_visual_report(
@@ -1290,8 +1392,9 @@ def _audit_visual_report(
     label: str,
     errors: list[str],
 ) -> None:
-    if report.get("gate") != "visual_parity":
-        errors.append(f"{label}: gate must be visual_parity")
+    is_fidelity = _audit_official_fidelity_report(report, label, errors)
+    if not is_fidelity and report.get("gate") != "visual_parity":
+        errors.append(f"{label}: gate must be visual_parity or official-fidelity-v1")
     producer = report.get("producer")
     if producer not in TRUSTED_VISUAL_EVIDENCE_PRODUCERS:
         errors.append(
@@ -1567,6 +1670,8 @@ def _audit_visual_report(
             errors.append(f"{prefix}: passed does not match recomputed visual result")
         if page.get("passed") is not True:
             errors.append(f"{prefix}: passed must be true")
+        if is_fidelity:
+            _audit_fidelity_components(page, prefix, errors)
         if expected_chromium is not None:
             _audit_visual_report_v2_page(
                 root,
