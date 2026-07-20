@@ -205,10 +205,18 @@
   display: grid;
   place-items: center;
   border: 1pt solid #111;
+  /* The official band opening rule is 1.44pt black (2.88 device px); the fixed
+   * height keeps the growth inside the box so no sibling moves. */
+  border-top-width: 1.5pt;
   background: #d1d1d1;
   font-size: 8pt;
   line-height: 1;
 }
+/* The Schedule 2 and Part VII bands open on a 0.12pt gray-0.8509 hairline, not
+ * on the 1.44pt black rule the other bands carry, so they keep the lighter
+ * stroke. Thickening them would paint black over near-invisible decoration. */
+.schedule-one-1701 + .paired-section-1701 > .section-band-1701,
+.page-four-1701 > .indexed-section-1701:not(.part-nine-1701) > .section-band-1701 { border-top-width: 1pt; }
 .background-1701 { border: 1pt solid #111; border-top: 0; }
 .page-one-1701 > .background-1701 { margin-top: 2pt; }
 .page-one-1701 > .background-1701,
@@ -673,6 +681,9 @@
 .schedule-six-1701,
 .schedule-six-spouse-1701,
 .part-eight-1701 { border: 1pt solid #111; border-top: 0; }
+/* The official Schedule 6 spouse closing rule is 1.44pt black (2.88 device px)
+ * and sits 0.02pt from our stroke centre, so the extra weight lands on it. */
+.schedule-six-spouse-1701 { border-bottom-width: 1.5pt; margin-bottom: -.75pt; }
 .schedule-five-1701 > .section-band-1701,
 .schedule-six-1701 > .section-band-1701,
 .schedule-six-spouse-1701 > .section-band-1701,
