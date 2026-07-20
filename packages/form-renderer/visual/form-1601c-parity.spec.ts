@@ -4,7 +4,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
 import { compareCompleteOfficialPage } from "./official-page-diff";
-import { renderEnvelope } from "./support/render-utils";
+import {
+  PRE_PRINTED_CONSTANT_SELECTORS,
+  renderEnvelope
+} from "./support/render-utils";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "../../..");
@@ -340,7 +343,22 @@ test("1601C 2018 fits long plain values by measured field width without clipping
   );
   expect(fitReport.length).toBeGreaterThan(4);
   expect(fitReport.filter((entry) => entry.state !== "fit")).toEqual([]);
-  expect(fitReport.filter((entry) => entry.fontSize < 8 || entry.fontSize > 9.6)).toEqual([]);
+
+  // Item 5's ATC is pre-printed on the official form (a 9.96pt Arial,Bold run
+  // in the geometry contract), so it is deliberately outside the 8-9.6px range
+  // that governs genuine taxpayer values. It is excluded from the range check
+  // and pinned to its own exact size below - the assertion is narrowed in
+  // scope and strengthened in total, never relaxed.
+  const taxpayerValues = fitReport.filter(
+    (entry) => !entry.className.includes("atc-plain-1601c")
+  );
+  expect(taxpayerValues.length).toBeGreaterThan(3);
+  expect(taxpayerValues.filter((entry) => entry.fontSize < 8 || entry.fontSize > 9.6)).toEqual([]);
+
+  const atc = fitReport.filter((entry) => entry.className.includes("atc-plain-1601c"));
+  expect(atc).toHaveLength(1);
+  expect(atc[0].text).toBe("WW010");
+  expect(atc[0].fontSize).toBeCloseTo(13.28, 2);
 
   const pages = page.locator(".form-page");
   expect(await pageHasNoOverflow(pages.nth(0))).toBe(true);
@@ -379,6 +397,11 @@ test("1601C 2018 matches the complete pinned official pages", async ({ page }, t
       .form-page[data-visual-blank-values="true"] .inline-description-1601c {
         color: transparent !important;
         text-shadow: none !important;
+      }
+      ${PRE_PRINTED_CONSTANT_SELECTORS
+        .map((selector) => `.form-page[data-visual-blank-values="true"] ${selector}`)
+        .join(",\n      ")} {
+        color: inherit !important;
       }
     `
   });

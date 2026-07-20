@@ -272,10 +272,16 @@
   width: 46pt;
   background: #fff;
 }
+/* Item 5's ATC is pre-printed on the official form, not taxpayer input: the
+ * geometry contract records it as a 9.96pt Arial,Bold run at (539.62, 112.21).
+ * It inherited the smaller regular adaptive-value type before, which read as a
+ * filled-in value rather than part of the printed form. */
 .header-option-1601c:nth-child(5) > span > .atc-plain-1601c {
   flex: 0 0 46pt;
   width: 46pt;
   background: #fff;
+  font-size: 9.96pt;
+  font-weight: 700;
 }
 .header-option-1601c:last-child > span { padding-inline: 9pt; }
 .header-option-1601c .check-box { width: 14pt; height: 14pt; }

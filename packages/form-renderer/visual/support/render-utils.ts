@@ -53,6 +53,27 @@ export const FIXTURE_OWNED_SELECTORS: readonly string[] = [
 ];
 
 /**
+ * Values that flow through the envelope but are PRE-PRINTED on the official
+ * form, so the blank official page shows them and blanking ours would invent a
+ * mismatch we could never close.
+ *
+ * 1601C item 5 ATC is the reviewed case: the pinned PDF prints `WW010` as a
+ * 9.96pt bold text run at (539.6, 112.2) — it is on the paper before a taxpayer
+ * touches it — and `bir-core`'s `FORM_1601C_ATC` constrains the field to
+ * exactly that string, with validation and XML round-trip both rejecting any
+ * other value. It is a form constant carried on the envelope for convenience,
+ * not taxpayer input.
+ *
+ * This list may only ever grow by the same standard: a text run visible in the
+ * OFFICIAL raster plus a domain constraint proving the value cannot vary. It
+ * makes the comparison stricter, never weaker — the glyphs stay visible on our
+ * side and must match ink that is genuinely present on the official page.
+ */
+export const PRE_PRINTED_CONSTANT_SELECTORS: readonly string[] = [
+  ".atc-plain-1601c"
+];
+
+/**
  * Hide fixture-supplied glyphs so the comparison sees the blank official
  * page: values, adaptive plain text, check marks, and inline specification
  * text become transparent while every border, comb cell, label, fill, and
@@ -66,6 +87,11 @@ export async function prepareOfficialBlankComparison(page: Page) {
         .join(",\n      ")} {
         color: transparent !important;
         text-shadow: none !important;
+      }
+      ${PRE_PRINTED_CONSTANT_SELECTORS
+        .map((selector) => `.form-page[data-visual-blank-values="true"] ${selector}`)
+        .join(",\n      ")} {
+        color: inherit !important;
       }
     `
   });

@@ -155,7 +155,17 @@ function HeaderOptions({ envelope, monthYear }: { envelope: RenderEnvelope; mont
         <AdaptiveComb1601C value={String(integer(envelope, "number_of_sheets"))} cells={2} align="right" />
       </HeaderOption>
       <HeaderOption label={<><b>5</b> ATC</>}>
-        <AdaptivePlainValue value={text(envelope, "atc")} className="atc-plain-1601c" />
+        {/* Pre-printed on the official form, so it must render at the official
+            9.96pt (13.28px) rather than the shared 9.6px adaptive maximum,
+            which rendered it as a small filled-in value. The fitting ladder is
+            retained below it, but never engages: `WW010` is the only value the
+            domain permits (bir-core's FORM_1601C_ATC) and it fits the 46pt box
+            at full size. */}
+        <AdaptivePlainValue
+          value={text(envelope, "atc")}
+          className="atc-plain-1601c"
+          maxFontSizePx={13.28}
+        />
       </HeaderOption>
     </section>
   );
