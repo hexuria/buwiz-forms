@@ -115,6 +115,10 @@
   display: grid;
   grid-template-columns: 86pt 346pt minmax(0, 1fr);
   border: 1pt solid #000;
+  /* Official outer frame top rule: contract rules_h y=44.76, thickness_pt 1.44,
+   * gray 0 (device_px 3). 1pt floors to 1 CSS px (1.5 device px); 1.5pt floors to
+   * 2 CSS px (3 device px), which is the bucket the official rule occupies. */
+  border-top-width: 1.5pt;
 }
 .form-number-0619f,
 .form-title-0619f,
@@ -161,7 +165,9 @@
 .official-pdf417-object-0619f {
   position: absolute;
   left: 3.34pt;
-  top: 5.28pt;
+  /* Compensates the 1 CSS px the thicker masthead top rule takes off the content
+   * box, so the pinned PDF417 frame stays at its verified page position. */
+  top: 4.53pt;
   display: block;
   width: 138.12pt;
   height: 32.28pt;
@@ -177,7 +183,7 @@
 .official-pdf417-symbol-0619f path { fill: #000; }
 .barcode-0619f > small {
   position: absolute;
-  top: 38.104pt;
+  top: 37.354pt;
   right: .952pt;
   width: 59.768pt;
   color: #000;
@@ -190,11 +196,15 @@
 }
 
 .header-options-0619f {
-  height: 30pt;
+  /* Items 1-5 bottom rule: contract rules_h y=128.30, thickness_pt 1.44, gray 0
+   * (device_px 3). 30pt + the 0.75pt the thicker rule adds, with Part I giving the
+   * same 0.75pt back off its margin so Part I stays on its calibrated y. */
+  height: 30.75pt;
   display: grid;
   grid-template-columns: 142.5pt 144.5pt 101.5pt 101pt minmax(0, 1fr);
   border: 1pt solid #000;
   border-top: 0;
+  border-bottom-width: 1.5pt;
 }
 .header-option-0619f {
   min-width: 0;
@@ -245,19 +255,34 @@
 .part-0619f {
   width: 577pt;
   border: 1pt solid #000;
+  /* Part-box top rule: contract rules_h y=130.94 (Part I) and y=286.97 (Part II),
+   * thickness_pt 1.44, gray 0 (device_px 3). Crosses 1 CSS px -> 2 CSS px. The
+   * border grows downward, so each heading band gives back the same 0.75pt to
+   * keep every row below it on its calibrated y. */
+  border-top-width: 1.5pt;
 }
 .part-0619f > h2,
 .payment-0619f > h2 {
-  height: 13pt;
+  height: 12.25pt;
   margin: 0;
   display: grid;
   place-items: center;
-  border-bottom: .5pt solid #000;
+  /* Part-heading underline: contract rules_h y=142.70 (Part I), y=298.85 (Part II)
+   * and y=620.02 (Part III), all thickness_pt 1.44, gray 0 (device_px 3). .5pt
+   * floors to 1 CSS px; 1.5pt floors to 2 CSS px = the official 3 device px.
+   * The border grows upward into the fixed-height band, so padding-top restores
+   * the centred heading text to its calibrated baseline. */
+  padding-top: .75pt;
+  border-bottom: 1.5pt solid #000;
   background: #d9d9d9;
   font-size: 9pt;
   font-weight: 600;
 }
-.background-0619f { height: 155pt; margin-top: 1pt; }
+/* Part I bottom rule: contract rules_h y=284.33, thickness_pt 1.44, gray 0
+ * (device_px 3). 155pt + the 0.75pt the thicker rule adds, so the rows keep their
+ * band and the rule grows downward; Part II gives back the same 0.75pt of margin
+ * so every section below stays on its calibrated y. */
+.background-0619f { height: 155.75pt; margin-top: .25pt; border-bottom-width: 1.5pt; }
 .tin-rdo-0619f {
   height: 18pt;
   display: grid;
@@ -358,8 +383,8 @@
 .email-0619f .label-0619f { height: 10.5pt; border-bottom: .5pt solid #000; }
 .email-0619f > :is(.guided-field-0619f, .plain-field-shell-0619f) { height: 18.5pt; }
 
-.remittance-0619f { height: 218pt; margin-top: 1.5pt; }
-.remittance-0619f > h2 { height: 12pt; }
+.remittance-0619f { height: 218pt; margin-top: .75pt; }
+.remittance-0619f > h2 { height: 11.25pt; }
 .remittance-head-0619f,
 .final-tax-row-0619f {
   display: grid;
@@ -563,11 +588,17 @@
 
 .payment-0619f {
   width: 577pt;
-  height: 160.5pt;
+  /* 160.5pt + the 0.75pt the thicker bottom rule adds, so the band the rows sit
+   * in is unchanged and the rule grows downward the way the official one does. */
+  height: 161.25pt;
   margin-top: 1.5pt;
   border: 1pt solid #000;
+  /* Part III frame rules: contract rules_h y=608.26 (top) and y=767.98 (bottom),
+   * both thickness_pt 1.44, gray 0 (device_px 3). */
+  border-top-width: 1.5pt;
+  border-bottom-width: 1.5pt;
 }
-.payment-0619f > h2 { height: 12pt; }
+.payment-0619f > h2 { height: 11.25pt; }
 .payment-head-0619f,
 .payment-row-0619f {
   display: grid;
@@ -601,8 +632,15 @@
   border-bottom: .5pt solid #000;
 }
 .payment-row-0619f[data-payment-row="payment_20"] { height: 18.5pt; }
-.payment-row-0619f[data-payment-row="payment_22"],
-.payment-row-0619f[data-payment-row="payment_23"] { height: 18.5pt; }
+.payment-row-0619f[data-payment-row="payment_22"] { height: 18.5pt; }
+/* Rule closing the payment rows: contract rules_h y=715.30, thickness_pt 1.44,
+ * gray 0 (device_px 3), against 0.48pt for every payment row rule above it.
+ * 18.5pt + 0.75pt so the rule grows downward instead of squeezing the row's
+ * combs; the machine-validation band gives the same 0.75pt back. */
+.payment-row-0619f[data-payment-row="payment_23"] {
+  height: 19.25pt;
+  border-bottom-width: 1.5pt;
+}
 .payment-tax-debit-row-0619f {
   grid-template-columns: 171.5pt 87pt 116pt minmax(0, 1fr);
 }
@@ -668,12 +706,14 @@
   font-size: 9.333pt;
 }
 .machine-validation-0619f {
-  height: 51pt;
+  height: 50.25pt;
   display: grid;
   grid-template-columns: 374.5pt minmax(0, 1fr);
 }
 .machine-validation-0619f > span {
-  padding: 3pt 5pt;
+  /* Band top moved down 0.75pt to make room for the thicker y=715.30 rule; the
+   * reduced top padding keeps this copy on its calibrated baseline. */
+  padding: 2.25pt 5pt 3pt;
   font-size: 7.6pt;
   line-height: 1.08;
 }
@@ -683,7 +723,9 @@
 }
 .privacy-note-0619f {
   height: 11pt;
-  margin: 0;
+  /* Part III grew 0.75pt downward so its bottom rule could thicken the way the
+   * official one does; this keeps the footnote on its calibrated baseline. */
+  margin: -.75pt 0 0;
   padding-top: 2pt;
   font-size: 8pt;
 }
