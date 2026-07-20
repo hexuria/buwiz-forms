@@ -84,12 +84,39 @@ describe("symmetric grayscale edge evidence", () => {
   });
 
   it("is additive evidence and cannot replace or relax the raw page gate", () => {
+    // This page-global diagnostic is also NOT the cell-scoped component of
+    // official-fidelity-v1: page-global scope scores a removed comb field
+    // better than the cross-rasterizer floor, and its default radius of 2
+    // scores a whole-page 1px misregistration as exactly 1.000000.
     expect(LAYERED_EDGE_EVIDENCE_POLICY).toEqual({
       promotionEligible: false,
-      authoritativeVisualGate: "official-complete-page-v1",
-      replacesAuthoritativeGate: false
+      authoritativeVisualGate: "official-fidelity-v1",
+      replacesAuthoritativeGate: false,
+      supersededBy: "cell-edge-f1-v1",
+      scope: "page-global"
     });
     expect(parsePromotionVisualThreshold(undefined)).toBe(1);
+  });
+
+  it("forgives at radius 2 a misregistration that radius 1 penalises", () => {
+    // Guards the measured reason official-fidelity-v1 pins radius 1: a wider
+    // tolerance disc can only ever match more, and on the real page radius 2
+    // scored a whole-page 1px misregistration as exactly 1.000000. Sobel marks
+    // both sides of a rule, so a 2px displacement is the smallest that
+    // separates the two radii on a synthetic single-line page.
+    const expected = whitePage();
+    const shifted = whitePage();
+    drawBlackLine(expected, 8, 12, 70, 12);
+    drawBlackLine(shifted, 8, 14, 70, 14);
+
+    const atRadiusTwo = compareSymmetricGrayscaleEdges(expected, shifted, {
+      toleranceRadiusPx: 2
+    });
+    const atRadiusOne = compareSymmetricGrayscaleEdges(expected, shifted, {
+      toleranceRadiusPx: 1
+    });
+    expect(atRadiusTwo.f1).toBe(1);
+    expect(atRadiusOne.f1).toBeLessThan(1);
   });
 });
 

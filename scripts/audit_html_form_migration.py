@@ -18,6 +18,7 @@ import struct
 import subprocess
 import sys
 import zlib
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -518,6 +519,471 @@ def pixelmatch_mask(
             mask[offset : offset + 4] = b"\xff\x00\x00\xff"
             changed += 1
     return changed, bytes(mask)
+
+
+# ---------------------------------------------------------------------------
+# official-fidelity-v1 primitives.
+#
+# Pure-stdlib reimplementation of
+# packages/form-renderer/visual/official-fidelity.ts. Every function below must
+# produce integers IDENTICAL to the TypeScript implementation; the audit trusts
+# no number the evidence report declares.
+#
+# Bit-exactness rules that are load-bearing (criterion section 1.1):
+#   - Luminance is IEEE-754 binary64 in BOTH languages, evaluated left to right.
+#     Python floats are binary64 natively, matching Float64Array.
+#   - The Sobel test compares gx*gx + gy*gy against threshold*threshold.
+#     math.hypot is FORBIDDEN: it is a scaled libm-class routine and is not
+#     bit-reproducible against the JS equivalent.
+#   - Dilation is a Euclidean DISC via an explicit offset list, never a square.
+# ---------------------------------------------------------------------------
+
+FIDELITY_TOLERANCE_RADIUS_PX = 1
+FIDELITY_EDGE_THRESHOLD = 48
+FIDELITY_INK_THRESHOLD = 160
+FIDELITY_STRUCTURAL_MIN_RUN = 24
+FIDELITY_INK_TOLERANCE_RADIUS_PX = 2
+FIDELITY_GRID_SIZE_PX = 64
+FIDELITY_GRID_OFFSET_PX = 32
+FIDELITY_MIN_CELL_EDGE_PIXELS = 200
+FIDELITY_MIN_EDGE_COVERAGE = 0.98
+
+
+def fidelity_ratio(numerator: int, denominator: int) -> float:
+    """Criterion primitive P8."""
+
+    if denominator == 0:
+        return 1.0 if numerator == 0 else 0.0
+    return numerator / denominator
+
+
+def fidelity_f1(precision: float, recall: float) -> float:
+    """Criterion primitive P8."""
+
+    if precision + recall == 0:
+        return 0.0
+    return (2 * precision * recall) / (precision + recall)
+
+
+def composite_luminance(image: PngRgba) -> list[float]:
+    """Criterion primitive P2: composite-over-white luminance, binary64."""
+
+    pixels = image.pixels
+    luminance = [0.0] * (image.width * image.height)
+    for index in range(len(luminance)):
+        offset = index * 4
+        alpha = pixels[offset + 3] / 255
+        red = pixels[offset] * alpha + 255 * (1 - alpha)
+        green = pixels[offset + 1] * alpha + 255 * (1 - alpha)
+        blue = pixels[offset + 2] * alpha + 255 * (1 - alpha)
+        luminance[index] = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+    return luminance
+
+
+def sobel_edge_mask(image: PngRgba, threshold: int) -> bytearray:
+    """Criterion primitive P3. Border pixels are never edges."""
+
+    width = image.width
+    height = image.height
+    grayscale = composite_luminance(image)
+    edges = bytearray(width * height)
+    threshold_squared = float(threshold * threshold)
+
+    for y in range(1, height - 1):
+        row = y * width
+        above = row - width
+        below = row + width
+        for x in range(1, width - 1):
+            top_left = grayscale[above + x - 1]
+            top = grayscale[above + x]
+            top_right = grayscale[above + x + 1]
+            left = grayscale[row + x - 1]
+            right = grayscale[row + x + 1]
+            bottom_left = grayscale[below + x - 1]
+            bottom = grayscale[below + x]
+            bottom_right = grayscale[below + x + 1]
+            gradient_x = (
+                -top_left + top_right - 2 * left + 2 * right - bottom_left + bottom_right
+            )
+            gradient_y = (
+                -top_left - 2 * top - top_right + bottom_left + 2 * bottom + bottom_right
+            )
+            if gradient_x * gradient_x + gradient_y * gradient_y >= threshold_squared:
+                edges[row + x] = 1
+    return edges
+
+
+def _disc_offsets(radius: int) -> tuple[tuple[int, int], ...]:
+    return tuple(
+        (dx, dy)
+        for dy in range(-radius, radius + 1)
+        for dx in range(-radius, radius + 1)
+        if dx * dx + dy * dy <= radius * radius
+    )
+
+
+def dilate_disc(mask: bytearray, width: int, height: int, radius: int) -> bytearray:
+    """Criterion primitive P5: Euclidean-disc dilation, order-independent."""
+
+    if radius == 0:
+        return bytearray(mask)
+    result = bytearray(len(mask))
+    offsets = _disc_offsets(radius)
+    for y in range(height):
+        row = y * width
+        for x in range(width):
+            if mask[row + x] != 1:
+                continue
+            for dx, dy in offsets:
+                target_y = y + dy
+                target_x = x + dx
+                if 0 <= target_x < width and 0 <= target_y < height:
+                    result[target_y * width + target_x] = 1
+    return result
+
+
+def dark_ink_mask_p4(image: PngRgba, threshold: int = FIDELITY_INK_THRESHOLD) -> bytearray:
+    """Criterion primitive P4: raw channel comparison, alpha ignored."""
+
+    pixels = image.pixels
+    mask = bytearray(image.width * image.height)
+    for index in range(len(mask)):
+        offset = index * 4
+        if (
+            pixels[offset] < threshold
+            and pixels[offset + 1] < threshold
+            and pixels[offset + 2] < threshold
+        ):
+            mask[index] = 1
+    return mask
+
+
+def structural_stratum(
+    ink: bytearray,
+    width: int,
+    height: int,
+    min_run: int = FIDELITY_STRUCTURAL_MIN_RUN,
+) -> bytearray:
+    """Criterion primitive P6: maximal ink runs >= min_run along rows/columns."""
+
+    stratum = bytearray(len(ink))
+    for y in range(height):
+        row = y * width
+        run_start = -1
+        for x in range(width + 1):
+            is_ink = x < width and ink[row + x] == 1
+            if is_ink and run_start < 0:
+                run_start = x
+            if not is_ink and run_start >= 0:
+                if x - run_start >= min_run:
+                    for fill in range(run_start, x):
+                        stratum[row + fill] = 1
+                run_start = -1
+    for x in range(width):
+        run_start = -1
+        for y in range(height + 1):
+            is_ink = y < height and ink[y * width + x] == 1
+            if is_ink and run_start < 0:
+                run_start = y
+            if not is_ink and run_start >= 0:
+                if y - run_start >= min_run:
+                    for fill in range(run_start, y):
+                        stratum[fill * width + x] = 1
+                run_start = -1
+    return stratum
+
+
+def largest_component(mask: bytearray, width: int, height: int) -> int:
+    """Criterion primitive P7: largest 8-connected component, raster seeds."""
+
+    visited = bytearray(len(mask))
+    largest = 0
+    for seed in range(len(mask)):
+        if mask[seed] != 1 or visited[seed] == 1:
+            continue
+        visited[seed] = 1
+        stack = [seed]
+        size = 0
+        while stack:
+            index = stack.pop()
+            size += 1
+            x = index % width
+            y = index // width
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    if dx == 0 and dy == 0:
+                        continue
+                    nx = x + dx
+                    ny = y + dy
+                    if nx < 0 or ny < 0 or nx >= width or ny >= height:
+                        continue
+                    neighbour = ny * width + nx
+                    if mask[neighbour] != 1 or visited[neighbour] == 1:
+                        continue
+                    visited[neighbour] = 1
+                    stack.append(neighbour)
+        if size > largest:
+            largest = size
+    return largest
+
+
+def _clip_cell(
+    identifier: str,
+    kind: str,
+    x: int,
+    y: int,
+    width: int,
+    height: int,
+    page_width: int,
+    page_height: int,
+) -> dict[str, Any] | None:
+    x0 = max(0, x)
+    y0 = max(0, y)
+    x1 = min(page_width, x + width)
+    y1 = min(page_height, y + height)
+    if x1 <= x0 or y1 <= y0:
+        return None
+    return {
+        "id": identifier,
+        "kind": kind,
+        "x": x0,
+        "y": y0,
+        "width": x1 - x0,
+        "height": y1 - y0,
+    }
+
+
+def build_fidelity_cells(
+    named_regions: Sequence[Mapping[str, Any]],
+    page_width: int,
+    page_height: int,
+) -> list[dict[str, Any]]:
+    """Reconstruct the scoring-cell table: named regions, then G0, then G1.
+
+    Ordering is part of the contract; the resulting SHA-256 is compared against
+    the producer's declared ``cell_table_sha256``.
+    """
+
+    cells: list[dict[str, Any]] = []
+    seen: set[tuple[int, int, int, int]] = set()
+
+    for region in named_regions:
+        cell = _clip_cell(
+            str(region.get("name")),
+            "named",
+            int(region.get("x", 0)),
+            int(region.get("y", 0)),
+            int(region.get("width", 0)),
+            int(region.get("height", 0)),
+            page_width,
+            page_height,
+        )
+        if cell is None:
+            continue
+        key = (cell["x"], cell["y"], cell["width"], cell["height"])
+        if key in seen:
+            continue
+        seen.add(key)
+        cells.append(cell)
+
+    for origin, label in ((0, "g0"), (FIDELITY_GRID_OFFSET_PX, "g1")):
+        row = 0
+        y = origin
+        while y < page_height:
+            col = 0
+            x = origin
+            while x < page_width:
+                cell = _clip_cell(
+                    f"{label}-r{row}-c{col}",
+                    "grid",
+                    x,
+                    y,
+                    FIDELITY_GRID_SIZE_PX,
+                    FIDELITY_GRID_SIZE_PX,
+                    page_width,
+                    page_height,
+                )
+                if cell is not None:
+                    key = (cell["x"], cell["y"], cell["width"], cell["height"])
+                    if key not in seen:
+                        seen.add(key)
+                        cells.append(cell)
+                x += FIDELITY_GRID_SIZE_PX
+                col += 1
+            y += FIDELITY_GRID_SIZE_PX
+            row += 1
+
+    return cells
+
+
+def fidelity_cell_table_sha256(cells: Sequence[Mapping[str, Any]]) -> str:
+    canonical = "\n".join(
+        f"{cell['kind']}:{cell['id']}:{cell['x']},{cell['y']},{cell['width']},{cell['height']}"
+        for cell in cells
+    )
+    return hashlib.sha256(f"{canonical}\n".encode("utf-8")).hexdigest()
+
+
+def compute_cell_edge_f1(
+    expected: PngRgba,
+    actual: PngRgba,
+    named_regions: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """``cell-edge-f1-v1``: dilate page-globally once, then count per cell."""
+
+    width = expected.width
+    height = expected.height
+    expected_edges = sobel_edge_mask(expected, FIDELITY_EDGE_THRESHOLD)
+    actual_edges = sobel_edge_mask(actual, FIDELITY_EDGE_THRESHOLD)
+    expected_dilated = dilate_disc(expected_edges, width, height, FIDELITY_TOLERANCE_RADIUS_PX)
+    actual_dilated = dilate_disc(actual_edges, width, height, FIDELITY_TOLERANCE_RADIUS_PX)
+
+    cells = build_fidelity_cells(named_regions, width, height)
+    covered = bytearray(width * height)
+    scored_cells: list[dict[str, Any]] = []
+
+    for cell in cells:
+        expected_edge_pixels = 0
+        actual_edge_pixels = 0
+        matched_expected = 0
+        matched_actual = 0
+        for y in range(cell["y"], cell["y"] + cell["height"]):
+            row = y * width
+            for x in range(cell["x"], cell["x"] + cell["width"]):
+                index = row + x
+                if expected_edges[index] == 1:
+                    expected_edge_pixels += 1
+                    if actual_dilated[index] == 1:
+                        matched_expected += 1
+                if actual_edges[index] == 1:
+                    actual_edge_pixels += 1
+                    if expected_dilated[index] == 1:
+                        matched_actual += 1
+        precision = fidelity_ratio(matched_actual, actual_edge_pixels)
+        recall = fidelity_ratio(matched_expected, expected_edge_pixels)
+        is_scored = expected_edge_pixels >= FIDELITY_MIN_CELL_EDGE_PIXELS
+        if is_scored:
+            for y in range(cell["y"], cell["y"] + cell["height"]):
+                row = y * width
+                for x in range(cell["x"], cell["x"] + cell["width"]):
+                    covered[row + x] = 1
+        scored_cells.append(
+            {
+                **cell,
+                "expected_edge_pixels": expected_edge_pixels,
+                "actual_edge_pixels": actual_edge_pixels,
+                "matched_expected_pixels": matched_expected,
+                "matched_actual_pixels": matched_actual,
+                "precision": precision,
+                "recall": recall,
+                "f1": fidelity_f1(precision, recall),
+                "scored": is_scored,
+            }
+        )
+
+    expected_edge_total = 0
+    expected_edge_covered = 0
+    for index in range(len(expected_edges)):
+        if expected_edges[index] != 1:
+            continue
+        expected_edge_total += 1
+        if covered[index] == 1:
+            expected_edge_covered += 1
+
+    gated = [cell for cell in scored_cells if cell["scored"]]
+    return {
+        "comparison": "cell-edge-f1-v1",
+        "cell_table_sha256": fidelity_cell_table_sha256(cells),
+        "cells": scored_cells,
+        "scored_cell_count": len(gated),
+        "worst_scored_f1": min((cell["f1"] for cell in gated), default=0.0),
+        "edge_coverage": fidelity_ratio(expected_edge_covered, expected_edge_total),
+    }
+
+
+def compute_structural_ink(expected: PngRgba, actual: PngRgba) -> dict[str, Any]:
+    """``structural-ink-coverage-v1``: font-independent by construction."""
+
+    width = expected.width
+    height = expected.height
+    expected_structural = structural_stratum(dark_ink_mask_p4(expected), width, height)
+    actual_structural = structural_stratum(dark_ink_mask_p4(actual), width, height)
+    expected_dilated = dilate_disc(expected_structural, width, height, FIDELITY_TOLERANCE_RADIUS_PX)
+    actual_dilated = dilate_disc(actual_structural, width, height, FIDELITY_TOLERANCE_RADIUS_PX)
+
+    unmatched = bytearray(len(expected_structural))
+    expected_pixels = 0
+    actual_pixels = 0
+    matched_expected = 0
+    matched_actual = 0
+    for index in range(len(expected_structural)):
+        if expected_structural[index] == 1:
+            expected_pixels += 1
+            if actual_dilated[index] == 1:
+                matched_expected += 1
+            else:
+                unmatched[index] = 1
+        if actual_structural[index] == 1:
+            actual_pixels += 1
+            if expected_dilated[index] == 1:
+                matched_actual += 1
+
+    return {
+        "comparison": "structural-ink-coverage-v1",
+        "expected_structural_pixels": expected_pixels,
+        "actual_structural_pixels": actual_pixels,
+        "structural_recall": fidelity_ratio(matched_expected, expected_pixels),
+        "structural_precision": fidelity_ratio(matched_actual, actual_pixels),
+        "largest_unmatched_cluster_px": largest_component(unmatched, width, height),
+        "unmatched_expected_pixels": expected_pixels - matched_expected,
+    }
+
+
+def compute_page_ink_budget(expected: PngRgba, actual: PngRgba) -> dict[str, Any]:
+    """``page-ink-budget-v1``: absolute ink and paper substrate."""
+
+    width = expected.width
+    height = expected.height
+    expected_ink_mask = dark_ink_mask_p4(expected)
+    actual_ink_mask = dark_ink_mask_p4(actual)
+    expected_dilated = dilate_disc(
+        expected_ink_mask, width, height, FIDELITY_INK_TOLERANCE_RADIUS_PX
+    )
+    actual_dilated = dilate_disc(
+        actual_ink_mask, width, height, FIDELITY_INK_TOLERANCE_RADIUS_PX
+    )
+
+    expected_ink = 0
+    actual_ink = 0
+    ink_missing = 0
+    ink_unexpected = 0
+    for index in range(len(expected_ink_mask)):
+        if expected_ink_mask[index] == 1:
+            expected_ink += 1
+            if actual_dilated[index] != 1:
+                ink_missing += 1
+        if actual_ink_mask[index] == 1:
+            actual_ink += 1
+            if expected_dilated[index] != 1:
+                ink_unexpected += 1
+
+    pixels = actual.pixels
+    paper_pixels = 0
+    for index in range(len(actual_ink_mask)):
+        offset = index * 4
+        if pixels[offset] == 255 and pixels[offset + 1] == 255 and pixels[offset + 2] == 255:
+            paper_pixels += 1
+
+    return {
+        "comparison": "page-ink-budget-v1",
+        "expected_ink": expected_ink,
+        "actual_ink": actual_ink,
+        "ink_missing": ink_missing,
+        "ink_unexpected": ink_unexpected,
+        "ink_missing_ratio": fidelity_ratio(ink_missing, expected_ink),
+        "ink_unexpected_ratio": fidelity_ratio(ink_unexpected, actual_ink),
+        "paper_pixels": paper_pixels,
+    }
 
 
 def _read_json(path: Path, label: str, errors: list[str]) -> dict[str, Any] | None:

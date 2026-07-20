@@ -1330,5 +1330,175 @@ class AuditHtmlFormMigrationTests(unittest.TestCase):
         self.assertEqual(audit.png_dimensions(path), (1224, 1872))
 
 
+class OfficialFidelityPrimitiveTests(unittest.TestCase):
+    """Pin the official-fidelity-v1 primitives against the TypeScript contract.
+
+    These are deliberately small, hand-computable cases. The audit's guarantee
+    is that it recomputes every component itself; that guarantee is worthless
+    if this reimplementation drifts from
+    packages/form-renderer/visual/official-fidelity.ts. A full-page bit-exact
+    cross-check on the real 2551Q rasters is run separately; these tests keep
+    the invariants enforced in CI without needing captured artifacts.
+    """
+
+    def solid(self, width: int, height: int, rgb: tuple[int, int, int]) -> audit.PngRgba:
+        pixel = bytes((rgb[0], rgb[1], rgb[2], 255))
+        return audit.PngRgba(width=width, height=height, pixels=pixel * (width * height))
+
+    def test_ratio_and_f1_edge_cases_match_pinned_semantics(self) -> None:
+        self.assertEqual(audit.fidelity_ratio(0, 0), 1.0)
+        self.assertEqual(audit.fidelity_ratio(5, 0), 0.0)
+        self.assertEqual(audit.fidelity_ratio(1, 4), 0.25)
+        self.assertEqual(audit.fidelity_f1(0.0, 0.0), 0.0)
+        self.assertEqual(audit.fidelity_f1(1.0, 1.0), 1.0)
+        self.assertAlmostEqual(audit.fidelity_f1(0.5, 1.0), 2 / 3, places=15)
+
+    def test_disc_dilation_is_a_disc_not_a_square(self) -> None:
+        # A single lit pixel at radius 1 must light 5 cells (plus shape), never 9.
+        mask = bytearray(25)
+        mask[12] = 1
+        dilated = audit.dilate_disc(mask, 5, 5, 1)
+        self.assertEqual(sum(dilated), 5)
+        for corner in (6, 8, 16, 18):
+            self.assertEqual(dilated[corner], 0, "disc dilation must not reach diagonals")
+
+    def test_sobel_never_marks_border_pixels(self) -> None:
+        image = self.solid(6, 6, (255, 255, 255))
+        pixels = bytearray(image.pixels)
+        for index in range(36):
+            if index % 6 >= 3:
+                pixels[index * 4] = 0
+                pixels[index * 4 + 1] = 0
+                pixels[index * 4 + 2] = 0
+        edges = audit.sobel_edge_mask(
+            audit.PngRgba(width=6, height=6, pixels=bytes(pixels)),
+            audit.FIDELITY_EDGE_THRESHOLD,
+        )
+        for x in range(6):
+            self.assertEqual(edges[x], 0)
+            self.assertEqual(edges[5 * 6 + x], 0)
+        for y in range(6):
+            self.assertEqual(edges[y * 6], 0)
+            self.assertEqual(edges[y * 6 + 5], 0)
+        self.assertGreater(sum(edges), 0, "an interior vertical edge must be detected")
+
+    def test_structural_stratum_keeps_long_runs_and_drops_short_ones(self) -> None:
+        width, height = 40, 3
+        ink = bytearray(width * height)
+        for x in range(audit.FIDELITY_STRUCTURAL_MIN_RUN):
+            ink[x] = 1  # long horizontal run -> kept
+        for x in range(5):
+            ink[width + x] = 1  # short run -> dropped
+        stratum = audit.structural_stratum(ink, width, height)
+        self.assertEqual(sum(stratum[:width]), audit.FIDELITY_STRUCTURAL_MIN_RUN)
+        self.assertEqual(sum(stratum[width : width * 2]), 0)
+
+    def test_largest_component_is_eight_connected(self) -> None:
+        # Two blobs joined only diagonally are ONE component under 8-connection.
+        mask = bytearray(25)
+        mask[6] = 1
+        mask[12] = 1
+        mask[18] = 1
+        self.assertEqual(audit.largest_component(mask, 5, 5), 3)
+
+    def test_cell_table_covers_the_page_with_two_offset_grids(self) -> None:
+        cells = audit.build_fidelity_cells([], 128, 128)
+        kinds = {cell["kind"] for cell in cells}
+        self.assertEqual(kinds, {"grid"})
+        # 2x2 G0 cells plus the offset G1 lattice, all clipped in bounds.
+        self.assertGreater(len(cells), 4)
+        for cell in cells:
+            self.assertGreaterEqual(cell["x"], 0)
+            self.assertGreaterEqual(cell["y"], 0)
+            self.assertLessEqual(cell["x"] + cell["width"], 128)
+            self.assertLessEqual(cell["y"] + cell["height"], 128)
+        # Every pixel must lie in at least one cell: coverage is a construction.
+        covered = bytearray(128 * 128)
+        for cell in cells:
+            for y in range(cell["y"], cell["y"] + cell["height"]):
+                for x in range(cell["x"], cell["x"] + cell["width"]):
+                    covered[y * 128 + x] = 1
+        self.assertEqual(sum(covered), 128 * 128)
+
+    def test_named_regions_precede_grids_and_dedupe_by_geometry(self) -> None:
+        named = [{"name": "alpha", "x": 0, "y": 0, "width": 64, "height": 64}]
+        cells = audit.build_fidelity_cells(named, 128, 128)
+        self.assertEqual(cells[0]["id"], "alpha")
+        self.assertEqual(cells[0]["kind"], "named")
+        # The G0 cell with identical geometry must be deduplicated away.
+        identical = [
+            cell
+            for cell in cells
+            if (cell["x"], cell["y"], cell["width"], cell["height"]) == (0, 0, 64, 64)
+        ]
+        self.assertEqual(len(identical), 1)
+
+    def test_cell_table_hash_changes_when_geometry_changes(self) -> None:
+        base = audit.build_fidelity_cells([], 128, 128)
+        moved = audit.build_fidelity_cells(
+            [{"name": "alpha", "x": 3, "y": 5, "width": 40, "height": 40}], 128, 128
+        )
+        self.assertNotEqual(
+            audit.fidelity_cell_table_sha256(base),
+            audit.fidelity_cell_table_sha256(moved),
+        )
+
+    def test_identical_pages_score_perfectly_on_every_component(self) -> None:
+        image = self.solid(48, 48, (255, 255, 255))
+        pixels = bytearray(image.pixels)
+        for y in range(10, 40):  # a long dark rule -> structural stratum
+            for x in range(4, 44):
+                offset = (y * 48 + x) * 4
+                pixels[offset] = pixels[offset + 1] = pixels[offset + 2] = 0
+        page = audit.PngRgba(width=48, height=48, pixels=bytes(pixels))
+
+        structural = audit.compute_structural_ink(page, page)
+        self.assertEqual(structural["structural_recall"], 1.0)
+        self.assertEqual(structural["structural_precision"], 1.0)
+        self.assertEqual(structural["largest_unmatched_cluster_px"], 0)
+
+        ink = audit.compute_page_ink_budget(page, page)
+        self.assertEqual(ink["ink_missing"], 0)
+        self.assertEqual(ink["ink_unexpected"], 0)
+        self.assertEqual(ink["expected_ink"], ink["actual_ink"])
+
+        cell = audit.compute_cell_edge_f1(page, page, [])
+        self.assertEqual(cell["edge_coverage"], 1.0)
+        for entry in cell["cells"]:
+            if entry["scored"]:
+                self.assertEqual(entry["f1"], 1.0)
+
+    def test_structural_stratum_is_blind_to_text_sized_marks(self) -> None:
+        """Font-independence is BY CONSTRUCTION and must be asserted, not assumed.
+
+        This is correct behaviour, not insensitivity: text correctness is bound
+        by static-text-exhaustive-v1, never by these pixels.
+        """
+
+        width = height = 48
+        base = bytearray(self.solid(width, height, (255, 255, 255)).pixels)
+        for y in range(10, 40):
+            for x in range(4, 44):
+                offset = (y * width + x) * 4
+                base[offset] = base[offset + 1] = base[offset + 2] = 0
+        expected = audit.PngRgba(width=width, height=height, pixels=bytes(base))
+
+        glyphish = bytearray(base)
+        for y in range(2, 8):  # a short, glyph-sized mark well under min run
+            for x in range(2, 8):
+                offset = (y * width + x) * 4
+                glyphish[offset] = glyphish[offset + 1] = glyphish[offset + 2] = 0
+        actual = audit.PngRgba(width=width, height=height, pixels=bytes(glyphish))
+
+        before = audit.compute_structural_ink(expected, expected)
+        after = audit.compute_structural_ink(expected, actual)
+        self.assertEqual(before["structural_recall"], after["structural_recall"])
+        self.assertEqual(before["structural_precision"], after["structural_precision"])
+        # ...while the ink budget DOES see it, which is what binds that stratum.
+        self.assertGreater(
+            audit.compute_page_ink_budget(expected, actual)["ink_unexpected"], 0
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

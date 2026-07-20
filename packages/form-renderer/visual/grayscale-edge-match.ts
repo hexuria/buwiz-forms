@@ -20,11 +20,24 @@ export type GrayscaleEdgeMatch = Readonly<{
 const DEFAULT_EDGE_THRESHOLD = 48;
 const DEFAULT_TOLERANCE_RADIUS_PX = 2;
 
-/** This diagnostic can corroborate structure but can never promote a form. */
+/**
+ * This page-global diagnostic can corroborate structure but can never promote
+ * a form, and it is NOT the cell-scoped component of `official-fidelity-v1`.
+ *
+ * Two measured reasons it cannot stand in for that component:
+ *  - Page-global scope is blind to localized defects: a removed comb field
+ *    scores 0.999837 here, better than the 0.998313 cross-rasterizer floor.
+ *  - Its default tolerance radius of 2 scores a whole-page 1px misregistration
+ *    as exactly 1.000000. The criterion pins radius 1 for that reason.
+ * See docs/form-print-readiness/official-fidelity-criterion-v1.md sections 1.2
+ * and 2.1. Use `cell-edge-f1-v1` in ./official-fidelity.ts for gating.
+ */
 export const LAYERED_EDGE_EVIDENCE_POLICY = Object.freeze({
   promotionEligible: false,
-  authoritativeVisualGate: "official-complete-page-v1",
-  replacesAuthoritativeGate: false
+  authoritativeVisualGate: "official-fidelity-v1",
+  replacesAuthoritativeGate: false,
+  supersededBy: "cell-edge-f1-v1",
+  scope: "page-global"
 } as const);
 
 /**
@@ -104,20 +117,45 @@ export function compareSymmetricGrayscaleEdges(
   };
 }
 
-function grayscaleSobelEdges(image: PNG, threshold: number) {
-  const width = image.width;
-  const height = image.height;
-  const grayscale = new Float32Array(width * height);
-  const edges = new Uint8Array(width * height);
-
-  for (let index = 0; index < grayscale.length; index += 1) {
+/**
+ * Composite-over-white luminance (criterion primitive P2).
+ *
+ * Storage is IEEE-754 binary64 on BOTH sides. This is a correctness
+ * requirement, not an optimization: the Python audit must reproduce these
+ * integers exactly, and emulating a JS `Float32Array` precision detail in
+ * Python would pin an implementation artifact into the audit forever, where a
+ * future refactor of one line desynchronizes the two implementations with no
+ * test able to see it. binary64 is native in both languages and the expression
+ * is evaluated left-to-right under IEEE rules in both.
+ */
+export function compositeLuminance(image: PNG): Float64Array {
+  const luminance = new Float64Array(image.width * image.height);
+  for (let index = 0; index < luminance.length; index += 1) {
     const offset = index * 4;
     const alpha = image.data[offset + 3] / 255;
     const red = image.data[offset] * alpha + 255 * (1 - alpha);
     const green = image.data[offset + 1] * alpha + 255 * (1 - alpha);
     const blue = image.data[offset + 2] * alpha + 255 * (1 - alpha);
-    grayscale[index] = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+    luminance[index] = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
   }
+  return luminance;
+}
+
+/**
+ * Sobel edge mask (criterion primitive P3). Border pixels are never edges,
+ * matching the loop bounds pinned by the criterion.
+ *
+ * `Math.hypot` is deliberately NOT used: it is a scaled libm-class routine and
+ * is not bit-reproducible against Python's `math.hypot`. Two prior
+ * investigations found the two agreed on this data, which is luck, not a
+ * guarantee. The squared comparison is provably deterministic.
+ */
+export function sobelEdgeMask(image: PNG, threshold: number): Uint8Array {
+  const width = image.width;
+  const height = image.height;
+  const grayscale = compositeLuminance(image);
+  const edges = new Uint8Array(width * height);
+  const thresholdSquared = threshold * threshold;
 
   for (let y = 1; y < height - 1; y += 1) {
     for (let x = 1; x < width - 1; x += 1) {
@@ -133,7 +171,7 @@ function grayscaleSobelEdges(image: PNG, threshold: number) {
         -topLeft + topRight - 2 * left + 2 * right - bottomLeft + bottomRight;
       const gradientY =
         -topLeft - 2 * top - topRight + bottomLeft + 2 * bottom + bottomRight;
-      if (Math.hypot(gradientX, gradientY) >= threshold) {
+      if (gradientX * gradientX + gradientY * gradientY >= thresholdSquared) {
         edges[y * width + x] = 1;
       }
     }
@@ -141,7 +179,16 @@ function grayscaleSobelEdges(image: PNG, threshold: number) {
   return edges;
 }
 
-function dilate(mask: Uint8Array, width: number, height: number, radius: number) {
+function grayscaleSobelEdges(image: PNG, threshold: number) {
+  return sobelEdgeMask(image, threshold);
+}
+
+/**
+ * Euclidean-disc dilation (criterion primitive P5). The criterion uses the
+ * disc form EVERYWHERE, with no exceptions; see `dilateMask` in
+ * ./official-page-diff.ts for the legacy square (Chebyshev) form it replaces.
+ */
+export function dilate(mask: Uint8Array, width: number, height: number, radius: number) {
   if (radius === 0) return mask.slice();
   const result = new Uint8Array(mask.length);
   for (let y = 0; y < height; y += 1) {
@@ -169,7 +216,15 @@ function dilate(mask: Uint8Array, width: number, height: number, radius: number)
   return result;
 }
 
-function ratio(numerator: number, denominator: number) {
+/** Criterion primitive P8. Pins today's semantics exactly. */
+export function ratio(numerator: number, denominator: number) {
   if (denominator === 0) return numerator === 0 ? 1 : 0;
   return numerator / denominator;
+}
+
+/** Criterion primitive P8. */
+export function f1Score(precision: number, recall: number) {
+  return precision + recall === 0
+    ? 0
+    : (2 * precision * recall) / (precision + recall);
 }
