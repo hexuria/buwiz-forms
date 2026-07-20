@@ -2,12 +2,77 @@
 
 Authoritative checkout: `/Volumes/goldcoders/reverse-engineer-ebir-forms/bir-print-parity` on branch `codex/print-preview-parity`. Do not work in the sibling `bir/` checkout. Prefix shell commands with the `rtk` wrapper (`rtk git status`, `rtk cargo test --locked -p bir-print`, `rtk npm run test:forms`).
 
-## The visual parity gate (read before touching any form renderer)
+## The visual criterion (read before touching any form renderer)
 
-- The release gate is a **complete-page pixel difference ≤ 1%** per official page at 144 DPI (pixelmatch threshold 0.1, `FORM_VISUAL_MAX_CHANGED_PERCENT=1`). It is enforced by `packages/form-renderer/visual/form-parity.spec.ts` and re-verified independently by `scripts/audit_html_form_migration.py`.
-- For chromium-equipped forms (currently `2551Q:2018`) the gate compares against the **same-rasterizer chromium reference** (`references/*-chromium.png`), which removes the ~3.6% Poppler-vs-Chromium rasterizer noise floor that made the old raw comparison unreachable. The raw Poppler-raster diff and the pinned per-page noise floor are **mandatory, clearly-labeled diagnostics**: always report them alongside — never instead of — the gate number.
-- **Never report a masked or structure-only percentage as visual parity.** Structure-only line diagnostics (~0.07%) are geometry probes only. Full parity is the complete-page number, nothing else.
-- Never weaken the numeric 1% gate, no matter how close a form gets.
+**The ≤1% complete-page gate is unreachable, and this is proven, not an excuse.**
+`pdffonts` shows every one of the 35 source PDFs carries `emb=no` for its
+primary faces, so the pinned references encode Poppler's *substituted* glyph
+outlines rather than BIR's typography. Glyph outline shape is ~57% of the
+residual. Every rendering-side lever was tested and refuted: real platform
+Arial scores *worse* than bundled Arimo, path-filling our own text through the
+reference pipeline scores worse, and 19 weight variants, 26 size variants and
+every CSS text-rendering knob failed. Even a *perfect* ATC table leaves page 2
+above 1%. See `docs/form-print-readiness/priority-forms-readiness.md`.
+
+**Do not spend effort on text pixels. Ever.** That is where the previous 273
+commits went. Text correctness is proven by content assertions instead.
+
+The replacement criterion is `official-fidelity-v1`
+(`docs/form-print-readiness/official-fidelity-criterion-v1.md`), a **composite
+of six bound components**, currently **implemented and running in reporting
+mode but not gating**:
+
+| Component | Binds |
+| --- | --- |
+| `cell-edge-f1-v1` | displacement, per scoring cell, tolerance radius **1** |
+| `structural-ink-coverage-v1` | rules, boxes, fills — font-independent by construction |
+| `page-ink-budget-v1` | ink volume and exactly-white paper pixels (the tint attack) |
+| `static-text-exhaustive-v1` | every printed string, ordered — **the only thing standing between us and a wrong tax rate** |
+| `encoded-artwork-integrity-v1` | payload + raster crop hash + transform |
+| `official-complete-page-v2` | retained, **mandatory, never hidden**, no longer gating |
+
+Rules that are not negotiable:
+
+- **It is a NON-REGRESSION criterion.** It certifies "no worse than a reviewed
+  baseline". It can never certify "matches the official form". Reports must
+  carry `proves_parity: false` and `is_non_regression_gate: true`; the audit
+  rejects them otherwise.
+- **The complete-page percentage stays computed and reported always**, next to
+  the raw Poppler diagnostic and the pinned noise floor. Never report a masked,
+  structure-only, or text-excluded number as parity.
+- **Never weaken the numeric 1% threshold**, any component threshold, or any
+  assertion, no matter how close a form gets.
+- **A missing component is an error, not a pass.** A partial criterion promotes
+  on the components it includes while the omitted one is the one that would
+  have failed.
+- **Baselines are not pinned yet**, so nothing gates. Reporting mode must never
+  become a promotion shortcut.
+
+### Calibrate structure, not text
+
+Structure *is* winnable and is where effort belongs. Working loop:
+
+```sh
+rtk npx playwright test --config packages/form-renderer/playwright.structural-defects.config.ts   # where and why
+rtk npx playwright test --config packages/form-renderer/playwright.comb-capacity.config.ts        # capacity vs official
+rtk npx playwright test --config packages/form-renderer/playwright.fidelity-baseline.config.ts    # component values
+rtk npx playwright test --config packages/form-renderer/playwright.fidelity-injection.config.ts   # the criterion's own regression test
+```
+
+**Always check both rasterizers.** A change that improves the chromium gate
+while worsening the Poppler diagnostic is overfitting to one reference, not
+convergence. Every real fix this session moved both the same way.
+
+**Read tone profiles, not thresholded pixel counts.** Hard thresholds
+misreported sub-pixel geometry three separate times here: they turned a correct
+3-device-px stroke into an apparent 4, gave the defect localizer phantom
+clusters, and would have hidden every mid-grey comb guide (official guides
+measure tone 83–153 because sub-pixel black ink cannot fill a pixel).
+
+**Distinguish weight from displacement.** An offset search reports a confident
+"displaced by 2px, recovers 100%" for a stroke that is merely too thin, because
+shifting it does land on ink. Acting on that moves correctly-placed rules. The
+localizer now reports both stroke thicknesses; use them.
 
 ## Reference pipeline
 

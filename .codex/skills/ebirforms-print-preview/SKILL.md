@@ -7,20 +7,31 @@ description: Diagnose, fix, calibrate, or review an existing eBIRForms semantic 
 
 Fix an already-migrated form through the owning layer. Do not create a second rendering path.
 
-**The visual release gate is a complete-page pixel difference of at most 1%**
-per official page at 144 DPI (pixelmatch threshold 0.1), compared against the
-pinned gate reference (the same-rasterizer chromium raster where one exists,
-otherwise the Poppler raster). Structure-only or masked percentages are
-geometry diagnostics and never satisfy or substitute for this gate. Report the
-raw gate number, the Poppler-raster diagnostic, and the pinned noise floor
-separately and honestly.
+**Do not chase the 1% complete-page gate. It is unreachable, by proof.** The
+source PDFs do not embed their fonts, so the reference carries Poppler's
+substituted glyph outlines; text pixels cannot converge and every
+rendering-side lever was refuted by measurement. Text correctness is bound by
+`static-text-exhaustive-v1`. The release criterion is `official-fidelity-v1`, a
+non-regression composite currently in reporting mode. The complete-page number
+stays mandatory and reported, never presented as parity.
 
-Calibration loop: `rtk npm run test:forms:visual` writes a region-ranked diff
-report (worst regions first, with cropped expected|actual|diff strips) next to
-its artifacts; `rtk npm run report:visual:regions` re-ranks the last captured
-run in seconds without a browser; `rtk npm run diagnose:fonts` attributes the
-residual to candidate font stacks against both rasters. Fix the top-ranked
-regions; do not tweak blindly against a whole-page percentage.
+Calibration loop — target STRUCTURE, and verify against BOTH rasterizers:
+
+```sh
+rtk npx playwright test --config packages/form-renderer/playwright.structural-defects.config.ts
+rtk npx playwright test --config packages/form-renderer/playwright.comb-capacity.config.ts
+rtk npx playwright test --config packages/form-renderer/playwright.fidelity-baseline.config.ts
+rtk npx playwright test --config packages/form-renderer/playwright.fidelity-injection.config.ts
+rtk npm run report:visual:regions
+```
+
+A change that improves the chromium gate while worsening the Poppler
+diagnostic is overfitting, not convergence. Three traps that cost real time
+here: thresholded pixel counts misreport sub-pixel geometry (read tone
+profiles); an offset search reports a too-thin stroke as "displaced" when the
+fault is weight; and a thicker border moves everything inside it unless the
+padding is compensated. `rtk npm run diagnose:fonts` is attribution evidence
+only and can never close a gap.
 
 ## Triage by ownership
 

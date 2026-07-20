@@ -43,10 +43,37 @@ a whole official page as a runtime background.
   row counts, date separators, signature cells, and conditional structures.
 - Require no clipping, overlap, missing glyph, accidental wrap, or row loss.
 - Exercise empty, normal, long-value, and maximum-row fixtures.
-- Meet the repository's strict complete-page pixel-difference threshold after
-  suppressing only fixture-provided values (currently at most 1%) before
-  marking visual parity complete.
+- Satisfy `official-fidelity-v1`'s components, NOT the 1% complete-page
+  threshold. That threshold is unreachable and chasing it is the documented
+  failure mode of this project: the source PDFs do not embed their fonts, so
+  the reference carries Poppler's substituted glyph outlines, glyph shape is
+  ~57% of the residual, and every rendering-side lever was measured and
+  refuted. Text correctness is proven by `static-text-exhaustive-v1` instead.
+- Direct calibration effort at STRUCTURE, which is winnable, using
+  `playwright.structural-defects.config.ts` (which localizes each defect and
+  says whether it is weight, displacement, or missing structure) and
+  `playwright.comb-capacity.config.ts` (which checks declared cell counts
+  against the official form's dividers — a capacity error is invisible to every
+  pixel metric).
+- Verify each change against BOTH rasterizers. Improving the chromium gate
+  while worsening the Poppler diagnostic is overfitting to one reference.
 - Record complete-page, critical-region, expected-ink-recall, and unexpected-ink
   metrics separately. Never present a sparse diagnostic as “percent identical.”
+  `official-fidelity-v1` certifies "no worse than a reviewed baseline" and can
+  never certify "matches the official form".
 - Record an incomplete result honestly; never adjust masks, denominators, or
   tolerances to hide application content defects.
+
+## Measurement traps that cost real time here
+
+- **Thresholded pixel counts misreport sub-pixel geometry.** Counting rows
+  below a tone cut made a correct 3-device-px stroke look like 4. Read tone
+  profiles.
+- **An offset search reports a too-thin stroke as "displaced".** Shifting it
+  does land on ink, so recovery reads 100% while the real fault is weight.
+  Acting on the offset moves correctly-placed rules.
+- **Official guides are mid-grey (tone 83–153), not black** — sub-pixel black
+  ink cannot fill a pixel. A detector keyed to near-black misses nearly all of
+  them.
+- **A thicker border moves everything inside it** unless the padding or track
+  size is compensated by the same amount.

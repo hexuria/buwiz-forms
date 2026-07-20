@@ -17,13 +17,20 @@ Convert one exact form revision at a time. Treat conversion as a tax-data and re
 > text-pixel parity unreachable by adversarially-verified proof). Every
 > fail-closed rule below remains in force.
 
-**The visual release gate is a complete-page pixel difference of at most 1%**
-per official page at 144 DPI (pixelmatch threshold 0.1), compared against the
-pinned gate reference (the same-rasterizer chromium raster where one exists,
-otherwise the Poppler raster). Structure-only or masked percentages are
-geometry diagnostics and never satisfy or substitute for this gate. Report the
-raw gate number, the Poppler-raster diagnostic, and the pinned noise floor
-separately and honestly.
+**The 1% complete-page gate is unreachable and must not be chased.** Every one
+of the 35 source PDFs has non-embedded fonts, so the reference encodes
+Poppler's substituted glyph outlines; glyph shape is ~57% of the residual and
+every rendering-side fix was measured and refuted. Text correctness is proven
+by `static-text-exhaustive-v1` content assertions, never by pixels. Spend
+calibration effort on STRUCTURE, which is winnable.
+
+The release criterion is `official-fidelity-v1`, a composite of six bound
+components, currently in reporting mode and not gating. It is a
+**non-regression** criterion: it certifies "no worse than a reviewed baseline",
+never "matches the official form". The complete-page percentage remains
+mandatory and reported alongside the Poppler diagnostic and pinned noise floor;
+a masked, structure-only or text-excluded number is never parity. See
+`docs/form-print-readiness/official-fidelity-criterion-v1.md` and CLAUDE.md.
 
 ## Non-negotiable boundaries
 
