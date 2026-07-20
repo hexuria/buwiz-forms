@@ -75,7 +75,14 @@ CRITERIA = [
 # report that says done when nothing was done is worse than no report, so
 # substring-matching a specific subject line is the only acceptable form here.
 CAPACITY_COMMIT = "Correct 23 charbox capacities across seven forms"
-WEIGHT_COMMIT = "Apply the verified stroke-weight corrections"
+# Subjects that count as a committed weight/stroke correction. 2551Q's landed
+# before this wave had a naming convention, under its own subject; listing it
+# explicitly is honest, whereas loosening the match to catch it would reopen
+# the false-positive hole described above.
+WEIGHT_COMMITS = (
+    "Apply the verified stroke-weight corrections",
+    "Fix 2551Q page-one structural displacement",
+)
 
 
 def git_log_subjects() -> list[str]:
@@ -91,10 +98,54 @@ def git_log_subjects() -> list[str]:
         return []
 
 
+def weight_reviewed_forms() -> set[str]:
+    """Which forms actually received a committed weight correction.
+
+    PER FORM, deliberately. A whole-repo subject match reported weight review
+    complete on all ten the moment one commit landed covering three of them —
+    while the other six had just been REVERTED for causing clipping. Since this
+    report is the stop condition for the Wave 0 goal loop, a false green ends
+    the work early with six forms unfixed. So the question asked here is the
+    narrow, checkable one: did a weight commit touch THIS form's stylesheet?
+    """
+    import subprocess
+
+    reviewed: set[str] = set()
+    try:
+        out = subprocess.run(
+            ["git", "log", "--format=%H %s", "-80"],
+            cwd=REPO, capture_output=True, text=True, timeout=30,
+        )
+        if out.returncode != 0:
+            return reviewed
+        for line in out.stdout.splitlines():
+            sha, _, subject = line.partition(" ")
+            if not any(w in subject for w in WEIGHT_COMMITS):
+                continue
+            files = subprocess.run(
+                ["git", "show", "--name-only", "--format=", sha],
+                cwd=REPO, capture_output=True, text=True, timeout=30,
+            )
+            for path in files.stdout.splitlines():
+                match = re.search(r"src/forms/Form([0-9A-Za-z]+)\.(css|tsx)$", path)
+                if match:
+                    reviewed.add(match.group(1).upper())
+                # 2551Q is the exception: it has no Form2551Q.css because it was
+                # the first form migrated and its rules live in the shared
+                # print.css. Matching only src/forms/ reported it unreviewed
+                # despite its structural corrections being committed and
+                # verified against both rasterizers.
+                elif path.endswith("src/print.css"):
+                    reviewed.add("2551Q")
+    except Exception:
+        return reviewed
+    return reviewed
+
+
 def evaluate(subjects: list[str]) -> list[dict]:
     rows = []
     capacity_done = any(CAPACITY_COMMIT in s for s in subjects)
-    weight_done = any(WEIGHT_COMMIT in s for s in subjects)
+    weight_forms = weight_reviewed_forms()
 
     for code, revision, rust_stem, spec_stem, ref_stem in FORMS:
         rust = REPO / f"crates/bir-print/src/html_forms/{rust_stem}.rs"
@@ -127,7 +178,7 @@ def evaluate(subjects: list[str]) -> list[dict]:
             "spec_retargeted": "-chromium.png" in spec_text,
             "geometry_contract": contract,
             "capacity_reviewed": capacity_done,
-            "weight_reviewed": weight_done,
+            "weight_reviewed": code.upper() in weight_forms,
             "static_text": static_text,
             "region_table": region_table,
             "structure_diff": "structure-diff" in spec_text or "structural_diff" in spec_text,
