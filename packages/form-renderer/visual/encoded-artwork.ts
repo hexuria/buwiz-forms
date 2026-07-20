@@ -215,9 +215,14 @@ export function verifyEncodedArtwork(
 
 /**
  * Reviewed artwork pins for 2551Q:2018. Crop rectangles come from the reviewed
- * critical-region table; crop hashes are pinned by a reviewer after the
- * structural fixes land, because a crop hash captured over a known-defective
- * render would pin the defect.
+ * geometry assertions. Hashes were pinned 2026-07-20, after the Milestone B
+ * structural fixes landed (pinning earlier would have hashed a known-defective
+ * render): symbol-data hashes are the SHA-256 of the reviewed module paths in
+ * official2551QAssets.ts as rendered into the DOM, and crop hashes were
+ * captured from the deterministic Playwright raster (byte-identical across
+ * runs, verified against two independent captures) after side-by-side review
+ * of each crop against the official reference — module patterns correspond,
+ * no mirroring, correct framing on both pages.
  */
 export const OFFICIAL_2551Q_ARTWORK_PINS: readonly EncodedArtworkPin[] = [
   {
@@ -225,19 +230,32 @@ export const OFFICIAL_2551Q_ARTWORK_PINS: readonly EncodedArtworkPin[] = [
     page: 1,
     selector: ".official-barcode > .official-pdf417-symbol",
     payload: "2551Q 01/18ENCS P1",
-    crop: { x: 852, y: 119, width: 323, height: 74 }
+    symbolDataSha256:
+      "7ecda284c8c42dc6c64631313ff25e705c11450b9a1139223978f43e7d8168c2",
+    crop: { x: 852, y: 119, width: 323, height: 74 },
+    cropSha256:
+      "8c37b467d417c1ee395503249bcd3d95a6f82434ada0388f01303e7535f19bfe"
   },
   {
     id: "page-1-government-seal",
     page: 1,
     selector: ".government-seal",
-    crop: { x: 490, y: 44, width: 58, height: 50 }
+    crop: { x: 490, y: 44, width: 58, height: 50 },
+    cropSha256:
+      "dbd002394d47f53d844aa58f3ba32f35d9b8aaa22460bffab3cbef12deab716d"
   },
   {
     id: "page-2-pdf417",
     page: 2,
     selector: ".page-two-barcode > .official-pdf417-symbol",
     payload: "2551Q 01/18ENCS P2",
-    crop: { x: 852, y: 119, width: 323, height: 74 }
+    symbolDataSha256:
+      "d8c1d2fb417d8c4f83c147a5af7c3aee41f811beaa56ca39e20f77117c2c923e",
+    // Page 2's symbol sits higher than page 1's; this rectangle matches the
+    // reviewed geometry assertion (a copy of page 1's rect was here before,
+    // which would have hashed blank paper above the real symbol).
+    crop: { x: 849, y: 97, width: 326, height: 75 },
+    cropSha256:
+      "6a41a55cb98ce2e4c3d99a7c4b004bff1d00e3010a8766d909a8c16a75ba914f"
   }
 ];

@@ -47,6 +47,11 @@ import {
   renderEnvelope
 } from "./support/render-utils";
 import {
+  OFFICIAL_2551Q_ARTWORK_PINS,
+  verifyEncodedArtwork,
+  type ArtworkObservation
+} from "./encoded-artwork";
+import {
   criticalRegionsFor,
   PAGE_ONE_CRITICAL_REGIONS,
   PAGE_TWO_CRITICAL_REGIONS,
@@ -626,6 +631,54 @@ test("2551Q PDF417 artwork keeps the reviewed source geometry", async ({ page })
     naturalHeight: (image as HTMLImageElement).naturalHeight,
     naturalWidth: (image as HTMLImageElement).naturalWidth
   }))).toEqual({ naturalHeight: 83, naturalWidth: 95 });
+});
+
+test("2551Q encoded artwork matches the reviewed pins (encoded-artwork-integrity-v1)", async ({
+  page
+}) => {
+  await renderEnvelope(
+    page,
+    readFixture("packages/form-contracts/fixtures/2551q-6-rows.json")
+  );
+  const pages = page.locator(".form-page");
+  await expect(pages).toHaveCount(2);
+
+  const rasters = new Map<number, PNG>();
+  for (const pageNumber of [1, 2]) {
+    const buffer = await pages.nth(pageNumber - 1).screenshot({
+      animations: "disabled",
+      caret: "hide"
+    });
+    rasters.set(pageNumber, PNG.sync.read(buffer));
+  }
+
+  const observations: ArtworkObservation[] = [];
+  for (const pin of OFFICIAL_2551Q_ARTWORK_PINS) {
+    const element = pages.nth(pin.page - 1).locator(pin.selector);
+    if ((await element.count()) === 0) continue; // reported as "missing"
+    observations.push({
+      ...(await element.evaluate((node) => ({
+        pathData: node.querySelector("path")?.getAttribute("d") ?? null,
+        title:
+          node.querySelector("title")?.textContent ??
+          node.getAttribute("title"),
+        transform: getComputedStyle(node).transform,
+        naturalWidth:
+          node instanceof HTMLImageElement ? node.naturalWidth : null,
+        naturalHeight:
+          node instanceof HTMLImageElement ? node.naturalHeight : null
+      }))),
+      id: pin.id,
+      page: pin.page
+    });
+  }
+
+  const violations = verifyEncodedArtwork(
+    OFFICIAL_2551Q_ARTWORK_PINS,
+    observations,
+    rasters
+  );
+  expect(violations).toEqual([]);
 });
 
 test("2551Q page-one typography keeps the reviewed bundled-font calibration", async ({
