@@ -339,7 +339,16 @@
 .part-three-0605 > h2 {
   height: 20pt;
   display: grid;
-  grid-template-columns: 75pt 1fr;
+  /* Finding 1 (global-alignment): the three Part headings must start at a
+   * single common x. The contract left-aligns every visible heading glyph at
+   * x=206.29pt — Part II "Computation of Tax" (run x0 42.72 + 73 leading
+   * spaces) and Part III "Details of Payment" (identical 73 leading spaces)
+   * begin at exactly 206.29, and Part I "Background Information" begins within
+   * metric noise of the same x. Measured h2 content-left is 14.99pt, so col1 =
+   * 206.29 - 14.99 = 191.3pt seats the heading column's left edge on 206.29.
+   * Previously col1 was 75/166/74pt for the three parts, scattering the
+   * headings across 181-259pt. */
+  grid-template-columns: 191.3pt 1fr;
   align-items: center;
   border-bottom: 1pt solid #111;
   padding: 0 1pt;
@@ -348,8 +357,28 @@
   letter-spacing: .1pt;
 }
 .part-one-0605 > h2 { height: 19pt; }
+/* Finding 1: the heading text must LEFT-align to the shared 206.29pt column
+ * origin (the official left-aligns it, it is not centred), so all three start
+ * at the same x. Was text-align:center on Part I/III, which pushed them to 241
+ * and 259pt while left-aligned Part II sat at 181pt. Letter-spacing is left as
+ * it was here and corrected under finding 2. */
 .part-one-0605 > h2 b,
-.part-three-0605 > h2 b { text-align: center; letter-spacing: 4.5pt; }
+.part-two-0605 > h2 b,
+.part-three-0605 > h2 b { text-align: left; }
+/* Finding 2 (global-alignment): the official DOES letter-space these headings,
+ * but by inserting one literal space between characters — the contract stores
+ * them as "B a c k g r o u n d    I n f o r m a t i o n",
+ * "C o m p u t a t i o n   o f   T a x" and "D e t a i l s   of   P a y m e n t".
+ * One inter-character space glyph is 0.278em = 2.24pt at 8.06pt, and solving
+ * each heading's official run width for CSS letter-spacing gives 2.35 / 2.24 /
+ * 2.11pt (mean ~2.24pt, i.e. exactly one space). So the official spacing is
+ * kept, not removed. Our previous 4.5pt was our own invention and nearly
+ * doubled the official run width (Part I 180pt vs official 135pt), while Part II
+ * carried no spacing at all. Both are corrected to the single official value of
+ * 2.24pt so all three read identically to the official and to each other. */
+.part-one-0605 > h2 b,
+.part-two-0605 > h2 b,
+.part-three-0605 > h2 b { letter-spacing: 2.24pt; }
 .identity-row-0605 {
   height: 36pt;
   display: grid;
@@ -370,12 +399,41 @@
  * border by the same amount. The .guided-field-0605 grid is inset via padding
  * (box-sizing: border-box), leaving the box border and box width untouched. */
 .identity-row-0605 .item-10-0605 .guided-field-0605 { padding: 0 2pt; }
-.identity-row-0605 .item-12-0605 > div { margin: 0 3pt 2pt 16pt; }
+/* Finding 3 (global-alignment): the item 9-12 field boxes must share one top
+ * edge. The contract puts every box on this row at y0=246.12pt (item 9 TIN
+ * groups, item 10 RDO, item 11 I/N answer boxes and item 12 all have
+ * y0=246.12, y1=265.08). Items 9 and 10 already sit at 245.46pt via the shared
+ * header-value 4pt top margin; item 12 carried margin-top:0, floating its box
+ * ~4pt high at 241.46. Restoring the 4pt top margin seats it on the same
+ * 245.46pt edge as items 9/10 (left 16pt and right 3pt are unchanged). */
+.identity-row-0605 .item-12-0605 > div { margin: 4pt 3pt 2pt 16pt; }
 .identity-row-0605 .item-12-0605 .adaptive-plain-value {
   white-space: normal;
   overflow-wrap: anywhere;
   line-height: .95;
 }
+/* Finding 4 (global-alignment): the item 9, 13 and 15 description labels must
+ * start on the contract common left edge x=29.28pt (their text_run x0). Outside
+ * .header-fields-0605 the .item-label-0605 span has no flex/gutter, so it laid
+ * out inline as "number + nbsp + text": the description start floated with the
+ * digit count (item 9 at 22.89pt, items 13/15 at 27.88pt) and a wrapped line
+ * (item 15's "Address") fell back under the number at 13.99pt. Taking the number
+ * out of flow and padding the label to 15.29pt (label left is 13.99pt) seats the
+ * description — and every wrapped continuation — on 29.28pt. The nbsp spacer is
+ * no longer needed. Item 13's label keeps its own absolute positioning (it is
+ * already a containing block); items 9 and 15 get position:relative so their
+ * absolute number anchors to the label. */
+.identity-row-0605 .item-9-0605 > .item-label-0605,
+.address-zip-0605 > div:first-child > .item-label-0605 { position: relative; }
+.identity-row-0605 .item-9-0605 > .item-label-0605,
+.name-phone-0605 > div:first-child > .item-label-0605,
+.address-zip-0605 > div:first-child > .item-label-0605 { padding-left: 15.29pt; }
+.identity-row-0605 .item-9-0605 > .item-label-0605 > b,
+.name-phone-0605 > div:first-child > .item-label-0605 > b,
+.address-zip-0605 > div:first-child > .item-label-0605 > b { position: absolute; left: 0; top: 0; }
+.identity-row-0605 .item-9-0605 > .item-label-0605 > i,
+.name-phone-0605 > div:first-child > .item-label-0605 > i,
+.address-zip-0605 > div:first-child > .item-label-0605 > i { display: none; }
 /* Finding 1 (reviewer-authorised divergence, see Tin0605 in Form0605.tsx):
  * item 9 renders as full-width character boxes in the modern 000-000-000-00000
  * format — 14 character cells in four groups (3-3-3-5) with 3 greyed separator
@@ -405,12 +463,19 @@
   background: #c0c0c0;
 }
 .tin-overflow-plain-0605 { height: 100%; }
+/* Finding 3: item 11's I/N answer boxes must sit on the same top edge as the
+ * items 9/10/12 boxes (official y0=246.12pt). They were vertically centred in
+ * this 21pt span, floating their tops at ~243.8pt — ~1.7pt above the shared
+ * 245.46pt edge. A 3.3pt top pad (box-sizing:border-box, so the span stays
+ * 21pt) lowers the centred boxes onto that edge while keeping the "I"/"N"
+ * letters centred against each box. */
 .classification-0605 > span:last-child {
   height: 21pt;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12pt;
+  padding-top: 3.3pt;
   padding-left: 7pt;
 }
 .classification-0605 .check-box { width: 16pt; height: 16pt; }
@@ -534,7 +599,10 @@
   border: 2pt solid #111;
   background: #c0c0c0;
 }
-.part-two-0605 > h2 { grid-template-columns: 166pt 1fr; height: 20pt; }
+/* Finding 1: col1 override removed; Part II now shares the 191.3pt heading
+ * column so "Computation of Tax" starts at the common 206.29pt like Part I/III
+ * (was 166pt, which left-aligned it at 181pt). */
+.part-two-0605 > h2 { height: 20pt; }
 .item-19-row-0605,
 .item-21-row-0605 {
   height: 31pt;
@@ -557,8 +625,14 @@
  * and the decimal point sat at 24.8% of the box where the official form puts
  * it at ~88%. Scoping this to the label leaves the money box as the grid it
  * was always meant to be. */
+/* Finding 4 (global-alignment): the item 19/21 description must start at the
+ * contract common left edge x=29.28pt (the "Basic Tax" / "Total Amount Payable"
+ * run x0). The 12pt gap between the "19"/"21" tag and the text pushed the
+ * description to 36.88pt — ~7.6pt right of items 9/13/15. The tag box ends at
+ * ~24.89pt, so a 4.4pt gap seats the description on 29.28. The tag (first flex
+ * item) is unmoved. */
 .item-19-row-0605 > span:first-child,
-.item-21-row-0605 > span:first-child { display: flex; gap: 12pt; padding-left: 2pt; }
+.item-21-row-0605 > span:first-child { display: flex; gap: 4.4pt; padding-left: 2pt; }
 .item-19-row-0605 > .money-0605,
 .item-21-row-0605 > .money-0605,
 .item-19-row-0605 > .adaptive-plain-value,
@@ -585,7 +659,9 @@
   grid-template-columns: 34pt 108pt 14pt 107pt 16pt 95pt 16pt 1fr;
   align-items: end;
 }
-.penalties-row-0605 > span { position: absolute; left: 2pt; top: -10pt; display: flex; gap: 12pt; }
+/* Finding 4: item 20 "Add: Penalties" description shares the same 4.4pt tag gap
+ * as items 19/21 so it too starts on the common 29.28pt left edge (was 12pt). */
+.penalties-row-0605 > span { position: absolute; left: 2pt; top: -10pt; display: flex; gap: 4.4pt; }
 .penalties-row-0605 label {
   position: relative;
   height: 23.5pt;
@@ -715,7 +791,10 @@
 /* Only the Part III title rule is heavy officially: y=682.30 is a 1.92pt black
  * fill (gray 0.0) -> 2 device px, while the Part I (y=232.85) and Part II
  * (y=452.59) title rules are 0.96pt -> 1 px and must keep the shared 1pt. */
-.part-three-0605 > h2 { height: 18pt; grid-template-columns: 74pt 1fr; border-bottom-width: 1.5pt; }
+/* Finding 1: col1 override removed; Part III shares the 191.3pt heading column
+ * so "Details of Payment" starts at the common 206.29pt (was 74pt + centred,
+ * which put it at 259pt). Height and the heavier 1.5pt title rule are kept. */
+.part-three-0605 > h2 { height: 18pt; border-bottom-width: 1.5pt; }
 .payment-table-head-0605 {
   height: 18pt;
   display: grid;
