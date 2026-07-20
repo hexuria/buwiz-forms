@@ -289,6 +289,16 @@
  * 13.32x12.24pt (y0_pt 112.2). A 14x14pt square read visibly larger than the
  * official on paper. */
 .header-option-1601c .check-box { width: 13.4pt; height: 12.2pt; }
+/* The official form knocks every check-box interior out to WHITE inside the
+ * grey option bands. The contract records all eight boxes as p0
+ * knockout_regions over the #d9d9d9 fill: items 2/3 (Amended? / Any Taxes
+ * Withheld?) at y0_pt 108.5-112.4, item 11 (Private/Government) at y0_pt 230.4,
+ * item 13 (payees availing relief Yes/No) at y0_pt 265.8. The shared .check-box
+ * carries no fill, so ours inherited the band grey -- measured interior tone
+ * 217 (#d9d9d9) against the official 255. The value/comb cells already knock
+ * out white via their own #fff, so this closes the last grey bleed the reviewer
+ * flagged. Page two carries no check boxes. */
+.form-1601c-page-one .check-box { background: #fff; }
 
 .part-1601c { margin-top: 2.5pt; }
 .part-1601c > h2,
