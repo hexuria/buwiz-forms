@@ -103,3 +103,70 @@ wholly displaced rule, so every weight defect was misfiled as missing
 structure. Probing at the matched offset instead surfaced 81 weight-related
 clusters. A diagnostic that reports a clean bill of health deserves the same
 scepticism as one that reports a problem.
+
+## The transferable finding: Chromium floors border-width to integer CSS px
+
+Established while calibrating 1601C, verified empirically at several device
+scale factors rather than inferred, and it changes how every remaining form
+should be approached.
+
+Chromium rounds `border-width` **down to whole CSS pixels**, independent of
+device scale factor. Measured ladder:
+
+| declared | rendered |
+| --- | --- |
+| 0.5pt – 1.4pt | 1 px (0.75pt) |
+| 1.5pt – 2pt | 2 px (1.5pt) |
+| 2.25pt – 2.5pt | 3 px (2.25pt) |
+| 3pt | 4 px (3pt) |
+
+Two consequences:
+
+1. **A declared weight hierarchy can be fiction.** All 382 bordered edges in
+   1601C render at exactly 1 CSS px despite the stylesheet declaring `.55pt`,
+   `.7pt`, `1pt` and `1.1pt`. Four distinct declared weights, one rendered
+   weight.
+2. **2551Q's fix worked for a different reason than assumed.** Changing part
+   boundaries from 1pt to 1.5pt succeeded because it crossed the 1px→2px
+   bucket, not because 1.5pt is a BIR weight. The pattern therefore transfers
+   as a **mechanism**, not as a constant — and only official weights that land
+   on the ladder are expressible at all. 1601C has official strokes measuring
+   ~1.10pt and ~1.16pt, which sit between buckets; 1.10pt is closer to today's
+   rendered 0.75pt than to 1.5pt, so "correcting" it would make it worse.
+
+Check the rendered width, not the declared one, before treating any weight as a
+defect.
+
+### 1601C calibration result
+
+Page 1 Poppler 11.8669% → 11.5612%, chromium 12.3656% → 12.1082%. Page 2
+byte-identical. Untoleranced ink measurement (no dilation, so neither side can
+hide under the other's tolerance — the blind spot that hid a 2551Q regression)
+shows **both** directions improving on **both** references: false ink −1272
+(Poppler) / −1358 (chromium), missed ink −5894 / −5980.
+
+Three findings that would have caused damage if acted on naively:
+
+- The three 1486px clusters reported as weight deficits are the opposite:
+  **ours is heavier** than the official (0.51pt vs 0.38pt). The tool's
+  `official=2px/ours=1px` is a sub-pixel phase artifact of a stroke straddling
+  two rows at partial coverage.
+- Under `box-sizing: border-box` a bottom border grows **upward**, so
+  thickening would have moved ink *away* from the official stroke on three of
+  five candidate targets.
+- Page 1 has no global registration offset — every one of 120 alternative
+  whole-page shifts scored worse — but it does drift progressively, roughly
+  +2.3px at y≈315 to −4.4px by y≈1350. Local correction has ~20pp of headroom;
+  global registration has none.
+
+Page 2's dominant residual is **text reflow** in the guidelines block, not
+structure: the text is 89% present but line-wrapping diverges and the official
+continues past where our block ends. No border or registration change addresses
+it.
+
+### Wave 0 gap this surfaced
+
+The nine forms' parity specs still compare against their **Poppler** rasters.
+Chromium references are now pinned for all ten forms, but only 2551Q's spec
+consumes one. Retargeting the other nine is outstanding Wave 0 work, and until
+it happens their reported numbers carry the cross-rasterizer noise floor.

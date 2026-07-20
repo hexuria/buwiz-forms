@@ -248,6 +248,14 @@
 }
 .form-1601c-page-one .part-1601c > h2,
 .form-1601c-page-one .payment-1601c > h2 { font-size: 8pt; }
+/* The official form draws the Part II boundary heavier than the ordinary
+ * interior rules around it: 3 device px at 144 DPI against the 1-2 px of a
+ * normal rule. Chromium floors border-width to whole CSS px, so .55pt through
+ * 1.25pt all rasterize identically at 1px (0.75pt) and the declared weight
+ * hierarchy is inert; 1.5pt is the first step that reaches 2px (3 device px)
+ * and matches the official stroke. Under border-box the bottom border grows
+ * upward, which is also the direction the official ink lies in here. */
+.computation-1601c > h2 { border-bottom-width: 1.5pt; }
 .background-1601c { height: 149.5pt; margin-top: 4pt; }
 .tin-rdo-1601c {
   height: 17.5pt;
@@ -548,12 +556,21 @@
 }
 .payment-other-1601c { height: 17.5pt; }
 .payment-other-1601c > span:first-child { background: #fff; }
+/* The page-foot boundary is the heavy 1.5pt part-boundary stroke again, but it
+ * also sits ~3.7 device px lower in the official form than ours does, because
+ * the stack above it accumulates a small vertical shortfall. Thickening alone
+ * would be actively wrong here: under border-box the bottom border grows
+ * upward, away from the official ink, so the extra weight would land where the
+ * official form has no ink at all. Growing the box to carry its bottom edge
+ * down to the official stroke is what makes the added weight land on target.
+ * This element ends the page, so moving its bottom edge displaces nothing. */
 .machine-validation-1601c {
-  height: 49pt;
+  height: 50.85pt;
   display: grid;
   grid-template-columns: 373pt minmax(0, 1fr);
   border: 1pt solid #111;
   border-top: 0;
+  border-bottom-width: 1.5pt;
 }
 .machine-validation-1601c > span { padding: 2pt 4pt; text-align: center; }
 .machine-validation-1601c > span:first-child { border-right: .7pt solid #111; text-align: left; }
@@ -585,6 +602,19 @@
 .identity-1601c-page-two > .adaptive-plain-value { height: 100%; background: #fff; }
 
 .schedule-1601c { margin-top: 2pt; height: 190.5pt; }
+/* NOT FIXED HERE, deliberately. The schedule heading's top boundary is page
+ * two's largest structural cluster (2309px): the official stroke is 3 device
+ * px at y=221-223 and ours is 2 px at y=224-225, so it is both light and low.
+ * Neither half can be corrected in isolation. Thickening alone is wrong
+ * because border-top grows downward, away from the official ink. Lifting the
+ * whole block is wrong because the schedule interior below is already too
+ * high. Growing the heading upward does fix the stroke -- measured at
+ * chromium 11.8564 -> 11.6467 and poppler 12.0981 -> 11.8889 -- but it
+ * consumes layout inside a fixed-height schedule and fails the unclipped-folio
+ * and plain-value-fit assertions on the 1601c-minimum fixture, whether the
+ * height is taken from the box or clawed back with a negative margin. The
+ * correct fix is a re-derivation of the schedule header stack, not a border
+ * tweak, so it is left for that work rather than bought by weakening a gate. */
 .schedule-1601c > h3 {
   height: 12pt;
   margin: 0;
