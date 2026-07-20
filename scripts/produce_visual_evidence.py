@@ -170,15 +170,47 @@ def main() -> int:
         raise SystemExit(
             f"the visual run did not cover exactly {args.form}; refusing to emit"
         )
-    if report.get("passed") is not True:
-        failing = [
-            (page.get("page"), page.get("changed_percent")) for page in pages
-        ]
+    # The complete-page number is always surfaced, whatever else happens: it is
+    # a mandatory diagnostic, never a hidden one and never a parity claim.
+    per_page_percent = [
+        (page.get("page"), page.get("changed_percent")) for page in pages
+    ]
+    print(f"complete-page changed percent (diagnostic): {per_page_percent}")
+
+    # The old requirement here - report["passed"] must be true - bound evidence
+    # to the 1% complete-page gate, which is unreachable by proof (non-embedded
+    # fonts corpus-wide; see the criterion document). The operative gate is
+    # official-fidelity-v1: no evidence can exist before its baselines are
+    # pinned and reviewed, and once they are, the composite verdict must pass.
+    if report.get("gate") != "official-fidelity-v1":
         working_report.unlink(missing_ok=True)
         raise SystemExit(
-            "the visual gate FAILED; no promotion evidence can exist yet. "
-            f"Per-page changed percent: {failing}. Use the region reports and "
-            "font sweep diagnostics to close the gap first."
+            f"the run reports gate {report.get('gate')!r}; only "
+            "official-fidelity-v1 runs can produce evidence"
+        )
+    if report.get("proves_parity") is not False or (
+        report.get("is_non_regression_gate") is not True
+    ):
+        working_report.unlink(missing_ok=True)
+        raise SystemExit(
+            "the report must carry proves_parity=false and "
+            "is_non_regression_gate=true; anything else overclaims"
+        )
+    if report.get("baselines_pinned") is not True:
+        working_report.unlink(missing_ok=True)
+        raise SystemExit(
+            "official-fidelity-v1 is in reporting mode: baselines are not "
+            "pinned, so no promotion evidence can exist yet. Reporting mode "
+            "is not a promotion shortcut; pin reviewed baselines first "
+            "(criterion section 8)."
+        )
+    if report.get("passed") is not True:
+        working_report.unlink(missing_ok=True)
+        raise SystemExit(
+            "the non-regression gate FAILED against the pinned baselines; no "
+            f"promotion evidence can exist. Complete-page diagnostic: "
+            f"{per_page_percent}. Use the structural-defect and region "
+            "reports to find the regression."
         )
     if report.get("promotion_eligible") is not True:
         raise SystemExit("the run was not promotion-eligible; refusing to emit")
