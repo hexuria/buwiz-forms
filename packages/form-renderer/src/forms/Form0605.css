@@ -929,6 +929,19 @@
 .atc-table-0605 .atc-category-0605 {
   background: #bfbfbf;
 }
+/* Findings 1 & 2 (page-two-atc-and-tax-type): the official indents the ATC
+ * group-header rows relative to the ordinary rows beneath them. Ordinary
+ * descriptions render at the 1.5pt cell padding; the contract (page 2
+ * text_runs) puts the product-group sub-headers a further +14.28pt in
+ * (x0 294.89 vs ordinary 280.61 in the middle column, and the matching +14.28
+ * in the left and right columns), so their padding-left is 1.5 + 14.28 =
+ * 15.78pt. "Excise Tax on Goods" is the OUTER top-level category (contract
+ * x0 80.64 = ordinary) and therefore keeps the flush 1.5pt with no indent
+ * class — the product groups (Alcohol Products directly below it, etc.) nest
+ * one level under it. "Miscellaneous Products/Articles" carries only the
+ * official's two leading spaces (~3.68pt -> padding-left 5.18pt). */
+.atc-table-0605 .atc-category-indent-0605 { padding-left: 15.78pt; }
+.atc-table-0605 .atc-category-subindent-0605 { padding-left: 5.18pt; }
 .atc-table-0605 .atc-narrow-0605 {
   position: relative;
 }
@@ -965,8 +978,48 @@
   font-size: 7pt;
   font-weight: 400;
 }
-.tax-type-table-0605 th { height: 7pt; background: #fff; font-weight: 400; }
-.tax-type-table-0605 td { height: 7.5pt; border-top: 0; border-bottom: 0; text-align: center; font-size: 3.4pt; }
+.tax-type-table-0605 th { height: 7pt; background: #fff; font-weight: 400; font-size: 6.62pt; }
+/* Finding 3 (page-two-atc-and-tax-type): the official tax-type grid prints its
+ * data at 5.78pt and header at 6.62pt on a 6.8pt line pitch (contract 0605-1999
+ * page 2 text_runs: header y274.50 size 6.62; data rows y281.98..350.14 step
+ * 6.84 at size 5.78), and its outer height is pinned at 167 device px = 83.5pt
+ * (the "Tax Type table" critical-region assertion, matching the official rules
+ * at y274.79..356.39). Our render carried a 3.4pt data font on 7.5pt rows,
+ * which read far too small and airy against the official band.
+ *
+ * The official reaches that density by interleaving the wrapped continuation
+ * lines into the empty cells of the rows below (e.g. the long WITHHOLDING
+ * TAX-OTHERS text spills into the ST/SO/SL rows). Our semantic 10-row table
+ * cannot interleave, so we cannot use the full 5.78pt without wrapping enough
+ * rows to overflow the pinned 83.5pt. The two longest descriptions
+ * ("WITHHOLDING TAX-BANKS AND OTHER FINANCIAL INSTITUTIONS" and "WITHHOLDING
+ * TAX-OTHERS (ONE-TIME TRANSACTION NOT SUBJECT TO CAPITAL GAINS TAX)") already
+ * wrap at 4pt, so a bigger font is only possible with exactly those two rows
+ * doubling. 5.0pt is the largest size that stays in that stable two-wrap regime
+ * (a third row, WITHHOLDING TAX - PERCENTAGE TAX ON WINNING AND PRIZES, only
+ * begins to wrap at 5.25pt), a ~47% increase toward the official 5.78pt. The
+ * line-height then packs the resulting 12 physical lines (8 single + 2 double
+ * rows) so the whole table lands on its pinned 83.5pt outer height: 1.22 was
+ * dialled against the "Tax Type table" critical-region assertion (measured
+ * table height 110.6px at 1.21 and 112.3px at 1.23 vs the 111.3px pin, so 1.22
+ * sits dead-centre, ~+0.1px), giving ~2px leading — far tighter than the old
+ * airy rows. The 5pt min row-height never dominates the 6.1pt line box. */
+.tax-type-table-0605 td {
+  height: 5pt;
+  border-top: 0;
+  border-bottom: 0;
+  text-align: center;
+  /* The base .reference-tables-0605 td rule sets white-space: nowrap, which at
+   * this larger font would overflow and CLIP the two longest descriptions
+   * ("...FINANCIAL INSTITUTIONS" and "...CAPITAL GAINS TAX)"). Allow wrapping so
+   * they fall to a second line (the same two rows the official wraps) instead of
+   * being cut off. Measured: exactly rows 6 and 10 wrap (12 physical lines),
+   * stable from 4.4pt up to ~5.0pt. innerText re-joins the wrapped lines, and
+   * the static-text assertions collapse whitespace, so wording is unaffected. */
+  white-space: normal;
+  font-size: 5pt;
+  line-height: 1.22;
+}
 .tax-type-table-0605 th:nth-child(1), .tax-type-table-0605 td:nth-child(1) { width: 57pt; }
 .tax-type-table-0605 th:nth-child(2), .tax-type-table-0605 td:nth-child(2) { width: 129pt; }
 .tax-type-table-0605 th:nth-child(3), .tax-type-table-0605 td:nth-child(3) { width: 43pt; }

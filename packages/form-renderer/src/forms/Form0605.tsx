@@ -485,6 +485,27 @@ function AtcCellPair0605({ rowIndex, groupIndex }: { rowIndex: number; groupInde
     description = "Greases";
   }
   const isCategory = code.length === 0 && description.length > 0;
+  // Official page-two ATC group-header indentation (contract 0605-1999 page 2
+  // text_runs; ordinary description x0 = 80.64 / 280.61 / 480.58pt in the three
+  // description columns). Verified against references/0605-1999-page-2-chromium.png
+  // (pixel scan: Mineral +14.5, Alcohol +14.0, Miscellaneous +3.5, Excise +0):
+  //  - the product-group sub-headers indent +14.28pt (Sweetened / Invasive
+  //    Cosmetic / Tobacco Products / Tobacco Inspection Fees / Petroleum /
+  //    Mineral / Alcohol Products all sit at x0 94.92 / 294.89 / 494.86);
+  //  - "Excise Tax on Goods" is the OUTER top-level category and stays FLUSH at
+  //    the ordinary x0 (80.64). The contract refutes any deeper indent for it:
+  //    the product groups nest one level BENEATH it (e.g. Alcohol Products, the
+  //    row directly below, indents +14.28 while Excise does not);
+  //  - "Miscellaneous Products/Articles" carries only the official's two leading
+  //    spaces (~3.68pt) — a shallower indent than the +14.28pt sub-headers, and
+  //    HTML collapses the leading spaces so the indent must come from CSS.
+  const categoryIndentClass = !isCategory
+    ? ""
+    : description === "Excise Tax on Goods"
+      ? ""
+      : description === "Miscellaneous Products/Articles"
+        ? "atc-category-subindent-0605"
+        : "atc-category-indent-0605";
   const narrowScale = ATC_NARROW_SCALE_BY_DESCRIPTION[description];
   const mergedClass = mergedStart
     ? "atc-merged-start-0605"
@@ -499,6 +520,7 @@ function AtcCellPair0605({ rowIndex, groupIndex }: { rowIndex: number; groupInde
         className={[
           mergedClass,
           isCategory ? "atc-category-0605" : "",
+          categoryIndentClass,
           narrowScale ? "atc-narrow-0605" : ""
         ].filter(Boolean).join(" ") || undefined}
         data-official-font-role={narrowScale ? "Arial Narrow" : undefined}
