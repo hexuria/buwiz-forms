@@ -1,6 +1,7 @@
 import {
   assertRenderEnvelope,
-  type RenderEnvelope
+  type RenderEnvelope,
+  type RenderValue
 } from "@ebirforms/form-contracts";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -361,6 +362,94 @@ describe("0619F:2018 runtime render contract", () => {
     expect(overflowMarkup).toContain('data-adaptive-max-font-px="10"');
     expect(overflowMarkup).toContain('data-adaptive-min-font-px="6"');
     expect(overflowMarkup).toContain('data-adaptive-step-px="0.5"');
+  });
+
+  it("adapts every drawee-bank and number payment cell across empty, short, exact, and over-capacity states", () => {
+    // Official divider evidence, contract 0619f-2018 Part III
+    // (packages/form-specs/geometry-contracts/0619f-2018.json, comb_candidates_container):
+    //   drawee-bank column x 117.38-189.26 -> cells:5, interior_dividers:4 (rows 20, 21, 23)
+    //   number column      x 189.26-276.05 -> cells:6, interior_dividers:5 (rows 20, 21, 22, 23)
+    // Row 22's bank y-band (667.90-686.14) carries NO bank divider container: it is
+    // the merged plain_unframed_gray cell and must never be promoted to charboxes.
+    const withPayment = (updates: Record<string, string>): RenderEnvelope => {
+      const envelope = structuredClone(minimumFixture) as RenderEnvelope;
+      for (const [key, value] of Object.entries(updates)) {
+        const typed: RenderValue = { type: "text", value };
+        envelope.fields[key] = typed;
+      }
+      return envelope;
+    };
+    const render = (envelope: RenderEnvelope) =>
+      renderToStaticMarkup(createElement(FormDocument, { envelope }));
+
+    const bankFields = ["20-bank", "21-bank"] as const;
+    const numberFields = ["20-number", "21-number", "22-number"] as const;
+
+    // (1) empty -> guided charboxes at the official capacity (5 bank / 6 number).
+    const emptyMarkup = render(minimumFixture as RenderEnvelope);
+    for (const field of bankFields) {
+      expect(officialFieldTag(emptyMarkup, field), `${field} empty`).toContain('data-field-mode="guided"');
+      expect(officialFieldTag(emptyMarkup, field), `${field} empty`).toContain('data-guide-segments="5"');
+      expect(officialFieldTag(emptyMarkup, field), `${field} empty`).toContain('data-guide-count="4"');
+    }
+    for (const field of numberFields) {
+      expect(officialFieldTag(emptyMarkup, field), `${field} empty`).toContain('data-field-mode="guided"');
+      expect(officialFieldTag(emptyMarkup, field), `${field} empty`).toContain('data-guide-segments="6"');
+      expect(officialFieldTag(emptyMarkup, field), `${field} empty`).toContain('data-guide-count="5"');
+    }
+
+    // (2) short (below capacity) -> still guided charboxes.
+    const shortMarkup = render(withPayment({
+      payment_20_drawee_bank_or_agency: "AAB",
+      payment_21_drawee_bank_or_agency: "DBP",
+      payment_20_number: "REF12",
+      payment_21_number: "REF34",
+      payment_22_number: "REF56"
+    }));
+    for (const field of [...bankFields, ...numberFields]) {
+      expect(officialFieldTag(shortMarkup, field), `${field} short`).toContain('data-field-mode="guided"');
+    }
+
+    // (3) exact capacity (5 bank / 6 number) -> guided, full official comb, no overflow.
+    const exactMarkup = render(withPayment({
+      payment_20_drawee_bank_or_agency: "AAB18",
+      payment_21_drawee_bank_or_agency: "DBP21",
+      payment_20_number: "REF123",
+      payment_21_number: "REF456",
+      payment_22_number: "REF789"
+    }));
+    for (const field of bankFields) {
+      expect(officialFieldTag(exactMarkup, field), `${field} exact`).toContain('data-field-mode="guided"');
+      expect(officialFieldTag(exactMarkup, field), `${field} exact`).toContain('data-guide-count="4"');
+    }
+    for (const field of numberFields) {
+      expect(officialFieldTag(exactMarkup, field), `${field} exact`).toContain('data-field-mode="guided"');
+      expect(officialFieldTag(exactMarkup, field), `${field} exact`).toContain('data-guide-count="5"');
+    }
+
+    // (4) capacity + 1 -> a single plain field in the same footprint, the entire
+    // value preserved verbatim (never truncated).
+    const overMarkup = render(withPayment({
+      payment_20_drawee_bank_or_agency: "AAB018", // 6 > 5
+      payment_21_drawee_bank_or_agency: "DBP021", // 6 > 5
+      payment_20_number: "REF1234", // 7 > 6
+      payment_21_number: "REF5678", // 7 > 6
+      payment_22_number: "REF9012" // 7 > 6
+    }));
+    for (const field of [...bankFields, ...numberFields]) {
+      expect(officialFieldTag(overMarkup, field), `${field} over`).toContain('data-field-mode="plain"');
+      expect(officialFieldTag(overMarkup, field), `${field} over`).toContain('data-guide-count="0"');
+    }
+    for (const value of ["AAB018", "DBP021", "REF1234", "REF5678", "REF9012"]) {
+      expect(overMarkup, `${value} untruncated`).toContain(`aria-label="${value}"`);
+    }
+
+    // Row 22's bank stays the merged plain cell in every state; it is the one
+    // Part III bank column without a divider container, so it is never charboxes.
+    for (const markup of [emptyMarkup, shortMarkup, exactMarkup, overMarkup]) {
+      expect(officialFieldTag(markup, "22-bank")).toContain('data-field-mode="plain"');
+      expect(officialFieldTag(markup, "22-bank")).toContain('data-guide-count="0"');
+    }
   });
 
   it("fails closed on missing fields, mutable fixed codes, or schedules", () => {

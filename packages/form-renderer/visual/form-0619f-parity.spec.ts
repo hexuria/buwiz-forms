@@ -316,6 +316,40 @@ test("0619F 2018 uses only exact pinned guides and measured plain overflow field
     await expect(locator, field).toHaveAttribute("data-guide-count", "0");
     await expect(locator.locator(".comb-value"), `${field} overflow comb`).toHaveCount(0);
   }
+
+  // Exact-capacity fills the official comb; capacity-plus-one degrades to the
+  // measured plain field in the same footprint without truncating. Contract
+  // 0619f-2018 Part III: drawee-bank 5 cells / 4 dividers, number 6 cells / 5.
+  const exactCapacity = setPaymentText(
+    readFixture("packages/form-contracts/fixtures/0619f-minimum.json"),
+    { payment_20_drawee_bank_or_agency: "AAB18", payment_20_number: "REF123" }
+  );
+  await renderEnvelope(page, exactCapacity);
+  for (const [field, guideCount] of [["20-bank", 4], ["20-number", 5]] as const) {
+    const locator = page.locator(`[data-official-field="${field}"]`);
+    await expect(locator, `${field} exact`).toHaveAttribute("data-field-mode", "guided");
+    await expect(
+      locator.locator(".guided-segment-0619f .comb-value > span:not(:last-child)"),
+      `${field} exact rules`
+    ).toHaveCount(guideCount);
+  }
+
+  const overCapacity = setPaymentText(
+    readFixture("packages/form-contracts/fixtures/0619f-minimum.json"),
+    { payment_20_drawee_bank_or_agency: "AAB018", payment_20_number: "REF1234" }
+  );
+  await renderEnvelope(page, overCapacity);
+  await expect(page.locator('[data-adaptive-fit-state="unresolved"]')).toHaveCount(0);
+  for (const [field, value] of [["20-bank", "AAB018"], ["20-number", "REF1234"]] as const) {
+    const locator = page.locator(`[data-official-field="${field}"]`);
+    await expect(locator, `${field} over`).toHaveAttribute("data-field-mode", "plain");
+    await expect(locator, `${field} over`).toHaveAttribute("data-guide-count", "0");
+    await expect(locator.locator(".comb-value"), `${field} over comb`).toHaveCount(0);
+    await expect(
+      locator.locator(".adaptive-plain-value"),
+      `${field} over untruncated`
+    ).toHaveAttribute("aria-label", value);
+  }
 });
 
 test("0619F 2018 preserves the official payment-row partitions", async ({ page }) => {
@@ -500,6 +534,16 @@ async function pageHasNoOverflow(locator: Locator) {
 
 function readFixture(relativePath: string): unknown {
   return JSON.parse(fs.readFileSync(path.join(REPO_ROOT, relativePath), "utf8")) as unknown;
+}
+
+// readFixture reparses the file on every call, so the returned envelope is safe
+// to mutate in place for the exact/over-capacity payment probes.
+function setPaymentText(fixture: unknown, updates: Record<string, string>): unknown {
+  const envelope = fixture as { fields: Record<string, { type: string; value: string }> };
+  for (const [key, value] of Object.entries(updates)) {
+    envelope.fields[key] = { type: "text", value };
+  }
+  return envelope;
 }
 
 
