@@ -74,6 +74,18 @@ measure tone 83–153 because sub-pixel black ink cannot fill a pixel).
 shifting it does land on ink. Acting on that moves correctly-placed rules. The
 localizer now reports both stroke thicknesses; use them.
 
+**Never change a border from raster evidence alone — check the stroke's grey
+value in the geometry contract first.** The raster localizer compares ink
+*presence* and cannot tell a light-grey decorative fill from a black rule. Many
+official "rules" are `gray = 0.8509` (tone ~217, near-invisible on paper); where
+we correctly paint nothing, the sweep reports them as missing black structure.
+A contract-first re-derivation refuted seven such findings across 1701, 1601C
+and 1701Q — acting on them would have painted black over grey decoration while
+*improving* structural recall, because the metric only asks whether ink exists.
+Width tells you how thick a stroke is; only grey tells you whether it is there.
+The weight columns in `wave0-diagnostic-review.md` are contaminated this way and
+are superseded by the per-form contract-derived lists.
+
 ## Reference pipeline
 
 - Poppler raster (primary provenance): `.codex/skills/ebirforms-convert-form-to-html/scripts/prepare_official_reference.py` — pinned official PDF → 144 DPI PNG.

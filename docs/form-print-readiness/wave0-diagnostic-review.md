@@ -104,6 +104,37 @@ structure. Probing at the matched offset instead surfaced 81 weight-related
 clusters. A diagnostic that reports a clean bill of health deserves the same
 scepticism as one that reports a problem.
 
+### A second correction: this table's weight counts are contaminated by grey
+
+**Do not act on the weight columns above without checking the stroke's grey
+value in the geometry contract.** A contract-first re-derivation on 2026-07-20
+(nine analyst agents, each adversarially verified) refuted eleven findings, and
+**seven failed for the same reason: the "missing black rule" is a light-grey
+decorative fill, not black ink.** Those strokes carry `gray = 0.8509` in the
+PDF — predicted minimum tone **217**, essentially invisible on paper, the same
+tone as the header-band fills. 1701 was affected worst (four of its five
+refutations), with 1601C and 1701Q also hit.
+
+The mechanism is a blind spot in the raster localizer, not a bug in it: it
+compares *ink presence* between two rasters and cannot tell a grey guide from a
+black rule. Where the official form paints a tone-217 band and we paint
+nothing, it reports unmatched official structure — indistinguishable from a
+genuinely missing black boundary.
+
+Acting on those rows would have painted black ink over grey decoration on at
+least three forms — making them visibly *wrong* on paper while the structural
+recall metric improved, because the metric only asks whether ink is present.
+That is the same failure shape as the three measurement traps in CLAUDE.md, and
+it earns the same standing rule:
+
+> A stroke's **width** tells you how thick it is. Only its **grey value** tells
+> you whether it is there at all. The geometry contract records both; the
+> raster records neither directly. Read the contract before changing a border.
+
+The per-form fix lists derived from the contract — with grey values checked and
+each finding adversarially verified — supersede the weight columns in this
+table for every form.
+
 ## The transferable finding: Chromium floors border-width to integer CSS px
 
 Established while calibrating 1601C, verified empirically at several device
