@@ -1777,9 +1777,13 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   font-weight: 450;
 }
 
+/* The pinned PDF sets the footnote at 8.04pt (Arial, "*NOTE:" in Arial,Bold —
+ * the geometry contract's text runs record both). The earlier 7pt +
+ * negative letter-spacing squeeze made the line ~14% narrower than official
+ * and drove the two worst page-1 fidelity cells (F1 0.45, recall 0.29 at
+ * g1-r27-c9 / g0-r28-c10) before baselining. */
 .form-2551q-page-one .privacy-note {
-  font-size: 7pt;
-  letter-spacing: -.05pt;
+  font-size: 8.04pt;
 }
 
 /* Preserve the official single-row Item 17 geometry when the value fits. A
