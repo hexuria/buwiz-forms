@@ -93,6 +93,37 @@ function components(mask: Uint8Array, width: number, height: number): Cluster[] 
 }
 
 /**
+ * Stroke thickness at a cluster, measured perpendicular to its run.
+ *
+ * WHY THIS EXISTS. Offset search alone misdescribes weight defects. Measured
+ * on 2551Q: three full-width rules reported "dy=+2, recovers 100%", which is
+ * true and misleading - the official stroke is 3 device px and ours was 2, so
+ * shifting ours down DOES land it on official ink while the real fault is that
+ * it never covers the official's top row. Acting on the offset would have
+ * moved correct rules; the actual fix was 1pt to 1.5pt. Reporting both
+ * thicknesses makes the two cases distinguishable at a glance.
+ */
+function strokeThickness(
+  mask: Uint8Array,
+  width: number,
+  height: number,
+  cluster: Cluster,
+  horizontal: boolean
+): number {
+  const midX = Math.floor((cluster.x0 + cluster.x1) / 2);
+  const midY = Math.floor((cluster.y0 + cluster.y1) / 2);
+  let thickness = 0;
+  if (horizontal) {
+    for (let y = midY; y >= 0 && mask[y * width + midX] === 1; y -= 1) thickness += 1;
+    for (let y = midY + 1; y < height && mask[y * width + midX] === 1; y += 1) thickness += 1;
+  } else {
+    for (let x = midX; x >= 0 && mask[midY * width + x] === 1; x -= 1) thickness += 1;
+    for (let x = midX + 1; x < width && mask[midY * width + x] === 1; x += 1) thickness += 1;
+  }
+  return thickness;
+}
+
+/**
  * The offset at which this cluster's expected structure would have been
  * matched by rendered structure. This is what turns a defect into an
  * actionable instruction.
@@ -186,18 +217,37 @@ test("localize 2551Q structural defects", async ({ page }, testInfo) => {
     );
     const pageClusters = clusters.map((cluster) => {
       const offset = bestOffset(cluster, actualStructural, width, height);
-      const shape =
-        cluster.y1 - cluster.y0 <= 3
-          ? "horizontal rule"
-          : cluster.x1 - cluster.x0 <= 3
-            ? "vertical rule"
-            : "box or fill";
+      const horizontal = cluster.y1 - cluster.y0 <= 3;
+      const vertical = cluster.x1 - cluster.x0 <= 3;
+      const shape = horizontal
+        ? "horizontal rule"
+        : vertical
+          ? "vertical rule"
+          : "box or fill";
       const recovered = offset.matched / cluster.pixels.length;
+
+      // Distinguish a weight deficit from a displacement. A thinner stroke of
+      // ours that still overlaps the official one reports a confident offset,
+      // because shifting it does land on ink - but moving it would be wrong.
+      const expectedThickness = horizontal || vertical
+        ? strokeThickness(expectedStructural, width, height, cluster, horizontal)
+        : 0;
+      const actualThickness = horizontal || vertical
+        ? strokeThickness(actualStructural, width, height, cluster, horizontal)
+        : 0;
+      const weightDeficit =
+        (horizontal || vertical) &&
+        actualThickness > 0 &&
+        expectedThickness > actualThickness;
+      const diagnosis = weightDeficit
+        ? `WEIGHT: official ${expectedThickness}px vs ours ${actualThickness}px`
+        : recovered >= 0.9
+          ? `DISPLACED: dx=${offset.dx} dy=${offset.dy}`
+          : `PARTIAL (${(recovered * 100).toFixed(0)}%): likely missing or extra structure`;
+
       console.log(
         `  ${String(cluster.pixels.length).padStart(5)}px ${shape.padEnd(15)} ` +
-          `x=${cluster.x0}..${cluster.x1} y=${cluster.y0}..${cluster.y1} ` +
-          `-> matches at dx=${offset.dx} dy=${offset.dy} ` +
-          `(recovers ${(recovered * 100).toFixed(0)}%)`
+          `x=${cluster.x0}..${cluster.x1} y=${cluster.y0}..${cluster.y1}  ${diagnosis}`
       );
       return {
         pixels: cluster.pixels.length,
@@ -208,7 +258,14 @@ test("localize 2551Q structural defects", async ({ page }, testInfo) => {
         y1: cluster.y1,
         best_dx: offset.dx,
         best_dy: offset.dy,
-        recovered_fraction: recovered
+        recovered_fraction: recovered,
+        expected_thickness_px: expectedThickness,
+        actual_thickness_px: actualThickness,
+        diagnosis: weightDeficit
+          ? "weight-deficit"
+          : recovered >= 0.9
+            ? "displaced"
+            : "partial-missing-or-extra"
       };
     });
     report.push({ page: entry.page, expected_structural_px: expectedTotal, clusters: pageClusters });
