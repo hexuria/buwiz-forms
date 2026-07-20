@@ -251,6 +251,14 @@
   background: #fff;
 }
 .header-option-0619f .code-value-0619f > :is(.guided-field-0619f, .plain-field-shell-0619f) { height: 100%; }
+/* Item 5's official box is ONE undivided 28.8pt cell (contract box edges at
+ * x=535.90 / x=564.70, no interior rule). Centering each glyph inside its own
+ * phantom 14.4pt half-cell reads as two separate boxes with a gap; render the
+ * two-character tax type code across the FULL box width instead, with 2px
+ * padding left and right. Capacity stays 2 and no divider is drawn. */
+.header-option-0619f .code-value-0619f .comb-value { padding: 0 2px; }
+.header-option-0619f .code-value-0619f .comb-value > span:first-child { justify-items: start; }
+.header-option-0619f .code-value-0619f .comb-value > span:last-child { justify-items: end; }
 
 .part-0619f {
   width: 577pt;
