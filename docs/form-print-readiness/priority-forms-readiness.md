@@ -135,8 +135,39 @@ gate. On page 1 a perfect render is therefore not distinguishable from roughly
 not weakened by this observation; whether page 1's reference basis should be
 re-derived at higher precision is an open, explicitly flagged decision.
 
-The latest exact complete-page and structural diagnostics for the recently
-calibrated forms are:
+### Text-excluded structural decomposition (2551Q, 2026-07-20)
+
+A controlled decomposition removed text from BOTH sides by construction —
+glyph `<use>` placements stripped from the pinned reference SVG (artwork
+`<use>` references preserved), glyph fills made transparent in our render with
+layout and non-text ink proven unchanged — and ran the gate's own comparison
+on what remains: boxes, fields, ruled lines, containers, gray fills, comb
+guides, checkbox outlines, and artwork. Independently reproduced to the digit.
+
+| 2551Q:2018 | Page 1 | Page 2 |
+| --- | --- | --- |
+| Complete page (gate) | 7.3355% | 5.4557% |
+| Text-excluded (structure only) | **3.0556%** | **2.3837%** |
+| Text-only complement | 4.4386% | 3.0785% |
+
+Text is therefore ~56–59% of the total error and structure ~41–44%. Both
+sides of the text-free comparison share one rasterizer, so no cross-rasterizer
+noise floor applies: the structural residual is genuine displacement, not
+missing structure (total structural dark ink matches within ~0.1%). It is
+dominated by ~1 px vertical registration drift on horizontal rules and
+gray-band edges (page 1) and ATC-table row-pitch drift (66% of page 2's
+structural diff), plus comb-guide tick differences — geometry that, unlike
+the font-substitution residual, is under the renderer's control.
+
+A text-excluded percentage is blind to every character-level defect (wrong
+values, digits, labels, check marks, fonts, clipping) and excludes 43–49% of
+the page's dark ink. It is a diagnostic, never parity, per the standing rule.
+
+The historical table below predates the chromium gate reference: its 2551Q row
+is measured against the Poppler raster and is superseded by the tables above.
+Under the current chromium-referenced gate the narrow structural line
+diagnostic records 0.4237% / 0.5865% (visual-evidence.json), not the Poppler
+figures below.
 
 | Exact target | Complete-page difference by page | Structural difference by page |
 | --- | --- | --- |
