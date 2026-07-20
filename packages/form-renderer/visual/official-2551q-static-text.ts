@@ -68,6 +68,20 @@ export type OfficialStaticTextEntry = Readonly<{
    * printed tight. `officialText` records what the PDF prints; a unit test
    * asserts the two differ by whitespace only, so a wrong *value* can never
    * hide in this field.
+   *
+   * REVIEWED DECISION (2026-07-20): we render these tight and do NOT reproduce
+   * the space. The space is real — PyMuPDF span extraction on the pinned PDF
+   * returns the literal `'18 % '`, not a `-layout` positional artifact — but
+   * those same five spans are also set at 8.04pt against 8.52pt for every
+   * other rate, and at a different x-origin. It is an inconsistency in the
+   * source document, not a rendering error on our side.
+   *
+   * Reproducing it would mean a per-row exception in the rate formatter, since
+   * the rate is stored as a number (0.18) and formatted uniformly. That would
+   * encode a source typographic defect as renderer logic, would only half-match
+   * unless the font size were also special-cased, and changes no value: 18% and
+   * 18 % are the same rate. The divergence stays recorded here, bounded by the
+   * whitespace-only test, rather than being copied into the renderer.
    */
   officialText?: string;
 }>;

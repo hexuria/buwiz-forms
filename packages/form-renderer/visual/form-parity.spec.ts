@@ -1145,14 +1145,16 @@ test("canonical fixtures render safely or fail closed at the readable floor", as
   capacityEnvelope.taxpayer.registered_address = "A".repeat(71);
   capacityEnvelope.taxpayer.contact_number = "+63 912 345 6789";
   capacityEnvelope.taxpayer.email = "renderer.2551q@example.com";
-  capacityEnvelope.fields.tax_relief_specification.value =
-    "Special law reference 1234";
+  // Exactly 16 characters: this probe fills every field to its exact declared
+  // capacity, so the value must track the measured 12A capacity or the test
+  // silently becomes an overflow case instead of the exact-capacity one it is.
+  capacityEnvelope.fields.tax_relief_specification.value = "Special law 1234";
   await renderEnvelope(page, capacityEnvelope);
   await expect(page.locator(".name-field .comb-value")).toContainText("N".repeat(40));
   const contactAndEmail = page.locator(".contact-email-field > .comb-value");
   expect((await contactAndEmail.nth(0).locator("> span").allTextContents()).join("").trimEnd()).toBe("639123456789");
   expect((await contactAndEmail.nth(1).locator("> span").allTextContents()).join("").trimEnd()).toBe("RENDERER.2551Q@EXAMPLE.COM");
-  expect((await page.locator(".tax-relief-field > .comb-value > span").allTextContents()).join("").trimEnd()).toBe("SPECIAL LAW REFERENCE 1234");
+  expect((await page.locator(".tax-relief-field > .comb-value > span").allTextContents()).join("").trimEnd()).toBe("SPECIAL LAW 1234");
   const addressCharacters = await page
     .locator(".address-field > .comb-value > span, .address-continuation > .comb-value:first-child > span")
     .allTextContents();
@@ -2292,7 +2294,9 @@ async function expectBackgroundInformationParity(pageOne: Locator) {
   expect(await pageOne.locator(".name-field .comb-value > span").count()).toBe(40);
   expect(await pageOne.locator(".address-field .comb-value > span").count()).toBe(75);
   expect(await pageOne.locator(".contact-email-field .comb-value > span").count()).toBe(40);
-  expect(await pageOne.locator(".tax-relief-field .comb-value > span").count()).toBe(26);
+  // 16, measured from the pinned PDF: 15 interior dividers on a 28.4px pitch
+  // across the 455px field. This asserted 26 before the field was measured.
+  expect(await pageOne.locator(".tax-relief-field .comb-value > span").count()).toBe(16);
 
   expect(
     await pageOne.locator(".relief-choices .check-box").evaluateAll((elements) =>

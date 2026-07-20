@@ -694,9 +694,19 @@ function BackgroundInformation({
           <CheckChoice checked={!bool(envelope, "tax_relief")} label="No" />
         </div>
         <div className="tax-relief-spec"><b>12A</b> If yes, specify</div>
+        {/*
+          * 16 cells, measured from the pinned official PDF rather than
+          * estimated. The official field spans x=724..1179 (455 device px at
+          * 144 DPI) and carries 15 interior dividers on a 28.4 px pitch:
+          * 28.4 x 16 = 454.4, which is the field width. This previously
+          * declared 26 on an 18 px pitch, overstating the field by 62% and
+          * telling a taxpayer that ten characters would fit which the official
+          * form has no room for. Values longer than 16 now take the reviewed
+          * plain-box overflow path, which is what the official geometry implies.
+          */}
         <Adaptive2551QValue
           value={text(envelope, "tax_relief_specification").toUpperCase()}
-          cells={26}
+          cells={16}
           className="tax-relief-overflow-value"
           typography={REVIEWED_2551Q_OVERFLOW_FONT_PX.item12A}
         />
