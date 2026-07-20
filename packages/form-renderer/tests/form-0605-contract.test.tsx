@@ -203,26 +203,39 @@ describe("0605:1999 runtime render contract", () => {
     expect(markup).not.toMatch(/font-size:[^;]*calc\(/);
   });
 
-  it("switches the whole TIN field to plain mode only when it exceeds the official 12 guides", () => {
+  it("renders the reviewer-authorised 14-cell TIN as guided 3-3-3-5 for every contract-valid value", () => {
+    // REVIEWER-AUTHORISED DIVERGENCE from the pinned 12-cell 000-000-000-000
+    // field. Item 9 renders the modern 000-000-000-00000 (3-3-3-5 = 14 cells)
+    // format because real TINs now carry a 5-digit branch code the pinned
+    // 12-cell field can no longer hold. The envelope caps the printable TIN at
+    // 14 digits (== the comb capacity), so every contract-valid TIN fits the
+    // character boxes and none falls back to the plain overflow box. See the
+    // Tin0605 component and the field-guide inventory's `divergence` note.
+    expect(String(normalFixture.taxpayer.tin).replace(/\D/g, "")).toHaveLength(14);
     const fourteenDigitMarkup = renderToStaticMarkup(
       createElement(FormDocument, { envelope: normalFixture as RenderEnvelope })
     );
-    expect(officialFieldTag(fourteenDigitMarkup, "9-tin")).toContain(
-      'data-field-mode="plain"'
-    );
+    const fourteen = officialFieldTag(fourteenDigitMarkup, "9-tin");
+    expect(fourteen).toContain('data-field-mode="guided"');
+    expect(fourteen).toContain('data-guide-segments="3-3-3-5"');
+    expect(fourteen).toContain('data-guide-count="10"');
 
-    const legacyTin = structuredClone(normalFixture) as RenderEnvelope;
-    legacyTin.taxpayer.tin = "123456789000";
-    const legacyMarkup = renderToStaticMarkup(
-      createElement(FormDocument, { envelope: legacyTin })
+    const twelveDigitTin = structuredClone(normalFixture) as RenderEnvelope;
+    twelveDigitTin.taxpayer.tin = "123456789000";
+    const twelveMarkup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: twelveDigitTin })
     );
-    const tag = officialFieldTag(legacyMarkup, "9-tin");
-    expect(tag).toContain('data-field-mode="guided"');
-    expect(tag).toContain('data-guide-segments="3-3-3-3"');
-    expect(tag).toContain('data-guide-count="8"');
+    const twelve = officialFieldTag(twelveMarkup, "9-tin");
+    expect(twelve).toContain('data-field-mode="guided"');
+    expect(twelve).toContain('data-guide-segments="3-3-3-5"');
+    expect(twelve).toContain('data-guide-count="10"');
   });
 
   it("switches only contract-valid guide overflow to one plain field", () => {
+    // 9-tin has no contract-valid overflow row here: the reviewer-authorised
+    // 14-cell (3-3-3-5) comb capacity equals the envelope's 14-digit TIN limit,
+    // so every valid TIN fits the character boxes. Its guided rendering is
+    // covered by "renders the reviewer-authorised 14-cell TIN ..." above.
     const cases: Array<{
       field: string;
       exact: string | number;
@@ -240,12 +253,6 @@ describe("0605:1999 runtime render contract", () => {
         exact: "IT",
         overflow: "ITX",
         mutate: (fixture, value) => { fixture.fields.tax_type_code.value = value; }
-      },
-      {
-        field: "9-tin",
-        exact: "123456789000",
-        overflow: "1234567890001",
-        mutate: (fixture, value) => { fixture.taxpayer.tin = value; }
       },
       {
         field: "14-telephone",

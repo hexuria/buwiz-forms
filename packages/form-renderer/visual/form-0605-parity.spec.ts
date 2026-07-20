@@ -308,10 +308,26 @@ test("0605 1999 uses plain rectangles and only the pinned short-guide counts", a
     ).toHaveCount(guideCount);
   }
 
+  // REVIEWER-AUTHORISED DIVERGENCE: item 9 renders the modern 14-cell
+  // 000-000-000-00000 (3-3-3-5) character boxes, not the pinned 12-cell field.
+  // The envelope caps the TIN at 14 digits (== comb capacity), so every valid
+  // TIN renders guided; there is no contract-valid plain overflow. See the
+  // Tin0605 component and the field-guide inventory's `divergence` note.
   await expect(page.locator('[data-official-field="9-tin"]')).toHaveAttribute(
     "data-field-mode",
-    "plain"
+    "guided"
   );
+  await expect(page.locator('[data-official-field="9-tin"]')).toHaveAttribute(
+    "data-guide-segments",
+    "3-3-3-5"
+  );
+  await expect(page.locator('[data-official-field="9-tin"]')).toHaveAttribute(
+    "data-guide-count",
+    "10"
+  );
+  await expect(
+    page.locator('[data-official-field="9-tin"] .comb-value > span:not(:last-child)')
+  ).toHaveCount(10);
   await expect(page.locator('[data-official-field="14-telephone"]')).toHaveAttribute(
     "data-field-mode",
     "plain"
@@ -323,11 +339,11 @@ test("0605 1999 uses plain rectangles and only the pinned short-guide counts", a
   await renderEnvelope(page, legacyCapacity);
   await expect(page.locator('[data-official-field="9-tin"]')).toHaveAttribute(
     "data-guide-count",
-    "8"
+    "10"
   );
   await expect(
     page.locator('[data-official-field="9-tin"] .comb-value > span:not(:last-child)')
-  ).toHaveCount(8);
+  ).toHaveCount(10);
   await expect(page.locator('[data-official-field="14-telephone"]')).toHaveAttribute(
     "data-guide-count",
     "6"
@@ -482,10 +498,14 @@ test("0605 1999 switches whole guided fields only for valid values beyond offici
     mutate: (fixture: Record<string, any>, value: string | number) => void;
   }> = [
     {
+      // REVIEWER-AUTHORISED DIVERGENCE: the 14-cell (3-3-3-5) comb capacity
+      // equals the envelope's 14-digit TIN limit, so the maximum valid TIN
+      // still renders as guided character boxes and no contract-valid value
+      // overflows to plain. See Form0605 Tin0605.
       field: "9-tin",
       values: [
         { value: "123456789000", mode: "guided" },
-        { value: "1234567890001", mode: "plain" }
+        { value: "12345678900000", mode: "guided" }
       ],
       mutate: (fixture, value) => { fixture.taxpayer.tin = value; }
     },

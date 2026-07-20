@@ -311,18 +311,46 @@ function BackgroundInformation0605({ envelope }: { envelope: RenderEnvelope }) {
   );
 }
 
+// REVIEWER-AUTHORISED DIVERGENCE FROM THE PINNED 1999 GEOMETRY.
+// The pinned July-1999 PDF prints item 9 as FOUR groups of three = 12 character
+// cells (000-000-000-000): its page-two guideline even states "The last 3
+// digits of the 12-digit TIN refers to the branch code", and the official
+// comb ticks confirm 12 cells (per-group character ticks at x=43.68/57.12,
+// 95.64/109.08, 148.32/161.76, 197.16/211.32 pt with grey separators between
+// the four groups). The reviewer has deliberately widened the final group to
+// FIVE cells (3-3-3-5 = 14 cells, the modern 000-000-000-00000 format) because
+// real TINs now carry a 5-digit branch code that the pinned 12-cell field can
+// no longer hold — the shipped fixtures all carry a 14-digit TIN. This is NOT a
+// match to the pinned form; the field-guide inventory records the same reason.
+const TIN_SEGMENTS_0605 = [3, 3, 3, 5] as const;
+
 function Tin0605({ value }: { value: string }) {
-  if (Array.from(value).length > 12) {
+  const characters = Array.from(value);
+  const capacity = TIN_SEGMENTS_0605.reduce((total, segment) => total + segment, 0);
+  if (characters.length > capacity) {
     return <PlainValue0605 field="9-tin" value={value} className="tin-overflow-plain-0605" />;
   }
+  const guideCount = TIN_SEGMENTS_0605.reduce((total, segment) => total + segment - 1, 0);
+  let offset = 0;
   return (
-    <span className="tin-0605" data-official-field="9-tin" data-field-mode="guided" data-guide-count="8" data-guide-segments="3-3-3-3" aria-label={value}>
-      {[0, 3, 6, 9].map((offset, index) => (
-        <span className="guided-segment-0605" key={offset}>
-          <CombValue value={value.slice(offset, offset + 3)} cells={3} />
-          {index < 3 && <i aria-hidden="true" />}
-        </span>
-      ))}
+    <span
+      className="tin-0605"
+      data-official-field="9-tin"
+      data-field-mode="guided"
+      data-guide-count={guideCount}
+      data-guide-segments={TIN_SEGMENTS_0605.join("-")}
+      aria-label={value}
+    >
+      {TIN_SEGMENTS_0605.map((segment, index) => {
+        const segmentValue = characters.slice(offset, offset + segment).join("");
+        offset += segment;
+        return (
+          <span className="guided-segment-0605" key={index}>
+            <CombValue value={segmentValue} cells={segment} />
+            {index < TIN_SEGMENTS_0605.length - 1 && <i aria-hidden="true" />}
+          </span>
+        );
+      })}
     </span>
   );
 }

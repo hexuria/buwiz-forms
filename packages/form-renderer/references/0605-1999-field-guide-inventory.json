@@ -8,7 +8,7 @@
     { "field": "7-return-period", "mode": "guided", "segments": [2, 2, 4], "short_tick_count": 5 },
     { "field": "8-tax-type", "mode": "guided", "segments": [2], "short_tick_count": 1 },
     { "field": "bcs-item", "mode": "plain", "short_tick_count": 0 },
-    { "field": "9-tin", "mode": "guided", "segments": [3, 3, 3, 3], "short_tick_count": 8, "overflow_mode": "plain" },
+    { "field": "9-tin", "mode": "guided", "segments": [3, 3, 3, 5], "short_tick_count": 10, "overflow_mode": "plain", "pinned_official_segments": [3, 3, 3, 3], "pinned_official_short_tick_count": 8, "divergence": "REVIEWER-AUTHORISED, NOT A MATCH TO THE PINNED FORM. The pinned July-1999 PDF prints 12 character cells in four groups of three (000-000-000-000): per-group comb ticks at x=43.68/57.12, 95.64/109.08, 148.32/161.76, 197.16/211.32 pt with grey separators between the groups, and the page-two guideline states 'The last 3 digits of the 12-digit TIN refers to the branch code.' The renderer deliberately widens the final group to five cells (3-3-3-5 = 14 cells, the modern 000-000-000-00000 format) because real TINs now carry a 5-digit branch code the pinned 12-cell field can no longer hold; the shipped fixtures all carry a 14-digit TIN. segments/short_tick_count above describe the renderer output; pinned_official_* preserve the pinned geometry." },
     { "field": "10-rdo", "mode": "guided", "segments": [3], "short_tick_count": 2 },
     { "field": "12-line-of-business", "mode": "plain", "short_tick_count": 0 },
     { "field": "13-taxpayer-name", "mode": "plain", "short_tick_count": 0 },
