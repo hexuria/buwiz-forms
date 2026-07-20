@@ -1819,6 +1819,144 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 }
 
 /*
+ * Official part-boundary strokes are 1.5pt (3 device px at 144 DPI); ordinary
+ * interior tax-line rules are 1pt. Measured against the pinned chromium
+ * reference, the official part boundaries ink rows y=691-693, y=721-723 and
+ * y=1201-1203 while a 1pt border reaches only the lower two. `box-sizing:
+ * border-box` keeps every outer rect — and therefore every reviewed critical
+ * region — unchanged; only the stroke grows inward.
+ */
+.form-2551q-page-one .income-rate-field,
+.form-2551q-page-one .tax-payable > h2,
+.form-2551q-page-one .overpayment-options {
+  border-bottom-width: 1.5pt;
+}
+
+/*
+ * Left outer frame only. The official inks x=45-47 (3 device px) down the whole
+ * page while a 1pt border reaches only x=45, so thickening inward lands on the
+ * official stroke.
+ *
+ * border-right is deliberately NOT thickened, and this is worth recording
+ * because the structural metric argues for it. Our right edge is x=1180 and the
+ * official frame is x=1179-1181, so growing the border inward paints x=1177-1178
+ * — roughly 780 px of ink the official does not have — while x=1181 stays
+ * unpainted. `structural-ink-coverage-v1` cannot see that: at tolerance radius 1
+ * our 1177-1180 dilates over the official 1179-1181 and vice versa, so recall
+ * and precision both improve while the untoleranced complete-page difference
+ * gets worse. Measured: the change improved structural recall but moved the
+ * Poppler diagnostic the wrong way by more than it moved the chromium gate.
+ * The real fix moves the right edge to x=1181, which is a Part II column
+ * re-derivation, not a border width.
+ */
+.form-2551q-page-one .official-tax-line {
+  border-left-width: 1.5pt;
+  /*
+   * The stroke must grow WITHOUT moving what is inside it. Under
+   * `box-sizing: border-box` a thicker left border pushes the grid's content
+   * origin right by the same 0.5pt (1 device px), which displaced every Part
+   * II tax-line text band: measured dx=0 against both rasterizers before the
+   * change and dx=-1 to -2 after, and the Poppler diagnostic regressed by more
+   * than the chromium gate improved. Narrowing the first grid column by the
+   * same 0.5pt returns the content to where it already matched, so the frame
+   * fix stops costing interior alignment.
+   */
+  grid-template-columns: 353.5pt minmax(0, 1fr);
+}
+
+/*
+ * Official row pitch across items 20-21 is 37 + 36 device px; ours was 36 + 38,
+ * putting the item-20/21 boundary ~1.4 device px high. The pair is re-centred
+ * rather than swapped: Poppler rules this boundary at y=1024 and chromium at
+ * y=1024-1025, so the two heights are averaged to land on 1024, the position
+ * both rasterizers agree on. Tuning to 1025 would fit chromium's rounding
+ * alone, which is calibrating to the reference pipeline rather than to the
+ * document. The item-21 boundary at y=1061 and everything below it are
+ * unaffected because the pair still sums to the same height.
+ */
+.form-2551q-page-one .official-tax-line[data-item="20"] { height: 18.25pt; }
+.form-2551q-page-one .official-tax-line[data-item="21"] { height: 18.25pt; }
+
+/*
+ * Item 17's inline specification field is an underline on the official form,
+ * not a box: the pinned reference inks only y=882 across x=448-750, with no
+ * ink at our top stroke (y=862-863) and none at our left stroke (x=444-445).
+ * The three-sided border was therefore two strokes of ink the official does not
+ * have, plus an underline sitting 3-4 device px low.
+ *
+ * The underline is drawn as a decoration rather than by resizing the field,
+ * because the field's rect is a reviewed critical region (regions/2551q.ts:
+ * "Item 17 inline specification field", 444,862 309x24) and landing the border
+ * on y=882 geometrically would move that rect past its 2 device px tolerance.
+ * Keeping the box and repainting the rule leaves the reviewed geometry
+ * untouched while removing the false ink. No value-bearing content is
+ * positioned; the ::after carries no content.
+ */
+.form-2551q-page-one .official-tax-line:not(.specify-line-extended) .tax-credit-description {
+  position: relative;
+  /* Border widths are retained and only made invisible: this field is measured
+   * by the adaptive font fitter, and zeroing the widths would change the
+   * content box and with it Item 17's resolved font size. */
+  border-color: transparent;
+}
+.form-2551q-page-one .official-tax-line:not(.specify-line-extended) .tax-credit-description::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 1.2pt;
+  border-bottom: .55pt solid #111;
+  pointer-events: none;
+}
+
+/*
+ * Part III / declaration left frame. The official inks x=46-48 in both blocks
+ * while a 1pt border inks x=45-46, so the reviewed x=47 child origin sits one
+ * device px left of the official rule. Only border-left is thickened: growing
+ * border-right as well would shrink the pinned full-width children
+ * (declaration copy, signature boxes, tax-agent strip, all pinned x=47 w=1133)
+ * by 2 device px, which is exactly the assertion tolerance. At 1.5pt on the
+ * left alone the pinned children move 1 device px (0.67 CSS px) against a
+ * 1.33 CSS px budget.
+ */
+.form-2551q-page-one .official-declaration,
+.form-2551q-page-one .machine-validation {
+  border-left-width: 1.5pt;
+}
+
+/*
+ * The Part III validation divider is a column-position defect, not a weight
+ * one: the official rules x=756-757, ours x=751-752. Two of the five device px
+ * come back from the thicker left frame above; the remaining 2pt is the column.
+ */
+.form-2551q-page-one .machine-validation {
+  grid-template-columns: 355.5pt minmax(0, 1fr);
+}
+
+/*
+ * NOT FIXED — deliberately left alone; see the note below.
+ *
+ * The Part II centavos column is missing structure, not displaced: the official
+ * rules both its edges full height (x=1094-1095 and x=1122-1123, inked on every
+ * row), while our separator carries no border at all. The only ink near x=1095
+ * is the neighbouring comb cell's 7pt guide tick, which is why the localizer
+ * recovers just 19% of these clusters by offset.
+ *
+ * Adding border-left/right here (mirroring Part III's .blank-money-value) was
+ * measured and reverted: our separator column itself sits 2 device px right of
+ * the official and is 2 device px narrow, so the borders paint at x=1096-1097
+ * and x=1123-1124 — ink the official does not have — while still missing
+ * x=1094 and x=1122. It removed ~72px of structural cluster but moved the
+ * complete-page number the wrong way, 7.2968% -> 7.3294%.
+ *
+ * The real fix is row geometry: .official-money-integer's 170.5pt basis must
+ * lose 1pt and .decimal-separator's 14pt width must gain 1pt, so the column
+ * lands on x=1094-1123. That moves the money-integer comb cells, which carry
+ * reviewed critical-region geometry, so it belongs in a deliberate Part II
+ * column re-derivation with its own review — not in a border declaration.
+ */
+
+/*
  * The pinned Schedule 1 PDF uses process black for every live rule and glyph.
  * Keep this page-local: continuation sheets have independent calibration and
  * page one owns its own measured overrides above.
