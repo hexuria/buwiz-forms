@@ -233,7 +233,13 @@ function PartOne2550Q({ envelope }: { envelope: RenderEnvelope }) {
         <span><b>14</b> Are you availing of tax relief under Special Law or International Tax Treaty?</span>
         <CheckChoice checked={bool(envelope, "is_availing_tax_relief")} label="Yes" />
         <CheckChoice checked={!bool(envelope, "is_availing_tax_relief")} label="No" />
-        <span className="tax-relief-detail-2550q"><span><b>14A</b> If yes, specify</span><AdaptiveGuidedValue2550Q value={text(envelope, "tax_relief_details")} cells={17} /></span>
+        {/* 16 cells, not 17: the official April 2024 page-1 comb at
+            x=361.23-592.25pt / y=309.78-332.28pt has exactly 15 interior
+            dividers (375.8 .. 576.3) at a uniform 14.32pt pitch, all 0.2pt
+            with no heavier group mark interrupting the lattice, and
+            231.02/14.32 = 16.13. Confirmed independently by the tick-run
+            detector (15 ticks) and a 288-DPI crop of the field. */}
+        <span className="tax-relief-detail-2550q"><span><b>14A</b> If yes, specify</span><AdaptiveGuidedValue2550Q value={text(envelope, "tax_relief_details")} cells={16} /></span>
       </div>
     </section>
   );
@@ -285,7 +291,23 @@ function PartThree2550Q({ envelope }: { envelope: RenderEnvelope }) {
       <div className="payment-header-2550q"><span>Particulars</span><span>Drawee Bank/Agency</span><span>Number</span><span>Date <em>(MM/DD/YYY)</em></span><span>Amount</span></div>
       {rows.map(([item, label, bank, number, date, amount]) => (
         <div className="payment-row-2550q" key={item}>
-          <span><b>{item}</b> {label}</span><AdaptiveGuidedValue2550Q value={bank ? text(envelope, bank) : ""} cells={5} /><AdaptiveGuidedValue2550Q value={number ? text(envelope, number) : ""} cells={6} /><AdaptiveGuidedValue2550Q value={date ? text(envelope, date) : ""} cells={8} /><MoneyCell2550Q envelope={envelope} fieldKey={amount} cells={12} />
+          <span><b>{item}</b> {label}</span>
+          {/* Row 29 (Tax Debit Memo) has NO Drawee Bank/Agency comb on the
+              official form. The Particulars/Drawee divider at x=106.60pt runs
+              only for y=717.58-772.48 (header + rows 27-28) and restarts at
+              x=106.58 / y=800.98-817.58 for row 30; no divider and no comb
+              candidate crosses the row-29 band y=772.73-789.83, and a 288-DPI
+              crop shows the grey "29 Tax Debit Memo" label running through the
+              Drawee column. Absence of guides is field-specific evidence, so
+              this cell renders plain in the identical grid footprint. It also
+              carries no data key (the rows table passes bank="" for item 29).
+              Still outstanding for the geometry pass: the official has no
+              x~106.6 column border here and continues the grey label band
+              through this column. */}
+          {item === 29
+            ? <span />
+            : <AdaptiveGuidedValue2550Q value={bank ? text(envelope, bank) : ""} cells={5} />}
+          <AdaptiveGuidedValue2550Q value={number ? text(envelope, number) : ""} cells={6} /><AdaptiveGuidedValue2550Q value={date ? text(envelope, date) : ""} cells={8} /><MoneyCell2550Q envelope={envelope} fieldKey={amount} cells={12} />
         </div>
       ))}
       <div className="payment-other-label-2550q"><b>30</b> Others (Specify below)</div>

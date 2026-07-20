@@ -312,6 +312,30 @@ describe("0619F:2018 runtime render contract", () => {
     }
   });
 
+  it("draws no interior guide in the undivided Item 5 box yet keeps its 2-character capacity", () => {
+    // Official evidence: raw rules_v of the pinned contract in x 520-580 / y 95-140
+    // holds only the two 0.48pt full-height box edges at x=535.90 and x=564.70
+    // (y 109.7-127.6) - zero interior rules. Items 1 and 2 on the same row do carry
+    // detected 0.24pt ticks in the same y-band, so this is field-specific absence,
+    // not extractor blindness. The box is 28.8pt = 2 x 14.4pt cell pitch, so capacity
+    // stays 2 and only the guide ink is removed (inventory short_tick_count 1 -> 0).
+    const markup = renderToStaticMarkup(
+      createElement(FormDocument, { envelope: normalFixture as RenderEnvelope })
+    );
+    const tag = officialFieldTag(markup, "5-tax-type-code");
+    expect(tag).toContain('data-field-mode="guided"');
+    expect(tag).toContain('data-guide-segments="2"');
+    expect(tag).toContain('data-guide-count="0"');
+    expect(tag).toContain('data-guide-ticks="none"');
+    // Both cells still exist, so the two characters keep their official positions.
+    // No over-capacity probe is possible here (and none is needed): the render
+    // contract pins this field to exactly "WB" (form-contracts assert0619FEnvelope,
+    // "0619F requires fixed tax type WB"), so 2 characters is both the capacity and
+    // the only legal value, and no truncation path exists. The generic
+    // guided -> plain overflow behaviour is exercised by the 8-agent-name probe below.
+    expect(markup).toContain('<span class="comb-value"><span>W</span><span>B</span></span>');
+  });
+
   it("keeps exact-capacity guides and switches the whole over-capacity field to measured plain mode", () => {
     const exact = structuredClone(normalFixture) as RenderEnvelope;
     exact.taxpayer.name = "A".repeat(40);

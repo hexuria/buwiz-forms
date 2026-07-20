@@ -159,7 +159,10 @@ describe("1701:2018 semantic HTML preview contract", () => {
       'data-field-key="payment_34_date" data-field-mode="guided" data-cell-capacity="8"',
       'data-field-key="payment_34_amount" data-field-mode="guided" data-cell-capacity="9"',
       'data-field-key="payment_37_description" data-field-mode="guided" data-cell-capacity="7"',
-      'data-field-key="schedule_5_taxpayer_1_description" data-field-mode="guided" data-cell-capacity="21"',
+      // Schedule 5 description: official page idx 2 measures 20 cells (19 interior 0.24pt
+      // ticks 43.44...300.17, pitch 14.26, bounded by 0.48pt rules at x=29.16/314.45).
+      // Corrected from the previously declared 21.
+      'data-field-key="schedule_5_taxpayer_1_description" data-field-mode="guided" data-cell-capacity="20"',
       'data-field-key="schedule_5_taxpayer_1_legal_basis" data-field-mode="guided" data-cell-capacity="9"',
       'data-field-key="schedule_6_taxpayer_1_amount" data-field-mode="plain"'
     ]) {

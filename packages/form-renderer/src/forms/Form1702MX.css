@@ -287,6 +287,20 @@
 .payment-header-1702mx > span:nth-child(2) { font-size: 6pt; line-height: .9; }
 .payment-entry-1702mx { height: 19.5pt; }
 .payment-others-heading-1702mx { height: 10.5pt; display: flex; align-items: center; gap: 2pt; padding: 1pt 4pt; background: #d9d9d9; border-bottom: .55pt solid #111; }
+/*
+ * Row 26 "Others" Particulars is the only payment row whose Particulars column
+ * is a real official comb: pinned page-1 container (18.0,806.98)-(133.1,826.44)
+ * with dividers at 34.44/50.86/67.28/83.70/100.12/116.54 (pitch 16.42) => 7
+ * cells. Zero padding on this one cell is what puts seven equal flex cells on
+ * those divider positions across the 115pt column; the guides reuse the form's
+ * existing bottom-anchored comb-tick idiom (see .comb-lines-1702mx) and the
+ * last cell is left tick-free because the column's own border already draws the
+ * x=133.1 edge. The shaded first-column background is deliberately untouched -
+ * fill and stroke weight belong to the geometry/weight pass, not capacity.
+ */
+.payment-particulars-1702mx { padding: 0; }
+.payment-particulars-1702mx .comb-value > span { position: relative; border-right: 0; }
+.payment-particulars-1702mx .comb-value > span:not(:last-child)::after { position: absolute; right: 0; bottom: 0; height: 7pt; border-right: .45pt solid #222; content: ""; }
 .payment-value-1702mx,
 .payment-amount-1702mx { position: relative; }
 .payment-value-1702mx::after,
@@ -567,6 +581,23 @@
   line-height: .9;
 }
 .schedule-seven-1702mx { height: 73pt; margin-top: 1.75pt; }
+/*
+ * Schedule 7 amount combs are 12 cells, not the 13 the default
+ * .amount-cell-1702mx gradient paints. Pinned page-3 containers
+ * (412.15-593.39) x3 rows each carry 11 dividers at pitch 15.17 => 12 cells,
+ * while the default 14.5pt pitch lands 12 interior ticks (14.5..174) inside the
+ * 182pt column => 13 cells. Schedule 7 previously had no ::after override at
+ * all (the .nolco-table-1702mx display:none rule does not reach it - this block
+ * is .nolco-computation-1702mx), so this selector is new. Capacity only: the
+ * tick weight and colour are carried over unchanged from the default, and the
+ * background is clipped to 170pt so the 12th tick (which would begin at
+ * 181.54pt, inside the column) cannot paint a sliver on the frame. The missing
+ * 1.44pt thousands heavies here are a weight defect owned by the weight pass,
+ * which will edit this same selector.
+ */
+.schedule-seven-1702mx .amount-cell-1702mx::after {
+  background: repeating-linear-gradient(90deg, transparent 0 14.67pt, #222 14.67pt 15.17pt) left bottom / 170pt 100% no-repeat;
+}
 .nolco-computation-1702mx > .amount-row-1702mx { flex: 1 1 auto; min-height: 0; }
 
 .schedule-seven-one-1702mx { height: 121pt; margin-top: 1pt; }

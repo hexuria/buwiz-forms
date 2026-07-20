@@ -3,7 +3,6 @@ import { getFormSpec } from "@ebirforms/form-specs";
 import { Fragment, type ReactNode } from "react";
 import {
   AdaptiveCombValue,
-  AdaptivePlainValue,
   CheckChoice,
   CombValue,
   FolioPage,
@@ -231,7 +230,11 @@ function PartOne1702RT({ envelope }: { envelope: RenderEnvelope }) {
       </div>
       <div className="split-identity-1702rt">
         <div className="labeled-comb-1702rt"><span><b>10</b><span>Date of Incorporation/Organization<em>(MM/DD/YYYY)</em></span></span><OfficialDate1702RT value={text(envelope, "incorporation_date")} /></div>
-        <LabeledComb1702RT number="11" label="Contact Number" value={envelope.taxpayer.contact_number} cells={12} />
+        {/* Official capacity is 11, not 12: contract page 0 container candidate x[427.39,594.24]
+            y[337.13,356.57] measures 11 cells at uniform 15.16pt pitch (10 interior dividers,
+            0.24pt, gray 0.0). The '11 Contact Number' label run ends at x=422.3, so no 12th cell
+            can exist left of x0. Width 166.85pt = 11 x 15.168. */}
+        <LabeledComb1702RT number="11" label="Contact Number" value={envelope.taxpayer.contact_number} cells={11} />
       </div>
       <LabeledComb1702RT number="12" label="Email Address" value={envelope.taxpayer.email} cells={32} />
       <div className="deduction-choice-1702rt"><b>13</b><span>Method of Deductions</span><CheckChoice checked={deduction === "itemized"} label="Itemized Deductions [Section 34 (A-J), NIRC]" /><CheckChoice checked={deduction === "osd"} label="Optional Standard Deduction (OSD) – 40% of Gross Income [Section 34(L) NIRC, as amended]" /></div>
@@ -279,7 +282,13 @@ function PartThree1702RT({ envelope }: { envelope: RenderEnvelope }) {
       {rows.map(([item, label]) => <div key={item} className="payment-grid-1702rt payment-row-1702rt" data-payment-item={item} data-payment-fields="bank,number,date,amount"><span><b>{item}</b>{label}</span><PaymentTextCell1702RT value={text(envelope, `payment_${item}_bank`)} cells={5} /><PaymentTextCell1702RT value={text(envelope, `payment_${item}_number`)} cells={7} /><PaymentDate1702RT value={text(envelope, `payment_${item}_date`)} /><Money1702RT envelope={envelope} fieldKey={`payment_${item}_amount`} /></div>)}
       <div className="payment-grid-1702rt payment-row-1702rt payment-row-tax-debit-1702rt" data-payment-item="25" data-payment-fields="number,date,amount"><span><b>25</b>Tax Debit Memo</span><PaymentTextCell1702RT value={text(envelope, "payment_25_number")} cells={7} /><PaymentDate1702RT value={text(envelope, "payment_25_date")} /><Money1702RT envelope={envelope} fieldKey="payment_25_amount" /></div>
       <div className="payment-other-label-1702rt" data-payment-item-label="26"><b>26</b>Others <em>(specify below)</em></div>
-      <div className="payment-grid-1702rt payment-other-1702rt" data-payment-item="26" data-payment-fields="specification,bank,number,date,amount"><PaymentPlainTextCell1702RT value={text(envelope, "payment_26_specification")} /><PaymentPlainTextCell1702RT value={text(envelope, "payment_26_bank")} /><PaymentTextCell1702RT value={text(envelope, "payment_26_number")} cells={7} /><PaymentDate1702RT value={text(envelope, "payment_26_date")} /><Money1702RT envelope={envelope} fieldKey="payment_26_amount" /></div>
+      {/* Item 26 specification and bank are combed on the official form, not plain: contract page 0
+          container candidates x[18.0,133.34] (7 cells, pitch 16.47pt, 6 interior 0.24pt gray-0.0
+          dividers) and x[133.34,205.37] (5 cells, pitch 14.40pt, 4 dividers). The bank candidate is
+          geometrically identical to the rows-23/24 bank combs we already draw with cells={5}. The
+          7-cell comb spans the existing 115pt Particulars column (115/7 = 16.43pt) and the 5-cell
+          comb the existing 72pt column (72/5 = 14.4pt), so no column geometry changes. */}
+      <div className="payment-grid-1702rt payment-other-1702rt" data-payment-item="26" data-payment-fields="specification,bank,number,date,amount"><PaymentTextCell1702RT value={text(envelope, "payment_26_specification")} cells={7} /><PaymentTextCell1702RT value={text(envelope, "payment_26_bank")} cells={5} /><PaymentTextCell1702RT value={text(envelope, "payment_26_number")} cells={7} /><PaymentDate1702RT value={text(envelope, "payment_26_date")} /><Money1702RT envelope={envelope} fieldKey="payment_26_amount" /></div>
       <div className="payment-validation-1702rt"><span>Machine Validation/Revenue Official Receipt Details [if not filed with an Authorized Agent Bank (AAB)]</span><span>Stamp of Receiving Office/AAB and Date of Receipt <em>(RO’s Signature/Bank Teller’s Initial)</em></span></div>
     </section>
   );
@@ -438,10 +447,6 @@ function officialDateParts1702RT(value: string) {
 
 function PaymentTextCell1702RT({ value, cells }: { value: string; cells: number }) {
   return <span className="payment-value-1702rt" data-official-field-mode="guided" data-cell-capacity={cells} aria-label={value}><AdaptiveCombValue value={value} cells={cells} /></span>;
-}
-
-function PaymentPlainTextCell1702RT({ value }: { value: string }) {
-  return <span className="payment-value-1702rt" data-official-field-mode="plain" aria-label={value}><AdaptivePlainValue value={value} className="plain-value-1702rt payment-plain-value-1702rt" /></span>;
 }
 
 function Tin1702RT({ value }: { value: string }) {

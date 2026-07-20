@@ -237,7 +237,6 @@ test("0619F 2018 uses only exact pinned guides and measured plain overflow field
   for (const [field, segments, guideCount] of [
     ["1-month", "2-4", 4],
     ["2-due-date", "2-2-4", 5],
-    ["5-tax-type-code", "2", 1],
     ["6-tin", "3-3-3-5", 10],
     ["7-rdo", "3", 2],
     ["8-agent-name", "40", 39],
@@ -260,6 +259,28 @@ test("0619F 2018 uses only exact pinned guides and measured plain overflow field
       `${field} short rules`
     ).toHaveCount(guideCount);
   }
+
+  // Item 5 is the one guided field whose official entry box carries no interior
+  // divider at all: raw rules_v of the pinned contract in x 520-580 / y 95-140 holds
+  // only the two 0.48pt full-height box edges at x=535.90 and x=564.70 (y 109.7-127.6).
+  // Items 1 and 2 on the same row do carry detected 0.24pt ticks in the identical
+  // y-band, so this is field-specific absence, not extractor blindness. The box is
+  // 28.8pt = 2 x 14.4pt cell pitch, so capacity stays 2 and only the guide ink is
+  // removed - which is why the cell-span count (2 cells, 1 non-last span) here is
+  // deliberately asserted separately from the drawn-guide count (0).
+  const taxTypeCode = page.locator('[data-official-field="5-tax-type-code"]');
+  await expect(taxTypeCode).toHaveAttribute("data-field-mode", "guided");
+  await expect(taxTypeCode).toHaveAttribute("data-guide-segments", "2");
+  await expect(taxTypeCode).toHaveAttribute("data-guide-count", "0");
+  await expect(
+    taxTypeCode.locator(".guided-segment-0619f .comb-value > span"),
+    "5-tax-type-code cells"
+  ).toHaveCount(2);
+  expect(
+    await taxTypeCode
+      .locator(".guided-segment-0619f .comb-value > span:not(:last-child)")
+      .evaluate((element) => getComputedStyle(element, "::after").content)
+  ).toBe("none");
 
   const minimum = readFixture("packages/form-contracts/fixtures/0619f-minimum.json");
   await renderEnvelope(page, minimum);

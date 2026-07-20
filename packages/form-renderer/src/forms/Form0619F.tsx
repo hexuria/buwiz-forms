@@ -169,7 +169,17 @@ function HeaderOptions0619F({ envelope }: { envelope: RenderEnvelope }) {
         <CheckChoice checked={!bool(envelope, "any_taxes_withheld")} label="No" />
       </HeaderOption0619F>
       <HeaderOption0619F label={<><b>5</b> Tax Type Code**</>} valueClassName="code-value-0619f">
-        <GuidedValue0619F field="5-tax-type-code" value={text(envelope, "tax_type_code")} segments={[2]} />
+        {/* Item 5 is an undivided official box: the pinned contract shows only the two
+         * 0.48pt full-height box edges at x=535.90 and x=564.70 (y 109.7-127.6) and zero
+         * interior rules, while items 1 and 2 on the same row do carry 0.24pt ticks in the
+         * identical y-band (so the extractor is not blind here). The box is 28.8pt =
+         * 2 x 14.4pt pitch, so data capacity stays 2 and only the guide is suppressed. */}
+        <GuidedValue0619F
+          field="5-tax-type-code"
+          value={text(envelope, "tax_type_code")}
+          segments={[2]}
+          guides={false}
+        />
       </HeaderOption0619F>
     </section>
   );
@@ -312,13 +322,18 @@ function GuidedValue0619F({
   value,
   segments,
   align = "left",
-  className = ""
+  className = "",
+  guides = true
 }: {
   field: string;
   value: string;
   segments: readonly number[];
   align?: "left" | "right";
   className?: string;
+  /* When false the cell lattice still positions characters (capacity is unchanged)
+   * but no interior guide ink is drawn, for official fields whose entry box carries
+   * no divider rules at all. */
+  guides?: boolean;
 }) {
   const characters = Array.from(value);
   const capacity = segments.reduce((total, segment) => total + segment, 0);
@@ -334,13 +349,16 @@ function GuidedValue0619F({
   }
 
   let offset = 0;
-  const guideCount = segments.reduce((total, segment) => total + segment - 1, 0);
+  const guideCount = guides
+    ? segments.reduce((total, segment) => total + segment - 1, 0)
+    : 0;
   return (
     <span
       className={`guided-field-0619f ${className}`.trim()}
       data-official-field={field}
       data-field-mode="guided"
       data-guide-count={guideCount}
+      data-guide-ticks={guides ? undefined : "none"}
       data-guide-segments={segments.join("-")}
       aria-label={value}
       style={{ gridTemplateColumns: segments.map((segment) => `${segment}fr`).join(" ") }}

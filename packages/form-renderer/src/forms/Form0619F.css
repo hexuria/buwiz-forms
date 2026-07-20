@@ -27,6 +27,14 @@
   border-right: .5pt solid #000;
   content: "";
 }
+/* Fields whose official entry box has no divider rules at all keep the cell
+ * lattice (character placement and capacity) but draw no guide ink. Item 5 (Tax
+ * Type Code): the pinned contract has only the 0.48pt full-height box edges at
+ * x=535.90 / x=564.70 (y 109.7-127.6) and zero interior rules, while items 1-2
+ * on the same row do carry detected 0.24pt ticks in the same y-band. */
+.form-0619f-page-one .guided-field-0619f[data-guide-ticks="none"] .comb-value > span::after {
+  content: none;
+}
 .plain-field-shell-0619f,
 .guided-field-0619f {
   width: 100%;

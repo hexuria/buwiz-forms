@@ -413,9 +413,19 @@ test("1702MX January 2018C preserves the official Page 1 address, signatory, and
   await expect(signatories.locator(":scope > .signature-space-1702mx")).toHaveCount(2);
   await expect(signatories.locator(":scope > .signature-label-1702mx")).toHaveCount(2);
   await expect(signatories.locator(":scope > .signature-footer-1702mx")).toHaveCount(2);
-  await expect(pageOne.locator(".attachments-cell-1702mx .comb-value > span")).toHaveCount(2);
+  // Item 22 "Number of Attachments" is a 3-cell comb officially, not 2: the
+  // pinned page-1 raw rules give 0.48pt box edges at x=533.5/578.98 with
+  // bottom-anchored 0.24pt interior ticks at x=548.74 and x=563.86 (pitch
+  // ~15.2). The field is below the comb detector's container minimum, so the
+  // count comes from those raw strokes.
+  await expect(pageOne.locator(".attachments-cell-1702mx .comb-value > span")).toHaveCount(3);
 
   await expect(pageOne.locator(".part-three-1702mx > .payment-entry-1702mx")).toHaveCount(4);
+  // Row 26 "Others" is the only payment row with an official Particulars comb:
+  // pinned container (18.0,806.98)-(133.1,826.44), 6 dividers at 34.44..116.54
+  // (pitch 16.42) => 7 cells. Rows 23-25 have no container and no ticks there.
+  await expect(pageOne.locator(".payment-entry-1702mx .payment-particulars-1702mx")).toHaveCount(1);
+  await expect(pageOne.locator(".payment-particulars-1702mx .comb-value > span")).toHaveCount(7);
   await expect(pageOne.locator(".part-three-1702mx > .payment-others-heading-1702mx")).toHaveText(
     "26 Others (specify below)"
   );

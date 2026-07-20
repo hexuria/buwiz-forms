@@ -297,7 +297,11 @@ function Address1701Q({ envelope }: { envelope: RenderEnvelope }) {
     <div className="address-1701q">
       <div><b>10</b> Registered Address <em>(Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)</em></div>
       <AdaptiveCombValue value={envelope.taxpayer.registered_address.toUpperCase()} cells={40} />
-      <div className="address-second-1701q"><AdaptiveCombValue value={text(envelope, "registered_address_2").toUpperCase()} cells={31} /><span><b>10A</b> ZIP Code</span><CombValue value={envelope.taxpayer.zip_code} cells={4} align="right" /></div>
+      {/* cells={32}: official 1701Q (Jan 2018) page 1 item 10 continuation comb measured from the pinned
+          PDF contract — box edges x=15.60/475.54pt with 31 interior dividers at uniform 14.39pt pitch.
+          The right edge is a real 0.48pt rule (y 246.1-262.8) with the "10A" label starting at x=475.9,
+          so the final 461.26->475.54pt cell is genuine. Was 31. */}
+      <div className="address-second-1701q"><AdaptiveCombValue value={text(envelope, "registered_address_2").toUpperCase()} cells={32} /><span><b>10A</b> ZIP Code</span><CombValue value={envelope.taxpayer.zip_code} cells={4} align="right" /></div>
     </div>
   );
 }
@@ -357,8 +361,12 @@ function Amount1701Q({ envelope, fieldKey, cells = 8 }: { envelope: RenderEnvelo
 }
 
 function AggregateAmount1701Q({ envelope }: { envelope: RenderEnvelope }) {
+  // cells={8}: official 1701Q (Jan 2018) page 1 item 31 comb measured from the pinned PDF contract —
+  // 0.48pt box edges at x=420.91/536.86pt with 7 interior dividers at uniform 14.49pt pitch, the ones
+  // at 450.07 and 493.66 being 1.44pt digit-group separators after cells 2 and 5 (XX,XXX,XXX).
+  // Was 12, which mis-pitched every divider across the same width. Matches Amount1701Q's default.
   return (
-    <div className="aggregate-1701q"><span><b>31</b> Aggregate Amount Payable/(Overpayment) <small>(Sum of Items 30A and 30B)</small></span><Amount1701Q envelope={envelope} fieldKey="item_31" cells={12} /></div>
+    <div className="aggregate-1701q"><span><b>31</b> Aggregate Amount Payable/(Overpayment) <small>(Sum of Items 30A and 30B)</small></span><Amount1701Q envelope={envelope} fieldKey="item_31" cells={8} /></div>
   );
 }
 

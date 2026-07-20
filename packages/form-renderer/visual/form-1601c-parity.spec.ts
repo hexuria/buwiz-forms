@@ -275,14 +275,23 @@ test("1601C 2018 switches each reviewed adaptive field only after its official c
       selector: ".form-1601c-page-one .email-1601c > :nth-child(2)"
     },
     {
-      capacity: 24,
-      exact: "R".repeat(24),
+      // 17, not 24: official contract p0 candidate[6] measures 16 interior
+      // dividers (x=362.11..579.34, pitch 14.48pt) between the field edge at
+      // 347.83pt and the page border at 594.48pt. Probe string resized so the
+      // exact/capacity+1 boundary still lands on the real capacity.
+      capacity: 17,
+      exact: "R".repeat(17),
       mutate: (fixture, value) => { fixture.fields.tax_relief_specification.value = value; },
       selector: ".form-1601c-page-one .tax-relief-1601c > :nth-child(4)"
     },
     {
-      capacity: 38,
-      exact: "C".repeat(38),
+      // 26, not 38: official contract p1 candidate[1] measures 25 interior
+      // dividers (x=232.85..579.10, pitch 14.43pt) between the TIN/name
+      // boundary at 218.45pt and the right border at 593.51pt. Page 1's name
+      // comb is a genuinely wider 40 cells. Probe string resized to keep the
+      // exact/capacity+1 boundary exact.
+      capacity: 26,
+      exact: "C".repeat(26),
       mutate: (fixture, value) => { fixture.taxpayer.name = value; },
       selector: ".form-1601c-page-two .identity-1601c-page-two > :nth-child(4)"
     }

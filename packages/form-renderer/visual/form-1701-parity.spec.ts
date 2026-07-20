@@ -83,7 +83,10 @@ test("1701 2018 uses only the reviewed guided capacities and official plain cell
 
   const secondPage = page.locator(".page-two-1701");
   for (const [item, capacity] of [
-    ["5", 40], ["6", 11], ["7", 19], ["9", 17]
+    // Item 7 Citizenship: official page idx 1 (y 195.3->209.5, bbox 329.35->599.04)
+    // measures 18 cells - 17 interior 0.24pt ticks (343.75...584.98) bounded by a 0.48pt
+    // rule at x=329.35 and the 1.44pt page frame at x=599.04. Corrected from 19.
+    ["5", 40], ["6", 11], ["7", 18], ["9", 17]
   ] as const) {
     const locator = secondPage.locator(`.labeled-comb-1701[data-item-number="${item}"]`);
     await expect(locator, `page 2 item ${item}`).toHaveAttribute("data-field-mode", "guided");

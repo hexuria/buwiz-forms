@@ -266,7 +266,11 @@ test("2550Q April 2024 uses only the official guided fields and exact guide capa
   expect(await combCapacities(pageOne.locator(".address-comb-lines-2550q"))).toEqual([40, 31]);
   expect(await combCapacities(pageOne.locator(".zip-2550q"))).toEqual([4]);
   expect(await combCapacities(pageOne.locator(".split-row-2550q"))).toEqual([13, 27]);
-  expect(await combCapacities(pageOne.locator(".tax-relief-detail-2550q"))).toEqual([17]);
+  // Item 14A measures 16 cells, not the 17 previously declared: the official
+  // comb at x=361.23-592.25pt / y=309.78-332.28pt carries exactly 15 interior
+  // dividers at a uniform 14.32pt pitch (231.02/14.32 = 16.13), agreed by the
+  // rules_v scan, the tick-run detector and a 288-DPI crop.
+  expect(await combCapacities(pageOne.locator(".tax-relief-detail-2550q"))).toEqual([16]);
   expect(await combCapacities(pageOne.locator(".part-two-2550q"))).toEqual(
     Array.from({ length: 12 }, () => [12, 2]).flat()
   );
@@ -274,7 +278,16 @@ test("2550Q April 2024 uses only the official guided fields and exact guide capa
   const standardPaymentCapacities = await pageOne.locator(".payment-row-2550q:not(.payment-other-values-2550q)")
     .evaluateAll((rows) => rows.map((row) => [...row.querySelectorAll(":scope > .comb-value, :scope > .money-cell-2550q > .comb-value")]
       .map((comb) => comb.children.length)));
-  expect(standardPaymentCapacities).toEqual(Array.from({ length: 3 }, () => [5, 6, 8, 12, 2]));
+  // Rows 27 and 28 carry a 5-cell Drawee comb; row 29 (Tax Debit Memo) does
+  // not exist on the official form. The Particulars/Drawee divider at
+  // x=106.60pt spans only y=717.58-772.48 (header + rows 27-28) and restarts
+  // at y=800.98 for row 30, with no comb candidate in the row-29 band
+  // y=772.73-789.83, so that cell now renders plain in the same footprint.
+  expect(standardPaymentCapacities).toEqual([
+    [5, 6, 8, 12, 2],
+    [5, 6, 8, 12, 2],
+    [6, 8, 12, 2]
+  ]);
   expect(await combCapacities(pageOne.locator(".payment-other-values-2550q"))).toEqual([6, 5, 6, 8, 12, 2]);
 
   expect(await combCapacities(pageTwo.locator(".page-two-identity-2550q > div:first-child"))).toEqual([3, 3, 3, 5]);

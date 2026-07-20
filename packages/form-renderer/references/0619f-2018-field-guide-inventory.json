@@ -5,12 +5,19 @@
     "revision": "2018"
   },
   "audit_method": "Reviewed the exact pinned PDF vector rectangles and short bottom-rule objects against the committed 144 DPI reference raster.",
+  "corrections": [
+    {
+      "field": "5-tax-type-code",
+      "short_tick_count": { "from": 1, "to": 0 },
+      "evidence": "Raw rules_v of the pinned contract in x 520-580 / y 95-140 contains only the two 0.48pt full-height box edges at x=535.90 and x=564.70 (y 109.7-127.6): zero interior rules, fills or comb candidates. Extractor blindness is ruled out because items 1 and 2 on the same row carry detected 0.24pt ticks in the identical y-band (60.24/88.70/102.98/117.26 and 189.02/217.85/246.65/261.05/275.93), and a 288-DPI raster crop shows one undivided white box. Data capacity stays 2 (box width 28.8pt = 2 x 14.4pt cell pitch); only the drawn guide is suppressed."
+    }
+  ],
   "official_source_sha256": "edd7357390b1f0d95f2a38c9bb76252341c15b54b82bffd338bd540452ff15e1",
   "reference_page_one_sha256": "9ca59837f330ad026f1d90e5b19f7d524945b66314b09ded2644efc508f2b627",
   "fields": [
     { "field": "1-month", "mode": "guided", "segments": [2, 4], "short_tick_count": 4 },
     { "field": "2-due-date", "mode": "guided", "segments": [2, 2, 4], "short_tick_count": 5 },
-    { "field": "5-tax-type-code", "mode": "guided", "segments": [2], "short_tick_count": 1 },
+    { "field": "5-tax-type-code", "mode": "guided", "segments": [2], "short_tick_count": 0 },
     { "field": "6-tin", "mode": "guided", "segments": [3, 3, 3, 5], "short_tick_count": 10, "separator_bands": 3, "overflow_mode": "plain" },
     { "field": "7-rdo", "mode": "guided", "segments": [3], "short_tick_count": 2 },
     { "field": "8-agent-name", "mode": "guided", "segments": [40], "short_tick_count": 39, "overflow_mode": "plain" },

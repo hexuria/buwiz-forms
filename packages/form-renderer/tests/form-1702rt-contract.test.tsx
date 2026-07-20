@@ -204,13 +204,20 @@ describe("1702RT:2018C experimental preview contract", () => {
 
     expect(markup).toContain('class="stacked-field-1702rt" data-official-field-mode="guided" data-line-capacity="38"');
     expect(markup).toContain('class="address-block-1702rt" data-official-field-mode="guided" data-line-capacities="38,38,30"');
-    expect(markup).toContain('data-cell-capacity="12"><span><b>11</b>Contact Number');
+    // Item 11 capacity corrected 12 -> 11 against the official contract: page 0 container candidate
+    // x[427.39,594.24] y[337.13,356.57] measures 11 cells at uniform 15.16pt pitch (10 interior
+    // 0.24pt gray-0.0 dividers); the label run ends at x=422.3 so no 12th cell fits.
+    expect(markup).toContain('data-cell-capacity="11"><span><b>11</b>Contact Number');
     expect(markup).toContain('data-cell-capacity="32"><span><b>12</b>Email Address');
     expect(markup).toContain('data-official-field-mode="plain" aria-label="IC010"');
-    expect(markup.match(/class="payment-value-1702rt" data-official-field-mode="guided" data-cell-capacity="5"/g)).toHaveLength(2);
-    expect(markup.match(/class="payment-value-1702rt" data-official-field-mode="guided" data-cell-capacity="7"/g)).toHaveLength(4);
-    expect(markup).toContain('data-official-field-mode="plain" aria-label="OTHER REVIEWED PAYMENT"');
-    expect(markup).toContain('data-official-field-mode="plain" aria-label="AUTHORIZED AGENT BANK 026"');
+    // Item 26 specification (7 cells) and bank (5 cells) are combed on the official form, not plain:
+    // contract page 0 candidates x[18.0,133.34] pitch 16.47pt and x[133.34,205.37] pitch 14.40pt.
+    // Bank combs therefore number 3 (items 23, 24, 26) and 7-cell combs 5 (23, 24, 25, 26 number +
+    // 26 specification).
+    expect(markup.match(/class="payment-value-1702rt" data-official-field-mode="guided" data-cell-capacity="5"/g)).toHaveLength(3);
+    expect(markup.match(/class="payment-value-1702rt" data-official-field-mode="guided" data-cell-capacity="7"/g)).toHaveLength(5);
+    expect(markup).toContain('data-cell-capacity="7" aria-label="OTHER REVIEWED PAYMENT"');
+    expect(markup).toContain('data-cell-capacity="5" aria-label="AUTHORIZED AGENT BANK 026"');
     expect(markup).toContain('data-other-description-capacity="23"');
     expect(markup).toContain('data-description-capacity="15" data-legal-basis-capacity="10"');
     expect(markup).toContain('data-description-capacity="24"');

@@ -240,7 +240,7 @@ function SpouseBackground1701({ envelope }: { envelope: RenderEnvelope }) {
     <ChoiceLine1701 number="3" label="Filer’s Spouse Type" choices={[["single_proprietor", "Single Proprietor"], ["professional", "Professional"], ["compensation_earner", "Compensation Earner"]]} selected={type} />
     <AtcChoices1701 number="4" selected={text(envelope, "spouse_atc")} />
     <LabeledComb1701 number="5" label="Spouse’s Name (Last Name, First Name, Middle Name)" value={text(envelope, "spouse_name")} cells={40} />
-    <div className="split-values-1701 spouse-contact-1701"><LabeledComb1701 number="6" label="Contact Number" value={text(envelope, "spouse_contact_number")} cells={11} /><LabeledComb1701 number="7" label="Citizenship" value={text(envelope, "spouse_citizenship")} cells={19} /></div>
+    <div className="split-values-1701 spouse-contact-1701"><LabeledComb1701 number="6" label="Contact Number" value={text(envelope, "spouse_contact_number")} cells={11} /><LabeledComb1701 number="7" label="Citizenship" value={text(envelope, "spouse_citizenship")} cells={18} /></div>
     <div className="split-values-1701 spouse-credit-1701"><YesNoLine1701 number="8" label="Claiming Foreign Tax Credits?" value={optionalBool(envelope, "spouse_claims_foreign_tax_credits")} /><LabeledComb1701 number="9" label="Foreign Tax Number" value={text(envelope, "spouse_foreign_tax_number")} cells={17} /></div>
     <div className="two-choice-row-1701"><YesNoLine1701 number="10" label="Income EXEMPT from Income Tax?" value={optionalBool(envelope, "spouse_has_exempt_income")} /><YesNoLine1701 number="11" label="Income subject to SPECIAL/PREFERENTIAL RATE?" value={optionalBool(envelope, "spouse_has_special_rate_income")} /></div>
     <TaxElection1701 number="12" rate={rate} deduction={deduction} />
@@ -365,10 +365,10 @@ function ScheduleOne1701({ envelope }: { envelope: RenderEnvelope }) {
 
 function EmployerIdentity1701({ name, tin }: { name: string; tin: string }) {
   const characters = Array.from(name);
-  const exceedsOfficialCombCapacity = characters.length > 52;
+  const exceedsOfficialCombCapacity = characters.length > 51;
   const firstLine = exceedsOfficialCombCapacity ? name : characters.slice(0, 35).join("");
   const continuation = exceedsOfficialCombCapacity ? "" : characters.slice(35).join("");
-  return <span className="employer-identity-1701" aria-label={name}><AdaptiveCombValue value={firstLine} cells={35} className="employer-name-primary-1701" /><CombValue value={continuation} cells={17} /><span className="employer-tin-label-1701"><b>b.</b> Employer’s TIN</span><AdaptiveCombValue value={tin} cells={14} className="employer-tin-value-1701" /></span>;
+  return <span className="employer-identity-1701" aria-label={name}><AdaptiveCombValue value={firstLine} cells={35} className="employer-name-primary-1701" /><CombValue value={continuation} cells={16} /><span className="employer-tin-label-1701"><b>b.</b> Employer’s TIN</span><AdaptiveCombValue value={tin} cells={14} className="employer-tin-value-1701" /></span>;
 }
 
 function EmployerTotal1701({ item, party, incomeKey, withheldKey, envelope }: { item: "3A" | "3B"; party: "TAXPAYER" | "SPOUSE"; incomeKey: string; withheldKey: string; envelope: RenderEnvelope }) {
@@ -423,7 +423,7 @@ function ScheduleFive1701({ envelope }: { envelope: RenderEnvelope }) {
 
 function SpecialDeductionGroup1701({ party, start, envelope }: { party: "taxpayer" | "spouse"; start: number; envelope: RenderEnvelope }) {
   const totalItem = party === "taxpayer" ? 3 : 6;
-  return <><div className="special-head-1701"><span>5.{party === "taxpayer" ? "A - Taxpayer/Filer" : "B - Spouse"} — Description</span><span>Legal Basis</span><span>Amount</span></div>{[0, 1].map((offset) => { const key = `schedule_5_${party}_${offset + 1}`; return <div className="special-row-1701" key={key}><span>{start + offset}</span><GuidedField1701 value={text(envelope, `${key}_description`)} cells={21} fieldKey={`${key}_description`} /><GuidedField1701 value={text(envelope, `${key}_legal_basis`)} cells={9} fieldKey={`${key}_legal_basis`} /><Amount1701 envelope={envelope} fieldKey={`${key}_amount`} /></div>; })}<div className="special-total-1701"><span>{totalItem} Total Special Allowable Itemized Deductions-{party === "taxpayer" ? "Taxpayer/Filer" : "Spouse"}</span><Amount1701 envelope={envelope} fieldKey={`schedule_5_total_${party}`} /></div></>;
+  return <><div className="special-head-1701"><span>5.{party === "taxpayer" ? "A - Taxpayer/Filer" : "B - Spouse"} — Description</span><span>Legal Basis</span><span>Amount</span></div>{[0, 1].map((offset) => { const key = `schedule_5_${party}_${offset + 1}`; return <div className="special-row-1701" key={key}><span>{start + offset}</span><GuidedField1701 value={text(envelope, `${key}_description`)} cells={20} fieldKey={`${key}_description`} /><GuidedField1701 value={text(envelope, `${key}_legal_basis`)} cells={9} fieldKey={`${key}_legal_basis`} /><Amount1701 envelope={envelope} fieldKey={`${key}_amount`} /></div>; })}<div className="special-total-1701"><span>{totalItem} Total Special Allowable Itemized Deductions-{party === "taxpayer" ? "Taxpayer/Filer" : "Spouse"}</span><Amount1701 envelope={envelope} fieldKey={`schedule_5_total_${party}`} /></div></>;
 }
 
 function ScheduleSixTaxpayer1701({ envelope }: { envelope: RenderEnvelope }) {

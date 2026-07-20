@@ -139,7 +139,10 @@ describe("1701Q:2018 experimental preview contract", () => {
       payment_35_number: 11,
       payment_35_date: 8,
       item_26_taxpayer: 8,
-      item_31: 12
+      // item_31 corrected 12 -> 8: official page 1 item 31 comb measured from the pinned PDF contract
+      // (0.48pt box edges x=420.91/536.86pt, 7 interior dividers at uniform 14.49pt pitch, 1.44pt
+      // digit-group separators at 450.07/493.66 after cells 2 and 5 => XX,XXX,XXX).
+      item_31: 8
     } as const;
     for (const [fieldName, capacity] of Object.entries(guidedCapacities)) {
       expect(markup, fieldName).toContain(

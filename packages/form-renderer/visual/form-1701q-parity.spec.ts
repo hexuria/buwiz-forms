@@ -74,7 +74,10 @@ test("1701Q 2018 uses only the pinned official comb capacities and plain cells",
     )).toEqual([3, 3, 3, 5]);
   }
   await expect(page.locator(".address-1701q > .comb-value > span")).toHaveCount(40);
-  await expect(page.locator(".address-second-1701q > .comb-value:first-child > span")).toHaveCount(31);
+  // 32 (was 31): official item 10 continuation comb, box edges x=15.60/475.54pt with 31 interior
+  // dividers at uniform 14.39pt pitch; the right edge is a real 0.48pt rule and the last cell
+  // (461.26->475.54pt) is on-pitch, so the 32nd cell is genuine.
+  await expect(page.locator(".address-second-1701q > .comb-value:first-child > span")).toHaveCount(32);
   await expect(page.locator(".address-second-1701q > .comb-value:last-child > span")).toHaveCount(4);
   await expect(page.locator(".page-two-identity-1701q > .comb-value:nth-child(3) > span")).toHaveCount(14);
   await expect(page.locator(".page-two-identity-1701q > .comb-value:nth-child(4) > span")).toHaveCount(26);
@@ -102,12 +105,13 @@ test("1701Q 2018 uses only the pinned official comb capacities and plain cells",
     await expect(locator.locator(".comb-value"), `${fieldName} invented comb`).toHaveCount(0);
   }
 
+  // Every money comb on the official form is 8 cells (XX,XXX,XXX), item 31 included: its comb was
+  // measured from the pinned PDF contract as 0.48pt box edges x=420.91/536.86pt with 7 interior
+  // dividers at uniform 14.49pt pitch and 1.44pt digit-group separators at 450.07/493.66 (after
+  // cells 2 and 5). item_31 previously carried a 12-cell override.
   for (const amount of await page.locator(".amount-1701q").all()) {
     const fieldName = await amount.getAttribute("data-field-name");
-    await expect(amount, fieldName ?? "amount").toHaveAttribute(
-      "data-cell-capacity",
-      fieldName === "item_31" ? "12" : "8"
-    );
+    await expect(amount, fieldName ?? "amount").toHaveAttribute("data-cell-capacity", "8");
   }
 });
 

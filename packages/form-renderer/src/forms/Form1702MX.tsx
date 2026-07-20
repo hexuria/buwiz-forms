@@ -334,9 +334,27 @@ function PartOne1702MX({ envelope }: { envelope: RenderEnvelope }) {
       <Address1702MX envelope={envelope} />
       <div className="identity-split-1702mx">
         <LabeledCombLines1702MX number="10" label="Date of Incorporation/Organization (MM/DD/YYYY)" value={text(envelope, "incorporation_date").replace(/\D/g, "")} cells={8} lines={1} />
-        <LabeledCombLines1702MX number="11" label="Contact Number" value={envelope.taxpayer.contact_number.replace(/\D/g, "")} cells={12} lines={1} />
+        {/*
+          * Item 11 capacity is the official measured 11, not 12. Pinned page 1
+          * comb container (427.39,342.89)-(594.24,362.33) carries 10 uniform
+          * 0.24pt dividers at 442.51..578.98 (pitch 15.16), and the tick-run
+          * detector independently reports 10 ticks; capacity = ticks + 1 = 11.
+          * The "11 Contact Number" label ends at x=422.3, left of the 0.48pt
+          * row edge at 427.39, so the first cell is writable and the count is
+          * unambiguous. A 12th declared cell silently dropped a character.
+          */}
+        <LabeledCombLines1702MX number="11" label="Contact Number" value={envelope.taxpayer.contact_number.replace(/\D/g, "")} cells={11} lines={1} />
       </div>
-      <LabeledCombLines1702MX number="12" label="Email Address" value={envelope.taxpayer.email.toUpperCase()} cells={40} lines={1} compact />
+      {/*
+        * Item 12 capacity is the official measured 32, not 40. Pinned page 1
+        * comb container (108.98,362.33)-(594.24,381.77) carries 31 uniform
+        * dividers at 124.1..578.98 (pitch 15.16, uniform lattice - not a
+        * detector over-merge), tick-run agrees at 31 ticks => 32 cells. The
+        * field extent already matches (.compact-field-1702mx label column is
+        * 90pt, putting the comb start at ~x108); only the declared pitch was
+        * wrong (~11.7pt vs 15.16pt).
+        */}
+      <LabeledCombLines1702MX number="12" label="Email Address" value={envelope.taxpayer.email.toUpperCase()} cells={32} lines={1} compact />
       <div className="deduction-method-1702mx">
         <span><b>13</b> Method of Deduction</span>
         <CheckChoice checked={deduction === "itemized"} label="Itemized Deduction [Section 34 (A-J), NIRC]" />
@@ -429,7 +447,17 @@ function Declaration1702MX({ envelope }: { envelope: RenderEnvelope }) {
           title={text(envelope, "treasurer_title")}
           tin={text(envelope, "treasurer_tin")}
         />
-        <div className="attachments-cell-1702mx"><span><b>22</b> Number of<br />Attachments</span><CombValue value={text(envelope, "number_of_attachments")} cells={2} align="right" /></div>
+        {/*
+          * Item 22 capacity is the official measured 3, not 2. The field sits
+          * below the comb detector's container minimum, so it is read from the
+          * raw pinned rules: 0.48pt box edges at x=533.5 and x=578.98 (y
+          * 675.34-696.58) with bottom-anchored 0.24pt interior ticks at
+          * x=548.74 and x=563.86 => 3 cells at pitch ~15.2 (the classic
+          * comb-in-box, not a rect-edge artifact). The declared 46pt
+          * .attachments-cell-1702mx comb width matches the official 45.48pt
+          * box, so the field binding is unambiguous.
+          */}
+        <div className="attachments-cell-1702mx"><span><b>22</b> Number of<br />Attachments</span><CombValue value={text(envelope, "number_of_attachments")} cells={3} align="right" /></div>
       </div>
     </section>
   );
@@ -462,8 +490,19 @@ function PartThree1702MX({ envelope }: { envelope: RenderEnvelope }) {
         return <PaymentEntry1702MX key={label} label={label} drawee={text(envelope, `${prefix}_drawee`)} number={text(envelope, `${prefix}_number`)} date={combined} />;
       })}
       <div className="payment-others-heading-1702mx">26 Others <em>(specify below)</em></div>
+      {/*
+        * Row 26 is the one payment row whose Particulars column is a real
+        * official comb, and it was rendering as a bare empty span. Pinned page
+        * 1 container (18.0,806.98)-(133.1,826.44) carries 6 dividers at
+        * 34.44..116.54 (pitch 16.42) and the tick-run detector agrees => 7
+        * cells. Rows 23-25 have no Particulars container and no ticks in
+        * x 18-133.1 at y 737-800, so their plain rendering is correct and is
+        * left alone. Seven flex cells across the 115pt column reproduce the
+        * official divider positions to within 0.05pt.
+        */}
       <PaymentEntry1702MX
         label=""
+        particulars={text(envelope, "payment_26_particulars")}
         drawee={text(envelope, "payment_26_drawee")}
         number={text(envelope, "payment_26_number")}
         date={text(envelope, "payment_26_date_or_amount")}
@@ -473,10 +512,16 @@ function PartThree1702MX({ envelope }: { envelope: RenderEnvelope }) {
   );
 }
 
-function PaymentEntry1702MX({ label, drawee, number, date }: { label: string; drawee: string; number: string; date: string }) {
+function PaymentEntry1702MX({ label, particulars, drawee, number, date }: { label: string; particulars?: string; drawee: string; number: string; date: string }) {
   return (
     <div className="payment-grid-1702mx payment-entry-1702mx">
-      <span>{label}</span>
+      {particulars === undefined
+        ? <span>{label}</span>
+        : (
+          <span className="payment-particulars-1702mx" data-cell-capacity={7}>
+            <AdaptiveCombValue value={particulars} cells={7} />
+          </span>
+        )}
       <PlainValue1702MX value={drawee} className="payment-value-1702mx" />
       <PlainValue1702MX value={number} className="payment-value-1702mx" />
       <PlainValue1702MX value={date} className="payment-value-1702mx" />
@@ -489,7 +534,18 @@ function PageIdentity1702MX({ envelope }: { envelope: RenderEnvelope }) {
   return (
     <section className="page-identity-1702mx">
       <span><b>Taxpayer Identification Number (TIN)</b><Tin1702MX value={envelope.taxpayer.tin} /></span>
-      <span><b>Registered Name</b><AdaptiveCombValue value={envelope.taxpayer.name.toUpperCase()} cells={48} /></span>
+      {/*
+        * Page-identity Registered Name capacity is the official measured 24,
+        * not 48. Pinned containers: p2 (231.17,93.86)-(593.39,111.5) with 23
+        * uniform dividers at pitch 15.16, p3 (230.33,113.42)-(594.24,133.34)
+        * and p4 (230.33,97.34)-(593.39,117.26) both likewise 24 cells; the
+        * tick-run detector agrees on all three pages. The field extent already
+        * matches (official TIN column 18-231.17 = 213.17pt = our 213pt first
+        * grid column), so 48 was halving the official pitch to ~7.5pt.
+        * Values longer than 24 characters keep the reviewed AdaptiveCombValue
+        * plain-box overflow path - nothing is truncated.
+        */}
+      <span><b>Registered Name</b><AdaptiveCombValue value={envelope.taxpayer.name.toUpperCase()} cells={24} /></span>
     </section>
   );
 }

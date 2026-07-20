@@ -223,7 +223,12 @@ function BackgroundInformation({
           <CheckChoice checked={!relief} label="No" />
         </span>
         <div><b>13A</b> If yes, specify</div>
-        <AdaptiveComb1601C value={text(envelope, "tax_relief_specification").toUpperCase()} cells={24} />
+        {/* 17 cells: official contract p0 candidate[6], bbox 347.83-594.48pt, pitch
+            14.48pt uniform, 16 interior 0.24pt dividers at x=362.11..579.34
+            (y 271.13-279.17) between the 0.48pt field edge and the 1.44pt page
+            border. The former 24 forced a ~10.3pt pitch against the form's
+            ~14.5pt, displacing every divider. */}
+        <AdaptiveComb1601C value={text(envelope, "tax_relief_specification").toUpperCase()} cells={17} />
       </div>
     </section>
   );
@@ -392,7 +397,13 @@ function PageTwo({ envelope, rows }: { envelope: RenderEnvelope; rows: RenderRow
       <div className="identity-1601c-page-two">
         <span className="identity-label-1601c">TIN</span><span className="identity-label-1601c">Withholding Agent’s Name <em>(Last Name for Individual OR Registered Name for Non-Individual)</em></span>
         <AdaptiveComb1601C value={envelope.taxpayer.tin.replace(/\D/g, "")} cells={14} />
-        <AdaptiveComb1601C value={envelope.taxpayer.name.toUpperCase()} cells={38} />
+        {/* 26 cells: official contract p1 candidate[1], bbox 218.45-593.51pt,
+            pitch 14.43pt uniform, 25 interior 0.24pt dividers at
+            x=232.85..579.10 between the 0.48pt TIN/name boundary and the 1.46pt
+            right border. Page 1's name field is genuinely 40 cells (p0
+            candidate[1], 39 dividers) - this page-2 field is narrower, not a
+            copy. The former 38 gave a ~9.9pt pitch vs the official 14.43pt. */}
+        <AdaptiveComb1601C value={envelope.taxpayer.name.toUpperCase()} cells={26} />
       </div>
       <section className="schedule-1601c">
         <h2>Part IV - Schedule</h2>
