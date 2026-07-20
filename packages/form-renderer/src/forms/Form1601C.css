@@ -284,7 +284,11 @@
   font-weight: 700;
 }
 .header-option-1601c:last-child > span { padding-inline: 9pt; }
-.header-option-1601c .check-box { width: 14pt; height: 14pt; }
+/* The official header check boxes are wider than they are tall, not square:
+ * the geometry contract records the item 2/3 pair at 13.44x12.12pt and
+ * 13.32x12.24pt (y0_pt 112.2). A 14x14pt square read visibly larger than the
+ * official on paper. */
+.header-option-1601c .check-box { width: 13.4pt; height: 12.2pt; }
 
 .part-1601c { margin-top: 2.5pt; }
 .part-1601c > h2,
