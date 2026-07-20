@@ -1,6 +1,6 @@
 # Priority HTML Form Readiness
 
-Last verified: **July 19, 2026**.
+Last verified: **July 20, 2026**.
 
 The machine-readable authority is
 `packages/form-specs/form-migration-status.json`, cross-checked against
@@ -49,8 +49,10 @@ noise floor are mandatory non-gating diagnostics reported next to the gate:
 
 | 2551Q:2018 page | Gate vs chromium raster | Poppler-raster diagnostic | Pinned noise floor |
 | --- | --- | --- | --- |
-| Page 1 | 7.3355% | 6.6530% | 3.6104% |
+| Page 1 | 7.1422% | 6.5242% | 3.6104% |
 | Page 2 | 5.4557% | 4.6501% | 3.0690% |
+
+Page 1 was 7.3355% / 6.6530% before the structural fixes recorded below.
 
 The gate being higher than the Poppler diagnostic is an honest finding, not a
 regression: historical calibration drifted toward Poppler's rasterization
@@ -74,6 +76,64 @@ corrected an earlier incorrect attribution to glyph shape and anti-aliasing:
   a DOM `Range` rectangle excludes. Measured consistently, the median ratio for
   the ATC table is **0.99872** with only 11 of 93 runs below 0.97. Advance
   width is not a broad defect.
+
+### Structural fixes landed 2026-07-20, and what they cost to get right
+
+The criterion localized real defects the single 7.34% number was burying, and
+fixing them improved BOTH rasterizers, which is the signature that separates
+convergence from metric-chasing:
+
+| 2551Q page 1 | Before | After |
+| --- | --- | --- |
+| Structural recall | 0.915875 | **0.965591** |
+| Largest unmatched cluster | 1130 px | **105 px** |
+| Worst scored cell | **0.000000** | 0.4523 |
+| Complete page (chromium gate) | 7.3355% | **7.1422%** |
+| Poppler diagnostic | 6.6530% | **6.5242%** |
+
+What was actually wrong, and three corrections worth remembering:
+
+- The three full-width rules were a WEIGHT defect, not displacement. Official
+  part boundaries are 1.5pt (3 device px); ours drew 1pt. The localizer
+  reported "dy=+2, recovers 100%", which is true and misdescribes the cause —
+  shifting a too-thin stroke down does land it on ink. Moving those rules would
+  have been the wrong fix. The tool now reports stroke thickness alongside
+  offset so the two cases are distinguishable.
+- Item 17's specification field is an UNDERLINE, not a box. We painted a top and
+  left stroke the official does not have. This also cleared the dead cell that
+  scored F1 0.000000.
+- Thickening `border-right` was reverted after review: our right edge is x=1180
+  and the official frame x=1179-1181, so growing it inward painted ~780 px of
+  ink the official lacks while never reaching x=1181. `structural-ink-coverage-v1`
+  cannot see this — at tolerance radius 1 each side dilates over the other — so
+  recall rose while the untoleranced complete-page number got worse. A note sits
+  at the site so it is not re-added.
+- A thicker border moves what is inside it. The left-frame fix displaced every
+  Part II text band by 1-2 px until the grid column was narrowed by the same
+  0.5pt; that single compensation is what turned a mixed result into an
+  improvement on both rasterizers.
+
+**Item 12A capacity.** The official field carries 15 interior dividers on a
+28.4 px pitch across 455 px: 16 character positions. The renderer declared 26 —
+a 62% overstatement of what the form accepts, and the defect behind the
+"Item 12A value" cell flagged at F1 0.703 with precision 0.621. A full audit of
+all 96 comb fields on both pages found no other capacity mismatch, so this was
+the only one. Ten wrong dividers moved the complete-page number by about a
+hundredth of a percent, which is why capacity needs its own check rather than
+relying on any pixel gate.
+
+**Not fixed, deliberately, with reasons recorded at each site:** the Part II
+centavos column is missing structure rather than displacement (our separator
+sits 2 device px right and 2 px narrow, so a border-only fix paints ink the
+official lacks while still missing its edges, and measured worse); page 2's ATC
+row-pitch drift shows in the cell component rather than as a structural cluster;
+and the y=1201 part boundary retains a ~1 px downward bias.
+
+**Measurement caution recorded from this work.** Threshold-based row counting
+misreports sub-pixel geometry: counting rows below tone 150 made a correct
+3-device-px stroke look like 4 because our lighter partials crossed the
+threshold and the official's did not. Read tone profiles, not thresholded
+counts, when judging stroke placement.
 
 ### The decisive result: the 1% gate is not reachable for 2551Q
 
