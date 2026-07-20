@@ -161,7 +161,7 @@
   height: 19pt;
   display: grid;
   grid-template-columns: 130pt 190pt 138pt minmax(0, 1fr);
-  border: 1pt solid #111;
+  border: 1.5pt solid #111;
   border-top: 0;
   /* The source uses 9.33pt Arial here. The bundled Arimo face calibrates to
    * the pinned raster at 8.15pt without shrinking the fixed option columns. */
@@ -476,7 +476,7 @@
   height: 16pt;
   display: grid;
   grid-template-columns: minmax(0, 72%) minmax(0, 28%);
-  border: 1pt solid #111;
+  border: 1.5pt solid #111;
   border-top: 0;
 }
 .aggregate-1701q > span:first-child { display: flex; align-items: center; gap: 3pt; padding: 1pt 3pt; background: #d9d9d9; }
@@ -546,7 +546,7 @@
 }
 
 .part-five-1701q { margin-top: 1.5pt; }
-.part-five-1701q > h2 { height: 11.5pt; border: 1pt solid #111; }
+.part-five-1701q > h2 { height: 11.5pt; border: 1.5pt solid #111; }
 .part-five-1701q > h2 small { position: absolute; right: 18pt; font-style: italic; }
 .part-five-1701q .paired-section-1701q { margin-top: 1.5pt; }
 .part-five-1701q .graduated-schedule-1701q { margin-top: 0; }
@@ -628,7 +628,7 @@
   padding-left: 59pt;
   font-size: 9pt;
 }
-.single-total-1701q { min-height: 18pt; border: 1pt solid #111; margin-top: 2pt; }
+.single-total-1701q { min-height: 18pt; border: 1.5pt solid #111; margin-top: 2pt; }
 .single-total-1701q > span:first-child,
 .single-total-1701q > .amount-1701q { border-bottom: 0; }
 .final-total-1701q { font-size: 8pt; }
