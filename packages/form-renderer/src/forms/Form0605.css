@@ -299,16 +299,22 @@
 .item-5-0605 > .item-label-0605 { height: 24pt; line-height: 1.6; }
 .item-5-0605 > div { height: 19pt; margin: -8pt 2pt 2pt 48pt; }
 .item-6-0605 { grid-column: 5; grid-row: 1; }
-.item-7-0605 { grid-column: 1; grid-row: 2; border-top: 1pt solid #111; border-right: 1pt solid #111; }
+/* Official y=171.86pt separator is a 1.92pt black fill (contract gray 0.0),
+ * which buckets to 2 device px; 1pt buckets to 1. The 0.5pt the thicker
+ * border eats is taken back from each item's label height so the field boxes
+ * keep their calibrated y and the 36pt row-2 track still fits. */
+.item-7-0605 { grid-column: 1; grid-row: 2; border-top: 1.5pt solid #111; border-right: 1pt solid #111; }
 .item-7-0605 > div { margin-left: 26pt; }
-.item-8-0605 { grid-column: 2; grid-row: 2; border-top: 1pt solid #111; border-right: 1pt solid #111; }
+.item-8-0605 { grid-column: 2; grid-row: 2; border-top: 1.5pt solid #111; border-right: 1pt solid #111; }
 .item-8-0605 > div { width: 31pt; margin-left: 43pt; }
+.item-7-0605 > .item-label-0605,
+.item-8-0605 > .item-label-0605 { height: 12.5pt; }
 .bcs-item-0605 {
   grid-column: 3 / 6;
   grid-row: 2;
-  border-top: 1pt solid #111;
+  border-top: 1.5pt solid #111;
 }
-.bcs-item-0605 > span { display: block; height: 14pt; padding: 1pt 2pt; }
+.bcs-item-0605 > span { display: block; height: 13.5pt; padding: 1pt 2pt; }
 .bcs-item-0605 > i {
   display: block;
   height: 20pt;
@@ -388,11 +394,12 @@
 }
 .classification-0605 .check-box { width: 16pt; height: 16pt; }
 .classification-0605 .check-choice { flex-direction: row-reverse; }
+/* Official y=307.01pt separator is a 1.92pt black fill (contract gray 0.0) -> 2 device px. */
 .name-phone-0605 {
   height: 38pt;
   display: grid;
   grid-template-columns: 445pt 1fr;
-  border-bottom: 1pt solid #111;
+  border-bottom: 1.5pt solid #111;
 }
 .name-phone-0605 > div:first-child {
   position: relative;
@@ -412,7 +419,9 @@
 .name-phone-0605 > div:first-child > small {
   position: absolute;
   left: 95pt;
-  bottom: 1pt;
+  /* Compensates the 0.5pt the thicker row border-bottom takes out of the
+   * grid item's height, holding this caption at its original y. */
+  bottom: .5pt;
   font-size: 7.2pt;
 }
 .name-phone-0605 .item-14-0605 > div { margin: 1pt 4pt 2pt 13pt; }
@@ -565,7 +574,12 @@
 }
 .money-0605 > i { display: grid; place-items: end center; padding-bottom: 2pt; font-style: normal; }
 .money-overflow-0605 { grid-column: 1 / -1; }
-.item-21-row-0605 { height: 23pt; align-items: start; border-top: 1pt solid #111; }
+/* No official rule exists here: the contract has nothing full-width in
+ * y 503-510, only 0.75pt box rect-edges (penalty box bottoms 504.96/505.68 and
+ * the item-21 box top 507.84, x404.28-576.12, which the money box's own .8pt
+ * border already draws). The removed border-top was ~390pt of spurious ink;
+ * padding-top replaces its 1pt of layout so the money box holds its y. */
+.item-21-row-0605 { height: 23pt; align-items: start; padding-top: 1pt; }
 .item-21-row-0605 > .money-0605,
 .item-21-row-0605 > .adaptive-plain-value { height: 21pt; margin-top: 0; margin-bottom: 0; }
 
@@ -577,11 +591,15 @@
   border: 2pt solid #111;
 }
 .declaration-0605 > div { min-width: 0; }
+/* Official declaration verticals x=355.99 and x=512.02 are both 1.92pt black
+ * fills (contract gray 0.0) -> 2 device px. The right paddings below give back
+ * the 0.5pt each border eats so the text measure — and therefore line
+ * breaking — is unchanged. */
 .voluntary-signature-0605,
-.deficiency-signature-0605 { position: relative; border-right: 1pt solid #111; text-align: center; }
+.deficiency-signature-0605 { position: relative; border-right: 1.5pt solid #111; text-align: center; }
 .declaration-0605 h3 { height: 23pt; padding-top: 3pt; font-size: 8.5pt; font-weight: 400; }
-.voluntary-signature-0605 > p { padding: 0 37pt; font-size: 7.5pt; line-height: 1.35; text-align: justify; }
-.signature-lines-0605 { position: absolute; left: 16pt; right: 7pt; bottom: 8pt; display: grid; grid-template-columns: 2fr 1fr; gap: 14pt; }
+.voluntary-signature-0605 > p { padding: 0 36.5pt 0 37pt; font-size: 7.5pt; line-height: 1.35; text-align: justify; }
+.signature-lines-0605 { position: absolute; left: 16pt; right: 6.5pt; bottom: 8pt; display: grid; grid-template-columns: 2fr 1fr; gap: 14pt; }
 .signature-line-0605 { position: relative; min-width: 0; }
 .signature-line-0605 > b { position: absolute; left: -15pt; top: 2pt; }
 .signature-line-0605 > .signature-value-0605 { height: 14pt; border-bottom: .8pt solid #111; }
@@ -599,8 +617,8 @@
   white-space: nowrap;
 }
 .deficiency-signature-0605 h3 { height: 45pt; line-height: 1.2; }
-.deficiency-signature-0605 > p { text-align: left; padding: 0 6pt; }
-.deficiency-signature-0605 > .signature-line-0605 { position: absolute; left: 8pt; right: 4pt; bottom: 8pt; }
+.deficiency-signature-0605 > p { text-align: left; padding: 0 5.5pt 0 6pt; }
+.deficiency-signature-0605 > .signature-line-0605 { position: absolute; left: 8pt; right: 3.5pt; bottom: 8pt; }
 .receiving-stamp-0605 { padding-top: 2pt; text-align: center; font-size: 7.2pt; line-height: 1.45; }
 
 .part-three-0605 {
@@ -609,7 +627,10 @@
   border: 2pt solid #111;
   background: #c0c0c0;
 }
-.part-three-0605 > h2 { height: 18pt; grid-template-columns: 74pt 1fr; }
+/* Only the Part III title rule is heavy officially: y=682.30 is a 1.92pt black
+ * fill (gray 0.0) -> 2 device px, while the Part I (y=232.85) and Part II
+ * (y=452.59) title rules are 0.96pt -> 1 px and must keep the shared 1pt. */
+.part-three-0605 > h2 { height: 18pt; grid-template-columns: 74pt 1fr; border-bottom-width: 1.5pt; }
 .payment-table-head-0605 {
   height: 18pt;
   display: grid;
@@ -645,9 +666,12 @@
 .payment-date-0605 > .guided-field-0605,
 .payment-date-0605 > .plain-field-shell-0605 { padding-left: 0; padding-right: 0; }
 .payment-field-0605 .plain-field-value-0605 { padding-right: 0; padding-left: 0; }
+/* Official y=801.24pt rule is a 1.92pt black fill (gray 0.0) -> 2 device px.
+ * Interior is 13pt + 46pt inside a 64pt block, so the extra 0.5pt has 4pt of
+ * slack and nothing clips. */
 .machine-validation-0605 {
   height: 64pt;
-  border-top: 1pt solid #111;
+  border-top: 1.5pt solid #111;
   background: #fff;
 }
 .machine-validation-0605 > span:first-child { display: block; height: 13pt; padding: 1pt; background: #fff; }
@@ -694,7 +718,10 @@
   white-space: nowrap;
 }
 .reference-tables-0605 th {
-  height: 13.5pt;
+  /* 13.5 - 0.4: gives back the half of the heavier ATC thead/tbody boundary
+   * below that lands in the header row. .tax-type-table-0605 th overrides this
+   * height outright, so the second table is unaffected. */
+  height: 13.1pt;
   background: #bfbfbf;
   font-size: 4.6pt;
 }
@@ -703,6 +730,14 @@
   text-align: left;
   font-size: 6.667pt;
   letter-spacing: .25pt;
+}
+/* Official y=59.84 thead/tbody boundary is a 1.80pt black fill (gray 0.0) ->
+ * 2 device px, against the .7pt collapsed cell border we drew -> 1 px. Under
+ * border-collapse the thicker declaration wins the shared edge. Scoped to the
+ * ATC table: the tax-type separator at y=281.57 is officially 0.96pt -> 1 px
+ * and must keep the .7pt border. */
+.atc-table-0605 thead th {
+  border-bottom: 1.5pt solid #111;
 }
 .atc-table-0605 td {
   font-size: 6.125pt;
