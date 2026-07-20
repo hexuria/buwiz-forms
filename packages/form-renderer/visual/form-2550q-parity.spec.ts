@@ -382,7 +382,14 @@ test("2550Q April 2024 matches the complete official pages", async ({ page }, te
   for (let pageIndex = 0; pageIndex < 2; pageIndex += 1) {
     const expectedBuffer = fs.readFileSync(path.join(
       REPO_ROOT,
-      `packages/form-renderer/references/2550q-2024-page-${pageIndex + 1}.png`
+      // Compares against the SAME-RASTERIZER chromium reference, not the Poppler
+      // raster. The Poppler comparison carries a cross-rasterizer noise floor - 1.55%
+      // to 4.54% depending on the form - which flatters every number by an amount
+      // that has nothing to do with this renderer. The chromium reference is built
+      // from the same pinned PDF through pdftocairo and rasterized by this exact
+      // Chromium build, so the difference it reports is ours. Expect the number to
+      // RISE on this change: that is the floor being removed, not a regression.
+      `packages/form-renderer/references/2550q-2024-page-${pageIndex + 1}-chromium.png`
     ));
     const actualBuffer = await pages.nth(pageIndex).screenshot({ animations: "disabled", caret: "hide" });
     const expected = PNG.sync.read(expectedBuffer);

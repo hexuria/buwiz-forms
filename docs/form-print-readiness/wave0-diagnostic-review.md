@@ -164,9 +164,33 @@ structure: the text is 89% present but line-wrapping diverges and the official
 continues past where our block ends. No border or registration change addresses
 it.
 
-### Wave 0 gap this surfaced
+### All ten specs now measure against the chromium reference
 
-The nine forms' parity specs still compare against their **Poppler** rasters.
-Chromium references are now pinned for all ten forms, but only 2551Q's spec
-consumes one. Retargeting the other nine is outstanding Wave 0 work, and until
-it happens their reported numbers carry the cross-rasterizer noise floor.
+The nine forms' parity specs read their Poppler rasters until 2026-07-20; they
+now read the same-rasterizer chromium references, matching 2551Q and matching
+the structural and capacity diagnostics.
+
+**The effect was smaller and less uniform than expected, and that is worth
+recording.** Predicting from 2551Q — whose number rose 6.65% to 7.34% when it
+was retargeted — suggested every form would rise by roughly its noise floor.
+Measured, the deltas are mixed and small:
+
+| Form | page | Poppler | chromium | delta | pinned floor |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `0605` | 1 | 7.4394% | 7.0168% | −0.4226 | 1.55% |
+| `0619F` | 1 | 8.3773% | 9.1610% | +0.7837 | 3.84% |
+| `1601C` | 1 | 11.5612% | 12.1082% | +0.5470 | 3.76% |
+| `1701` | 3 | 12.2539% | 12.1645% | −0.0894 | 3.45% |
+| `1702RT` | 4 | 11.3909% | 10.5984% | −0.7925 | 2.37% |
+| `2550Q` | 2 | 9.8479% | 10.0734% | +0.2255 | 3.40% |
+
+Nine of twenty-two pages moved *down*. The floor does not simply add: it is the
+difference between two renderings of the official page, and our render already
+differs from both in ways that partly overlap it. So the earlier claim that
+these numbers were "flattered by a floor now excluded" was too strong — the
+correction is real but its size is not predictable from the floor.
+
+The value of the change is consistency rather than magnitude: every form is now
+measured against the same reference its structural and capacity diagnostics
+use, so numbers from different tools can be compared without asking which
+rasterizer produced them.

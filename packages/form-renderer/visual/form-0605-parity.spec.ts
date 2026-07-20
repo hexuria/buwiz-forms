@@ -571,7 +571,14 @@ test("0605 1999 matches the complete pinned official pages", async ({ page }, te
   for (let index = 0; index < 2; index += 1) {
     const referencePath = path.join(
       REPO_ROOT,
-      `packages/form-renderer/references/0605-1999-page-${index + 1}.png`
+      // Compares against the SAME-RASTERIZER chromium reference, not the Poppler
+      // raster. The Poppler comparison carries a cross-rasterizer noise floor - 1.55%
+      // to 4.54% depending on the form - which flatters every number by an amount
+      // that has nothing to do with this renderer. The chromium reference is built
+      // from the same pinned PDF through pdftocairo and rasterized by this exact
+      // Chromium build, so the difference it reports is ours. Expect the number to
+      // RISE on this change: that is the floor being removed, not a regression.
+      `packages/form-renderer/references/0605-1999-page-${index + 1}-chromium.png`
     );
     const expectedBuffer = fs.readFileSync(referencePath);
     const actualBuffer = await pages.nth(index).screenshot({ animations: "disabled", caret: "hide" });
