@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
 import { compareCompleteOfficialPage } from "./official-page-diff";
+import { renderEnvelope } from "./support/render-utils";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "../../..");
@@ -480,18 +481,6 @@ function readFixture(relativePath: string): unknown {
   return JSON.parse(fs.readFileSync(path.join(REPO_ROOT, relativePath), "utf8")) as unknown;
 }
 
-async function renderEnvelope(page: Page, envelope: unknown) {
-  await page.goto("/");
-  await page.waitForFunction(() => typeof (window as Window & { renderEbirForm?: unknown }).renderEbirForm === "function");
-  await page.evaluate((value) => {
-    const render = (window as Window & { renderEbirForm?: (input: unknown) => void }).renderEbirForm;
-    if (!render) throw new Error("renderEbirForm is unavailable");
-    render(value);
-  }, envelope);
-  await page.locator(".form-document").waitFor();
-  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
-  await page.evaluate(() => document.fonts.ready);
-}
 
 function compareOfficialStructure(expected: PNG, actual: PNG) {
   const expectedLines = structuralLineMask(expected);

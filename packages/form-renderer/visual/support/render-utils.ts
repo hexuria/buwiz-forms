@@ -31,6 +31,12 @@ export async function renderEnvelope(page: Page, envelope: unknown) {
     })
   );
   await page.evaluate(() => document.fonts.ready);
+  // Adaptive-fit fields (charbox -> plain-text overflow) mark themselves
+  // pending until the post-font fitting ladder settles; capturing earlier
+  // races the fit. Forms without such fields pass through immediately.
+  await page.waitForFunction(
+    () => !document.querySelector('[data-adaptive-fit-state="pending"]')
+  );
 }
 
 /**
