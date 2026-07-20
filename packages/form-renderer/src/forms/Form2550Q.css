@@ -68,7 +68,10 @@
   height: 59pt;
   display: grid;
   grid-template-columns: 98.7pt minmax(0, 1fr) 160.5pt;
-  border: 1.15pt solid #111;
+  /* Contract 2550q-2024 page 1 rules_h pos 49.95/107.65: thickness_pt 1.5,
+   * gray 0.0. 1.15pt floored to a 1px Chromium border; 1.5pt reaches the 2px
+   * bucket the official 3-device-px stroke needs. */
+  border: 1.5pt solid #111;
 }
 .masthead-2550q.compact-2550q { height: 58pt; grid-template-columns: 99pt minmax(0, 1fr) 156pt; }
 .form-number-2550q,
@@ -113,37 +116,46 @@
   text-align: left;
   white-space: nowrap;
 }
+/* The masthead border grew 1.15pt -> 1.5pt (1px -> 2px rendered). The barcode
+ * is the last grid column, so its padding box moved 0.75pt DOWN (top border)
+ * and 0.75pt LEFT (right border). These offsets are calibrated to the official
+ * page, so top drops 0.75pt and left gains 0.75pt to hold the artwork and
+ * caption exactly where the official raster puts them. */
 .form-2550q-page-one .official-pdf417-object-2550q {
-  left: 1.8pt;
-  top: .95pt;
+  left: 2.55pt;
+  top: .2pt;
   width: 156.2pt;
   height: 46.7pt;
 }
 .form-2550q-page-one .barcode-2550q > small {
-  left: 76.9pt;
-  top: 49.306pt;
+  left: 77.65pt;
+  top: 48.556pt;
   width: 80.408pt;
 }
 .form-2550q-page-two .official-pdf417-object-2550q {
-  left: -.1pt;
-  top: 1.65pt;
+  left: .65pt;
+  top: .9pt;
   width: 153.9pt;
   height: 45.1pt;
 }
 .form-2550q-page-two .barcode-2550q > small {
-  left: 71.5pt;
-  top: 48.006pt;
+  left: 72.25pt;
+  top: 47.256pt;
   width: 80.408pt;
 }
 
 .header-options-2550q {
   height: 46.5pt;
-  border: 1.15pt solid #111;
+  /* Contract page 1 rules_h pos 154.17: thickness_pt 1.5, gray 0.0. */
+  border: 1.5pt solid #111;
   border-top: 0;
 }
 .header-row-2550q { display: grid; width: 100%; }
 .header-row-one-2550q { height: 17.5pt; grid-template-columns: 168.5pt 199.5pt minmax(0, 1fr); }
-.header-row-two-2550q { height: 29pt; grid-template-columns: 297pt 127.5pt minmax(0, 1fr); }
+/* Absorbs the 1.5pt the thickened container bottom border takes from the
+ * interior. Contract interior runs 108.4 -> 153.42 = 45.02pt; 17.5 + 27.5
+ * keeps the row-one divider and the bottom stroke on their official rows. */
+.header-row-two-2550q { height: 27.5pt; grid-template-columns: 297pt 127.5pt minmax(0, 1fr); }
 .header-cell-2550q { min-width: 0; display: flex; align-items: center; gap: 4pt; padding: 1pt 4pt; background: #d9d9d9; border-right: .55pt solid #111; border-bottom: .55pt solid #111; }
 .header-options-2550q :is(.comb-value, .check-box) { background: #fff; }
 .header-row-2550q > :last-child { border-right: 0; }
@@ -168,15 +180,20 @@
   display: grid;
   place-items: center;
   background: #d9d9d9;
-  border-bottom: .65pt solid #111;
+  /* Contract heading rules (page 1 pos 168.67/344.18/716.83, page 2 pos
+   * 121.95/365.37): thickness_pt 1.5, gray 0.0. .65pt floored to 1px. */
+  border-bottom: 1.5pt solid #111;
   font-size: 8.5pt;
   /* The source headings are semantically bold but rasterize at Arimo regular. */
   font-weight: 400;
 }
-.part-one-2550q { height: 174pt; }
-.part-one-2550q > h2 { height: 12pt; }
+/* Contract page 1 rules_h pos 156.87 / 329.68: thickness_pt 1.5, gray 0.0. */
+.part-one-2550q { height: 174.3pt; border-width: 1.5pt; }
+.part-one-2550q > h2 { height: 11.8pt; }
 .tin-rdo-2550q {
-  height: 17.5pt;
+  /* Contract row band 169.42 -> 186.53 = 17.11pt; the reclaimed height also
+   * absorbs the interior the thickened part-one border takes. */
+  height: 17.1pt;
   display: grid;
   grid-template-columns: 210pt 242.5pt 71pt 45pt;
   border-bottom: .55pt solid #111;
@@ -186,34 +203,42 @@
 .tin-rdo-2550q .comb-value { height: 100%; }
 .tin-comb-2550q { min-width: 0; height: 100%; display: grid !important; grid-template-columns: 3fr 14pt 3fr 14pt 3fr 14pt 5fr; padding: 0 !important; }
 .tin-separator-2550q { display: grid; place-items: center; background: #a6a6a6; font-weight: 700; }
-.full-field-2550q { min-width: 0; height: 28.5pt; display: grid; grid-template-rows: 11pt 17.5pt; border-bottom: .55pt solid #111; }
+/* The value track absorbs the bottom border instead of overflowing past it, so
+ * part-one's thickened outer border does not push the stack out of its box. */
+.full-field-2550q { min-width: 0; height: 28.6pt; display: grid; grid-template-rows: 11pt minmax(0, 1fr); border-bottom: .55pt solid #111; }
 .full-field-2550q > span:first-child { display: flex; align-items: center; padding: 1pt 4pt; background: #d9d9d9; }
-.full-field-2550q > :is(.adaptive-plain-value, .comb-value) { height: 17.5pt; }
-.address-2550q { height: 47pt; border-bottom: .55pt solid #111; }
+.full-field-2550q > :is(.adaptive-plain-value, .comb-value) { height: 100%; }
+.address-2550q { height: 46.9pt; display: grid; grid-template-rows: 11pt minmax(0, 1fr); border-bottom: .55pt solid #111; }
 .address-2550q > span:first-child { height: 11pt; display: flex; align-items: center; padding: 1pt 4pt; background: #d9d9d9; }
 .address-2550q > span:first-child em { margin-left: 2pt; font-size: 5pt; }
-.address-value-2550q { position: relative; height: 36pt; }
-.address-value-2550q > .adaptive-plain-value { height: 36pt; padding-right: 131pt; }
-.address-comb-lines-2550q { height: 36pt; display: grid; grid-template-rows: 18pt 18pt; }
-.address-comb-lines-2550q .comb-value { height: 18pt; }
+.address-value-2550q { position: relative; height: 100%; }
+.address-value-2550q > .adaptive-plain-value { height: 100%; padding-right: 131pt; }
+.address-comb-lines-2550q { height: 100%; display: grid; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+.address-comb-lines-2550q .comb-value { height: 100%; }
 .address-comb-lines-2550q .comb-value:nth-child(2) { width: 439.5pt; }
 .zip-2550q { position: absolute; right: 0; bottom: 0; width: 131pt; height: 19pt; display: grid; grid-template-columns: 71pt 1fr; align-items: center; background: #d9d9d9; border-left: .55pt solid #111; border-top: .55pt solid #111; padding-left: 2pt; }
 .zip-label-2550q { display: flex; align-items: center; justify-content: center; gap: 2pt; line-height: 1; }
 .zip-2550q .comb-value { height: 18pt; background: #fff; }
-.split-row-2550q { display: grid; grid-template-columns: 182pt 1fr; height: 28.5pt; }
-.split-row-2550q .full-field-2550q { height: 28.5pt; }
+.split-row-2550q { display: grid; grid-template-columns: 182pt 1fr; height: 28.6pt; }
+.split-row-2550q .full-field-2550q { height: 28.6pt; }
 .split-row-2550q .full-field-2550q + .full-field-2550q { border-left: .55pt solid #111; }
-.classification-2550q { height: 19.5pt; display: grid; grid-template-columns: 135pt 70.5pt 70.5pt 87.5pt minmax(0, 1fr); align-items: center; padding: 1pt 4pt; border-bottom: .55pt solid #111; background: #d9d9d9; }
-.tax-relief-2550q { height: 20pt; display: grid; grid-template-columns: 169pt 43pt 42pt minmax(0, 1fr); align-items: center; background: #d9d9d9; }
+.classification-2550q { height: 19.4pt; display: grid; grid-template-columns: 135pt 70.5pt 70.5pt 87.5pt minmax(0, 1fr); align-items: center; padding: 1pt 4pt; border-bottom: .55pt solid #111; background: #d9d9d9; }
+/* Contract row band 310.03 -> 328.93 = 18.90pt, not 20pt. */
+.tax-relief-2550q { height: 18.9pt; display: grid; grid-template-columns: 169pt 43pt 42pt minmax(0, 1fr); align-items: center; background: #d9d9d9; }
 .tax-relief-2550q .check-box { background: #fff; }
-.tax-relief-2550q > * { padding: 1pt 4pt; }
+.tax-relief-2550q > * { padding: .25pt 4pt; }
 .tax-relief-detail-2550q { height: 100%; display: grid; grid-template-columns: 85pt minmax(0, 1fr); align-items: center; padding: 0; border-left: .55pt solid #111; }
 .tax-relief-detail-2550q > span:first-child { display: flex; align-items: center; padding: 1pt 4pt; white-space: nowrap; }
 .tax-relief-detail-2550q > :is(.adaptive-plain-value, .comb-value) { min-height: 16pt; background: #fff; border-left: .55pt solid #111; }
 
-.part-two-2550q { height: 244pt; }
-.amount-row-2550q { height: 18.32pt; display: grid; grid-template-columns: minmax(0, 1fr) 216pt; border-bottom: .55pt solid #111; }
-.part-two-subband-2550q { height: 11pt; display: flex; align-items: center; padding-left: 19pt; background: #d9d9d9; border-bottom: .55pt solid #111; font-size: 8pt; }
+/* Contract page 1 rules_h pos 332.28 / 575.00: thickness_pt 1.5, gray 0.0.
+ * margin-top drops 1.5 -> 1.2pt because part-one grew 174 -> 174.3pt, so
+ * part-two's top stroke stays on its contract row. */
+.part-two-2550q { height: 244pt; margin-top: 1.2pt; border-width: 1.5pt; }
+/* Contract heading band 333.03 -> 344.93 = 11.9pt. */
+.part-two-2550q > h2 { height: 11.9pt; }
+.amount-row-2550q { height: 18.19pt; display: grid; grid-template-columns: minmax(0, 1fr) 216pt; border-bottom: .55pt solid #111; }
+.part-two-subband-2550q { height: 10.9pt; display: flex; align-items: center; padding-left: 19pt; background: #d9d9d9; border-bottom: .55pt solid #111; font-size: 8pt; }
 .amount-label-2550q { min-width: 0; display: flex; align-items: center; padding: 1pt 4pt; background: #d9d9d9; }
 .penalty-prefix-2550q { min-width: 80pt; padding-left: 14pt; font-size: 8pt; }
 .amount-row-2550q .money-cell-2550q { border-left: .55pt solid #111; }
@@ -228,8 +253,8 @@
 .decimal-cell-2550q { width: 15pt; flex: 0 0 15pt; display: grid; place-items: center; background: #a6a6a6; font-weight: 700; }
 .blank-money-2550q { min-height: 100%; }
 
-.declaration-2550q { height: 125.5pt; margin-top: 1.5pt; border: 1.15pt solid #111; }
-.declaration-2550q > p { height: 39pt; padding: 2pt 5pt; text-align: center; font-size: 5.5pt; line-height: 1.04; background: #d9d9d9; border-bottom: .55pt solid #111; }
+.declaration-2550q { height: 125.5pt; margin-top: 1.5pt; border: 1.5pt solid #111; }
+.declaration-2550q > p { height: 38.5pt; padding: 2pt 5pt; text-align: center; font-size: 5.5pt; line-height: 1.04; background: #d9d9d9; border-bottom: .55pt solid #111; }
 .signature-panels-2550q { height: 65pt; display: grid; grid-template-columns: 296pt minmax(0, 1fr); }
 .signature-panels-2550q > div { min-width: 0; display: grid; grid-template-rows: 46.5pt 18.5pt; text-align: center; }
 .signature-panels-2550q > div + div { border-left: .55pt solid #111; }
@@ -238,7 +263,7 @@
 .signature-caption-2550q { min-width: 0; padding: 1.5pt 4pt; background: #d9d9d9; border-top: .55pt solid #111; font-size: 6.5pt; line-height: .92; text-align: center; }
 .signature-caption-2550q small { margin-left: 2pt; font-style: italic; }
 .value-line-2550q { display: block; width: 100%; min-height: 12pt; border-bottom: .55pt solid #111; overflow: hidden; }
-.credential-row-2550q { height: 20pt; display: grid; grid-template-columns: 267.5pt 143pt minmax(0, 1fr); border-top: .55pt solid #111; }
+.credential-row-2550q { height: 18.4pt; display: grid; grid-template-columns: 267.5pt 143pt minmax(0, 1fr); border-top: .55pt solid #111; }
 .credential-row-2550q > span { min-width: 0; display: grid; padding: 0; text-align: center; }
 .credential-row-2550q > span:nth-child(1) { grid-template-columns: 125.5pt minmax(0, 1fr); }
 .credential-row-2550q > span:nth-child(2) { grid-template-columns: 58pt minmax(0, 1fr); }
@@ -266,14 +291,18 @@
 .receiving-stamp-2550q { padding: 3pt 5pt; border-left: .55pt solid #111; text-align: center; background: #fff; }
 .privacy-note-2550q { margin-top: 2pt !important; text-align: left; font-size: 8pt; }
 
-.page-two-identity-2550q { height: 28pt; display: grid; grid-template-columns: 197.5pt minmax(0, 1fr); border: 1.15pt solid #111; border-top: 0; }
-.page-two-identity-2550q > div { min-width: 0; display: grid; grid-template-rows: 11pt 17pt; }
+.page-two-identity-2550q { height: 28.6pt; display: grid; grid-template-columns: 197.5pt minmax(0, 1fr); border: 1.5pt solid #111; border-top: 0; }
+/* Contract bands 79.80 -> 90.60 = 10.8pt and 90.60 -> 106.70 = 16.1pt. The
+ * block's height also grows 28 -> 28.6pt so its bottom stroke lands on the
+ * contract row 106.70-108.20 instead of 0.6pt short of it; part-four's
+ * margin-top drops 2 -> 1.4pt so part-four does not move. */
+.page-two-identity-2550q > div { min-width: 0; display: grid; grid-template-rows: 10.8pt 16.1pt; }
 .page-two-identity-2550q > div + div { border-left: .55pt solid #111; }
 .page-two-identity-2550q > div > span:first-child { display: flex; align-items: center; padding: 1pt 4pt; background: #d9d9d9; }
 .page-two-identity-2550q .comb-value,
-.page-two-identity-2550q .adaptive-plain-value { height: 17pt; padding: 0; }
+.page-two-identity-2550q .adaptive-plain-value { height: 100%; padding: 0; }
 
-.part-four-2550q { height: 558pt; margin-top: 2pt; border: 1.15pt solid #111; }
+.part-four-2550q { height: 558pt; margin-top: 1.4pt; border: 1.15pt solid #111; }
 .part-four-header-2550q,
 .part-four-row-2550q,
 .part-four-subheader-2550q { display: grid; grid-template-columns: 141pt 213.5pt 1fr; }
