@@ -11,10 +11,10 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { PNG } from "pngjs";
+import { INK_THRESHOLD } from "./official-fidelity";
 import { darkInkMask, dilateMask } from "./official-page-diff";
 import type { CriticalRegion } from "./regions/2551q";
 
-const INK_THRESHOLD = 160;
 const INK_TOLERANCE_RADIUS = 2;
 const DEFAULT_GRID = { cols: 12, rows: 18 };
 const DEFAULT_TOP_N = 10;

@@ -1,0 +1,2194 @@
+{
+  "purpose": "criterion_section_8_3_constant_sweeps",
+  "promotion_eligible": false,
+  "tolerance_radius_px": 1,
+  "pinned": {
+    "edge_threshold": 48,
+    "ink_threshold": 150,
+    "structural_min_run": 24
+  },
+  "forms": {
+    "2551Q:2018": {
+      "ink_threshold_curve": [
+        {
+          "ink_threshold": 100,
+          "pages": [
+            {
+              "expected_pixels": 88274,
+              "actual_pixels": 76796,
+              "recall": 0.9166572263633685,
+              "precision": 0.8805276316474816,
+              "largest_unmatched": 1274
+            },
+            {
+              "expected_pixels": 76024,
+              "actual_pixels": 69277,
+              "recall": 0.9244843733557824,
+              "precision": 0.7956897671665921,
+              "largest_unmatched": 956
+            }
+          ]
+        },
+        {
+          "ink_threshold": 110,
+          "pages": [
+            {
+              "expected_pixels": 90201,
+              "actual_pixels": 77422,
+              "recall": 0.9137703573131118,
+              "precision": 0.8942419467334866,
+              "largest_unmatched": 1368
+            },
+            {
+              "expected_pixels": 77982,
+              "actual_pixels": 76262,
+              "recall": 0.9236875176322741,
+              "precision": 0.8078466339723585,
+              "largest_unmatched": 956
+            }
+          ]
+        },
+        {
+          "ink_threshold": 120,
+          "pages": [
+            {
+              "expected_pixels": 100818,
+              "actual_pixels": 83371,
+              "recall": 0.9229006724989586,
+              "precision": 0.9688740689208478,
+              "largest_unmatched": 1368
+            },
+            {
+              "expected_pixels": 84341,
+              "actual_pixels": 82432,
+              "recall": 0.9538658540923157,
+              "precision": 0.8763344332298136,
+              "largest_unmatched": 954
+            }
+          ]
+        },
+        {
+          "ink_threshold": 130,
+          "pages": [
+            {
+              "expected_pixels": 106663,
+              "actual_pixels": 99611,
+              "recall": 0.9357134151486457,
+              "precision": 0.9818795112989529,
+              "largest_unmatched": 1368
+            },
+            {
+              "expected_pixels": 101591,
+              "actual_pixels": 121531,
+              "recall": 0.9915248397988011,
+              "precision": 0.9596234705548379,
+              "largest_unmatched": 73
+            }
+          ]
+        },
+        {
+          "ink_threshold": 132,
+          "pages": [
+            {
+              "expected_pixels": 107114,
+              "actual_pixels": 99621,
+              "recall": 0.9358067106073903,
+              "precision": 0.9847120587024825,
+              "largest_unmatched": 1368
+            },
+            {
+              "expected_pixels": 101833,
+              "actual_pixels": 121531,
+              "recall": 0.9911227205326367,
+              "precision": 0.9618286692284274,
+              "largest_unmatched": 103
+            }
+          ]
+        },
+        {
+          "ink_threshold": 134,
+          "pages": [
+            {
+              "expected_pixels": 107297,
+              "actual_pixels": 99623,
+              "recall": 0.9353383598795866,
+              "precision": 0.9853045983357257,
+              "largest_unmatched": 1368
+            },
+            {
+              "expected_pixels": 103278,
+              "actual_pixels": 121531,
+              "recall": 0.9912372431689227,
+              "precision": 0.971480527602011,
+              "largest_unmatched": 103
+            }
+          ]
+        },
+        {
+          "ink_threshold": 135,
+          "pages": [
+            {
+              "expected_pixels": 107554,
+              "actual_pixels": 99623,
+              "recall": 0.9350093906316826,
+              "precision": 0.9869508045330897,
+              "largest_unmatched": 1368
+            },
+            {
+              "expected_pixels": 105178,
+              "actual_pixels": 121531,
+              "recall": 0.9913955389910437,
+              "precision": 0.9875587298713908,
+              "largest_unmatched": 103
+            }
+          ]
+        },
+        {
+          "ink_threshold": 136,
+          "pages": [
+            {
+              "expected_pixels": 108101,
+              "actual_pixels": 118560,
+              "recall": 0.9824145937595397,
+              "precision": 0.9867155870445344,
+              "largest_unmatched": 103
+            },
+            {
+              "expected_pixels": 105188,
+              "actual_pixels": 121531,
+              "recall": 0.9913963569988972,
+              "precision": 0.9875669582246505,
+              "largest_unmatched": 103
+            }
+          ]
+        },
+        {
+          "ink_threshold": 137,
+          "pages": [
+            {
+              "expected_pixels": 108155,
+              "actual_pixels": 118820,
+              "recall": 0.9827932134436688,
+              "precision": 0.9867614879649891,
+              "largest_unmatched": 103
+            },
+            {
+              "expected_pixels": 105257,
+              "actual_pixels": 121531,
+              "recall": 0.9914019970168255,
+              "precision": 0.9879125490615563,
+              "largest_unmatched": 103
+            }
+          ]
+        },
+        {
+          "ink_threshold": 138,
+          "pages": [
+            {
+              "expected_pixels": 108829,
+              "actual_pixels": 118892,
+              "recall": 0.9828997785516728,
+              "precision": 0.9870554789220469,
+              "largest_unmatched": 103
+            },
+            {
+              "expected_pixels": 105291,
+              "actual_pixels": 121531,
+              "recall": 0.9914047734374258,
+              "precision": 0.9881347145995671,
+              "largest_unmatched": 103
+            }
+          ]
+        },
+        {
+          "ink_threshold": 139,
+          "pages": [
+            {
+              "expected_pixels": 108905,
+              "actual_pixels": 118892,
+              "recall": 0.9828933474128828,
+              "precision": 0.9870891229014568,
+              "largest_unmatched": 103
+            },
+            {
+              "expected_pixels": 105335,
+              "actual_pixels": 121531,
+              "recall": 0.9914083637917122,
+              "precision": 0.9884720770832134,
+              "largest_unmatched": 103
+            }
+          ]
+        },
+        {
+          "ink_threshold": 140,
+          "pages": [
+            {
+              "expected_pixels": 109022,
+              "actual_pixels": 118892,
+              "recall": 0.9822696336519234,
+              "precision": 0.9871143558860141,
+              "largest_unmatched": 103
+            },
+            {
+              "expected_pixels": 105495,
+              "actual_pixels": 121531,
+              "recall": 0.9914119152566472,
+              "precision": 0.9895417630069694,
+              "largest_unmatched": 103
+            }
+          ]
+        },
+        {
+          "ink_threshold": 141,
+          "pages": [
+            {
+              "expected_pixels": 109033,
+              "actual_pixels": 118892,
+              "recall": 0.9822714224133978,
+              "precision": 0.9871395888705716,
+              "largest_unmatched": 103
+            },
+            {
+              "expected_pixels": 105629,
+              "actual_pixels": 121531,
+              "recall": 0.9914228100237624,
+              "precision": 0.9900848343221071,
+              "largest_unmatched": 103
+            }
+          ]
+        },
+        {
+          "ink_threshold": 143,
+          "pages": [
+            {
+              "expected_pixels": 110180,
+              "actual_pixels": 118940,
+              "recall": 0.9824741332365221,
+              "precision": 0.9869682192702203,
+              "largest_unmatched": 103
+            },
+            {
+              "expected_pixels": 106009,
+              "actual_pixels": 121532,
+              "recall": 0.9914629889915008,
+              "precision": 0.9901096007635849,
+              "largest_unmatched": 103
+            }
+          ]
+        },
+        {
+          "ink_threshold": 145,
+          "pages": [
+            {
+              "expected_pixels": 110641,
+              "actual_pixels": 118998,
+              "recall": 0.9811643061794453,
+              "precision": 0.9868401149599153,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 108355,
+              "actual_pixels": 121533,
+              "recall": 0.9898204974389737,
+              "precision": 0.9901508232331959,
+              "largest_unmatched": 103
+            }
+          ]
+        },
+        {
+          "ink_threshold": 147,
+          "pages": [
+            {
+              "expected_pixels": 110728,
+              "actual_pixels": 119102,
+              "recall": 0.9811429809984827,
+              "precision": 0.9868767946801901,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 108429,
+              "actual_pixels": 121533,
+              "recall": 0.9898274446873069,
+              "precision": 0.9903976697687048,
+              "largest_unmatched": 103
+            }
+          ]
+        },
+        {
+          "ink_threshold": 149,
+          "pages": [
+            {
+              "expected_pixels": 111766,
+              "actual_pixels": 119102,
+              "recall": 0.9811033766977435,
+              "precision": 0.9868851908448221,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 108656,
+              "actual_pixels": 121533,
+              "recall": 0.9898394934472096,
+              "precision": 0.9916483588819498,
+              "largest_unmatched": 103
+            }
+          ]
+        },
+        {
+          "ink_threshold": 150,
+          "pages": [
+            {
+              "expected_pixels": 111861,
+              "actual_pixels": 119102,
+              "recall": 0.9811104853344776,
+              "precision": 0.98708669879599,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 108691,
+              "actual_pixels": 121533,
+              "recall": 0.9896219558197091,
+              "precision": 0.9916483588819498,
+              "largest_unmatched": 103
+            }
+          ]
+        },
+        {
+          "ink_threshold": 155,
+          "pages": [
+            {
+              "expected_pixels": 112711,
+              "actual_pixels": 119194,
+              "recall": 0.9801971413615352,
+              "precision": 0.9870547175193383,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 109657,
+              "actual_pixels": 121558,
+              "recall": 0.9896769016113882,
+              "precision": 0.9914444133664588,
+              "largest_unmatched": 104
+            }
+          ]
+        },
+        {
+          "ink_threshold": 156,
+          "pages": [
+            {
+              "expected_pixels": 112790,
+              "actual_pixels": 119194,
+              "recall": 0.9802110116145049,
+              "precision": 0.9870547175193383,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 109698,
+              "actual_pixels": 121558,
+              "recall": 0.9894528614924611,
+              "precision": 0.9914444133664588,
+              "largest_unmatched": 104
+            }
+          ]
+        },
+        {
+          "ink_threshold": 157,
+          "pages": [
+            {
+              "expected_pixels": 112790,
+              "actual_pixels": 119224,
+              "recall": 0.9802287436829507,
+              "precision": 0.9868482855800845,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 109728,
+              "actual_pixels": 121558,
+              "recall": 0.989455745115194,
+              "precision": 0.9914444133664588,
+              "largest_unmatched": 104
+            }
+          ]
+        },
+        {
+          "ink_threshold": 158,
+          "pages": [
+            {
+              "expected_pixels": 112841,
+              "actual_pixels": 119224,
+              "recall": 0.980228817539724,
+              "precision": 0.9868482855800845,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 109731,
+              "actual_pixels": 121558,
+              "recall": 0.9894469201957514,
+              "precision": 0.9914444133664588,
+              "largest_unmatched": 104
+            }
+          ]
+        },
+        {
+          "ink_threshold": 159,
+          "pages": [
+            {
+              "expected_pixels": 113355,
+              "actual_pixels": 119248,
+              "recall": 0.9803272903709584,
+              "precision": 0.9868760901650342,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 109731,
+              "actual_pixels": 121558,
+              "recall": 0.9894469201957514,
+              "precision": 0.9914444133664588,
+              "largest_unmatched": 104
+            }
+          ]
+        },
+        {
+          "ink_threshold": 160,
+          "pages": [
+            {
+              "expected_pixels": 114389,
+              "actual_pixels": 119323,
+              "recall": 0.9781797200779795,
+              "precision": 0.986917861602541,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 110378,
+              "actual_pixels": 121558,
+              "recall": 0.9876968236423925,
+              "precision": 0.9914773194688955,
+              "largest_unmatched": 134
+            }
+          ]
+        },
+        {
+          "ink_threshold": 161,
+          "pages": [
+            {
+              "expected_pixels": 114419,
+              "actual_pixels": 119323,
+              "recall": 0.9781767014219667,
+              "precision": 0.986917861602541,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 110378,
+              "actual_pixels": 121558,
+              "recall": 0.9876968236423925,
+              "precision": 0.9914773194688955,
+              "largest_unmatched": 134
+            }
+          ]
+        },
+        {
+          "ink_threshold": 162,
+          "pages": [
+            {
+              "expected_pixels": 114615,
+              "actual_pixels": 119348,
+              "recall": 0.9781965711294334,
+              "precision": 0.9867865402017629,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 110379,
+              "actual_pixels": 121558,
+              "recall": 0.9876878754110836,
+              "precision": 0.9914773194688955,
+              "largest_unmatched": 134
+            }
+          ]
+        },
+        {
+          "ink_threshold": 163,
+          "pages": [
+            {
+              "expected_pixels": 114652,
+              "actual_pixels": 119348,
+              "recall": 0.9781599972089453,
+              "precision": 0.9870043905218353,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 110453,
+              "actual_pixels": 121558,
+              "recall": 0.9876961241433008,
+              "precision": 0.9914773194688955,
+              "largest_unmatched": 134
+            }
+          ]
+        },
+        {
+          "ink_threshold": 164,
+          "pages": [
+            {
+              "expected_pixels": 114683,
+              "actual_pixels": 119619,
+              "recall": 0.9783664536156187,
+              "precision": 0.9869585935344719,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 110458,
+              "actual_pixels": 121558,
+              "recall": 0.9876966810914556,
+              "precision": 0.9914773194688955,
+              "largest_unmatched": 134
+            }
+          ]
+        },
+        {
+          "ink_threshold": 165,
+          "pages": [
+            {
+              "expected_pixels": 116329,
+              "actual_pixels": 119619,
+              "recall": 0.9785092281374378,
+              "precision": 0.9870003929141692,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 110738,
+              "actual_pixels": 121558,
+              "recall": 0.9877006989470642,
+              "precision": 0.9914773194688955,
+              "largest_unmatched": 134
+            }
+          ]
+        },
+        {
+          "ink_threshold": 166,
+          "pages": [
+            {
+              "expected_pixels": 118588,
+              "actual_pixels": 119620,
+              "recall": 0.9754022329409384,
+              "precision": 0.9871676977094131,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 111828,
+              "actual_pixels": 121582,
+              "recall": 0.9880351969095397,
+              "precision": 0.9914790018259282,
+              "largest_unmatched": 110
+            }
+          ]
+        },
+        {
+          "ink_threshold": 167,
+          "pages": [
+            {
+              "expected_pixels": 130979,
+              "actual_pixels": 122375,
+              "recall": 0.9181624535230839,
+              "precision": 0.9873421859039837,
+              "largest_unmatched": 782
+            },
+            {
+              "expected_pixels": 111880,
+              "actual_pixels": 121582,
+              "recall": 0.9876117268501966,
+              "precision": 0.9914790018259282,
+              "largest_unmatched": 110
+            }
+          ]
+        },
+        {
+          "ink_threshold": 168,
+          "pages": [
+            {
+              "expected_pixels": 131184,
+              "actual_pixels": 122641,
+              "recall": 0.9185342724722527,
+              "precision": 0.986529790200667,
+              "largest_unmatched": 782
+            },
+            {
+              "expected_pixels": 111993,
+              "actual_pixels": 121582,
+              "recall": 0.9871688409096997,
+              "precision": 0.9914790018259282,
+              "largest_unmatched": 110
+            }
+          ]
+        },
+        {
+          "ink_threshold": 169,
+          "pages": [
+            {
+              "expected_pixels": 131861,
+              "actual_pixels": 122641,
+              "recall": 0.9189449496060246,
+              "precision": 0.9867173294412146,
+              "largest_unmatched": 782
+            },
+            {
+              "expected_pixels": 112222,
+              "actual_pixels": 121708,
+              "recall": 0.9869989841564043,
+              "precision": 0.9915042560883426,
+              "largest_unmatched": 110
+            }
+          ]
+        },
+        {
+          "ink_threshold": 170,
+          "pages": [
+            {
+              "expected_pixels": 139259,
+              "actual_pixels": 122641,
+              "recall": 0.9140235101501519,
+              "precision": 0.9868640992816432,
+              "largest_unmatched": 782
+            },
+            {
+              "expected_pixels": 112345,
+              "actual_pixels": 121708,
+              "recall": 0.9870132182117585,
+              "precision": 0.9915042560883426,
+              "largest_unmatched": 110
+            }
+          ]
+        },
+        {
+          "ink_threshold": 180,
+          "pages": [
+            {
+              "expected_pixels": 142173,
+              "actual_pixels": 140420,
+              "recall": 0.9254781146912564,
+              "precision": 0.9882352941176471,
+              "largest_unmatched": 782
+            },
+            {
+              "expected_pixels": 114448,
+              "actual_pixels": 124090,
+              "recall": 0.9872256395917797,
+              "precision": 0.9940688210170038,
+              "largest_unmatched": 144
+            }
+          ]
+        },
+        {
+          "ink_threshold": 190,
+          "pages": [
+            {
+              "expected_pixels": 147645,
+              "actual_pixels": 140521,
+              "recall": 0.9273053608317248,
+              "precision": 0.9900513090570092,
+              "largest_unmatched": 782
+            },
+            {
+              "expected_pixels": 116669,
+              "actual_pixels": 124188,
+              "recall": 0.9880773813095166,
+              "precision": 0.9945244307018392,
+              "largest_unmatched": 144
+            }
+          ]
+        },
+        {
+          "ink_threshold": 200,
+          "pages": [
+            {
+              "expected_pixels": 160791,
+              "actual_pixels": 150950,
+              "recall": 0.9378074643481289,
+              "precision": 0.9881748923484598,
+              "largest_unmatched": 5940
+            },
+            {
+              "expected_pixels": 134299,
+              "actual_pixels": 124239,
+              "recall": 0.9720474463696677,
+              "precision": 0.9945991194391455,
+              "largest_unmatched": 953
+            }
+          ]
+        },
+        {
+          "ink_threshold": 210,
+          "pages": [
+            {
+              "expected_pixels": 163619,
+              "actual_pixels": 151304,
+              "recall": 0.9368105171159828,
+              "precision": 0.9868410617035901,
+              "largest_unmatched": 5940
+            },
+            {
+              "expected_pixels": 136310,
+              "actual_pixels": 124287,
+              "recall": 0.9697527694226395,
+              "precision": 0.9947379854691158,
+              "largest_unmatched": 953
+            }
+          ]
+        },
+        {
+          "ink_threshold": 220,
+          "pages": [
+            {
+              "expected_pixels": 1069735,
+              "actual_pixels": 1074254,
+              "recall": 0.9965066114504995,
+              "precision": 0.9950551731713356,
+              "largest_unmatched": 620
+            },
+            {
+              "expected_pixels": 391714,
+              "actual_pixels": 382840,
+              "recall": 0.986773513328602,
+              "precision": 0.9984980670776303,
+              "largest_unmatched": 961
+            }
+          ]
+        }
+      ],
+      "structural_min_run_curve": [
+        {
+          "min_run": 8,
+          "pages": [
+            {
+              "expected_pixels": 176775,
+              "actual_pixels": 173262,
+              "recall": 0.8370074954037618,
+              "precision": 0.8961110918724244,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 157911,
+              "actual_pixels": 170253,
+              "recall": 0.9191253300910006,
+              "precision": 0.9262861741055958,
+              "largest_unmatched": 108
+            }
+          ]
+        },
+        {
+          "min_run": 12,
+          "pages": [
+            {
+              "expected_pixels": 136951,
+              "actual_pixels": 142315,
+              "recall": 0.9176493782447737,
+              "precision": 0.9412008572532762,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 128340,
+              "actual_pixels": 140319,
+              "recall": 0.9405875019479507,
+              "precision": 0.957226034963191,
+              "largest_unmatched": 80
+            }
+          ]
+        },
+        {
+          "min_run": 16,
+          "pages": [
+            {
+              "expected_pixels": 119258,
+              "actual_pixels": 127246,
+              "recall": 0.9685136426906371,
+              "precision": 0.9678968297628217,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 116135,
+              "actual_pixels": 130263,
+              "recall": 0.9840272097128342,
+              "precision": 0.9753191620030246,
+              "largest_unmatched": 80
+            }
+          ]
+        },
+        {
+          "min_run": 20,
+          "pages": [
+            {
+              "expected_pixels": 114711,
+              "actual_pixels": 122128,
+              "recall": 0.9836458578514702,
+              "precision": 0.98620300013101,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 111513,
+              "actual_pixels": 125571,
+              "recall": 0.992144413655807,
+              "precision": 0.9852354444895717,
+              "largest_unmatched": 80
+            }
+          ]
+        },
+        {
+          "min_run": 24,
+          "pages": [
+            {
+              "expected_pixels": 111861,
+              "actual_pixels": 119102,
+              "recall": 0.9811104853344776,
+              "precision": 0.98708669879599,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 108691,
+              "actual_pixels": 121533,
+              "recall": 0.9896219558197091,
+              "precision": 0.9916483588819498,
+              "largest_unmatched": 103
+            }
+          ]
+        },
+        {
+          "min_run": 28,
+          "pages": [
+            {
+              "expected_pixels": 109490,
+              "actual_pixels": 116940,
+              "recall": 0.9833866106493744,
+              "precision": 0.988994356080041,
+              "largest_unmatched": 105
+            },
+            {
+              "expected_pixels": 107791,
+              "actual_pixels": 121131,
+              "recall": 0.9938213765527735,
+              "precision": 0.992256317540514,
+              "largest_unmatched": 80
+            }
+          ]
+        },
+        {
+          "min_run": 32,
+          "pages": [
+            {
+              "expected_pixels": 107547,
+              "actual_pixels": 115004,
+              "recall": 0.9812082159427971,
+              "precision": 0.9905568501965148,
+              "largest_unmatched": 192
+            },
+            {
+              "expected_pixels": 107435,
+              "actual_pixels": 121131,
+              "recall": 0.994163913063713,
+              "precision": 0.9922315509654837,
+              "largest_unmatched": 80
+            }
+          ]
+        },
+        {
+          "min_run": 40,
+          "pages": [
+            {
+              "expected_pixels": 104876,
+              "actual_pixels": 112551,
+              "recall": 0.9870036996071552,
+              "precision": 0.9902799619727946,
+              "largest_unmatched": 143
+            },
+            {
+              "expected_pixels": 105304,
+              "actual_pixels": 119096,
+              "recall": 0.993960343386766,
+              "precision": 0.9921156042184456,
+              "largest_unmatched": 88
+            }
+          ]
+        },
+        {
+          "min_run": 48,
+          "pages": [
+            {
+              "expected_pixels": 103308,
+              "actual_pixels": 110907,
+              "recall": 0.9898846168738142,
+              "precision": 0.9926785504972635,
+              "largest_unmatched": 110
+            },
+            {
+              "expected_pixels": 104337,
+              "actual_pixels": 118010,
+              "recall": 0.9940864698045756,
+              "precision": 0.9920684687738327,
+              "largest_unmatched": 80
+            }
+          ]
+        }
+      ],
+      "edge_threshold_curve": [
+        {
+          "edge_threshold": 16,
+          "pages": [
+            {
+              "expected_edges": 581528,
+              "actual_edges": 548372,
+              "precision": 0.9578041913153844,
+              "recall": 0.9212505674705259,
+              "f1": 0.939171836956008
+            },
+            {
+              "expected_edges": 491156,
+              "actual_edges": 474803,
+              "precision": 0.9768093293429064,
+              "recall": 0.9694536969924016,
+              "f1": 0.9731176133692856
+            }
+          ]
+        },
+        {
+          "edge_threshold": 24,
+          "pages": [
+            {
+              "expected_edges": 578122,
+              "actual_edges": 545158,
+              "precision": 0.9576086198863448,
+              "recall": 0.9214456464206517,
+              "f1": 0.9391791494168575
+            },
+            {
+              "expected_edges": 489206,
+              "actual_edges": 472704,
+              "precision": 0.9766619279718386,
+              "recall": 0.9692603933721172,
+              "f1": 0.9729470843869613
+            }
+          ]
+        },
+        {
+          "edge_threshold": 32,
+          "pages": [
+            {
+              "expected_edges": 573907,
+              "actual_edges": 542017,
+              "precision": 0.9571526354339439,
+              "recall": 0.9216806904254522,
+              "f1": 0.9390818118108235
+            },
+            {
+              "expected_edges": 485308,
+              "actual_edges": 470286,
+              "precision": 0.9765270494975398,
+              "recall": 0.9691700940433704,
+              "f1": 0.9728346629271043
+            }
+          ]
+        },
+        {
+          "edge_threshold": 40,
+          "pages": [
+            {
+              "expected_edges": 563003,
+              "actual_edges": 537768,
+              "precision": 0.955071703783044,
+              "recall": 0.9221709298174254,
+              "f1": 0.9383330053938769
+            },
+            {
+              "expected_edges": 480285,
+              "actual_edges": 467908,
+              "precision": 0.9765252998452687,
+              "recall": 0.9688934695024829,
+              "f1": 0.9726944149318083
+            }
+          ]
+        },
+        {
+          "edge_threshold": 48,
+          "pages": [
+            {
+              "expected_edges": 560307,
+              "actual_edges": 535464,
+              "precision": 0.9547252476356954,
+              "recall": 0.9217982284711774,
+              "f1": 0.9379728558185844
+            },
+            {
+              "expected_edges": 477476,
+              "actual_edges": 465803,
+              "precision": 0.9765888154434386,
+              "recall": 0.9685701480283826,
+              "f1": 0.9725629537738466
+            }
+          ]
+        },
+        {
+          "edge_threshold": 56,
+          "pages": [
+            {
+              "expected_edges": 556635,
+              "actual_edges": 532962,
+              "precision": 0.9543719814921139,
+              "recall": 0.9214081040538235,
+              "f1": 0.9376003986872522
+            },
+            {
+              "expected_edges": 474335,
+              "actual_edges": 464088,
+              "precision": 0.9763902535725983,
+              "recall": 0.9682144475950542,
+              "f1": 0.9722851635937552
+            }
+          ]
+        },
+        {
+          "edge_threshold": 64,
+          "pages": [
+            {
+              "expected_edges": 550884,
+              "actual_edges": 530603,
+              "precision": 0.9532739166570864,
+              "recall": 0.9225408615969968,
+              "f1": 0.9376556263506002
+            },
+            {
+              "expected_edges": 471954,
+              "actual_edges": 462462,
+              "precision": 0.9761926385303009,
+              "recall": 0.9681049424308301,
+              "f1": 0.9721319692828132
+            }
+          ]
+        },
+        {
+          "edge_threshold": 80,
+          "pages": [
+            {
+              "expected_edges": 544207,
+              "actual_edges": 524778,
+              "precision": 0.9530639622850043,
+              "recall": 0.9218440777130761,
+              "f1": 0.9371940922660817
+            },
+            {
+              "expected_edges": 467377,
+              "actual_edges": 459739,
+              "precision": 0.9757405832439711,
+              "recall": 0.9679637637282108,
+              "f1": 0.9718366158417724
+            }
+          ]
+        },
+        {
+          "edge_threshold": 96,
+          "pages": [
+            {
+              "expected_edges": 538516,
+              "actual_edges": 520552,
+              "precision": 0.9525542116829827,
+              "recall": 0.9214805131138165,
+              "f1": 0.9367597431744891
+            },
+            {
+              "expected_edges": 463561,
+              "actual_edges": 456695,
+              "precision": 0.9754059054730181,
+              "recall": 0.9675857114813369,
+              "f1": 0.9714800710356122
+            }
+          ]
+        }
+      ]
+    },
+    "1601C:2018": {
+      "ink_threshold_curve": [
+        {
+          "ink_threshold": 100,
+          "pages": [
+            {
+              "expected_pixels": 95936,
+              "actual_pixels": 80391,
+              "recall": 0.6922114743162108,
+              "precision": 0.6418131382866241,
+              "largest_unmatched": 2230
+            },
+            {
+              "expected_pixels": 42523,
+              "actual_pixels": 30041,
+              "recall": 0.7430096653575712,
+              "precision": 0.722545853999534,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 110,
+          "pages": [
+            {
+              "expected_pixels": 101115,
+              "actual_pixels": 89437,
+              "recall": 0.7310685852741927,
+              "precision": 0.673311940248443,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 44238,
+              "actual_pixels": 32496,
+              "recall": 0.7196753921967539,
+              "precision": 0.7069485475135401,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 120,
+          "pages": [
+            {
+              "expected_pixels": 114215,
+              "actual_pixels": 96258,
+              "recall": 0.7247471873221556,
+              "precision": 0.733019593176671,
+              "largest_unmatched": 2331
+            },
+            {
+              "expected_pixels": 44986,
+              "actual_pixels": 34471,
+              "recall": 0.7152447428088738,
+              "precision": 0.717356618606945,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 130,
+          "pages": [
+            {
+              "expected_pixels": 121203,
+              "actual_pixels": 124605,
+              "recall": 0.7490986196711302,
+              "precision": 0.7344729344729345,
+              "largest_unmatched": 2325
+            },
+            {
+              "expected_pixels": 47787,
+              "actual_pixels": 40017,
+              "recall": 0.7322912089061879,
+              "precision": 0.7270160181922682,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 132,
+          "pages": [
+            {
+              "expected_pixels": 121328,
+              "actual_pixels": 124824,
+              "recall": 0.7512280759593828,
+              "precision": 0.7357559443696725,
+              "largest_unmatched": 2325
+            },
+            {
+              "expected_pixels": 48521,
+              "actual_pixels": 40017,
+              "recall": 0.7219554419735784,
+              "precision": 0.7281905190294125,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 134,
+          "pages": [
+            {
+              "expected_pixels": 121446,
+              "actual_pixels": 124849,
+              "recall": 0.7508686988455775,
+              "precision": 0.7359610409374524,
+              "largest_unmatched": 2325
+            },
+            {
+              "expected_pixels": 49248,
+              "actual_pixels": 40017,
+              "recall": 0.7138157894736842,
+              "precision": 0.7310892870530025,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 135,
+          "pages": [
+            {
+              "expected_pixels": 122531,
+              "actual_pixels": 124849,
+              "recall": 0.7527972513078323,
+              "precision": 0.7363294860191111,
+              "largest_unmatched": 2325
+            },
+            {
+              "expected_pixels": 49320,
+              "actual_pixels": 40018,
+              "recall": 0.7132400648824007,
+              "precision": 0.7311459843070618,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 136,
+          "pages": [
+            {
+              "expected_pixels": 122662,
+              "actual_pixels": 125036,
+              "recall": 0.7530938677014887,
+              "precision": 0.7368517866854346,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 49377,
+              "actual_pixels": 40049,
+              "recall": 0.7125382262996942,
+              "precision": 0.7307548253389597,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 137,
+          "pages": [
+            {
+              "expected_pixels": 122681,
+              "actual_pixels": 125036,
+              "recall": 0.7531076531818293,
+              "precision": 0.736971752135385,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 49448,
+              "actual_pixels": 40070,
+              "recall": 0.7115353502669471,
+              "precision": 0.7304716745695033,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 138,
+          "pages": [
+            {
+              "expected_pixels": 122795,
+              "actual_pixels": 125061,
+              "recall": 0.753328718596034,
+              "precision": 0.7370323282238268,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 49465,
+              "actual_pixels": 40070,
+              "recall": 0.7113514606287273,
+              "precision": 0.7305465435487897,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 139,
+          "pages": [
+            {
+              "expected_pixels": 123521,
+              "actual_pixels": 125101,
+              "recall": 0.7519045344516317,
+              "precision": 0.7372043388941735,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 49522,
+              "actual_pixels": 40070,
+              "recall": 0.7106538508137797,
+              "precision": 0.7306463688545046,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 140,
+          "pages": [
+            {
+              "expected_pixels": 123597,
+              "actual_pixels": 125197,
+              "recall": 0.7520166347079622,
+              "precision": 0.737605533678922,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 49562,
+              "actual_pixels": 40095,
+              "recall": 0.7105443686695452,
+              "precision": 0.7307145529367751,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 141,
+          "pages": [
+            {
+              "expected_pixels": 123652,
+              "actual_pixels": 125197,
+              "recall": 0.7519651926374017,
+              "precision": 0.7378451560340903,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 49572,
+              "actual_pixels": 40125,
+              "recall": 0.7105018962317438,
+              "precision": 0.7309408099688474,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 143,
+          "pages": [
+            {
+              "expected_pixels": 124921,
+              "actual_pixels": 125223,
+              "recall": 0.7542526876986255,
+              "precision": 0.7379714589172915,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 49674,
+              "actual_pixels": 40152,
+              "recall": 0.709042960099851,
+              "precision": 0.731121737397888,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 145,
+          "pages": [
+            {
+              "expected_pixels": 126177,
+              "actual_pixels": 125296,
+              "recall": 0.7523241161225896,
+              "precision": 0.7382837440939855,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 51485,
+              "actual_pixels": 40204,
+              "recall": 0.6959308536466932,
+              "precision": 0.731668490697443,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 147,
+          "pages": [
+            {
+              "expected_pixels": 127487,
+              "actual_pixels": 125944,
+              "recall": 0.7553162283213191,
+              "precision": 0.7383996061741727,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 51531,
+              "actual_pixels": 40265,
+              "recall": 0.6958335759057654,
+              "precision": 0.7313796100831989,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 149,
+          "pages": [
+            {
+              "expected_pixels": 128547,
+              "actual_pixels": 125951,
+              "recall": 0.7559880821800586,
+              "precision": 0.7420107819707664,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 51571,
+              "actual_pixels": 40292,
+              "recall": 0.696127668650986,
+              "precision": 0.731882259505609,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 150,
+          "pages": [
+            {
+              "expected_pixels": 128558,
+              "actual_pixels": 125977,
+              "recall": 0.7560011823457117,
+              "precision": 0.7418655786373703,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 51606,
+              "actual_pixels": 40292,
+              "recall": 0.6956749215207534,
+              "precision": 0.731882259505609,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 155,
+          "pages": [
+            {
+              "expected_pixels": 130593,
+              "actual_pixels": 126033,
+              "recall": 0.7571309335109845,
+              "precision": 0.742091357025541,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 52061,
+              "actual_pixels": 40325,
+              "recall": 0.6910547242657652,
+              "precision": 0.7321264724116553,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 156,
+          "pages": [
+            {
+              "expected_pixels": 130702,
+              "actual_pixels": 126034,
+              "recall": 0.7573334761518569,
+              "precision": 0.74228382817335,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 52140,
+              "actual_pixels": 40325,
+              "recall": 0.6901802838511699,
+              "precision": 0.7321760694358338,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 157,
+          "pages": [
+            {
+              "expected_pixels": 130841,
+              "actual_pixels": 126098,
+              "recall": 0.7576982750055411,
+              "precision": 0.7421687893543117,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 52185,
+              "actual_pixels": 40325,
+              "recall": 0.6903899588004215,
+              "precision": 0.7321760694358338,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 158,
+          "pages": [
+            {
+              "expected_pixels": 131116,
+              "actual_pixels": 126132,
+              "recall": 0.7569251655023033,
+              "precision": 0.7424840643135763,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 52314,
+              "actual_pixels": 40325,
+              "recall": 0.6911343043927056,
+              "precision": 0.7352758834469931,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 159,
+          "pages": [
+            {
+              "expected_pixels": 132055,
+              "actual_pixels": 126210,
+              "recall": 0.7579644844950968,
+              "precision": 0.7450360510260676,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 52344,
+              "actual_pixels": 40325,
+              "recall": 0.6907955066483265,
+              "precision": 0.7353006819590825,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 160,
+          "pages": [
+            {
+              "expected_pixels": 133120,
+              "actual_pixels": 126233,
+              "recall": 0.755694110576923,
+              "precision": 0.745114193594385,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 52741,
+              "actual_pixels": 40325,
+              "recall": 0.6898617773648584,
+              "precision": 0.7353006819590825,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 161,
+          "pages": [
+            {
+              "expected_pixels": 133628,
+              "actual_pixels": 126240,
+              "recall": 0.755283323854282,
+              "precision": 0.7451679340937896,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 52782,
+              "actual_pixels": 40325,
+              "recall": 0.6898753362888863,
+              "precision": 0.7353006819590825,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 162,
+          "pages": [
+            {
+              "expected_pixels": 133993,
+              "actual_pixels": 126292,
+              "recall": 0.7554723007918324,
+              "precision": 0.7450749057739208,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 52784,
+              "actual_pixels": 40325,
+              "recall": 0.6898491967262806,
+              "precision": 0.7353006819590825,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 163,
+          "pages": [
+            {
+              "expected_pixels": 135128,
+              "actual_pixels": 126300,
+              "recall": 0.7557057012610265,
+              "precision": 0.7496832937450515,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 52875,
+              "actual_pixels": 40325,
+              "recall": 0.6902695035460993,
+              "precision": 0.7353006819590825,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 164,
+          "pages": [
+            {
+              "expected_pixels": 135245,
+              "actual_pixels": 126367,
+              "recall": 0.7555473400125697,
+              "precision": 0.74959443525604,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 52963,
+              "actual_pixels": 40325,
+              "recall": 0.6892736438645847,
+              "precision": 0.735350278983261,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 165,
+          "pages": [
+            {
+              "expected_pixels": 136543,
+              "actual_pixels": 126393,
+              "recall": 0.7490607354459767,
+              "precision": 0.7497487993797125,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 53256,
+              "actual_pixels": 40325,
+              "recall": 0.6855565570076612,
+              "precision": 0.735350278983261,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 166,
+          "pages": [
+            {
+              "expected_pixels": 137480,
+              "actual_pixels": 126395,
+              "recall": 0.7442027931335466,
+              "precision": 0.7497527592072472,
+              "largest_unmatched": 2330
+            },
+            {
+              "expected_pixels": 55299,
+              "actual_pixels": 40325,
+              "recall": 0.681115390875061,
+              "precision": 0.7359206447613144,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 167,
+          "pages": [
+            {
+              "expected_pixels": 161709,
+              "actual_pixels": 150845,
+              "recall": 0.7850768973897557,
+              "precision": 0.7924690907885578,
+              "largest_unmatched": 2368
+            },
+            {
+              "expected_pixels": 63097,
+              "actual_pixels": 47893,
+              "recall": 0.7145664611629713,
+              "precision": 0.7808865596224918,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 168,
+          "pages": [
+            {
+              "expected_pixels": 161895,
+              "actual_pixels": 150849,
+              "recall": 0.7844034713857747,
+              "precision": 0.792574030984627,
+              "largest_unmatched": 2370
+            },
+            {
+              "expected_pixels": 63217,
+              "actual_pixels": 47893,
+              "recall": 0.7150133666577029,
+              "precision": 0.7809491992566764,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 169,
+          "pages": [
+            {
+              "expected_pixels": 163403,
+              "actual_pixels": 152738,
+              "recall": 0.7794899726443211,
+              "precision": 0.7951983134517933,
+              "largest_unmatched": 2371
+            },
+            {
+              "expected_pixels": 64530,
+              "actual_pixels": 51986,
+              "recall": 0.735223926855726,
+              "precision": 0.7853268187588966,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 170,
+          "pages": [
+            {
+              "expected_pixels": 172402,
+              "actual_pixels": 152742,
+              "recall": 0.7801939652672243,
+              "precision": 0.8001073705987874,
+              "largest_unmatched": 2381
+            },
+            {
+              "expected_pixels": 64727,
+              "actual_pixels": 51986,
+              "recall": 0.7332952245585305,
+              "precision": 0.7853268187588966,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 180,
+          "pages": [
+            {
+              "expected_pixels": 176050,
+              "actual_pixels": 172971,
+              "recall": 0.788594149389378,
+              "precision": 0.7932312352937776,
+              "largest_unmatched": 2384
+            },
+            {
+              "expected_pixels": 65777,
+              "actual_pixels": 54357,
+              "recall": 0.7494108883044225,
+              "precision": 0.7944698934819803,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "ink_threshold": 190,
+          "pages": [
+            {
+              "expected_pixels": 183184,
+              "actual_pixels": 173060,
+              "recall": 0.788644204734038,
+              "precision": 0.8041604067953311,
+              "largest_unmatched": 2385
+            },
+            {
+              "expected_pixels": 68644,
+              "actual_pixels": 55016,
+              "recall": 0.7598042072140319,
+              "precision": 0.7957866802384761,
+              "largest_unmatched": 2311
+            }
+          ]
+        },
+        {
+          "ink_threshold": 200,
+          "pages": [
+            {
+              "expected_pixels": 190379,
+              "actual_pixels": 175123,
+              "recall": 0.778862164419395,
+              "precision": 0.8067586781861892,
+              "largest_unmatched": 2494
+            },
+            {
+              "expected_pixels": 69993,
+              "actual_pixels": 56218,
+              "recall": 0.7549040618347549,
+              "precision": 0.8026077057170301,
+              "largest_unmatched": 2311
+            }
+          ]
+        },
+        {
+          "ink_threshold": 210,
+          "pages": [
+            {
+              "expected_pixels": 196517,
+              "actual_pixels": 175916,
+              "recall": 0.770767923385763,
+              "precision": 0.8098637986311649,
+              "largest_unmatched": 3062
+            },
+            {
+              "expected_pixels": 73052,
+              "actual_pixels": 56441,
+              "recall": 0.7333406340688824,
+              "precision": 0.8030332559664074,
+              "largest_unmatched": 2311
+            }
+          ]
+        },
+        {
+          "ink_threshold": 220,
+          "pages": [
+            {
+              "expected_pixels": 1143711,
+              "actual_pixels": 1089520,
+              "recall": 0.9392932305451289,
+              "precision": 0.980101329025626,
+              "largest_unmatched": 22476
+            },
+            {
+              "expected_pixels": 307417,
+              "actual_pixels": 303359,
+              "recall": 0.9608382099883871,
+              "precision": 0.9760943304797286,
+              "largest_unmatched": 2311
+            }
+          ]
+        }
+      ],
+      "structural_min_run_curve": [
+        {
+          "min_run": 8,
+          "pages": [
+            {
+              "expected_pixels": 195447,
+              "actual_pixels": 187020,
+              "recall": 0.6670145870747568,
+              "precision": 0.6939043952518448,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 103693,
+              "actual_pixels": 84924,
+              "recall": 0.49959978012016243,
+              "precision": 0.5372332909424897,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "min_run": 12,
+          "pages": [
+            {
+              "expected_pixels": 155718,
+              "actual_pixels": 156049,
+              "recall": 0.7203727250542648,
+              "precision": 0.7133592653589578,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 66315,
+              "actual_pixels": 58269,
+              "recall": 0.6661690416949408,
+              "precision": 0.6516672673291115,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "min_run": 16,
+          "pages": [
+            {
+              "expected_pixels": 134547,
+              "actual_pixels": 140072,
+              "recall": 0.761770979657666,
+              "precision": 0.7188588725798161,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 57244,
+              "actual_pixels": 50401,
+              "recall": 0.6929634546852071,
+              "precision": 0.6595107239935716,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "min_run": 20,
+          "pages": [
+            {
+              "expected_pixels": 130709,
+              "actual_pixels": 127982,
+              "recall": 0.7574076765945726,
+              "precision": 0.7430498038786705,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 53420,
+              "actual_pixels": 42628,
+              "recall": 0.69704230625234,
+              "precision": 0.717321948015389,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "min_run": 24,
+          "pages": [
+            {
+              "expected_pixels": 128558,
+              "actual_pixels": 125977,
+              "recall": 0.7560011823457117,
+              "precision": 0.7418655786373703,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 51606,
+              "actual_pixels": 40292,
+              "recall": 0.6956749215207534,
+              "precision": 0.731882259505609,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "min_run": 28,
+          "pages": [
+            {
+              "expected_pixels": 126725,
+              "actual_pixels": 123791,
+              "recall": 0.7583744328269876,
+              "precision": 0.7445533197082179,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 50501,
+              "actual_pixels": 39637,
+              "recall": 0.7078275677709353,
+              "precision": 0.741251860635265,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "min_run": 32,
+          "pages": [
+            {
+              "expected_pixels": 123774,
+              "actual_pixels": 120482,
+              "recall": 0.7563947194079532,
+              "precision": 0.7436795537922677,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 48591,
+              "actual_pixels": 37759,
+              "recall": 0.6995534152415056,
+              "precision": 0.7290182473052782,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "min_run": 40,
+          "pages": [
+            {
+              "expected_pixels": 122764,
+              "actual_pixels": 119091,
+              "recall": 0.7570949138183832,
+              "precision": 0.7459169878496276,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 48006,
+              "actual_pixels": 36775,
+              "recall": 0.6922259717535308,
+              "precision": 0.7250305914343984,
+              "largest_unmatched": 2309
+            }
+          ]
+        },
+        {
+          "min_run": 48,
+          "pages": [
+            {
+              "expected_pixels": 121675,
+              "actual_pixels": 118179,
+              "recall": 0.7578960345181837,
+              "precision": 0.7444639064469999,
+              "largest_unmatched": 2322
+            },
+            {
+              "expected_pixels": 47642,
+              "actual_pixels": 36655,
+              "recall": 0.6948280928592419,
+              "precision": 0.7240212794980221,
+              "largest_unmatched": 2309
+            }
+          ]
+        }
+      ],
+      "edge_threshold_curve": [
+        {
+          "edge_threshold": 16,
+          "pages": [
+            {
+              "expected_edges": 662012,
+              "actual_edges": 607848,
+              "precision": 0.8725635356207473,
+              "recall": 0.825909500129907,
+              "f1": 0.8485957661584127
+            },
+            {
+              "expected_edges": 719010,
+              "actual_edges": 587426,
+              "precision": 0.7036511832979814,
+              "recall": 0.5994283806901156,
+              "f1": 0.6473718121771505
+            }
+          ]
+        },
+        {
+          "edge_threshold": 24,
+          "pages": [
+            {
+              "expected_edges": 657897,
+              "actual_edges": 604158,
+              "precision": 0.8714971911321211,
+              "recall": 0.8252553211216953,
+              "f1": 0.8477461375543355
+            },
+            {
+              "expected_edges": 714050,
+              "actual_edges": 581232,
+              "precision": 0.7025886393040989,
+              "recall": 0.5969189832644772,
+              "f1": 0.6454575393680598
+            }
+          ]
+        },
+        {
+          "edge_threshold": 32,
+          "pages": [
+            {
+              "expected_edges": 651503,
+              "actual_edges": 600291,
+              "precision": 0.8691851118874013,
+              "recall": 0.8248572915243675,
+              "f1": 0.8464412411174775
+            },
+            {
+              "expected_edges": 704682,
+              "actual_edges": 574989,
+              "precision": 0.6991142439246664,
+              "recall": 0.5962788889172704,
+              "f1": 0.6436147514215725
+            }
+          ]
+        },
+        {
+          "edge_threshold": 40,
+          "pages": [
+            {
+              "expected_edges": 643941,
+              "actual_edges": 595097,
+              "precision": 0.8669947924456013,
+              "recall": 0.8226623246539667,
+              "f1": 0.8442469708179872
+            },
+            {
+              "expected_edges": 696174,
+              "actual_edges": 569956,
+              "precision": 0.6966695674753841,
+              "recall": 0.5954531482072011,
+              "f1": 0.6420970426082535
+            }
+          ]
+        },
+        {
+          "edge_threshold": 48,
+          "pages": [
+            {
+              "expected_edges": 639821,
+              "actual_edges": 592461,
+              "precision": 0.8660519426595168,
+              "recall": 0.8223503136033359,
+              "f1": 0.843635554265637
+            },
+            {
+              "expected_edges": 691345,
+              "actual_edges": 565350,
+              "precision": 0.6957318475280799,
+              "recall": 0.5937672218646262,
+              "f1": 0.6407182076743085
+            }
+          ]
+        },
+        {
+          "edge_threshold": 56,
+          "pages": [
+            {
+              "expected_edges": 635525,
+              "actual_edges": 588678,
+              "precision": 0.864997502879333,
+              "recall": 0.823015617009559,
+              "f1": 0.8434845027636054
+            },
+            {
+              "expected_edges": 686308,
+              "actual_edges": 561437,
+              "precision": 0.6942168043787638,
+              "recall": 0.5924512026670241,
+              "f1": 0.6393095630164689
+            }
+          ]
+        },
+        {
+          "edge_threshold": 64,
+          "pages": [
+            {
+              "expected_edges": 630566,
+              "actual_edges": 586569,
+              "precision": 0.8641813665570461,
+              "recall": 0.8226529816070007,
+              "f1": 0.8429059778408405
+            },
+            {
+              "expected_edges": 679954,
+              "actual_edges": 557483,
+              "precision": 0.6923081062561549,
+              "recall": 0.5910135097374234,
+              "f1": 0.6376631369702832
+            }
+          ]
+        },
+        {
+          "edge_threshold": 80,
+          "pages": [
+            {
+              "expected_edges": 616778,
+              "actual_edges": 577825,
+              "precision": 0.8613196036862372,
+              "recall": 0.8214365622638939,
+              "f1": 0.840905448547903
+            },
+            {
+              "expected_edges": 668051,
+              "actual_edges": 550132,
+              "precision": 0.688287538263544,
+              "recall": 0.5895058910173026,
+              "f1": 0.6350784864319042
+            }
+          ]
+        },
+        {
+          "edge_threshold": 96,
+          "pages": [
+            {
+              "expected_edges": 609543,
+              "actual_edges": 572453,
+              "precision": 0.8600671146801572,
+              "recall": 0.8200881644116986,
+              "f1": 0.8396019940849226
+            },
+            {
+              "expected_edges": 657827,
+              "actual_edges": 542940,
+              "precision": 0.6850646480274063,
+              "recall": 0.5883294544006251,
+              "f1": 0.6330227379483235
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

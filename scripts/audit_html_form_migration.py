@@ -540,7 +540,10 @@ def pixelmatch_mask(
 
 FIDELITY_TOLERANCE_RADIUS_PX = 1
 FIDELITY_EDGE_THRESHOLD = 48
-FIDELITY_INK_THRESHOLD = 160
+# Swept 2026-07-20 (criterion section 8.3): plateau on the calibrated form is
+# tones [136, 166]; 150 is the centre (margins 14/16 vs the old 160's 24/6).
+# Must match INK_THRESHOLD in packages/form-renderer/visual/official-fidelity.ts.
+FIDELITY_INK_THRESHOLD = 150
 FIDELITY_STRUCTURAL_MIN_RUN = 24
 FIDELITY_INK_TOLERANCE_RADIUS_PX = 2
 FIDELITY_GRID_SIZE_PX = 64

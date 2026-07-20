@@ -186,9 +186,9 @@ Every constant below carries its status. **No constant was chosen to make a form
 | `M_CELL` | **0.0010** | **measured locally, BLOCKED on §8.1** | see below |
 | `MIN_CELL_EDGE_PIXELS` | 200 | measured | below this, single-pixel changes swing F1; the p1 ink floor of `0.8333` was driven by a tiny cents-cell region |
 | `MIN_EDGE_COVERAGE` | 0.98 | derived from construction | with G0∪G1 the achieved value should be ≈1.0; 0.98 is slack for page margins, not a target |
-| `EDGE_THRESHOLD` | 48 | **PROVISIONAL — sweep required** | inherited, never swept |
-| `INK_THRESHOLD` | 160 | **PROVISIONAL — sweep required** | inherited; a demonstrated cliff at 159→162 flips structural recall `0.824 → 0.136` |
-| `STRUCTURAL_MIN_RUN` | 24 | **PROVISIONAL — sweep required** | ≈4 mm at 144 DPI, longer than any glyph stroke at 8–9 pt; never swept |
+| `EDGE_THRESHOLD` | 48 | **swept 2026-07-20, pinned** | response is flat: 2551Q p1 F1 `0.9392 → 0.9368` across 16→96, 1601C `0.8486 → 0.8396`; no cliff anywhere in the range — see §2.6 |
+| `INK_THRESHOLD` | **150** | **swept 2026-07-20, re-pinned from 160** | plateau on the calibrated form is tones `[136, 166]` (cliffs at 135→136 and 166→167); 150 is the centre with 14/16 tones of margin where 160 had 24/6 — see §2.6 |
+| `STRUCTURAL_MIN_RUN` | 24 | **swept 2026-07-20, pinned** | 8→16 admit glyph runs (2551Q p1 stratum `183 980 → 121 814` px, recall 0.836 at 8); 20→48 is a plateau; 24 is past the knee — see §2.6 |
 | `STRUCTURAL_RECALL_DROP` | 0.002 | measured | below |
 | `STRUCTURAL_PRECISION_DROP` | 0.002 | measured | below |
 | `MAX_UNMATCHED_CLUSTER` | `max(baseline, 200)` | measured | below |
@@ -254,6 +254,29 @@ This binds **increases only**, because the number is non-monotone (§7). It catc
 `INK_RATIO_BAND = ±0.03` on `actual_ink / baseline_actual_ink` catches fake bold (+21.9%), doubled borders (+31.4%), and faded print (which moves ink below the 160 threshold). The measured local floor is 0 (byte-identical renders), so ±3% is ~generous slack for a future Chromium AA change, not a fitted value.
 
 `MIN_PAPER_PIXEL_RATIO = 0.98 × baseline` on the count of exactly-`(255,255,255)` pixels. This is the direct, exact answer to the tint attack: a page tinted to luminance 232 drives `paper_pixels` to ≈0 while producing a max cell regression of only `10.9e-4`. Do not attempt to catch tinting with a percentage gate — the complete-page number has a cliff there, jumping `7.3304% → 55.5732%` on a 4/255 change.
+
+### 2.6 The §8.3 constant sweeps (2026-07-20) — measured, precondition cleared
+
+Swept on the post-Milestone-B captures of 2551Q (structurally calibrated) and 1601C (uncalibrated, real weight defects still present) against their pinned chromium references, both pages each. Tool: `visual/tools/fidelity-constant-sweep.spec.ts` (browserless); full curves in `docs/form-print-readiness/data/fidelity-constant-sweeps.json`.
+
+**`INK_THRESHOLD`: re-pinned 160 → 150.** On the calibrated form the structural-recall response is a plateau bounded by two one-tone cliffs, both localized exactly:
+
+| tone | 2551Q p1 recall | largest unmatched |
+|---|---|---|
+| 135 | 0.935009 | 1368 px |
+| **136** | **0.982415** | **103 px** |
+| 150 | 0.981110 | 105 px |
+| 160 (old pin) | 0.978180 | 105 px |
+| **166** | **0.975402** | **105 px** |
+| 167 | 0.918162 | 782 px |
+
+Page 2's plateau is wider (stable 130→199). The joint plateau is `[136, 166]`; 160 sat 6 tones from the upper cliff, 150 sits at the centre with 14/16 tones of margin and marginally better recall on all four pages. On 1601C the curve has no cliff — its recall (~0.69–0.76) is dominated by that form's real, unfixed defects, and 150 vs 160 is a wash (p1 `0.7560` vs `0.7557`). Two honesty notes: (a) the previously documented "159→162 flips recall `0.824 → 0.136`" cliff **does not reproduce** on current captures (159: `0.9803` → 162: `0.9782`); it was measured before the Milestone B structural fixes and is superseded by this sweep. (b) tone 220 shows recall `0.9965` — that is *false comfort*, not a better constant: at 220 nearly all anti-aliased text enters both masks and the stratum stops discriminating structure (1601C p1's largest unmatched jumps to 22 476 px there).
+
+**`EDGE_THRESHOLD = 48`: pinned, response flat.** Across 16→96 the cell-relevant edge F1 moves 0.9392→0.9368 (2551Q p1) and 0.8486→0.8396 (1601C p1) — monotone, gentle, no cliff. No value in the range is materially better; 48 keeps continuity with every number recorded to date.
+
+**`STRUCTURAL_MIN_RUN = 24`: pinned, past the knee.** At 8 the stratum admits glyph runs (2551Q p1: 183 980 px, recall 0.836); the knee is at 16→20 (121 814 → 117 051 px, recall 0.967 → 0.982); 20→48 is a plateau. 24 is on the plateau with margin on both sides.
+
+Re-pinning `INK_THRESHOLD` before baselining is exactly why §8.3 blocks baselining: no baseline existed to churn. The constant is defined once per implementation (`visual/official-fidelity.ts`, `scripts/audit_html_form_migration.py`) and the two must move together.
 
 ---
 
@@ -349,7 +372,7 @@ Top level:
     "is_non_regression_gate": true,
     "proves_parity": false,
     "constants": { "tolerance_radius_px": 1, "edge_threshold": 48,
-                   "ink_threshold": 160, "structural_min_run": 24,
+                   "ink_threshold": 150, "structural_min_run": 24,
                    "m_cell": 0.0010, "min_cell_edge_pixels": 200,
                    "min_edge_coverage": 0.98, "grid_size_px": 64,
                    "grid_offsets": [[0,0],[32,32]],
@@ -459,7 +482,7 @@ Per page, 1224×1872, this machine, CPython 3.13, no numpy:
 1. **This is a non-regression gate, pinned to a reviewed baseline.** It passes the current render by construction. It certifies "no worse than a reviewed state", never "matches the official form".
 2. **The reference does not encode the document's true typography.** `pdffonts` shows the official PDF embeds none of its primary faces (Arial, Arial-Bold, Arial-Italic, Times New Roman all `emb=no`). Poppler substitutes, so the pinned reference encodes *Poppler's substituted outlines*. Glyph outline shape is ~57% of the residual. The absolute fidelity numbers — complete-page **7.3355%** (p1) / **5.4557%** (p2), page-global edge F1 **0.9653** / **0.9919** — are the fidelity claim, and they are what they are.
 3. **Cross-environment drift is unmeasured** (§8.1). All floors are single-machine, single-Chromium (145.0.7632.6), single-Playwright.
-4. **Three constants are unswept**: `EDGE_THRESHOLD=48`, `INK_THRESHOLD=160`, `STRUCTURAL_MIN_RUN=24`. Each has a demonstrated cliff nearby — ink 159→162 flips structural recall `0.824 → 0.136`.
+4. ~~Three constants are unswept~~ **Swept and pinned 2026-07-20** (§2.6): `EDGE_THRESHOLD=48` (flat response), `INK_THRESHOLD=150` (re-pinned from 160 to the centre of the measured `[136, 166]` plateau), `STRUCTURAL_MIN_RUN=24` (past the glyph-run knee). The historic "ink 159→162 flips recall `0.824 → 0.136`" cliff predates the Milestone B fixes and does not reproduce; the real cliffs are at 135→136 and 166→167.
 5. **Two page-1 cells are already pathological at baseline and are dead detectors**: `"Item 12A value"` (F1 ≈0.703–0.758) and `"Item 17 inline specification field"` (100% ink-miss, 98% ink-unexpected — possibly an artifact of the fixture-blanking rules, **not verified**). Investigate before baselining; do not silently pin.
 6. **Page 2 has only 4 named regions vs 76 on page 1.** The grid closes the coverage hole but page-2 named-region sensitivity remains structurally weaker.
 7. **Border `+1` device px is unrenderable** at DSF 1.5 (Chromium snaps it). Not a detectable-or-missed data point.
@@ -550,9 +573,9 @@ Running the structural stratum clean on page 1 immediately localized these, each
 
 Baselining now would bake a 1,130-pixel misplacement into the accepted floor. Fix first, then baseline.
 
-### 8.3 The three unswept constants must be swept and pinned
+### 8.3 The three unswept constants must be swept and pinned — **CLEARED 2026-07-20**
 
-`EDGE_THRESHOLD=48`, `INK_THRESHOLD=160`, `STRUCTURAL_MIN_RUN=24`. Each has a demonstrated cliff. Sweep each, record the response curve in the evidence file, and pin with the sweep as justification.
+Done; see §2.6 for the curves and the resulting pins (`EDGE_THRESHOLD=48`, `INK_THRESHOLD=150` re-pinned from 160, `STRUCTURAL_MIN_RUN=24`). Response curves are recorded in `docs/form-print-readiness/data/fidelity-constant-sweeps.json`, reproducible via `visual/tools/fidelity-constant-sweep.spec.ts`.
 
 ### 8.4 The companion assertions in §3.2–§3.4 must land first
 

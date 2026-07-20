@@ -40,8 +40,20 @@ import {
  *  as exactly 1.000000 and a fake-bold render as an improvement; see
  *  criterion section 2.1. Do not change without a fresh sweep. */
 export const TOLERANCE_RADIUS_PX = 1;
+/** Swept 2026-07-20 (criterion section 8.3): response is flat across 16..96
+ *  (2551Q p1 F1 0.9392 -> 0.9368), no cliff. Pinned at the inherited value. */
 export const EDGE_THRESHOLD = 48;
-export const INK_THRESHOLD = 160;
+/** Swept 2026-07-20 (criterion section 8.3). The stable plateau on the
+ *  calibrated form (2551Q) is tones [136, 166]: recall collapses at 135->136
+ *  (0.935 -> 0.982) and 166->167 (0.975 -> 0.918). 150 sits at the plateau
+ *  centre with 14/16 tones of margin; the previous 160 had only 6 above.
+ *  The historic "159->162 flips recall 0.824 -> 0.136" cliff does NOT
+ *  reproduce on post-Milestone-B captures. Curves are recorded in
+ *  docs/form-print-readiness/data/fidelity-constant-sweeps.json. */
+export const INK_THRESHOLD = 150;
+/** Swept 2026-07-20 (criterion section 8.3): 8..16 admit glyph runs into the
+ *  stratum (2551Q p1 stratum 183980 -> 121814 px, recall 0.836 at 8); 20..48
+ *  is a plateau. 24 is past the knee. Pinned at the inherited value. */
 export const STRUCTURAL_MIN_RUN = 24;
 export const INK_TOLERANCE_RADIUS_PX = 2;
 
