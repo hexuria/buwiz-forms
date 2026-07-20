@@ -7,6 +7,16 @@ description: Convert an exact BIR/eBIRForms form revision into this repository's
 
 Convert one exact form revision at a time. Treat conversion as a tax-data and release-readiness task, not as PDF tracing.
 
+> **Strategy amendment (2026-07-20):** read
+> `docs/form-print-readiness/conversion-strategy-v2.md` first. It reorders
+> this workflow around measured findings: geometry is generated from PDF
+> ground-truth extraction and then reviewed (not hand-measured); calibration
+> targets STRUCTURE pixels only (text-neutralized comparison); text
+> correctness is proven by exhaustive static-text content assertions, never
+> by chasing text pixels (all 35 source PDFs carry substituted fonts, making
+> text-pixel parity unreachable by adversarially-verified proof). Every
+> fail-closed rule below remains in force.
+
 **The visual release gate is a complete-page pixel difference of at most 1%**
 per official page at 144 DPI (pixelmatch threshold 0.1), compared against the
 pinned gate reference (the same-rasterizer chromium raster where one exists,
