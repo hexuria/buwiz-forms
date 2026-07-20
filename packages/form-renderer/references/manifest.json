@@ -3,6 +3,17 @@
   "dpi": 144,
   "forms": [
     {
+      "chromium_reference_provenance": {
+        "generator": {
+          "chromium_version": "145.0.7632.6",
+          "pdftocairo_version": "26.07.0",
+          "playwright_version": "1.58.2"
+        },
+        "kind": "official_chromium_raster",
+        "note": "pdftocairo -svg from the pinned official PDF, rasterized by the same Chromium/Playwright environment as the parity screenshots; calibration-only and never runtime-loaded. The Poppler raster and the pinned per-page noise floor remain reported.",
+        "replacement_required": false,
+        "runtime_eligible": false
+      },
       "code": "0605",
       "fixture": "packages/form-contracts/fixtures/0605-normal.json",
       "fixture_sha256": "3f76b5f1ae518f81a625b07cd20976b7620bee7b0b1cead224f44af4d20887db",
@@ -25,6 +36,15 @@
       "page_width_pt": 612.0,
       "pages": [
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 1.551589296687336,
+            "noise_floor_changed_pixels": 35552,
+            "reference_height_px": 1872,
+            "reference_png": "packages/form-renderer/references/0605-1999-page-1-chromium.png",
+            "reference_png_sha256": "9d763c34cab73124db07ee686776309050dd0d2a1a5dc05c9edf254598baa2fd",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "b7aa1aacb7ed15ad6e5437ad849bd0cfe04edebd98f8c66f3da099b5550b9aba"
+          },
           "page": 1,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/0605-1999-page-1.png",
@@ -32,6 +52,15 @@
           "reference_width_px": 1224
         },
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 2.7991627562705994,
+            "noise_floor_changed_pixels": 64138,
+            "reference_height_px": 1872,
+            "reference_png": "packages/form-renderer/references/0605-1999-page-2-chromium.png",
+            "reference_png_sha256": "667f4669d134aacbe7b590c1f4962601782f400f7900206cf91aefe035947bdd",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "fb630322c053547805f1aa4e35259555d36e61219819836257fda6e3798ef339"
+          },
           "page": 2,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/0605-1999-page-2.png",
@@ -127,6 +156,17 @@
       ]
     },
     {
+      "chromium_reference_provenance": {
+        "generator": {
+          "chromium_version": "145.0.7632.6",
+          "pdftocairo_version": "26.07.0",
+          "playwright_version": "1.58.2"
+        },
+        "kind": "official_chromium_raster",
+        "note": "pdftocairo -svg from the pinned official PDF, rasterized by the same Chromium/Playwright environment as the parity screenshots; calibration-only and never runtime-loaded. The Poppler raster and the pinned per-page noise floor remain reported.",
+        "replacement_required": false,
+        "runtime_eligible": false
+      },
       "code": "0619E",
       "fixture": "packages/form-contracts/fixtures/0619e-normal.json",
       "fixture_sha256": "f08bd7cbb1eee63fdfdab025d880094319b949cd566be2c82203385e5f0c41fe",
@@ -173,6 +213,15 @@
       "page_width_pt": 612.0,
       "pages": [
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 3.4545825906120022,
+            "noise_floor_changed_pixels": 66978,
+            "reference_height_px": 1584,
+            "reference_png": "packages/form-renderer/references/0619e-2018-page-1-chromium.png",
+            "reference_png_sha256": "f3d3caa4b8635299f241f57548aafce0184ee97efa314adf1c8b49f3c6974737",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "4fcd762df5437628423246d6a290d5c504be4cd5b533dca33a98f694eb5ba4ba"
+          },
           "page": 1,
           "reference_height_px": 1584,
           "reference_png": "packages/form-renderer/references/0619e-2018-page-1.png",
@@ -323,6 +372,17 @@
       ]
     },
     {
+      "chromium_reference_provenance": {
+        "generator": {
+          "chromium_version": "145.0.7632.6",
+          "pdftocairo_version": "26.07.0",
+          "playwright_version": "1.58.2"
+        },
+        "kind": "official_chromium_raster",
+        "note": "pdftocairo -svg from the pinned official PDF, rasterized by the same Chromium/Playwright environment as the parity screenshots; calibration-only and never runtime-loaded. The Poppler raster and the pinned per-page noise floor remain reported.",
+        "replacement_required": false,
+        "runtime_eligible": false
+      },
       "code": "0619F",
       "fixture": "packages/form-contracts/fixtures/0619f-normal.json",
       "fixture_sha256": "e56153e3b269da028de8042dc59f5aa93df142c6b24204299ba9dd137b3e72e6",
@@ -369,6 +429,15 @@
       "page_width_pt": 612.0,
       "pages": [
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 3.8430671089984814,
+            "noise_floor_changed_pixels": 74510,
+            "reference_height_px": 1584,
+            "reference_png": "packages/form-renderer/references/0619f-2018-page-1-chromium.png",
+            "reference_png_sha256": "cf71163cdcd94ee15381e330ca677e6a4f4b4728f4395695dcdf150905c938f0",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "34978bc84b8c4a6ab44d15a429c4a4525b1cff99d9c0f6adf94a73b7b0ce4152"
+          },
           "page": 1,
           "reference_height_px": 1584,
           "reference_png": "packages/form-renderer/references/0619f-2018-page-1.png",
@@ -521,6 +590,17 @@
       ]
     },
     {
+      "chromium_reference_provenance": {
+        "generator": {
+          "chromium_version": "145.0.7632.6",
+          "pdftocairo_version": "26.07.0",
+          "playwright_version": "1.58.2"
+        },
+        "kind": "official_chromium_raster",
+        "note": "pdftocairo -svg from the pinned official PDF, rasterized by the same Chromium/Playwright environment as the parity screenshots; calibration-only and never runtime-loaded. The Poppler raster and the pinned per-page noise floor remain reported.",
+        "replacement_required": false,
+        "runtime_eligible": false
+      },
       "code": "1601C",
       "fixture": "packages/form-contracts/fixtures/1601c-normal.json",
       "fixture_sha256": "ae115b4e97c9b2ffc9b59b5820e255be3e180efba09996d72030f0c6d607ea34",
@@ -590,6 +670,15 @@
       "page_width_pt": 612.0,
       "pages": [
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 3.7628833584715937,
+            "noise_floor_changed_pixels": 86220,
+            "reference_height_px": 1872,
+            "reference_png": "packages/form-renderer/references/1601c-2018-page-1-chromium.png",
+            "reference_png_sha256": "dbf35a39ca207a75792317eea000db6bdaa5710600d470665299a083e44230bc",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "9e1b07f5580328d51b5820a0a127550ab5ea3267719af8772b8128bfeec6f2b0"
+          },
           "page": 1,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/1601c-2018-page-1.png",
@@ -597,6 +686,15 @@
           "reference_width_px": 1224
         },
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 4.530211301044634,
+            "noise_floor_changed_pixels": 103802,
+            "reference_height_px": 1872,
+            "reference_png": "packages/form-renderer/references/1601c-2018-page-2-chromium.png",
+            "reference_png_sha256": "92cf727b8ac1373da18da9e5b455c16643edec4b8a360f1fd6ea4ff93a4619eb",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "4969b23016fe5da7afe1105ddac720862db433b4c1642c80bd2268d5fe7746dc"
+          },
           "page": 2,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/1601c-2018-page-2.png",
@@ -845,6 +943,17 @@
       ]
     },
     {
+      "chromium_reference_provenance": {
+        "generator": {
+          "chromium_version": "145.0.7632.6",
+          "pdftocairo_version": "26.07.0",
+          "playwright_version": "1.58.2"
+        },
+        "kind": "official_chromium_raster",
+        "note": "pdftocairo -svg from the pinned official PDF, rasterized by the same Chromium/Playwright environment as the parity screenshots; calibration-only and never runtime-loaded. The Poppler raster and the pinned per-page noise floor remain reported.",
+        "replacement_required": false,
+        "runtime_eligible": false
+      },
       "code": "1701",
       "fixture": "packages/form-contracts/fixtures/1701-normal.json",
       "fixture_sha256": "469be004c4f32ee8e27a4589731cedeb9b6dab61410be831ff0ff001f30dfe58",
@@ -960,6 +1069,15 @@
       "page_width_pt": 612.0,
       "pages": [
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 3.9400731802692586,
+            "noise_floor_changed_pixels": 90280,
+            "reference_height_px": 1872,
+            "reference_png": "packages/form-renderer/references/1701-2018-page-1-chromium.png",
+            "reference_png_sha256": "ba3bc9a8b93cce3a41794f11627fe09dcd1cb9be8253ee02a1dd652c9b856df2",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "960568ad43f2c47a2c3cb00d4fd84656f8130c0dc58f3da7efd8b86ef7d69d5f"
+          },
           "page": 1,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/1701-2018-page-1.png",
@@ -967,6 +1085,15 @@
           "reference_width_px": 1224
         },
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 3.985505348863192,
+            "noise_floor_changed_pixels": 91321,
+            "reference_height_px": 1872,
+            "reference_png": "packages/form-renderer/references/1701-2018-page-2-chromium.png",
+            "reference_png_sha256": "4c0609dec36d7a1c02f76cdc3310c8dc95f8b214b47b13fdb1fa38cc30ececa4",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "e490106ebccc22ad59c70766f65fa46602ec1454e8b23bbfe55f4791e9ddf1a1"
+          },
           "page": 2,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/1701-2018-page-2.png",
@@ -974,6 +1101,15 @@
           "reference_width_px": 1224
         },
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 3.445861963018826,
+            "noise_floor_changed_pixels": 78956,
+            "reference_height_px": 1872,
+            "reference_png": "packages/form-renderer/references/1701-2018-page-3-chromium.png",
+            "reference_png_sha256": "b2105366a8a3cb56e74eed7f48072a097ad77524a720feccd40ac3464007a42f",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "120e9b38c468847dbb0f6c2a0efd5f23ca43dc3cc6bef9280f7e527e26ab4105"
+          },
           "page": 3,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/1701-2018-page-3.png",
@@ -981,6 +1117,15 @@
           "reference_width_px": 1224
         },
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 4.076806114183565,
+            "noise_floor_changed_pixels": 93413,
+            "reference_height_px": 1872,
+            "reference_png": "packages/form-renderer/references/1701-2018-page-4-chromium.png",
+            "reference_png_sha256": "3cddad3456e67f93b9c6212eb25a1b2a2f75df4b043189eeeeb63c8a65460173",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "acc47d664bd7d7acf99cbb6ab3b52078d6248a042a026785f56d4b0bd09ffd11"
+          },
           "page": 4,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/1701-2018-page-4.png",
@@ -1377,6 +1522,17 @@
       ]
     },
     {
+      "chromium_reference_provenance": {
+        "generator": {
+          "chromium_version": "145.0.7632.6",
+          "pdftocairo_version": "26.07.0",
+          "playwright_version": "1.58.2"
+        },
+        "kind": "official_chromium_raster",
+        "note": "pdftocairo -svg from the pinned official PDF, rasterized by the same Chromium/Playwright environment as the parity screenshots; calibration-only and never runtime-loaded. The Poppler raster and the pinned per-page noise floor remain reported.",
+        "replacement_required": false,
+        "runtime_eligible": false
+      },
       "code": "1701Q",
       "fixture": "packages/form-contracts/fixtures/1701q-normal.json",
       "fixture_sha256": "ca8a90050a22d5f18eaab4fcada5dfce5a074ec053c86ffa87d2694b9f9f12e8",
@@ -1446,6 +1602,15 @@
       "page_width_pt": 612.0,
       "pages": [
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 4.538983506508016,
+            "noise_floor_changed_pixels": 104003,
+            "reference_height_px": 1872,
+            "reference_png": "packages/form-renderer/references/1701q-2018-page-1-chromium.png",
+            "reference_png_sha256": "33c321c9c4ca2ba8e3ed3e995ffb34e833979ebf0226f5fd79cd91cd873c86dd",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "924452489363f9aa43079637463b9fa15328b53d564c66ad56ed8a8a020ea914"
+          },
           "page": 1,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/1701q-2018-page-1.png",
@@ -1453,6 +1618,15 @@
           "reference_width_px": 1224
         },
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 3.659537176694039,
+            "noise_floor_changed_pixels": 83852,
+            "reference_height_px": 1872,
+            "reference_png": "packages/form-renderer/references/1701q-2018-page-2-chromium.png",
+            "reference_png_sha256": "72c79311ce465e50b17c033df5c721e6a6e01f1db9f7e90431619c2452fca7c1",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "818fe8ef6b15cc29e6531b8c61bb4ef80dc156550ad1f586f5a6ab660a8fbe05"
+          },
           "page": 2,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/1701q-2018-page-2.png",
@@ -1679,6 +1853,17 @@
       ]
     },
     {
+      "chromium_reference_provenance": {
+        "generator": {
+          "chromium_version": "145.0.7632.6",
+          "pdftocairo_version": "26.07.0",
+          "playwright_version": "1.58.2"
+        },
+        "kind": "official_chromium_raster",
+        "note": "pdftocairo -svg from the pinned official PDF, rasterized by the same Chromium/Playwright environment as the parity screenshots; calibration-only and never runtime-loaded. The Poppler raster and the pinned per-page noise floor remain reported.",
+        "replacement_required": false,
+        "runtime_eligible": false
+      },
       "code": "1702MX",
       "fixture": "packages/form-contracts/fixtures/1702mx-normal.json",
       "fixture_sha256": "d2f70e503945974783358b321a772e0ca4025736c93e961e29e9191779ab4ec2",
@@ -1794,6 +1979,15 @@
       "page_width_pt": 612.0,
       "pages": [
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 3.3249277275012568,
+            "noise_floor_changed_pixels": 76185,
+            "reference_height_px": 1872,
+            "reference_png": "packages/form-renderer/references/1702mx-2018c-page-1-chromium.png",
+            "reference_png_sha256": "6bbb7cbf83383708740c11372d1b19ed18123739e3e08548ff527b6345f936ae",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "452e363d07d2f9b6d9f3fbd99e670a553964438a44522d912578ac707ffcce1b"
+          },
           "page": 1,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/1702mx-2018c-page-1.png",
@@ -1801,6 +1995,15 @@
           "reference_width_px": 1224
         },
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 4.169678020780962,
+            "noise_floor_changed_pixels": 95541,
+            "reference_height_px": 1872,
+            "reference_png": "packages/form-renderer/references/1702mx-2018c-page-2-chromium.png",
+            "reference_png_sha256": "bdbf064b57d0571ad41e86d4a6318cf44d646400075fa055abbdd04ad048f2ca",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "cf9a09288fa1797e34e2f4d331f39ee79d5def44e7f093f1fcde08d3ed6c04ed"
+          },
           "page": 2,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/1702mx-2018c-page-2.png",
@@ -1808,6 +2011,15 @@
           "reference_width_px": 1224
         },
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 3.5219750293279706,
+            "noise_floor_changed_pixels": 80700,
+            "reference_height_px": 1872,
+            "reference_png": "packages/form-renderer/references/1702mx-2018c-page-3-chromium.png",
+            "reference_png_sha256": "326b20fced7c0a0b50f21700ead740d49704c5fb5f493b5cfc889fe9f40271a6",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "f53dab6ad91b613aafa8148c503d68bb06825a132e60591aab6c02421106b145"
+          },
           "page": 3,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/1702mx-2018c-page-3.png",
@@ -1815,6 +2027,15 @@
           "reference_width_px": 1224
         },
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 3.0944500307245404,
+            "noise_floor_changed_pixels": 70904,
+            "reference_height_px": 1872,
+            "reference_png": "packages/form-renderer/references/1702mx-2018c-page-4-chromium.png",
+            "reference_png_sha256": "a7a6e8103a2e2a150353f8b230948a92067ec3e3291b8b38784deabde56a8696",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "0f000ba3705ba8095acc9186d359da82d91f4bf4d43d2eafadbb29c4839bb6fc"
+          },
           "page": 4,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/1702mx-2018c-page-4.png",
@@ -2230,6 +2451,17 @@
       ]
     },
     {
+      "chromium_reference_provenance": {
+        "generator": {
+          "chromium_version": "145.0.7632.6",
+          "pdftocairo_version": "26.07.0",
+          "playwright_version": "1.58.2"
+        },
+        "kind": "official_chromium_raster",
+        "note": "pdftocairo -svg from the pinned official PDF, rasterized by the same Chromium/Playwright environment as the parity screenshots; calibration-only and never runtime-loaded. The Poppler raster and the pinned per-page noise floor remain reported.",
+        "replacement_required": false,
+        "runtime_eligible": false
+      },
       "code": "1702RT",
       "fixture": "packages/form-contracts/fixtures/1702rt-normal.json",
       "fixture_sha256": "c2506735870f32d9da7b3235022ccd6057b4d2ecfe40a2a8e23dd1122d294fd3",
@@ -2345,6 +2577,15 @@
       "page_width_pt": 612.0,
       "pages": [
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 3.115442223898106,
+            "noise_floor_changed_pixels": 71385,
+            "reference_height_px": 1872,
+            "reference_png": "packages/form-renderer/references/1702rt-2018c-page-1-chromium.png",
+            "reference_png_sha256": "92d9b7c133ac1d51c59f4248115ce2ef61ed57117b2458ba9b52d87a9a62ae80",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "5f4849a5a103a0b77b48b36e2a7063c7142159f200663abfdf7383b3e7529c19"
+          },
           "page": 1,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/1702rt-2018c-page-1.png",
@@ -2352,6 +2593,15 @@
           "reference_width_px": 1224
         },
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 2.870125970616167,
+            "noise_floor_changed_pixels": 65764,
+            "reference_height_px": 1872,
+            "reference_png": "packages/form-renderer/references/1702rt-2018c-page-2-chromium.png",
+            "reference_png_sha256": "24b50f9ef8102a87d85fa6925d8f23c9891bb015b91516655f88831fe44f0771",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "64cb9a1b4a1cdd583d6051498d2fa098a44ead6f14541bdfc700cacba70d523d"
+          },
           "page": 2,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/1702rt-2018c-page-2.png",
@@ -2359,6 +2609,15 @@
           "reference_width_px": 1224
         },
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 2.414844142785319,
+            "noise_floor_changed_pixels": 55332,
+            "reference_height_px": 1872,
+            "reference_png": "packages/form-renderer/references/1702rt-2018c-page-3-chromium.png",
+            "reference_png_sha256": "51fb0b5be80854e54b6732014944fde293b529559175ac112f686dd222f433f3",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "be611f8c36cef1bea46e7880872f31a038efee724bd6433ccc848b2becb47e66"
+          },
           "page": 3,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/1702rt-2018c-page-3.png",
@@ -2366,6 +2625,15 @@
           "reference_width_px": 1224
         },
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 2.367928118540864,
+            "noise_floor_changed_pixels": 54257,
+            "reference_height_px": 1872,
+            "reference_png": "packages/form-renderer/references/1702rt-2018c-page-4-chromium.png",
+            "reference_png_sha256": "76f1b663d084ddbba131160e4475520d08ef9a37a52455969372ff72cad6ab04",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "17270273c3c794349ea5e875d3f6160898625bdbbc3830b34a4994a7b6162ed3"
+          },
           "page": 4,
           "reference_height_px": 1872,
           "reference_png": "packages/form-renderer/references/1702rt-2018c-page-4.png",
@@ -2772,6 +3040,17 @@
       ]
     },
     {
+      "chromium_reference_provenance": {
+        "generator": {
+          "chromium_version": "145.0.7632.6",
+          "pdftocairo_version": "26.07.0",
+          "playwright_version": "1.58.2"
+        },
+        "kind": "official_chromium_raster",
+        "note": "pdftocairo -svg from the pinned official PDF, rasterized by the same Chromium/Playwright environment as the parity screenshots; calibration-only and never runtime-loaded. The Poppler raster and the pinned per-page noise floor remain reported.",
+        "replacement_required": false,
+        "runtime_eligible": false
+      },
       "code": "2550Q",
       "fixture": "packages/form-contracts/fixtures/2550q-normal.json",
       "fixture_sha256": "f9b13277d40b0b6b093ac4f1c93c289ff72fcc77e191a3a98d3eb27ce11176b3",
@@ -2841,6 +3120,15 @@
       "page_width_pt": 612.0,
       "pages": [
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 2.882252438012242,
+            "noise_floor_changed_pixels": 71122,
+            "reference_height_px": 2016,
+            "reference_png": "packages/form-renderer/references/2550q-2024-page-1-chromium.png",
+            "reference_png_sha256": "22a50febd1b25e3ced56f4869ba041d840ed4d6eaa5b764870305c102134a57e",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "3614563af7db10835468b8dde1aceca358a531268530796a44374a49cc2748a7"
+          },
           "page": 1,
           "reference_height_px": 2016,
           "reference_png": "packages/form-renderer/references/2550q-2024-page-1.png",
@@ -2848,6 +3136,15 @@
           "reference_width_px": 1224
         },
         {
+          "chromium_raster": {
+            "noise_floor_changed_percent": 3.401951058201058,
+            "noise_floor_changed_pixels": 83946,
+            "reference_height_px": 2016,
+            "reference_png": "packages/form-renderer/references/2550q-2024-page-2-chromium.png",
+            "reference_png_sha256": "6481138b3fc7b42b677d8139299ffc48fe9822ae2fff59d0fc6b3fd240dde698",
+            "reference_width_px": 1224,
+            "vector_svg_sha256": "39567d0cc880251651423f138b1db38d42f83f4019e3ff09e8e89d5a596bdfbd"
+          },
           "page": 2,
           "reference_height_px": 2016,
           "reference_png": "packages/form-renderer/references/2550q-2024-page-2.png",

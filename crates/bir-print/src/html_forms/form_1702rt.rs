@@ -48,6 +48,48 @@ const VISUAL_REFERENCE_PAGES: &[VisualReferencePage] = &[
 /// typed draft. It does not prove an electronic submission contract or any
 /// continuation-sheet geometry, so this provider always emits exactly four
 /// pages and no renderer-owned continuation schedules.
+
+// Pinned by scripts/prepare_chromium_reference.mjs from the same official
+// PDF bytes; see references/1702rt-2018c-chromium-source.json
+// for the full pdf -> svg -> png provenance chain.
+const CHROMIUM_REFERENCES: super::ChromiumReferenceSet = super::ChromiumReferenceSet {
+    generator: super::ChromiumReferenceGenerator {
+        pdftocairo_version: "26.07.0",
+        playwright_version: "1.58.2",
+        chromium_version: "145.0.7632.6",
+    },
+    pages: &[
+        super::ChromiumVisualReference {
+            page: 1,
+            file_name: "1702rt-2018c-page-1-chromium.png",
+            sha256: "92d9b7c133ac1d51c59f4248115ce2ef61ed57117b2458ba9b52d87a9a62ae80",
+            vector_svg_sha256: "5f4849a5a103a0b77b48b36e2a7063c7142159f200663abfdf7383b3e7529c19",
+            noise_floor_changed_pixels: 71_385,
+        },
+        super::ChromiumVisualReference {
+            page: 2,
+            file_name: "1702rt-2018c-page-2-chromium.png",
+            sha256: "24b50f9ef8102a87d85fa6925d8f23c9891bb015b91516655f88831fe44f0771",
+            vector_svg_sha256: "64cb9a1b4a1cdd583d6051498d2fa098a44ead6f14541bdfc700cacba70d523d",
+            noise_floor_changed_pixels: 65_764,
+        },
+        super::ChromiumVisualReference {
+            page: 3,
+            file_name: "1702rt-2018c-page-3-chromium.png",
+            sha256: "51fb0b5be80854e54b6732014944fde293b529559175ac112f686dd222f433f3",
+            vector_svg_sha256: "be611f8c36cef1bea46e7880872f31a038efee724bd6433ccc848b2becb47e66",
+            noise_floor_changed_pixels: 55_332,
+        },
+        super::ChromiumVisualReference {
+            page: 4,
+            file_name: "1702rt-2018c-page-4-chromium.png",
+            sha256: "76f1b663d084ddbba131160e4475520d08ef9a37a52455969372ff72cad6ab04",
+            vector_svg_sha256: "17270273c3c794349ea5e875d3f6160898625bdbbc3830b34a4994a7b6162ed3",
+            noise_floor_changed_pixels: 54_257,
+        },
+    ],
+};
+
 pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     code: "1702RT",
     revision: "2018C",
@@ -65,7 +107,7 @@ pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     reference_width_px: 1_224,
     reference_height_px: 1_872,
     visual_reference_pages: VISUAL_REFERENCE_PAGES,
-    chromium_references: None,
+    chromium_references: Some(&CHROMIUM_REFERENCES),
     machine_readable_artwork: super::MachineReadableArtworkEvidence::Present,
     runtime_discrete_assets,
     fixtures,

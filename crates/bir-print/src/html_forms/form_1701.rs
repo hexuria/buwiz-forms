@@ -44,6 +44,48 @@ const VISUAL_REFERENCE_PAGES: &[VisualReferencePage] = &[
 /// The reviewed source pack proves an exact 837-key editable-save round trip,
 /// but not queue/final-flag semantics. The separate Part X attachment stays a
 /// separate, fail-closed workflow and is never appended by this provider.
+
+// Pinned by scripts/prepare_chromium_reference.mjs from the same official
+// PDF bytes; see references/1701-2018-chromium-source.json
+// for the full pdf -> svg -> png provenance chain.
+const CHROMIUM_REFERENCES: super::ChromiumReferenceSet = super::ChromiumReferenceSet {
+    generator: super::ChromiumReferenceGenerator {
+        pdftocairo_version: "26.07.0",
+        playwright_version: "1.58.2",
+        chromium_version: "145.0.7632.6",
+    },
+    pages: &[
+        super::ChromiumVisualReference {
+            page: 1,
+            file_name: "1701-2018-page-1-chromium.png",
+            sha256: "ba3bc9a8b93cce3a41794f11627fe09dcd1cb9be8253ee02a1dd652c9b856df2",
+            vector_svg_sha256: "960568ad43f2c47a2c3cb00d4fd84656f8130c0dc58f3da7efd8b86ef7d69d5f",
+            noise_floor_changed_pixels: 90_280,
+        },
+        super::ChromiumVisualReference {
+            page: 2,
+            file_name: "1701-2018-page-2-chromium.png",
+            sha256: "4c0609dec36d7a1c02f76cdc3310c8dc95f8b214b47b13fdb1fa38cc30ececa4",
+            vector_svg_sha256: "e490106ebccc22ad59c70766f65fa46602ec1454e8b23bbfe55f4791e9ddf1a1",
+            noise_floor_changed_pixels: 91_321,
+        },
+        super::ChromiumVisualReference {
+            page: 3,
+            file_name: "1701-2018-page-3-chromium.png",
+            sha256: "b2105366a8a3cb56e74eed7f48072a097ad77524a720feccd40ac3464007a42f",
+            vector_svg_sha256: "120e9b38c468847dbb0f6c2a0efd5f23ca43dc3cc6bef9280f7e527e26ab4105",
+            noise_floor_changed_pixels: 78_956,
+        },
+        super::ChromiumVisualReference {
+            page: 4,
+            file_name: "1701-2018-page-4-chromium.png",
+            sha256: "3cddad3456e67f93b9c6212eb25a1b2a2f75df4b043189eeeeb63c8a65460173",
+            vector_svg_sha256: "acc47d664bd7d7acf99cbb6ab3b52078d6248a042a026785f56d4b0bd09ffd11",
+            noise_floor_changed_pixels: 93_413,
+        },
+    ],
+};
+
 pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     code: "1701",
     revision: "2018",
@@ -62,7 +104,7 @@ pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     reference_width_px: 1_224,
     reference_height_px: 1_872,
     visual_reference_pages: VISUAL_REFERENCE_PAGES,
-    chromium_references: None,
+    chromium_references: Some(&CHROMIUM_REFERENCES),
     machine_readable_artwork: super::MachineReadableArtworkEvidence::Present,
     runtime_discrete_assets,
     fixtures,

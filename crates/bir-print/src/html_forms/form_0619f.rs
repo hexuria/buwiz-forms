@@ -23,6 +23,27 @@ const VISUAL_REFERENCE_PAGES: &[VisualReferencePage] = &[VisualReferencePage {
     sha256: "9ca59837f330ad026f1d90e5b19f7d524945b66314b09ded2644efc508f2b627",
 }];
 
+
+// Pinned by scripts/prepare_chromium_reference.mjs from the same official
+// PDF bytes; see references/0619f-2018-chromium-source.json
+// for the full pdf -> svg -> png provenance chain.
+const CHROMIUM_REFERENCES: super::ChromiumReferenceSet = super::ChromiumReferenceSet {
+    generator: super::ChromiumReferenceGenerator {
+        pdftocairo_version: "26.07.0",
+        playwright_version: "1.58.2",
+        chromium_version: "145.0.7632.6",
+    },
+    pages: &[
+        super::ChromiumVisualReference {
+            page: 1,
+            file_name: "0619f-2018-page-1-chromium.png",
+            sha256: "cf71163cdcd94ee15381e330ca677e6a4f4b4728f4395695dcdf150905c938f0",
+            vector_svg_sha256: "34978bc84b8c4a6ab44d15a429c4a4525b1cff99d9c0f6adf94a73b7b0ce4152",
+            noise_floor_changed_pixels: 74_510,
+        },
+    ],
+};
+
 pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     code: "0619F",
     revision: "2018",
@@ -40,7 +61,7 @@ pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     reference_width_px: 1_224,
     reference_height_px: 1_584,
     visual_reference_pages: VISUAL_REFERENCE_PAGES,
-    chromium_references: None,
+    chromium_references: Some(&CHROMIUM_REFERENCES),
     machine_readable_artwork: super::MachineReadableArtworkEvidence::Present,
     runtime_discrete_assets,
     fixtures,

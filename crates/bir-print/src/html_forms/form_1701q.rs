@@ -33,6 +33,34 @@ const VISUAL_REFERENCE_PAGES: &[VisualReferencePage] = &[
 /// The reviewed source pack has no exact-revision saved XML. Consequently this
 /// provider supplies semantic preview data but does not make an XML, queue, or
 /// filing-readiness claim. Those gates remain false in the capability manifest.
+
+// Pinned by scripts/prepare_chromium_reference.mjs from the same official
+// PDF bytes; see references/1701q-2018-chromium-source.json
+// for the full pdf -> svg -> png provenance chain.
+const CHROMIUM_REFERENCES: super::ChromiumReferenceSet = super::ChromiumReferenceSet {
+    generator: super::ChromiumReferenceGenerator {
+        pdftocairo_version: "26.07.0",
+        playwright_version: "1.58.2",
+        chromium_version: "145.0.7632.6",
+    },
+    pages: &[
+        super::ChromiumVisualReference {
+            page: 1,
+            file_name: "1701q-2018-page-1-chromium.png",
+            sha256: "33c321c9c4ca2ba8e3ed3e995ffb34e833979ebf0226f5fd79cd91cd873c86dd",
+            vector_svg_sha256: "924452489363f9aa43079637463b9fa15328b53d564c66ad56ed8a8a020ea914",
+            noise_floor_changed_pixels: 104_003,
+        },
+        super::ChromiumVisualReference {
+            page: 2,
+            file_name: "1701q-2018-page-2-chromium.png",
+            sha256: "72c79311ce465e50b17c033df5c721e6a6e01f1db9f7e90431619c2452fca7c1",
+            vector_svg_sha256: "818fe8ef6b15cc29e6531b8c61bb4ef80dc156550ad1f586f5a6ab660a8fbe05",
+            noise_floor_changed_pixels: 83_852,
+        },
+    ],
+};
+
 pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     code: "1701Q",
     revision: "2018",
@@ -51,7 +79,7 @@ pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     reference_width_px: 1_224,
     reference_height_px: 1_872,
     visual_reference_pages: VISUAL_REFERENCE_PAGES,
-    chromium_references: None,
+    chromium_references: Some(&CHROMIUM_REFERENCES),
     machine_readable_artwork: super::MachineReadableArtworkEvidence::Present,
     runtime_discrete_assets,
     fixtures,

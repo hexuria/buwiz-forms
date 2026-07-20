@@ -1,0 +1,57 @@
+{
+  "calibration_only": true,
+  "form": {
+    "code": "2550Q",
+    "device_scale_factor": 1.5,
+    "dpi": 144,
+    "form_id": "2550Qv2024",
+    "official_source_file": "external:2550Q  April 2024 ENCS_Final.pdf",
+    "official_source_sha256": "18eb16925010fdda820cef958221ba2c0d073066efa93a898113e39b31135a25",
+    "page_count": 2,
+    "page_height_pt": 1008,
+    "page_width_pt": 612,
+    "pages": [
+      {
+        "chromium_png": "packages/form-renderer/references/2550q-2024-page-1-chromium.png",
+        "chromium_png_sha256": "22a50febd1b25e3ced56f4869ba041d840ed4d6eaa5b764870305c102134a57e",
+        "noise_floor_changed_percent": 2.882252438012242,
+        "noise_floor_changed_pixels": 71122,
+        "noise_floor_pixelmatch_threshold": 0.1,
+        "page": 1,
+        "poppler_reference_png": "packages/form-renderer/references/2550q-2024-page-1.png",
+        "poppler_reference_png_sha256": "abfa7be4cb205a9a7488e865279c9b83b50b8b581b6019318c5a98646b74cceb",
+        "reference_height_px": 2016,
+        "reference_width_px": 1224,
+        "vector_svg_sha256": "3614563af7db10835468b8dde1aceca358a531268530796a44374a49cc2748a7"
+      },
+      {
+        "chromium_png": "packages/form-renderer/references/2550q-2024-page-2-chromium.png",
+        "chromium_png_sha256": "6481138b3fc7b42b677d8139299ffc48fe9822ae2fff59d0fc6b3fd240dde698",
+        "noise_floor_changed_percent": 3.401951058201058,
+        "noise_floor_changed_pixels": 83946,
+        "noise_floor_pixelmatch_threshold": 0.1,
+        "page": 2,
+        "poppler_reference_png": "packages/form-renderer/references/2550q-2024-page-2.png",
+        "poppler_reference_png_sha256": "6bcf45b6780789601b4a6a659cad12ef8777f3a61179ee82d9f93c62c85b97f4",
+        "reference_height_px": 2016,
+        "reference_width_px": 1224,
+        "vector_svg_sha256": "39567d0cc880251651423f138b1db38d42f83f4019e3ff09e8e89d5a596bdfbd"
+      }
+    ],
+    "reference_provenance": {
+      "kind": "official_chromium_raster",
+      "replacement_required": false,
+      "runtime_eligible": false
+    },
+    "revision": "2024"
+  },
+  "generator": {
+    "chromium_version": "145.0.7632.6",
+    "name": "prepare_chromium_reference.mjs",
+    "pdftocairo_version": "26.07.0",
+    "platform": "darwin",
+    "playwright_version": "1.58.2"
+  },
+  "runtime_background_allowed": false,
+  "schema_version": 1
+}

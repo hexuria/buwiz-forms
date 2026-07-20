@@ -40,6 +40,34 @@ const VISUAL_REFERENCE_PAGES: &[VisualReferencePage] = &[
 /// official labels, but their geometry and transport contract are not present
 /// in the source pack. Consequently this provider is deliberately fixed at two
 /// pages and refuses to invent continuation pages.
+
+// Pinned by scripts/prepare_chromium_reference.mjs from the same official
+// PDF bytes; see references/2550q-2024-chromium-source.json
+// for the full pdf -> svg -> png provenance chain.
+const CHROMIUM_REFERENCES: super::ChromiumReferenceSet = super::ChromiumReferenceSet {
+    generator: super::ChromiumReferenceGenerator {
+        pdftocairo_version: "26.07.0",
+        playwright_version: "1.58.2",
+        chromium_version: "145.0.7632.6",
+    },
+    pages: &[
+        super::ChromiumVisualReference {
+            page: 1,
+            file_name: "2550q-2024-page-1-chromium.png",
+            sha256: "22a50febd1b25e3ced56f4869ba041d840ed4d6eaa5b764870305c102134a57e",
+            vector_svg_sha256: "3614563af7db10835468b8dde1aceca358a531268530796a44374a49cc2748a7",
+            noise_floor_changed_pixels: 71_122,
+        },
+        super::ChromiumVisualReference {
+            page: 2,
+            file_name: "2550q-2024-page-2-chromium.png",
+            sha256: "6481138b3fc7b42b677d8139299ffc48fe9822ae2fff59d0fc6b3fd240dde698",
+            vector_svg_sha256: "39567d0cc880251651423f138b1db38d42f83f4019e3ff09e8e89d5a596bdfbd",
+            noise_floor_changed_pixels: 83_946,
+        },
+    ],
+};
+
 pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     code: "2550Q",
     revision: "2024",
@@ -57,7 +85,7 @@ pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     reference_width_px: 1_224,
     reference_height_px: 2_016,
     visual_reference_pages: VISUAL_REFERENCE_PAGES,
-    chromium_references: None,
+    chromium_references: Some(&CHROMIUM_REFERENCES),
     machine_readable_artwork: super::MachineReadableArtworkEvidence::Present,
     runtime_discrete_assets,
     fixtures,

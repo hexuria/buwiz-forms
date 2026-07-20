@@ -34,6 +34,34 @@ const VISUAL_REFERENCE_PAGES: &[VisualReferencePage] = &[
     },
 ];
 
+
+// Pinned by scripts/prepare_chromium_reference.mjs from the same official
+// PDF bytes; see references/0605-1999-chromium-source.json
+// for the full pdf -> svg -> png provenance chain.
+const CHROMIUM_REFERENCES: super::ChromiumReferenceSet = super::ChromiumReferenceSet {
+    generator: super::ChromiumReferenceGenerator {
+        pdftocairo_version: "26.07.0",
+        playwright_version: "1.58.2",
+        chromium_version: "145.0.7632.6",
+    },
+    pages: &[
+        super::ChromiumVisualReference {
+            page: 1,
+            file_name: "0605-1999-page-1-chromium.png",
+            sha256: "9d763c34cab73124db07ee686776309050dd0d2a1a5dc05c9edf254598baa2fd",
+            vector_svg_sha256: "b7aa1aacb7ed15ad6e5437ad849bd0cfe04edebd98f8c66f3da099b5550b9aba",
+            noise_floor_changed_pixels: 35_552,
+        },
+        super::ChromiumVisualReference {
+            page: 2,
+            file_name: "0605-1999-page-2-chromium.png",
+            sha256: "667f4669d134aacbe7b590c1f4962601782f400f7900206cf91aefe035947bdd",
+            vector_svg_sha256: "fb630322c053547805f1aa4e35259555d36e61219819836257fda6e3798ef339",
+            noise_floor_changed_pixels: 64_138,
+        },
+    ],
+};
+
 pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     code: "0605",
     revision: "1999",
@@ -51,7 +79,7 @@ pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     reference_width_px: 1_224,
     reference_height_px: 1_872,
     visual_reference_pages: VISUAL_REFERENCE_PAGES,
-    chromium_references: None,
+    chromium_references: Some(&CHROMIUM_REFERENCES),
     machine_readable_artwork: super::MachineReadableArtworkEvidence::Absent {
         audited_pages: &[1, 2],
         inventory_method: "pinned PDF image-XObject, decoded page-content stream, and reviewed 144 DPI page inventory",
