@@ -2043,3 +2043,36 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   size: 612pt 1008pt;
   margin: 0;
 }
+
+/*
+ * Part II centavos column, derived from the pinned PDF rather than tuned.
+ *
+ * The extracted geometry contract gives the official column exactly: its left
+ * edge is a 0.96px rule centred on x=1094.84 and its right edge one centred on
+ * x=1123.40, both running the full height of the money band (399px of ~501px),
+ * with the table's right border at x=1180.28. Ours drew NO edge rules at all
+ * and placed the column boundary at x=1096, so the structural stratum reported
+ * this as missing structure rather than displacement.
+ *
+ * An earlier attempt added the borders without moving the column. That painted
+ * them at 1096/1124 - ink the official does not have - while still leaving
+ * 1094.84 and 1123.40 unpainted, and measured worse. Position and edges have to
+ * be corrected together, which is what the contract makes possible:
+ *   integer basis 170.5pt -> 169.92pt moves the boundary 0.58pt (1.16 device
+ *   px) left, landing it on 1094.84;
+ *   separator 14pt -> 14.28pt (28.56 device px) puts its right edge on
+ *   1123.40 rather than 1122.84.
+ * The centavos comb keeps `flex: 1`, so its right edge stays on the official
+ * border at 1180.28 and no reviewed comb capacity changes.
+ *
+ * Scoped to page one: `.money-value .decimal-separator` is shared with other
+ * forms whose columns have not been measured.
+ */
+.form-2551q-page-one .official-tax-line .money-value > .official-money-integer {
+  flex: 0 0 169.92pt;
+}
+.form-2551q-page-one .official-tax-line .money-value > .decimal-separator {
+  width: 14.28pt;
+  border-left: .48pt solid #111;
+  border-right: .48pt solid #111;
+}
