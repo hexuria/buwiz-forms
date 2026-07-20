@@ -34,6 +34,19 @@ export async function renderEnvelope(page: Page, envelope: unknown) {
 }
 
 /**
+ * The fixture-owned glyph set: values, adaptive plain text, check marks, and
+ * inline specification text. Single definition, shared by the pixel gate's
+ * blanking below and by `static-text-exhaustive-v1`, so "fixture-owned" can
+ * never mean two different things in one criterion.
+ */
+export const FIXTURE_OWNED_SELECTORS: readonly string[] = [
+  ".comb-value > span",
+  ".adaptive-plain-value",
+  ".check-box",
+  ".tax-credit-description"
+];
+
+/**
  * Hide fixture-supplied glyphs so the comparison sees the blank official
  * page: values, adaptive plain text, check marks, and inline specification
  * text become transparent while every border, comb cell, label, fill, and
@@ -42,10 +55,9 @@ export async function renderEnvelope(page: Page, envelope: unknown) {
 export async function prepareOfficialBlankComparison(page: Page) {
   await page.addStyleTag({
     content: `
-      .form-page[data-visual-blank-values="true"] .comb-value > span,
-      .form-page[data-visual-blank-values="true"] .adaptive-plain-value,
-      .form-page[data-visual-blank-values="true"] .check-box,
-      .form-page[data-visual-blank-values="true"] .tax-credit-description {
+      ${FIXTURE_OWNED_SELECTORS
+        .map((selector) => `.form-page[data-visual-blank-values="true"] ${selector}`)
+        .join(",\n      ")} {
         color: transparent !important;
         text-shadow: none !important;
       }

@@ -14,12 +14,22 @@ import {
   comparePixelMask
 } from "./official-page-diff";
 import {
+  OFFICIAL_2551Q_ALLOWED_RESIDUAL,
+  OFFICIAL_2551Q_COMPLETENESS_SELECTORS,
+  OFFICIAL_2551Q_SOURCE_SHA256,
   OFFICIAL_2551Q_STATIC_TEXT,
-  verifyPageIndexedStaticText
+  staticTextEntriesForPage,
+  verifyPageIndexedStaticText,
+  verifyStaticTextExhaustive,
+  verifyStaticTextManifestCompleteness,
+  verifyFixtureOwnedText,
+  collectEnvelopeStrings,
+  SINGLE_GLYPH_FIXTURE_SELECTORS
 } from "./official-2551q-static-text";
 import { writeRegionReport } from "./region-report";
 import {
   blankComparisonEnvelope,
+  FIXTURE_OWNED_SELECTORS,
   prepareOfficialBlankComparison,
   renderEnvelope
 } from "./support/render-utils";
@@ -256,12 +266,51 @@ for (const parityCase of cases) {
     await expectBackgroundInformationParity(pages.nth(0));
     await expectCriticalRegionGeometry(pages.nth(1), PAGE_TWO_CRITICAL_REGIONS);
     await expectCriticalRegionContent(pages.nth(0), pages.nth(1));
-    const staticTextViolations = verifyPageIndexedStaticText(
-      await collectStaticTextSnapshots(pages)
-    );
+    const staticTextSnapshots = await collectStaticTextSnapshots(pages);
+    const staticTextViolations = verifyPageIndexedStaticText(staticTextSnapshots);
     expect(
       staticTextViolations,
       "Every reviewed 2551Q static label must appear on its official page"
+    ).toEqual([]);
+
+    // static-text-exhaustive-v1. The pixel components cannot see content: a
+    // wrong statutory rate scores 0.19e-4 and violates nothing above. These
+    // three assertions are what close that hole, so none of them may be
+    // relaxed to make a run pass.
+    const exhaustiveStaticTextViolations = staticTextSnapshots.flatMap(
+      (snapshot, index) =>
+        verifyStaticTextExhaustive(
+          snapshot.staticText,
+          staticTextEntriesForPage(index + 1),
+          OFFICIAL_2551Q_ALLOWED_RESIDUAL
+        )
+    );
+    expect(
+      exhaustiveStaticTextViolations,
+      "Every reviewed 2551Q static string must appear in manifest order, and no unreviewed string may reach the page"
+    ).toEqual([]);
+
+    const manifestCompletenessViolations = verifyStaticTextManifestCompleteness(
+      await collectCompletenessObservations(pages)
+    );
+    expect(
+      manifestCompletenessViolations,
+      "Every ATC row and payment heading the renderer emits must have a reviewed manifest entry"
+    ).toEqual([]);
+
+    // Both halves of the criterion deliberately look away from fixture-owned
+    // elements: the pixel gate blanks them and the exhaustive walk suppresses
+    // them. Adversarial testing showed that shared blind spot is a bypass - a
+    // fabricated advisory line wrapped in `.comb-value > span` printed on the
+    // page and scored zero violations everywhere, across a 725-element
+    // surface. This constrains that set so suppression is not a free pass.
+    const fixtureOwnedViolations = verifyFixtureOwnedText(
+      await collectFixtureOwnedObservations(pages),
+      collectEnvelopeStrings(envelope)
+    );
+    expect(
+      fixtureOwnedViolations,
+      "Fixture-owned elements are hidden from both the pixel gate and the static-text walk, so each must be a single glyph or match a value the envelope supplied"
     ).toEqual([]);
 
     // The pinned official PDF is an unfilled form while our authoritative
@@ -315,7 +364,11 @@ for (const parityCase of cases) {
       });
     }
 
-    writeLayeredFidelityDiagnostic(staticTextViolations);
+    writeLayeredFidelityDiagnostic(
+      staticTextViolations,
+      exhaustiveStaticTextViolations,
+      manifestCompletenessViolations
+    );
     writeVisualEvidence();
     expect(
       layeredFidelityMetrics,
@@ -363,6 +416,7 @@ async function collectStaticTextSnapshots(pages: Locator) {
     )
   ];
   const pageCount = await pages.count();
+  const staticTexts = await collectFixtureFreeStaticText(pages.page());
   return Promise.all(Array.from({ length: pageCount }, async (_, pageIndex) => {
     const formPage = pages.nth(pageIndex);
     const selectorText = Object.fromEntries(
@@ -371,11 +425,95 @@ async function collectStaticTextSnapshots(pages: Locator) {
         (await formPage.locator(selector).allInnerTexts()).join(" ")
       ] as const))
     );
+    const fullText = await formPage.innerText();
     return {
-      fullText: await formPage.innerText(),
+      fullText,
+      staticText: staticTexts[pageIndex] ?? fullText,
       selectorText
     };
   }));
+}
+
+/**
+ * Page text with only the fixture-supplied glyphs suppressed — the same
+ * fixture-owned set the pixel gate blanks. The exhaustive walk asserts static
+ * text, so a fixture's comb characters must not become residual; scoping them
+ * out is what lets `allowedResidual` stay down to three punctuation glyphs
+ * instead of an allowlist wide enough to hide a fabricated advisory line.
+ *
+ * The suppression is applied and reverted inside one evaluate call, so the DOM
+ * the later screenshots capture is untouched.
+ */
+async function collectFixtureFreeStaticText(page: Page) {
+  return page.evaluate((selectors) => {
+    const owned = Array.from(
+      document.querySelectorAll<HTMLElement>(selectors.join(","))
+    );
+    const previous = owned.map((element) => element.style.display);
+    for (const element of owned) element.style.display = "none";
+    try {
+      return Array.from(document.querySelectorAll<HTMLElement>(".form-page")).map(
+        (formPage) => formPage.innerText
+      );
+    } finally {
+      owned.forEach((element, index) => {
+        element.style.display = previous[index] ?? "";
+      });
+    }
+  }, FIXTURE_OWNED_SELECTORS);
+}
+
+/**
+ * Enumerates the DOM elements the manifest must account for. If the renderer
+ * grows an ATC row or a payment heading, this makes the manifest fail closed
+ * rather than silently fall behind.
+ */
+async function collectCompletenessObservations(pages: Locator) {
+  const pageCount = await pages.count();
+  const observations = await Promise.all(
+    Array.from({ length: pageCount }, async (_, pageIndex) => {
+      const formPage = pages.nth(pageIndex);
+      const perSelector = await Promise.all(
+        OFFICIAL_2551Q_COMPLETENESS_SELECTORS.map(async (selector) =>
+          (await formPage.locator(selector).allInnerTexts()).map((text) => ({
+            page: pageIndex + 1,
+            selector,
+            text
+          }))
+        )
+      );
+      return perSelector.flat();
+    })
+  );
+  return observations.flat();
+}
+
+/**
+ * Enumerate every fixture-owned element so the set both halves of the
+ * criterion suppress can still be held to account. Single-glyph selectors are
+ * flagged as such: comb cells and check boxes carry one character by
+ * construction, so anything longer is a structural impossibility rather than a
+ * value judgement.
+ */
+async function collectFixtureOwnedObservations(pages: Locator) {
+  const pageCount = await pages.count();
+  const observations = await Promise.all(
+    Array.from({ length: pageCount }, async (_, pageIndex) => {
+      const formPage = pages.nth(pageIndex);
+      const perSelector = await Promise.all(
+        FIXTURE_OWNED_SELECTORS.map(async (selector) =>
+          (await formPage.locator(selector).allInnerTexts()).map((text) => ({
+            page: pageIndex + 1,
+            selector,
+            text,
+            singleGlyph: SINGLE_GLYPH_FIXTURE_SELECTORS.includes(selector)
+          }))
+        )
+      );
+      return perSelector.flat();
+    })
+  );
+  return observations.flat();
 }
 
 test("2551Q PDF417 artwork keeps the reviewed source geometry", async ({ page }) => {
@@ -1673,7 +1811,11 @@ test("2551Q adaptive fields retain domain-boundary text and report unsafe geomet
 });
 
 function writeLayeredFidelityDiagnostic(
-  staticTextViolations: ReturnType<typeof verifyPageIndexedStaticText>
+  staticTextViolations: ReturnType<typeof verifyPageIndexedStaticText>,
+  exhaustiveStaticTextViolations: ReturnType<typeof verifyStaticTextExhaustive>,
+  manifestCompletenessViolations: ReturnType<
+    typeof verifyStaticTextManifestCompleteness
+  >
 ) {
   const reportPath = path.join(
     REPO_ROOT,
@@ -1697,9 +1839,26 @@ function writeLayeredFidelityDiagnostic(
       violations: staticTextViolations,
       passed: staticTextViolations.length === 0
     },
+    static_text_exhaustive: {
+      comparison: "static-text-exhaustive-v1",
+      is_content_assertion: true,
+      proves_parity: false,
+      reviewed_entry_count: OFFICIAL_2551Q_STATIC_TEXT.length,
+      manifest_sha256: sha256(Buffer.from(JSON.stringify(OFFICIAL_2551Q_STATIC_TEXT))),
+      official_source_sha256: OFFICIAL_2551Q_SOURCE_SHA256,
+      allowed_residual: OFFICIAL_2551Q_ALLOWED_RESIDUAL,
+      completeness_selectors: OFFICIAL_2551Q_COMPLETENESS_SELECTORS,
+      ordered_violations: exhaustiveStaticTextViolations,
+      completeness_violations: manifestCompletenessViolations,
+      passed:
+        exhaustiveStaticTextViolations.length === 0 &&
+        manifestCompletenessViolations.length === 0
+    },
     edges: layeredFidelityMetrics,
     passed:
       staticTextViolations.length === 0 &&
+      exhaustiveStaticTextViolations.length === 0 &&
+      manifestCompletenessViolations.length === 0 &&
       layeredFidelityMetrics.length === 2 &&
       layeredFidelityMetrics.every((metric) => metric.passed)
   };
