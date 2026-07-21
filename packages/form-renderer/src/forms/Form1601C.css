@@ -358,7 +358,23 @@
   border-left: .7pt solid #111;
   background: #d9d9d9;
 }
+/* The `.address-second-1601c > span` label rule above (0,1,1) also matches the
+ * two `.comb-value` spans (address line 2 + ZIP), leaking `align-items: center`
+ * and `gap: 3pt` onto their inner-cell flex. That collapsed every cell to its
+ * content height (~9.3px in a ~20px row), so the bottom-anchored guide `::after`
+ * (height:46%) rendered at ~4.3px -- half of line 1's ticks -- and the empty
+ * cells after the value dropped their ticks entirely under sub-pixel snapping
+ * (the reviewer's "shorter, and empty cells show no ticks"). The leaked `gap`
+ * also shifted the whole tick row ~4px left of line 1 and the official (contract
+ * p1 line-1 and line-2 tick centres are IDENTICAL: 93,122,150,179...). This
+ * override (0,2,0) already resets padding/border/background off that label rule;
+ * `align-items: stretch` restores the base comb's full-height inner cells and
+ * `column-gap: 0` restores the contract pitch, so line 2 now matches line 1 and
+ * the official in both tick height and x-position, empty cells included. Adds no
+ * cells and changes no capacity -- §2.2 empty cells retain their guides. */
 .address-second-1601c > .comb-value {
+  align-items: stretch;
+  column-gap: 0;
   padding: 0;
   border-left: .7pt solid #111;
   background: #fff;
