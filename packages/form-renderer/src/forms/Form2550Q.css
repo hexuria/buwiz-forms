@@ -510,6 +510,15 @@
 .schedule-total-2550q { height: 10pt; background: #d9d9d9; }
 .schedule-total-2550q > span:first-child { justify-content: flex-start; grid-column: 1 / 3; }
 .schedule-four-grid-2550q.schedule-total-2550q > span:first-child { grid-column: 1 / 5; }
+/* §3.1 knockout: the official grey label band on the Sch 3 / Sch 4 total rows
+ * stops at the label|value divider — page-2 fill_regions gray 0.851 end at
+ * x780.8px (Sch 3, y1722.3-1740.7) and x1006.0px (Sch 4, y1817.3-1835.8) — and
+ * the total-entry value cell(s) to the right are WHITE paper, with no fill or
+ * knockout carving them grey. The grey row background was bleeding through the
+ * ScheduleMoney totals; knock them out to white so only the label stays grey,
+ * matching the official. (Schedule 1's total uses .schedule-one-total-2550q,
+ * which carries no grey fill, so this rule leaves it untouched.) */
+.schedule-total-2550q .schedule-money-2550q { background: #fff; }
 .plain-value-2550q { min-width: 0; display: flex; align-items: center; overflow-wrap: anywhere; line-height: 1; }
 .form-2550q-page .adaptive-plain-value.plain-value-2550q {
   height: auto;
