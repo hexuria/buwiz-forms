@@ -174,6 +174,46 @@ describe("1601C:2018 runtime render contract", () => {
     expect(markup).toContain("<strong>TOTAL AMOUNT STILL DUE</strong>/(Over-remittance)");
   });
 
+  it("zero-pads Item 4 Number of Sheet/s Attached to the field's two cells", () => {
+    const renderWithSheets = (value: number) => {
+      const fixture = structuredClone(normalFixture) as RenderEnvelope;
+      (fixture.fields as Record<string, { type: string; value: number }>)
+        .number_of_sheets = { type: "integer", value };
+      return renderToStaticMarkup(
+        createElement(FormDocument, { envelope: fixture })
+      );
+    };
+
+    // A single-digit count fills both cells with a leading zero ("02"),
+    // matching the form's own numeric-header convention (For-the-Month "06",
+    // RDO Code "018") rather than leaving the left cell blank.
+    const paddedMarkup = renderWithSheets(2);
+    expect(paddedMarkup).toContain(
+      'Number of Sheet/s Attached</div><span><span class="comb-value">' +
+        "<span>0</span><span>2</span></span></span>"
+    );
+    // Never the old blank-left-cell rendering.
+    expect(paddedMarkup).not.toContain(
+      'Number of Sheet/s Attached</div><span><span class="comb-value">' +
+        "<span> </span><span>2</span></span></span>"
+    );
+
+    // A two-digit count already fills both cells and is left untouched.
+    expect(renderWithSheets(12)).toContain(
+      'Number of Sheet/s Attached</div><span><span class="comb-value">' +
+        "<span>1</span><span>2</span></span></span>"
+    );
+
+    // padStart never truncates: a >2-digit count keeps its full value and the
+    // adaptive overflow ladder still engages, preserving the right alignment.
+    const overflowMarkup = renderWithSheets(123);
+    expect(overflowMarkup).toContain(
+      'Number of Sheet/s Attached</div><span><span ' +
+        'class="adaptive-plain-value adaptive-align-right"'
+    );
+    expect(overflowMarkup).toContain('aria-label="123"');
+  });
+
   it("uses the reviewed plain Item 5 field and measured overflow contract", () => {
     const normalMarkup = renderToStaticMarkup(
       createElement(FormDocument, { envelope: structuredClone(normalFixture) as RenderEnvelope })

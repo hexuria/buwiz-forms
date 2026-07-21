@@ -152,7 +152,12 @@ function HeaderOptions({ envelope, monthYear }: { envelope: RenderEnvelope; mont
         <CheckChoice checked={!bool(envelope, "any_taxes_withheld")} label="No" />
       </HeaderOption>
       <HeaderOption label={<><b>4</b> Number of Sheet/s Attached</>}>
-        <AdaptiveComb1601C value={String(integer(envelope, "number_of_sheets"))} cells={2} align="right" />
+        {/* Zero-pad to the field's two cells, matching the form's own numeric
+            header convention (For-the-Month "06", RDO Code "018"): a value of 2
+            reads "02" filling both cells, 12 stays "12". padStart never
+            truncates, so a >2-digit value keeps its full string and the
+            AdaptiveComb1601C overflow ladder still engages. */}
+        <AdaptiveComb1601C value={String(integer(envelope, "number_of_sheets")).padStart(2, "0")} cells={2} align="right" />
       </HeaderOption>
       <HeaderOption label={<><b>5</b> ATC</>}>
         {/* Pre-printed on the official form, so it must render at the official
