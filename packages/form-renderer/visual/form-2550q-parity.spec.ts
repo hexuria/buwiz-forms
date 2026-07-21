@@ -211,9 +211,14 @@ test("2550Q April 2024 preserves official disabled panels and page-one payment c
   await expectCriticalRegionGeometry(pages.nth(0), [
     {
       name: "Item 10A ZIP panel",
+      // y re-pinned 486 -> 483 (1 device px up): under the uniform 1px border
+      // decision (border-thickness-decision.md) part-one's top frame dropped from
+      // 2px to 1px, so its top-anchored interior — including this bottom-anchored
+      // ZIP panel — returns to its natural position one device px higher. The
+      // panel's x/width/height are unchanged.
       selector: ".zip-2550q",
       x: 923,
-      y: 486,
+      y: 483,
       width: 262,
       height: 38
     }
@@ -321,7 +326,16 @@ test("2550Q April 2024 uses only the official guided fields and exact guide capa
     .first().locator(":scope > span")
     .evaluateAll((cells) => cells.map((cell) => Number.parseFloat(getComputedStyle(cell, "::after").borderRightWidth)));
   expect(moneyGuideWidths).toHaveLength(12);
-  for (const index of [2, 5, 8]) expect(moneyGuideWidths[index]).toBeGreaterThan(moneyGuideWidths[0]);
+  // Uniform 1px comb dividers, per border-thickness-decision.md and
+  // custom_form_styling.md 2.1. The Wave 0 heavier thousands-group separators
+  // (indices 2/5/8 were 1.65pt) collapse to the same width as every interior
+  // tick, so the 11 interior guides are one uniform positive width; the
+  // right-most cell (index 11) draws no guide at all because the grey
+  // decimal-separator column to its right owns that edge.
+  const interiorGuideWidths = moneyGuideWidths.slice(0, 11);
+  expect(interiorGuideWidths.every((width) => width > 0)).toBe(true);
+  expect(new Set(interiorGuideWidths).size).toBe(1);
+  expect(moneyGuideWidths[11]).toBe(0);
 });
 
 test("2550Q April 2024 keeps Part III comb guides for empty, short, and exact values and fails closed past capacity", async ({ page }) => {

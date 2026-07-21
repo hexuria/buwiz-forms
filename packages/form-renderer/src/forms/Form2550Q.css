@@ -68,10 +68,11 @@
   height: 59pt;
   display: grid;
   grid-template-columns: 98.7pt minmax(0, 1fr) 160.5pt;
-  /* Contract 2550q-2024 page 1 rules_h pos 49.95/107.65: thickness_pt 1.5,
-   * gray 0.0. 1.15pt floored to a 1px Chromium border; 1.5pt reaches the 2px
-   * bucket the official 3-device-px stroke needs. */
-  border: 1.5pt solid #111;
+  /* Uniform 1px border per border-thickness-decision.md. The Wave 0 weight pass
+   * thickened this masthead frame to 1.5pt (2px) to match the official heavier
+   * boundary; the owner chose ONE uniform width, so it returns to 1.15pt (1px),
+   * a deliberate divergence from the official per-section weight. */
+  border: 1.15pt solid #111;
 }
 .masthead-2550q.compact-2550q { height: 58pt; grid-template-columns: 99pt minmax(0, 1fr) 156pt; }
 .form-number-2550q,
@@ -116,38 +117,39 @@
   text-align: left;
   white-space: nowrap;
 }
-/* The masthead border grew 1.15pt -> 1.5pt (1px -> 2px rendered). The barcode
- * is the last grid column, so its padding box moved 0.75pt DOWN (top border)
- * and 0.75pt LEFT (right border). These offsets are calibrated to the official
- * page, so top drops 0.75pt and left gains 0.75pt to hold the artwork and
- * caption exactly where the official raster puts them. */
+/* The masthead border returned 1.5pt -> 1.15pt (2px -> 1px) under the uniform
+ * border decision. The Wave 0 pass had nudged the barcode (last grid column)
+ * artwork/caption by +0.75pt to hold them at the official position against the
+ * thicker frame; removing the thicker frame removes that displacement
+ * compensation too, so the offsets return to their pre-Wave-0 values and the
+ * artwork stays exactly where the pinned geometry assertions place it. */
 .form-2550q-page-one .official-pdf417-object-2550q {
-  left: 2.55pt;
-  top: .2pt;
+  left: 1.8pt;
+  top: .95pt;
   width: 156.2pt;
   height: 46.7pt;
 }
 .form-2550q-page-one .barcode-2550q > small {
-  left: 77.65pt;
-  top: 48.556pt;
+  left: 76.9pt;
+  top: 49.306pt;
   width: 80.408pt;
 }
 .form-2550q-page-two .official-pdf417-object-2550q {
-  left: .65pt;
-  top: .9pt;
+  left: -.1pt;
+  top: 1.65pt;
   width: 153.9pt;
   height: 45.1pt;
 }
 .form-2550q-page-two .barcode-2550q > small {
-  left: 72.25pt;
-  top: 47.256pt;
+  left: 71.5pt;
+  top: 48.006pt;
   width: 80.408pt;
 }
 
 .header-options-2550q {
   height: 46.5pt;
-  /* Contract page 1 rules_h pos 154.17: thickness_pt 1.5, gray 0.0. */
-  border: 1.5pt solid #111;
+  /* Uniform 1px border per border-thickness-decision.md (Wave 0 had 1.5pt/2px). */
+  border: 1.15pt solid #111;
   border-top: 0;
 }
 .header-row-2550q { display: grid; width: 100%; }
@@ -159,6 +161,11 @@
 .header-cell-2550q { min-width: 0; display: flex; align-items: center; gap: 4pt; padding: 1pt 4pt; background: #d9d9d9; border-right: .55pt solid #111; border-bottom: .55pt solid #111; }
 .header-options-2550q :is(.comb-value, .check-box) { background: #fff; }
 .header-row-2550q > :last-child { border-right: 0; }
+/* The container's 1px bottom border owns the header's bottom boundary; the last
+ * row's cells drop their own border-bottom so the two do not stack to 2px
+ * (custom_form_styling.md 1.4). Row one keeps its border-bottom — that is the
+ * interior divider between the two header rows. */
+.header-row-two-2550q .header-cell-2550q { border-bottom: 0; }
 .header-cell-2550q > span { display: flex; align-items: center; gap: 4pt; }
 .filing-basis-2550q { justify-content: space-between; }
 .year-ended-2550q .comb-value { width: 82pt; height: 100%; margin-left: auto; }
@@ -180,15 +187,15 @@
   display: grid;
   place-items: center;
   background: #d9d9d9;
-  /* Contract heading rules (page 1 pos 168.67/344.18/716.83, page 2 pos
-   * 121.95/365.37): thickness_pt 1.5, gray 0.0. .65pt floored to 1px. */
-  border-bottom: 1.5pt solid #111;
+  /* Uniform 1px per border-thickness-decision.md (Wave 0 had 1.5pt/2px). */
+  border-bottom: .65pt solid #111;
   font-size: 8.5pt;
   /* The source headings are semantically bold but rasterize at Arimo regular. */
   font-weight: 400;
 }
-/* Contract page 1 rules_h pos 156.87 / 329.68: thickness_pt 1.5, gray 0.0. */
-.part-one-2550q { height: 174.3pt; border-width: 1.5pt; }
+/* Uniform 1px border per border-thickness-decision.md; part-one drops its Wave 0
+ * 1.5pt override and inherits the 1.15pt (1px) frame from .part-2550q. */
+.part-one-2550q { height: 174.3pt; }
 .part-one-2550q > h2 { height: 11.8pt; }
 .tin-rdo-2550q {
   /* Contract row band 169.42 -> 186.53 = 17.11pt; the reclaimed height also
@@ -237,10 +244,10 @@
 .tax-relief-detail-2550q > span:first-child { display: flex; align-items: center; padding: 1pt 4pt; white-space: nowrap; }
 .tax-relief-detail-2550q > :is(.adaptive-plain-value, .comb-value) { min-height: 16pt; background: #fff; border-left: .55pt solid #111; }
 
-/* Contract page 1 rules_h pos 332.28 / 575.00: thickness_pt 1.5, gray 0.0.
- * margin-top drops 1.5 -> 1.2pt because part-one grew 174 -> 174.3pt, so
- * part-two's top stroke stays on its contract row. */
-.part-two-2550q { height: 244pt; margin-top: 1.2pt; border-width: 1.5pt; }
+/* Uniform 1px border per border-thickness-decision.md; part-two drops its Wave 0
+ * 1.5pt override and inherits the 1.15pt (1px) frame from .part-2550q. margin-top
+ * stays 1.2pt so part-two's top stroke holds its pinned row. */
+.part-two-2550q { height: 244pt; margin-top: 1.2pt; }
 /* Contract heading band 333.03 -> 344.93 = 11.9pt. */
 .part-two-2550q > h2 { height: 11.9pt; }
 .amount-row-2550q { height: 18.19pt; display: grid; grid-template-columns: minmax(0, 1fr) 216pt; border-bottom: .55pt solid #111; }
@@ -250,6 +257,10 @@
 .amount-row-2550q .money-cell-2550q { border-left: .55pt solid #111; }
 .amount-row-2550q.subtotal-2550q .amount-label-2550q { font-weight: 700; }
 .amount-row-2550q.total-2550q .amount-label-2550q { font-weight: 700; }
+/* item-26 is the last part-two row: the part-two frame owns the bottom boundary,
+ * so the total row drops its own border-bottom instead of drawing a second 1px
+ * rule that floats just above the frame (custom_form_styling.md 1.4). */
+.part-two-2550q .amount-row-2550q.total-2550q { border-bottom: 0; }
 .inline-specify-2550q { flex: 1; min-width: 30pt; min-height: 12pt; margin-left: 4pt; padding: 1pt 3pt; background: #fff; border-bottom: .55pt solid #111; font-weight: 400; }
 .money-cell-2550q { min-width: 0; display: flex; align-items: stretch; background: #fff; }
 .money-cell-2550q > .adaptive-plain-value,
@@ -259,7 +270,7 @@
 .decimal-cell-2550q { width: 15pt; flex: 0 0 15pt; display: grid; place-items: center; background: #a6a6a6; font-weight: 700; }
 .blank-money-2550q { min-height: 100%; }
 
-.declaration-2550q { height: 125.5pt; margin-top: 1.5pt; border: 1.5pt solid #111; }
+.declaration-2550q { height: 125.5pt; margin-top: 1.5pt; border: 1.15pt solid #111; }
 .declaration-2550q > p { height: 38.5pt; padding: 2pt 5pt; text-align: center; font-size: 5.5pt; line-height: 1.04; background: #d9d9d9; border-bottom: .55pt solid #111; }
 .signature-panels-2550q { height: 65pt; display: grid; grid-template-columns: 296pt minmax(0, 1fr); }
 .signature-panels-2550q > div { min-width: 0; display: grid; grid-template-rows: 46.5pt 18.5pt; text-align: center; }
@@ -284,6 +295,11 @@
 .payment-header-2550q { height: 22pt; background: #d9d9d9; font-weight: 700; text-align: center; }
 .payment-header-2550q > span,
 .payment-row-2550q > span { display: flex; align-items: center; justify-content: center; min-width: 0; padding: 1pt 3pt; border-right: .55pt solid #111; border-bottom: .55pt solid #111; overflow: hidden; }
+/* The part-three frame owns the right edge; the last (Amount) column drops its
+ * border-right so it does not double the frame to 2px (custom_form_styling.md
+ * 1.4, case ii). Matches Part II's clean 1px right frame. */
+.payment-header-2550q > span:last-child,
+.payment-row-2550q > span:last-child { border-right: 0; }
 .payment-row-2550q { height: 17pt; }
 .payment-row-2550q > span:first-child { justify-content: flex-start; background: #d9d9d9; }
 .payment-row-2550q > span:first-child { font-size: 6.5pt; line-height: .95; }
@@ -323,23 +339,19 @@
 .payment-row-2550q > .comb-value { align-items: stretch; padding: 0; }
 .payment-other-label-2550q { height: 11pt; display: flex; align-items: center; gap: 4pt; padding: 1pt 4pt; background: #d9d9d9; border-bottom: .55pt solid #111; }
 .payment-other-values-2550q > span:first-child { background: #fff; }
-/* Contract page 1 rules_h pos 886.23: thickness_pt 1.5, gray 0.0, in two
- * fragments (x22.80-377.28 machine-validation cell, x378.77-591.50 stamp cell,
- * split only where the vertical divider crosses) directly above the *NOTE
- * footnote at y~887. The box was closing only on the part-three container's
- * 1.15pt (1px) border, most of which the row's own white background painted
- * over, so it read as open. Draw the official 2px rule (1.5pt reaches the 2px
- * bucket at scale 1.5) on the box itself. border-box keeps the row's outer
- * height at 68pt, so part-three's height and the sibling *NOTE do not move; the
- * cells' top-anchored text loses none of its room to the 1.5pt the border
- * reclaims from the empty stamp area at the bottom. */
-.receipt-validation-row-2550q { height: 68pt; display: grid; grid-template-columns: 356pt minmax(0, 1fr); border-bottom: 1.5pt solid #111; }
+/* Contract page 1 rules_h pos 886.23 (gray 0.0), the rule directly above the
+ * *NOTE footnote. The part-three container's own 1.15pt bottom border is painted
+ * over by this row's white background (the row fills to the container's inner
+ * edge), so the row draws the closing rule itself. Uniform 1px per
+ * border-thickness-decision.md: this was 1.5pt (2px) in the Part III fix pass and
+ * now returns to 1.15pt (1px) like every other boundary. */
+.receipt-validation-row-2550q { height: 68pt; display: grid; grid-template-columns: 356pt minmax(0, 1fr); border-bottom: 1.15pt solid #111; }
 .machine-validation-2550q { padding: 3pt 5pt; background: #fff; font-size: 6.8pt; }
 .machine-validation-2550q .plain-value-2550q { display: flex; margin-top: 4pt; min-height: 22pt; padding: 2pt; background: #fff; }
 .receiving-stamp-2550q { padding: 3pt 5pt; border-left: .55pt solid #111; text-align: center; background: #fff; }
 .privacy-note-2550q { margin-top: 2pt !important; text-align: left; font-size: 8pt; }
 
-.page-two-identity-2550q { height: 28.6pt; display: grid; grid-template-columns: 197.5pt minmax(0, 1fr); border: 1.5pt solid #111; border-top: 0; }
+.page-two-identity-2550q { height: 28.6pt; display: grid; grid-template-columns: 197.5pt minmax(0, 1fr); border: 1.15pt solid #111; border-top: 0; }
 /* Contract bands 79.80 -> 90.60 = 10.8pt and 90.60 -> 106.70 = 16.1pt. The
  * block's height also grows 28 -> 28.6pt so its bottom stroke lands on the
  * contract row 106.70-108.20 instead of 0.6pt short of it; part-four's
@@ -362,12 +374,21 @@
 .part-four-subheader-2550q.wide-label-2550q > span:first-child { grid-column: 1 / 3; }
 .part-four-subheader-2550q.wide-label-2550q > span:nth-child(2) { display: none; }
 .part-four-subheader-2550q.wide-label-2550q > span:nth-child(3) { grid-column: 3; }
-.part-four-subheader-2550q.current-transactions-2550q { height: 14pt; border-top: 1.5pt solid #111; }
+/* Uniform 1px per border-thickness-decision.md (was 1.5pt/2px). The prior data
+ * row's .55pt border-bottom already draws this seam, so the subheader draws no
+ * top rule of its own (avoids a doubled 2px line, section 1.4). */
+.part-four-subheader-2550q.current-transactions-2550q { height: 14pt; }
 .part-four-row-2550q { height: 16pt; }
 .part-four-row-2550q > span { min-width: 0; display: flex; align-items: center; padding: 1pt 3pt; border-right: .55pt solid #111; border-bottom: .55pt solid #111; background: #d9d9d9; overflow: hidden; }
 .part-four-row-2550q > span:first-child { font-size: 6.5pt; line-height: .92; }
 .part-four-row-2550q .inline-specify-2550q { min-height: 9pt; padding: 0 2pt; line-height: .9; white-space: nowrap; overflow-wrap: normal; }
 .part-four-row-2550q > span:not(:first-child) { padding: 0; background: #fff; }
+/* The part-four frame owns the right edge; the last (B) column of every header,
+ * subheader and data row drops its border-right so it does not double the frame
+ * to 2px (custom_form_styling.md 1.4, case ii). */
+.part-four-header-2550q > span:last-child,
+.part-four-subheader-2550q > span:last-child,
+.part-four-row-2550q > span:last-child { border-right: 0; }
 .part-four-row-2550q .money-cell-2550q { width: 100%; height: 100%; }
 .part-four-row-2550q > span.disabled-cell-2550q { background: #d9d9d9; }
 .part-four-row-2550q.single-b-2550q > span:first-child { grid-column: 1 / 3; }
@@ -381,7 +402,10 @@
 .part-four-row-2550q.item-50-2550q > span:first-child em { font-size: 4.4pt; }
 .part-four-row-2550q.item-52-2550q { height: 17.5pt; }
 .part-four-row-2550q.item-60-2550q { height: 15.5pt; }
-.part-four-row-2550q.total-2550q { border-top: .7pt solid #111; }
+/* item-61 is the last part-four row: item-60's border-bottom draws the seam
+ * above it and the part-four frame draws the seam below it, so item-61 draws
+ * neither rule of its own — no doubled 2px seam at either edge (section 1.4). */
+.part-four-row-2550q.total-2550q > span { border-bottom: 0; }
 
 .part-five-2550q { height: 249.5pt; margin-top: 2pt; border: 1.15pt solid #111; }
 /* Keep the official bold semantics in markup; regular Arimo matches the pinned raster. */
@@ -400,6 +424,12 @@
 .schedule-money-2550q { justify-content: flex-end !important; padding-top: 0 !important; padding-bottom: 0 !important; font-size: 5.8pt; line-height: 1; font-variant-numeric: tabular-nums; }
 .schedule-one-total-2550q { height: 10.5pt; display: grid; grid-template-columns: minmax(0, 1fr) 66.5pt 73.5pt; border-bottom: .45pt solid #111; }
 .schedule-one-total-2550q > span { display: flex; align-items: center; padding: 1pt 4pt; border-right: .45pt solid #111; }
+/* The part-five frame owns the schedules' right edge; each grid's last column
+ * drops its border-right so it does not double the frame to 2px (section 1.4). */
+.schedule-one-grid-2550q > span:last-child,
+.schedule-three-grid-2550q > span:last-child,
+.schedule-four-grid-2550q > span:last-child,
+.schedule-one-total-2550q > span:last-child { border-right: 0; }
 .schedule-one-note-2550q { height: 9pt; display: grid; grid-template-columns: 1fr 2fr; background: #d9d9d9; border-bottom: .45pt solid #111; font-size: 5.5pt; font-style: italic; }
 .schedule-one-note-2550q > span { display: grid; place-items: center; }
 .schedule-two-2550q { height: 58pt; }
@@ -499,14 +529,16 @@
 .page-two-identity-2550q .comb-value > span,
 .payment-row-2550q .comb-value > span,
 .money-cell-2550q .comb-value > span { position: relative; border-right: 0; }
-.header-options-2550q .comb-value > span::after,
-.part-one-2550q .comb-value > span::after,
-.page-two-identity-2550q .comb-value > span::after,
-.payment-row-2550q .comb-value > span::after,
-.money-cell-2550q .comb-value > span::after { position: absolute; right: 0; bottom: 0; height: 7pt; border-right: .55pt solid #222; content: ""; }
-.money-cell-2550q > .comb-value:first-child > span:nth-child(3)::after,
-.money-cell-2550q > .comb-value:first-child > span:nth-child(6)::after,
-.money-cell-2550q > .comb-value:first-child > span:nth-child(9)::after { border-right-width: 1.65pt; }
+/* The right-most cell divider of every comb is dropped (`:not(:last-child)`) so
+ * the neighbour — the field's box border, the grey decimal-separator column, or a
+ * TIN separator cell — provides the outer edge instead of a doubled comb tick
+ * (custom_form_styling.md 2.1). 2550Q has no leading-cells/value-comb split, so
+ * there is no char-to-char last divider to keep: the exception never applies. */
+.header-options-2550q .comb-value > span:not(:last-child)::after,
+.part-one-2550q .comb-value > span:not(:last-child)::after,
+.page-two-identity-2550q .comb-value > span:not(:last-child)::after,
+.payment-row-2550q .comb-value > span:not(:last-child)::after,
+.money-cell-2550q .comb-value > span:not(:last-child)::after { position: absolute; right: 0; bottom: 0; height: 7pt; border-right: .55pt solid #222; content: ""; }
 
 @media print {
   .form-2550q-page { box-shadow: none; }
