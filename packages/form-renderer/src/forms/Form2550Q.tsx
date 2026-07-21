@@ -291,21 +291,21 @@ function PartThree2550Q({ envelope }: { envelope: RenderEnvelope }) {
       <div className="payment-header-2550q"><span>Particulars</span><span>Drawee Bank/Agency</span><span>Number</span><span>Date <em>(MM/DD/YYY)</em></span><span>Amount</span></div>
       {rows.map(([item, label, bank, number, date, amount]) => (
         <div className="payment-row-2550q" key={item}>
-          <span><b>{item}</b> {label}</span>
-          {/* Row 29 (Tax Debit Memo) has NO Drawee Bank/Agency comb on the
-              official form. The Particulars/Drawee divider at x=106.60pt runs
-              only for y=717.58-772.48 (header + rows 27-28) and restarts at
-              x=106.58 / y=800.98-817.58 for row 30; no divider and no comb
-              candidate crosses the row-29 band y=772.73-789.83, and a 288-DPI
-              crop shows the grey "29 Tax Debit Memo" label running through the
-              Drawee column. Absence of guides is field-specific evidence, so
-              this cell renders plain in the identical grid footprint. It also
-              carries no data key (the rows table passes bank="" for item 29).
-              Still outstanding for the geometry pass: the official has no
-              x~106.6 column border here and continues the grey label band
-              through this column. */}
+          {/* Row 29 (Tax Debit Memo) has no Particulars/Drawee divider and no
+              Drawee comb on the official form: the x=106.60pt divider runs only
+              y=717.58-772.48 (header + rows 27-28) and restarts at x=106.58 /
+              y=800.98-817.58 for row 30, so nothing crosses the row-29 band
+              y=772.73-789.83, while the grey label fill (fill_regions gray 0.851
+              at x=22.90-591.60 / y=717.58-800.48) continues unbroken across the
+              Drawee column with no white knockout carving it out. So row 29's
+              label cell merges across into the Drawee column (grid-column 1/3),
+              stays grey, drops the x=106.60 divider and carries no comb — giving
+              "29 Tax Debit Memo" its full width instead of a shrunk box. The
+              Drawee/Number divider at x=177.88 does cross row 29 (y=717.58-
+              789.58), so it stays as the merged cell's right edge. */}
+          <span className={item === 29 ? "payment-particulars-merged-2550q" : undefined}><b>{item}</b> {label}</span>
           {item === 29
-            ? <span />
+            ? null
             : <AdaptiveGuidedValue2550Q value={bank ? text(envelope, bank) : ""} cells={5} />}
           <AdaptiveGuidedValue2550Q value={number ? text(envelope, number) : ""} cells={6} /><AdaptiveGuidedValue2550Q value={date ? text(envelope, date) : ""} cells={8} /><MoneyCell2550Q envelope={envelope} fieldKey={amount} cells={12} />
         </div>

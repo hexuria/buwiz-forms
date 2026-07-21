@@ -287,6 +287,12 @@
 .payment-row-2550q { height: 17pt; }
 .payment-row-2550q > span:first-child { justify-content: flex-start; background: #d9d9d9; }
 .payment-row-2550q > span:first-child { font-size: 6.5pt; line-height: .95; }
+/* Row 29's label spans Particulars + Drawee (the official drops the x=106.60
+ * divider and runs the grey label fill straight through the Drawee column for
+ * this row only; see PartThree2550Q). The merged cell keeps the first-child
+ * grey background and its border-right now lands on the Drawee/Number divider
+ * at x=177.88 that the contract still draws across row 29. */
+.payment-row-2550q > .payment-particulars-merged-2550q { grid-column: 1 / 3; }
 .payment-row-2550q > .plain-value-2550q { line-height: .95; white-space: nowrap; }
 .payment-row-2550q .money-cell-2550q { border-bottom: .55pt solid #111; }
 /* The Amount cell reuses the shared money comb, but the generic `> span` rule
@@ -297,9 +303,37 @@
  * full-height stretch and zero padding so Part III matches the polished Part II
  * amount rows. */
 .payment-row-2550q > .money-cell-2550q { align-items: stretch; justify-content: flex-start; padding: 0; overflow: visible; }
+/* The generic `.payment-row-2550q > span` cell rule above also matches the
+ * Drawee/Number/Date `.comb-value` grid children (they are spans), forcing
+ * align-items:center and 1pt 3pt padding onto them. That collapsed every EMPTY
+ * guided cell: a base comb stretches its inner cells to full height (flex's
+ * default align-items:stretch), but once centered a lone-space inner cell — it
+ * carries a single trimmed U+0020, so no glyph box — measured 0px tall, and its
+ * guide `::after` tick (position:absolute; bottom:0; height:7pt) had no
+ * containing height to render against and vanished. Only cells with a real
+ * value (row 28 Check Number "000123") kept their guides, exactly the reviewer
+ * report. The official draws the Number and Date comb ticks in every row 27-30
+ * band regardless of content (contract page-1 rules_v: 0.2pt ticks at
+ * x=192.13/206.33/220.65/234.95/249.15 for Number and x=277.65..363.37 for
+ * Date, present in the y-bands 749.17/766.28/783.37/811.28 of rows 27/28/29/30
+ * alike), so an empty guided cell must still draw them. Restore the base comb's
+ * full-height stretch and drop the inherited inset so the ticks reach the cell
+ * edges. This adds no cells and changes no capacity; it only shows guides that
+ * were already declared. */
+.payment-row-2550q > .comb-value { align-items: stretch; padding: 0; }
 .payment-other-label-2550q { height: 11pt; display: flex; align-items: center; gap: 4pt; padding: 1pt 4pt; background: #d9d9d9; border-bottom: .55pt solid #111; }
 .payment-other-values-2550q > span:first-child { background: #fff; }
-.receipt-validation-row-2550q { height: 68pt; display: grid; grid-template-columns: 356pt minmax(0, 1fr); }
+/* Contract page 1 rules_h pos 886.23: thickness_pt 1.5, gray 0.0, in two
+ * fragments (x22.80-377.28 machine-validation cell, x378.77-591.50 stamp cell,
+ * split only where the vertical divider crosses) directly above the *NOTE
+ * footnote at y~887. The box was closing only on the part-three container's
+ * 1.15pt (1px) border, most of which the row's own white background painted
+ * over, so it read as open. Draw the official 2px rule (1.5pt reaches the 2px
+ * bucket at scale 1.5) on the box itself. border-box keeps the row's outer
+ * height at 68pt, so part-three's height and the sibling *NOTE do not move; the
+ * cells' top-anchored text loses none of its room to the 1.5pt the border
+ * reclaims from the empty stamp area at the bottom. */
+.receipt-validation-row-2550q { height: 68pt; display: grid; grid-template-columns: 356pt minmax(0, 1fr); border-bottom: 1.5pt solid #111; }
 .machine-validation-2550q { padding: 3pt 5pt; background: #fff; font-size: 6.8pt; }
 .machine-validation-2550q .plain-value-2550q { display: flex; margin-top: 4pt; min-height: 22pt; padding: 2pt; background: #fff; }
 .receiving-stamp-2550q { padding: 3pt 5pt; border-left: .55pt solid #111; text-align: center; background: #fff; }

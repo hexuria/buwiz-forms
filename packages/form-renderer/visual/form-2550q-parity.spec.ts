@@ -278,11 +278,12 @@ test("2550Q April 2024 uses only the official guided fields and exact guide capa
   const standardPaymentCapacities = await pageOne.locator(".payment-row-2550q:not(.payment-other-values-2550q)")
     .evaluateAll((rows) => rows.map((row) => [...row.querySelectorAll(":scope > .comb-value, :scope > .money-cell-2550q > .comb-value")]
       .map((comb) => comb.children.length)));
-  // Rows 27 and 28 carry a 5-cell Drawee comb; row 29 (Tax Debit Memo) does
-  // not exist on the official form. The Particulars/Drawee divider at
-  // x=106.60pt spans only y=717.58-772.48 (header + rows 27-28) and restarts
-  // at y=800.98 for row 30, with no comb candidate in the row-29 band
-  // y=772.73-789.83, so that cell now renders plain in the same footprint.
+  // Rows 27 and 28 carry a 5-cell Drawee comb; row 29 (Tax Debit Memo) has no
+  // Drawee comb because its label cell merges across into the Drawee column.
+  // The Particulars/Drawee divider at x=106.60pt spans only y=717.58-772.48
+  // (header + rows 27-28) and restarts at y=800.98 for row 30, with no comb
+  // candidate in the row-29 band y=772.73-789.83 and the grey label fill
+  // continuing across it, so row 29 keeps only its Number/Date/Amount combs.
   expect(standardPaymentCapacities).toEqual([
     [5, 6, 8, 12, 2],
     [5, 6, 8, 12, 2],
@@ -321,6 +322,44 @@ test("2550Q April 2024 uses only the official guided fields and exact guide capa
     .evaluateAll((cells) => cells.map((cell) => Number.parseFloat(getComputedStyle(cell, "::after").borderRightWidth)));
   expect(moneyGuideWidths).toHaveLength(12);
   for (const index of [2, 5, 8]) expect(moneyGuideWidths[index]).toBeGreaterThan(moneyGuideWidths[0]);
+});
+
+test("2550Q April 2024 keeps Part III comb guides for empty, short, and exact values and fails closed past capacity", async ({ page }) => {
+  const fixture = readFixture("packages/form-contracts/fixtures/2550q-minimum.json") as {
+    fields: Record<string, { type: string; value: string }>;
+  };
+  // Exercise the full value ladder in Part III's 6-cell Number column: row 27
+  // stays empty, row 28 is short, row 29 is exact-capacity, row 30 is one past
+  // capacity. Empty/short/exact must keep every official guide tick; only
+  // capacity+1 may fail closed to a plain box.
+  fixture.fields.payment_check_number = { type: "text", value: "12" };
+  fixture.fields.payment_tax_debit_memo_number = { type: "text", value: "123456" };
+  fixture.fields.payment_other_number = { type: "text", value: "1234567" };
+  await renderEnvelope(page, fixture);
+
+  const pageOne = page.locator(".form-page").nth(0);
+  // Every rendered Part III comb — including the empty row-27 Drawee/Number/Date
+  // cells — must draw its guide: the inner cell carries real height and the
+  // `::after` tick is solid. Before the fix a lone-space inner cell collapsed to
+  // 0px, so its guide vanished and only populated cells (row 28) showed ticks.
+  const combGuides = await pageOne.locator(".payment-row-2550q > .comb-value").evaluateAll((combs) => combs.map((comb) => {
+    const first = comb.children[0] as HTMLElement;
+    return {
+      innerHeight: first.getBoundingClientRect().height,
+      guideStyle: getComputedStyle(first, "::after").borderRightStyle
+    };
+  }));
+  expect(combGuides.length).toBeGreaterThanOrEqual(9);
+  for (const guide of combGuides) {
+    expect(guide.innerHeight).toBeGreaterThan(6);
+    expect(guide.guideStyle).toBe("solid");
+  }
+
+  // capacity+1 fails closed to a single plain overflow box (never a comb, never
+  // truncated); the guided cells above are the only combs left.
+  const overflow = pageOne.locator(".payment-row-2550q .adaptive-plain-value[data-overflow-mode='plain']");
+  await expect(overflow).toHaveCount(1);
+  await expect(overflow).toHaveText("1234567");
 });
 
 test("2550Q April 2024 preserves the official Schedule 2 fraction and result bands", async ({ page }) => {
