@@ -107,19 +107,25 @@
   margin-left: 12.5pt;
 }
 
+/* Uniform 1px borders per border-thickness-decision.md: the masthead frame was
+ * a 2pt box outline. Chromium device-snaps the 2pt frame to 2px and the 1pt
+ * frame to 1px, so thinning it moves the border-box padding origin (the
+ * containing block for the absolutely-positioned seal and masthead typography)
+ * inward by 1px = 0.75pt. Every masthead child below therefore adds +0.75pt to
+ * its left and top to hold the pinned official positions unchanged. */
 .masthead-0605 {
   position: relative;
   height: 68.5pt;
   display: block;
-  border: 2pt solid #111;
+  border: 1pt solid #111;
 }
 .government-0605 {
   display: contents;
 }
 .government-seal-0605 {
   position: absolute;
-  left: .5359pt;
-  top: 7.52439pt;
+  left: 1.2859pt;
+  top: 8.27439pt;
   width: 41.0379pt;
   height: 33.7591pt;
   object-fit: fill;
@@ -128,7 +134,7 @@
 .government-copy-0605 { display: contents; }
 .government-copy-0605 > span {
   position: absolute;
-  left: 48.700883pt;
+  left: 49.450883pt;
   width: max-content;
   color: #000;
   font-family: "eBIRForms Arimo", sans-serif;
@@ -138,24 +144,24 @@
   white-space: nowrap;
 }
 .government-line-one-0605 {
-  top: 13.8306pt;
+  top: 14.5806pt;
   font-size: 8.3pt;
   transform: scaleX(.998873);
 }
 .government-line-two-0605 {
-  top: 22.30199pt;
+  top: 23.05199pt;
   font-size: 8.3pt;
   transform: scaleX(1.003257);
 }
 .government-line-three-0605 {
-  top: 31.439855pt;
+  top: 32.189855pt;
   font-size: 10.36pt;
   transform: scaleX(.999767);
 }
 .masthead-0605 h1 {
   position: absolute;
-  left: 238.892923pt;
-  top: 14.39756pt;
+  left: 239.642923pt;
+  top: 15.14756pt;
   width: max-content;
   font-family: "eBIRForms Arimo", sans-serif;
   font-size: 21.583447pt;
@@ -179,16 +185,16 @@
   white-space: nowrap;
 }
 .form-number-0605 > span {
-  left: 476.499765pt;
-  top: 5.50668pt;
+  left: 477.249765pt;
+  top: 6.25668pt;
   font-size: 7.881306pt;
   font-weight: 400;
   transform: scaleX(1.04025);
   transform-origin: left top;
 }
 .form-number-0605 strong {
-  left: 471.069253pt;
-  top: 11.46725pt;
+  left: 471.819253pt;
+  top: 12.21725pt;
   height: 36pt;
   font-size: 32.580833pt;
   font-weight: 700;
@@ -196,8 +202,8 @@
   transform-origin: left top;
 }
 .form-number-0605 small {
-  left: 473.517251pt;
-  top: 43.4888pt;
+  left: 474.267251pt;
+  top: 44.2388pt;
   font-size: 7.881306pt;
   font-weight: 400;
   transform: scaleX(1.056404);
@@ -209,7 +215,7 @@
   margin: 1.5pt 0 0 12.5pt;
   display: flex;
   align-items: center;
-  border: 2pt solid #111;
+  border: 1pt solid #111;
   padding: 0 1pt;
   font-size: 9.2pt;
 }
@@ -220,7 +226,7 @@
   display: grid;
   grid-template-columns: 154pt 120pt 127.5pt 82.5pt 80.5pt;
   grid-template-rows: 36pt 36pt;
-  border: 2pt solid #111;
+  border: 1pt solid #111;
   background: #c0c0c0;
 }
 .header-fields-0605 > * { min-width: 0; }
@@ -313,22 +319,20 @@
 .item-5-0605 > .item-label-0605 > i { width: 4pt; }
 .item-5-0605 > div { height: 19pt; margin: -8pt 2pt 2pt 48pt; }
 .item-6-0605 { grid-column: 5; grid-row: 1; }
-/* Official y=171.86pt separator is a 1.92pt black fill (contract gray 0.0),
- * which buckets to 2 device px; 1pt buckets to 1. The 0.5pt the thicker
- * border eats is taken back from each item's label height so the field boxes
- * keep their calibrated y and the 36pt row-2 track still fits. */
-.item-7-0605 { grid-column: 1; grid-row: 2; border-top: 1.5pt solid #111; border-right: 1pt solid #111; }
+/* Uniform 1px borders per border-thickness-decision.md: the Wave 0 pass
+ * thickened this row-2 top boundary to 1.5pt (2 device px) and shaved 0.5pt
+ * off each item's label height to hold the field boxes' y. Both are reverted,
+ * so the boundary renders at the base 1pt and the labels return to natural. */
+.item-7-0605 { grid-column: 1; grid-row: 2; border-top: 1pt solid #111; border-right: 1pt solid #111; }
 .item-7-0605 > div { margin-left: 26pt; }
-.item-8-0605 { grid-column: 2; grid-row: 2; border-top: 1.5pt solid #111; border-right: 1pt solid #111; }
+.item-8-0605 { grid-column: 2; grid-row: 2; border-top: 1pt solid #111; border-right: 1pt solid #111; }
 .item-8-0605 > div { width: 31pt; margin-left: 43pt; }
-.item-7-0605 > .item-label-0605,
-.item-8-0605 > .item-label-0605 { height: 12.5pt; }
 .bcs-item-0605 {
   grid-column: 3 / 6;
   grid-row: 2;
-  border-top: 1.5pt solid #111;
+  border-top: 1pt solid #111;
 }
-.bcs-item-0605 > span { display: block; height: 13.5pt; padding: 1pt 2pt; }
+.bcs-item-0605 > span { display: block; height: 14pt; padding: 1pt 2pt; }
 /* Finding 2: the BCS box carried a 3pt right gap while the identity-row value
  * fields sit at ~2pt; this is the field whose intended alignment was computed
  * (right padding = 2pt) and then applied to the item-9 TIN and item-10 RDO
@@ -345,7 +349,7 @@
 .part-one-0605 {
   height: 218pt;
   margin-top: 2pt;
-  border: 2pt solid #111;
+  border: 1pt solid #111;
   background: #c0c0c0;
 }
 .part-one-0605 > h2,
@@ -494,12 +498,13 @@
 }
 .classification-0605 .check-box { width: 16pt; height: 16pt; }
 .classification-0605 .check-choice { flex-direction: row-reverse; }
-/* Official y=307.01pt separator is a 1.92pt black fill (contract gray 0.0) -> 2 device px. */
+/* Uniform 1px borders per border-thickness-decision.md: this row bottom
+ * boundary was thickened to 1.5pt in Wave 0; reverted to the base 1pt. */
 .name-phone-0605 {
   height: 38pt;
   display: grid;
   grid-template-columns: 445pt 1fr;
-  border-bottom: 1.5pt solid #111;
+  border-bottom: 1pt solid #111;
 }
 .name-phone-0605 > div:first-child {
   position: relative;
@@ -519,9 +524,7 @@
 .name-phone-0605 > div:first-child > small {
   position: absolute;
   left: 95pt;
-  /* Compensates the 0.5pt the thicker row border-bottom takes out of the
-   * grid item's height, holding this caption at its original y. */
-  bottom: .5pt;
+  bottom: 1pt;
   font-size: 7.2pt;
 }
 .name-phone-0605 .item-14-0605 > div { margin: 1pt 4pt 2pt 13pt; }
@@ -610,7 +613,15 @@
 .part-two-0605 {
   height: 101.5pt;
   margin-top: 1.5pt;
-  border: 2pt solid #111;
+  border: 1pt solid #111;
+  /* Thinning the frame from 2pt to 1pt (uniform borders,
+   * border-thickness-decision.md) moves the border-box content origin inward by
+   * one device-snapped CSS px (Chromium floors the 2pt frame to 2px and the 1pt
+   * frame to 1px, a 1px = 0.75pt delta) and would shift the pinned Part II
+   * amount boxes. A 0.75pt inset restores the original content box exactly
+   * (1px border + 1px padding == the old 2px), so the amount-box geometry stays
+   * on the official position. */
+  padding: 0.75pt;
   background: #c0c0c0;
 }
 /* Finding 1: col1 override removed; Part II now shares the 191.3pt heading
@@ -766,18 +777,18 @@
   margin-top: 1.5pt;
   display: grid;
   grid-template-columns: 342pt 155.5pt 1fr;
-  border: 2pt solid #111;
+  border: 1pt solid #111;
 }
 .declaration-0605 > div { min-width: 0; }
-/* Official declaration verticals x=355.99 and x=512.02 are both 1.92pt black
- * fills (contract gray 0.0) -> 2 device px. The right paddings below give back
- * the 0.5pt each border eats so the text measure — and therefore line
- * breaking — is unchanged. */
+/* Uniform 1px borders per border-thickness-decision.md: the declaration
+ * verticals were thickened to 1.5pt in Wave 0 with 0.5pt of right padding given
+ * back to hold the text measure. Both are reverted to the base 1pt / natural
+ * padding. */
 .voluntary-signature-0605,
-.deficiency-signature-0605 { position: relative; border-right: 1.5pt solid #111; text-align: center; }
+.deficiency-signature-0605 { position: relative; border-right: 1pt solid #111; text-align: center; }
 .declaration-0605 h3 { height: 23pt; padding-top: 3pt; font-size: 8.5pt; font-weight: 400; }
-.voluntary-signature-0605 > p { padding: 0 36.5pt 0 37pt; font-size: 7.5pt; line-height: 1.35; text-align: justify; }
-.signature-lines-0605 { position: absolute; left: 16pt; right: 6.5pt; bottom: 8pt; display: grid; grid-template-columns: 2fr 1fr; gap: 14pt; }
+.voluntary-signature-0605 > p { padding: 0 37pt; font-size: 7.5pt; line-height: 1.35; text-align: justify; }
+.signature-lines-0605 { position: absolute; left: 16pt; right: 7pt; bottom: 8pt; display: grid; grid-template-columns: 2fr 1fr; gap: 14pt; }
 .signature-line-0605 { position: relative; min-width: 0; }
 .signature-line-0605 > b { position: absolute; left: -15pt; top: 2pt; }
 .signature-line-0605 > .signature-value-0605 { height: 14pt; border-bottom: .8pt solid #111; }
@@ -795,15 +806,15 @@
   white-space: nowrap;
 }
 .deficiency-signature-0605 h3 { height: 45pt; line-height: 1.2; }
-.deficiency-signature-0605 > p { text-align: left; padding: 0 5.5pt 0 6pt; }
+.deficiency-signature-0605 > p { text-align: left; padding: 0 6pt; }
 /* The "22B" tag is absolutely positioned at left: -15pt relative to its
  * signature line, so a line starting at 8pt put the tag 7pt OUTSIDE the
- * column - drawn over the 1.5pt divider it shares with the voluntary column.
+ * column - drawn over the 1pt divider it shares with the voluntary column.
  * Starting the line at 24pt seats the tag 9pt inside the divider and carries
  * the signature underline right along with it. */
 /* The "22B" tag is absolutely positioned at left: -15pt relative to its
  * signature line, so a line starting at 8pt put the tag 7pt OUTSIDE the
- * column - drawn over the 1.5pt divider it shares with the voluntary column.
+ * column - drawn over the 1pt divider it shares with the voluntary column.
  * Shifting the line right alone clipped the nowrap caption by 6px, so the tag
  * offset moves too and the right inset gives the width back: the line starts
  * at 12pt with the tag 3pt inside the divider, and the caption still fits. */
@@ -814,16 +825,14 @@
 .part-three-0605 {
   height: 205pt;
   margin-top: -2pt;
-  border: 2pt solid #111;
+  border: 1pt solid #111;
   background: #c0c0c0;
 }
-/* Only the Part III title rule is heavy officially: y=682.30 is a 1.92pt black
- * fill (gray 0.0) -> 2 device px, while the Part I (y=232.85) and Part II
- * (y=452.59) title rules are 0.96pt -> 1 px and must keep the shared 1pt. */
 /* Finding 1: col1 override removed; Part III shares the 191.3pt heading column
  * so "Details of Payment" starts at the common 206.29pt (was 74pt + centred,
- * which put it at 259pt). Height and the heavier 1.5pt title rule are kept. */
-.part-three-0605 > h2 { height: 18pt; border-bottom-width: 1.5pt; }
+ * which put it at 259pt). Height is kept; the title rule is the uniform 1px
+ * per border-thickness-decision.md (the Wave 0 pass had made it 1.5pt). */
+.part-three-0605 > h2 { height: 18pt; }
 .payment-table-head-0605 {
   height: 18pt;
   display: grid;
@@ -878,12 +887,11 @@
 .payment-date-0605 > .guided-field-0605,
 .payment-date-0605 > .plain-field-shell-0605 { padding-left: 0; padding-right: 0; }
 .payment-field-0605 .plain-field-value-0605 { padding-right: 0; padding-left: 0; }
-/* Official y=801.24pt rule is a 1.92pt black fill (gray 0.0) -> 2 device px.
- * Interior is 13pt + 46pt inside a 64pt block, so the extra 0.5pt has 4pt of
- * slack and nothing clips. */
+/* Uniform 1px borders per border-thickness-decision.md: this rule was
+ * thickened to 1.5pt in Wave 0; reverted to the base 1pt. */
 .machine-validation-0605 {
   height: 64pt;
-  border-top: 1.5pt solid #111;
+  border-top: 1pt solid #111;
   background: #fff;
 }
 .machine-validation-0605 > span:first-child { display: block; height: 13pt; padding: 1pt; background: #fff; }
@@ -915,7 +923,7 @@
 }
 .reference-tables-0605 table {
   width: 570pt;
-  border: 2pt solid #111;
+  border: 1pt solid #111;
   table-layout: fixed;
   border-collapse: collapse;
 }
@@ -930,10 +938,7 @@
   white-space: nowrap;
 }
 .reference-tables-0605 th {
-  /* 13.5 - 0.4: gives back the half of the heavier ATC thead/tbody boundary
-   * below that lands in the header row. .tax-type-table-0605 th overrides this
-   * height outright, so the second table is unaffected. */
-  height: 13.1pt;
+  height: 13.5pt;
   background: #bfbfbf;
   font-size: 4.6pt;
 }
@@ -943,14 +948,10 @@
   font-size: 6.667pt;
   letter-spacing: .25pt;
 }
-/* Official y=59.84 thead/tbody boundary is a 1.80pt black fill (gray 0.0) ->
- * 2 device px, against the .7pt collapsed cell border we drew -> 1 px. Under
- * border-collapse the thicker declaration wins the shared edge. Scoped to the
- * ATC table: the tax-type separator at y=281.57 is officially 0.96pt -> 1 px
- * and must keep the .7pt border. */
-.atc-table-0605 thead th {
-  border-bottom: 1.5pt solid #111;
-}
+/* Uniform 1px borders per border-thickness-decision.md: the Wave 0 pass
+ * thickened the ATC thead/tbody boundary to 1.5pt; the override is removed so
+ * it renders at the base .7pt collapsed cell border (1 device px) like every
+ * other rule, and the header-row height compensation above is reverted with it. */
 .atc-table-0605 td {
   font-size: 6.125pt;
   letter-spacing: .25pt;
@@ -1001,7 +1002,7 @@
   margin-top: -3pt;
   display: grid;
   place-items: center;
-  border: 2pt solid #111;
+  border: 1pt solid #111;
   border-top: 0;
   background: #bfbfbf;
   font-size: 7pt;
@@ -1028,11 +1029,15 @@
  * (a third row, WITHHOLDING TAX - PERCENTAGE TAX ON WINNING AND PRIZES, only
  * begins to wrap at 5.25pt), a ~47% increase toward the official 5.78pt. The
  * line-height then packs the resulting 12 physical lines (8 single + 2 double
- * rows) so the whole table lands on its pinned 83.5pt outer height: 1.22 was
- * dialled against the "Tax Type table" critical-region assertion (measured
- * table height 110.6px at 1.21 and 112.3px at 1.23 vs the 111.3px pin, so 1.22
- * sits dead-centre, ~+0.1px), giving ~2px leading — far tighter than the old
- * airy rows. The 5pt min row-height never dominates the 6.1pt line box. */
+ * rows) so the whole table lands on its pinned 83.5pt outer height. Slope is
+ * ~0.85px of table height per 0.01 of line-height (measured 110.6px at 1.21 and
+ * 112.3px at 1.23 vs the 111.3px pin). Uniform 1px borders
+ * (border-thickness-decision.md) thinned the shared table frame from 2pt to
+ * 1pt, removing ~2 device px of top+bottom frame from the outer height, so the
+ * line-height is re-dialled from 1.22 to 1.245 to keep the table on the same
+ * pinned 111.3px official outer height (line-height does not affect where the
+ * two rows wrap — that is horizontal — so the 12-physical-line layout is
+ * unchanged). The 5pt min row-height never dominates the 6.1pt line box. */
 .tax-type-table-0605 td {
   height: 5pt;
   border-top: 0;
@@ -1047,7 +1052,7 @@
    * the static-text assertions collapse whitespace, so wording is unaffected. */
   white-space: normal;
   font-size: 5pt;
-  line-height: 1.22;
+  line-height: 1.245;
 }
 .tax-type-table-0605 th:nth-child(1), .tax-type-table-0605 td:nth-child(1) { width: 57pt; }
 .tax-type-table-0605 th:nth-child(2), .tax-type-table-0605 td:nth-child(2) { width: 129pt; }
