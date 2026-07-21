@@ -37,6 +37,22 @@
   background: #111;
   content: "";
 }
+/* The MM/DD/YYYY date combs sit in odd-width columns (the YYYY box is a 61pt
+ * schedule column / a 4fr date track), so their cell edges land on half-device
+ * pixels. At .5pt a divider is exactly one device pixel; on a half-pixel edge it
+ * splits and Chromium drops it - which is why an empty YYYY box could show only
+ * two of its three ticks even with all four cells present in the DOM (the money
+ * combs escape this because their cell edges are whole pixels). Widen only the
+ * date/year comb ticks to .75pt so each one survives its sub-pixel edge; the
+ * count and the box structure are unchanged. */
+.form-1702rt-page :is(
+  .nolco-primary-row-1702rt > .comb-value,
+  .mcit-grid-1702rt > .comb-value,
+  .official-date-1702rt .comb-value,
+  .payment-date-1702rt .comb-value
+) > span:not(:last-child)::after {
+  width: .75pt;
+}
 .form-1702rt-page .adaptive-plain-value {
   padding: 1pt 3pt;
   overflow: hidden;
@@ -502,6 +518,15 @@
   grid-template-columns: 2fr 2fr 4fr;
   background: #fff;
 }
+/* Every Part III value cell is a <span>, so `.payment-row-1702rt > span` (0,1,1)
+ * outranks `.payment-date-1702rt` (0,1,0) and flips the date box from grid to
+ * flex: the 2fr 2fr 4fr template goes inert and MM/DD/YYYY collapse to three
+ * equal columns, cramping the YYYY segment to a single MM width (the money-grid
+ * specificity trap in its date form, custom_form_styling 4.1). The item-26
+ * payment-other row has no `> span` rule and already renders grid; restore grid
+ * for the three payment-row dates so YYYY keeps its official double width and
+ * four cells. */
+.payment-row-1702rt > .payment-date-1702rt { display: grid; }
 .payment-date-1702rt > .comb-value {
   width: 100%;
   height: 100%;
@@ -660,6 +685,15 @@
 .nolco-primary-row-1702rt > span:first-child { background: #d9d9d9; }
 .nolco-primary-row-1702rt > .nolco-dead-cell-1702rt { background: #a6a6a6; }
 .nolco-primary-row-1702rt > :is(.comb-value, .adaptive-plain-value) { background: #fff; }
+/* The Year comb is a direct grid child, so the row's `> *` align-items:center
+ * governs the comb's own spans - and an empty YYYY box (space-only cells) then
+ * has zero-height spans, collapsing every 48%-height guide tick to nothing so
+ * the box reads blank. The money amounts escape this because they nest the comb
+ * one level below `.money-1702rt`. Stretch the Year comb's spans to the cell
+ * height so an empty YYYY field keeps all three dividers (custom_form_styling
+ * 2.2). */
+.nolco-primary-row-1702rt > .comb-value,
+.mcit-grid-1702rt > .comb-value { align-items: stretch; }
 /* Every cell in these NOLCO/MCIT grids already draws its own border-right, so
  * each money cell drops the border-left it would otherwise stack on the
  * preceding cell's right rule, and every grid's last cell drops the border-right
