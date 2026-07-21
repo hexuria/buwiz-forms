@@ -48,15 +48,7 @@
   height: 69pt;
   display: grid;
   grid-template-columns: 89pt minmax(0, 1fr) 167pt;
-  /*
-   * Frame is heavy, the masthead/header-options divider is not. Contract page1
-   * x=18.00 and x=594.24 run 1.44pt (device_px 3, gray 0.0) from y=62.28 to
-   * y=171.98 and the top rule y=61.44 is 1.44pt, but the divider the bottom
-   * border draws, y=128.06, is 0.480pt (device_px 1, gray 0.0). So only three
-   * sides cross into the 2-CSS-px bucket; the bottom stays in the 1-px bucket.
-   */
-  border: 1.5pt solid #111;
-  border-bottom-width: 1.2pt;
+  border: 1.2pt solid #111;
 }
 .masthead-1702mx.compact-1702mx { height: 57.5pt; }
 .form-1702mx-page-two .masthead-1702mx.compact-1702mx { height: 54.5pt; }
@@ -90,26 +82,26 @@
 .official-pdf417-symbol-1702mx { inset: 0; width: 100%; height: 100%; overflow: visible; }
 .official-pdf417-symbol-1702mx path { fill: #000; }
 .barcode-1702mx[data-barcode-page="1"] .official-pdf417-object-1702mx {
-  left: 6.106pt;
-  top: 5.825pt;
+  left: 5.356pt;
+  top: 6.575pt;
   width: 158.04pt;
   height: 45.36pt;
 }
 .barcode-1702mx[data-barcode-page="2"] .official-pdf417-object-1702mx {
-  left: 5.146pt;
-  top: 2.205pt;
+  left: 4.396pt;
+  top: 2.955pt;
   width: 160.8pt;
   height: 39.6pt;
 }
 .barcode-1702mx[data-barcode-page="3"] .official-pdf417-object-1702mx {
-  left: 4.306pt;
-  top: 3.225pt;
+  left: 3.556pt;
+  top: 3.975pt;
   width: 161.04pt;
   height: 42.72pt;
 }
 .barcode-1702mx[data-barcode-page="4"] .official-pdf417-object-1702mx {
-  left: 5.146pt;
-  top: 3.125pt;
+  left: 4.396pt;
+  top: 3.875pt;
   width: 160.2pt;
   height: 41.64pt;
 }
@@ -124,21 +116,16 @@
   text-align: right;
   white-space: nowrap;
 }
-.barcode-1702mx[data-barcode-page="1"] > small { top: 50.7688pt; right: 1.3838pt; }
-.barcode-1702mx[data-barcode-page="2"] > small { top: 43.6488pt; right: 1.5038pt; }
-.barcode-1702mx[data-barcode-page="3"] > small { top: 45.5288pt; right: 0.6638pt; }
-.barcode-1702mx[data-barcode-page="4"] > small { top: 44.9288pt; right: 1.3838pt; }
+.barcode-1702mx[data-barcode-page="1"] > small { top: 51.5188pt; right: 2.1338pt; }
+.barcode-1702mx[data-barcode-page="2"] > small { top: 44.3988pt; right: 2.2538pt; }
+.barcode-1702mx[data-barcode-page="3"] > small { top: 46.2788pt; right: 1.4138pt; }
+.barcode-1702mx[data-barcode-page="4"] > small { top: 45.6788pt; right: 2.1338pt; }
 
 .header-options-1702mx {
   height: 44pt;
   display: grid;
   grid-template-columns: 131pt 94pt 98pt minmax(0, 1fr);
-  /*
-   * Same frame as the masthead above it (contract page1 x=18.00/x=594.24,
-   * 1.44pt gray 0.0, unbroken to y=171.98) and its bottom rule y=172.70 is
-   * 1.44pt gray 0.0 too, so all three drawn sides move to the 2-CSS-px bucket.
-   */
-  border: 1.5pt solid #111;
+  border: 1.2pt solid #111;
   border-top: 0;
   background: #d9d9d9;
 }
@@ -154,16 +141,16 @@
 .period-options-1702mx .year-row-1702mx { white-space: nowrap; }
 .period-options-1702mx .year-row-1702mx small { font-size: 5pt; }
 .period-options-1702mx .year-row-1702mx i { font-style: normal; }
-.period-options-1702mx .year-row-1702mx .comb-value { width: 22pt; height: 15pt; background: #fff; }
+/*
+ * Items 1-2 year fields (MM and YY) are boxed in the official: a rectangle with
+ * a single interior divider, two cells. Box them at the uniform 1px so the box
+ * border owns all four outer edges; the right-most comb divider is then removed
+ * by the base-comb :last-child rule below (§2.1) and the box edge replaces it.
+ */
+.period-options-1702mx .year-row-1702mx .comb-value { width: 22pt; height: 15pt; background: #fff; border: .55pt solid #111; }
 .binary-header-1702mx { display: grid; grid-template-rows: 1fr 1fr; padding: 0 4pt; }
 .binary-header-1702mx > span:last-child { display: flex; align-items: center; justify-content: center; gap: 8pt; }
-/*
- * The heavier header-options bottom rule takes 2 CSS px out of this column's
- * content box, and 14+15+15pt no longer fits. The last track absorbs it (the
- * first two carry the pinned ATC boxes), which raises that row's centre by
- * .625pt, so its existing -4.5pt nudge is unwound by the same amount.
- */
-.atc-options-1702mx { display: grid; grid-template-rows: 14pt 15pt minmax(0, 1fr); overflow: hidden; }
+.atc-options-1702mx { display: grid; grid-template-rows: 14pt 15pt 15pt; overflow: hidden; }
 .atc-options-1702mx > span { min-width: 0; display: grid; grid-template-columns: 40pt 1fr 17pt; align-items: center; gap: 3pt; padding: 0 4pt; }
 .atc-options-1702mx > span:first-child { display: flex; }
 .atc-options-1702mx > span:not(:first-child) {
@@ -175,7 +162,7 @@
 .atc-options-1702mx > span:not(:first-child) > :nth-child(2) { grid-column: 3; }
 .atc-options-1702mx > span:not(:first-child) > :nth-child(3) { grid-column: 5; }
 .atc-options-1702mx > span:nth-child(2) { position: relative; top: -2.5pt; }
-.atc-options-1702mx > span:nth-child(3) { position: relative; top: -3.875pt; }
+.atc-options-1702mx > span:nth-child(3) { position: relative; top: -4.5pt; }
 .atc-options-1702mx .atc-code-box-1702mx,
 .atc-options-1702mx .atc-description-box-1702mx {
   height: 10.5pt;
@@ -198,26 +185,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1.425pt 4pt .575pt;
+  padding: 1pt 4pt;
   background: #d9d9d9;
-  /*
-   * Heavy band rule, not a hairline. Every section-heading / schedule-title
-   * bottom rule in the contract is thickness_pt 1.44 (device_px 3, gray 0.0):
-   * page1 y=187.22/417.29/726.58, page2 y=125.90/167.42/299.33, page3
-   * y=147.74/310.61/699.58/800.98, page4 y=131.66/262.46/334.49/456.55/
-   * 541.15/667.30. At device scale
-   * 1.5 Chromium floors border-width to whole CSS px, so .65pt and 1.2pt both
-   * render 1 CSS px = 1.5 device px; 1.5pt is the first value that reaches
-   * 2 CSS px = 3 device px and so is the only bucket-crossing fix.
-   * box-sizing is border-box and every one of these bands is fixed-height, so
-   * the extra .85pt is taken out of the bottom of the content box: the rule
-   * grows upward and align-items/justify-content:center would drag every
-   * caption up by .425pt with it. The padding is therefore made asymmetric by
-   * exactly .85pt (1.425/.575, sum unchanged at 2pt) which restores the old
-   * centre line (p_t - p_b = 1.5 - .65) for every title band on the form at
-   * once, so no caption moves.
-   */
-  border-bottom: 1.5pt solid #111;
+  border-bottom: .65pt solid #111;
   font-size: 8.5pt;
   line-height: 1;
 }
@@ -236,25 +206,38 @@
 .tin-comb-1702mx { min-width: 0; width: 100%; height: 100%; display: grid !important; grid-template-columns: 3fr 14pt 3fr 14pt 3fr 14pt 5fr; padding: 0 !important; background: #fff !important; }
 .tin-comb-1702mx > i { display: grid; place-items: center; background: #9f9f9f; font-style: normal; }
 .tin-comb-1702mx .comb-value > span { border-right: 0; position: relative; }
-.tin-comb-1702mx .comb-value > span::after { position: absolute; right: 0; bottom: 0; height: 7pt; border-right: .5pt solid #222; content: ""; }
+.tin-comb-1702mx .comb-value > span:not(:last-child)::after { position: absolute; right: 0; bottom: 0; height: 7pt; border-right: .5pt solid #222; content: ""; }
 
 .labeled-comb-1702mx { height: 69pt; display: grid; grid-template-rows: 11pt minmax(0, 1fr); border-bottom: .55pt solid #111; }
 .labeled-comb-1702mx > span:first-child,
 .address-field-1702mx > span:first-child { display: flex; align-items: center; gap: 2pt; padding: 1pt 4pt; background: #d9d9d9; }
 .comb-lines-1702mx { min-height: 0; display: grid; }
 .comb-lines-1702mx > :is(.comb-value, .adaptive-plain-value) { min-height: 0; border-bottom: .4pt solid #111; }
+/*
+ * §1.4: each seam is drawn once. Interior comb lines keep their inter-line rule,
+ * but the LAST line's border-bottom sits on the same y as the field's own
+ * .labeled-comb border-bottom, doubling that boundary to 2px (items 8/10/11/12).
+ * Drop the last line's rule; the field border owns the boundary. Transparent (not
+ * removed) so no row height changes and nothing can clip.
+ */
+.comb-lines-1702mx > :is(.comb-value, .adaptive-plain-value):last-child { border-bottom-color: transparent; }
 .comb-lines-1702mx > .plain-lines-value-1702mx { height: 100%; grid-row: 1 / -1; }
 .comb-lines-1702mx .comb-value > span,
 .address-comb-1702mx .comb-value > span,
 .page-identity-1702mx .comb-value > span { position: relative; border-right: 0; }
-.comb-lines-1702mx .comb-value > span::after,
-.address-comb-1702mx .comb-value > span::after,
-.page-identity-1702mx .comb-value > span::after { position: absolute; right: 0; bottom: 0; height: 7pt; border-right: .45pt solid #222; content: ""; }
+.comb-lines-1702mx .comb-value > span:not(:last-child)::after,
+.address-comb-1702mx .comb-value > span:not(:last-child)::after,
+.page-identity-1702mx .comb-value > span:not(:last-child)::after { position: absolute; right: 0; bottom: 0; height: 7pt; border-right: .45pt solid #222; content: ""; }
 .address-field-1702mx { height: 69pt; display: grid; grid-template-rows: 11pt 58pt; border-bottom: .55pt solid #111; }
 .address-field-1702mx > span:first-child em { margin-left: 3pt; font-size: 5.5pt; }
 .address-comb-1702mx { position: relative; min-height: 0; display: grid; grid-template-rows: repeat(3, 1fr); }
 .address-comb-1702mx > .comb-value { min-height: 0; display: flex; border-bottom: .4pt solid #111; }
 .address-comb-1702mx > .comb-value:nth-of-type(3) { width: calc(100% - 122pt); }
+/* §1.4: the last address line's border-bottom doubles the .address-field border
+   (item 9 → item 10 boundary). Drop it; the field border owns the seam. The 3rd
+   line is the last comb-value, but the ZIP span is the last span-of-type, so this
+   must key off :nth-of-type(3) (as the width rule above does), not :last-of-type. */
+.address-comb-1702mx > .comb-value:nth-of-type(3) { border-bottom-color: transparent; }
 .address-comb-1702mx > .adaptive-plain-value { height: 100%; grid-row: 1 / -1; padding: 2pt 68pt 2pt 4pt; }
 .zip-field-1702mx { position: absolute; right: 0; bottom: 0; width: 122pt; height: 20pt; display: grid; grid-template-columns: 49pt 1fr; align-items: center; padding-left: 4pt; background: #d9d9d9; border-left: .55pt solid #111; border-top: .55pt solid #111; }
 .zip-label-1702mx { display: flex; align-items: center; gap: 2pt; }
@@ -281,9 +264,16 @@
 .part-two-1702mx .amount-row-1702mx { min-height: 0; height: 19.25pt; }
 .part-two-1702mx .amount-cell-1702mx::after {
   height: 8pt;
-  background:
-    repeating-linear-gradient(90deg, transparent 0 45.75pt, #111 45.75pt 46.75pt),
-    repeating-linear-gradient(90deg, transparent 0 15.25pt, #555 15.25pt 15.65pt);
+  /*
+   * Uniform tick weight per border-thickness-decision.md / custom_form_styling
+   * §1.1: the 1pt #111 thousands-group heavy (2 device px, the heaviest line on
+   * the form) is a per-official weight distinction the owner decision removes.
+   * Its x positions (45.75/91.5/...) are exact multiples of the 15.25pt cell
+   * pitch, so the #555 cell-tick lattice already draws a tick at every one of
+   * them; dropping the heavy layer changes those ticks' WIDTH only, never
+   * whether a divider exists.
+   */
+  background: repeating-linear-gradient(90deg, transparent 0 15.25pt, #555 15.25pt 15.65pt);
 }
 .penalty-heading-1702mx {
   height: 10.5pt;
@@ -389,6 +379,16 @@
 .instructions-1702mx .check-choice { white-space: normal; }
 
 .schedule-block-1702mx { margin-top: 2pt; border: 1.2pt solid #111; display: flex; flex-direction: column; }
+/*
+ * §1.4: the container frame owns each block's bottom boundary. Every schedule
+ * block's last row also carries a border-bottom (on its cells, or on the row for
+ * the nolco-computation amount rows), which stacked on the 1px frame rendered a
+ * 2px doubled line at every block bottom. Make the last row's bottom rule
+ * transparent so only the frame draws the boundary; transparent (not removed)
+ * keeps every fixed-height row's geometry so nothing can clip.
+ */
+.schedule-block-1702mx > :last-child > *,
+.schedule-block-1702mx > .amount-row-1702mx:last-child { border-bottom-color: transparent; }
 .schedule-title-1702mx { flex: 0 0 12pt; justify-content: flex-start; font-size: 8.2pt; }
 .relief-grid-1702mx,
 .regime-grid-1702mx,
@@ -638,7 +638,14 @@
 
 .schedule-seven-one-1702mx { height: 121pt; margin-top: 1pt; }
 .schedule-eight-1702mx { height: 82pt; margin-top: 1pt; }
-.schedule-eight-one-1702mx { height: 120pt; margin-top: 0; }
+/*
+ * §1.4: Schedule 8.1 abuts Schedule 8 with no gap (margin-top:0), and the
+ * official joins them with a single boundary rule. Our two block frames
+ * (Sch 8 border-bottom + Sch 8.1 border-top) stacked to a doubled line, so make
+ * Sch 8.1's top border transparent and let Schedule 8's bottom frame be the
+ * shared 1px rule. Transparent (not 0-width) keeps Sch 8.1's rows in place.
+ */
+.schedule-eight-one-1702mx { height: 120pt; margin-top: 0; border-top-color: transparent; }
 .nolco-grid-1702mx { grid-template-columns: 61pt 103pt repeat(4, minmax(0, 1fr)); }
 .nolco-table-1702mx > .schedule-title-1702mx {
   flex: 0 0 12pt;
@@ -746,9 +753,9 @@
 .schedule-eight-1702mx .amount-cell-1702mx::after,
 .schedule-nine-1702mx .amount-cell-1702mx::after {
   height: 8pt;
-  background:
-    repeating-linear-gradient(90deg, transparent 0 45.75pt, #111 45.75pt 46.75pt),
-    repeating-linear-gradient(90deg, transparent 0 15.25pt, #555 15.25pt 15.65pt);
+  /* Uniform tick weight (see the Part II note): drop the 1pt #111 thousands
+     heavy; the #555 lattice already draws a tick at every 45.75pt multiple. */
+  background: repeating-linear-gradient(90deg, transparent 0 15.25pt, #555 15.25pt 15.65pt);
 }
 
 .schedule-nine-1702mx { height: 209.5pt; margin-top: 1pt; }
@@ -883,6 +890,15 @@
 .form-1702mx-page .check-choice { gap: 2pt; }
 .form-1702mx-page .adaptive-plain-value { min-height: 0; padding: 1pt 3pt; line-height: 1; }
 .form-1702mx-page .comb-value > span { font-size: 6.5pt; }
+/*
+ * §2.1: the right-most divider of EVERY comb is removed. The ::after-based combs
+ * (TIN, comb-lines, address, page-identity, payment particulars, relief) already
+ * use :not(:last-child); these base .comb-value cells (RDO, year, ZIP, item-22
+ * Number of Attachments) draw a border-right per print.css, so drop it on the
+ * last cell. The neighbouring box border / section frame owns that edge; this is
+ * a no-op on the ::after combs, which already carry border-right:0.
+ */
+.form-1702mx-page .comb-value > span:last-child { border-right: 0; }
 
 .attachment-blocker-1702mx {
   width: 612pt;
