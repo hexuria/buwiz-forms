@@ -529,7 +529,14 @@
   left: 15pt;
   content: "Add: Penalties";
 }
-.tax-line-1601c.tax-line-29 > div:first-child > span,
+/* This indents the item 29/30 LABEL only. `.inline-description-1601c` is also a
+ * `> span` child of item 29's label cell, so an unqualified `> span` swept the
+ * specify box into the 24pt indent too: its 24pt padding-left is interior
+ * (border-box), so the box kept its official 192.98..387.67pt extent but the
+ * "PRIOR REMITTANCE" value was pushed 24pt off the box's left edge -- the
+ * reviewer's "short box". Excluding the description span leaves the value flush
+ * to the box (with the 2px inset below) while the label keeps its indent. */
+.tax-line-1601c.tax-line-29 > div:first-child > span:not(.inline-description-1601c),
 .tax-line-1601c.tax-line-30 > div:first-child > span { padding-left: 24pt; }
 .inline-description-1601c {
   flex: 0 0 auto;
@@ -539,8 +546,19 @@
   background: #fff;
 }
 .inline-description-1601c > :is(.comb-value, .adaptive-plain-value) { height: calc(100% - 1pt); }
-.tax-line-1601c.tax-line-20 .inline-description-1601c { width: 178pt; }
+/* Specify boxes carry the official knockout extents (contract p0
+ * knockout_regions): item 20 x0=204.29..x1=382.15 (177.86pt), item 29
+ * x0=192.98..x1=387.67 (194.69pt), both short of the amount comb at x=390.79.
+ * The box is right-anchored (margin-left: auto) against the label cell's inner
+ * right edge (~387.5pt), which already lands item 29's box on its official
+ * extent. Item 20's official right edge sits 5.3pt further left, so its box
+ * carries that much right margin: 387.5 - 5.3 = 382.2pt right / 204.2pt left,
+ * onto the official box rather than 5pt right of it toward the comb. */
+.tax-line-1601c.tax-line-20 .inline-description-1601c { width: 178pt; margin-right: 5.3pt; }
 .tax-line-1601c.tax-line-29 .inline-description-1601c { width: 195pt; }
+/* Reviewer: the specify value takes a 2px left inset, not the shared plain
+ * value's 3pt, so it reads as maximally using the box. */
+.form-1601c-page-one .inline-description-1601c > .inline-plain-1601c { padding-left: 2px; }
 .money-1601c {
   min-width: 0;
   height: 100%;
