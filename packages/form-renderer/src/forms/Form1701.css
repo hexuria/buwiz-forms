@@ -24,7 +24,7 @@
   border-right: 0;
   font-size: 7.1pt;
 }
-.form-1701-page .comb-value > span::after {
+.form-1701-page .comb-value > span:not(:last-child)::after {
   position: absolute;
   right: 0;
   bottom: 0;
@@ -204,19 +204,15 @@
   margin: 2pt 0 0;
   display: grid;
   place-items: center;
+  /* Uniform 1 CSS px on every side per border-thickness-decision.md. The Wave 0
+   * pass opened these bands on a 1.5pt (2 device px) black rule to match the
+   * official 1.44pt boundary; the owner decision collapses it to the uniform
+   * width. The fixed height keeps content in place so no sibling moves. */
   border: 1pt solid #111;
-  /* The official band opening rule is 1.44pt black (2.88 device px); the fixed
-   * height keeps the growth inside the box so no sibling moves. */
-  border-top-width: 1.5pt;
   background: #d1d1d1;
   font-size: 8pt;
   line-height: 1;
 }
-/* The Schedule 2 and Part VII bands open on a 0.12pt gray-0.8509 hairline, not
- * on the 1.44pt black rule the other bands carry, so they keep the lighter
- * stroke. Thickening them would paint black over near-invisible decoration. */
-.schedule-one-1701 + .paired-section-1701 > .section-band-1701,
-.page-four-1701 > .indexed-section-1701:not(.part-nine-1701) > .section-band-1701 { border-top-width: 1pt; }
 .background-1701 { border: 1pt solid #111; border-top: 0; }
 .page-one-1701 > .background-1701 { margin-top: 2pt; }
 .page-one-1701 > .background-1701,
@@ -404,7 +400,11 @@
 .paired-row-1701 > span:first-child { min-width: 0; display: flex; align-items: center; gap: 4pt; padding: 1pt 4pt; border-bottom: .6pt solid #111; background: #d1d1d1; }
 .paired-row-1701 > span:first-child > b { min-width: 11pt; }
 .paired-row-1701 > .amount-1701 { border-left: .6pt solid #111; border-bottom: .6pt solid #111; }
-.paired-row-1701:last-child > * { border-bottom: 0; }
+/* The section frame owns the closing bottom rule; the last row must not paint
+ * its own, or the two 1px borders stack into a doubled seam (custom_form_styling
+ * 1.4). The first-cell selector above is (0,2,1), so the zeroing must match it. */
+.paired-row-1701:last-child > *,
+.paired-row-1701:last-child > span:first-child { border-bottom: 0; }
 .compact-table-1701 .paired-row-1701 { min-height: 15pt; }
 .compact-table-1701 .paired-head-1701 { height: 11pt; }
 .row-description-1701 { flex: 1; min-width: 0; height: 13pt; background: #fff; }
@@ -571,6 +571,9 @@
 .employer-amount-row-1701 > span:first-child { display: flex; align-items: center; padding-left: 5pt; background: #d1d1d1; }
 .employer-total-1701 { height: 17.5pt; }
 .employer-total-1701 > * { border-bottom: .6pt solid #111; }
+/* Schedule 1's frame owns its closing rule; the last (3B) total row must not
+ * paint its own bottom, or the two 1px borders stack (custom_form_styling 1.4). */
+.employer-total-1701:last-child > * { border-bottom: 0; }
 .employer-total-1701 > span:first-child { display: grid; grid-template-columns: 28pt minmax(0, 1fr); align-items: center; padding: 1pt 3pt; background: #d1d1d1; }
 .employer-total-1701 > span:first-child > b { align-self: start; }
 .employer-total-1701 > span:first-child > span { display: flex; flex-wrap: wrap; align-items: center; column-gap: 2pt; line-height: .9; }
@@ -588,6 +591,10 @@
 .page-two-1701 > .schedule-three-a-1701 > .section-band-1701 {
   height: 12.5pt;
   margin: 0 -1pt;
+  /* Abuts Schedule 2 with no gap, so Schedule 2's frame bottom already draws
+   * this boundary; dropping the band's own top border avoids a doubled seam
+   * (custom_form_styling 1.4). The official rules this boundary once. */
+  border-top: 0;
   display: flex;
   justify-content: center;
   gap: 3pt;
@@ -681,9 +688,9 @@
 .schedule-six-1701,
 .schedule-six-spouse-1701,
 .part-eight-1701 { border: 1pt solid #111; border-top: 0; }
-/* The official Schedule 6 spouse closing rule is 1.44pt black (2.88 device px)
- * and sits 0.02pt from our stroke centre, so the extra weight lands on it. */
-.schedule-six-spouse-1701 { border-bottom-width: 1.5pt; margin-bottom: -.75pt; }
+/* Uniform 1 CSS px per border-thickness-decision.md. Wave 0 had thickened the
+ * Schedule 6 spouse closing rule to 1.5pt (2 device px) with a -.75pt margin to
+ * absorb the extra weight; both the thickness and its compensation are removed. */
 .schedule-five-1701 > .section-band-1701,
 .schedule-six-1701 > .section-band-1701,
 .schedule-six-spouse-1701 > .section-band-1701,
