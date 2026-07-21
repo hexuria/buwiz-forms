@@ -266,9 +266,22 @@
   line-height: .9;
 }
 .year-row-0605 .item-label-0605 em { grid-column: 3; font-size: 6pt; }
+/* Reviewer finding (field-vs-container seam, custom_form_styling.md 1.4 case ii):
+ * the item-2 year field's RIGHT border touched the period-block divider (the
+ * .period-block-0605 border-right, which separates the item 1/2 block from
+ * item 3 "Quarter"), so the two 1px lines merged and read as no gap. The base
+ * .guided-field-0605/.plain-field-shell-0605 rule sets width:100%, which forces
+ * the field to fill its 1fr grid track right up to the period-block content edge
+ * and made the existing 2pt right margin inert (the border landed on the track
+ * edge = the divider). Contract page 1: the official year box right edge is at
+ * x=165.72pt and the period/quarter divider at x=168.50pt — a 2.78pt gap. Set
+ * width:auto so the default justify-self:stretch fills the track minus the
+ * margins, and widen the right margin to 2.8pt so the field's border insets from
+ * the divider by the official gap. Left edge and cell count are unchanged. */
 .year-row-0605 > .guided-field-0605,
 .year-row-0605 > .plain-field-shell-0605 {
-  margin: 1pt 2pt 1pt 0;
+  width: auto;
+  margin: 1pt 2.8pt 1pt 0;
   border: .8pt solid #111;
   background: #fff;
 }
@@ -540,9 +553,23 @@
   align-items: center;
   border-right: 1pt solid #111;
 }
+/* Reviewer finding (field-vs-container seam, custom_form_styling.md 1.4 case ii):
+ * the item-15 Registered Address value field's RIGHT border touched the item
+ * 15/16 divider (this div's border-right, separating item 15 from item 16 "Zip
+ * Code"), so the two 1px lines merged and read as no gap. As with the item-2
+ * year field, the base .plain-field-shell-0605 width:100% forced the field to
+ * fill its 1fr grid track up to the divider, making the existing 6pt right
+ * margin inert. Contract page 1: the official address box right edge is at
+ * x=450.96pt and the item 15/16 divider at x=459.34pt — an 8.38pt gap. Set
+ * width:auto so justify-self:stretch fills the track minus the margins, and set
+ * the right margin to 7.5pt, which seats the field's right border on the
+ * official x=450.96pt extent (our track edge is ~458.5pt) and reproduces the
+ * official gap. Left edge is the track start (official x=85.44pt) and unchanged;
+ * the field never truncates (AdaptivePlainValue shrinks to fit). */
 .address-zip-0605 > div:first-child > .plain-field-shell-0605 {
+  width: auto;
   height: 20pt;
-  margin-right: 6pt;
+  margin-right: 7.5pt;
   border: .8pt solid #111;
   background: #fff;
 }
