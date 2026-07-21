@@ -611,19 +611,49 @@
   line-height: 6.5pt;
 }
 .signature-body-1601c { height: 43.5pt; display: grid; grid-template-columns: 1fr 1fr; }
+/* Each cell splits into a white signing space (which carries the absolutely
+ * positioned For Individual / For Non-Individual label and the blank area the
+ * signatory signs in) and a grey caption strip at the bottom (.sig-caption).
+ * The official form fills that strip grey -- contract p0 fill_regions
+ * x 18.36..593.64 y 721.54..759.34 gray 0.851 -- and rules a black SIGNATURE
+ * LINE across its top: contract p0 rules_h y=721.30, gray 0.0, 0.48pt / 1 device
+ * px, the same 1-device-px bucket the agent-strip top and the column dividers
+ * are drawn at .7pt here. The strip is bottom-anchored (justify-content:
+ * flex-end) so its top rule = signature-body bottom minus the strip height. The
+ * official span (agent-strip top y 740.26 down-anchored, rule at 721.3) is
+ * ~18.9pt, but our declaration stack lands its bottom ~1pt below official, so
+ * 20pt is the height that lifts the rule onto the official 721.3 (measured
+ * chromium 721.0-721.5) rather than 722.5. Below the strip the grey continues
+ * unbroken into the agent strip, as the official fill does. */
 .signature-body-1601c > div {
   position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
   justify-content: flex-end;
-  padding: 1pt 3pt 2pt;
   text-align: center;
 }
 .signature-body-1601c > div + div { border-left: .7pt solid #111; }
 .signature-body-1601c > div > span { position: absolute; top: 1pt; left: 4pt; }
-.signature-body-1601c > div > b { font-size: 7.5pt; }
-.signature-body-1601c > div > em { font-size: 6.5pt; }
+.sig-caption-1601c {
+  height: 20pt;
+  align-self: stretch;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3pt;
+  border-top: .7pt solid #111;
+  background: #d9d9d9;
+}
+.sig-caption-1601c b { font-size: 7.5pt; }
+/* The right caption wraps to two lines like the left block, and the designation
+ * rides inline at the end of line two -- official p0 text_runs place
+ * "Authorized Officer or Representative/Tax Agent" (309.05..477.06) and
+ * "(Indicate Title/Designation and TIN)" (477.22..591.23) on the same baseline
+ * y~731..740, together filling the cell width. The left keeps the designation on
+ * its own centred line under a single caption line. */
+.sig-caption-1601c em { font-size: 6.5pt; }
 /* 18pt, not 19: see the compensation note on .declaration-1601c above. The
  * removed pt is bottom slack below the top-anchored 7.2pt/line-height-1 text,
  * and it keeps this strip's grey column backgrounds off the heavier

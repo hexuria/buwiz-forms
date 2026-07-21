@@ -363,8 +363,19 @@ function Declaration1601C() {
     <section className="declaration-1601c">
       <p>I/We declare under the penalties of perjury that this remittance return, and all its attachments, have been made in good faith, verified by me/us, and to the best of my/our knowledge and belief, is true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof. Further, I give my consent to the processing of my information as contemplated under the *Data Privacy Act of 2012 (R.A. No. 10173) for legitimate and lawful purposes. <em>(If Authorized Representative, attach authorization letter)</em></p>
       <div className="signature-body-1601c">
-        <div><span>For Individual:</span><b>Signature over Printed Name of Taxpayer/Authorized Representative/Tax Agent</b><em>(Indicate Title/Designation and TIN)</em></div>
-        <div><span>For Non-Individual:</span><b>Signature over Printed Name of President/Vice President/<br />Authorized Officer or Representative/Tax Agent</b><em>(Indicate Title/Designation and TIN)</em></div>
+        <div>
+          <span>For Individual:</span>
+          <div className="sig-caption-1601c">
+            <b>Signature over Printed Name of Taxpayer/Authorized Representative/Tax Agent</b>
+            <em>(Indicate Title/Designation and TIN)</em>
+          </div>
+        </div>
+        <div>
+          <span>For Non-Individual:</span>
+          <div className="sig-caption-1601c sig-caption-right-1601c">
+            <b>Signature over Printed Name of President/Vice President/<br />Authorized Officer or Representative/Tax Agent <em>(Indicate Title/Designation and TIN)</em></b>
+          </div>
+        </div>
       </div>
       <div className="agent-strip-1601c">
         <span>Tax Agent Accreditation No./<br />Attorney’s Roll No. <em>(if applicable)</em></span>
