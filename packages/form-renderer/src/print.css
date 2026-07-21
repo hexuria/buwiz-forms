@@ -336,6 +336,13 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 .form-2551q-page-one .official-header-options {
   position: relative;
 }
+/*
+ * Header (Items 1-5) bottom rule. Uniform border width per
+ * border-thickness-decision.md: this filled section-boundary rule was 1.5pt
+ * (3 device px) — heavier than the base 1pt section boundaries and than the
+ * official, which rules this boundary at 2 device px. Collapsed to the uniform
+ * 1pt so it matches every other section rule.
+ */
 .form-2551q-page-one .official-header-options::after {
   content: "";
   position: absolute;
@@ -343,7 +350,7 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   right: 0;
   bottom: -1pt;
   left: 0;
-  height: 1.5pt;
+  height: 1pt;
   background: #000;
   pointer-events: none;
 }
@@ -1456,7 +1463,17 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   border-right: 0;
 }
 
-.form-2551q-page-one .comb-value > span::after {
+/*
+ * The right-most cell divider is dropped (`:not(:last-child)`) so the field's
+ * own box border provides the outer edge instead of a comb tick doubling it —
+ * border-thickness-decision.md. The exception is the whole-peso integer comb:
+ * its last cell sits against the decimal-separator column (a following element),
+ * not the field's outer box border, so that divider is a real interior column
+ * boundary and is kept. Same for the Part III blank-money integer comb.
+ */
+.form-2551q-page-one .comb-value > span:not(:last-child)::after,
+.form-2551q-page-one .official-money-integer > .comb-value > span:last-child::after,
+.form-2551q-page-one .blank-money-value > .comb-value:first-child > span:last-child::after {
   content: "";
   position: absolute;
   right: 0;
@@ -1828,50 +1845,26 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 }
 
 /*
- * Official part-boundary strokes are 1.5pt (3 device px at 144 DPI); ordinary
- * interior tax-line rules are 1pt. Measured against the pinned chromium
- * reference, the official part boundaries ink rows y=691-693, y=721-723 and
- * y=1201-1203 while a 1pt border reaches only the lower two. `box-sizing:
- * border-box` keeps every outer rect — and therefore every reviewed critical
- * region — unchanged; only the stroke grows inward.
+ * Uniform border width per border-thickness-decision.md. The Wave 0 weight pass
+ * thickened these part-boundary bottom strokes to 1.5pt (3 device px) to match
+ * the official heavier boundaries. The owner reviewed that and chose ONE uniform
+ * border width, so the override is removed: these boundaries now render at the
+ * base 1pt like every other rule on the form. Deliberate divergence from the
+ * official per-section weight, not a regression. `box-sizing: border-box` keeps
+ * every outer rect unchanged, so no reviewed critical region moves.
  */
-.form-2551q-page-one .income-rate-field,
-.form-2551q-page-one .tax-payable > h2,
-.form-2551q-page-one .overpayment-options {
-  border-bottom-width: 1.5pt;
-}
 
 /*
- * Left outer frame only. The official inks x=45-47 (3 device px) down the whole
- * page while a 1pt border reaches only x=45, so thickening inward lands on the
- * official stroke.
- *
- * border-right is deliberately NOT thickened, and this is worth recording
- * because the structural metric argues for it. Our right edge is x=1180 and the
- * official frame is x=1179-1181, so growing the border inward paints x=1177-1178
- * — roughly 780 px of ink the official does not have — while x=1181 stays
- * unpainted. `structural-ink-coverage-v1` cannot see that: at tolerance radius 1
- * our 1177-1180 dilates over the official 1179-1181 and vice versa, so recall
- * and precision both improve while the untoleranced complete-page difference
- * gets worse. Measured: the change improved structural recall but moved the
- * Poppler diagnostic the wrong way by more than it moved the chromium gate.
- * The real fix moves the right edge to x=1181, which is a Part II column
- * re-derivation, not a border width.
+ * Uniform border width per border-thickness-decision.md. The Wave 0 weight pass
+ * thickened the tax-line left frame to 1.5pt and, to keep the label/value
+ * divider still under `box-sizing: border-box`, narrowed the first grid column
+ * by the same 0.5pt (354pt -> 353.5pt). The owner chose ONE uniform width, so
+ * BOTH are reverted to the base rule (border-left 1pt, grid column 354pt): the
+ * divider lands at exactly the same x it did (1pt + 354pt == 1.5pt + 353.5pt),
+ * so removing the border and its compensation together leaves interior content
+ * where it already matched. No override needed — the base `.official-tax-line`
+ * rule now owns both.
  */
-.form-2551q-page-one .official-tax-line {
-  border-left-width: 1.5pt;
-  /*
-   * The stroke must grow WITHOUT moving what is inside it. Under
-   * `box-sizing: border-box` a thicker left border pushes the grid's content
-   * origin right by the same 0.5pt (1 device px), which displaced every Part
-   * II tax-line text band: measured dx=0 against both rasterizers before the
-   * change and dx=-1 to -2 after, and the Poppler diagnostic regressed by more
-   * than the chromium gate improved. Narrowing the first grid column by the
-   * same 0.5pt returns the content to where it already matched, so the frame
-   * fix stops costing interior alignment.
-   */
-  grid-template-columns: 353.5pt minmax(0, 1fr);
-}
 
 /*
  * Official row pitch across items 20-21 is 37 + 36 device px; ours was 36 + 38,
@@ -1919,24 +1912,21 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 }
 
 /*
- * Part III / declaration left frame. The official inks x=46-48 in both blocks
- * while a 1pt border inks x=45-46, so the reviewed x=47 child origin sits one
- * device px left of the official rule. Only border-left is thickened: growing
- * border-right as well would shrink the pinned full-width children
- * (declaration copy, signature boxes, tax-agent strip, all pinned x=47 w=1133)
- * by 2 device px, which is exactly the assertion tolerance. At 1.5pt on the
- * left alone the pinned children move 1 device px (0.67 CSS px) against a
- * 1.33 CSS px budget.
+ * Uniform border width per border-thickness-decision.md. The Wave 0 weight pass
+ * thickened the Part III declaration / machine-validation left frame to 1.5pt.
+ * The owner chose ONE uniform width, so the override is removed and both blocks
+ * render their left frame at the base 1pt.
  */
-.form-2551q-page-one .official-declaration,
-.form-2551q-page-one .machine-validation {
-  border-left-width: 1.5pt;
-}
 
 /*
- * The Part III validation divider is a column-position defect, not a weight
- * one: the official rules x=756-757, ours x=751-752. Two of the five device px
- * come back from the thicker left frame above; the remaining 2pt is the column.
+ * The Part III validation divider is a column-position defect, not a weight one:
+ * the official rules x=756-757, the base 353.5pt column x=751-752. This
+ * structural fix is retained at its 355.5pt value — it is unrelated to border
+ * width, so it is NOT re-tuned to compensate for the uniform border. Reverting
+ * the left frame from 1.5pt to the uniform 1pt shifts the divider one device px
+ * left (measured x=756 vs the official x=757), which stays inside the 2-device-px
+ * tolerance. Adding a compensating column width was tried and measured 1px the
+ * other way (x=758) with a marginally worse complete-page number.
  */
 .form-2551q-page-one .machine-validation {
   grid-template-columns: 355.5pt minmax(0, 1fr);
@@ -1984,7 +1974,17 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   border-right: 0;
 }
 
-.form-2551q-page-two .comb-value > span::after,
+/*
+ * As on page one, the right-most `.comb-value` cell divider is dropped so the
+ * field's box border owns the outer edge instead of a doubled comb tick —
+ * border-thickness-decision.md. Kept where the last cell is a real interior
+ * boundary with a following element: the visual integer comb's last cell sits
+ * against the decimal-separator column, and every `.visual-leading-cells` tick
+ * (including its last) is the boundary with the adjacent value comb, so both
+ * halves of the twelve-cell integer comb read as one continuous field.
+ */
+.form-2551q-page-two .comb-value > span:not(:last-child)::after,
+.form-2551q-page-two .visual-integer-comb > .comb-value > span:last-child::after,
 .form-2551q-page-two .visual-leading-cells > span::after {
   content: "";
   position: absolute;
