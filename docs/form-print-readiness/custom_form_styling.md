@@ -55,21 +55,60 @@ height — no thin white stripe above or below. If our band is shorter than its
 container, it reads as a stripe. Match the contract's band `y` extent; don't
 just overflow. (2550Q Part I TIN row.)
 
+### 1.4 Each visual seam is drawn by exactly ONE element **[engineering]**
+Uniform 1 px (1.1) is necessary but not sufficient: **two separate 1 px borders
+that meet render as one 2 px line.** So a form can still look "thick" even after
+1.1. Every shared edge must be owned by exactly one element. Three cases, all
+seen on 0605:
+
+- **Stacked rows** — element A `border-bottom` and element B `border-top` on the
+  same seam stack to 2 px. Draw the seam once: keep one, remove the other. (Do
+  NOT keep both.)
+- **A bordered field touching a container border** — an input/comb box with its
+  own border sitting flush against the container's inner border doubles to 2 px.
+  Fix either way: (a) drop the field's border on the side that touches the
+  container (the container's border is the line), or (b) inset the field with a
+  little padding so its border does not touch the container's. Pick per field —
+  usually (a) is cleaner.
+- **Incomplete closing** — the opposite failure: a box whose border stops short
+  of the adjacent rule leaves a visible gap ("border never closed"). Extend it to
+  meet the neighbouring line.
+
+The clean structural pattern for grid/flex box-per-cell layouts: **each cell
+draws only its interior dividers (e.g. top+left, or nothing) and the CONTAINER
+draws the outer frame and section boundaries** — so no seam is ever drawn twice
+and none is left open. Decide per seam who owns it; when in doubt the container
+owns the frame and boundaries, cells own only interiors. Verify by zooming the
+band: a correctly-owned seam is a single crisp 1 px line, a doubled seam is
+visibly 2 px, a gap is white.
+
 ---
 
 ## 2. Character-box combs (charboxes)
 
-### 2.1 No divider on the right-most cell **[engineering]**
+### 2.1 The right-most divider of a comb is ALWAYS removed **[owner]**
 Draw comb dividers with `:not(:last-child)`:
 ```css
 .<form> .comb-value > span:not(:last-child)::after { /* divider */ }
 ```
-Drawing `::after` on every span puts the last tick on the field's own box
-border → a doubled, ugly line. **Exception:** keep the last divider only where
-it is genuinely the boundary with a *following* element (a separator column, an
-adjacent comb) rather than the box edge — e.g. the whole-peso comb's last cell
-sits against the decimal-separator column. Check the render: flush-to-box-border
-→ drop it; followed-by-element → keep it.
+Drawing `::after` on every span puts the last tick on whatever is to the comb's
+right — a box border, a decimal-separator column, blank space — and it reads as
+a doubled, ugly line every time. **Remove it. No exceptions for "it's next to a
+separator / another element."** The neighbour (border, separator column,
+adjacent field) provides the edge; the comb never draws its own right-most
+divider.
+
+The ONE thing that is *not* a last-cell divider and stays: a divider strictly
+**between two character cells of the same continuous field**. When a field is
+built from two adjacent sub-combs (leading cells + value comb), the tick where
+they meet is char-cell-to-char-cell — a true interior divider — and it stays so
+the combined field reads evenly. A divider against a **separator column** or a
+**border** is *never* char-to-char, so it is always removed.
+
+> **This corrects an earlier mistake.** The first 2551Q pass kept the whole-peso
+> comb's last divider "because it sits against the decimal-separator column."
+> That is exactly the case to REMOVE — a separator is not a character cell. Do
+> not reintroduce that exception.
 
 ### 2.2 Empty guided cells still show their guides **[contract]**
 CLAUDE.md: *"Empty, short, and exact-capacity values retain every official
@@ -261,7 +300,8 @@ with 2px side padding.
 - [ ] All borders 1 CSS px, no double-width, no leftover compensations (§1.1)
 - [ ] No black rule where the contract shows grey decoration (§1.2)
 - [ ] Grey bands fill their full row height (§1.3)
-- [ ] Comb dividers use `:not(:last-child)`; last tick doesn't double a border (§2.1)
+- [ ] No doubled seams: each shared edge drawn by one element, none left open (§1.4)
+- [ ] Comb dividers use `:not(:last-child)`; last tick removed everywhere — even against a separator column (§2.1)
 - [ ] Empty combs still show guides (§2.2); counts from the contract (§2.3)
 - [ ] Charbox→plain overflow with 4-state tests (§2.4); numerics zero-padded (§2.5)
 - [ ] Check-box and entry-cell interiors white per `knockout_regions`; bands grey (§3.1)
