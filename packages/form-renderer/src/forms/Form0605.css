@@ -842,8 +842,18 @@
 }
 .payment-table-head-0605 > span { display: grid; place-items: center; border-right: 1pt solid #111; }
 .payment-table-head-0605 > span:last-child { border-right: 0; }
-.cash-payment-0605 { height: 25.25pt; display: grid; grid-template-columns: 384pt 1fr; align-items: center; }
+.cash-payment-0605 { position: relative; height: 25.25pt; display: grid; grid-template-columns: 384pt 1fr; align-items: center; }
 .cash-payment-0605 > span { align-self: start; padding: 2pt; line-height: 1.25; }
+/* Row 23's amount marker. The official prints a "23" immediately left of the
+ * row-23 amount box (contract page 1 text_run "   23" at x0=375.79, y0=700.56,
+ * size 8.06 bold) exactly like the 24D/25C/26D markers on the rows below, which
+ * all share x0=375.79. Row 23 rendered its Money box with no marker, so this
+ * string was missing from the printed form. It is placed at the same
+ * part-three-relative left origin (365pt) and the same 6.4pt small-caption style
+ * as the .payment-amount-0605 > small markers (which sit at -1.5pt inside their
+ * col-5 origin of 366.5pt = 365pt), 19pt left of the amount box at 384pt.
+ * Absolutely positioned so it never disturbs the cash row's amount-box grid. */
+.cash-amount-marker-0605 { position: absolute; left: 365pt; top: 6.5pt; font-size: 6.4pt; white-space: nowrap; }
 .cash-payment-0605 > .money-0605,
 .cash-payment-0605 > .adaptive-plain-value { height: 22pt; margin: 1pt 3pt 2pt 0; border: .8pt solid #111; background: #fff; }
 .payment-row-0605 {

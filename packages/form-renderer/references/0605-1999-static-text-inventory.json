@@ -212,6 +212,10 @@
       "text": "23 Cash/Bank Debit Memo"
     },
     {
+      "selector": ".cash-amount-marker-0605",
+      "text": "23"
+    },
+    {
       "selector": "[data-payment-row=\"payment_24\"] > span:first-child",
       "text": "24 Check"
     },

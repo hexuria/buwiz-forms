@@ -403,7 +403,7 @@ function PaymentDetails0605({ envelope }: { envelope: RenderEnvelope }) {
     <section className="part-three-0605">
       <h2><span>Part III</span><b>Details of Payment</b></h2>
       <div className="payment-table-head-0605"><span>Particulars</span><span>Drawee Bank/Agency</span><span>Number</span><span>MM</span><span>DD</span><span>YYYY</span><span>Amount</span></div>
-      <div className="cash-payment-0605" data-payment-row="payment_23"><span><b>23</b> Cash/Bank<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Debit Memo</span><Money0605 field="23-amount" value={decimal(envelope, "payment_23_amount")} present={bool(envelope, "payment_23_amount_present")} /></div>
+      <div className="cash-payment-0605" data-payment-row="payment_23"><span><b>23</b> Cash/Bank<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Debit Memo</span><small className="cash-amount-marker-0605">23</small><Money0605 field="23-amount" value={decimal(envelope, "payment_23_amount")} present={bool(envelope, "payment_23_amount_present")} /></div>
       <PaymentRow0605 envelope={envelope} number="24" label="Check" prefix="payment_24" bankItem="24A" numberItem="24B" dateItem="24C" amountItem="24D" />
       <PaymentRow0605 envelope={envelope} number="25" label={<>Tax Debit<br />Memo</>} prefix="payment_25" numberItem="25A" dateItem="25B" amountItem="25C" hideBank />
       <PaymentRow0605 envelope={envelope} number="26" label="Others" prefix="payment_26" bankItem="26A" numberItem="26B" dateItem="26C" amountItem="26D" />
