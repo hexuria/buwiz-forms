@@ -926,8 +926,28 @@
 .payment-field-0605 .plain-field-value-0605 { padding-right: 0; padding-left: 0; }
 /* Uniform 1px borders per border-thickness-decision.md: this rule was
  * thickened to 1.5pt in Wave 0; reverted to the base 1pt. */
+/* Reviewer finding (white knockout must reach the rule, custom_form_styling.md
+ * 3.1): the "Taxpayer Classification" footnote below Part III read as though a
+ * box were drawn around it. Nothing wraps it — the footnote <p> has 0px borders
+ * on all four sides and no rule or vertical exists anywhere below the Part III
+ * bottom border. What made the single rule read as a heavy boxed edge was a
+ * full-width band of Part III's OWN grey (#c0c0c0) leaking immediately above it:
+ * .part-three-0605 is a fixed 205pt box whose content height is 203.5pt (205 -
+ * two 1px = 0.75pt frame edges) while its children sum to exactly 201pt (h2 18 +
+ * table head 18 + cash row 25.25 + 3 payment rows 75.75 + this box 64), leaving
+ * 2.5pt of the grey band exposed between the bottom of this white box and the
+ * frame's bottom border. Contract page 1 refutes that grey: there is exactly ONE
+ * rules_h entry in y 855..875pt (pos_pt 866.04, gray 0, length 566.4pt — this
+ * box's bottom, which the .part-three-0605 border-bottom already draws and which
+ * stays), fill_regions intersecting y 845..875 is EMPTY, and a knockout_region
+ * spans y0 801.24 -> y1 877.08pt across x 13.44..579.96 — i.e. the official
+ * paints WHITE from this box's top rule straight through the rule and past the
+ * footnote. Growing the knockout by that 2.5pt (64 -> 66.5pt) fills the strip
+ * white to the border. Part III's own 205pt height and the y=866 rule do not
+ * move (the pinned "Part III" critical region stays 410 device px), and the
+ * label (13pt) and value (46pt) stack from the top so no content shifts. */
 .machine-validation-0605 {
-  height: 64pt;
+  height: 66.5pt;
   border-top: 1pt solid #111;
   background: #fff;
 }
