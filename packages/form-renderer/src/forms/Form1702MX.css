@@ -839,7 +839,16 @@
   border-left: 0;
 }
 
-.schedule-ten-1702mx { height: 221.5pt; margin-top: 1pt; }
+/*
+ * §1.4: the frame owns this block's bottom boundary (its last row's border is
+ * delegated to the frame via the transparent rule above). height must therefore
+ * be tall enough to CONTAIN the stacked fixed-height content (title 12 + header
+ * 13.5 + 13 rows x 15 = 220.5pt of content + the border-box borders); at the old
+ * 221.5pt the content overflowed the content-box by ~1pt, so row 10's opaque
+ * grey/white cells painted over the frame's fallback bottom border and the box
+ * read as open. 222.5pt lets the content fit and reveals the single frame rule.
+ */
+.schedule-ten-1702mx { height: 222.5pt; margin-top: 1pt; }
 .schedule-ten-1702mx > .schedule-title-1702mx {
   flex: 0 0 12pt;
   gap: 2pt;
