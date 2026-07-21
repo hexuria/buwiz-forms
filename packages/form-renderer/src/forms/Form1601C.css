@@ -819,25 +819,52 @@
   border-top: 0;
   background: #d9d9d9;
 }
+/* Each column head is a two-row grid: the header text in row 1 (the flexible
+ * top region) and its small reference number on ITS OWN row 2 beneath, exactly
+ * as the official form lays it out (contract p1, band top y=134.90 bottom
+ * y=165.87: the two-line "Drawee Bank/Bank" / "Code/Agency" runs y 135.72..156.83
+ * with its "3" on a distinct line at y 156.90..165.87; single-line "Number" sits
+ * at y 141.39..151.43 with "4" below). The former flex column centred the header
+ * text and pinned the number absolutely at the bottom, so the two-line columns'
+ * second line descended onto the number -- the reviewer's "Code/&gency" overlap.
+ * Splitting text and number into separate grid rows makes them non-overlapping
+ * by construction. The auto number row sizes to the number, the 1fr text row
+ * takes the rest (~29.3px of the 40px band), and the tallest header (two 9pt
+ * lines ~26.4px) fits inside it, so nothing overflows and the fixed 31pt band
+ * height is unchanged. The header text is wrapped in .schedule-col-head-1601c so
+ * its <br> wraps to two clean lines within one grid item, instead of the <br>
+ * becoming a phantom third flex line the way it did between two bare text nodes. */
 .schedule-top-head-1601c > span {
   position: relative;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: center;
+  justify-items: center;
   border-right: .7pt solid #111;
   text-align: center;
   line-height: 1.1;
 }
 .schedule-top-head-1601c > span:last-child { border-right: 0; }
 .schedule-top-head-1601c em { font-size: 7pt; }
-.schedule-top-head-1601c b { position: absolute; bottom: 1pt; }
+/* Row 2. font-size 8.04pt / line-height 1 matches the official reference-number
+ * run (y 156.90..165.87, size 8.04) and keeps the row shallow so the text row
+ * above stays generous. */
+.schedule-top-head-1601c b { align-self: end; font-size: 8.04pt; line-height: 1; }
+/* Column 3's head is the only one the contract records in Arial Narrow (p1
+ * "Drawee Bank/Bank" / "Code/Agency", font "Arial Narrow", size 9) -- the
+ * official form condenses it precisely because "Drawee Bank/Bank" does not fit
+ * the 71pt column in regular Arial. In our regular Arial it wrapped to a third
+ * line (37px), overflowing the two-row grid; the bundled Roboto Condensed
+ * substitute (already this form's Arial Narrow stand-in for the declaration)
+ * fits it on one line, so the head is the intended two lines and clears row 2. */
+.schedule-top-head-1601c > span:nth-child(3) > .schedule-col-head-1601c {
+  font-family: "eBIRForms Roboto Condensed", "Arial Narrow", Arial, sans-serif;
+}
 .schedule-tax-paid-label-1601c {
   display: flex;
   align-items: baseline;
   justify-content: center;
   gap: 2pt;
-  transform: translateY(-2.25pt);
   white-space: nowrap;
 }
 .schedule-top-row-1601c {

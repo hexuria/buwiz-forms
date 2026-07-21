@@ -435,10 +435,10 @@ function PageTwo({ envelope, rows }: { envelope: RenderEnvelope; rows: RenderRow
         <h2>Part IV - Schedule</h2>
         <h3>Schedule I – Adjustment of Taxes Withheld on Compensation from Previous Months <em>(attach additional sheet/s, if necessary)</em></h3>
         <div className="schedule-top-head-1601c">
-          <span>Previous Month/s<br /><em>(MM/YYYY)</em><b>1</b></span>
-          <span>Date Paid<br /><em>(MM/DD/YYYY)</em><b>2</b></span>
-          <span>Drawee Bank/Bank<br />Code/Agency<b>3</b></span>
-          <span>Number<b>4</b></span>
+          <span><span className="schedule-col-head-1601c">Previous Month/s<br /><em>(MM/YYYY)</em></span><b>1</b></span>
+          <span><span className="schedule-col-head-1601c">Date Paid<br /><em>(MM/DD/YYYY)</em></span><b>2</b></span>
+          <span><span className="schedule-col-head-1601c">Drawee Bank/Bank<br />Code/Agency</span><b>3</b></span>
+          <span><span className="schedule-col-head-1601c">Number</span><b>4</b></span>
           <span>
             <span className="schedule-tax-paid-label-1601c">
               Tax Paid <em>(Excluding Penalties for the Month)</em>
