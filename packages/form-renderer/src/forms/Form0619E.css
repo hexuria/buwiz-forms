@@ -20,7 +20,26 @@
   position: relative;
   border-right: 0;
 }
-.form-0619e-page-one .comb-value > span::after {
+/*
+ * Comb dividers draw with :not(:last-child) so the field's own box border owns
+ * the outer edge instead of a comb tick doubling it (border-thickness-decision.md
+ * / custom_form_styling.md 2.1). The kept :last-child exceptions below are the
+ * combs whose last cell sits against a FOLLOWING element (a separator column, a
+ * grey filler column, or an adjacent comb), not the field's box border, verified
+ * against the official section bands:
+ *   - .money-0619e whole-peso (first comb): its last cell sits against the grey
+ *     decimal-separator column. Required in the remittance rows, whose separator
+ *     has no border of its own.
+ *   - .tin-value-0619e seg 1/2/3 (every comb except the last, the branch): each
+ *     sits against a grey "-" separator column. The branch (last child) sits
+ *     against the RDO-label box border, so it drops.
+ *   - .rdo-value-0619e comb: its last cell sits against the grey filler column
+ *     that runs to the part box edge; the official rules that comb/filler seam.
+ */
+.form-0619e-page-one .comb-value > span:not(:last-child)::after,
+.form-0619e-page-one .money-0619e > .comb-value:first-child > span:last-child::after,
+.form-0619e-page-one .tin-value-0619e > .comb-value:not(:last-child) > span:last-child::after,
+.form-0619e-page-one .rdo-value-0619e > .comb-value > span:last-child::after {
   position: absolute;
   right: 0;
   bottom: 0;
@@ -29,33 +48,14 @@
   content: "";
 }
 /*
- * The official whole-peso comb is an 11-cell run grouped 2+3+3+3, and the
- * three group boundaries (x = 392.11 + {2,5,8} * 14.4 = 420.91 / 464.11 /
- * 507.31) are drawn heavy: contract rules_v thickness_pt 1.44, device_px 3,
- * gray 0.0, source fill, 12 segments each (8 remittance rows + 4 payment
- * rows). The neighbouring per-character ticks are 0.24pt, so this is a two
- * device-px-class contrast, not a bucket seam. .55pt floors to 1 CSS px at
- * device scale 1.5; 1.5pt is the first width that reaches the 2 CSS px /
- * 3 device px bucket the official stroke occupies.
- *
- * The tick is an absolutely-positioned ::after, so cell widths (flex 1 1 0)
- * and centred glyphs are untouched and nothing reflows. `right` deliberately
- * stays 0: print.css:98 sets overflow:hidden on .comb-value > span, so any
- * negative offset would be clipped back below the bucket boundary and the
- * change would render identically to today. The stroke therefore grows
- * leftward inside the cell; its centre moves 0.475pt left, from 421.14 to
- * 420.66 against the official 420.91 - an equal-magnitude offset, so this is
- * added ink without added displacement.
- *
- * Scoped to .money-0619e so the 0.24pt TIN divider that shares x = 420.91 is
- * not caught, and so the cells=14 overflow variant (rendered outside
- * .money-0619e, no official counterpart) stays exempt. No cell count changes.
+ * The official whole-peso group boundaries (x = 420.91 / 464.11 / 507.31) are
+ * inked heavy (contract rules_v thickness_pt 1.44, device_px 3, gray 0.0). Per
+ * border-thickness-decision.md the owner chose ONE uniform border width, so the
+ * Wave 0 override that thickened these three ticks to 1.5pt (2 CSS px) is
+ * removed: they render at the uniform .55pt (1 CSS px) like every other tick.
+ * A deliberate divergence from the official per-group weight, not a regression;
+ * the ticks still EXIST, only their width changes.
  */
-.form-0619e-page-one .money-0619e > .comb-value:first-child > span:nth-child(2)::after,
-.form-0619e-page-one .money-0619e > .comb-value:first-child > span:nth-child(5)::after,
-.form-0619e-page-one .money-0619e > .comb-value:first-child > span:nth-child(8)::after {
-  border-right-width: 1.5pt;
-}
 
 .government-header-0619e {
   position: relative;
@@ -239,19 +239,17 @@
   border: 1pt solid #000;
 }
 /*
- * The three part-heading bottom rules are heavy in the official artwork:
- * contract rules_h at y = 164.66 (Part I, 23 frags), 320.69 (Part II, 15) and
- * 607.78 (Part III, 5), all thickness_pt 1.44, device_px 3, gray 0.0,
- * source fill. .6pt floors to 1 CSS px; 1.5pt is the first width in the
- * 2 CSS px / 3 device px bucket.
- *
- * Compensation: the h2 is border-box with a fixed height (13pt here, 12pt for
- * .payment-0619e > h2 below), so the border grows upward into the content box
- * and nothing below the heading moves. That upward growth would lift the
- * place-items:center caption by 0.45pt, so padding-top restores it exactly:
- * old centre 12.4 / 2 = 6.2pt from the top; new centre
- * .9 + (13 - 1.5 - .9) / 2 = 6.2pt. Same arithmetic holds for the 12pt
- * Part III heading (5.7pt before and after).
+ * The three part-heading bottom rules are inked heavy in the official artwork
+ * (contract rules_h at y = 164.66 / 320.69 / 607.78, all thickness_pt 1.44,
+ * device_px 3, gray 0.0). Per border-thickness-decision.md the owner chose ONE
+ * uniform border width, so the Wave 0 override that thickened these to 1.5pt
+ * (2 CSS px) is reverted to the uniform .6pt (1 CSS px) shared by every interior
+ * rule on the form. The Wave 0 padding-top: .9pt was added ONLY to keep the
+ * place-items:center caption where it was under the thicker upward-growing
+ * border; with the border back at .6pt that compensation is removed so the
+ * caption returns to its natural centre (12.4 / 2 = 6.2pt from the top, and
+ * 11.4 / 2 = 5.7pt for the 12pt Part III heading). Deliberate divergence from
+ * the official per-section weight, not a regression; the rules still EXIST.
  */
 .part-0619e > h2,
 .payment-0619e > h2 {
@@ -259,8 +257,7 @@
   margin: 0;
   display: grid;
   place-items: center;
-  padding-top: .9pt;
-  border-bottom: 1.5pt solid #000;
+  border-bottom: .6pt solid #000;
   background: #d9d9d9;
   font-size: 8.7pt;
   font-weight: 400;
@@ -541,31 +538,17 @@
 }
 .payment-row-0619e[data-payment-row="payment_20"] { height: 18.5pt; }
 /*
- * Only the row-22 bottom is heavy officially: contract rules_h y = 703.06,
- * thickness_pt 1.44, device_px 3, gray 0.0, 40 frags. The rows above it
- * (y = 637.42 / 655.66 / 673.90) are thin 0.48pt, so the shared .6pt bottom
- * on .payment-row-0619e must stay as it is.
- *
- * Compensation: the 19pt border-box height is deliberately left alone, so the
- * border grows upward into the row and the row's outer box, every block below
- * it, and the payment box bottom rule all stay exactly where they are - no
- * height or margin needs to be paid back anywhere.
- *
- * Direction was chosen on edge error, not on convenience. Official ink runs
- * 702.34-703.78. Growing upward puts our edges at 702.0 / 703.5 (errors 0.34pt
- * and 0.28pt, both inside the 1-device-px = 0.5pt cell-edge tolerance) and
- * overlaps 1.16pt of the 1.44pt band. Growing downward instead (height 19.9pt,
- * paid back by .machine-validation-0619e) would put them at 702.9 / 704.4 -
- * errors 0.56pt and 0.62pt, both outside tolerance, overlapping only 0.88pt.
- *
- * The cost is that the row content box goes 18.4pt -> 17.5pt, so the
- * bottom-anchored comb ticks and the full-height date dividers end at 702.0
- * instead of 702.9. That is also a move toward the official 702.34, and the
- * label and comb text stay inside the box (widest is ~12pt of a 17.5pt row).
+ * The row-22 bottom is inked heavy officially (contract rules_h y = 703.06,
+ * thickness_pt 1.44, device_px 3, gray 0.0). Per border-thickness-decision.md
+ * the owner chose ONE uniform border width, so the Wave 0 override that
+ * thickened this bottom to 1.5pt (2 CSS px) is removed; it falls back to the
+ * shared .6pt (1 CSS px) bottom on .payment-row-0619e. No compensation is paid
+ * back: the 19pt border-box height predates Wave 0 and is unchanged, so every
+ * block below the row and the payment box bottom rule stay exactly where they
+ * are. Deliberate divergence from the official weight, not a regression.
  */
 .payment-row-0619e[data-payment-row="payment_22"] {
   height: 19pt;
-  border-bottom-width: 1.5pt;
 }
 .payment-row-0619e > * {
   min-width: 0;
