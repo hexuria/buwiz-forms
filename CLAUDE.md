@@ -123,6 +123,7 @@ rtk cargo test --locked -p bir-print
 ## Deep guidance
 
 - **Conversion strategy (start here for any new form): `docs/form-print-readiness/conversion-strategy-v2.md`** — structure-first calibration, generated geometry contracts, text via content assertions (never text-pixel chasing: all 35 source PDFs have substituted fonts, so text pixels are unwinnable by proof), dynamic-behaviour pattern library, and the 35-form wave plan.
+- **Recurring styling patterns (read before building OR reviewing any form): `docs/form-print-readiness/custom_form_styling.md`** — every defect found by eye during review, tagged by provenance, so a new form starts correct: uniform-1px borders (`border-thickness-decision.md`), the `> span` → money-grid-collapse specificity trap, comb `:not(:last-child)` dividers, empty-cell guides, grey-band vs white-knockout, pre-printed constants, and a per-form checklist.
 - Release-criterion design: `docs/form-print-readiness/official-fidelity-criterion-v1.md` (specified, not yet implemented or promotable).
 - Process playbooks (follow them, as amended by the strategy above): `.codex/skills/ebirforms-convert-form-to-html/` and `.codex/skills/ebirforms-print-preview/`.
 - Honest per-form readiness numbers: `docs/form-print-readiness/priority-forms-readiness.md`.
