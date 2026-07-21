@@ -1576,6 +1576,11 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
   width: 13.25pt;
   height: 13.25pt;
   transform: translateY(-.5pt);
+  /* Contract 2551q-2018.json knocks both box interiors to white
+   * (knockout_regions x 396-422.6 and x 592.8-619.7, y 1174.3-1198.3)
+   * inside the grey declaration band (fill_region gray 0.851). Match the
+   * other page-one check boxes (.relief-choices, .income-rate-choice). */
+  background: #fff;
 }
 
 .form-2551q-page-one .official-money-leading-cell {
