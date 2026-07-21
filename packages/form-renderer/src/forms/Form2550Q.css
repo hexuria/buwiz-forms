@@ -199,6 +199,12 @@
   border-bottom: .55pt solid #111;
 }
 .tin-rdo-2550q > * { min-width: 0; display: flex; align-items: center; padding: 1pt 4pt; border-right: .55pt solid #111; }
+/* Contract fill_regions: the item 7/8 label cells are grey (gray 0.851 / tone
+ * 217) across the full row band y 169.43->186.03pt; the TIN and RDO value combs
+ * knock out to white. The label cells were rendering white, leaving the row as
+ * a white stripe between the grey Part I heading and the grey item 9 label. */
+.tin-rdo-2550q > *:nth-child(1),
+.tin-rdo-2550q > *:nth-child(3) { background: #d9d9d9; }
 .tin-rdo-2550q > :last-child { border-right: 0; padding: 0; }
 .tin-rdo-2550q .comb-value { height: 100%; }
 .tin-comb-2550q { min-width: 0; height: 100%; display: grid !important; grid-template-columns: 3fr 14pt 3fr 14pt 3fr 14pt 5fr; padding: 0 !important; }
@@ -283,6 +289,14 @@
 .payment-row-2550q > span:first-child { font-size: 6.5pt; line-height: .95; }
 .payment-row-2550q > .plain-value-2550q { line-height: .95; white-space: nowrap; }
 .payment-row-2550q .money-cell-2550q { border-bottom: .55pt solid #111; }
+/* The Amount cell reuses the shared money comb, but the generic `> span` rule
+ * above (specificity beats .money-cell-2550q) was collapsing it: align-items
+ * center shrank the grey decimal separator into a floating box instead of the
+ * official full-height column (contract fill x549.10-563.40, gray 0.651), and
+ * padding 1pt 3pt shoved the charboxes right. Restore the money comb's own
+ * full-height stretch and zero padding so Part III matches the polished Part II
+ * amount rows. */
+.payment-row-2550q > .money-cell-2550q { align-items: stretch; justify-content: flex-start; padding: 0; overflow: visible; }
 .payment-other-label-2550q { height: 11pt; display: flex; align-items: center; gap: 4pt; padding: 1pt 4pt; background: #d9d9d9; border-bottom: .55pt solid #111; }
 .payment-other-values-2550q > span:first-child { background: #fff; }
 .receipt-validation-row-2550q { height: 68pt; display: grid; grid-template-columns: 356pt minmax(0, 1fr); }
