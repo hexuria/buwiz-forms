@@ -21,25 +21,27 @@
   border-right: 0;
 }
 /*
- * Comb dividers draw with :not(:last-child) so the field's own box border owns
- * the outer edge instead of a comb tick doubling it (border-thickness-decision.md
- * / custom_form_styling.md 2.1). The kept :last-child exceptions below are the
- * combs whose last cell sits against a FOLLOWING element (a separator column, a
- * grey filler column, or an adjacent comb), not the field's box border, verified
- * against the official section bands:
- *   - .money-0619e whole-peso (first comb): its last cell sits against the grey
- *     decimal-separator column. Required in the remittance rows, whose separator
- *     has no border of its own.
- *   - .tin-value-0619e seg 1/2/3 (every comb except the last, the branch): each
- *     sits against a grey "-" separator column. The branch (last child) sits
- *     against the RDO-label box border, so it drops.
- *   - .rdo-value-0619e comb: its last cell sits against the grey filler column
- *     that runs to the part box edge; the official rules that comb/filler seam.
+ * Comb dividers draw ONLY with :not(:last-child) (custom_form_styling.md 2.1,
+ * corrected rule): the right-most divider of every comb is removed and the
+ * neighbour — a box border, a separator column, or a grey filler column —
+ * provides the outer edge. There are NO last-cell exceptions on 0619E. The
+ * three exceptions kept by the first pass were each a divider-against-separator,
+ * never char-cell-to-char-cell, so the corrected rule removes all of them:
+ *   - .money-0619e whole-peso last cell (was against the grey decimal-separator
+ *     column): removed. Its tick was a 46%-height stub that under-drew the
+ *     whole-peso/decimal seam in the remittance rows and DOUBLED the separator's
+ *     own border in the payment rows. The decimal separator now owns both its
+ *     left (whole-peso/decimal) and right (decimal/centavos) seams as full-height
+ *     rules in BOTH parts — see .decimal-separator-0619e below. Those two seams
+ *     are real 0.48pt full-height rules in the contract (rules_v x = 550.54 /
+ *     564.94), so they are closed, not dropped.
+ *   - .tin-value-0619e seg 1/2/3 last cell (against a grey "-" separator column):
+ *     removed. The separator column's white/grey edge is the seam; the official
+ *     tick there is a 0.24pt sub-pixel guide (tone 133), not a structural rule.
+ *   - .rdo-value-0619e last cell (against the grey filler column): removed. The
+ *     grey filler's white/grey edge is the seam; again a 0.24pt guide, not a rule.
  */
-.form-0619e-page-one .comb-value > span:not(:last-child)::after,
-.form-0619e-page-one .money-0619e > .comb-value:first-child > span:last-child::after,
-.form-0619e-page-one .tin-value-0619e > .comb-value:not(:last-child) > span:last-child::after,
-.form-0619e-page-one .rdo-value-0619e > .comb-value > span:last-child::after {
+.form-0619e-page-one .comb-value > span:not(:last-child)::after {
   position: absolute;
   right: 0;
   bottom: 0;
@@ -414,6 +416,15 @@
 .decimal-separator-0619e {
   display: grid;
   place-items: center;
+  /*
+   * The decimal separator owns both money seams as full-height uniform rules in
+   * BOTH the remittance and payment rows: its left edge is the whole-peso/decimal
+   * boundary (contract rules_v x = 550.54, 0.48pt full height) and its right edge
+   * the decimal/centavos boundary (x = 564.94, 0.48pt full height). The whole-peso
+   * comb's last-cell tick is removed (above), so each seam is drawn exactly once.
+   */
+  border-right: .6pt solid #000;
+  border-left: .6pt solid #000;
   background: #a6a6a6;
   font-size: 9pt;
 }
@@ -588,10 +599,11 @@
 .payment-row-0619e > .comb-value:nth-child(4)::after,
 .payment-row-0619e > .adaptive-plain-value:nth-child(4)::after { left: 58pt; }
 .payment-row-0619e > .money-0619e { width: 100%; }
-.payment-row-0619e > .money-0619e > .decimal-separator-0619e {
-  border-right: .6pt solid #000;
-  border-left: .6pt solid #000;
-}
+/*
+ * The decimal separator's full-height left/right rules are now on the shared
+ * .decimal-separator-0619e rule so the remittance and payment money rows are
+ * identical; the payment-only border override that lived here is removed.
+ */
 .payment-other-label-0619e {
   height: 11pt;
   display: flex;
