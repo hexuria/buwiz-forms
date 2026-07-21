@@ -1464,16 +1464,16 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 }
 
 /*
- * The right-most cell divider is dropped (`:not(:last-child)`) so the field's
- * own box border provides the outer edge instead of a comb tick doubling it —
- * border-thickness-decision.md. The exception is the whole-peso integer comb:
- * its last cell sits against the decimal-separator column (a following element),
- * not the field's outer box border, so that divider is a real interior column
- * boundary and is kept. Same for the Part III blank-money integer comb.
+ * The right-most cell divider of EVERY comb is dropped (`:not(:last-child)`) so
+ * the neighbour — a box border or the decimal-separator column — provides the
+ * outer edge instead of a comb tick doubling it (custom_form_styling.md §2.1,
+ * corrected). A divider against a separator column is NOT char-to-char, so the
+ * whole-peso integer comb (page-one amounts) and the Part III blank-money comb
+ * both drop their last tick against the decimal separator; the separator column
+ * draws that edge. Only a tick strictly between two character cells of the same
+ * field is kept (e.g. the leading-cell → value-comb boundary, drawn elsewhere).
  */
-.form-2551q-page-one .comb-value > span:not(:last-child)::after,
-.form-2551q-page-one .official-money-integer > .comb-value > span:last-child::after,
-.form-2551q-page-one .blank-money-value > .comb-value:first-child > span:last-child::after {
+.form-2551q-page-one .comb-value > span:not(:last-child)::after {
   content: "";
   position: absolute;
   right: 0;
@@ -1976,15 +1976,15 @@ th { background: #d4d4d4; font-weight: 400; text-align: center; }
 
 /*
  * As on page one, the right-most `.comb-value` cell divider is dropped so the
- * field's box border owns the outer edge instead of a doubled comb tick —
- * border-thickness-decision.md. Kept where the last cell is a real interior
- * boundary with a following element: the visual integer comb's last cell sits
- * against the decimal-separator column, and every `.visual-leading-cells` tick
+ * neighbour owns the outer edge instead of a doubled comb tick
+ * (custom_form_styling.md §2.1, corrected). The visual integer comb's last cell
+ * sits against the decimal-separator column — a separator is not a character
+ * cell, so that tick is dropped and the separator's border draws the edge. The
+ * ONLY kept last tick is char-to-char: every `.visual-leading-cells` tick
  * (including its last) is the boundary with the adjacent value comb, so both
  * halves of the twelve-cell integer comb read as one continuous field.
  */
 .form-2551q-page-two .comb-value > span:not(:last-child)::after,
-.form-2551q-page-two .visual-integer-comb > .comb-value > span:last-child::after,
 .form-2551q-page-two .visual-leading-cells > span::after {
   content: "";
   position: absolute;
