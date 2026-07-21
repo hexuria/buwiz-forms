@@ -841,7 +841,18 @@
   background: #d9d9d9;
 }
 .schedule-total-1601c > b { display: grid; place-items: center; }
-.schedule-total-1601c > span { display: flex; align-items: center; padding: 0 6pt; }
+/* The label is the only plain <span> child. `.money-1601c` is ALSO a <span>,
+ * so an unqualified `> span` rule beats `.money-1601c { display: grid }` on
+ * specificity (0,1,1 vs 0,1,0) and silently turned the Total Adjustment amount
+ * comb into a flex row: its `minmax(0,1fr) 15pt 30pt` template went inert, the
+ * whole-peso and centavos combs (both width:100%) split the field 50/50 and the
+ * `.` separator collapsed to its glyph width -- the exact "decimal boxes eat the
+ * space, separator and peso boxes get shrunk" the reviewer flagged. The leaked
+ * `padding: 0 6pt` also ate 12pt of the field. Excluding the money comb restores
+ * the shared amount-comb geometry (whole ~14.4pt, sep ~15pt, centavos ~15pt) so
+ * item 4 matches the tax-paid/adjustment/Part II combs and the official contract
+ * (item-4 whole-peso x0=333.19..491.50, pitch 14.38pt). */
+.schedule-total-1601c > span:not(.money-1601c) { display: flex; align-items: center; padding: 0 6pt; }
 .schedule-total-1601c > .money-1601c { grid-column: 3; background: #fff; }
 
 .guidelines-1601c {
