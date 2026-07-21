@@ -193,8 +193,22 @@
   height: 30pt;
   display: grid;
   grid-template-columns: 142.5pt 144.5pt 101.5pt 101pt minmax(0, 1fr);
-  border: 1pt solid #000;
-  border-top: 0;
+  /* Only left/right frames. The masthead above owns the top seam (its
+   * border-bottom); Part I below owns the bottom closing rule (its border-top,
+   * contract's full-width black rule at y=130.94pt). Drawing a border-bottom
+   * here too would (a) double the seam (§1.4) and (b) be invisible anyway — the
+   * grey option band fills the full 30pt border-box and, with box-sizing:
+   * border-box, overflowed the content box to paint grey over its own bottom
+   * border. With no bottom border the band fills flush to Part I's rule (§1.3). */
+  border-left: 1pt solid #000;
+  border-right: 1pt solid #000;
+  /* Bridge the 1pt gap the Part I margin opens below this band: a paint-only
+   * grey strip offset down into that gap so the band meets Part I's black
+   * border-top with no white stripe (§1.3). A box-shadow (not a child, not
+   * scroll content) fills those pixels without overflowing the box — an
+   * absolutely-positioned ::after would trip the descendant-overflow guard.
+   * Part I paints over the ~0.5pt that laps onto its border-top. */
+  box-shadow: 0 1.5pt 0 0 #d9d9d9;
 }
 .header-option-0619f {
   min-width: 0;
@@ -272,6 +286,9 @@
   font-size: 9pt;
   font-weight: 600;
 }
+/* margin-top places Part I's border-top at the official closing rule (contract
+ * y=130.94pt); the 1pt gap it opens above that rule is filled grey by the
+ * header-options band's box-shadow so no white strip shows (§1.3). */
 .background-0619f { height: 155pt; margin-top: 1pt; }
 .tin-rdo-0619f {
   height: 18pt;
