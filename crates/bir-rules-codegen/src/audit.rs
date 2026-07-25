@@ -5967,7 +5967,7 @@ fn serialization_contract_digest(rule_set: &JsonValue) -> Result<String> {
         })
 }
 
-fn snapshot_source_digest(
+pub(crate) fn snapshot_source_digest(
     rule_set: &JsonValue,
     fixtures: &BTreeMap<String, JsonValue>,
 ) -> Result<String> {

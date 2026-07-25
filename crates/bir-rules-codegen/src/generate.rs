@@ -751,24 +751,39 @@ fn digest_file_tree(domain: &str, files: &BTreeMap<String, Vec<u8>>) -> String {
     )
 }
 
+/// Every file whose bytes define the generator's behavior.
+///
+/// `include_bytes!` cannot be derived from a directory listing, so this list is
+/// hand-maintained. `generator_source_list_covers_every_source_file` fails when
+/// it falls behind, because a source file outside this list would change what
+/// the generator emits while leaving `generator.source_sha256` untouched.
+const GENERATOR_SOURCES: &[(&str, &[u8])] = &[
+    ("Cargo.toml", include_bytes!("../Cargo.toml")),
+    ("src/audit.rs", include_bytes!("audit.rs")),
+    ("src/bindings.rs", include_bytes!("bindings.rs")),
+    ("src/check.rs", include_bytes!("check.rs")),
+    ("src/corpus.rs", include_bytes!("corpus.rs")),
+    ("src/emit.rs", include_bytes!("emit.rs")),
+    ("src/error.rs", include_bytes!("error.rs")),
+    ("src/files.rs", include_bytes!("files.rs")),
+    ("src/generate.rs", include_bytes!("generate.rs")),
+    ("src/hash.rs", include_bytes!("hash.rs")),
+    ("src/json.rs", include_bytes!("json.rs")),
+    ("src/lib.rs", include_bytes!("lib.rs")),
+    ("src/main.rs", include_bytes!("main.rs")),
+    ("src/model.rs", include_bytes!("model.rs")),
+    ("src/path.rs", include_bytes!("path.rs")),
+    ("src/projections.rs", include_bytes!("projections.rs")),
+    ("src/rollpin.rs", include_bytes!("rollpin.rs")),
+    ("src/schema.rs", include_bytes!("schema.rs")),
+    ("src/status.rs", include_bytes!("status.rs")),
+];
+
 fn generator_source_digest() -> String {
-    const SOURCES: &[(&str, &[u8])] = &[
-        ("Cargo.toml", include_bytes!("../Cargo.toml")),
-        ("src/audit.rs", include_bytes!("audit.rs")),
-        ("src/check.rs", include_bytes!("check.rs")),
-        ("src/emit.rs", include_bytes!("emit.rs")),
-        ("src/error.rs", include_bytes!("error.rs")),
-        ("src/files.rs", include_bytes!("files.rs")),
-        ("src/generate.rs", include_bytes!("generate.rs")),
-        ("src/hash.rs", include_bytes!("hash.rs")),
-        ("src/json.rs", include_bytes!("json.rs")),
-        ("src/lib.rs", include_bytes!("lib.rs")),
-        ("src/main.rs", include_bytes!("main.rs")),
-        ("src/model.rs", include_bytes!("model.rs")),
-        ("src/path.rs", include_bytes!("path.rs")),
-        ("src/schema.rs", include_bytes!("schema.rs")),
-    ];
-    digest_entries("bir-rules-codegen-source-v1", SOURCES.iter().copied())
+    digest_entries(
+        "bir-rules-codegen-source-v1",
+        GENERATOR_SOURCES.iter().copied(),
+    )
 }
 
 #[cfg(test)]
@@ -1643,6 +1658,40 @@ mod tests {
         assert!(
             a_identity_entry < z_identity_entry,
             "rule_set_id `a-v1-p1` must sort before `z-v1-p1` even though its module sorts later"
+        );
+    }
+
+    /// A generator source file outside `GENERATOR_SOURCES` would change what
+    /// the generator emits while leaving `generator.source_sha256` unchanged,
+    /// silently breaking the provenance the manifest claims to record.
+    #[test]
+    fn generator_source_list_covers_every_source_file() {
+        let source_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut on_disk: Vec<String> = fs::read_dir(&source_dir)
+            .expect("read generator source directory")
+            .map(|entry| entry.expect("read generator source entry").path())
+            .filter(|path| path.extension() == Some(std::ffi::OsStr::new("rs")))
+            .map(|path| {
+                format!(
+                    "src/{}",
+                    path.file_name()
+                        .and_then(|name| name.to_str())
+                        .expect("generator source name is UTF-8")
+                )
+            })
+            .collect();
+        on_disk.sort();
+
+        let mut listed: Vec<String> = super::GENERATOR_SOURCES
+            .iter()
+            .map(|(name, _)| (*name).to_owned())
+            .filter(|name| name.starts_with("src/"))
+            .collect();
+        listed.sort();
+
+        assert_eq!(
+            listed, on_disk,
+            "GENERATOR_SOURCES is out of sync with crates/bir-rules-codegen/src"
         );
     }
 

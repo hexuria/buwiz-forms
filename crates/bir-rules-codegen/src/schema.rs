@@ -8,6 +8,14 @@ use crate::files::{json_files, read_bytes};
 use crate::json::{JsonValue, canonical_bytes, parse_strict};
 use crate::path::normalized_relative_path;
 
+#[derive(Clone, Copy, Debug)]
+enum NestedSchemas {
+    /// The v2 schema set must be flat.
+    Reject,
+    /// The v1 schema directory contains the v2 subtree, which it does not own.
+    Skip,
+}
+
 #[derive(Clone, Debug)]
 pub struct SchemaSet {
     root: PathBuf,
@@ -17,14 +25,34 @@ pub struct SchemaSet {
 
 impl SchemaSet {
     pub fn load(root: &Path) -> Result<Self> {
+        Self::load_with(root, NestedSchemas::Reject)
+    }
+
+    /// Loads only the schemas directly under `root`, ignoring nested
+    /// directories rather than rejecting them.
+    ///
+    /// The v1 corpus keeps its schemas in `rules/schema/` while the v2 IR keeps
+    /// its own closed set in `rules/schema/v2/`. [`Self::load`] must keep
+    /// rejecting nested documents so the v2 set stays flat; the v1 audit simply
+    /// skips the v2 subtree it does not own.
+    pub fn load_top_level(root: &Path) -> Result<Self> {
+        Self::load_with(root, NestedSchemas::Skip)
+    }
+
+    fn load_with(root: &Path, nested: NestedSchemas) -> Result<Self> {
         let mut documents = BTreeMap::new();
         let mut canonical_documents = BTreeMap::new();
         for path in json_files(root)? {
             let relative = normalized_relative_path(root, &path)?;
             if relative.contains('/') {
-                return Err(CodegenError::new(format!(
-                    "v2 schema `{relative}` must be directly under the schema directory"
-                )));
+                match nested {
+                    NestedSchemas::Skip => continue,
+                    NestedSchemas::Reject => {
+                        return Err(CodegenError::new(format!(
+                            "v2 schema `{relative}` must be directly under the schema directory"
+                        )));
+                    }
+                }
             }
             let bytes = read_bytes(&path)?;
             let value = parse_strict(&bytes, &path)?;
