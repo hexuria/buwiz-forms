@@ -475,6 +475,34 @@ pub enum Form2550QCaptureGap {
     ExcludedLocalPrintRawBuffer { field_key: &'static str },
 }
 
+impl Form2550QCaptureGap {
+    /// Whether this gap makes the captured snapshot unfit to evaluate.
+    ///
+    /// Not every gap is an obstruction. Two of the three describe deliberate,
+    /// correct states of a complete capture:
+    ///
+    /// * `NoLiveEditorControls` — a repeated family has no editor UI. Every
+    ///   family in the reviewed rule set is `min_occurs: 0` and no rule is
+    ///   group-scoped, so contributing zero rows is a valid and complete
+    ///   capture, not a missing one.
+    /// * `ExcludedLocalPrintRawBuffer` — a local-print buffer holds a value.
+    ///   These are deliberately outside the rules snapshot; their presence is
+    ///   expected and says nothing about the fields that are in it.
+    ///
+    /// Only `MissingRawBuffer` is obstructive: it means a field the rules do
+    /// evaluate has no captured input, so evaluating would judge data we do not
+    /// have.
+    ///
+    /// Treating all three as blocking made `request_from_capture` unreachable —
+    /// the four controlless families emit their gaps unconditionally, so no
+    /// draft could ever be evaluated. `bir-rules-codegen`'s audit asserts the
+    /// rule-set properties this distinction rests on, so a future snapshot that
+    /// scopes a rule over a group forces this decision to be revisited.
+    pub const fn is_blocking(&self) -> bool {
+        matches!(self, Self::MissingRawBuffer { .. })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Form2550QCaptureError {
     RowIdentity(Form2550QRowIdentityError),
@@ -1045,10 +1073,16 @@ impl<'registry> Form2550QLiveValidationEvaluator<'registry> {
         input_revision: InputRevision,
         context_values: Vec<ContextValue>,
     ) -> Result<EvaluationRequest, Form2550QLiveValidationState> {
-        if !source.gaps().is_empty() {
+        let blocking: Vec<Form2550QCaptureGap> = source
+            .gaps()
+            .iter()
+            .filter(|gap| gap.is_blocking())
+            .cloned()
+            .collect();
+        if !blocking.is_empty() {
             return Err(Form2550QLiveValidationState::IncompleteCapture {
                 rule_set: self.pin.0.clone(),
-                gaps: source.gaps().to_vec(),
+                gaps: blocking,
             });
         }
         EvaluationRequest::capture(
@@ -1097,10 +1131,16 @@ fn evaluate_repo_default_impl(
             };
         }
     };
-    if !source.gaps().is_empty() {
+    let blocking: Vec<Form2550QCaptureGap> = source
+        .gaps()
+        .iter()
+        .filter(|gap| gap.is_blocking())
+        .cloned()
+        .collect();
+    if !blocking.is_empty() {
         return Form2550QRepoLiveValidationState::IncompleteCapture {
             rule_set: pin.0,
-            gaps: source.gaps().to_vec(),
+            gaps: blocking,
         };
     }
     Form2550QRepoLiveValidationState::Unavailable {
@@ -1753,24 +1793,17 @@ mod live_validation_tests {
         );
     }
 
-    /// The GPUI seam cannot close, and this records why by name.
+    /// Four of the seven repeated families have no editor controls, and that
+    /// is still reported — it is true and worth knowing. It no longer prevents
+    /// evaluation, because every family is `min_occurs: 0` and no rule in the
+    /// reviewed set is group-scoped, so contributing zero rows is a complete
+    /// capture rather than a missing one.
     ///
-    /// `try_capture` pushes a `NoLiveEditorControls` gap for every repeated
-    /// family whose editor controls do not exist, and `request_from_capture`
-    /// refuses when *any* gap is present. Four of the seven families have no UI
-    /// at all, so those four gaps are emitted unconditionally, for every input.
-    ///
-    /// The consequence is structural rather than incidental: **no draft, however
-    /// complete, can produce an `EvaluationRequest` for 2550Q.** The rules engine
-    /// therefore cannot be exercised from the application, independently of the
-    /// empty reviewed registry.
-    ///
-    /// Other tests here assert `IncompleteCapture` as expected behaviour, which
-    /// it is today. This one asserts the *cause*, so that closing the seam has a
-    /// named prerequisite: give these four families editor controls, or make
-    /// their absence something other than a capture gap.
+    /// This test pins the set. If a family gains or loses controls, or the
+    /// blocking classification changes, the seam's behaviour changed and the
+    /// decision recorded on `Form2550QCaptureGap::is_blocking` must be revisited.
     #[test]
-    fn four_repeated_families_have_no_editor_controls_so_no_request_is_constructible() {
+    fn controlless_families_are_reported_but_do_not_obstruct_capture() {
         let without_controls: Vec<&str> = GROUP_BINDINGS
             .iter()
             .filter(|binding| !binding.has_live_editor_controls)
@@ -1800,6 +1833,89 @@ mod live_validation_tests {
             without_controls.len(),
             "every controlless family must surface as a capture gap"
         );
+    }
+
+    /// The seam, end to end: a fully captured draft reaches the evaluator.
+    ///
+    /// This is what could not happen before. `request_from_capture` refused on
+    /// any gap, and the four controlless families emitted theirs
+    /// unconditionally, so no draft — however complete — produced an
+    /// `EvaluationRequest`. The adapter and the rules engine had never met.
+    ///
+    /// Constructing a request is not authorization. The reviewed registry is
+    /// still empty, so resolving this request in a production build fails; that
+    /// boundary is deliberate and unaffected.
+    #[test]
+    fn a_fully_captured_draft_produces_an_evaluation_request() {
+        let mut draft = draft();
+        for field_key in SINGLETON_FIELD_IDS {
+            draft
+                .raw_editor_state
+                .set_singleton(field_key, RawValue::Text(String::new()));
+        }
+
+        // A fresh draft materializes rows for the three families that do have
+        // controls, so their members need buffers too. Deriving the work from
+        // the reported gaps keeps this honest: whatever capture says is missing
+        // is exactly what gets filled.
+        let probe = Form2550QFieldValueSource::try_capture(&mut draft).expect("probe capture");
+        let missing: Vec<FieldInstance> = probe
+            .gaps()
+            .iter()
+            .filter_map(|gap| match gap {
+                Form2550QCaptureGap::MissingRawBuffer { field } => Some(field.clone()),
+                _ => None,
+            })
+            .collect();
+        for field in missing {
+            let instance = field
+                .group_path()
+                .first()
+                .expect("only repeated members can still be missing");
+            let family = GROUP_BINDINGS
+                .iter()
+                .find(|binding| binding.group_id == instance.group_id().as_str())
+                .expect("every materialized row belongs to a declared family")
+                .family;
+            draft.raw_editor_state.set_repeated(
+                family,
+                instance.instance_id().clone(),
+                field.field_id().as_str(),
+                RawValue::Text(String::new()),
+            );
+        }
+
+        let source =
+            Form2550QFieldValueSource::try_capture(&mut draft).expect("raw capture succeeds");
+        assert!(
+            !source.gaps().iter().any(|gap| gap.is_blocking()),
+            "a fully populated draft must leave no obstructive gap: {:?}",
+            source.gaps()
+        );
+
+        let registry = RecordingUnavailableRegistry::default();
+        let facade = Form2550QLiveValidationEvaluator::new(
+            &registry,
+            Form2550QRuleSetPin::try_new(exact_2550q_identity(9)).unwrap(),
+        );
+        let request = facade
+            .request_from_capture(
+                source,
+                ValidationContext::new(ValidationPhase::Validate, BehaviorProfile::FilingSafe),
+                InputRevision::new(1),
+                Vec::new(),
+            )
+            .expect("a complete capture must produce an EvaluationRequest");
+
+        // 66 singleton fields plus the 40 materialized repeated members —
+        // the same 66/40 split the serialization binding inventory records for
+        // the live control surface, arrived at independently from the app side.
+        assert_eq!(request.raw_inputs().fields().len(), 106);
+        assert_eq!(
+            request.raw_inputs().fields().len(),
+            SINGLETON_FIELD_IDS.len() + 40
+        );
+        assert_eq!(request.context().phase(), ValidationPhase::Validate);
     }
 
     #[test]
