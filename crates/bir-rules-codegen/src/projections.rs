@@ -256,6 +256,7 @@ fn build_static_projection(repo_root: &Path) -> Result<StaticProjection> {
     let runtime = read_json(&runtime_path)?;
     let v1_fields = read_json(&v1_fields_path)?;
     let core_adapter = read_text(&core_adapter_path)?;
+    let core_singleton_field_ids = parse_core_singleton_field_ids(&core_adapter)?;
 
     // The original calls this `$existingProjectedIds`; it is in fact the set of
     // ids that carry *no* projection source reference, i.e. the reviewed fields
@@ -322,7 +323,7 @@ fn build_static_projection(repo_root: &Path) -> Result<StaticProjection> {
                 "Static projection lacks exact evidence indices: {key}"
             )));
         }
-        if core_adapter.contains(&format!("\"{key}\"")) {
+        if core_singleton_field_ids.contains(*key) {
             raw_keys.insert(key);
         } else if !WORKFLOW_KEYS.contains(key) {
             derived_keys.insert(key);
@@ -748,6 +749,55 @@ fn render(document: &JsonValue) -> Result<Vec<u8>> {
 
 /// Writes through a uniquely named sibling so a failed write can never leave a
 /// truncated rule set or fixture in place.
+/// The exact contents of `SINGLETON_FIELD_IDS` in the core adapter.
+///
+/// Whether a control becomes an executable raw field or stays a documented-only
+/// projection is decided by whether `bir-core` actually binds it. The PowerShell
+/// original answered that with `core_adapter.contains("\"<key>\"")` — a
+/// substring search over the whole file. That file holds 297 distinct quoted
+/// strings of which only 66 are field ids, so a doc comment or an error message
+/// mentioning a control id would silently promote a documented-only projection
+/// into the executable field surface. The 34/44/9 count assertions catch a net
+/// change but not an offsetting swap.
+///
+/// Reading the declaration itself is the same signal without the ambiguity, and
+/// it fails loudly rather than classifying everything as derived if the
+/// declaration moves.
+fn parse_core_singleton_field_ids(source: &str) -> Result<BTreeSet<String>> {
+    const MARKER: &str = "const SINGLETON_FIELD_IDS";
+    let start = source.find(MARKER).ok_or_else(|| {
+        CodegenError::new(format!(
+            "{CORE_ADAPTER_PATH} no longer declares {MARKER}; the raw/derived split has no signal"
+        ))
+    })?;
+    let open = source[start..].find('[').ok_or_else(|| {
+        CodegenError::new(format!(
+            "{MARKER} in {CORE_ADAPTER_PATH} has no array literal"
+        ))
+    })? + start;
+    let close = source[open..].find("];").ok_or_else(|| {
+        CodegenError::new(format!("{MARKER} in {CORE_ADAPTER_PATH} is unterminated"))
+    })? + open;
+
+    let mut ids = BTreeSet::new();
+    let body = &source[open..close];
+    let mut rest = body;
+    while let Some(quote) = rest.find('"') {
+        rest = &rest[quote + 1..];
+        let Some(end) = rest.find('"') else {
+            break;
+        };
+        ids.insert(rest[..end].to_owned());
+        rest = &rest[end + 1..];
+    }
+    if ids.is_empty() {
+        return Err(CodegenError::new(format!(
+            "{MARKER} in {CORE_ADAPTER_PATH} parsed to no field ids"
+        )));
+    }
+    Ok(ids)
+}
+
 fn write_atomically(path: &Path, bytes: &[u8]) -> Result<()> {
     let parent = path
         .parent()

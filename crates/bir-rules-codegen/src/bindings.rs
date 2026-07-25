@@ -412,9 +412,23 @@ fn build_binding_inventory(repo_root: &Path) -> Result<JsonValue> {
     let encrypted = read_pinned(&encrypted_path, "encrypted", ENCRYPTED_AUDIT_SHA256)?;
     let controls = read_pinned(&controls_path, "controls", CONTROL_INVENTORY_SHA256)?;
     let families = read_pinned(&families_path, "families", FAMILY_INVENTORY_SHA256)?;
-    // Parsed and pinned but never projected, exactly as in the PowerShell
-    // original: a corrupt or moved `fields.json` must still fail the build.
-    let _fields = read_pinned(&fields_path, "fields", FIELDS_SHA256)?;
+    // The PowerShell original pinned `fields.json`, published its hash in the
+    // artifact, and then never read the parsed document — so the inventory
+    // attested an input it did not use. It is now load-bearing: every static
+    // occurrence must name a key the v1 field corpus actually declares, which
+    // is what makes publishing that hash mean something.
+    let fields = read_pinned(&fields_path, "fields", FIELDS_SHA256)?;
+    let v1_field_keys: BTreeSet<&str> = fields
+        .object()
+        .and_then(|fields| fields.get("fields"))
+        .and_then(|fields| match fields {
+            JsonValue::Array(values) => Some(values),
+            _ => None,
+        })
+        .ok_or_else(|| CodegenError::new("fields.json has no fields array"))?
+        .iter()
+        .filter_map(|field| field.object()?.get("field_key")?.as_str())
+        .collect();
     let rule_set = read_json(&rule_set_path)?;
 
     let plain_keys = string_array(&plaintext, "keys", PLAINTEXT_AUDIT_PATH)?;
@@ -480,6 +494,19 @@ fn build_binding_inventory(repo_root: &Path) -> Result<JsonValue> {
             "occurrence classification drifted: expected {EXPECTED_CLASSIFICATION_COUNTS:?}, found {actual:?}"
         )));
     }
+    let unknown: Vec<&str> = occurrences
+        .iter()
+        .filter(|occurrence| matches!(occurrence.projection, Projection::StaticControl))
+        .map(|occurrence| occurrence.key.as_str())
+        .filter(|key| !v1_field_keys.contains(key))
+        .collect();
+    if !unknown.is_empty() {
+        return Err(CodegenError::new(format!(
+            "static occurrence(s) name keys absent from the pinned v1 field corpus: {}",
+            unknown.join(", ")
+        )));
+    }
+
     let group_contracts = build_group_contracts(&occurrences)?;
 
     let field_bound_count = occurrences

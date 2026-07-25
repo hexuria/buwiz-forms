@@ -19,29 +19,38 @@ auditable. It is not a tool.
 
 ## Live tooling
 
-Five scripts were part of the maintained regenerate-and-verify loop. All are
-being consolidated into `bir-rules-codegen`, which runs anywhere `cargo` runs.
+Five scripts were the maintained regenerate-and-verify loop. All are now
+`bir-rules-codegen` subcommands, which run anywhere `cargo` runs.
 
-| script | status |
+| script | replaced by |
 | --- | --- |
-| `../validate.ps1` | **Superseded** by `cargo run -p bir-rules-codegen -- validate-v1` |
-| `../validate-json-schema.ps1` | **Superseded** — folded into the same command |
-| `build-2550q-serialization-bindings.ps1` | Being ported to `bir-rules-codegen` |
-| `update-2550q-v2-group-projections.ps1` | Being ported; **runs before** the static projector |
-| `update-2550q-v2-static-projections.ps1` | Being ported; **runs after** the group projector |
+| `../validate.ps1` *(removed)* | `validate-v1` |
+| `../validate-json-schema.ps1` *(removed)* | folded into `validate-v1` |
+| `build-2550q-serialization-bindings.ps1` | `build-2550q-bindings` |
+| `update-2550q-v2-static-projections.ps1` | `project-2550q` |
+| `update-2550q-v2-group-projections.ps1` | **not ported — spent**, see below |
 
-The two validators are kept, unmodified, until CI has run the Rust replacement
-on all three operating systems. They are Windows-only in practice: both
-partition the v2 trees with literal `\` separators, so on macOS and Linux the
-exclusion never matches and the wrong file set is audited. `validate.ps1` exits
-1 on macOS; `validate-json-schema.ps1` is worse, because it *succeeds* while
-validating the wrong set.
+The three remaining `.ps1` files are kept as provenance for how the current
+snapshot was produced. Prefer the subcommands; they are cross-platform, emit
+canonical JSON, and are covered by tests.
 
-Do not "fix" `validate.ps1:32` or `:53`. `Join-Path` normalizes `\` to `/` on
-Unix, so those lines are already correct. The real defects were `:5-6`
-(`.TrimEnd('\') + '\'` appends a literal backslash so the v2 exclusion never
-matches), `:97` (`-notmatch '\\schema\\'`) and `:112` (unreachable — the
-`-RequireJsonSchema` switch can never fire).
+Both validators have been removed. They were Windows-only in practice: each
+partitioned the v2 trees with literal `\` separators, so on macOS and Linux the
+exclusion never matched and the wrong file set was audited. `validate.ps1`
+exited 1 on macOS; `validate-json-schema.ps1` was worse, because it *succeeded*
+while validating the wrong set — a broken gate that reported success.
+
+They were kept for a while pending a CI run of the replacement on all three
+operating systems. That was the wrong trade: leaving a validator that reports
+success over the wrong file set is more dangerous than removing it, and the
+Rust replacement reproduces all eight corpus counts and is exercised on every
+platform by the same job.
+
+For the record, since the reasoning outlived the files: the defects were at
+`:5-6` (`.TrimEnd('\') + '\'` appends a literal backslash, so the v2 exclusion
+never matched off Windows), `:97` (`-notmatch '\\schema\\'`) and `:112`
+(unreachable — `-RequireJsonSchema` could never fire). `Join-Path` normalizes
+`\` to `/` on Unix, so the lines that *looked* wrong were fine.
 
 ### The two projectors are not peers — one is already spent
 
@@ -98,10 +107,15 @@ rewrites a file already in the tree. They are not part of any loop.
 
 ## Known hazards if you do reuse one
 
-`rules/UPDATING.md:33-36` records this and it is still true: current builders
-write **directly** into a historical `rules/forms/...` directory and mutate
-`rules/index.json`. There is no staging root and no fail-if-target-exists guard.
-Do not point one at the canonical corpus for a new release until that is fixed.
+`rules/UPDATING.md:33-36` records the hazard: these builders write **directly**
+into a historical `rules/forms/...` directory and mutate `rules/index.json`, so
+pointing one at the canonical corpus for a new release overwrites the snapshot
+documenting the old one.
+
+The ported subcommands now have the guard — `project-2550q --staging-root`
+mirrors the corpus layout beneath a staging root and refuses a target that
+already exists. See `STAGING.md`. **The remaining `.ps1` builders do not**, so
+the warning still stands for them.
 
 `ConvertTo-Json` formats differently under Windows PowerShell 5.1 and pwsh 7
 (5.1 emits two spaces after each colon and aligns nested objects under the

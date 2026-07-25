@@ -1,0 +1,4 @@
+interface:
+  display_name: "GPUI Testing"
+  short_description: "Write deterministic tests for GPUI apps"
+  default_prompt: "Use $gpui-testing to plan, implement, or debug tests for GPUI application code."

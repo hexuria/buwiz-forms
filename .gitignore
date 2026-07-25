@@ -45,6 +45,12 @@ Desktop.ini
 # Test artifacts
 /test-output/
 
+# Calibration scratch and test artifacts — large, machine-local, never evidence.
+# `tmp/` holds built app binaries and release zips; committing either would put
+# hundreds of megabytes of non-reproducible output into the corpus history.
+/tmp/
+/test-results/
+
 # Generated PDF files
 *.pdf
 *.lock
