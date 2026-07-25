@@ -1753,6 +1753,55 @@ mod live_validation_tests {
         );
     }
 
+    /// The GPUI seam cannot close, and this records why by name.
+    ///
+    /// `try_capture` pushes a `NoLiveEditorControls` gap for every repeated
+    /// family whose editor controls do not exist, and `request_from_capture`
+    /// refuses when *any* gap is present. Four of the seven families have no UI
+    /// at all, so those four gaps are emitted unconditionally, for every input.
+    ///
+    /// The consequence is structural rather than incidental: **no draft, however
+    /// complete, can produce an `EvaluationRequest` for 2550Q.** The rules engine
+    /// therefore cannot be exercised from the application, independently of the
+    /// empty reviewed registry.
+    ///
+    /// Other tests here assert `IncompleteCapture` as expected behaviour, which
+    /// it is today. This one asserts the *cause*, so that closing the seam has a
+    /// named prerequisite: give these four families editor controls, or make
+    /// their absence something other than a capture gap.
+    #[test]
+    fn four_repeated_families_have_no_editor_controls_so_no_request_is_constructible() {
+        let without_controls: Vec<&str> = GROUP_BINDINGS
+            .iter()
+            .filter(|binding| !binding.has_live_editor_controls)
+            .map(|binding| binding.group_id)
+            .collect();
+
+        assert_eq!(
+            without_controls,
+            [
+                "item-19-additional-row",
+                "item-42-additional-row",
+                "item-47-additional-row",
+                "item-56-additional-row",
+            ],
+            "the set of families lacking editor controls changed; the seam blocker moved"
+        );
+
+        let source =
+            Form2550QFieldValueSource::try_capture(&mut draft()).expect("raw capture succeeds");
+        let controlless = source
+            .gaps()
+            .iter()
+            .filter(|gap| matches!(gap, Form2550QCaptureGap::NoLiveEditorControls { .. }))
+            .count();
+        assert_eq!(
+            controlless,
+            without_controls.len(),
+            "every controlless family must surface as a capture gap"
+        );
+    }
+
     #[test]
     fn every_capture_gap_blocks_request_construction_and_dispatch() {
         let registry = RecordingUnavailableRegistry::default();
