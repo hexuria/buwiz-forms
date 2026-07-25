@@ -459,6 +459,11 @@ impl FormValidationState {
         self.result = None;
         self.evaluator_unavailable = None;
         self.incomplete = None;
+        // An accepted transition describes the workflow state of a *specific*
+        // evaluated snapshot. Leaving it behind after a raw edit or a context
+        // change lets the view keep showing `validated` for input that has
+        // since been altered.
+        self.workflow_transition = None;
     }
 }
 
@@ -519,13 +524,16 @@ mod tests {
                 "input_revision": input_revision,
                 "context_fingerprint": context_fingerprint,
                 "expected_rules": [
-                    {"rule_id": "blocking-rule", "order": 10},
-                    {"rule_id": "advisory-rule", "order": 20}
+                    {"execution": {"rule_id": "blocking-rule", "instance": null}, "order": 10},
+                    {"execution": {"rule_id": "advisory-rule", "instance": null}, "order": 20}
                 ],
-                "evaluated_rules": ["blocking-rule", "advisory-rule"],
+                "evaluated_rules": [
+                    {"rule_id": "blocking-rule", "instance": null},
+                    {"rule_id": "advisory-rule", "instance": null}
+                ],
                 "violations": [
                     {
-                        "rule_id": "blocking-rule",
+                        "execution": {"rule_id": "blocking-rule", "instance": null},
                         "phase": phase,
                         "order": {"rule_order": 10, "occurrence": 0},
                         "fields": [],
@@ -536,7 +544,7 @@ mod tests {
                         "profile": profile
                     },
                     {
-                        "rule_id": "advisory-rule",
+                        "execution": {"rule_id": "advisory-rule", "instance": null},
                         "phase": phase,
                         "order": {"rule_order": 20, "occurrence": 0},
                         "fields": [],
