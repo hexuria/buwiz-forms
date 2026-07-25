@@ -1,146 +1,184 @@
-# Validation rules — action plan
+# Validation rules — action plan and status
 
-Supersedes the tactical `execution-plan.md` at the strategic level. That
-document describes how the tooling was consolidated; this one describes what to
-do about the fact that the engine still validates nothing.
+Working tracker. Strategic layer above `execution-plan.md` (which covers the
+tooling consolidation) and `handoff.md` (which records the prior session).
 
-## Position, stated honestly
+Last updated after the seam-opening work. Nine commits on
+`codex/print-preview-parity`, nothing pushed.
 
-| | |
+## Where it stands
+
+| Measure | Value |
 | --- | --- |
-| Forms with an **executable** rule set | **1 of 43** (2550Q, `candidate`, test-only) |
-| Forms with research-only v1 evidence | 43 |
-| Validation rules extracted | 2,007 |
-| Calculations extracted | 623 — of which **223 (36%) are English prose** |
-| Call sites of the engine in the app | **0** |
-| Reviewed rule sets resolvable at runtime | **0** (`REVIEWED_RULE_SET_ENTRIES = vec![]`) |
-| Extraction verified against the official package | **No — and not possible here** |
+| Forms with a v2 (executable) rule set | **1 of 43** — 2550Q, `candidate` |
+| Forms resolvable at runtime | **0** — reviewed registry is empty |
+| Executable validation rules | **27 / 2,007 (1.3%)** |
+| Executable calculations | **1 / 623 (0.2%)** |
+| Can a draft reach the evaluator? | **Yes** — as of this session |
+| Extraction verified against the official package | **No — not possible here** |
+| `status` criteria | **16 / 16** |
+| Corpus census | 659 JSON, all eight `validate-v1` counts stable |
 
-Two facts drive everything below.
+Provenance is traceable, not checkable: every rule cites a line range in an
+`.hta` that is not in the repository, and no official asset is. That does not
+change; it just has to be said out loud.
 
-**The corpus is self-consistent but its fidelity is unverified.** Every gate
-proves the corpus agrees with itself. None proves it agrees with BIR. Provenance
-is a line range — `official-hta-runtime#validate:L8407-L8620` — in a file that
-is not in this repository. No `.hta`, `BIRForms.exe`, `atcCodes.xml` or
-`eBIRTools.vbs` exists in the checkout. The extraction is *traceable*, not
-*checkable*.
+## Done
 
-**Prose is not executable, and 36% of calculations are prose.**
-`rules/UPDATING.md:106` forbids executing it. Converting it requires reading the
-official HTA, which requires Windows with the package installed. That is the
-throughput bottleneck, and it cannot be automated away from macOS.
+| ID | Item | Outcome |
+| --- | --- | --- |
+| **A0** | Commit everything | ✅ 9 commits. Verified from a **real clone**: `audit`, `validate-v1` and `status` all pass. |
+| **A1** | Prove the loop end-to-end | ✅ Reached a different way — see below. A draft now produces an `EvaluationRequest`. |
+| **A2** | Make the backlog visible | ✅ `coverage` subcommand. Objective, no heuristics. |
+| **A5a** | Five failing `bir-desktop` tests | ✅ Fixed, and they were hiding a real defect. |
+| — | Tooling consolidation (Phase 0) | ✅ 5 PowerShell scripts → cargo subcommands. |
+| — | Clone reproducibility | ✅ 599 files LF-normalised, 12 sources re-pinned, digest rolled. |
+| — | 53-projection slice (Phase 1) | ✅ Every occurrence classified; 53 = 44 + 5 + 4. |
+| — | Durable instruction coverage | ✅ CLAUDE.md, AGENTS.md, new skill, CI on three OSes. |
 
-At 2550Q's demonstrated cost — 19 review documents, 121 fixtures, still not
-promoted — 43 forms at this rigor is not reachable. The decision this plan
-exists to force is not "what next" but "what rigor, for how many forms".
+### A1 did not need the harness
 
-## A0 — Commit. Risk, not work.
+The planned replay harness could not have worked, and finding that out was the
+result. `request_from_capture` refused on **any** capture gap, and four of the
+seven repeated families emit a `NoLiveEditorControls` gap unconditionally
+because they have no UI. No draft could ever produce an `EvaluationRequest`.
 
-1,049 staged-but-never-committed files plus 142 with new content changes exist
-only as a working tree on an external drive that `handoff.md` warns is mounted
-by two operating systems. There is no commit anywhere holding this.
+Two blockers were being counted as one: the empty registry, and a seam that was
+shut upstream of it.
 
-Five reviewable commits: prior corpus · tooling · line-endings+pin-roll ·
-classification slice · docs/CI/skill. Gates re-run between each so a bisect
-lands somewhere meaningful.
+The fix was not to build UI for four families — that would have meant inventing
+unobserved official behaviour. It was that the check was over-strict. Verified
+against the rule set rather than assumed: every field group is `min_occurs: 0`
+and all 27 rules are `singleton`-scoped, so a family contributing zero rows is a
+*complete* capture. `Form2550QCaptureGap::is_blocking()` now separates gaps that
+obstruct from gaps that merely inform.
 
-**Needs from you:** the first commit is the prior session's corpus, not mine.
-Say whether it is mine to make.
+A complete draft now yields **106 raw fields — 66 singletons + 40 materialized
+repeated members**, the same 66/40 split the serialization binding inventory
+records, reached independently from the application side.
 
-## A1 — Prove the loop end-to-end, offline. Highest information per unit effort.
+### Two defects found by fixing tests
 
-The engine is built, tested and disconnected. Before widening to more forms or
-spending a Windows session, establish that the architecture *works on real
-input at all*.
+- **`clear_evaluation_state` never cleared `workflow_transition`.** A taxpayer
+  could validate, edit a field, and the view would still report `validated`.
+  `handoff.md:171` lists this invalidation as implemented; it was not. The
+  broken fixtures had masked it since the `RuleExecution` refactor.
+- **The audit did not survive a clone.** 12 declared sources were CRLF with
+  hashes pinned to one working tree.
 
-**Build a replay harness**: take a real 2550Q draft in the app's raw-capture
-format, run it through the candidate evaluator, and print the ordered report.
+## Next: promotion of 2550Q — and it does not need Windows
 
-Deliberately **not** an in-app wiring, because that would require compiling the
-candidate module into a non-test build and that is one of the five production
-guards. A harness needs no guard change, no promotion, no Windows and no
-decision from you.
+This is the correction that reshapes the plan. The 27 executable rules
+reference exactly **one** calculation, and it is executable. The audit passes,
+so every reference in the snapshot resolves. **The current executable subset is
+self-contained.** Windows is needed to *expand* the rule set, not to promote
+what already exists.
 
-**What it answers:** does a real draft produce a sane, correctly-ordered report?
-Do the 27 rules fire when they should? Does the raw-capture format actually feed
-the evaluator? If any answer is no, everything downstream is premature — and we
-find out in hours instead of after a Windows trip.
+Promotion requires `review_status: reviewed`, which the audit gates on: the
+digest pinned (already true), both profiles `Executable`, and **zero
+`"state": "unresolved"` anywhere in the rule set**. There are 135. Note the
+audit rejects only `unresolved` — the 6 `documented_only` states (node-less
+artifacts, Final Copy/Submit transitions) **do not block promotion**.
 
-**Verification:** report matches the official first-error order for at least one
-constructed failing draft and one clean draft.
+The 135 split into three unequal piles.
 
-## A2 — Make the backlog visible instead of anecdotal.
+### P1 — Mechanical: 116 states, no judgement
 
-Nobody can currently see how far from executable the corpus is without ad-hoc
-scripting. Add a `coverage` subcommand to `bir-rules-codegen` reporting, per
-form: validation rules, calculations, prose calculations, whether a v2 snapshot
-exists, and review status.
+94 `fields[].behavior.filing_safe` + 22 `verified-correct`
+`rules[].profiles.filing_safe`. Filing-safe mirrors official.
 
-This converts "we're stuck" into a measurable backlog and makes the cost of any
-scope decision explicit before it is taken. Cheap — the data is already in the
-corpus.
+Derive and encode with a generator, plus an audit assertion that filing-safe
+genuinely mirrors official wherever the v1 assessment is `verified-correct`. No
+hand-editing, no invented behaviour, checkable after the fact.
 
-## A3 — Decide the scope. This is yours, and it gates A4.
+### P2 — Five real decisions
 
-Four honest options:
+| rule | classification |
+| --- | --- |
+| `2550q-save-tin` | incorrect-official-behavior |
+| `2550q-save-name` | incorrect-official-behavior |
+| `2550q-validate-tin` | incorrect-official-behavior |
+| `2550q-validate-email` | incorrect-official-behavior |
+| `2550q-validate-future-period` | official-bug-compatible |
 
-1. **Prove one form properly.** Finish 2550Q through promotion; treat the other
-   42 as research evidence only. Smallest, most defensible.
-2. **Filing-volume subset.** Executable rules for the handful of forms that
-   carry real filing volume (1601C, 0605, 2550Q, 2551Q, 1701Q…); research for
-   the rest.
-3. **Tiered rigor.** Full evidence chain for high-risk filings; a lighter
-   reviewed-adapter path where v1 evidence plus a handwritten adapter is
-   proportionate.
-4. **All 43 at current rigor.** Honest cost: a Windows observation session and a
-   full review cycle per form.
+`rules/shared/official-bugs.md` says filing-safe should "fail closed until
+separately reviewed". For a **blank-field check** that is backwards: failing
+closed means filing-safe silently stops checking blank TIN, name and email —
+worse than official, not safer.
 
-I recommend **2**. It puts a working validator in front of taxpayers for the
-forms that matter, without pretending 43 is reachable.
+So the choice per rule is:
 
-## A4 — One batched Windows session, scoped by A3.
+- **(a) corrected-executable** — filing-safe runs the check properly: TIN
+  blankness without the `999999999` bypass, email actually validated.
+- **(b) fail closed** — filing-safe refuses to evaluate the rule.
 
-Per form in scope, the trip must produce: HTA function bodies for every prose
-calculation; Add/Delete row handler behaviour; byte-level save/final-copy
-samples; and the `Encrypt.exe` container behaviour. Batching matters — the
-package is installed once and every form's extraction reuses it.
+Recommendation: **(a) for the four identity/blank rules, (b) for
+future-period**, whose hard-coded date exception nobody should inherit.
 
-**Prerequisite:** A2's coverage report defines the exact shopping list, so the
-session is not exploratory.
+**This is the one thing blocking that only you can decide.**
 
-## A5 — Hygiene, any time
+### P3 — Eleven leftovers
 
-- **Five failing `bir-desktop` tests.** Now known mechanical: `state.rs:522-539`
-  fixtures use the flat `{"rule_id", "order"}` shape; `RuleViolation` requires
-  `{"execution": {...}, "order": {...}}`. The type is right — `generate.rs` and
-  `audit.rs` already use the new shape. ~30 minutes. Matters because those tests
-  cover the stale-result guard in the GPUI seam.
-- **P2.6 builder staging guard.** `UPDATING.md:33-36` records builders writing
-  directly into the canonical corpus with no staging root and no
-  fail-if-target-exists guard. Blocks any multi-form rollout.
-- **D5 doc split.** `architecture.md` is ~45% append-only status log duplicated
-  in `implementation-plan.md`; that duplication already produced the v16/v17
-  contradiction.
+4 workflow transitions, 3 artifact filing-safe branches, 1 calculation,
+`evaluation_policy`, `profile_status`, 4 `legacy_v1` mappings. Mostly follow
+from P1 and P2.
 
-## Blocked on decisions, not effort
+### Promotion gate
 
-- **Production clock/timezone/custody provider** for `local-current-date`. None
-  approved; not mine to pick.
-- **Filing-safe profile and each confirmed official defect.** Needs independent
-  domain/legal evidence. This is a tax-correctness judgement.
+`review_status: reviewed`, both profiles executable, zero unresolved, digest
+rolled, evidence-only commit. `status` gains a criterion so the registry cannot
+be populated without it.
 
-## What does not change
+## After promotion
 
-Every production boundary stays closed and is re-asserted mechanically by
-`status` on each run: reviewed registry empty, 2550Q `candidate`, filing-safe
-`unresolved`, all three artifacts `documented_only` and node-less, and
-`CheckedFinalCopyPayload::try_new` always failing. Nothing in this plan promotes
-anything.
+Only then does the engine validate anything: a reviewed snapshot resolves, and
+the seam already carries a request to it. Wiring the view to call it is the
+remaining GPUI work (`FormValidationState` and `summary.rs` both exist and are
+unused).
 
-## Suggested order
+## Still open, lower priority
 
-**A0 → A1 → A2 → A3 (you) → A4 (if scope > 1 form).** A5 fits anywhere.
+| ID | Item |
+| --- | --- |
+| **A5b** | P2.6 builder staging guard — blocks any multi-form rollout (`UPDATING.md:33-36`) |
+| **A5c** | D5 doc split — `architecture.md` is ~45% status log, duplicated in `implementation-plan.md`; already caused the v16/v17 contradiction |
+| **P2.4** | Shadow difference dimensions — `shadow.rs` holds only two types |
+| — | `.codex/skills/gpui-testing/` is untracked and uninspected; keep or remove |
 
-A0 removes the risk of losing everything. A1 tells us whether the architecture
-works before more is invested in it. A2 makes A3 an informed decision instead of
-a guess.
+## Needs Windows + the official package
+
+For **expanding** coverage, not for promoting 2550Q:
+
+- 222 of 623 calculations still phrased as prose (`UPDATING.md:106` forbids
+  executing prose)
+- dynamic Add/Delete row order versus stable-instance order
+- byte-level save / Final Copy contract
+- the four additional-item families' modal workflow
+- `Encrypt.exe` container behaviour
+
+Transport outcomes may be permanently unobservable by policy —
+`handoff.md:313` and `UPDATING.md:40-41` forbid using the official submission
+path for discovery.
+
+## Scope — still your call
+
+Now better informed. Promoting 2550Q is macOS-reachable; every *additional*
+form needs the Windows trip.
+
+1. **Prove one form properly.** Promote 2550Q, wire it to the view, ship a
+   working validator for one form. Research evidence for the other 42.
+2. **Filing-volume subset.** Then batch one Windows session for 1601C, 0605,
+   2551Q, 1701Q.
+3. **Tiered rigor** by filing risk.
+4. **All 43 at current rigor** — at 2550Q's demonstrated cost, not reachable.
+
+Recommendation: **1, then reassess.** It converts "built but validates nothing"
+into a working validator, and the cost is now measurable rather than open-ended.
+
+## Unchanged
+
+Every production boundary stays closed and is re-asserted by `status` on each
+run: reviewed registry empty, 2550Q `candidate`, filing-safe `unresolved`, all
+three artifacts `documented_only` and node-less,
+`CheckedFinalCopyPayload::try_new` always failing. Nothing above promotes
+anything without an explicit, separately reviewed step.
